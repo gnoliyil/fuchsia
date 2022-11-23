@@ -446,6 +446,20 @@ DisplayPll* DpllManagerSkylake::FindPllFor(DdiId ddi_id, bool is_edp,
   return nullptr;
 }
 
+namespace {
+
+// Timeout for the DisplayPllTigerLake to wait for PLL lock status.
+// Overridden in tests via
+// DisplayPllTigerLake::OverrideLockWaitTimeoutUsForTesting().
+int g_display_pll_tiger_lake_lock_wait_timeout_us = 500;
+
+// Timeout for the DisplayPllTigerLake to wait for PLL power on status.
+// Overridden in tests via
+// DisplayPllTigerLake::OverridePowerOnWaitTimeoutMsForTesting().
+int g_display_pll_tiger_lake_power_on_wait_timeout_ms = 5;
+
+}  // namespace
+
 DisplayPllTigerLake::DisplayPllTigerLake(fdf::MmioBuffer* mmio_space, PllId pll_id)
     : DisplayPll(pll_id), mmio_space_(mmio_space) {}
 
@@ -474,7 +488,7 @@ bool DisplayPllTigerLake::DoEnable(const DdiPllConfig& pll_config) {
   dpll_enable.set_power_on_request_tiger_lake(true);
   dpll_enable.WriteTo(mmio_space_);
   if (!PollUntil([&] { return dpll_enable.ReadFrom(mmio_space_).powered_on_tiger_lake(); },
-                 zx::msec(1), 5)) {
+                 zx::msec(1), g_display_pll_tiger_lake_power_on_wait_timeout_ms)) {
     zxlogf(ERROR, "DPLL %d power up failure!", pll_id());
     return false;
   }
@@ -500,8 +514,9 @@ bool DisplayPllTigerLake::DoEnable(const DdiPllConfig& pll_config) {
 
   dpll_enable.set_pll_enabled(true);
   dpll_enable.WriteTo(mmio_space_);
-  if (!PollUntil([&] { return dpll_enable.pll_locked_tiger_lake_and_lcpll1(); }, zx::usec(1),
-                 500)) {
+  if (!PollUntil(
+          [&] { return dpll_enable.ReadFrom(mmio_space_).pll_locked_tiger_lake_and_lcpll1(); },
+          zx::usec(1), g_display_pll_tiger_lake_lock_wait_timeout_us)) {
     zxlogf(ERROR, "DPLL %d lock failure! Failed to lock after 500us", pll_id());
     return false;
   }
@@ -514,6 +529,16 @@ bool DisplayPllTigerLake::DoDisable() {
   auto pll_enable = tgl_registers::PllEnable::GetForTigerLakeDpll(pll_id()).ReadFrom(mmio_space_);
   pll_enable.set_pll_enabled(false).WriteTo(mmio_space_);
   return true;
+}
+
+// static
+ScopedValueChange<int> DisplayPllTigerLake::OverrideLockWaitTimeoutUsForTesting(int timeout_us) {
+  return ScopedValueChange(g_display_pll_tiger_lake_lock_wait_timeout_us, timeout_us);
+}
+
+// static
+ScopedValueChange<int> DisplayPllTigerLake::OverridePowerOnWaitTimeoutMsForTesting(int timeout_ms) {
+  return ScopedValueChange(g_display_pll_tiger_lake_power_on_wait_timeout_ms, timeout_ms);
 }
 
 namespace {

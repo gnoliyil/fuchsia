@@ -14,6 +14,7 @@
 #include <variant>
 
 #include "src/graphics/display/drivers/intel-i915-tgl/hardware-common.h"
+#include "src/graphics/display/drivers/intel-i915-tgl/scoped-value-change.h"
 
 namespace i915_tgl {
 
@@ -278,6 +279,13 @@ class DisplayPllTigerLake : public DisplayPll {
  public:
   DisplayPllTigerLake(fdf::MmioBuffer* mmio_space, PllId pll_id);
   ~DisplayPllTigerLake() override = default;
+
+  // Tests that simulate retries must use the overrides below to avoid flakiness
+  // stemming from scheduling variability. Tests that simulate timeouts should
+  // use the overrides below to get the DisplayPllTigerLake to issue a
+  // deterministic MMIO access pattern.
+  static ScopedValueChange<int> OverrideLockWaitTimeoutUsForTesting(int timeout_us);
+  static ScopedValueChange<int> OverridePowerOnWaitTimeoutMsForTesting(int timeout_ms);
 
  protected:
   // DisplayPll overrides:

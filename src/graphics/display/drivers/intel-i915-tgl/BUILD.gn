@@ -112,6 +112,7 @@ test("intel-i915-tgl-test") {
     "dp-capabilities-unittest.cc",
     "dp-display-unittest.cc",
     "dpll-config-unittest.cc",
+    "dpll-unittest.cc",
     "fake-dpcd-channel.cc",
     "fake-dpcd-channel.h",
     "fuse-config-unittest.cc",
