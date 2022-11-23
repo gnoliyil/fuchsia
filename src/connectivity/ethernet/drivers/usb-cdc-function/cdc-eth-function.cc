@@ -867,6 +867,12 @@ static zx_protocol_device_t usb_cdc_proto = []() {
 zx_status_t usb_cdc_bind(void* ctx, zx_device_t* parent) {
   zxlogf(INFO, "%s", __func__);
   device_add_args_t args = {};
+  const zx_device_str_prop_t props[] = {
+      {
+          .key = "fuchsia.ethernet.NETDEVICE_MIGRATION",
+          .property_value = str_prop_bool_val(true),
+      },
+  };
 
   auto cdc = std::make_unique<usb_cdc_t>();
   if (!cdc) {
@@ -984,6 +990,10 @@ zx_status_t usb_cdc_bind(void* ctx, zx_device_t* parent) {
   args.ops = &usb_cdc_proto;
   args.proto_id = ZX_PROTOCOL_ETHERNET_IMPL;
   args.proto_ops = &ethernet_impl_ops;
+  if (device_is_dfv2(parent)) {
+    args.str_props = props;
+    args.str_prop_count = std::size(props);
+  }
 
   status = device_add(parent, &args, &cdc->zxdev);
   if (status != ZX_OK) {
