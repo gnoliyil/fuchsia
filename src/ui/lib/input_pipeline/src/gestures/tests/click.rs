@@ -274,6 +274,130 @@ mod tests {
         }
 
         #[fuchsia::test(allow_stalls = false)]
+        async fn click_then_place_2nd_finger_then_click() {
+            let finger1_pos1_um = Position { x: 2_000.0, y: 3_000.0 };
+            let finger1_pos2_um = finger1_pos1_um.clone();
+            let finger1_pos3_um = finger1_pos1_um.clone();
+            let finger2_pos3_um = Position { x: 5_000.0, y: 3_000.0 };
+            let finger1_pos4_um = finger1_pos3_um.clone();
+            let finger2_pos4_um = finger2_pos3_um.clone();
+            let inputs = vec![
+                touchpad_event(vec![finger1_pos1_um], hashset! {1}),
+                touchpad_event(vec![finger1_pos2_um], hashset! {}),
+                touchpad_event(vec![finger1_pos3_um, finger2_pos3_um], hashset! {1}),
+                touchpad_event(vec![finger1_pos4_um, finger2_pos4_um], hashset! {}),
+            ];
+            let got = utils::run_gesture_arena_test(inputs).await;
+
+            assert_eq!(got.len(), 4);
+            assert_matches!(got[0].as_slice(), [
+              utils::expect_mouse_event!(phase: phase_a, pressed_buttons: pressed_button_a, affected_buttons: affected_button_a, location: location_a),
+            ] => {
+              assert_eq!(phase_a, &mouse_binding::MousePhase::Down);
+              assert_eq!(pressed_button_a, &hashset! {1});
+              assert_eq!(affected_button_a, &hashset! {1});
+              assert_eq!(location_a, &utils::NO_MOVEMENT_LOCATION);
+            });
+            assert_matches!(got[1].as_slice(), [
+              utils::expect_mouse_event!(phase: phase_a, pressed_buttons: pressed_button_a, affected_buttons: affected_button_a, location: location_a),
+            ] => {
+              assert_eq!(phase_a, &mouse_binding::MousePhase::Up);
+              assert_eq!(pressed_button_a, &hashset! {});
+              assert_eq!(affected_button_a, &hashset! {1});
+              assert_eq!(location_a, &utils::NO_MOVEMENT_LOCATION);
+            });
+            assert_matches!(got[2].as_slice(), [
+              utils::expect_mouse_event!(phase: phase_a, pressed_buttons: pressed_button_a, affected_buttons: affected_button_a, location: location_a),
+            ] => {
+              assert_eq!(phase_a, &mouse_binding::MousePhase::Down);
+              assert_eq!(pressed_button_a, &hashset! {2});
+              assert_eq!(affected_button_a, &hashset! {2});
+              assert_eq!(location_a, &utils::NO_MOVEMENT_LOCATION);
+            });
+            assert_matches!(got[3].as_slice(), [
+              utils::expect_mouse_event!(phase: phase_a, pressed_buttons: pressed_button_a, affected_buttons: affected_button_a, location: location_a),
+            ] => {
+              assert_eq!(phase_a, &mouse_binding::MousePhase::Up);
+              assert_eq!(pressed_button_a, &hashset! {});
+              assert_eq!(affected_button_a, &hashset! {2});
+              assert_eq!(location_a, &utils::NO_MOVEMENT_LOCATION);
+            });
+        }
+
+        #[fuchsia::test(allow_stalls = false)]
+        async fn click_then_place_2nd_finger_then_click_drag() {
+            let finger1_pos1_um = Position { x: 2_000.0, y: 3_000.0 };
+            let finger1_pos2_um = finger1_pos1_um.clone();
+            let finger1_pos3_um = finger1_pos1_um.clone();
+            let finger2_pos3_um = Position { x: 5_000.0, y: 3_000.0 };
+            let finger1_pos4_um = finger1_pos3_um
+                + Position {
+                    x: 0.0,
+                    y: 1_000.0
+                        + args::SPURIOUS_TO_INTENTIONAL_MOTION_THRESHOLD_BUTTON_CHANGE_MM * 1_000.0,
+                };
+            let finger2_pos4_um = finger2_pos3_um
+                + Position {
+                    x: 0.0,
+                    y: 1_000.0
+                        + args::SPURIOUS_TO_INTENTIONAL_MOTION_THRESHOLD_BUTTON_CHANGE_MM * 1_000.0,
+                };
+            let finger1_pos5_um = finger1_pos4_um.clone();
+            let finger2_pos5_um = finger2_pos4_um.clone();
+            let inputs = vec![
+                touchpad_event(vec![finger1_pos1_um], hashset! {1}),
+                touchpad_event(vec![finger1_pos2_um], hashset! {}),
+                touchpad_event(vec![finger1_pos3_um, finger2_pos3_um], hashset! {1}),
+                touchpad_event(vec![finger1_pos4_um, finger2_pos4_um], hashset! {1}),
+                touchpad_event(vec![finger1_pos5_um, finger2_pos5_um], hashset! {}),
+            ];
+            let got = utils::run_gesture_arena_test(inputs).await;
+
+            assert_eq!(got.len(), 5);
+            assert_matches!(got[0].as_slice(), [
+              utils::expect_mouse_event!(phase: phase_a, pressed_buttons: pressed_button_a, affected_buttons: affected_button_a, location: location_a),
+            ] => {
+              assert_eq!(phase_a, &mouse_binding::MousePhase::Down);
+              assert_eq!(pressed_button_a, &hashset! {1});
+              assert_eq!(affected_button_a, &hashset! {1});
+              assert_eq!(location_a, &utils::NO_MOVEMENT_LOCATION);
+            });
+            assert_matches!(got[1].as_slice(), [
+              utils::expect_mouse_event!(phase: phase_a, pressed_buttons: pressed_button_a, affected_buttons: affected_button_a, location: location_a),
+            ] => {
+              assert_eq!(phase_a, &mouse_binding::MousePhase::Up);
+              assert_eq!(pressed_button_a, &hashset! {});
+              assert_eq!(affected_button_a, &hashset! {1});
+              assert_eq!(location_a, &utils::NO_MOVEMENT_LOCATION);
+            });
+            assert_matches!(got[2].as_slice(), [
+              utils::expect_mouse_event!(phase: phase_a, pressed_buttons: pressed_button_a, affected_buttons: affected_button_a, location: location_a),
+            ] => {
+              assert_eq!(phase_a, &mouse_binding::MousePhase::Down);
+              assert_eq!(pressed_button_a, &hashset! {2});
+              assert_eq!(affected_button_a, &hashset! {2});
+              assert_eq!(location_a, &utils::NO_MOVEMENT_LOCATION);
+            });
+            assert_matches!(got[3].as_slice(), [
+              utils::expect_mouse_event!(phase: phase_a, pressed_buttons: pressed_button_a, affected_buttons: affected_button_a, location: location_a),
+            ] => {
+              assert_eq!(phase_a, &mouse_binding::MousePhase::Move);
+              assert_eq!(pressed_button_a, &hashset! {2});
+              assert_eq!(affected_button_a, &hashset! {});
+              assert_near!(location_a.millimeters.x, 0.0, utils::EPSILON);
+              assert_gt!(location_a.millimeters.y, 0.0);
+            });
+            assert_matches!(got[4].as_slice(), [
+              utils::expect_mouse_event!(phase: phase_a, pressed_buttons: pressed_button_a, affected_buttons: affected_button_a, location: location_a),
+            ] => {
+              assert_eq!(phase_a, &mouse_binding::MousePhase::Up);
+              assert_eq!(pressed_button_a, &hashset! {});
+              assert_eq!(affected_button_a, &hashset! {2});
+              assert_eq!(location_a, &utils::NO_MOVEMENT_LOCATION);
+            });
+        }
+
+        #[fuchsia::test(allow_stalls = false)]
         async fn click_then_one_finger_drag() {
             let finger1_pos0_um = Position { x: 2_000.0, y: 3_000.0 };
             let finger1_pos1_um = finger1_pos0_um.clone();

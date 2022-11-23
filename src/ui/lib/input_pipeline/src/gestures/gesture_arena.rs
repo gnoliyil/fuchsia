@@ -3,7 +3,10 @@
 // found in the LICENSE file.
 
 use {
-    super::{args, inspect_keys, motion, one_finger_button, primary_tap, scroll, secondary_tap},
+    super::{
+        args, inspect_keys, motion, one_finger_button, primary_tap, scroll, secondary_button,
+        secondary_tap,
+    },
     crate::{input_device, input_handler::InputHandler, mouse_binding, touch_binding, utils::Size},
     anyhow::{format_err, Context, Error},
     async_trait::async_trait,
@@ -42,6 +45,13 @@ impl ContenderFactory for GestureArenaInitialContenders {
                     .tan(),
             }),
             Box::new(one_finger_button::InitialContender {
+                spurious_to_intentional_motion_threshold_mm:
+                    args::SPURIOUS_TO_INTENTIONAL_MOTION_THRESHOLD_MM,
+                spurious_to_intentional_motion_threshold_button_change_mm:
+                    args::SPURIOUS_TO_INTENTIONAL_MOTION_THRESHOLD_BUTTON_CHANGE_MM,
+                button_change_state_timeout: args::BUTTON_CHANGE_STATE_TIMEOUT,
+            }),
+            Box::new(secondary_button::InitialContender {
                 spurious_to_intentional_motion_threshold_mm:
                     args::SPURIOUS_TO_INTENTIONAL_MOTION_THRESHOLD_MM,
                 spurious_to_intentional_motion_threshold_button_change_mm:

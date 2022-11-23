@@ -7,5 +7,6 @@ mod motion;
 mod one_finger_drag;
 mod primary_tap;
 mod scroll;
+mod secondary_button;
 mod secondary_tap;
 mod utils;

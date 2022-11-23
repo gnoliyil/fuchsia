@@ -105,6 +105,7 @@ rustc_library("input_pipeline") {
     "src/gestures/tests/one_finger_drag.rs",
     "src/gestures/tests/primary_tap.rs",
     "src/gestures/tests/scroll.rs",
+    "src/gestures/tests/secondary_button.rs",
     "src/gestures/tests/secondary_tap.rs",
     "src/gestures/tests/utils.rs",
     "src/ime_handler.rs",
