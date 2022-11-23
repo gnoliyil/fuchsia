@@ -1449,24 +1449,28 @@ void MsdArmDevice::EnterProtectedMode() {
   address_manager_->ClearAddressMappings(false);
 
   if (!PowerDownShaders()) {
+    TRACE_ALERT("magma", "pmode-error");
     MAGMA_LOG(ERROR, "Powering down shaders timed out");
     // Keep trying to reset the device, or the job scheduler will hang forever.
   }
   // Powering down L2 can fail due to errata 1485982, so flush/invalidate L2
   // instead. We should be able to enter protected mode with L2 enabled.
   if (!FlushL2()) {
+    TRACE_ALERT("magma", "pmode-error");
     MAGMA_LOG(ERROR, "Flushing L2 timed out");
     // Keep trying to reset the device, or the job scheduler will hang forever.
   }
 
   zx_status_t status = mali_protocol_client_.EnterProtectedMode();
   if (status != ZX_OK) {
+    TRACE_ALERT("magma", "pmode-error");
     MAGMA_LOG(ERROR, "Error from EnterProtectedMode: %d", status);
   }
 
   EnableAllCores();
 
   if (!power_manager_->WaitForShaderReady(register_io_.get())) {
+    TRACE_ALERT("magma", "pmode-error");
     MAGMA_LOG(WARNING, "Waiting for shader ready failed");
     return;
   }
@@ -1481,12 +1485,14 @@ bool MsdArmDevice::ExitProtectedMode() {
   address_manager_->ClearAddressMappings(false);
 
   if (!PowerDownShaders()) {
+    TRACE_ALERT("magma", "pmode-error");
     MAGMA_LOG(ERROR, "Powering down shaders timed out");
     // Keep trying to reset the device, or the job scheduler will hang forever.
   }
   // Powering down L2 can fail due to errata 1485982, so flush L2 and let the hardware reset deal
   // with it.
   if (!FlushL2()) {
+    TRACE_ALERT("magma", "pmode-error");
     MAGMA_LOG(ERROR, "Flushing L2 timed out");
     // Keep trying to reset the device, or the job scheduler will hang forever.
   }

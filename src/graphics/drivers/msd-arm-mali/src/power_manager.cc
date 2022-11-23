@@ -8,6 +8,15 @@
 #include "platform_trace.h"
 #include "src/graphics/drivers/msd-arm-mali/src/registers.h"
 
+namespace {
+
+// Wait for up to 1 second in increments of 1ms for the power interrupt. The status may change
+// without receiving a wakeup.
+constexpr size_t kMaxPowerTries = 1000;
+constexpr size_t kLogAtPowerTry = 2;
+
+}  // anonymous namespace
+
 PowerManager::PowerManager(mali::RegisterIo* io) {
   power_state_semaphore_ = magma::PlatformSemaphore::Create();
   // Initialize current set of running cores.
@@ -18,6 +27,8 @@ PowerManager::PowerManager(mali::RegisterIo* io) {
 }
 
 void PowerManager::EnableCores(mali::RegisterIo* io, uint64_t shader_bitmask) {
+  TRACE_DURATION("magma:power", "PowerManager::EnableCores", "shader_bitmask",
+                 TA_UINT64(shader_bitmask));
   registers::CoreReadyState::WriteState(io, registers::CoreReadyState::CoreType::kShader,
                                         registers::CoreReadyState::ActionType::kActionPowerOn,
                                         shader_bitmask);
@@ -28,6 +39,7 @@ void PowerManager::EnableCores(mali::RegisterIo* io, uint64_t shader_bitmask) {
 }
 
 void PowerManager::DisableShaders(mali::RegisterIo* io) {
+  TRACE_DURATION("magma:power", "PowerManager::DisableShaders");
   uint64_t powered_on_shaders =
       registers::CoreReadyState::ReadBitmask(io, registers::CoreReadyState::CoreType::kShader,
                                              registers::CoreReadyState::StatusType::kReady) |
@@ -41,6 +53,7 @@ void PowerManager::DisableShaders(mali::RegisterIo* io) {
 }
 
 void PowerManager::DisableL2(mali::RegisterIo* io) {
+  TRACE_DURATION("magma:power", "PowerManager::DisableL2");
   registers::CoreReadyState::WriteState(io, registers::CoreReadyState::CoreType::kL2,
                                         registers::CoreReadyState::ActionType::kActionPowerOff, 1);
   registers::CoreReadyState::WriteState(io, registers::CoreReadyState::CoreType::kTiler,
@@ -48,7 +61,8 @@ void PowerManager::DisableL2(mali::RegisterIo* io) {
 }
 
 bool PowerManager::WaitForShaderDisable(mali::RegisterIo* io) {
-  while (true) {
+  TRACE_DURATION("magma:power", "PowerManager::WaitForShaderDisable");
+  for (size_t i = 0; i < kMaxPowerTries; i++) {
     uint64_t powered_on =
         registers::CoreReadyState::ReadBitmask(io, registers::CoreReadyState::CoreType::kShader,
                                                registers::CoreReadyState::StatusType::kReady) |
@@ -57,13 +71,18 @@ bool PowerManager::WaitForShaderDisable(mali::RegisterIo* io) {
             registers::CoreReadyState::StatusType::kPowerTransitioning);
     if (!powered_on)
       return true;
-    if (!power_state_semaphore_->Wait(1000))
-      return false;
+    const magma::Status status = power_state_semaphore_->Wait(1);
+    if (!status.ok() && i == kLogAtPowerTry) {
+      TRACE_ALERT("magma", "long-wait");
+      MAGMA_LOG(WARNING, "Waiting for shader disable longer than %zu ms", i + 1);
+    }
   }
+  return false;
 }
 
 bool PowerManager::WaitForL2Disable(mali::RegisterIo* io) {
-  while (true) {
+  TRACE_DURATION("magma:power", "PowerManager::WaitForL2Disable");
+  for (size_t i = 0; i < kMaxPowerTries; i++) {
     bool powered_on =
         registers::CoreReadyState::ReadBitmask(io, registers::CoreReadyState::CoreType::kL2,
                                                registers::CoreReadyState::StatusType::kReady) |
@@ -74,13 +93,18 @@ bool PowerManager::WaitForL2Disable(mali::RegisterIo* io) {
       UpdateReadyStatus(io);
       return true;
     }
-    if (!power_state_semaphore_->Wait(1000))
-      return false;
+    const magma::Status status = power_state_semaphore_->Wait(1);
+    if (!status.ok() && i == kLogAtPowerTry) {
+      TRACE_ALERT("magma", "long-wait");
+      MAGMA_LOG(WARNING, "Waiting for L2 disable longer than %zu ms", i + 1);
+    }
   }
+  return false;
 }
 
 bool PowerManager::WaitForShaderReady(mali::RegisterIo* io) {
-  while (true) {
+  TRACE_DURATION("magma:power", "PowerManager::WaitForShaderReady");
+  for (size_t i = 0; i < kMaxPowerTries; i++) {
     // Only wait for 1 shader to be ready, since that's enough to execute
     // commands.
     bool powered_on =
@@ -90,17 +114,23 @@ bool PowerManager::WaitForShaderReady(mali::RegisterIo* io) {
       UpdateReadyStatus(io);
       return true;
     }
-    if (!power_state_semaphore_->Wait(1000))
-      return false;
+    const magma::Status status = power_state_semaphore_->Wait(1);
+    if (!status.ok() && i == kLogAtPowerTry) {
+      TRACE_ALERT("magma", "long-wait");
+      MAGMA_LOG(WARNING, "Waiting for shader enable longer than %zu ms", i + 1);
+    }
   }
+  return false;
 }
 
 void PowerManager::ReceivedPowerInterrupt(mali::RegisterIo* io) {
+  TRACE_DURATION("magma:power", "PowerManager::ReceivedPowerInterrupt");
   UpdateReadyStatus(io);
   power_state_semaphore_->Signal();
 }
 
 void PowerManager::UpdateReadyStatus(mali::RegisterIo* io) {
+  TRACE_DURATION("magma:power", "PowerManager::UpdateReadyStatus");
   std::lock_guard<std::mutex> lock(ready_status_mutex_);
   tiler_ready_status_ =
       registers::CoreReadyState::ReadBitmask(io, registers::CoreReadyState::CoreType::kTiler,
@@ -110,11 +140,13 @@ void PowerManager::UpdateReadyStatus(mali::RegisterIo* io) {
 }
 
 void PowerManager::UpdateGpuActive(bool active) {
+  TRACE_DURATION("magma:power", "PowerManager::UpdateGpuActive", "active", TA_BOOL(active));
   std::lock_guard<std::mutex> lock(active_time_mutex_);
   UpdateGpuActiveLocked(active);
 }
 
 void PowerManager::UpdateGpuActiveLocked(bool active) {
+  TRACE_DURATION("magma:power", "PowerManager::UpdateGpuActiveLocked", "active", TA_BOOL(active));
   auto now = std::chrono::steady_clock::now();
   std::chrono::steady_clock::duration total_time = now - last_check_time_;
   constexpr std::chrono::milliseconds kMemoryDuration(100);
