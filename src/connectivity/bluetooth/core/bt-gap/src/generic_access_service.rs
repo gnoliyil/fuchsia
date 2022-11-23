@@ -2,21 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 use anyhow::{format_err, Error};
-use fidl::endpoints::{create_endpoints, create_request_stream, ClientEnd};
-use fidl_fuchsia_bluetooth_gatt::{
-    self as gatt, LocalServiceDelegateOnReadValueResponder,
-    LocalServiceDelegateRequest as ServiceDelegateReq,
-    LocalServiceDelegateRequestStream as ServiceDelegateReqStream, LocalServiceMarker,
-    Server_Proxy,
-};
+use fidl::endpoints::{create_request_stream, Responder};
+use fidl_fuchsia_bluetooth_gatt2 as gatt;
+use fuchsia_bluetooth::types::Uuid;
 use futures::{channel::mpsc, SinkExt, StreamExt};
 use log::{info, warn};
 
 use crate::host_dispatcher::HostDispatcher;
 
-const GENERIC_ACCESS_SERVICE_UUID: &str = "00001800-0000-1000-8000-00805f9b34fb";
-const GENERIC_ACCESS_DEVICE_NAME_UUID: &str = "00002A00-0000-1000-8000-00805f9b34fb";
-const GENERIC_ACCESS_APPEARANCE_UUID: &str = "00002A01-0000-1000-8000-00805f9b34fb";
+const GENERIC_ACCESS_SERVICE_UUID: Uuid = Uuid::new16(0x1800);
+const GENERIC_ACCESS_DEVICE_NAME_UUID: Uuid = Uuid::new16(0x2A00);
+const GENERIC_ACCESS_APPEARANCE_UUID: Uuid = Uuid::new16(0x2A01);
 const GENERIC_ACCESS_DEVICE_NAME_ID: u64 = 0x2A00;
 const GENERIC_ACCESS_APPEARANCE_ID: u64 = 0x2A01;
 
@@ -24,50 +20,36 @@ fn build_generic_access_service_info() -> gatt::ServiceInfo {
     // The spec says these characteristics should be readable, but optionally writeable. For
     // simplicity, we've disallowed them being peer-writeable. We enable access to these
     // characteristics with no security, as they are sent out freely during advertising anyway.
-    let device_name_read_sec = Box::new(gatt::SecurityRequirements {
-        encryption_required: false,
-        authentication_required: false,
-        authorization_required: false,
-    });
-
-    let appearance_read_sec = Box::new(gatt::SecurityRequirements {
-        encryption_required: false,
-        authentication_required: false,
-        authorization_required: false,
-    });
-
     let device_name_characteristic = gatt::Characteristic {
-        id: GENERIC_ACCESS_DEVICE_NAME_ID,
-        type_: GENERIC_ACCESS_DEVICE_NAME_UUID.to_string(),
-        properties: gatt::PROPERTY_READ,
-        permissions: Some(Box::new(gatt::AttributePermissions {
-            read: Some(device_name_read_sec),
-            write: None,
-            update: None,
-        })),
-        descriptors: None,
+        handle: Some(gatt::Handle { value: GENERIC_ACCESS_DEVICE_NAME_ID }),
+        type_: Some(GENERIC_ACCESS_DEVICE_NAME_UUID.into()),
+        properties: Some(gatt::CharacteristicPropertyBits::READ),
+        permissions: Some(gatt::AttributePermissions {
+            read: Some(gatt::SecurityRequirements::EMPTY),
+            ..gatt::AttributePermissions::EMPTY
+        }),
+        ..gatt::Characteristic::EMPTY
     };
 
     let appearance_characteristic = gatt::Characteristic {
-        id: GENERIC_ACCESS_APPEARANCE_ID,
-        type_: GENERIC_ACCESS_APPEARANCE_UUID.to_string(),
-        properties: gatt::PROPERTY_READ,
-        permissions: Some(Box::new(gatt::AttributePermissions {
-            read: Some(appearance_read_sec),
-            write: None,
-            update: None,
-        })),
-        descriptors: None,
+        handle: Some(gatt::Handle { value: GENERIC_ACCESS_APPEARANCE_ID }),
+        type_: Some(GENERIC_ACCESS_APPEARANCE_UUID.into()),
+        properties: Some(gatt::CharacteristicPropertyBits::READ),
+        permissions: Some(gatt::AttributePermissions {
+            read: Some(gatt::SecurityRequirements::EMPTY),
+            ..gatt::AttributePermissions::EMPTY
+        }),
+        ..gatt::Characteristic::EMPTY
     };
 
     gatt::ServiceInfo {
         // This value is ignored as this is a local-only service
-        id: 0,
+        handle: Some(gatt::ServiceHandle { value: 0 }),
         // Secondary services are only rarely used and this is not one of those cases
-        primary: true,
-        type_: GENERIC_ACCESS_SERVICE_UUID.to_string(),
+        kind: Some(gatt::ServiceKind::Primary),
+        type_: Some(GENERIC_ACCESS_SERVICE_UUID.into()),
         characteristics: Some(vec![device_name_characteristic, appearance_characteristic]),
-        includes: None,
+        ..gatt::ServiceInfo::EMPTY
     }
 }
 
@@ -77,45 +59,31 @@ fn build_generic_access_service_info() -> gatt::ServiceInfo {
 /// we can limit host state to one place, HostDispatcher. This will simplify supporting multiple
 /// Bluetooth hosts from within a single HostDispatcher in the future.
 pub struct GasProxy {
-    delegate_request_stream: ServiceDelegateReqStream,
-    gas_task_channel: mpsc::Sender<ServiceDelegateReq>,
+    service_request_stream: gatt::LocalServiceRequestStream,
+    gas_task_channel: mpsc::Sender<gatt::LocalServiceRequest>,
     // We have to hold on to these connections to the Hosts GATT server even though we never use them because
     // otherwise the host will shut down the connection to the Generic Access Server.
-    _local_service_client: ClientEnd<LocalServiceMarker>,
-    _gatt_server: Server_Proxy,
+    _gatt_server: gatt::Server_Proxy,
 }
 
 impl GasProxy {
     pub async fn new(
-        gatt_server: Server_Proxy,
-        gas_task_channel: mpsc::Sender<ServiceDelegateReq>,
+        gatt_server: gatt::Server_Proxy,
+        gas_task_channel: mpsc::Sender<gatt::LocalServiceRequest>,
     ) -> Result<GasProxy, Error> {
-        let (delegate_client, delegate_request_stream) =
-            create_request_stream::<gatt::LocalServiceDelegateMarker>()?;
-        let (local_service_client, service_server) = create_endpoints::<LocalServiceMarker>()?;
-        let mut service_info = build_generic_access_service_info();
-        let status =
-            gatt_server.publish_service(&mut service_info, delegate_client, service_server).await?;
-
-        if let Some(error) = status.error {
-            return Err(format_err!(
-                "Failed to publish Generic Access Service to GATT server: {:?}",
-                error
-            ));
-        }
+        let (service_client, service_request_stream) =
+            create_request_stream::<gatt::LocalServiceMarker>()?;
+        let service_info = build_generic_access_service_info();
+        gatt_server.publish_service(service_info, service_client).await?.map_err(|e| {
+            format_err!("Failed to publish Generic Access Service to GATT server: {:?}", e)
+        })?;
         info!("Published Generic Access Service to local device database.");
-        Ok(GasProxy {
-            delegate_request_stream,
-            gas_task_channel,
-            _local_service_client: local_service_client,
-            _gatt_server: gatt_server,
-        })
+        Ok(GasProxy { service_request_stream, gas_task_channel, _gatt_server: gatt_server })
     }
 
     pub async fn run(mut self) -> Result<(), Error> {
-        while let Some(delegate_request) = self.delegate_request_stream.next().await {
-            let delegate_inner_req = delegate_request?;
-            if let Err(send_err) = self.gas_task_channel.send(delegate_inner_req).await {
+        while let Some(req) = self.service_request_stream.next().await {
+            if let Err(send_err) = self.gas_task_channel.send(req?).await {
                 if send_err.is_disconnected() {
                     return Ok(());
                 }
@@ -136,51 +104,56 @@ impl GasProxy {
 /// sender end of the channel stored in this struct.
 pub struct GenericAccessService {
     hd: HostDispatcher,
-    generic_access_req_stream: mpsc::Receiver<ServiceDelegateReq>,
+    generic_access_req_stream: mpsc::Receiver<gatt::LocalServiceRequest>,
 }
 
 impl GenericAccessService {
-    pub fn build(hd: &HostDispatcher, request_stream: mpsc::Receiver<ServiceDelegateReq>) -> Self {
+    pub fn build(
+        hd: &HostDispatcher,
+        request_stream: mpsc::Receiver<gatt::LocalServiceRequest>,
+    ) -> Self {
         Self { hd: hd.clone(), generic_access_req_stream: request_stream }
     }
 
     fn send_read_response(
         &self,
-        responder: LocalServiceDelegateOnReadValueResponder,
+        responder: gatt::LocalServiceReadValueResponder,
         id: u64,
     ) -> Result<(), fidl::Error> {
         match id {
             GENERIC_ACCESS_DEVICE_NAME_ID => {
-                let name = self.hd.get_name();
-                responder.send(Some(name.as_bytes()), gatt::ErrorCode::NoError)
+                let value = self.hd.get_name().as_bytes().to_vec();
+                responder.send(&mut Ok(value))
             }
             GENERIC_ACCESS_APPEARANCE_ID => {
-                let appearance = self.hd.get_appearance().into_primitive();
-                responder.send(Some(&appearance.to_le_bytes()), gatt::ErrorCode::NoError)
+                let value = self.hd.get_appearance().into_primitive().to_le_bytes().to_vec();
+                responder.send(&mut Ok(value))
             }
-            _ => responder.send(None, gatt::ErrorCode::NotPermitted),
+            _ => responder.send(&mut Err(gatt::Error::ReadNotPermitted)),
         }
     }
 
-    fn process_service_delegate_req(&self, request: ServiceDelegateReq) -> Result<(), Error> {
+    fn process_service_req(&self, request: gatt::LocalServiceRequest) -> Result<(), Error> {
         match request {
-            // Notifying peers is excluded from the characteristics in this service
-            ServiceDelegateReq::OnCharacteristicConfiguration { .. } => Ok(()),
-            ServiceDelegateReq::OnReadValue { responder, id, .. } => {
-                Ok(self.send_read_response(responder, id)?)
+            gatt::LocalServiceRequest::ReadValue { responder, handle, .. } => {
+                Ok(self.send_read_response(responder, handle.value)?)
             }
             // Writing to the the available GENERIC_ACCESS service characteristics
             // is optional according to the spec, and it was decided not to implement
-            ServiceDelegateReq::OnWriteValue { responder, .. } => {
-                Ok(responder.send(gatt::ErrorCode::NotPermitted)?)
+            gatt::LocalServiceRequest::WriteValue { responder, .. } => {
+                Ok(responder.send(&mut Err(gatt::Error::WriteNotPermitted))?)
             }
-            ServiceDelegateReq::OnWriteWithoutResponse { .. } => Ok(()),
+            gatt::LocalServiceRequest::PeerUpdate { payload: _, responder } => {
+                Ok(responder.drop_without_shutdown())
+            }
+            // Ignore CharacteristicConfiguration, ValueChangedCredit, etc.
+            _ => Ok(()),
         }
     }
 
     pub async fn run(mut self) {
         while let Some(request) = self.generic_access_req_stream.next().await {
-            self.process_service_delegate_req(request).unwrap_or_else(|e| {
+            self.process_service_req(request).unwrap_or_else(|e| {
                 warn!("Error handling Generic Access Service Request: {:?}", e);
             });
         }
@@ -191,12 +164,8 @@ impl GenericAccessService {
 mod tests {
     use super::*;
     use async_helpers::hanging_get::asynchronous as hanging_get;
-    use fidl::endpoints::{create_endpoints, create_proxy_and_stream};
-    use fidl_fuchsia_bluetooth::Appearance;
-    use fidl_fuchsia_bluetooth_gatt::{
-        LocalServiceDelegateMarker, LocalServiceDelegateProxy,
-        LocalServiceDelegateRequest as ServiceDelegateReq, LocalServiceMarker, Server_Marker,
-    };
+    use fidl::endpoints::create_proxy_and_stream;
+    use fidl_fuchsia_bluetooth::{Appearance, PeerId};
     use fuchsia_async as fasync;
     use fuchsia_inspect as inspect;
     use futures::FutureExt;
@@ -207,18 +176,18 @@ mod tests {
 
     const TEST_DEVICE_APPEARANCE: Appearance = Appearance::Computer;
 
-    fn setup_generic_access_service() -> (LocalServiceDelegateProxy, HostDispatcher) {
-        let (generic_access_delegate_client, delegate_request_stream) =
-            create_proxy_and_stream::<LocalServiceDelegateMarker>().unwrap();
-        let (local_service_client, _local_service_server) =
-            create_endpoints::<LocalServiceMarker>().unwrap();
-        let (gas_task_channel, generic_access_req_stream) = mpsc::channel::<ServiceDelegateReq>(0);
+    // Starts tasks that run the GasProxy and GenericAccessService and returns the associated
+    // LocalServiceProxy and HostDispatcher.
+    fn setup_generic_access_service() -> (gatt::LocalServiceProxy, HostDispatcher) {
+        let (service_client, service_request_stream) =
+            create_proxy_and_stream::<gatt::LocalServiceMarker>().unwrap();
+        let (gas_task_channel, generic_access_req_stream) =
+            mpsc::channel::<gatt::LocalServiceRequest>(0);
         let (gatt_server, _gatt_server_remote) =
-            create_proxy_and_stream::<Server_Marker>().unwrap();
+            create_proxy_and_stream::<gatt::Server_Marker>().unwrap();
         let gas_proxy = GasProxy {
-            delegate_request_stream,
+            service_request_stream,
             gas_task_channel: gas_task_channel.clone(),
-            _local_service_client: local_service_client,
             _gatt_server: gatt_server,
         };
         fasync::Task::spawn(gas_proxy.run().map(|r| {
@@ -252,78 +221,97 @@ mod tests {
         );
         let service = GenericAccessService { hd: dispatcher.clone(), generic_access_req_stream };
         fasync::Task::spawn(service.run()).detach();
-        (generic_access_delegate_client, dispatcher)
+        (service_client, dispatcher)
     }
 
     #[fuchsia::test]
     async fn test_change_name() {
         let (delegate_client, host_dispatcher) = setup_generic_access_service();
-        let (expected_device_name, _err) =
-            delegate_client.on_read_value(GENERIC_ACCESS_DEVICE_NAME_ID, 0).await.unwrap();
-        assert_eq!(expected_device_name.unwrap(), DEFAULT_DEVICE_NAME.as_bytes());
+        let expected_device_name = delegate_client
+            .read_value(
+                &mut PeerId { value: 1 },
+                &mut gatt::Handle { value: GENERIC_ACCESS_DEVICE_NAME_ID },
+                0,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(expected_device_name, DEFAULT_DEVICE_NAME.as_bytes());
         // This is expected to error since there is no host.
         let _ = host_dispatcher
             .set_name("test-generic-access-service-1".to_string(), NameReplace::Replace)
             .await
             .unwrap_err();
-        let (expected_device_name, _err) =
-            delegate_client.on_read_value(GENERIC_ACCESS_DEVICE_NAME_ID, 0).await.unwrap();
-        assert_eq!(
-            expected_device_name.unwrap(),
-            "test-generic-access-service-1".to_string().as_bytes()
-        );
+        let expected_device_name = delegate_client
+            .read_value(
+                &mut PeerId { value: 1 },
+                &mut gatt::Handle { value: GENERIC_ACCESS_DEVICE_NAME_ID },
+                0,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(expected_device_name, "test-generic-access-service-1".to_string().as_bytes());
     }
 
     #[fuchsia::test]
     async fn test_get_appearance() {
-        let (delegate_client, _host_dispatcher) = setup_generic_access_service();
-        let (read_device_appearance, _err) =
-            delegate_client.on_read_value(GENERIC_ACCESS_APPEARANCE_ID, 0).await.unwrap();
+        let (service_client, _host_dispatcher) = setup_generic_access_service();
+        let read_device_appearance = service_client
+            .read_value(
+                &mut PeerId { value: 1 },
+                &mut gatt::Handle { value: GENERIC_ACCESS_APPEARANCE_ID },
+                0,
+            )
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(
-            read_device_appearance.unwrap(),
+            read_device_appearance,
             TEST_DEVICE_APPEARANCE.into_primitive().to_le_bytes().to_vec()
         );
     }
 
     #[fuchsia::test]
     async fn test_invalid_request() {
-        let (delegate_client, _host_dispatcher) = setup_generic_access_service();
-        let error_code = delegate_client
-            .on_write_value(GENERIC_ACCESS_DEVICE_NAME_ID, 0, b"new-name")
+        let (service_client, _host_dispatcher) = setup_generic_access_service();
+        let result = service_client
+            .write_value(gatt::LocalServiceWriteValueRequest {
+                peer_id: Some(PeerId { value: 1 }),
+                handle: Some(gatt::Handle { value: GENERIC_ACCESS_DEVICE_NAME_ID }),
+                offset: Some(0),
+                value: Some(b"new-name".to_vec()),
+                ..gatt::LocalServiceWriteValueRequest::EMPTY
+            })
             .await
             .unwrap();
-        assert_eq!(error_code, gatt::ErrorCode::NotPermitted);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), gatt::Error::WriteNotPermitted);
     }
 
     #[fuchsia::test]
     async fn test_gas_proxy() {
-        let (generic_access_delegate_client, delegate_request_stream) =
-            create_proxy_and_stream::<LocalServiceDelegateMarker>().unwrap();
-        let (local_service_client, _local_service_server) =
-            create_endpoints::<LocalServiceMarker>().unwrap();
+        let (service_client, service_request_stream) =
+            create_proxy_and_stream::<gatt::LocalServiceMarker>().unwrap();
         let (gas_task_channel, mut generic_access_req_stream) =
-            mpsc::channel::<ServiceDelegateReq>(0);
+            mpsc::channel::<gatt::LocalServiceRequest>(0);
         let (gatt_server, _gatt_server_remote) =
-            create_proxy_and_stream::<Server_Marker>().unwrap();
-        let gas_proxy = GasProxy {
-            delegate_request_stream,
-            gas_task_channel,
-            _local_service_client: local_service_client,
-            _gatt_server: gatt_server,
-        };
+            create_proxy_and_stream::<gatt::Server_Marker>().unwrap();
+        let gas_proxy =
+            GasProxy { service_request_stream, gas_task_channel, _gatt_server: gatt_server };
         fasync::Task::spawn(gas_proxy.run().map(|r| {
             r.unwrap_or_else(|err| {
                 warn!("Error running Generic Access proxy in task: {:?}", err);
             })
         }))
         .detach();
-        let _ignored_fut =
-            generic_access_delegate_client.on_read_value(GENERIC_ACCESS_APPEARANCE_ID, 0);
+        let _ignored_fut = service_client.read_value(
+            &mut PeerId { value: 1 },
+            &mut gatt::Handle { value: GENERIC_ACCESS_APPEARANCE_ID },
+            0,
+        );
         let proxied_request = generic_access_req_stream.next().await.unwrap();
-        if let ServiceDelegateReq::OnReadValue { id, .. } = proxied_request {
-            assert_eq!(id, GENERIC_ACCESS_APPEARANCE_ID)
-        } else {
-            panic!("Unexpected request from GAS Proxy: {:?}", proxied_request);
-        }
+        let (_, handle, ..) = proxied_request.into_read_value().expect("ReadValue request");
+        assert_eq!(handle.value, GENERIC_ACCESS_APPEARANCE_ID);
     }
 }

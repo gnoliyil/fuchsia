@@ -10,8 +10,8 @@ use {
     fidl::prelude::*,
     fidl_fuchsia_bluetooth::Appearance,
     fidl_fuchsia_bluetooth_bredr::ProfileMarker,
-    fidl_fuchsia_bluetooth_gatt::{LocalServiceDelegateRequest, Server_Marker},
-    fidl_fuchsia_bluetooth_gatt2::Server_Marker as Server_Marker2,
+    fidl_fuchsia_bluetooth_gatt::Server_Marker,
+    fidl_fuchsia_bluetooth_gatt2::{LocalServiceRequest, Server_Marker as Server_Marker2},
     fidl_fuchsia_bluetooth_le::{CentralMarker, PeripheralMarker},
     fidl_fuchsia_device::NameProviderMarker,
     fuchsia_async as fasync,
@@ -89,7 +89,7 @@ struct BtGap {
     hd: HostDispatcher,
     inspect: fuchsia_inspect::Inspector,
     /// The generic access service requests
-    gas_requests: mpsc::Receiver<LocalServiceDelegateRequest>,
+    gas_requests: mpsc::Receiver<LocalServiceRequest>,
     run_watch_peers: BoxFuture<'static, Result<(), Error>>,
     run_watch_hosts: BoxFuture<'static, Result<(), Error>>,
 }

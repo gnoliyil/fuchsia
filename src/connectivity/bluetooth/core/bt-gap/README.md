@@ -1,3 +1,4 @@
+# bt-gap
 This directory contains the implementation of the public Bluetooth
 APIs (`fuchsia.bluetooth*`). The main pieces of this
 implementation are:
@@ -13,6 +14,9 @@ implementation are:
   - Implements all stateful logic for the `fuchsia.bluetooth.sys.Access` interface.
   - Provides a Future to monitor `/dev/class/bt-host`, and react to the arrival
     and departure of Bluetooth hosts appropriately.
+- [GenericAccessService](src/generic_access_service.rs):
+  - Implements the GATT Generic Access Service, which tells peers the name and
+    appearance of the device.
 - [main](src/main.rs):
   - Binds the Access, Central, Pairing, Peripheral, and Server FIDL APIs to code within
     this component (`bt-gap`).
@@ -22,3 +26,12 @@ implementation are:
   - Instantiates the `/dev/class/bt-host`-monitoring future from HostDispatcher.
   - Configures an Executor to process API events and `/dev/class/bt-host` VFS events.
   - Serves `bt-gap` Inspect file at `/hub/c/bt-gap.cmx/{pid}/out/diagnostics/root.inspect`.
+
+## Tests
+### Unit Tests
+Run Rust unit tests with:
+```
+$ fx test bt-gap-unittests
+```
+### Integration Tests
+Integration tests that test bt-gap and bt-host are located at [bluetooth/tests](../../tests/)

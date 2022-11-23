@@ -8,8 +8,10 @@ use {
     fidl::endpoints::ServerEnd,
     fidl_fuchsia_bluetooth::{Appearance, DeviceClass},
     fidl_fuchsia_bluetooth_bredr::ProfileMarker,
-    fidl_fuchsia_bluetooth_gatt::{LocalServiceDelegateRequest, Server_Marker, Server_Proxy},
-    fidl_fuchsia_bluetooth_gatt2::Server_Marker as Server_Marker2,
+    fidl_fuchsia_bluetooth_gatt::Server_Marker,
+    fidl_fuchsia_bluetooth_gatt2::{
+        LocalServiceRequest, Server_Marker as Server_Marker2, Server_Proxy,
+    },
     fidl_fuchsia_bluetooth_host::HostProxy,
     fidl_fuchsia_bluetooth_le::{CentralMarker, PeripheralMarker},
     fidl_fuchsia_bluetooth_sys::{
@@ -179,11 +181,10 @@ struct HostDispatcherState {
     config_settings: build_config::Config,
     peers: HashMap<PeerId, Inspectable<Peer>>,
 
-    // Sender end of a futures::mpsc channel to send LocalServiceDelegateRequests
-    // to Generic Access Service. When a new host adapter is recognized, we create
-    // a new GasProxy, which takes GAS requests from the new host and forwards
-    // them along a clone of this channel to GAS
-    gas_channel_sender: mpsc::Sender<LocalServiceDelegateRequest>,
+    // Sender end of a futures::mpsc channel to send LocalServiceRequests to Generic Access Service.
+    // When a new host adapter is recognized, we create a new GasProxy, which takes GAS requests
+    // from the new host and forwards them along a clone of this channel to GAS
+    gas_channel_sender: mpsc::Sender<LocalServiceRequest>,
 
     pairing_dispatcher: Option<PairingDispatcherHandle>,
 
@@ -349,7 +350,7 @@ impl HostDispatcher {
         appearance: Appearance,
         stash: Stash,
         inspect: inspect::Node,
-        gas_channel_sender: mpsc::Sender<LocalServiceDelegateRequest>,
+        gas_channel_sender: mpsc::Sender<LocalServiceRequest>,
         watch_peers_publisher: hanging_get::Publisher<HashMap<PeerId, Peer>>,
         watch_peers_registrar: hanging_get::SubscriptionRegistrar<PeerWatcher>,
         watch_hosts_publisher: hanging_get::Publisher<Vec<HostInfo>>,
@@ -778,7 +779,7 @@ impl HostDispatcher {
         let (gatt_server_proxy, remote_gatt_server) = fidl::endpoints::create_proxy()?;
         host_device
             .proxy()
-            .request_gatt_server_(remote_gatt_server)
+            .request_gatt2_server_(remote_gatt_server)
             .context(format!("{:?}: failed to open gatt server for bt-host", dbg_ids))?;
         self.spawn_gas_proxy(gatt_server_proxy)
             .await
@@ -1048,9 +1049,8 @@ async fn assign_host_data(
 pub(crate) mod test {
     use super::*;
 
-    use fidl_fuchsia_bluetooth_gatt::{
-        LocalServiceDelegateProxy, LocalServiceRequestStream, Server_Request,
-        Server_RequestStream as GattServerRequestStream,
+    use fidl_fuchsia_bluetooth_gatt2::{
+        LocalServiceProxy, Server_Request, Server_RequestStream as GattServerRequestStream,
     };
     use fidl_fuchsia_bluetooth_host::{HostRequest, HostRequestStream};
     use futures::{future::join, StreamExt};
@@ -1101,8 +1101,7 @@ pub(crate) mod test {
     #[derive(Default)]
     pub(crate) struct GasEndpoints {
         gatt_server: Option<GattServerRequestStream>,
-        delegate: Option<LocalServiceDelegateProxy>,
-        service: Option<LocalServiceRequestStream>,
+        service: Option<LocalServiceProxy>,
     }
 
     async fn handle_standard_host_server_init(
@@ -1119,24 +1118,17 @@ pub(crate) mod test {
                     info!("Setting Device Class");
                     let _ = responder.send(&mut Ok(()));
                 }
-                Some(Ok(HostRequest::RequestGattServer_ { server, .. })) => {
+                Some(Ok(HostRequest::RequestGatt2Server_ { server, .. })) => {
                     // don't respond at all on the server side.
                     info!("Storing Gatt Server");
                     let mut gatt_server = server.into_stream().unwrap();
                     info!("GAS Server was started, waiting for publish");
                     // The Generic Access Service now publishes itself.
                     match gatt_server.next().await {
-                        Some(Ok(Server_Request::PublishService {
-                            info,
-                            delegate,
-                            service,
-                            responder,
-                        })) => {
+                        Some(Ok(Server_Request::PublishService { info, service, responder })) => {
                             info!("Captured publish of GAS Service: {:?}", info);
-                            gas_endpoints.delegate = Some(delegate.into_proxy().unwrap());
-                            gas_endpoints.service = Some(service.into_stream().unwrap());
-                            let _ =
-                                responder.send(&mut fidl_fuchsia_bluetooth::Status { error: None });
+                            gas_endpoints.service = Some(service.into_proxy().unwrap());
+                            let _ = responder.send(&mut Ok(()));
                         }
                         x => error!("Got unexpected GAS Server request: {:?}", x),
                     }
