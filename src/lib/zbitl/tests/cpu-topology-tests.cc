@@ -10,6 +10,7 @@
 #include <iterator>
 #include <memory>
 #include <string_view>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -18,17 +19,21 @@ namespace {
 class CpuConfigPayload {
  public:
   explicit CpuConfigPayload(cpp20::span<const zbi_cpu_cluster_t> clusters) {
-    zbi_cpu_config_t config{
+    const zbi_cpu_config_t config = {
         .cluster_count = static_cast<uint32_t>(clusters.size()),
     };
-    data_.append(reinterpret_cast<const std::byte*>(&config), sizeof(config));
-    data_.append(reinterpret_cast<const std::byte*>(clusters.data()), clusters.size_bytes());
+    for (cpp20::span<const std::byte> chunk : {
+             cpp20::as_bytes(cpp20::span(&config, 1)),
+             cpp20::as_bytes(clusters),
+         }) {
+      data_.insert(data_.end(), chunk.begin(), chunk.end());
+    }
   }
 
   cpp20::span<const std::byte> as_bytes() const { return {data_}; }
 
  private:
-  std::basic_string<std::byte> data_;
+  std::vector<std::byte> data_;
 };
 
 class CpuTopologyPayload {
