@@ -168,13 +168,13 @@ Create the following file and directory structure in the new project directory:
     |- meta
     |   |- echo_integration.cml
     |
-    |- echo_integration.cc
+    |- echo_integration_test.cc
   ```
 
   * `BUILD.gn`: GN build targets for the test binaries, component, and package.
   * `meta/echo_integration.cml`: Manifest declaring the components under test
     and their capabilities.
-  * `echo_integration.cc`: Source code for the C++ integration tests.
+  * `echo_integration_test.cc`: Source code for the C++ integration tests.
 
 ### Update the test component manifest
 
@@ -234,7 +234,7 @@ Add the following code to implement an integration test:
 
 * {C++}
 
-  `echo-integration/echo_integration.cc`:
+  `echo-integration/echo_integration_test.cc`:
 
   ```cpp
   {% includecode gerrit_repo="fuchsia/fuchsia" gerrit_path="examples/components/routing/integration_tests/cpp/echo_integration_test.cc" region_tag="example_snippet" adjust_indentation="auto" %}
