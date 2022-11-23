@@ -6,8 +6,9 @@ use {
     crate::{
         above_root_capabilities::AboveRootCapabilitiesForTest,
         constants::{
-            HERMETIC_ENVIRONMENT_NAME, HERMETIC_TESTS_COLLECTION, TEST_ROOT_COLLECTION,
-            TEST_ROOT_REALM_NAME,
+            ENCLOSING_ENV_REALM_NAME, HERMETIC_ENVIRONMENT_NAME, HERMETIC_RESOLVER_REALM_NAME,
+            HERMETIC_TESTS_COLLECTION, TEST_ROOT_COLLECTION, TEST_ROOT_REALM_NAME,
+            WRAPPER_REALM_NAME,
         },
         diagnostics, enclosing_env,
         error::LaunchTestError,
@@ -57,14 +58,10 @@ use {
     tracing::{debug, error, info, warn},
 };
 
-const WRAPPER_REALM_NAME: &'static str = "test_wrapper";
-const ENCLOSING_ENV_REALM_NAME: &'static str = "enclosing_env";
-
 const ARCHIVIST_REALM_NAME: &'static str = "archivist";
 const ARCHIVIST_FOR_EMBEDDING_URL: &'static str =
     "fuchsia-pkg://fuchsia.com/test_manager#meta/archivist-for-embedding.cm";
 
-pub const HERMETIC_RESOLVER_REALM_NAME: &'static str = "hermetic_resolver";
 pub const HERMETIC_RESOLVER_CAPABILITY_NAME: &'static str = "hermetic_resolver";
 
 /// A |RunningSuite| represents a launched test component.
@@ -98,6 +95,9 @@ impl RunningSuite {
             Ok(component_url) => component_url.package_url().name().to_string(),
             Err(_) => return Err(LaunchTestError::InvalidResolverData),
         };
+        above_root_capabilities_for_test
+            .validate(facets.collection)
+            .map_err(LaunchTestError::ValidateTestRealm)?;
         let builder = get_realm(
             test_url,
             test_package.as_ref(),
@@ -683,25 +683,6 @@ async fn get_realm(
         )
         .await?;
 
-    builder
-        .add_route(
-            Route::new()
-                .capability(Capability::event_stream("started_v2").with_scope(&wrapper_realm))
-                .capability(Capability::event_stream("stopped_v2").with_scope(&wrapper_realm))
-                .capability(Capability::event_stream("destroyed_v2").with_scope(&wrapper_realm))
-                .capability(Capability::event_stream("discovered_v2").with_scope(&wrapper_realm))
-                .capability(
-                    Capability::event_stream("capability_requested_v2").with_scope(&wrapper_realm),
-                )
-                .capability(
-                    Capability::event_stream("directory_ready_v2").with_scope(&wrapper_realm),
-                )
-                .capability(Capability::event_stream("debug_started_v2").with_scope(&wrapper_realm))
-                .from(Ref::parent())
-                .to(&wrapper_realm),
-        )
-        .await?;
-
     wrapper_realm
         .add_route(
             Route::new()
@@ -752,56 +733,6 @@ async fn get_realm(
                 ))
             },
             ChildOptions::new(),
-        )
-        .await?;
-
-    wrapper_realm
-        .add_route(
-            Route::new()
-                .capability(
-                    Capability::event_stream("started_v2")
-                        .with_scope(test_root.clone())
-                        .with_scope(&enclosing_env)
-                        .with_scope(&resolver),
-                )
-                .capability(
-                    Capability::event_stream("stopped_v2")
-                        .with_scope(test_root.clone())
-                        .with_scope(&enclosing_env)
-                        .with_scope(&resolver),
-                )
-                .capability(
-                    Capability::event_stream("debug_started_v2")
-                        .with_scope(test_root.clone())
-                        .with_scope(&enclosing_env)
-                        .with_scope(&resolver),
-                )
-                .capability(
-                    Capability::event_stream("destroyed_v2")
-                        .with_scope(test_root.clone())
-                        .with_scope(&enclosing_env)
-                        .with_scope(&resolver),
-                )
-                .capability(
-                    Capability::event_stream("capability_requested_v2")
-                        .with_scope(test_root.clone())
-                        .with_scope(&enclosing_env)
-                        .with_scope(&resolver),
-                )
-                .capability(
-                    Capability::event_stream("directory_ready_v2")
-                        .with_scope(test_root.clone())
-                        .with_scope(&enclosing_env)
-                        .with_scope(&resolver),
-                )
-                .capability(
-                    Capability::event_stream("discovered_v2")
-                        .with_scope(test_root.clone())
-                        .with_scope(&enclosing_env)
-                        .with_scope(&resolver),
-                )
-                .from(Ref::parent())
-                .to(test_root.clone()),
         )
         .await?;
 
@@ -870,16 +801,6 @@ async fn get_realm(
     wrapper_realm
         .add_route(
             Route::new()
-                .capability(
-                    Capability::event_stream("stopped_v2")
-                        .with_scope(test_root.clone())
-                        .with_scope(&enclosing_env),
-                )
-                .capability(
-                    Capability::event_stream("destroyed_v2")
-                        .with_scope(test_root.clone())
-                        .with_scope(&enclosing_env),
-                )
                 .capability(
                     Capability::event_stream("capability_requested_v2")
                         .with_scope(test_root.clone())

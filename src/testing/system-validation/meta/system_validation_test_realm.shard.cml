@@ -60,11 +60,14 @@
         },
         {
             event_stream: [
+                "capability_requested_v2",
+                "directory_ready_v2",
                 "started_v2",
                 "stopped_v2",
             ],
             from: "parent",
             to: "#system-validation-tests",
+            scope: "#system-validation-tests",
         },
 
         // Test realms may offer subdirectories of config-data to test

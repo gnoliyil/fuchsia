@@ -55,6 +55,9 @@ pub enum LaunchTestError {
 
     #[error("Invalid manifest: {0:?}")]
     InvalidManifest(#[source] anyhow::Error),
+
+    #[error("Failed validating test realm: {0:?}")]
+    ValidateTestRealm(#[source] anyhow::Error),
 }
 
 #[derive(Debug, Error)]
@@ -80,6 +83,7 @@ impl From<LaunchTestError> for LaunchError {
         warn!("Error launching test: {:?}", e);
         match e {
             LaunchTestError::InitializeTestRealm(_)
+            | LaunchTestError::ValidateTestRealm(_)
             | LaunchTestError::ConnectToArchiveAccessor(_)
             | LaunchTestError::CreateTestFidl(_)
             | LaunchTestError::CreateTest(_)

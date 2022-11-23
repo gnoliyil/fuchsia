@@ -7,6 +7,9 @@ use std::collections::HashMap;
 
 pub const TEST_ROOT_REALM_NAME: &'static str = "test_root";
 pub const TEST_ROOT_COLLECTION: &'static str = "test";
+pub const WRAPPER_REALM_NAME: &'static str = "test_wrapper";
+pub const HERMETIC_RESOLVER_REALM_NAME: &'static str = "hermetic_resolver";
+pub const ENCLOSING_ENV_REALM_NAME: &'static str = "enclosing_env";
 
 // TODO(fxbug.dev/100034): Delete these once we no longer need to hard code these in the code.
 pub const HERMETIC_ENVIRONMENT_NAME: &'static str = "hermetic";
@@ -26,17 +29,17 @@ pub const SYSTEM_VALIDATION_COLLECTION: &'static str = "system-validation-tests"
 lazy_static! {
     pub static ref TEST_TYPE_REALM_MAP: HashMap<&'static str, &'static str> = [
         ("hermetic", HERMETIC_TESTS_COLLECTION),
-        ("system", SYSTEM_TESTS_COLLECTION),
-        ("cts", CTS_TESTS_COLLECTION),
-        ("vulkan", VULKAN_TESTS_COLLECTION),
         ("chromium", CHROMIUM_TESTS_COLLECTION),
+        ("cts", CTS_TESTS_COLLECTION),
         ("devices", DEVICES_TESTS_COLLECTION),
         ("drm", DRM_TESTS_COLLECTION),
-        ("media", MEDIA_TESTS_COLLECTION),
         ("google", GOOGLE_TESTS_COLLECTION),
+        ("media", MEDIA_TESTS_COLLECTION),
         ("starnix", STARNIX_TESTS_COLLECTION),
-        ("vfs-compliance", VFS_COMPLIANCE_COLLECTION),
+        ("system", SYSTEM_TESTS_COLLECTION),
         ("system-validation", SYSTEM_VALIDATION_COLLECTION),
+        ("vfs-compliance", VFS_COMPLIANCE_COLLECTION),
+        ("vulkan", VULKAN_TESTS_COLLECTION),
     ]
     .iter()
     .copied()

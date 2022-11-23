@@ -3,10 +3,12 @@
 // found in the LICENSE file.
 
 use {
-    crate::constants::{TEST_ROOT_COLLECTION, TEST_TYPE_REALM_MAP},
-    anyhow::Error,
-    fidl_fuchsia_component_decl as fdecl,
-    fidl_fuchsia_component_test::Capability as RBCapability,
+    crate::constants::{
+        ENCLOSING_ENV_REALM_NAME, HERMETIC_RESOLVER_REALM_NAME, TEST_ROOT_COLLECTION,
+        TEST_TYPE_REALM_MAP, WRAPPER_REALM_NAME,
+    },
+    anyhow::{format_err, Error},
+    fidl_fuchsia_component_decl as fdecl, fidl_fuchsia_component_test as ftest,
     fuchsia_component_test::{
         error::Error as RealmBuilderError, Capability, RealmBuilder, Ref, Route, SubRealmBuilder,
     },
@@ -14,8 +16,26 @@ use {
     std::collections::HashMap,
 };
 
+#[derive(Default)]
+struct CollectionData {
+    capabilities: Vec<ftest::Capability>,
+    required_event_streams: RequiredEventStreams,
+}
+
+#[derive(Default)]
+struct RequiredEventStreams {
+    capability_requested: bool,
+    directory_ready: bool,
+}
+
+impl RequiredEventStreams {
+    fn validate(&self) -> bool {
+        self.capability_requested && self.directory_ready
+    }
+}
+
 pub struct AboveRootCapabilitiesForTest {
-    capabilities: HashMap<&'static str, Vec<RBCapability>>,
+    collection_data: HashMap<&'static str, CollectionData>,
 }
 
 impl AboveRootCapabilitiesForTest {
@@ -24,14 +44,27 @@ impl AboveRootCapabilitiesForTest {
         let file_proxy =
             fuchsia_fs::file::open_in_namespace(&path, fuchsia_fs::OpenFlags::RIGHT_READABLE)?;
         let component_decl = fuchsia_fs::read_file_fidl::<fdecl::Component>(&file_proxy).await?;
-        let capabilities = Self::load(component_decl);
-        Ok(Self { capabilities })
+        let collection_data = Self::load(component_decl);
+        Ok(Self { collection_data })
     }
 
     #[cfg(test)]
     pub fn new_empty_for_tests() -> Self {
-        let empty_capabilities = HashMap::new();
-        Self { capabilities: empty_capabilities }
+        let empty_collection_data = HashMap::new();
+        Self { collection_data: empty_collection_data }
+    }
+
+    pub fn validate(&self, collection: &str) -> Result<(), Error> {
+        match self.collection_data.get(collection) {
+            Some(c) if !c.required_event_streams.validate() => {
+                return Err(format_err!(
+                    "The collection `{collection}` must be routed the events \
+                `capability_requested_v2` and `directory_ready_v2` from `parent` scoped \
+                to it"
+                ));
+            }
+            _ => Ok(()),
+        }
     }
 
     pub async fn apply(
@@ -40,66 +73,119 @@ impl AboveRootCapabilitiesForTest {
         builder: &RealmBuilder,
         wrapper_realm: &SubRealmBuilder,
     ) -> Result<(), RealmBuilderError> {
-        if self.capabilities.contains_key(collection) {
-            for capability in &self.capabilities[collection] {
-                builder
-                    .add_route(
-                        Route::new()
-                            .capability(capability.clone())
-                            .from(Ref::parent())
-                            .to(wrapper_realm),
+        if !self.collection_data.contains_key(collection) {
+            return Ok(());
+        }
+        for capability in &self.collection_data[collection].capabilities {
+            let (capability_for_test_wrapper, capability_for_test_root) =
+                if let ftest::Capability::EventStream(event_stream) = &capability {
+                    let mut test_wrapper_event_stream = event_stream.clone();
+                    test_wrapper_event_stream.scope =
+                        Some(vec![Ref::child(WRAPPER_REALM_NAME).into()]);
+                    let mut test_root_event_stream = event_stream.clone();
+                    test_root_event_stream.scope = Some(vec![
+                        Ref::collection(TEST_ROOT_COLLECTION).into(),
+                        Ref::child(ENCLOSING_ENV_REALM_NAME).into(),
+                        Ref::child(HERMETIC_RESOLVER_REALM_NAME).into(),
+                    ]);
+                    (
+                        ftest::Capability::EventStream(test_wrapper_event_stream),
+                        ftest::Capability::EventStream(test_root_event_stream),
                     )
-                    .await?;
-                wrapper_realm
-                    .add_route(
-                        Route::new()
-                            .capability(capability.clone())
-                            .from(Ref::parent())
-                            .to(Ref::collection(TEST_ROOT_COLLECTION)),
-                    )
-                    .await?;
-            }
+                } else {
+                    (capability.clone(), capability.clone())
+                };
+            builder
+                .add_route(
+                    Route::new()
+                        .capability(capability_for_test_wrapper.clone())
+                        .from(Ref::parent())
+                        .to(wrapper_realm),
+                )
+                .await?;
+            wrapper_realm
+                .add_route(
+                    Route::new()
+                        .capability(capability_for_test_root.clone())
+                        .from(Ref::parent())
+                        .to(Ref::collection(TEST_ROOT_COLLECTION)),
+                )
+                .await?;
         }
         Ok(())
     }
 
-    fn load(decl: fdecl::Component) -> HashMap<&'static str, Vec<RBCapability>> {
-        let mut capabilities: HashMap<_, _> =
-            TEST_TYPE_REALM_MAP.values().map(|v| (*v, vec![])).collect();
+    fn load(decl: fdecl::Component) -> HashMap<&'static str, CollectionData> {
+        let mut collection_data: HashMap<_, _> =
+            TEST_TYPE_REALM_MAP.values().map(|v| (*v, CollectionData::default())).collect();
         for offer_decl in decl.offers.unwrap_or(vec![]) {
             match offer_decl {
                 fdecl::Offer::Protocol(fdecl::OfferProtocol {
                     target: Some(fdecl::Ref::Collection(fdecl::CollectionRef { name })),
                     target_name: Some(target_name),
                     ..
-                }) if capabilities.contains_key(name.as_str())
+                }) if collection_data.contains_key(name.as_str())
                     && target_name != "fuchsia.logger.LogSink" =>
                 {
-                    capabilities
+                    collection_data
                         .get_mut(name.as_str())
                         .unwrap()
+                        .capabilities
                         .push(Capability::protocol_by_name(target_name).into());
                 }
                 fdecl::Offer::Directory(fdecl::OfferDirectory {
                     target: Some(fdecl::Ref::Collection(fdecl::CollectionRef { name })),
                     target_name: Some(target_name),
                     ..
-                }) if capabilities.contains_key(name.as_str()) => {
-                    capabilities
+                }) if collection_data.contains_key(name.as_str()) => {
+                    collection_data
                         .get_mut(name.as_str())
                         .unwrap()
+                        .capabilities
                         .push(Capability::directory(target_name).into());
                 }
                 fdecl::Offer::Storage(fdecl::OfferStorage {
                     target: Some(fdecl::Ref::Collection(fdecl::CollectionRef { name })),
                     target_name: Some(target_name),
                     ..
-                }) if capabilities.contains_key(name.as_str()) => {
+                }) if collection_data.contains_key(name.as_str()) => {
                     let use_path = format!("/{}", target_name);
-                    capabilities
+                    collection_data
                         .get_mut(name.as_str())
                         .unwrap()
+                        .capabilities
                         .push(Capability::storage(target_name).path(use_path).into());
+                }
+                fdecl::Offer::EventStream(fdecl::OfferEventStream {
+                    target: Some(fdecl::Ref::Collection(fdecl::CollectionRef { name })),
+                    target_name: Some(target_name),
+                    source: Some(source),
+                    scope,
+                    ..
+                }) if collection_data.contains_key(name.as_str()) => {
+                    collection_data
+                        .get_mut(name.as_str())
+                        .unwrap()
+                        .capabilities
+                        .push(Capability::event_stream(target_name.clone()).into());
+
+                    // Keep track of relevant event streams being offered from parent to the
+                    // collection scoped to it.
+                    let coll_ref =
+                        fdecl::Ref::Collection(fdecl::CollectionRef { name: name.clone() });
+                    if (target_name == "capability_requested_v2"
+                        || target_name == "directory_ready_v2")
+                        && matches!(source, fdecl::Ref::Parent(_))
+                        && scope.map(|s| s.contains(&coll_ref)).unwrap_or(false)
+                    {
+                        let mut entry = collection_data.get_mut(name.as_str()).unwrap();
+                        entry.required_event_streams.directory_ready =
+                            entry.required_event_streams.directory_ready
+                                || target_name == "directory_ready_v2";
+                        entry.required_event_streams.capability_requested =
+                            entry.required_event_streams.capability_requested
+                                || target_name == "capability_requested_v2";
+                    }
                 }
                 fdecl::Offer::Service(fdecl::OfferService {
                     target: Some(fdecl::Ref::Collection(fdecl::CollectionRef { name })),
@@ -112,7 +198,7 @@ impl AboveRootCapabilitiesForTest {
                 | fdecl::Offer::Resolver(fdecl::OfferResolver {
                     target: Some(fdecl::Ref::Collection(fdecl::CollectionRef { name })),
                     ..
-                }) if capabilities.contains_key(name.as_str()) => {
+                }) if collection_data.contains_key(name.as_str()) => {
                     unimplemented!(
                         "Services, runners and resolvers are not supported by realm builder"
                     );
@@ -120,7 +206,7 @@ impl AboveRootCapabilitiesForTest {
                 fdecl::Offer::Event(fdecl::OfferEvent {
                     target: Some(fdecl::Ref::Collection(fdecl::CollectionRef { name })),
                     ..
-                }) if capabilities.contains_key(name.as_str()) => {
+                }) if collection_data.contains_key(name.as_str()) => {
                     unreachable!("No events should be routed from above root to a test.");
                 }
                 _ => {
@@ -128,6 +214,6 @@ impl AboveRootCapabilitiesForTest {
                 }
             }
         }
-        capabilities
+        collection_data
     }
 }

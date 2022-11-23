@@ -22,6 +22,15 @@
     ],
     offer: [
         {
+            event_stream: [
+                "capability_requested_v2",
+                "directory_ready_v2",
+            ],
+            from: "parent",
+            to: "#cts-tests",
+            scope: "#cts-tests",
+        },
+        {
             // These hermetic protocols are offered to be used by tests.
             protocol: [ "fuchsia.logger.LogSink" ],
             from: "parent",

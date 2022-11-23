@@ -11,6 +11,15 @@
     ],
     offer: [
         {
+            event_stream: [
+                "capability_requested_v2",
+                "directory_ready_v2",
+            ],
+            from: "parent",
+            to: "#drm-tests",
+            scope: "#drm-tests",
+        },
+        {
             // These hermetic protocols are offered to be used by tests.
             protocol: [
                 // Tests can write to debug logs
