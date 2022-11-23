@@ -98,13 +98,12 @@ test("test") {
     "//sdk/lib/device-watcher/cpp",
     "//sdk/lib/driver_test_realm",
     "//sdk/lib/fdio",
-
-    # TODO(fxb/115060): Migrate from fake_ddk to mock-ddk.
-    "//src/devices/testing/fake_ddk",
+    "//src/devices/testing/mock-ddk",
     "//src/lib/ddk",
     "//src/lib/ddk:ddk-metadata-headers",
     "//src/lib/ddktl",
     "//src/lib/storage/ramdevice_client/cpp",
+    "//zircon/system/ulib/async-loop:async-loop-cpp",
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/fdio-caller",
     "//zircon/system/ulib/fzl",

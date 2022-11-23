@@ -4,7 +4,8 @@
 
 #include "ram-nand.h"
 
-#include <lib/fake_ddk/fake_ddk.h>
+#include <lib/async-loop/cpp/loop.h>
+#include <lib/ddk/metadata.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <zircon/boot/image.h>
@@ -17,6 +18,8 @@
 #include <ddk/metadata/nand.h>
 #include <fbl/alloc_checker.h>
 #include <zxtest/zxtest.h>
+
+#include "src/devices/testing/mock-ddk/mock-device.h"
 
 namespace {
 
@@ -51,22 +54,27 @@ TEST(RamNandTest, TrivialLifetime) {
 }
 
 TEST(RamNandTest, DdkLifetime) {
+  auto fake_parent = MockDevice::FakeRootParent();
   NandParams params(kPageSize, kBlockSize, kNumBlocks, 6, 0);  // 6 bits of ECC, no OOB.
-  NandDevice* device(new NandDevice(params, fake_ddk::kFakeParent));
+  NandDevice* device(new NandDevice(params, fake_parent.get()));
 
-  fake_ddk::Bind ddk;
   auto config = BuildConfig();
   ASSERT_OK(device->Bind(config));
-  device->DdkAsyncRemove();
-  EXPECT_TRUE(ddk.Ok());
+  auto* child = fake_parent->GetLatestChild();
+  child->InitOp();
+  EXPECT_OK(child->WaitUntilInitReplyCalled());
 
-  // This should delete the object, which means this test should not leak.
-  device->DdkRelease();
+  child->UnbindOp();
+  EXPECT_OK(child->WaitUntilUnbindReplyCalled());
+  device->DdkAsyncRemove();
+
+  mock_ddk::ReleaseFlaggedDevices(fake_parent.get());
 }
 
 TEST(RamNandTest, ExportNandConfig) {
+  auto fake_parent = MockDevice::FakeRootParent();
   NandParams params(kPageSize, kBlockSize, kNumBlocks, 6, 0);
-  NandDevice device(params, fake_ddk::kFakeParent);
+  NandDevice* device(new NandDevice(params, fake_parent.get()));
 
   fuchsia_hardware_nand::wire::RamNandInfo config = BuildConfig();
   config.export_nand_config = true;
@@ -107,20 +115,31 @@ TEST(RamNandTest, ExportNandConfig) {
   expected.extra_partition_config[1].copy_count = 23;
   expected.extra_partition_config[1].copy_byte_offset = 24;
 
-  fake_ddk::Bind ddk;
-  ddk.ExpectMetadata(&expected, sizeof(expected));
-  ASSERT_OK(device.Bind(config));
+  ASSERT_OK(device->Bind(config));
+  auto* child = fake_parent->GetLatestChild();
+  child->InitOp();
+  EXPECT_OK(child->WaitUntilInitReplyCalled());
 
-  int calls;
-  size_t length;
-  ddk.GetMetadataInfo(&calls, &length);
-  EXPECT_EQ(1, calls);
-  EXPECT_EQ(sizeof(expected), length);
+  char metadata_buffer[256] = {};
+  size_t actual_size;
+
+  EXPECT_OK(device_get_metadata(child, DEVICE_METADATA_PRIVATE, metadata_buffer,
+                                sizeof(metadata_buffer), &actual_size));
+  EXPECT_EQ(sizeof(expected), actual_size);
+
+  EXPECT_BYTES_EQ(&expected, metadata_buffer, actual_size);
+
+  child->UnbindOp();
+  child->WaitUntilUnbindReplyCalled();
+
+  device->DdkAsyncRemove();
+  mock_ddk::ReleaseFlaggedDevices(fake_parent.get());
 }
 
 TEST(RamNandTest, ExportPartitionMap) {
+  auto fake_parent = MockDevice::FakeRootParent();
   NandParams params(kPageSize, kBlockSize, kNumBlocks, 6, 0);
-  NandDevice device(params, fake_ddk::kFakeParent);
+  NandDevice* device(new NandDevice(params, fake_parent.get()));
 
   fuchsia_hardware_nand::wire::RamNandInfo config = BuildConfig();
   config.export_partition_map = true;
@@ -165,33 +184,51 @@ TEST(RamNandTest, ExportPartitionMap) {
   expected->partitions[1].last_block = 58;
   memset(expected->partitions[1].name, 59, ZBI_PARTITION_NAME_LEN);
 
-  fake_ddk::Bind ddk;
-  ddk.ExpectMetadata(expected, expected_size);
-  ASSERT_OK(device.Bind(config));
+  ASSERT_OK(device->Bind(config));
+  auto* child = fake_parent->GetLatestChild();
+  child->InitOp();
+  EXPECT_OK(child->WaitUntilInitReplyCalled());
 
-  int calls;
-  size_t length;
-  ddk.GetMetadataInfo(&calls, &length);
-  EXPECT_EQ(1, calls);
-  EXPECT_EQ(expected_size, length);
+  char metadata_buffer[256] = {};
+  size_t actual_size;
+
+  EXPECT_OK(device_get_metadata(child, DEVICE_METADATA_PARTITION_MAP, metadata_buffer,
+                                sizeof(metadata_buffer), &actual_size));
+  EXPECT_EQ(expected_size, actual_size);
+
+  EXPECT_BYTES_EQ(expected, metadata_buffer, actual_size);
+
+  child->UnbindOp();
+  child->WaitUntilUnbindReplyCalled();
+
+  device->DdkAsyncRemove();
+  mock_ddk::ReleaseFlaggedDevices(fake_parent.get());
 }
 
 TEST(RamNandTest, AddMetadata) {
+  auto fake_parent = MockDevice::FakeRootParent();
   NandParams params(kPageSize, kBlockSize, kNumBlocks, 6, 0);
-  NandDevice device(params, fake_ddk::kFakeParent);
+  NandDevice* device(new NandDevice(params, fake_parent.get()));
 
   fuchsia_hardware_nand::wire::RamNandInfo config = BuildConfig();
   config.export_nand_config = true;
   config.export_partition_map = true;
 
-  fake_ddk::Bind ddk;
-  ASSERT_OK(device.Bind(config));
+  ASSERT_OK(device->Bind(config));
+  auto* child = fake_parent->GetLatestChild();
+  child->InitOp();
+  EXPECT_OK(child->WaitUntilInitReplyCalled());
 
-  int calls;
-  size_t length;
-  ddk.GetMetadataInfo(&calls, &length);
-  EXPECT_EQ(2, calls);
-  EXPECT_EQ(sizeof(nand_config_t) + sizeof(zbi_partition_map_t), length);
+  char metadata_buffer[256] = {};
+  size_t actual_size;
+
+  EXPECT_OK(device_get_metadata(child, DEVICE_METADATA_PRIVATE, metadata_buffer,
+                                sizeof(metadata_buffer), &actual_size));
+  EXPECT_EQ(sizeof(nand_config_t), actual_size);
+
+  EXPECT_OK(device_get_metadata(child, DEVICE_METADATA_PARTITION_MAP, metadata_buffer,
+                                sizeof(metadata_buffer), &actual_size));
+  EXPECT_EQ(sizeof(zbi_partition_map_t), actual_size);
 }
 
 std::unique_ptr<NandDevice> CreateDevice(size_t* operation_size) {
@@ -214,30 +251,37 @@ std::unique_ptr<NandDevice> CreateDevice(size_t* operation_size) {
 }
 
 TEST(RamNandTest, Unlink) {
+  auto fake_parent = MockDevice::FakeRootParent();
   NandParams params(kPageSize, kBlockSize, kNumBlocks, 6, 0);
-  NandDevice* device(new NandDevice(params, fake_ddk::kFakeParent));
+  NandDevice* device(new NandDevice(params, fake_parent.get()));
 
-  fake_ddk::Bind ddk;
+  auto endpoints = fidl::CreateEndpoints<fuchsia_hardware_nand::RamNand>();
+  ASSERT_TRUE(endpoints.is_ok());
+
+  async::Loop loop{&kAsyncLoopConfigNeverAttachToThread};
+  loop.StartThread("fidl-thread");
+  fidl::BindServer(loop.dispatcher(), std::move(endpoints->server), device);
+
   // We need to DdkAdd the device, as Unlink will call DdkAsyncRemove.
   auto config = BuildConfig();
   ASSERT_OK(device->Bind(config));
+  auto* child = fake_parent->GetLatestChild();
 
-  fidl::WireSyncClient client{ddk.FidlClient<fuchsia_hardware_nand::RamNand>()};
+  fidl::WireSyncClient client(std::move(endpoints->client));
   {
     auto result = client->Unlink();
     ASSERT_OK(result.status());
     ASSERT_OK(result.value().status);
   }
-  ASSERT_OK(ddk.WaitUntilRemove());
+  ASSERT_OK(child->WaitUntilAsyncRemoveCalled());
+  mock_ddk::ReleaseFlaggedDevices(fake_parent.get());
+  loop.Shutdown();
 
   // The device is "dead" now.
   {
     auto result = client->Unlink();
     ASSERT_EQ(ZX_ERR_PEER_CLOSED, result.status());
   }
-
-  // This should delete the object, which means this test should not leak.
-  device->DdkRelease();
 }
 
 TEST(RamNandTest, Query) {

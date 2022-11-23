@@ -100,7 +100,6 @@ zx_library("fake_ddk") {
     "//src/devices/lib/goldfish/pipe_io/*",
     "//src/devices/nand/drivers/aml-rawnand/tests/*",
     "//src/devices/nand/drivers/nand/tests/*",
-    "//src/devices/nand/drivers/ram-nand/*",
     "//src/devices/nand/drivers/skip-block/*",
     "//src/devices/power/drivers/ti-ina231/*",
     "//src/devices/ram/drivers/aml-ram/*",
