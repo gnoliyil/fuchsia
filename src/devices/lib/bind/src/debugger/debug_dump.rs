@@ -4,7 +4,8 @@
 
 use crate::compiler::symbol_table::{get_deprecated_key_identifiers, Symbol};
 use crate::interpreter::common::BytecodeError;
-use crate::interpreter::decode_bind_rules::{DecodedCondition, DecodedInstruction, DecodedRules};
+use crate::interpreter::decode_bind_rules::DecodedRules;
+use crate::interpreter::instruction_decoder::{DecodedCondition, DecodedInstruction};
 
 // TODO(fxb/93365): Print the decoded instructions in the composite bytecode.
 pub fn dump_bind_rules(bytecode: Vec<u8>) -> Result<String, BytecodeError> {

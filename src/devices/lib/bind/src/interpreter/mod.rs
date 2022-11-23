@@ -4,4 +4,8 @@
 
 pub mod common;
 pub mod decode_bind_rules;
+pub mod instruction_decoder;
 pub mod match_bind;
+
+#[cfg(test)]
+mod test_common;
