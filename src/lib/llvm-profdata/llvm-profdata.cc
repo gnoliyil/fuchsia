@@ -139,22 +139,41 @@ extern "C" {
 
 #else  // Not _WIN32 or __APPLE__.
 
+#ifndef __ELF__
+#error "unsupported object file format???"
+#endif
+
 extern "C" {
 
-[[gnu::visibility("hidden")]] extern const __llvm_profile_data DataBegin[] __asm__(
-    INSTR_PROF_QUOTE(INSTR_PROF_SECT_START(INSTR_PROF_DATA_COMMON)));
-[[gnu::visibility("hidden")]] extern const __llvm_profile_data DataEnd[] __asm__(
-    INSTR_PROF_QUOTE(INSTR_PROF_SECT_STOP(INSTR_PROF_DATA_COMMON)));
+// ELF linkers implicitly provide __start_SECNAME and __stop_SECNAME symbols
+// when there is a SECNAME output section.  If selective instrumentation causes
+// no actual metadata sections to be emitted, or even if all instrumentation
+// sections in the input are in GC'd groups, then there is no such output
+// section and so these symbols aren't defined.  In the userland runtime, this
+// is handled simply by using weak references to the symbols.  However, those
+// references require GOT slots for PIC-friendly links even with hidden
+// visibility since there is no way for a PC-relative relocation to be resolved
+// to absolute zero to indicate a missing value.  So instead, we need to ensure
+// that there will be a zero-length section of the expected name that induces
+// the linker to resolve the __start_SECNAME and __stop_SECNAME symbols.
+// Having an explicit empty section with SHF_GNU_RETAIN accomplishes that
+// without adding anything to the actual memory image.  Since the start and
+// stop symbols are equal, the loops across them will just do nothing.
 
-[[gnu::visibility("hidden")]] extern const char NamesBegin[] __asm__(
-    INSTR_PROF_QUOTE(INSTR_PROF_SECT_START(INSTR_PROF_NAME_COMMON)));
-[[gnu::visibility("hidden")]] extern const char NamesEnd[] __asm__(
-    INSTR_PROF_QUOTE(INSTR_PROF_SECT_STOP(INSTR_PROF_NAME_COMMON)));
+#define PROFDATA_SECTION(type, begin, end, section, writable)        \
+  [[gnu::visibility("hidden")]] extern type begin[] __asm__(         \
+      INSTR_PROF_QUOTE(INSTR_PROF_SECT_START(section)));             \
+  [[gnu::visibility("hidden")]] extern type end[] __asm__(           \
+      INSTR_PROF_QUOTE(INSTR_PROF_SECT_STOP(section)));              \
+  __asm__(".pushsection " INSTR_PROF_QUOTE(section) ",\"aR" writable \
+                                                    "\",%progbits\n" \
+                                                    ".popsection")
 
-[[gnu::visibility("hidden")]] extern uint64_t CountersBegin[] __asm__(
-    INSTR_PROF_QUOTE(INSTR_PROF_SECT_START(INSTR_PROF_CNTS_COMMON)));
-[[gnu::visibility("hidden")]] extern uint64_t CountersEnd[] __asm__(
-    INSTR_PROF_QUOTE(INSTR_PROF_SECT_STOP(INSTR_PROF_CNTS_COMMON)));
+PROFDATA_SECTION(const __llvm_profile_data, DataBegin, DataEnd, INSTR_PROF_DATA_COMMON, "");
+
+PROFDATA_SECTION(const char, NamesBegin, NamesEnd, INSTR_PROF_NAME_COMMON, "");
+
+PROFDATA_SECTION(uint64_t, CountersBegin, CountersEnd, INSTR_PROF_CNTS_COMMON, "w");
 
 }  // extern "C"
 
