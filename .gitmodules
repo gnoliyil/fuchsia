@@ -718,3 +718,9 @@
 	name = third_party/github.com/google/python_portpicker
 	ignore = all
 	active = false
+[submodule "third_party/android/device/generic/vulkan-cereal"]
+	path = third_party/android/device/generic/vulkan-cereal
+	url = https://fuchsia.googlesource.com/third_party/android/device/generic/vulkan-cereal
+	name = third_party/android/device/generic/vulkan-cereal
+	ignore = all
+	active = false
