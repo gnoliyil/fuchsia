@@ -10,6 +10,7 @@ extend uint fuchsia.BIND_PLATFORM_DEV_VID {
 
 extend uint fuchsia.BIND_PLATFORM_DEV_PID {
   SD8987 = 1,
+  IMX8MMEVK = 2,
 };
 
 extend uint fuchsia.BIND_PLATFORM_DEV_DID {
