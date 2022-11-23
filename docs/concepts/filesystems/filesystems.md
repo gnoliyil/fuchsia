@@ -13,8 +13,7 @@ Unlike more common monolithic kernels, Fuchsia’s filesystems live entirely
 within userspace. They are not linked nor loaded with the kernel; they are
 simply userspace processes that implement servers that can appear as
 filesystems. As a consequence, Fuchsia’s filesystems themselves can be changed
-with ease -- modifications don’t require recompiling the kernel. In fact,
-updating to a new Fuchsia filesystem can be done without rebooting.
+with ease -- modifications don’t require recompiling the kernel.
 
 ![Filesystem block diagram](images/filesystem.svg "filesystem")
 
@@ -39,8 +38,9 @@ the following interface:
 
 As a benefit of this interface, any resources accessible via a channel can make
 themselves appear like filesystems by implementing the expected protocols for
-files or directories. For example, “serviceFS” (discussed in more detail later
-in this document) allows for service discovery through a filesystem interface.
+files or directories. For example, components serve their
+[outgoing directory][glossary.outgoing-directory], which contains their
+[capabilities][capabilities-overview], in a filesystem-like structure.
 
 ## File Lifecycle
 
@@ -290,3 +290,6 @@ file itself may be created on host. To do this there is host side utility
 [here](/src/storage/bin/fvm).
 Integrity of the FVM device/file can be verbosely verified with
 [fvm-check](/src/devices/block/bin/fvm-check)
+
+[glossary.outgoing-directory]: /docs/glossary/README.md#outgoing-directory
+[capabilities-overview]: /docs/concepts/components/v2/capabilities/README.md
