@@ -390,8 +390,10 @@ zx_status_t AmlPwmDevice::Create(void* ctx, zx_device_t* parent) {
     return status;
   }
 
-  if ((status = device->DdkAdd(
-           ddk::DeviceAddArgs("aml-pwm-device").set_proto_id(ZX_PROTOCOL_PWM_IMPL))) != ZX_OK) {
+  if (auto status = device->DdkAdd(ddk::DeviceAddArgs("aml-pwm-device")
+                                       .set_proto_id(ZX_PROTOCOL_PWM_IMPL)
+                                       .forward_metadata(parent, DEVICE_METADATA_PWM_IDS));
+      status != ZX_OK) {
     zxlogf(ERROR, "%s: DdkAdd failed", __func__);
     return status;
   }

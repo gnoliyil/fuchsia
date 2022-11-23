@@ -645,7 +645,11 @@ zx_status_t UsbPeripheral::AddFunctionDevices() {
           {BIND_USB_PID, 0, device_desc_.id_product},
       };
 
-      auto status = function->DdkAdd(ddk::DeviceAddArgs(name).set_props(props));
+      auto status =
+          function->DdkAdd(ddk::DeviceAddArgs(name)
+                               .set_props(props)
+                               .forward_metadata(parent(), DEVICE_METADATA_MAC_ADDRESS)
+                               .forward_metadata(parent(), DEVICE_METADATA_SERIAL_NUMBER));
       if (status != ZX_OK) {
         zxlogf(ERROR, "usb_dev_bind_functions add_device failed %d", status);
         return status;

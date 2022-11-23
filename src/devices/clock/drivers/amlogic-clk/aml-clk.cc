@@ -8,6 +8,7 @@
 #include <lib/ddk/debug.h>
 #include <lib/ddk/device.h>
 #include <lib/ddk/driver.h>
+#include <lib/ddk/metadata.h>
 #include <lib/ddk/platform-defs.h>
 #include <lib/device-protocol/pdev.h>
 #include <string.h>
@@ -768,7 +769,8 @@ zx_status_t AmlClock::Create(zx_device_t* parent) {
   auto clock_device = std::make_unique<amlogic_clock::AmlClock>(
       parent, std::move(*hiu_mmio), *std::move(dosbus_mmio), *std::move(msr_mmio), info.did);
 
-  status = clock_device->DdkAdd("clocks");
+  status = clock_device->DdkAdd(
+      ddk::DeviceAddArgs("clocks").forward_metadata(parent, DEVICE_METADATA_CLOCK_IDS));
   if (status != ZX_OK) {
     zxlogf(ERROR, "aml-clk: Could not create clock device: %d", status);
     return status;

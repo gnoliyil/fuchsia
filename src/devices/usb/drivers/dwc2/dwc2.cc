@@ -137,8 +137,8 @@ void Dwc2::HandleInEpInterrupt() {
 
       if (diepint.timeout()) {
         // TODO(105382) remove logging once timeout recovery has stabilized.
-        zxlogf(ERROR, "(diepint.timeout) DIEPINT=0x%08x DIEPMSK=0x%08x",
-               diepint.reg_value(), diepmsk.reg_value());
+        zxlogf(ERROR, "(diepint.timeout) DIEPINT=0x%08x DIEPMSK=0x%08x", diepint.reg_value(),
+               diepmsk.reg_value());
       }
 
       diepint.set_reg_value(diepint.reg_value() & diepmsk.reg_value());
@@ -984,7 +984,10 @@ zx_status_t Dwc2::Init() {
     return status;
   }
 
-  status = DdkAdd("dwc2");
+  status = DdkAdd(ddk::DeviceAddArgs("dwc2")
+                      .forward_metadata(parent(), DEVICE_METADATA_USB_CONFIG)
+                      .forward_metadata(parent(), DEVICE_METADATA_MAC_ADDRESS)
+                      .forward_metadata(parent(), DEVICE_METADATA_SERIAL_NUMBER));
   if (status != ZX_OK) {
     zxlogf(ERROR, "Dwc2::Init DdkAdd failed: %d", status);
     return status;

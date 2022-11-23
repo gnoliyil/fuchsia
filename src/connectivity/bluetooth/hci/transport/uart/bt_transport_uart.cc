@@ -11,6 +11,7 @@
 #include <lib/ddk/debug.h>
 #include <lib/ddk/device.h>
 #include <lib/ddk/driver.h>
+#include <lib/ddk/metadata.h>
 #include <lib/ddk/platform-defs.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -589,6 +590,7 @@ zx_status_t BtTransportUart::Bind() {
   };
   args.set_props(props);
   args.set_proto_id(ZX_PROTOCOL_BT_TRANSPORT);
+  args.forward_metadata(parent(), DEVICE_METADATA_MAC_ADDRESS);
   return DdkAdd(args);
 }
 

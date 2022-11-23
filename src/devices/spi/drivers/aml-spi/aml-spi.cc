@@ -735,7 +735,8 @@ zx_status_t AmlSpi::Create(void* ctx, zx_device_t* device) {
   char devname[32];
   sprintf(devname, "aml-spi-%u", config.bus_id);
 
-  status = spi->DdkAdd(devname);
+  status = spi->DdkAdd(
+      ddk::DeviceAddArgs(devname).forward_metadata(device, DEVICE_METADATA_SPI_CHANNELS));
   if (status != ZX_OK) {
     zxlogf(ERROR, "DdkAdd failed for SPI%u: %d", config.bus_id, status);
     return status;

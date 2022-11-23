@@ -77,7 +77,9 @@ zx_status_t AmlUart::Init() {
       {BIND_PROTOCOL, 0, ZX_PROTOCOL_SERIAL_IMPL_ASYNC},
       {BIND_SERIAL_CLASS, 0, serial_port_info_.serial_class},
   };
-  auto status = DdkAdd(ddk::DeviceAddArgs("aml-uart").set_props(props));
+  auto status = DdkAdd(ddk::DeviceAddArgs("aml-uart")
+                           .set_props(props)
+                           .forward_metadata(parent(), DEVICE_METADATA_MAC_ADDRESS));
   if (status != ZX_OK) {
     zxlogf(ERROR, "%s: DdkDeviceAdd failed", __func__);
     return status;

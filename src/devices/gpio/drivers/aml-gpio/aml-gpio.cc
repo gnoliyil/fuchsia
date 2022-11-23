@@ -5,6 +5,7 @@
 #include "aml-gpio.h"
 
 #include <lib/ddk/debug.h>
+#include <lib/ddk/metadata.h>
 #include <lib/ddk/platform-defs.h>
 #include <lib/device-protocol/platform-device.h>
 
@@ -156,8 +157,10 @@ zx_status_t AmlGpio::Create(void* ctx, zx_device_t* parent) {
         std::move(endpoints->client)));
   }
 
-  if ((status = device->DdkAdd(
-           ddk::DeviceAddArgs("aml-gpio").set_proto_id(ZX_PROTOCOL_GPIO_IMPL))) != ZX_OK) {
+  if (auto status = device->DdkAdd(ddk::DeviceAddArgs("aml-gpio")
+                                       .set_proto_id(ZX_PROTOCOL_GPIO_IMPL)
+                                       .forward_metadata(parent, DEVICE_METADATA_GPIO_PINS));
+      status != ZX_OK) {
     zxlogf(ERROR, "AmlGpio::Create: DdkAdd failed");
     return status;
   }
@@ -180,7 +183,7 @@ void AmlGpio::Bind(fdf::WireSyncClient<fuchsia_hardware_platform_bus::PlatformBu
 }
 
 zx_status_t AmlGpio::AmlPinToBlock(const uint32_t pin, const AmlGpioBlock** out_block,
-                                      uint32_t* out_pin_index) const {
+                                   uint32_t* out_pin_index) const {
   ZX_DEBUG_ASSERT(out_block && out_pin_index);
 
   for (size_t i = 0; i < block_count_; i++) {
@@ -548,8 +551,7 @@ zx_status_t AmlGpio::GpioImplGetDriveStrength(uint32_t pin, uint64_t* out) {
   return ZX_OK;
 }
 
-zx_status_t AmlGpio::GpioImplSetDriveStrength(uint32_t pin, uint64_t ua,
-                                                 uint64_t* out_actual_ua) {
+zx_status_t AmlGpio::GpioImplSetDriveStrength(uint32_t pin, uint64_t ua, uint64_t* out_actual_ua) {
   zx_status_t status;
 
   if (info_.pid == PDEV_PID_AMLOGIC_A113) {
