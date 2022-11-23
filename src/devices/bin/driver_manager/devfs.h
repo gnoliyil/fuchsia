@@ -62,7 +62,6 @@ class Devnode {
                          uint32_t protocol_id, ExportOptions options,
                          std::vector<std::unique_ptr<Devnode>>& out);
 
-  const Device* device() const;
   std::string_view name() const;
   PseudoDir& children() const { return node().children(); }
   ExportOptions export_options() const;

@@ -238,8 +238,7 @@ class CompositeTestCase : public MultipleDeviceTestCase {
                               size_t device_indexes_count, size_t* fragment_indexes_out,
                               DeviceState* composite_state);
 
-  fbl::RefPtr<Device> GetCompositeDeviceFromFragment(const char* composite_name,
-                                                     size_t fragment_index);
+  fbl::RefPtr<Device> GetCompositeDevice(std::string_view composite_name);
 
  protected:
   void SetUp() override {
@@ -248,17 +247,16 @@ class CompositeTestCase : public MultipleDeviceTestCase {
   }
 };
 
-fbl::RefPtr<Device> CompositeTestCase::GetCompositeDeviceFromFragment(const char* composite_name,
-                                                                      size_t fragment_index) {
-  fbl::RefPtr<Device> composite_device;
-  auto fragment_device = device(fragment_index)->device;
-  for (auto& comp : fragment_device->fragments()) {
-    if (!strcmp(comp.composite()->device()->name().data(), composite_name)) {
-      composite_device = comp.composite()->device();
-      break;
+fbl::RefPtr<Device> CompositeTestCase::GetCompositeDevice(std::string_view composite_name) {
+  for (Device& device : coordinator().device_manager()->devices()) {
+    if (!device.is_composite()) {
+      continue;
+    }
+    if (std::string_view(device.composite()->get().name()) == composite_name) {
+      return fbl::RefPtr(&device);
     }
   }
-  return composite_device;
+  return nullptr;
 }
 
 void CompositeTestCase::CheckCompositeCreation(const char* composite_name,
@@ -630,8 +628,7 @@ TEST_F(CompositeTestCase, FragmentUnbinds) {
   coordinator_loop()->RunUntilIdle();
 
   {
-    fbl::RefPtr<Device> comp_device =
-        GetCompositeDeviceFromFragment(kCompositeDevName, device_indexes[1]);
+    fbl::RefPtr<Device> comp_device = GetCompositeDevice(kCompositeDevName);
     ASSERT_NOT_NULL(comp_device);
   }
 
@@ -778,8 +775,7 @@ TEST_F(CompositeTestCase, ResumeOrder) {
   ASSERT_NO_FATAL_FAILURE(CheckCompositeCreation(kCompositeDevName, device_indexes,
                                                  std::size(device_indexes), fragment_device_indexes,
                                                  &composite));
-  fbl::RefPtr<Device> comp_device =
-      GetCompositeDeviceFromFragment(kCompositeDevName, device_indexes[1]);
+  fbl::RefPtr<Device> comp_device = GetCompositeDevice(kCompositeDevName);
   ASSERT_NOT_NULL(comp_device);
 
   // Put all the devices in suspended state
@@ -921,6 +917,9 @@ TEST_F(CompositeTestCase, Topology) {
                                                  std::size(device_indexes), fragment_device_indexes,
                                                  &composite));
 
+  fbl::RefPtr<Device> comp_device = GetCompositeDevice(kCompositeDevName);
+  ASSERT_NOT_NULL(comp_device);
+
   std::optional<Devnode>& dn = coordinator().root_device()->self;
   ASSERT_TRUE(dn.has_value());
   Devnode& root = dn.value();
@@ -941,15 +940,12 @@ TEST_F(CompositeTestCase, Topology) {
       ASSERT_STATUS(child.status_value(), ZX_ERR_NOT_FOUND);
       continue;
     }
-    // This is the primary parent; the composite device is a child node. Verify its topological path
-    // is correct.
+    // This is the primary parent; the composite device is a child node.
     ASSERT_OK(child.status_value());
 
-    // Copy before reusing the buffer.
-    const std::string expected_topological_path = std::string(path_buf) + '/' + kCompositeDevName;
-    ASSERT_OK(coordinator().GetTopologicalPath(fbl::RefPtr(child.value()->device()), path_buf,
-                                               sizeof(path_buf)));
-    ASSERT_STREQ(path_buf, expected_topological_path);
+    // Check that the Devnode we got walking the topological path is the same one
+    // from our device.
+    ASSERT_EQ(child.value(), &comp_device->self.value());
   }
 }
 
@@ -1030,7 +1026,7 @@ void CompositeMetadataTestCase::AddCompositeDevice(AddLocation add) {
   ASSERT_NO_FATAL_FAILURE(CheckCompositeCreation(kCompositeDevName, device_indexes,
                                                  std::size(device_indexes), fragment_device_indexes,
                                                  &composite));
-  composite_device = GetCompositeDeviceFromFragment(kCompositeDevName, device_indexes[0]);
+  composite_device = GetCompositeDevice(kCompositeDevName);
   ASSERT_NOT_NULL(composite_device);
 }
 
@@ -1139,7 +1135,7 @@ TEST_F(CompositeMetadataTestCase, GetMetadataAfterCompositeReassemble) {
   ASSERT_NO_FATAL_FAILURE(CheckCompositeCreation(kCompositeDevName, device_indexes,
                                                  std::size(device_indexes), fragment_device_indexes,
                                                  &composite));
-  composite_device = GetCompositeDeviceFromFragment(kCompositeDevName, device_indexes[0]);
+  composite_device = GetCompositeDevice(kCompositeDevName);
   ASSERT_NOT_NULL(composite_device);
 
   // Get and verify metadata
@@ -1203,7 +1199,7 @@ TEST_F(CompositeMetadataTestCase, GetMetadataAfterCompositeReassemble) {
   ASSERT_NO_FATAL_FAILURE(CheckCreateCompositeDeviceReceived(
       driver_host_server(), kCompositeDevName, std::size(device_indexes), &composite));
 
-  composite_device = GetCompositeDeviceFromFragment(kCompositeDevName, device_indexes[0]);
+  composite_device = GetCompositeDevice(kCompositeDevName);
   ASSERT_NOT_NULL(composite_device);
 
   // Get and verify metadata again
@@ -1259,8 +1255,7 @@ TEST_F(CompositeTestCase, FragmentDeviceInit) {
   coordinator_loop()->RunUntilIdle();
 
   {
-    fbl::RefPtr<Device> comp_device =
-        GetCompositeDeviceFromFragment(kCompositeDevName, device_indexes[1]);
+    fbl::RefPtr<Device> comp_device = GetCompositeDevice(kCompositeDevName);
     ASSERT_NOT_NULL(comp_device);
     ASSERT_EQ(Device::State::kActive, comp_device->state());
   }

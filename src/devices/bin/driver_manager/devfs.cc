@@ -61,13 +61,6 @@ ProtoNode* Devfs::proto_node(uint32_t protocol_id) {
   return &value;
 }
 
-const Device* Devnode::device() const {
-  return std::visit(overloaded{[](const NoRemote&) -> const Device* { return nullptr; },
-                               [](const Service&) -> const Device* { return nullptr; },
-                               [](const Device& device) { return &device; }},
-                    target());
-}
-
 std::string_view Devnode::name() const {
   if (name_.has_value()) {
     return name_.value();

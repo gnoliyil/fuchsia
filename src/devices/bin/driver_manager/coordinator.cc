@@ -956,29 +956,25 @@ void Coordinator::GetDeviceInfo(GetDeviceInfoRequestView request,
       device_list.emplace_back(&device);
     }
   } else {
-    std::optional<Devnode>& root_node_opt = root_device_->self;
-    ZX_ASSERT(root_node_opt.has_value());
-    Devnode& root_node = root_node_opt.value();
     for (const fidl::StringView& device_filter : request->device_filter) {
-      if (request->exact_match) {
-        zx::result dn = root_node.walk(device_filter.get());
-        if (dn.is_error()) {
-          if (dn.status_value() == ZX_ERR_NOT_FOUND) {
-            // If no device matches the filter, continue rather than exiting with an error.
-            continue;
-          }
-          request->iterator.Close(dn.status_value());
-          return;
+      for (auto& device : device_manager_->devices()) {
+        char path[fdm::wire::kDevicePathMax] = {};
+        GetTopologicalPath(fbl::RefPtr(&device), path, fdm::wire::kDevicePathMax);
+        // Remove the devfs prefix from the topological path.
+        std::string_view topo_path = path;
+        constexpr std::string_view devfs_prefix("dev/");
+        if (topo_path.length() > devfs_prefix.length()) {
+          topo_path = topo_path.substr(devfs_prefix.length() + 1);
         }
-        device_list.emplace_back(dn.value()->device());
-      } else {
-        for (auto& device : device_manager_->devices()) {
-          char path[fdm::wire::kDevicePathMax] = {};
-          GetTopologicalPath(fbl::RefPtr(&device), path, fdm::wire::kDevicePathMax);
-          std::string_view topo_path = path;
-          if (topo_path.find(device_filter.get()) != std::string_view::npos) {
-            device_list.emplace_back(&device);
-          }
+        bool matches = false;
+        // TODO(fxbug.dev/115717): Matches should also check the /dev/class/ path.
+        if (request->exact_match) {
+          matches = topo_path == device_filter.get();
+        } else {
+          matches = topo_path.find(device_filter.get()) != std::string_view::npos;
+        }
+        if (matches) {
+          device_list.emplace_back(&device);
         }
       }
     }
