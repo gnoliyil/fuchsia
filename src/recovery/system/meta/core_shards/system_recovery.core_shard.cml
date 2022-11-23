@@ -38,6 +38,11 @@
             to: "#system_recovery",
         },
         {
+            protocol: "fuchsia.feedback.CrashReporter",
+            from: "#feedback",
+            to: "#system_recovery",
+        },
+        {
             protocol: [
                 "fuchsia.sys.Environment",
                 "fuchsia.sys.Loader",
