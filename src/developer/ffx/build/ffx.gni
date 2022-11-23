@@ -11,7 +11,11 @@ import("ffx_plugin.gni")
 template("ffx") {
   assert(is_host, "ffx presently only builds in host toolchains")
 
-  ffx_deps = []
+  if (defined(invoker.ffx_deps)) {
+    ffx_deps = invoker.ffx_deps
+  } else {
+    ffx_deps = []
+  }
 
   ffx_name = target_name
 
@@ -62,22 +66,7 @@ template("ffx") {
       configs += [ "//build/config/rust:lto_thin" ]
     }
 
-    deps = ffx_deps + [
-             "//src/developer/ffx:ffx_lib_args",
-             "//src/developer/ffx:ffx_lib_sub_command",
-             "//src/developer/ffx:ffx_lib_suite",
-             "//src/developer/ffx/command:lib",
-             "//src/developer/ffx/config:lib",
-             "//src/developer/ffx/lib/errors:lib",
-             "//src/developer/ffx/lib/fho:lib",
-             "//src/developer/ffx/plugins/daemon:ffx_daemon_plugin_args",
-             "//src/developer/ffx/plugins/daemon:ffx_daemon_plugin_sub_command",
-             "//src/lib/fuchsia-async",
-             "//third_party/rust_crates:anyhow",
-             "//third_party/rust_crates:argh",
-             "//third_party/rust_crates:async-trait",
-             "//third_party/rust_crates:tempfile",
-           ]
+    deps = ffx_deps
     non_rust_deps = [
       "//src/lib/chunked-compression",
       "//third_party/boringssl",

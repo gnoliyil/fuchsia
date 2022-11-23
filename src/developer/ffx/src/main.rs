@@ -5,8 +5,8 @@
 use argh::{FromArgs, SubCommands};
 use errors::ffx_error;
 use ffx_command::{
-    argh_to_ffx_err, DaemonVersionCheck, Error, Ffx, FfxCommandLine, FfxToolInfo, Result,
-    ToolRunner, ToolSuite,
+    argh_to_ffx_err, DaemonVersionCheck, Error, Ffx, FfxCommandLine, FfxContext, FfxToolInfo,
+    Result, ToolRunner, ToolSuite,
 };
 use ffx_config::EnvironmentContext;
 use ffx_lib_args::FfxBuiltIn;
@@ -135,11 +135,12 @@ async fn run_legacy_subcommand(
     app: Ffx,
     context: EnvironmentContext,
     subcommand: FfxBuiltIn,
-) -> Result<(), anyhow::Error> {
+) -> Result<()> {
     let router_interval = if is_daemon(&subcommand) { Some(CIRCUIT_REFRESH_RATE) } else { None };
     let cache_path = context.get_cache_path()?;
-    std::fs::create_dir_all(&cache_path)?;
-    let hoist_cache_dir = tempfile::tempdir_in(&cache_path)?;
+    let hoist_cache_dir = std::fs::create_dir_all(&cache_path)
+        .and_then(|_| tempfile::tempdir_in(&cache_path))
+        .user_message("Unable to create hoist cache directory")?;
     let injector = app
         .initialize_overnet(
             hoist_cache_dir.path(),

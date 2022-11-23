@@ -1,7 +1,7 @@
 pub async fn ffx_plugin_impl(
   _injector: &dyn ffx_core::Injector,
   _cmd: {{suite_args_lib}}::FfxPluginCommand,
-) -> anyhow::Result<()>
+) -> fho::Result<()>
 {
 {% if includes_subcommands %}
 {% if includes_execution %}
@@ -10,14 +10,14 @@ pub async fn ffx_plugin_impl(
   match Some(_cmd.subcommand) {
 {% endif %}
 {% for plugin in plugins %}
-    Some({{suite_subcommand_lib}}::SubCommand::{{plugin.enum}}(c)) => return {{plugin.lib}}_suite::ffx_plugin_impl(_injector, c).await,
+    Some({{suite_subcommand_lib}}::SubCommand::{{plugin.enum}}(c)) => return {{plugin.lib}}_suite::ffx_plugin_impl(_injector, c).await.map_err(fho::Error::from),
 {% endfor %}
     None => (),
   };
 {% endif %}
 
 {% if includes_execution %}
-  {{execution_lib}}::ffx_plugin_impl(_injector, _cmd).await
+  {{execution_lib}}::ffx_plugin_impl(_injector, _cmd).await.map_err(fho::Error::from)
 {% else %}
   println!("SubCommand not implemented yet.");
   Ok(())
