@@ -18,6 +18,7 @@ default_config = {
   listen_to_lifecycle = true
   log_to_debuglog = true
   logs_max_cached_original_bytes = 4194304
+  maximum_concurrent_snapshots_per_reader = 4
   num_threads = 4
   pipelines_path = "/config/data"
   serve_unattributed_logs = false

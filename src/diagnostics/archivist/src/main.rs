@@ -69,6 +69,7 @@ fn load_v1_config(options: Vec<ArchivistOptionV1>) -> Config {
         listen_to_lifecycle: false,
         log_to_debuglog: false,
         logs_max_cached_original_bytes: constants::LEGACY_DEFAULT_MAXIMUM_CACHED_LOGS_BYTES,
+        maximum_concurrent_snapshots_per_reader: 4,
         num_threads: 1,
         pipelines_path: constants::DEFAULT_PIPELINES_PATH.into(),
         serve_unattributed_logs: true,

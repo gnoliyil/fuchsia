@@ -93,8 +93,11 @@ impl Archivist {
             Arc::new(InspectRepository::new(pipelines.iter().map(Arc::downgrade).collect()));
 
         // Initialize our FIDL servers. This doesn't start serving yet.
-        let accessor_server =
-            Arc::new(ArchiveAccessorServer::new(inspect_repo.clone(), logs_repo.clone()));
+        let accessor_server = Arc::new(ArchiveAccessorServer::new(
+            inspect_repo.clone(),
+            logs_repo.clone(),
+            config.maximum_concurrent_snapshots_per_reader,
+        ));
         let log_server = Arc::new(LogServer::new(logs_repo.clone()));
         let log_settings_server = Arc::new(LogSettingsServer::new(logs_repo.clone()));
 
@@ -404,6 +407,7 @@ mod tests {
             install_controller: true,
             listen_to_lifecycle: false,
             log_to_debuglog: false,
+            maximum_concurrent_snapshots_per_reader: 4,
             serve_unattributed_logs: true,
             logs_max_cached_original_bytes: LEGACY_DEFAULT_MAXIMUM_CACHED_LOGS_BYTES,
             num_threads: 1,

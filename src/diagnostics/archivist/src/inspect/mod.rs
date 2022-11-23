@@ -5,7 +5,6 @@
 use {
     crate::{
         accessor::PerformanceConfig,
-        constants,
         diagnostics::BatchIteratorConnectionStats,
         inspect::container::{ReadSnapshot, SnapshotData, UnpopulatedInspectDataContainer},
         moniker_rewriter::OutputRewriter,
@@ -103,6 +102,8 @@ impl ReaderServer {
         let server = Arc::new(Self { selectors, output_rewriter });
 
         let batch_timeout = performance_configuration.batch_timeout_sec;
+        let maximum_concurrent_snapshots_per_reader =
+            performance_configuration.maximum_concurrent_snapshots_per_reader;
 
         futures::stream::iter(unpopulated_diagnostics_sources.into_iter())
             .map(move |unpopulated| {
@@ -112,7 +113,7 @@ impl ReaderServer {
             .flatten()
             .map(future::ready)
             // buffer a small number in memory in case later components time out
-            .buffer_unordered(constants::MAXIMUM_SIMULTANEOUS_SNAPSHOTS_PER_READER)
+            .buffer_unordered(maximum_concurrent_snapshots_per_reader as usize)
             // filter each component's inspect
             .filter_map(move |populated| {
                 let server_clone = server.clone();
@@ -1096,6 +1097,7 @@ mod tests {
         let test_performance_config = PerformanceConfig {
             batch_timeout_sec: BATCH_RETRIEVAL_TIMEOUT_SECONDS,
             aggregated_content_limit_bytes: None,
+            maximum_concurrent_snapshots_per_reader: 4,
         };
 
         let trace_id = ftrace::Id::random();

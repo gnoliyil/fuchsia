@@ -29,6 +29,9 @@
         // sizes stored in the archivist. Logs are rolled out when this value is exceeded.
         logs_max_cached_original_bytes: { type: "uint64" },
 
+        // Maximum number of concurrent Inspect snapshots per reader client.
+        maximum_concurrent_snapshots_per_reader: { type: "uint64" },
+
         // Number of threads that the archivist will use for its multithreaded executor.
         num_threads: { type: "uint64" },
 
