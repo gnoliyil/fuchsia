@@ -373,8 +373,10 @@ fuchsia_package("setui_service") {
     "//:additional_base_packages",
     "//:developer_base_packages",
     "//:legacy_base_packages",
+    "//build/images/recovery:*",
     "//src/developer/forensics/feedback/tests/*",
     "//src/intl/intl_services/tests/*",
+    "//vendor/google/*",
   ]
   deps = [
     ":setui_service_v2",
@@ -389,6 +391,7 @@ core_shard("setui_service_core_shard") {
   visibility = [
     ":*",
     "//build/images/fuchsia:*",
+    "//build/images/recovery:*",
     "//bundles/assembly_input_groups:*",
     "//vendor/google/*",
   ]

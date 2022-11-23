@@ -121,6 +121,7 @@ if (is_fuchsia) {
           "//src/developer/sshd-host:core_shard",
           "//src/factory/factory_store_providers:factory_store_providers_shard",
           "//src/recovery/system:system_recovery_core_shard",
+          "//src/settings/service:setui_service_core_shard",
           "//src/sys/process-resolver:core_shard",
         ]
   }
@@ -201,6 +202,9 @@ if (is_fuchsia) {
         # Support for hwinfo protocol to read regulatory region from factory.
         "//src/hwinfo:hwinfo",
         "//src/factory/factory_store_providers",
+
+        # Support privacy switch
+        "//src/settings/service:setui_service",
       ]
 
   recovery_installer_packages =

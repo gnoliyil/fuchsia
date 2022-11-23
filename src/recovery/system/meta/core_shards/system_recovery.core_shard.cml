@@ -51,6 +51,29 @@
             to: "#system_recovery",
         },
         {
+            protocol: "fuchsia.hwinfo.Board",
+            from: "#hwinfo",
+            to: "#system_recovery",
+        },
+        {
+            protocol: "fuchsia.hwinfo.Device",
+            from: "#hwinfo",
+            to: "#system_recovery",
+        },
+        {
+            protocol: "fuchsia.hwinfo.Product",
+            from: "#hwinfo",
+            to: "#system_recovery",
+        },
+        {
+            protocol: [
+                "fuchsia.settings.Input",
+                "fuchsia.settings.Privacy",
+            ],
+            from: "#setui_service",
+            to: "#system_recovery",
+        },
+        {
             protocol: [
                 "fuchsia.boot.Arguments",
                 "fuchsia.fshost.Admin",

@@ -76,6 +76,7 @@
             protocol: "fuchsia.ui.brightness.Control",
             from: "#brightness_manager",
             to: "#setui_service",
+            source_availability: "unknown",
         },
         {
             protocol: [
@@ -84,6 +85,7 @@
             ],
             from: "#audio_core",
             to: "#setui_service",
+            source_availability: "unknown",
         },
         {
             protocol: "fuchsia.stash.Store",
@@ -109,11 +111,12 @@
             protocol: "fuchsia.media.sounds.Player",
             from: "#soundplayer",
             to: "#setui_service",
+            source_availability: "unknown",
         },
     ],
     expose: [
         {
-            protocol: "fuchsia.settings.Input",
+            protocol: [ "fuchsia.settings.Input" ],
             from: "#setui_service",
         },
     ],
