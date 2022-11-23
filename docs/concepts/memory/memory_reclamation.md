@@ -108,7 +108,7 @@ zx_vmo_create(vmo_size, ZX_VMO_DISCARDABLE, &vmo);
 // Lock the VMO.
 zx_vmo_lock_state_t lock_state = {};
 zx_vmo_op_range(vmo, ZX_VMO_OP_LOCK, 0, vmo_size, &lock_state,
-                sizeof(lock_state)));
+                sizeof(lock_state));
 
 // Use the VMO as desired.
 zx_vmo_read(vmo, buf, 0, sizeof(buf));
@@ -118,7 +118,7 @@ vmo_op_range(vmo, ZX_VMO_OP_UNLOCK, 0, vmo_size, nullptr, 0);
 
 // Lock the VMO again before use.
 zx_vmo_op_range(vmo, ZX_VMO_OP_LOCK, 0, vmo_size, &lock_state,
-                sizeof(lock_state)));
+                sizeof(lock_state));
 
 if (lock_state.discarded_size > 0) {
   // The kernel discarded the VMO. Re-initialize it if required.
