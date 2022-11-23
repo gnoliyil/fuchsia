@@ -78,7 +78,7 @@ fuchsia_driver_component("sdmmc") {
   component_name = "sdmmc"
   deps = [ ":sdmmc-driver" ]
   info = "sdmmc-info.json"
-  colocate = true
+  manifest = "meta/sdmmc.cml"
 }
 
 test("sdmmc-test-bin") {
