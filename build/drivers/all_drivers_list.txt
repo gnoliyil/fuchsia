@@ -100,6 +100,7 @@
 //src/devices/board/drivers/av400:av400-driver
 //src/devices/board/drivers/buckeye:buckeye-driver
 //src/devices/board/drivers/clover:clover-driver
+//src/devices/board/drivers/imx8mmevk:imx8mmevk-driver
 //src/devices/board/drivers/integration-test:integration-test-driver
 //src/devices/board/drivers/machina:machina-driver
 //src/devices/board/drivers/nelson:nelson-module-driver
@@ -237,9 +238,6 @@
 //src/devices/tests/ddk-power:ddk-power-test-child-driver
 //src/devices/tests/ddk-power:ddk-power-test-driver
 //src/devices/tests/ddk-topology-test:ddk-topology-test
-//src/devices/tests/node-group-test/drivers:node-group-driver
-//src/devices/tests/node-group-test/drivers:leaf-driver
-//src/devices/tests/node-group-test/drivers:root-driver
 //src/devices/tests/device-watcher:test-driver-driver
 //src/devices/tests/driver-inspect-test:fuchsia_driver
 //src/devices/tests/driver-multiname-test:parent_device
@@ -256,14 +254,17 @@
 //src/devices/tests/fidl-service:parent-driver
 //src/devices/tests/isolateddevmgr:isolateddevmgr-test-driver-driver
 //src/devices/tests/mock-device:mock-device-driver
+//src/devices/tests/node-group-test/drivers:leaf-driver
+//src/devices/tests/node-group-test/drivers:node-group-driver
+//src/devices/tests/node-group-test/drivers:root-driver
 //src/devices/tests/nonbindable:driver
 //src/devices/tests/string-bind-test:child-driver-driver
 //src/devices/tests/string-bind-test:parent-driver-driver
 //src/devices/tests/sysdev:sysdev-driver
-//src/devices/tests/v2/compat-node-group/node-group:driver
-//src/devices/tests/v2/compat-node-group/root:driver
 //src/devices/tests/v2/compat-globals/leaf:driver
 //src/devices/tests/v2/compat-globals/root:driver
+//src/devices/tests/v2/compat-node-group/node-group:driver
+//src/devices/tests/v2/compat-node-group/root:driver
 //src/devices/tests/v2/compat-runtime-v1/leaf:driver
 //src/devices/tests/v2/compat-runtime-v1/root:driver
 //src/devices/tests/v2/compat-runtime:root-driver
@@ -274,8 +275,6 @@
 //src/devices/tests/v2/composite:root_driver
 //src/devices/tests/v2/ddk-init-test:driver
 //src/devices/tests/v2/devfs_exporter:root_driver
-//src/devices/tests/v2/node_group:leaf_driver
-//src/devices/tests/v2/node_group:root_driver
 //src/devices/tests/v2/dynamic_offers:leaf_driver
 //src/devices/tests/v2/dynamic_offers:root_driver
 //src/devices/tests/v2/init-child-first:driver
@@ -283,6 +282,8 @@
 //src/devices/tests/v2/interop:leaf_driver
 //src/devices/tests/v2/interop:root_driver
 //src/devices/tests/v2/interop:v1_driver
+//src/devices/tests/v2/node_group:leaf_driver
+//src/devices/tests/v2/node_group:root_driver
 //src/devices/tests/v2/runtime-dispatcher:leaf-driver
 //src/devices/tests/v2/runtime-dispatcher:root-driver
 //src/devices/tests/v2/runtime-protocol:leaf-driver
@@ -345,8 +346,8 @@
 //src/graphics/drivers/msd-vsi-vip:msd_vsi-driver
 //src/graphics/drivers/msd-vsi-vip:msd_vsi_test-driver
 //src/graphics/drivers/virtio:virtio_gpu-driver
-//src/media/audio/drivers/aml-dsp:aml-dsp-driver
 //src/media/audio/drivers/aml-dsp/aml-g12-tdm-dsp:aml-g12-tdm-dsp-driver
+//src/media/audio/drivers/aml-dsp:aml-dsp-driver
 //src/media/audio/drivers/aml-g12-pdm:aml-g12-pdm-driver
 //src/media/audio/drivers/aml-g12-tdm:aml-g12-tdm-dai-driver
 //src/media/audio/drivers/aml-g12-tdm:aml-g12-tdm-driver

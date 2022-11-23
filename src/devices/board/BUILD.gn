@@ -10,6 +10,7 @@ group("drivers") {
     "drivers/av400",
     "drivers/buckeye",
     "drivers/clover",
+    "drivers/imx8mmevk",
     "drivers/integration-test",
     "drivers/machina",
     "drivers/nelson",

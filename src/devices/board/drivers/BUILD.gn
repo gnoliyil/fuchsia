@@ -7,6 +7,7 @@ group("tests") {
   deps = [
     "as370:tests",
     "astro:tests",
+    "imx8mmevk:tests",
     "machina:tests",
     "nelson:tests",
     "pinecrest:tests",

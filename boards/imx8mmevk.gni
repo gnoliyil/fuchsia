@@ -23,7 +23,12 @@ max_fuchsia_zbi_size = 33554432  # 32 mebibytes (MiB)
 max_zedboot_zbi_size = 33554432  # 32 MiB
 
 # You'll put kernel command line arguments and driver dependencies here later.
-_common_bootfs_deps = []
+_common_bootfs_deps = [
+  "//bundles/drivers:bootstrap-dfv2",
+  "//src/devices/bin/driver_host2",
+  "//src/devices/board/drivers/imx8mmevk",
+]
+
 board_bootfs_labels += _common_bootfs_deps
 board_zedboot_bootfs_labels += _common_bootfs_deps
 board_recovery_bootfs_labels += _common_bootfs_deps
