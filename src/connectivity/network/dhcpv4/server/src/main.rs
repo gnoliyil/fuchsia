@@ -523,10 +523,14 @@ async fn define_msg_handling_loop_future<DS: DataStore>(
             }
             .context("initialize socket address failed")?;
 
+            // Create the packet socket without binding to a protocol so that
+            // the packet socket is not registered for RX. This desirable since
+            // the socket is only used to send packets and receiving packets
+            // on a packet socket is not free.
             let socket = socket2::Socket::new(
                 socket2::Domain::PACKET,
                 socket2::Type::DGRAM,
-                Some(socket2::Protocol::UDP),
+                None, /* protocol */
             )
             .context("create packet socket failed")?;
 
