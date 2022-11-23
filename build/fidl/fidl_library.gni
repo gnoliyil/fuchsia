@@ -166,19 +166,19 @@ template("fidl_library") {
 
     outputs = [ lint_stamp_file ]
 
-    fidl_to_lint = []
-    foreach(source, sources) {
-      if (string_replace(source, ".test.", "") == source) {
-        # Don't automatically lint test.fidl and test.<various>.fidl files
-        fidl_to_lint += [ rebase_path(source, root_build_dir) ]
-      }
-    }
-
     args = [ rebase_path(lint_stamp_file, root_build_dir) ]
-    if (fidl_to_lint == []) {
+
+    # Don't lint FIDL libraries used to test FIDL itself.
+    if (filter_include([ get_label_info(target_name, "dir") ],
+                       [
+                         "//sdk/testing/fidl/*",
+                         "//src/devices/tools/fidlgen_banjo/tests/fidl/*",
+                         "//src/lib/fidl/*",
+                         "//src/tests/benchmarks/fidl/benchmark_suite/*",
+                         "//src/tests/fidl/*",
+                         "//tools/fidl/fidlc/testdata/*",
+                       ]) != []) {
       args += [ ":" ]  # NOOP - Nothing to lint, but touch the stamp file
-      not_needed(invoker, [ "excluded_checks" ])
-      not_needed(invoker, [ "experimental_checks" ])
     } else {
       args += [ rebase_path(host_executable, root_build_dir) ]
 
@@ -188,11 +188,11 @@ template("fidl_library") {
       }
 
       if (excluded_checks != []) {
-        # Add path to fidl-lint executable, and --must-find-excluded-checks option, so fidl-lint will
-        # return an error if any excluded check is no longer required. Excluded checks are only
-        # allowed if the target |fidl_to_lint| files still violate those checks. After updating
-        # the FIDL files to resolve a lint error, remove the check-id from the list of excluded
-        # checks in the fidl() target to prevent the same lint errors from creeping back in, in
+        # Add path to fidl-lint executable, and --must-find-excluded-checks option, so fidl-lint
+        # will return an error if any excluded check is no longer required. Excluded checks are only
+        # allowed if the target files still violate those checks. After updating the FIDL files to
+        # resolve a lint error, remove the check-id from the list of excluded checks in the fidl()
+        # target to prevent the same lint errors from creeping back in, in
         # the future.
         args += [ "--must-find-excluded-checks" ]
 
@@ -216,7 +216,9 @@ template("fidl_library") {
         ]
       }
 
-      args += fidl_to_lint
+      foreach(source, sources) {
+        args += [ rebase_path(source, root_build_dir) ]
+      }
     }
   }
 

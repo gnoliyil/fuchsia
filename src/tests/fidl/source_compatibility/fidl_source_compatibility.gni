@@ -160,7 +160,6 @@ template("source_compatibility_test") {
     fidl(fidl_targets[fidl]) {
       name = fidl_library
       sources = [ fidl_sources[fidl] ]
-      excluded_checks = [ "too-many-nested-libraries" ]
     }
   }
 

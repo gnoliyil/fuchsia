@@ -60,4 +60,5 @@ fidl("fuchsia.device.mock") {
   testonly = true
   sources = [ "mock-device.test.fidl" ]
   public_deps = [ "//zircon/vdso/zx" ]
+  excluded_checks = [ "event-names-must-start-with-on" ]
 }

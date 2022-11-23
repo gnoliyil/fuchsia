@@ -14,4 +14,8 @@ import("//build/fidl/fidl.gni")
 fidl("examples.keyvaluestore.supportexports") {
   sources = [ "key_value_store.test.fidl" ]
   public_deps = [ "//zircon/vdso/zx" ]
+  excluded_checks = [
+    "vector-bounds-not-specified",
+    "wrong-prefix-for-platform-source-library",
+  ]
 }

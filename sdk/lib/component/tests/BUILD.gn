@@ -21,6 +21,10 @@ fidl("fidl.service.test") {
     "//sdk/lib/sys/component/cpp/tests:*",
   ]
   sources = [ "test.test.fidl" ]
+  excluded_checks = [
+    "disallowed-library-name-component",
+    "string-bounds-not-specified",
+  ]
 }
 
 test("service_client_test") {

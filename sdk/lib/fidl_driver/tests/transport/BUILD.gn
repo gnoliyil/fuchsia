@@ -18,6 +18,7 @@ fidl("test.transport") {
     "//zircon/vdso/zx",
   ]
   contains_drivers = true
+  excluded_checks = [ "vector-bounds-not-specified" ]
 }
 
 source_set("fidl_driver_transport_testing_lib") {

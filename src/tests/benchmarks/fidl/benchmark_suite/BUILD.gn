@@ -4,8 +4,8 @@
 
 import("//build/fidl/fidl.gni")
 import("//build/go/go_library.gni")
-import("//src/tests/benchmarks/fidl/benchmark_suite/benchmark_suite.gni")
 import("//tools/fidl/gidl/gidl.gni")
+import("benchmark_suite.gni")
 
 fidl("benchmark_suite_fidl") {
   testonly = true

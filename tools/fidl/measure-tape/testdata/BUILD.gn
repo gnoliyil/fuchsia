@@ -12,4 +12,9 @@ fidl("measuretape") {
   sources = [ "measuretape.test.fidl" ]
 
   public_deps = [ "//zircon/vdso/zx" ]
+
+  excluded_checks = [
+    "string-bounds-not-specified",
+    "vector-bounds-not-specified",
+  ]
 }

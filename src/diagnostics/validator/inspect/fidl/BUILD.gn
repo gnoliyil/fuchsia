@@ -13,4 +13,10 @@ fidl("validate") {
     "//sdk/fidl/fuchsia.inspect:fuchsia.inspect",
     "//zircon/vdso/zx",
   ]
+
+  excluded_checks = [
+    "invalid-case-for-decl-member",
+    "string-bounds-not-specified",
+    "vector-bounds-not-specified",
+  ]
 }

@@ -12,4 +12,8 @@ fidl("fuchsia.io.test") {
     "//sdk/fidl/fuchsia.io",
     "//zircon/vdso/zx",
   ]
+  excluded_checks = [
+    "string-bounds-not-specified",
+    "vector-bounds-not-specified",
+  ]
 }

@@ -13,4 +13,6 @@ fidl("sink-puppet") {
     "//sdk/fidl/fuchsia.diagnostics.stream",
     "//zircon/vdso/zx",
   ]
+
+  excluded_checks = [ "string-bounds-not-specified" ]
 }

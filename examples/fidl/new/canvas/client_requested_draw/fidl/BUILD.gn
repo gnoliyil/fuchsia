@@ -13,4 +13,8 @@ import("//build/fidl/fidl.gni")
 #
 fidl("examples.canvas.clientrequesteddraw") {
   sources = [ "canvas.test.fidl" ]
+  excluded_checks = [
+    "vector-bounds-not-specified",
+    "wrong-prefix-for-platform-source-library",
+  ]
 }

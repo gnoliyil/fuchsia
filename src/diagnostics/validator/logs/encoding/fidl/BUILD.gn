@@ -13,4 +13,6 @@ fidl("validate") {
     "//sdk/fidl/fuchsia.diagnostics.stream:fuchsia.diagnostics.stream",
     "//sdk/fidl/fuchsia.mem",
   ]
+
+  excluded_checks = [ "invalid-case-for-constant" ]
 }

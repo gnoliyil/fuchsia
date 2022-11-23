@@ -41,12 +41,6 @@ ctf_source_set("test") {
 ctf_fidl("frobinator") {
   testonly = true
 
-  # TODO(fxbug.dev/35879): Remove lint exclusions by fixing known FIDL lint violations in this target
-  excluded_checks = [
-    "event-names-must-start-with-on",
-    "string-bounds-not-specified",
-  ]
-
   name = "fidl.test.frobinator"
 
   sources = [ "frobinator.test.fidl" ]

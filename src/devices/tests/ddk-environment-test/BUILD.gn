@@ -16,6 +16,10 @@ driver_bind_rules("test-environment-bind") {
 
 fidl("fuchsia.device.environment.test") {
   sources = [ "environment.test.fidl" ]
+  excluded_checks = [
+    "string-bounds-not-specified",
+    "vector-bounds-not-specified",
+  ]
 }
 
 fuchsia_driver("ddk-environment-test-driver") {

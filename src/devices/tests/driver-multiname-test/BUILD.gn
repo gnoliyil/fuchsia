@@ -50,6 +50,7 @@ fuchsia_unittest_package("package") {
 fidl("driver.multiname.test") {
   sources = [ "multiname.test.fidl" ]
   public_deps = [ "//zircon/vdso/zx" ]
+  excluded_checks = [ "wrong-prefix-for-platform-source-library" ]
 }
 
 driver_bind_rules("parent_device_bind") {
