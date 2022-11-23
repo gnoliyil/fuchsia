@@ -53,7 +53,6 @@ pub(crate) async fn serve(
     cache_packages: Arc<Option<system_image::CachePackages>>,
     executability_restrictions: system_image::ExecutabilityRestrictions,
     non_static_allow_list: Arc<system_image::NonStaticAllowList>,
-    subpackages_config: crate::SubpackagesConfig,
     scope: package_directory::ExecutionScope,
     stream: PackageCacheRequestStream,
     cobalt_sender: ProtocolSender<MetricEvent>,
@@ -89,7 +88,6 @@ pub(crate) async fn serve(
                         meta_far_blob,
                         needed_blobs,
                         dir.map(|dir| (dir, scope.clone())),
-                        subpackages_config,
                         cobalt_sender,
                         &node,
                         trace_id,
@@ -217,7 +215,6 @@ async fn get(
     meta_far_blob: BlobInfo,
     needed_blobs: ServerEnd<NeededBlobsMarker>,
     dir_and_scope: Option<(ServerEnd<fio::DirectoryMarker>, package_directory::ExecutionScope)>,
-    subpackages_config: crate::SubpackagesConfig,
     mut cobalt_sender: ProtocolSender<MetricEvent>,
     node: &finspect::Node,
     trace_id: ftrace::Id,
@@ -242,7 +239,6 @@ async fn get(
                     meta_far_blob,
                     package_index,
                     blobfs,
-                    subpackages_config,
                     node,
                     trace_id,
                 )
@@ -497,7 +493,6 @@ async fn serve_needed_blobs(
     meta_far_info: BlobInfo,
     package_index: &async_lock::RwLock<PackageIndex>,
     blobfs: &blobfs::Client,
-    subpackages_config: crate::SubpackagesConfig,
     node: &finspect::Node,
     trace_id: ftrace::Id,
 ) -> Result<
@@ -521,7 +516,6 @@ async fn serve_needed_blobs(
         // to avoid setting the content blobs twice in the package index.
         let (missing_blobs, missing_blobs_recv) = missing_blobs::MissingBlobs::new(
             blobfs.clone(),
-            subpackages_config,
             &root_dir,
             Box::new(IndexBlobRecorder { package_index, meta_far: meta_far_info.blob_id.into() }),
         )
@@ -1155,7 +1149,6 @@ mod serve_needed_blobs_tests {
                 meta_blob_info,
                 &package_index,
                 &blobfs,
-                crate::SubpackagesConfig::Disable,
                 &inspector.root().create_child("test-node-name"),
                 0.into()
             )
@@ -1183,7 +1176,6 @@ mod serve_needed_blobs_tests {
                     meta_blob_info,
                     &package_index,
                     &blobfs,
-                    crate::SubpackagesConfig::Disable,
                     &inspector.root().create_child("test-node-name"),
                     0.into(),
                 )
@@ -2383,7 +2375,6 @@ mod get_handler_tests {
                 meta_blob_info,
                 stream,
                 None,
-                crate::SubpackagesConfig::Disable,
                 ProtocolConnector::new_with_buffer_size(
                     CobaltConnectedService,
                     COBALT_CONNECTOR_BUFFER_SIZE,

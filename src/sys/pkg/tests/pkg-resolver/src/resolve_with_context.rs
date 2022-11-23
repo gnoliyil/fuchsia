@@ -47,7 +47,7 @@ async fn absolute_url_rejects_non_empty_context() {
 
 #[fuchsia::test]
 async fn relative_url_succeeds() {
-    let env = TestEnvBuilder::new().enable_subpackages().build().await;
+    let env = TestEnvBuilder::new().build().await;
     let subpackage = PackageBuilder::new("subpackage")
         .add_resource_at("subpackage-blob", "subpackage-blob-contents".as_bytes())
         .build()
@@ -84,7 +84,7 @@ async fn relative_url_succeeds() {
 
 #[fuchsia::test]
 async fn subpackage_of_a_subpackage() {
-    let env = TestEnvBuilder::new().enable_subpackages().build().await;
+    let env = TestEnvBuilder::new().build().await;
     let subsubpackage = PackageBuilder::new("subsubpackage")
         .add_resource_at("subsubpackage-blob", "subsubpackage-blob-contents".as_bytes())
         .build()
@@ -129,7 +129,7 @@ async fn subpackage_of_a_subpackage() {
 
 #[fuchsia::test]
 async fn relative_url_empty_context_fails() {
-    let env = TestEnvBuilder::new().enable_subpackages().build().await;
+    let env = TestEnvBuilder::new().build().await;
     let subpackage = PackageBuilder::new("subpackage")
         .add_resource_at("subpackage-blob", "subpackage-blob-contents".as_bytes())
         .build()
@@ -166,7 +166,7 @@ async fn relative_url_empty_context_fails() {
 
 #[fuchsia::test]
 async fn bad_relative_url_fails() {
-    let env = TestEnvBuilder::new().enable_subpackages().build().await;
+    let env = TestEnvBuilder::new().build().await;
     let subpackage = PackageBuilder::new("subpackage")
         .add_resource_at("subpackage-blob", "subpackage-blob-contents".as_bytes())
         .build()
@@ -219,7 +219,6 @@ async fn base_superpackage_base_subpackage_succeeds() {
         SystemImageBuilder::new().static_packages(&[&superpackage, &subpackage]).build().await;
     let env = TestEnvBuilder::new()
         .system_image_and_extra_packages(&system_image_package, &[&superpackage, &subpackage])
-        .enable_subpackages()
         .build()
         .await;
     let (_, context) = env
@@ -253,7 +252,6 @@ async fn base_superpackage_non_base_subpackage_fails() {
         // Still write the subpackage to blobfs, resolve should fail due to validation, not because
         // the blobs are missing.
         .system_image_and_extra_packages(&system_image_package, &[&superpackage, &subpackage])
-        .enable_subpackages()
         .build()
         .await;
     let (_, context) = env
@@ -285,7 +283,6 @@ async fn non_base_superpackage_base_subpackage_succeeds() {
         SystemImageBuilder::new().static_packages(&[&subpackage]).build().await;
     let env = TestEnvBuilder::new()
         .system_image_and_extra_packages(&system_image_package, &[&subpackage])
-        .enable_subpackages()
         .build()
         .await;
     let repo = Arc::new(

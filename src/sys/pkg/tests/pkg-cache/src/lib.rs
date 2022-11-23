@@ -288,7 +288,6 @@ struct TestEnvBuilder<BlobfsAndSystemImageFut> {
     paver_service_builder: Option<MockPaverServiceBuilder>,
     blobfs_and_system_image: BlobfsAndSystemImageFut,
     ignore_system_image: bool,
-    enable_subpackages: bool,
 }
 
 impl TestEnvBuilder<BoxFuture<'static, (BlobfsRamdisk, Option<Hash>)>> {
@@ -304,7 +303,6 @@ impl TestEnvBuilder<BoxFuture<'static, (BlobfsRamdisk, Option<Hash>)>> {
             .boxed(),
             paver_service_builder: None,
             ignore_system_image: false,
-            enable_subpackages: false,
         }
     }
 }
@@ -330,7 +328,6 @@ where
             blobfs_and_system_image: future::ready((blobfs, system_image)),
             paver_service_builder: self.paver_service_builder,
             ignore_system_image: self.ignore_system_image,
-            enable_subpackages: self.enable_subpackages,
         }
     }
 
@@ -364,18 +361,12 @@ where
             )),
             paver_service_builder: self.paver_service_builder,
             ignore_system_image: self.ignore_system_image,
-            enable_subpackages: self.enable_subpackages,
         }
     }
 
     fn ignore_system_image(self) -> Self {
         assert_eq!(self.ignore_system_image, false);
         Self { ignore_system_image: true, ..self }
-    }
-
-    fn enable_subpackages(self) -> Self {
-        assert_eq!(self.enable_subpackages, false);
-        Self { enable_subpackages: true, ..self }
     }
 
     async fn build(self) -> TestEnv<ConcreteBlobfs> {
@@ -460,17 +451,9 @@ where
             .add_child("pkg_cache", "#meta/pkg-cache.cm", ChildOptions::new())
             .await
             .unwrap();
-        if self.enable_subpackages || self.ignore_system_image {
+        if self.ignore_system_image {
             builder.init_mutable_config_from_package(&pkg_cache).await.unwrap();
-            if self.enable_subpackages {
-                builder
-                    .set_config_value_bool(&pkg_cache, "enable_subpackages", true)
-                    .await
-                    .unwrap();
-            }
-            if self.ignore_system_image {
-                builder.set_config_value_bool(&pkg_cache, "use_system_image", false).await.unwrap();
-            }
+            builder.set_config_value_bool(&pkg_cache, "use_system_image", false).await.unwrap();
         }
         let system_update_committer = builder
             .add_child("system_update_committer", "fuchsia-pkg://fuchsia.com/pkg-cache-integration-tests#meta/system-update-committer.cm", ChildOptions::new()).await.unwrap();

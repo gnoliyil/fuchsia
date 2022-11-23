@@ -367,7 +367,7 @@ async fn get_package_already_present_on_fs_with_pre_closed_needed_blobs() {
 //   1. are not available via PackageCache.Open
 //   2. are available via PackageCache.Get without needing to write any more blobs
 async fn verify_superpackage_get(superpackage: &Package, subpackages: &[Package]) {
-    let env = TestEnv::builder().enable_subpackages().build().await;
+    let env = TestEnv::builder().build().await;
     let _: fio::DirectoryProxy =
         get_and_verify_package(&env.proxies.package_cache, superpackage).await;
 

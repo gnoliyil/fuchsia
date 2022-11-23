@@ -466,7 +466,7 @@ enum GcProtection {
 }
 
 async fn subpackage_blobs_protected_from_gc(gc_protection: GcProtection) {
-    let env = TestEnv::builder().enable_subpackages().build().await;
+    let env = TestEnv::builder().build().await;
 
     let subpackage = PackageBuilder::new("subpackage")
         .add_resource_at("subpackage-blob-0", "subpackage-blob-contents-0".as_bytes())

@@ -36,7 +36,6 @@ pub(super) struct MissingBlobs<'a> {
     /// blobfs.
     visited_subpackages: HashSet<Hash>,
     blob_recorder: Box<dyn BlobRecorder + 'a>,
-    subpackages_config: crate::SubpackagesConfig,
 }
 
 enum RootDirOrHash<'a> {
@@ -61,7 +60,6 @@ pub(super) trait BlobRecorder: std::fmt::Debug + Send + Sync {
 impl<'a> MissingBlobs<'a> {
     pub(super) async fn new(
         blobfs: blobfs::Client,
-        subpackages_config: crate::SubpackagesConfig,
         root_dir: &package_directory::RootDir<blobfs::Client>,
         blob_recorder: Box<dyn BlobRecorder + 'a>,
     ) -> Result<
@@ -77,7 +75,6 @@ impl<'a> MissingBlobs<'a> {
             sent_but_not_cached_hashes: HashSet::new(),
             visited_subpackages: HashSet::new(),
             blob_recorder,
-            subpackages_config,
         };
         let () = self_.visit(RootDirOrHash::RootDir(root_dir)).await?;
         let () = self_.close_sender_if_all_sent_subpackages_cached();
@@ -125,19 +122,17 @@ impl<'a> MissingBlobs<'a> {
             }
         };
 
-        if self.subpackages_config == crate::SubpackagesConfig::Enable {
-            let () = self
-                .send_subpackages(
-                    root_dir
-                        .subpackages()
-                        .await
-                        .map_err(ServeNeededBlobsError::ReadSubpackages)?
-                        .into_subpackages()
-                        .into_values()
-                        .collect(),
-                )
-                .await?;
-        }
+        let () = self
+            .send_subpackages(
+                root_dir
+                    .subpackages()
+                    .await
+                    .map_err(ServeNeededBlobsError::ReadSubpackages)?
+                    .into_subpackages()
+                    .into_values()
+                    .collect(),
+            )
+            .await?;
 
         let () = self.send_content(root_dir.external_file_hashes().copied().collect()).await?;
         Ok(())
@@ -311,14 +306,10 @@ mod tests {
         blobfs.add_blob_from(&meta_far.merkle, meta_far.contents.as_slice()).unwrap();
         let root_dir = RootDir::new(blobfs.client(), *pkg.meta_far_merkle_root()).await.unwrap();
 
-        let (missing_blobs, recv) = MissingBlobs::new(
-            blobfs.client(),
-            crate::SubpackagesConfig::Enable,
-            &root_dir,
-            Box::new(blob_recorder.clone()),
-        )
-        .await
-        .unwrap();
+        let (missing_blobs, recv) =
+            MissingBlobs::new(blobfs.client(), &root_dir, Box::new(blob_recorder.clone()))
+                .await
+                .unwrap();
         assert_eq!(missing_blobs.count_not_cached(), 1);
         drop(missing_blobs);
 
@@ -341,14 +332,10 @@ mod tests {
         pkg.write_to_blobfs_dir(&blobfs.root_dir().unwrap());
         let root_dir = RootDir::new(blobfs.client(), *pkg.meta_far_merkle_root()).await.unwrap();
 
-        let (missing_blobs, recv) = MissingBlobs::new(
-            blobfs.client(),
-            crate::SubpackagesConfig::Enable,
-            &root_dir,
-            Box::new(blob_recorder.clone()),
-        )
-        .await
-        .unwrap();
+        let (missing_blobs, recv) =
+            MissingBlobs::new(blobfs.client(), &root_dir, Box::new(blob_recorder.clone()))
+                .await
+                .unwrap();
         assert_eq!(missing_blobs.count_not_cached(), 0);
         drop(missing_blobs);
 
@@ -373,14 +360,10 @@ mod tests {
         blobfs.add_blob_from(&meta_far.merkle, meta_far.contents.as_slice()).unwrap();
         let root_dir = RootDir::new(blobfs.client(), *pkg.meta_far_merkle_root()).await.unwrap();
 
-        let (missing_blobs, recv) = MissingBlobs::new(
-            blobfs.client(),
-            crate::SubpackagesConfig::Enable,
-            &root_dir,
-            Box::new(blob_recorder.clone()),
-        )
-        .await
-        .unwrap();
+        let (missing_blobs, recv) =
+            MissingBlobs::new(blobfs.client(), &root_dir, Box::new(blob_recorder.clone()))
+                .await
+                .unwrap();
         assert_eq!(missing_blobs.count_not_cached(), 1);
         drop(missing_blobs);
 
@@ -416,7 +399,6 @@ mod tests {
 
         let (missing_blobs, recv) = MissingBlobs::new(
             blobfs.client(),
-            crate::SubpackagesConfig::Enable,
             &superpackage_root_dir,
             Box::new(blob_recorder.clone()),
         )
@@ -453,7 +435,6 @@ mod tests {
 
         let (missing_blobs, recv) = MissingBlobs::new(
             blobfs.client(),
-            crate::SubpackagesConfig::Enable,
             &superpackage_root_dir,
             Box::new(blob_recorder.clone()),
         )
@@ -495,7 +476,6 @@ mod tests {
 
         let (missing_blobs, recv) = MissingBlobs::new(
             blobfs.client(),
-            crate::SubpackagesConfig::Enable,
             &superpackage_root_dir,
             Box::new(blob_recorder.clone()),
         )
@@ -536,7 +516,6 @@ mod tests {
 
         let (missing_blobs, recv) = MissingBlobs::new(
             blobfs.client(),
-            crate::SubpackagesConfig::Enable,
             &superpackage_root_dir,
             Box::new(blob_recorder.clone()),
         )
@@ -586,7 +565,6 @@ mod tests {
         // Sends the subsubpackage meta.far but only as a content blob.
         let (mut missing_blobs, recv) = MissingBlobs::new(
             blobfs.client(),
-            crate::SubpackagesConfig::Enable,
             &superpackage_root_dir,
             Box::new(blob_recorder.clone()),
         )

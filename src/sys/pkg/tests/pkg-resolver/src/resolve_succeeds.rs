@@ -918,7 +918,7 @@ async fn resolve_local_mirror() {
 
 #[fuchsia::test]
 async fn superpackage() {
-    let env = TestEnvBuilder::new().enable_subpackages().build().await;
+    let env = TestEnvBuilder::new().build().await;
     let startup_blobs = env.blobfs.list_blobs().unwrap();
 
     let subpackage = PackageBuilder::new("subpackage")

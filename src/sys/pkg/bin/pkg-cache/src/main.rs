@@ -83,12 +83,6 @@ impl ConnectedProtocol for CobaltConnectedService {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum SubpackagesConfig {
-    Enable,
-    Disable,
-}
-
 // pkg-cache is conceptually a binary, but is linked together as a library with other SWD binaries
 // to save space via blob deduplication.
 #[fuchsia::main(logging_tags = ["pkg-cache"])]
@@ -107,16 +101,10 @@ async fn main_inner() -> Result<(), Error> {
     info!("starting package cache service");
     let inspector = finspect::Inspector::new();
 
-    let (subpackages_config, use_system_image) = {
+    let use_system_image = {
         let config = pkg_cache_config::Config::take_from_startup_handle();
         inspector.root().record_child("config", |config_node| config.record_inspect(config_node));
-        (
-            match config.enable_subpackages {
-                true => SubpackagesConfig::Enable,
-                false => SubpackagesConfig::Disable,
-            },
-            config.use_system_image,
-        )
+        config.use_system_image
     };
 
     let mut package_index = PackageIndex::new(inspector.root().create_child("index"));
@@ -224,7 +212,6 @@ async fn main_inner() -> Result<(), Error> {
                         Arc::clone(&cache_packages),
                         executability_restrictions,
                         Arc::clone(&non_static_allow_list),
-                        subpackages_config,
                         scope.clone(),
                         stream,
                         cobalt_sender.clone(),
