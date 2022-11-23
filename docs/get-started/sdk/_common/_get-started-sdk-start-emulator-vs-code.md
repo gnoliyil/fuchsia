@@ -6,7 +6,7 @@ device, you also need to start the
 
 The tasks include:
 
-- Download one of Fuchsia's prebuilt images from Google Cloud Storage.
+- Download a Fuchsia prebuilt image from Google Cloud Storage.
 - Start the Fuchsia emulator to run the downloaded Fuchsia prebuilt image.
 - Set the emulator instance as the default target device.
 - Verify that various `ffx` commands can connect to the emulator instance.
@@ -114,8 +114,8 @@ In VS Code, do the following:
      If you see `Not connected` instead of `fuchsia-emulator`, click
      **Set fuchsia-emulator as default** in the Command Palette.
 
-1. To verify that you can establish an SSH connection to the emulator instance,
-   run the following command:
+1. In the terminal, to verify that you can establish an SSH connection
+   to the emulator instance, run the following command:
 
    ```posix-terminal
    tools/ffx target show
@@ -146,7 +146,7 @@ In VS Code, do the following:
    ```
 
    The example output above shows that the target device is running a
-   `workstation_eng.qemu-x64` prebuilt image whose version is `10.20221103.2.1`.
+   `workstation_eng.qemu-x64` prebuilt image.
 
 1. Start the Fuchsia package server:
 
@@ -179,7 +179,7 @@ In VS Code, do the following:
    +-----------------------+------+-------------------------------------------------------------------------------------------------+
    ```
 
-   Notice a package repository (`workstation-packages`) is created for the
+   Notice a package repository named `workstation-packages` is created for the
    Workstation prebuilt image.
 
 1. Register the `workstation-packages` package repository to the target device:

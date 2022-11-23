@@ -10,16 +10,16 @@ Important: The Fuchsia SDK is in active development. At the moment, Fuchsia does
 not support general public usage of the Fuchsia SDK. The APIs in the SDK are
 subject to change without notice.
 
-Which development environment are you using for this guide?:
+Which development environment are you using for this guide?
 
 <div class="device-selector-intro">
-  <devsite-nav-buttons name="ide" type="text" param="always">
-    <button value="none" default>Terminal</button>
+  <devsite-nav-buttons name="env" type="text" param="always">
+    <button value="terminal" default>Terminal</button>
     <button value="vscode">VS Code</button>
   </devsite-nav-buttons>
 </div>
 
-{% dynamic if request.query_string.ide == "none" %}
+{% dynamic if request.query_string.env == "terminal" %}
 
 Complete the following sections:
 
@@ -32,7 +32,7 @@ Complete the following sections:
 1. [Inspect components](#inspect-components)
 1. [Run tests](#run-tests)
 
-{% dynamic elif request.query_string.ide == "vscode" %}
+{% dynamic elif request.query_string.env == "vscode" %}
 
 Complete the following sections:
 
@@ -59,19 +59,19 @@ This guide requires that your host machine meets the following criteria:
 - Supports virtualization for running a [QEMU]{:.external}-based emulator.
 - IPv6 is enabled.
 - [Git][git-install]{:.external} is installed.
-{% dynamic if request.query_string.ide == "vscode" %}
+{% dynamic if request.query_string.env == "vscode" %}
 - [Visual Studio Code][vscode-install]{:.external} is installed.
 {% dynamic endif %}
 
 ## Clone the SDK samples repository {:#clone-the-sdk-samples-repository .numbered}
 
-{% dynamic if request.query_string.ide == "none" %}
+{% dynamic if request.query_string.env == "terminal" %}
 <<_common/_get-started-sdk-clone-sdk-repo-terminal.md>>
-{% dynamic elif request.query_string.ide == "vscode" %}
+{% dynamic elif request.query_string.env == "vscode" %}
 <<_common/_get-started-sdk-clone-sdk-repo-vs-code.md>>
 {% dynamic endif %}
 
-{% dynamic if request.query_string.ide == "vscode" %}
+{% dynamic if request.query_string.env == "vscode" %}
 ## Configure a VS Code workspace {:#configure-a-vs-code-workspace .numbered}
 
 <<_common/_get-started-sdk-configure-vs-code.md>>
@@ -79,33 +79,33 @@ This guide requires that your host machine meets the following criteria:
 
 ## Start the emulator {:#start-the-emulator .numbered}
 
-{% dynamic if request.query_string.ide == "none" %}
+{% dynamic if request.query_string.env == "terminal" %}
 <<_common/_get-started-sdk-start-emulator-terminal.md>>
-{% dynamic elif request.query_string.ide == "vscode" %}
+{% dynamic elif request.query_string.env == "vscode" %}
 <<_common/_get-started-sdk-start-emulator-vs-code.md>>
 {% dynamic endif %}
 
 ## Build and run the sample component {:#build-and-run-the-sample-component .numbered}
 
-{% dynamic if request.query_string.ide == "none" %}
+{% dynamic if request.query_string.env == "terminal" %}
 <<_common/_get-started-sdk-build-and-run-terminal.md>>
-{% dynamic elif request.query_string.ide == "vscode" %}
+{% dynamic elif request.query_string.env == "vscode" %}
 <<_common/_get-started-sdk-build-and-run-vs-code.md>>
 {% dynamic endif %}
 
 ## View symbolized logs {:#view-symbolized-logs .numbered}
 
-{% dynamic if request.query_string.ide == "none" %}
+{% dynamic if request.query_string.env == "terminal" %}
 <<_common/_get-started-sdk-view-symbolized-logs-terminal.md>>
-{% dynamic elif request.query_string.ide == "vscode" %}
+{% dynamic elif request.query_string.env == "vscode" %}
 <<_common/_get-started-sdk-view-symbolized-logs-vs-code.md>>
 {% dynamic endif %}
 
 ## Debug the sample component {:#debug-the-sample-component .numbered}
 
-{% dynamic if request.query_string.ide == "none" %}
+{% dynamic if request.query_string.env == "terminal" %}
 <<_common/_get-started-sdk-debug-component-terminal.md>>
-{% dynamic elif request.query_string.ide == "vscode" %}
+{% dynamic elif request.query_string.env == "vscode" %}
 <<_common/_get-started-sdk-debug-component-vs-code.md>>
 {% dynamic endif %}
 

@@ -12,7 +12,7 @@ In VS Code, do the following:
 1. Select the `getting-started.code-workspace` file.
 1. Click **Yes, I trust the authors**.
 
-   A pop-up message appears at the bottom right of the VS Code window.
+   A pop-up message appears at the bottom right corner of the VS Code window.
 
 1. Click **Install**.
 

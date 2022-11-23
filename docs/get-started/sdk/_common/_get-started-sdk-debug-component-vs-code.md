@@ -1,7 +1,5 @@
-The Fuchsia developer extension allows you launch the Fuchsia debugger
-([`zxdb`][fuchsia-debugger]) in VS Code. Start the debugger in VS Code
-and debug the sample component, which is now  updated to crash
-when it's started.
+Start the Fuchsia debugger ([`zxdb`][fuchsia-debugger]) in VS Code and debug
+the sample component, which is now  updated to crash when it runs.
 
 The tasks include:
 

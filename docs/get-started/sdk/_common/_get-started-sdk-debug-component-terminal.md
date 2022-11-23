@@ -1,5 +1,5 @@
-Launch the Fuchsia debugger ([`zxdb`][fuchsia-debugger]) for debugging the
-sample component, which is now updated to crash when it's started.
+Start the Fuchsia debugger ([`zxdb`][fuchsia-debugger]) and debug the
+sample component, which is now updated to crash when it runs.
 
 The tasks include:
 

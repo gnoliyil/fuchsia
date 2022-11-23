@@ -1,6 +1,5 @@
-Clone the [SDK samples repository][sdk-samples-repo]{:.external} on your host
-machine. This repository contains the Bazel-based Fuchsia SDK and sample
-components.
+Clone the SDK samples repository on your host machine. This repository contains
+the Bazel-based Fuchsia SDK and sample components.
 
 The tasks include:
 
@@ -28,8 +27,8 @@ In VS Code, do the following:
    ```
 
    This `git clone` command creates a new directory named
-   `fuchsia-getting-started` (see the command's second argument above) and
-   clones the content of the SDK samples repository.
+   `fuchsia-getting-started` and clones the content of the
+   [SDK samples repository][sdk-samples-repo]{:.external}.
 
 1. Go to the new directory:
 

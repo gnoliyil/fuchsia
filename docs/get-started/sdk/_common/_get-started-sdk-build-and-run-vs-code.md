@@ -103,7 +103,7 @@ In VS Code, do the following:
    Note: For more information on filtering syntax, see
    [Filter Fuchsia logs][filter-vscode-logs].
 
-1. Click the Explorer icon on the left side of the VS Code.
+1. Click the Explorer icon on the left side of the VS Code window.
 
 1. Open the `src/hello_world/hello_world.cc` file.
 
