@@ -13,6 +13,7 @@ the events to the fuchsia tracing system with the category `memory_trace`.
 - Dynamically link the component with `libmemory_trace.so`
   (`//src/performance/memory/profile:memory_trace`).
 - Route `fuchsia.tracing.provider.Registry` to the component.
+- Ensure your component [registers a trace provider](https://fuchsia.dev/fuchsia-src/development/tracing/tutorial/registering-a-trace-provider?hl=en#register-with-the-trace-manager).
 
 The dynamic library registers hooks the Fuchsia default allocator for c and
 rust programs.

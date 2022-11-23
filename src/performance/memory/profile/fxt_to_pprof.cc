@@ -277,10 +277,12 @@ fit::result<std::string, perfetto::third_party::perftools::profiles::Profile> fx
         "1 - the executable does not dynamically load libmemory_trace.so\n"
         "    Please verify that the binary depends dynamically on the library\n"
         "    with `readelf -d <binary>`\n"
-        "2 - the component does not have access to the trace FILD service\n"
+        "2 - the component does not register a trace provider. See:\n"
+        "    https://fuchsia.dev/fuchsia-src/development/tracing/tutorial/registering-a-trace-provider?hl=en#register-with-the-trace-manager\n"
+        "3 - the component does not have access to the trace FILD service\n"
         "    `fuchsia.tracing.provider.Registry`\n"
         "    Please verify you manifest.\n"
-        "3 - the component is not running");
+        "4 - the component is not running");
   } else if (layout_count == 0) {
     return fit::error(
         "memory layout not found in the trace.\n "
