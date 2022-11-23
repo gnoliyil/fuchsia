@@ -530,4 +530,10 @@ zx_status_t GcTester::DoGarbageCollect(GcManager &manager, uint32_t segno, GcTyp
   return manager.DoGarbageCollect(segno, gc_type);
 }
 
+void DeviceTester::SetHook(F2fs *fs, DeviceTester::Hook hook) {
+  static_cast<block_client::FakeBlockDevice *>(fs->GetBc().GetDevice())->Pause();
+  static_cast<block_client::FakeBlockDevice *>(fs->GetBc().GetDevice())->set_hook(std::move(hook));
+  static_cast<block_client::FakeBlockDevice *>(fs->GetBc().GetDevice())->Resume();
+}
+
 }  // namespace f2fs

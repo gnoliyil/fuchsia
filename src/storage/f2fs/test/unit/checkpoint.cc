@@ -500,10 +500,11 @@ TEST_F(CheckpointTest, RecoverOrphanInode) {
           }
           return ZX_OK;
         };
-        static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(std::move(hook));
+        DeviceTester::SetHook(fs_.get(), hook);
         ASSERT_EQ(fs_->RecoverOrphanInodes(), ZX_ERR_PEER_CLOSED);
         ASSERT_TRUE(fs_->GetSuperblockInfo().TestCpFlags(CpFlag::kCpErrorFlag));
-        static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(nullptr);
+
+        DeviceTester::SetHook(fs_.get(), nullptr);
         superblock_info.ClearCpFlags(CpFlag::kCpErrorFlag);
       }
       ASSERT_EQ(fs_->RecoverOrphanInodes(), 0);
@@ -936,7 +937,7 @@ TEST_F(CheckpointTest, CpError) {
     }
     return ZX_OK;
   };
-  static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(std::move(hook));
+  DeviceTester::SetHook(fs_.get(), hook);
   fs_->WriteCheckpoint(false, false);
 
   ASSERT_TRUE(fs_->GetSuperblockInfo().TestCpFlags(CpFlag::kCpErrorFlag));
@@ -955,7 +956,7 @@ TEST_F(CheckpointTest, CpError) {
   FileTester::ReadFromFile(vnode.get(), rbuf, sizeof(wbuf), 0);
   ASSERT_EQ(root_dir_->Lookup("test", &test_file), ZX_OK);
   ASSERT_EQ(strcmp(wbuf, rbuf), 0);
-  static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(nullptr);
+  DeviceTester::SetHook(fs_.get(), nullptr);
 
   vnode->Close();
   vnode = nullptr;
@@ -981,11 +982,11 @@ TEST_F(CheckpointTest, ValidateCheckpointFirstCpPackDiskFail) {
   {
     uint64_t cp1_version = 0;
     LockedPage cp_page;
-    static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(std::move(hook));
+    DeviceTester::SetHook(fs_.get(), hook);
     ASSERT_EQ(fs_->ValidateCheckpoint(cp_start_blk_no, &cp1_version, &cp_page), ZX_ERR_PEER_CLOSED);
     ASSERT_TRUE(fs_->GetSuperblockInfo().TestCpFlags(CpFlag::kCpErrorFlag));
 
-    static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(nullptr);
+    DeviceTester::SetHook(fs_.get(), nullptr);
     fs_->GetSuperblockInfo().ClearCpFlags(CpFlag::kCpErrorFlag);
   }
 }
@@ -1018,11 +1019,11 @@ TEST_F(CheckpointTest, ValidateCheckpointSecondCpPackDiskFail) {
   {
     uint64_t cp1_version = 0;
     LockedPage cp_page;
-    static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(std::move(hook));
+    DeviceTester::SetHook(fs_.get(), hook);
     ASSERT_EQ(fs_->ValidateCheckpoint(cp_start_blk_no, &cp1_version, &cp_page), ZX_ERR_PEER_CLOSED);
     ASSERT_TRUE(fs_->GetSuperblockInfo().TestCpFlags(CpFlag::kCpErrorFlag));
 
-    static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(nullptr);
+    DeviceTester::SetHook(fs_.get(), nullptr);
     fs_->GetSuperblockInfo().ClearCpFlags(CpFlag::kCpErrorFlag);
   }
 }
@@ -1054,11 +1055,11 @@ TEST_F(CheckpointTest, FlushNatEntriesDiskFail) {
 
   // Check disk peer closed exception case in FlushNatEntries()
   {
-    static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(std::move(hook));
+    DeviceTester::SetHook(fs_.get(), hook);
     ASSERT_EQ(fs_->GetNodeManager().FlushNatEntries(), ZX_ERR_PEER_CLOSED);
     ASSERT_TRUE(fs_->GetSuperblockInfo().TestCpFlags(CpFlag::kCpErrorFlag));
 
-    static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(nullptr);
+    DeviceTester::SetHook(fs_.get(), nullptr);
     fs_->GetSuperblockInfo().ClearCpFlags(CpFlag::kCpErrorFlag);
   }
 }
@@ -1102,21 +1103,21 @@ TEST_F(CheckpointTest, FlushSitEntriesDiskFail) {
 
   // Check disk peer closed exception case in FlushSitEntries()
   {
-    static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(std::move(hook));
+    DeviceTester::SetHook(fs_.get(), hook);
     ASSERT_EQ(fs_->GetSegmentManager().FlushSitEntries(), ZX_ERR_PEER_CLOSED);
     ASSERT_TRUE(fs_->GetSuperblockInfo().TestCpFlags(CpFlag::kCpErrorFlag));
 
-    static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(nullptr);
+    DeviceTester::SetHook(fs_.get(), nullptr);
     fs_->GetSuperblockInfo().ClearCpFlags(CpFlag::kCpErrorFlag);
   }
 
   // Check disk peer closed exception case in WriteCheckpoint()
   {
-    static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(std::move(hook));
+    DeviceTester::SetHook(fs_.get(), hook);
     ASSERT_EQ(fs_->WriteCheckpoint(false, false), ZX_ERR_PEER_CLOSED);
     ASSERT_TRUE(fs_->GetSuperblockInfo().TestCpFlags(CpFlag::kCpErrorFlag));
 
-    static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(nullptr);
+    DeviceTester::SetHook(fs_.get(), nullptr);
     fs_->GetSuperblockInfo().ClearCpFlags(CpFlag::kCpErrorFlag);
   }
 }
@@ -1144,22 +1145,22 @@ TEST_F(CheckpointTest, DoCheckpointDiskFail) {
   {
     flush_count = 0;
     target_flush_count = 1;
-    static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(std::move(hook));
+    DeviceTester::SetHook(fs_.get(), hook);
     ASSERT_EQ(fs_->DoCheckpoint(false), ZX_ERR_PEER_CLOSED);
     ASSERT_TRUE(fs_->GetSuperblockInfo().TestCpFlags(CpFlag::kCpErrorFlag));
 
-    static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(nullptr);
+    DeviceTester::SetHook(fs_.get(), nullptr);
     fs_->GetSuperblockInfo().ClearCpFlags(CpFlag::kCpErrorFlag);
   }
 
   {
     flush_count = 0;
     target_flush_count = 2;
-    static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(std::move(hook));
+    DeviceTester::SetHook(fs_.get(), hook);
     ASSERT_EQ(fs_->DoCheckpoint(false), ZX_ERR_PEER_CLOSED);
     ASSERT_TRUE(fs_->GetSuperblockInfo().TestCpFlags(CpFlag::kCpErrorFlag));
 
-    static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(nullptr);
+    DeviceTester::SetHook(fs_.get(), nullptr);
     fs_->GetSuperblockInfo().ClearCpFlags(CpFlag::kCpErrorFlag);
   }
 }
@@ -1182,11 +1183,11 @@ TEST_F(CheckpointTest, ReadCompactSummaryDiskFail) {
 
   // Check disk peer closed exception case in ReadCompactedSummaries()
   {
-    static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(std::move(hook));
+    DeviceTester::SetHook(fs_.get(), hook);
     ASSERT_EQ(fs_->GetSegmentManager().ReadCompactedSummaries(), ZX_ERR_PEER_CLOSED);
     ASSERT_TRUE(fs_->GetSuperblockInfo().TestCpFlags(CpFlag::kCpErrorFlag));
 
-    static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(nullptr);
+    DeviceTester::SetHook(fs_.get(), nullptr);
     fs_->GetSuperblockInfo().ClearCpFlags(CpFlag::kCpErrorFlag);
   }
 }
@@ -1211,13 +1212,13 @@ TEST_F(CheckpointTest, ReadNormalSummaryDiskFail) {
 
   // Check disk peer closed exception case in ReadNormalSummaries()
   {
-    static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(std::move(hook));
+    DeviceTester::SetHook(fs_.get(), hook);
     ASSERT_EQ(
         fs_->GetSegmentManager().ReadNormalSummaries(static_cast<int>(CursegType::kCursegWarmData)),
         ZX_ERR_PEER_CLOSED);
     ASSERT_TRUE(fs_->GetSuperblockInfo().TestCpFlags(CpFlag::kCpErrorFlag));
 
-    static_cast<FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(nullptr);
+    DeviceTester::SetHook(fs_.get(), nullptr);
     fs_->GetSuperblockInfo().ClearCpFlags(CpFlag::kCpErrorFlag);
   }
 }

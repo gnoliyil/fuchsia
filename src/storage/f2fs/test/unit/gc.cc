@@ -104,11 +104,11 @@ TEST_F(GcManagerTest, CheckpointDiskReadFailOnSyncFs) {
   {
     fs_->GetSuperblockInfo().IncreasePageCount(CountType::kDirtyData);
 
-    static_cast<block_client::FakeBlockDevice *>(fs_->GetBc().GetDevice())
-        ->set_hook(std::move(hook));
+    DeviceTester::SetHook(fs_.get(), hook);
     fs_->SyncFs(true);
     ASSERT_TRUE(fs_->GetSuperblockInfo().TestCpFlags(CpFlag::kCpErrorFlag));
-    static_cast<block_client::FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(nullptr);
+
+    DeviceTester::SetHook(fs_.get(), nullptr);
 
     fs_->GetSuperblockInfo().DecreasePageCount(CountType::kDirtyData);
   }
@@ -134,11 +134,11 @@ TEST_F(GcManagerTest, CheckpointDiskReadFailOnGc) {
 
   // Check disk peer closed exception case in F2fsGc()
   {
-    static_cast<block_client::FakeBlockDevice *>(fs_->GetBc().GetDevice())
-        ->set_hook(std::move(hook));
+    DeviceTester::SetHook(fs_.get(), hook);
     ASSERT_EQ(fs_->GetGcManager().F2fsGc().error_value(), ZX_ERR_PEER_CLOSED);
     ASSERT_TRUE(fs_->GetSuperblockInfo().TestCpFlags(CpFlag::kCpErrorFlag));
-    static_cast<block_client::FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(nullptr);
+
+    DeviceTester::SetHook(fs_.get(), nullptr);
   }
 }
 
@@ -165,10 +165,10 @@ TEST_F(GcManagerTest, CheckpointDiskReadFailOnGcPreFree) {
 
   // Check disk peer closed exception case in F2fsGc()
   {
-    static_cast<block_client::FakeBlockDevice *>(fs_->GetBc().GetDevice())
-        ->set_hook(std::move(hook));
+    DeviceTester::SetHook(fs_.get(), hook);
     ASSERT_EQ(fs_->GetGcManager().F2fsGc().error_value(), ZX_ERR_PEER_CLOSED);
-    static_cast<block_client::FakeBlockDevice *>(fs_->GetBc().GetDevice())->set_hook(nullptr);
+
+    DeviceTester::SetHook(fs_.get(), nullptr);
   }
 }
 

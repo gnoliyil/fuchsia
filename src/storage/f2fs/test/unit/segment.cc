@@ -576,9 +576,10 @@ TEST(SegmentManagerExceptionTest, BuildSitEntriesDiskFail) {
   sit_page.reset();
 
   // Expect fail in BuildSitEntries()
-  static_cast<block_client::FakeBlockDevice *>(fs->GetBc().GetDevice())->set_hook(std::move(hook));
+  DeviceTester::SetHook(fs.get(), hook);
   ASSERT_EQ(fs->GetSegmentManager().BuildSegmentManager(), ZX_ERR_PEER_CLOSED);
-  static_cast<block_client::FakeBlockDevice *>(fs->GetBc().GetDevice())->set_hook(nullptr);
+
+  DeviceTester::SetHook(fs.get(), nullptr);
 
   fs->GetVCache().Reset();
   fs->Reset();

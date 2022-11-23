@@ -680,7 +680,9 @@ TEST(FormatFilesystemTest, DeviceFailure) {
     }
     return ZX_OK;
   };
+  static_cast<FakeBlockDevice *>(bc_or->GetDevice())->Pause();
   static_cast<FakeBlockDevice *>(bc_or->GetDevice())->set_hook(std::move(hook));
+  static_cast<FakeBlockDevice *>(bc_or->GetDevice())->Resume();
   MkfsOptions mkfs_options;
   MkfsWorker mkfs(std::move(*bc_or), mkfs_options);
 
