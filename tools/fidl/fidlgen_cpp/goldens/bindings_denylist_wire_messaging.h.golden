@@ -430,7 +430,6 @@ struct ::fidl::internal::WireMethodTypes<::test_bindingsdenylist::DenyEachBindin
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_bindingsdenylist::wire::DenyEachBindingOnlyDenyDartRequest;
       using Response = ::test_bindingsdenylist::wire::DenyEachBindingOnlyDenyDartTopResponse;
-  
   using DomainError = uint32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_bindingsdenylist::DenyEachBinding::OnlyDenyDart>>;
@@ -464,7 +463,6 @@ struct ::fidl::internal::WireMethodTypes<::test_bindingsdenylist::DenyEachBindin
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_bindingsdenylist::wire::DenyEachBindingOnlyDenyGoRequest;
       using Response = ::test_bindingsdenylist::wire::DenyEachBindingOnlyDenyGoTopResponse;
-  
   using DomainError = uint32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_bindingsdenylist::DenyEachBinding::OnlyDenyGo>>;
@@ -498,7 +496,6 @@ struct ::fidl::internal::WireMethodTypes<::test_bindingsdenylist::DenyEachBindin
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_bindingsdenylist::wire::DenyEachBindingOnlyDenyLibfuzzerRequest;
       using Response = ::test_bindingsdenylist::wire::DenyEachBindingOnlyDenyLibfuzzerTopResponse;
-  
   using DomainError = uint32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_bindingsdenylist::DenyEachBinding::OnlyDenyLibfuzzer>>;
@@ -532,7 +529,6 @@ struct ::fidl::internal::WireMethodTypes<::test_bindingsdenylist::DenyEachBindin
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_bindingsdenylist::wire::DenyEachBindingOnlyDenyRustRequest;
       using Response = ::test_bindingsdenylist::wire::DenyEachBindingOnlyDenyRustTopResponse;
-  
   using DomainError = uint32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_bindingsdenylist::DenyEachBinding::OnlyDenyRust>>;
@@ -566,7 +562,6 @@ struct ::fidl::internal::WireMethodTypes<::test_bindingsdenylist::DenyEachBindin
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_bindingsdenylist::wire::DenyEachBindingOnlyDenySyzkallerRequest;
       using Response = ::test_bindingsdenylist::wire::DenyEachBindingOnlyDenySyzkallerTopResponse;
-  
   using DomainError = uint32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_bindingsdenylist::DenyEachBinding::OnlyDenySyzkaller>>;

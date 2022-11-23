@@ -28,7 +28,6 @@ struct {{ .WireMethodTypes }} {
   {{- end }}
 
   {{- if .HasDomainError }}
-  {{/* TODO(fxbug.dev/88366): Figure out how to handle unknown interactions for wire-types. */}}
   using DomainError = {{ .Result.ErrorDecl }};
   {{- end }}
 

@@ -309,7 +309,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsDriverProtocol::StrictTwoWayErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsDriverProtocolStrictTwoWayErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsDriverProtocol::StrictTwoWayErr>>;
@@ -342,7 +341,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsDriverProtocol::StrictTwoWayFieldsErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsDriverProtocolStrictTwoWayFieldsErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsDriverProtocol::StrictTwoWayFieldsErr>>;
@@ -375,7 +373,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsDriverProtocol::StrictTwoWayUnionErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsDriverProtocolStrictTwoWayUnionErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsDriverProtocol::StrictTwoWayUnionErr>>;
@@ -408,7 +405,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsDriverProtocol::StrictTwoWayTableErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsDriverProtocolStrictTwoWayTableErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsDriverProtocol::StrictTwoWayTableErr>>;
@@ -565,7 +561,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsDriverProtocol::FlexibleTwoWayErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsDriverProtocolFlexibleTwoWayErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsDriverProtocol::FlexibleTwoWayErr>>;
@@ -598,7 +593,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsDriverProtocol::FlexibleTwoWayFieldsErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsDriverProtocolFlexibleTwoWayFieldsErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsDriverProtocol::FlexibleTwoWayFieldsErr>>;
@@ -631,7 +625,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsDriverProtocol::FlexibleTwoWayUnionErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsDriverProtocolFlexibleTwoWayUnionErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsDriverProtocol::FlexibleTwoWayUnionErr>>;
@@ -664,7 +657,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsDriverProtocol::FlexibleTwoWayTableErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsDriverProtocolFlexibleTwoWayTableErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsDriverProtocol::FlexibleTwoWayTableErr>>;
@@ -5449,7 +5441,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsAjarDriverProtocol::StrictTwoWayErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsAjarDriverProtocolStrictTwoWayErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsAjarDriverProtocol::StrictTwoWayErr>>;
@@ -5482,7 +5473,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsAjarDriverProtocol::StrictTwoWayFieldsErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsAjarDriverProtocolStrictTwoWayFieldsErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsAjarDriverProtocol::StrictTwoWayFieldsErr>>;
@@ -5515,7 +5505,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsAjarDriverProtocol::StrictTwoWayUnionErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsAjarDriverProtocolStrictTwoWayUnionErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsAjarDriverProtocol::StrictTwoWayUnionErr>>;
@@ -5548,7 +5537,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsAjarDriverProtocol::StrictTwoWayTableErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsAjarDriverProtocolStrictTwoWayTableErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsAjarDriverProtocol::StrictTwoWayTableErr>>;
@@ -8162,7 +8150,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsClosedDriverProtocol::StrictTwoWayErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsClosedDriverProtocolStrictTwoWayErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsClosedDriverProtocol::StrictTwoWayErr>>;
@@ -8195,7 +8182,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsClosedDriverProtocol::StrictTwoWayFieldsErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsClosedDriverProtocolStrictTwoWayFieldsErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsClosedDriverProtocol::StrictTwoWayFieldsErr>>;
@@ -8228,7 +8214,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsClosedDriverProtocol::StrictTwoWayUnionErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsClosedDriverProtocolStrictTwoWayUnionErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsClosedDriverProtocol::StrictTwoWayUnionErr>>;
@@ -8261,7 +8246,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsClosedDriverProtocol::StrictTwoWayTableErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsClosedDriverProtocolStrictTwoWayTableErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsClosedDriverProtocol::StrictTwoWayTableErr>>;

@@ -38,7 +38,6 @@ struct ::fidl::internal::WireMethodTypes<::test_anonymous::SomeProtocol::SomeMet
   static constexpr bool HasRequestPayload = true;
   using Request = ::test_anonymous::wire::SomeProtocolSomeMethodRequest;
   using Response = ::test_anonymous::wire::SomeProtocolSomeMethodTopResponse;
-
   using DomainError = ::test_anonymous::wire::SomeProtocolSomeMethodError;
 
   using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_anonymous::SomeProtocol::SomeMethod>>;

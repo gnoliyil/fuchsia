@@ -38,7 +38,6 @@ struct ::fidl::internal::WireMethodTypes<::test_error::Example::Foo> {
   static constexpr bool HasRequestPayload = true;
   using Request = ::test_error::wire::ExampleFooRequest;
   using Response = ::test_error::wire::ExampleFooTopResponse;
-
   using DomainError = uint32_t;
 
   using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_error::Example::Foo>>;

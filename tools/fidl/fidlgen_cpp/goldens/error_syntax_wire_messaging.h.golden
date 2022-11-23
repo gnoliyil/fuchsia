@@ -49,7 +49,6 @@ struct ::fidl::internal::WireMethodTypes<::test_errorsyntax::ExampleUseOfErrorSy
   static constexpr bool HasRequestPayload = true;
   using Request = ::test_errorsyntax_parent::wire::ParentUsesErrorSyntaxComposedCallWhichMayFailRequest;
   using Response = ::test_errorsyntax_parent::wire::ParentUsesErrorSyntaxComposedCallWhichMayFailTopResponse;
-
   using DomainError = uint32_t;
 
   using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_errorsyntax::ExampleUseOfErrorSyntax::ComposedCallWhichMayFail>>;
@@ -73,7 +72,6 @@ struct ::fidl::internal::WireMethodTypes<::test_errorsyntax::ExampleUseOfErrorSy
   static constexpr bool HasRequestPayload = true;
   using Request = ::test_errorsyntax::wire::ExampleUseOfErrorSyntaxCallWhichMayFailRequest;
   using Response = ::test_errorsyntax::wire::ExampleUseOfErrorSyntaxCallWhichMayFailTopResponse;
-
   using DomainError = uint32_t;
 
   using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_errorsyntax::ExampleUseOfErrorSyntax::CallWhichMayFail>>;

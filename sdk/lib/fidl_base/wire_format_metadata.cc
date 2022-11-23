@@ -59,7 +59,6 @@ fidl_opaque_wire_format_metadata_t WireFormatMetadata::ToOpaque() const {
 
 bool WireFormatMetadata::is_valid() const {
   // Note: this method should be in sync with |fidl_validate_txn_header|.
-  // TODO(fxbug.dev/88366): Support the upcoming wire format magic in RFC-0138.
   return magic_number_ == kFidlWireFormatMagicNumberInitial;
 }
 

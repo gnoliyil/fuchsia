@@ -206,7 +206,6 @@ struct ::fidl::internal::WireMethodTypes<::test_protocolpayloads::MainProtocol::
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_protocolpayloads_imported::wire::ImportStructPayload;
       using Response = ::test_protocolpayloads_imported::wire::ComposedProtocolTwoWayComposedWithErrorTopResponse;
-  
   using DomainError = uint32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_protocolpayloads::MainProtocol::TwoWayComposedWithError>>;
@@ -257,7 +256,6 @@ struct ::fidl::internal::WireMethodTypes<::test_protocolpayloads::MainProtocol::
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_protocolpayloads_imported::wire::ComposedProtocolOnComposedWithErrorRequest;
-  
   using DomainError = uint32_t;
 };
 
@@ -326,7 +324,6 @@ struct ::fidl::internal::WireMethodTypes<::test_protocolpayloads::MainProtocol::
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_protocolpayloads::wire::LocalStructPayload;
       using Response = ::test_protocolpayloads::wire::MainProtocolTwoWayLocalWithErrorTopResponse;
-  
   using DomainError = uint32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_protocolpayloads::MainProtocol::TwoWayLocalWithError>>;
@@ -377,7 +374,6 @@ struct ::fidl::internal::WireMethodTypes<::test_protocolpayloads::MainProtocol::
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_protocolpayloads::wire::MainProtocolOnLocalWithErrorRequest;
-  
   using DomainError = uint32_t;
 };
 
@@ -446,7 +442,6 @@ struct ::fidl::internal::WireMethodTypes<::test_protocolpayloads::MainProtocol::
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_protocolpayloads_imported::wire::ImportStructPayload;
       using Response = ::test_protocolpayloads::wire::MainProtocolTwoWayImportWithErrorTopResponse;
-  
   using DomainError = uint32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_protocolpayloads::MainProtocol::TwoWayImportWithError>>;
@@ -497,7 +492,6 @@ struct ::fidl::internal::WireMethodTypes<::test_protocolpayloads::MainProtocol::
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_protocolpayloads::wire::MainProtocolOnImportWithErrorRequest;
-  
   using DomainError = uint32_t;
 };
 
@@ -566,7 +560,6 @@ struct ::fidl::internal::WireMethodTypes<::test_protocolpayloads::MainProtocol::
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_protocolpayloads::wire::MainProtocolTwoWayAnonWithErrorRequest;
       using Response = ::test_protocolpayloads::wire::MainProtocolTwoWayAnonWithErrorTopResponse;
-  
   using DomainError = uint32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_protocolpayloads::MainProtocol::TwoWayAnonWithError>>;
@@ -617,7 +610,6 @@ struct ::fidl::internal::WireMethodTypes<::test_protocolpayloads::MainProtocol::
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_protocolpayloads::wire::MainProtocolOnAnonWithErrorRequest;
-  
   using DomainError = uint32_t;
 };
 

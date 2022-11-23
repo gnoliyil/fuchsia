@@ -403,7 +403,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsProtocol::StrictTwoWayErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsProtocolStrictTwoWayErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsProtocol::StrictTwoWayErr>>;
@@ -436,7 +435,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsProtocol::StrictTwoWayFieldsErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsProtocolStrictTwoWayFieldsErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsProtocol::StrictTwoWayFieldsErr>>;
@@ -469,7 +467,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsProtocol::StrictTwoWayUnionErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsProtocolStrictTwoWayUnionErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsProtocol::StrictTwoWayUnionErr>>;
@@ -502,7 +499,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsProtocol::StrictTwoWayTableErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsProtocolStrictTwoWayTableErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsProtocol::StrictTwoWayTableErr>>;
@@ -659,7 +655,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsProtocol::FlexibleTwoWayErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsProtocolFlexibleTwoWayErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsProtocol::FlexibleTwoWayErr>>;
@@ -692,7 +687,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsProtocol::FlexibleTwoWayFieldsErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsProtocolFlexibleTwoWayFieldsErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsProtocol::FlexibleTwoWayFieldsErr>>;
@@ -725,7 +719,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsProtocol::FlexibleTwoWayUnionErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsProtocolFlexibleTwoWayUnionErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsProtocol::FlexibleTwoWayUnionErr>>;
@@ -758,7 +751,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsProtocol::FlexibleTwoWayTableErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsProtocolFlexibleTwoWayTableErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsProtocol::FlexibleTwoWayTableErr>>;
@@ -859,7 +851,6 @@ struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInte
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_unknowninteractions::wire::UnknownInteractionsProtocolStrictEventErrRequest;
-  
   using DomainError = int32_t;
 };
 
@@ -878,7 +869,6 @@ struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInte
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_unknowninteractions::wire::UnknownInteractionsProtocolStrictEventFieldsErrRequest;
-  
   using DomainError = int32_t;
 };
 
@@ -897,7 +887,6 @@ struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInte
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_unknowninteractions::wire::UnknownInteractionsProtocolStrictEventUnionErrRequest;
-  
   using DomainError = int32_t;
 };
 
@@ -916,7 +905,6 @@ struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInte
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_unknowninteractions::wire::UnknownInteractionsProtocolStrictEventTableErrRequest;
-  
   using DomainError = int32_t;
 };
 
@@ -1002,7 +990,6 @@ struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInte
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_unknowninteractions::wire::UnknownInteractionsProtocolFlexibleEventErrRequest;
-  
   using DomainError = int32_t;
 };
 
@@ -1021,7 +1008,6 @@ struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInte
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_unknowninteractions::wire::UnknownInteractionsProtocolFlexibleEventFieldsErrRequest;
-  
   using DomainError = int32_t;
 };
 
@@ -1040,7 +1026,6 @@ struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInte
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_unknowninteractions::wire::UnknownInteractionsProtocolFlexibleEventUnionErrRequest;
-  
   using DomainError = int32_t;
 };
 
@@ -1059,7 +1044,6 @@ struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInte
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_unknowninteractions::wire::UnknownInteractionsProtocolFlexibleEventTableErrRequest;
-  
   using DomainError = int32_t;
 };
 
@@ -7817,7 +7801,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsAjarProtocol::StrictTwoWayErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsAjarProtocolStrictTwoWayErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsAjarProtocol::StrictTwoWayErr>>;
@@ -7850,7 +7833,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsAjarProtocol::StrictTwoWayFieldsErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsAjarProtocolStrictTwoWayFieldsErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsAjarProtocol::StrictTwoWayFieldsErr>>;
@@ -7883,7 +7865,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsAjarProtocol::StrictTwoWayUnionErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsAjarProtocolStrictTwoWayUnionErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsAjarProtocol::StrictTwoWayUnionErr>>;
@@ -7916,7 +7897,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsAjarProtocol::StrictTwoWayTableErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsAjarProtocolStrictTwoWayTableErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsAjarProtocol::StrictTwoWayTableErr>>;
@@ -8017,7 +7997,6 @@ struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInte
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_unknowninteractions::wire::UnknownInteractionsAjarProtocolStrictEventErrRequest;
-  
   using DomainError = int32_t;
 };
 
@@ -8036,7 +8015,6 @@ struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInte
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_unknowninteractions::wire::UnknownInteractionsAjarProtocolStrictEventFieldsErrRequest;
-  
   using DomainError = int32_t;
 };
 
@@ -8055,7 +8033,6 @@ struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInte
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_unknowninteractions::wire::UnknownInteractionsAjarProtocolStrictEventUnionErrRequest;
-  
   using DomainError = int32_t;
 };
 
@@ -8074,7 +8051,6 @@ struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInte
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_unknowninteractions::wire::UnknownInteractionsAjarProtocolStrictEventTableErrRequest;
-  
   using DomainError = int32_t;
 };
 
@@ -8160,7 +8136,6 @@ struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInte
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_unknowninteractions::wire::UnknownInteractionsAjarProtocolFlexibleEventErrRequest;
-  
   using DomainError = int32_t;
 };
 
@@ -8179,7 +8154,6 @@ struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInte
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_unknowninteractions::wire::UnknownInteractionsAjarProtocolFlexibleEventFieldsErrRequest;
-  
   using DomainError = int32_t;
 };
 
@@ -8198,7 +8172,6 @@ struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInte
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_unknowninteractions::wire::UnknownInteractionsAjarProtocolFlexibleEventUnionErrRequest;
-  
   using DomainError = int32_t;
 };
 
@@ -8217,7 +8190,6 @@ struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInte
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_unknowninteractions::wire::UnknownInteractionsAjarProtocolFlexibleEventTableErrRequest;
-  
   using DomainError = int32_t;
 };
 
@@ -12453,7 +12425,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsClosedProtocol::StrictTwoWayErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsClosedProtocolStrictTwoWayErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsClosedProtocol::StrictTwoWayErr>>;
@@ -12486,7 +12457,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsClosedProtocol::StrictTwoWayFieldsErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsClosedProtocolStrictTwoWayFieldsErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsClosedProtocol::StrictTwoWayFieldsErr>>;
@@ -12519,7 +12489,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsClosedProtocol::StrictTwoWayUnionErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsClosedProtocolStrictTwoWayUnionErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsClosedProtocol::StrictTwoWayUnionErr>>;
@@ -12552,7 +12521,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInteractionsClosedProtocol::StrictTwoWayTableErr> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_unknowninteractions::wire::UnknownInteractionsClosedProtocolStrictTwoWayTableErrTopResponse;
-  
   using DomainError = int32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_unknowninteractions::UnknownInteractionsClosedProtocol::StrictTwoWayTableErr>>;
@@ -12653,7 +12621,6 @@ struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInte
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_unknowninteractions::wire::UnknownInteractionsClosedProtocolStrictEventErrRequest;
-  
   using DomainError = int32_t;
 };
 
@@ -12672,7 +12639,6 @@ struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInte
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_unknowninteractions::wire::UnknownInteractionsClosedProtocolStrictEventFieldsErrRequest;
-  
   using DomainError = int32_t;
 };
 
@@ -12691,7 +12657,6 @@ struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInte
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_unknowninteractions::wire::UnknownInteractionsClosedProtocolStrictEventUnionErrRequest;
-  
   using DomainError = int32_t;
 };
 
@@ -12710,7 +12675,6 @@ struct ::fidl::internal::WireMethodTypes<::test_unknowninteractions::UnknownInte
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_unknowninteractions::wire::UnknownInteractionsClosedProtocolStrictEventTableErrRequest;
-  
   using DomainError = int32_t;
 };
 

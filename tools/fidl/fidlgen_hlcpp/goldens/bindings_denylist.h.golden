@@ -241,7 +241,6 @@ class DenyEachBinding_OnlyDenyDart_Result final {
   }
 
   friend ::fidl::Equality<::test::bindingsdenylist::DenyEachBinding_OnlyDenyDart_Result>;
-
   DenyEachBinding_OnlyDenyDart_Result(fpromise::result<int32_t, uint32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -420,7 +419,6 @@ class DenyEachBinding_OnlyDenyGo_Result final {
   }
 
   friend ::fidl::Equality<::test::bindingsdenylist::DenyEachBinding_OnlyDenyGo_Result>;
-
   DenyEachBinding_OnlyDenyGo_Result(fpromise::result<int32_t, uint32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -599,7 +597,6 @@ class DenyEachBinding_OnlyDenyLibfuzzer_Result final {
   }
 
   friend ::fidl::Equality<::test::bindingsdenylist::DenyEachBinding_OnlyDenyLibfuzzer_Result>;
-
   DenyEachBinding_OnlyDenyLibfuzzer_Result(fpromise::result<int32_t, uint32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -778,7 +775,6 @@ class DenyEachBinding_OnlyDenyRust_Result final {
   }
 
   friend ::fidl::Equality<::test::bindingsdenylist::DenyEachBinding_OnlyDenyRust_Result>;
-
   DenyEachBinding_OnlyDenyRust_Result(fpromise::result<int32_t, uint32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -957,7 +953,6 @@ class DenyEachBinding_OnlyDenySyzkaller_Result final {
   }
 
   friend ::fidl::Equality<::test::bindingsdenylist::DenyEachBinding_OnlyDenySyzkaller_Result>;
-
   DenyEachBinding_OnlyDenySyzkaller_Result(fpromise::result<int32_t, uint32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {

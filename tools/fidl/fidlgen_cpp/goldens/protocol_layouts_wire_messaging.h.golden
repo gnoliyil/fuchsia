@@ -240,7 +240,6 @@ struct ::fidl::internal::WireMethodTypes<::test_protocollayouts::MainProtocol::T
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_protocollayouts_imported::wire::ComposedProtocolTwoWayAnonComposedWithErrorRequest;
       using Response = ::test_protocollayouts_imported::wire::ComposedProtocolTwoWayAnonComposedWithErrorTopResponse;
-  
   using DomainError = uint32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_protocollayouts::MainProtocol::TwoWayAnonComposedWithError>>;
@@ -291,7 +290,6 @@ struct ::fidl::internal::WireMethodTypes<::test_protocollayouts::MainProtocol::O
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_protocollayouts_imported::wire::ComposedProtocolOnAnonComposedWithErrorRequest;
-  
   using DomainError = uint32_t;
 };
 
@@ -360,7 +358,6 @@ struct ::fidl::internal::WireMethodTypes<::test_protocollayouts::MainProtocol::T
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_protocollayouts_imported::wire::ImportTablePayload;
       using Response = ::test_protocollayouts_imported::wire::ComposedProtocolTwoWayNamedComposedWithErrorTopResponse;
-  
   using DomainError = uint32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_protocollayouts::MainProtocol::TwoWayNamedComposedWithError>>;
@@ -411,7 +408,6 @@ struct ::fidl::internal::WireMethodTypes<::test_protocollayouts::MainProtocol::O
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_protocollayouts_imported::wire::ComposedProtocolOnNamedComposedWithErrorRequest;
-  
   using DomainError = uint32_t;
 };
 
@@ -480,7 +476,6 @@ struct ::fidl::internal::WireMethodTypes<::test_protocollayouts::MainProtocol::T
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_protocollayouts_imported::wire::ImportTablePayload;
       using Response = ::test_protocollayouts::wire::MainProtocolTwoWayImportWithErrorTopResponse;
-  
   using DomainError = uint32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_protocollayouts::MainProtocol::TwoWayImportWithError>>;
@@ -531,7 +526,6 @@ struct ::fidl::internal::WireMethodTypes<::test_protocollayouts::MainProtocol::O
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_protocollayouts::wire::MainProtocolOnImportWithErrorRequest;
-  
   using DomainError = uint32_t;
 };
 
@@ -600,7 +594,6 @@ struct ::fidl::internal::WireMethodTypes<::test_protocollayouts::MainProtocol::T
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_protocollayouts::wire::LocalTablePayload;
       using Response = ::test_protocollayouts::wire::MainProtocolTwoWayLocalWithErrorTopResponse;
-  
   using DomainError = uint32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_protocollayouts::MainProtocol::TwoWayLocalWithError>>;
@@ -651,7 +644,6 @@ struct ::fidl::internal::WireMethodTypes<::test_protocollayouts::MainProtocol::O
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_protocollayouts::wire::MainProtocolOnLocalWithErrorRequest;
-  
   using DomainError = uint32_t;
 };
 
@@ -720,7 +712,6 @@ struct ::fidl::internal::WireMethodTypes<::test_protocollayouts::MainProtocol::T
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_protocollayouts::wire::MainProtocolTwoWayAnonWithErrorRequest;
       using Response = ::test_protocollayouts::wire::MainProtocolTwoWayAnonWithErrorTopResponse;
-  
   using DomainError = uint32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_protocollayouts::MainProtocol::TwoWayAnonWithError>>;
@@ -771,7 +762,6 @@ struct ::fidl::internal::WireMethodTypes<::test_protocollayouts::MainProtocol::O
     
     static constexpr bool HasRequestPayload = true;
       using Request = ::test_protocollayouts::wire::MainProtocolOnAnonWithErrorRequest;
-  
   using DomainError = uint32_t;
 };
 

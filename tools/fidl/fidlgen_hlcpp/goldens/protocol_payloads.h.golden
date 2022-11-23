@@ -157,7 +157,6 @@ class MainProtocol_TwoWayLocalWithError_Result final {
   }
 
   friend ::fidl::Equality<::test::protocolpayloads::MainProtocol_TwoWayLocalWithError_Result>;
-
   MainProtocol_TwoWayLocalWithError_Result(fpromise::result<::std::tuple<uint32_t, uint32_t>, uint32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -284,7 +283,6 @@ class MainProtocol_OnLocalWithError_Result final {
   }
 
   friend ::fidl::Equality<::test::protocolpayloads::MainProtocol_OnLocalWithError_Result>;
-
   MainProtocol_OnLocalWithError_Result(fpromise::result<::std::tuple<uint32_t, uint32_t>, uint32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -533,7 +531,6 @@ class MainProtocol_TwoWayAnonWithError_Result final {
   }
 
   friend ::fidl::Equality<::test::protocolpayloads::MainProtocol_TwoWayAnonWithError_Result>;
-
   MainProtocol_TwoWayAnonWithError_Result(fpromise::result<::std::tuple<uint32_t, uint32_t>, uint32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -713,7 +710,6 @@ class MainProtocol_OnAnonWithError_Result final {
   }
 
   friend ::fidl::Equality<::test::protocolpayloads::MainProtocol_OnAnonWithError_Result>;
-
   MainProtocol_OnAnonWithError_Result(fpromise::result<::std::tuple<uint32_t, uint32_t>, uint32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {

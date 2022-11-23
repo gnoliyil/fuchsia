@@ -984,7 +984,6 @@ class UnknownInteractionsProtocol_StrictTwoWayErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsProtocol_StrictTwoWayErr_Result>;
-  
   UnknownInteractionsProtocol_StrictTwoWayErr_Result(fpromise::result<void, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -1151,7 +1150,6 @@ class UnknownInteractionsProtocol_StrictTwoWayFieldsErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsProtocol_StrictTwoWayFieldsErr_Result>;
-  
   UnknownInteractionsProtocol_StrictTwoWayFieldsErr_Result(fpromise::result<int32_t, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -1377,7 +1375,6 @@ class UnknownInteractionsProtocol_StrictTwoWayUnionErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsProtocol_StrictTwoWayUnionErr_Result>;
-  
   UnknownInteractionsProtocol_StrictTwoWayUnionErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsProtocol_StrictTwoWayUnionErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -1599,7 +1596,6 @@ class UnknownInteractionsProtocol_StrictTwoWayTableErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsProtocol_StrictTwoWayTableErr_Result>;
-  
   UnknownInteractionsProtocol_StrictTwoWayTableErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsProtocol_StrictTwoWayTableErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -2484,7 +2480,6 @@ class UnknownInteractionsProtocol_FlexibleTwoWayErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsProtocol_FlexibleTwoWayErr_Result>;
-  
   UnknownInteractionsProtocol_FlexibleTwoWayErr_Result(fpromise::result<void, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -2667,7 +2662,6 @@ class UnknownInteractionsProtocol_FlexibleTwoWayFieldsErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsProtocol_FlexibleTwoWayFieldsErr_Result>;
-  
   UnknownInteractionsProtocol_FlexibleTwoWayFieldsErr_Result(fpromise::result<int32_t, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -2909,7 +2903,6 @@ class UnknownInteractionsProtocol_FlexibleTwoWayUnionErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsProtocol_FlexibleTwoWayUnionErr_Result>;
-  
   UnknownInteractionsProtocol_FlexibleTwoWayUnionErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsProtocol_FlexibleTwoWayUnionErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -3147,7 +3140,6 @@ class UnknownInteractionsProtocol_FlexibleTwoWayTableErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsProtocol_FlexibleTwoWayTableErr_Result>;
-  
   UnknownInteractionsProtocol_FlexibleTwoWayTableErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsProtocol_FlexibleTwoWayTableErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -3516,7 +3508,6 @@ class UnknownInteractionsProtocol_StrictEventErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsProtocol_StrictEventErr_Result>;
-  
   UnknownInteractionsProtocol_StrictEventErr_Result(fpromise::result<void, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -3683,7 +3674,6 @@ class UnknownInteractionsProtocol_StrictEventFieldsErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsProtocol_StrictEventFieldsErr_Result>;
-  
   UnknownInteractionsProtocol_StrictEventFieldsErr_Result(fpromise::result<int32_t, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -3909,7 +3899,6 @@ class UnknownInteractionsProtocol_StrictEventUnionErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsProtocol_StrictEventUnionErr_Result>;
-  
   UnknownInteractionsProtocol_StrictEventUnionErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsProtocol_StrictEventUnionErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -4131,7 +4120,6 @@ class UnknownInteractionsProtocol_StrictEventTableErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsProtocol_StrictEventTableErr_Result>;
-  
   UnknownInteractionsProtocol_StrictEventTableErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsProtocol_StrictEventTableErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -4499,7 +4487,6 @@ class UnknownInteractionsProtocol_FlexibleEventErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsProtocol_FlexibleEventErr_Result>;
-  
   UnknownInteractionsProtocol_FlexibleEventErr_Result(fpromise::result<void, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -4666,7 +4653,6 @@ class UnknownInteractionsProtocol_FlexibleEventFieldsErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsProtocol_FlexibleEventFieldsErr_Result>;
-  
   UnknownInteractionsProtocol_FlexibleEventFieldsErr_Result(fpromise::result<int32_t, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -4892,7 +4878,6 @@ class UnknownInteractionsProtocol_FlexibleEventUnionErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsProtocol_FlexibleEventUnionErr_Result>;
-  
   UnknownInteractionsProtocol_FlexibleEventUnionErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsProtocol_FlexibleEventUnionErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -5114,7 +5099,6 @@ class UnknownInteractionsProtocol_FlexibleEventTableErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsProtocol_FlexibleEventTableErr_Result>;
-  
   UnknownInteractionsProtocol_FlexibleEventTableErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsProtocol_FlexibleEventTableErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -6001,7 +5985,6 @@ class UnknownInteractionsAjarProtocol_StrictTwoWayErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsAjarProtocol_StrictTwoWayErr_Result>;
-  
   UnknownInteractionsAjarProtocol_StrictTwoWayErr_Result(fpromise::result<void, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -6168,7 +6151,6 @@ class UnknownInteractionsAjarProtocol_StrictTwoWayFieldsErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsAjarProtocol_StrictTwoWayFieldsErr_Result>;
-  
   UnknownInteractionsAjarProtocol_StrictTwoWayFieldsErr_Result(fpromise::result<int32_t, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -6394,7 +6376,6 @@ class UnknownInteractionsAjarProtocol_StrictTwoWayUnionErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsAjarProtocol_StrictTwoWayUnionErr_Result>;
-  
   UnknownInteractionsAjarProtocol_StrictTwoWayUnionErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsAjarProtocol_StrictTwoWayUnionErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -6616,7 +6597,6 @@ class UnknownInteractionsAjarProtocol_StrictTwoWayTableErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsAjarProtocol_StrictTwoWayTableErr_Result>;
-  
   UnknownInteractionsAjarProtocol_StrictTwoWayTableErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsAjarProtocol_StrictTwoWayTableErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -6984,7 +6964,6 @@ class UnknownInteractionsAjarProtocol_StrictEventErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsAjarProtocol_StrictEventErr_Result>;
-  
   UnknownInteractionsAjarProtocol_StrictEventErr_Result(fpromise::result<void, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -7151,7 +7130,6 @@ class UnknownInteractionsAjarProtocol_StrictEventFieldsErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsAjarProtocol_StrictEventFieldsErr_Result>;
-  
   UnknownInteractionsAjarProtocol_StrictEventFieldsErr_Result(fpromise::result<int32_t, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -7377,7 +7355,6 @@ class UnknownInteractionsAjarProtocol_StrictEventUnionErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsAjarProtocol_StrictEventUnionErr_Result>;
-  
   UnknownInteractionsAjarProtocol_StrictEventUnionErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsAjarProtocol_StrictEventUnionErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -7599,7 +7576,6 @@ class UnknownInteractionsAjarProtocol_StrictEventTableErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsAjarProtocol_StrictEventTableErr_Result>;
-  
   UnknownInteractionsAjarProtocol_StrictEventTableErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsAjarProtocol_StrictEventTableErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -7967,7 +7943,6 @@ class UnknownInteractionsAjarProtocol_FlexibleEventErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsAjarProtocol_FlexibleEventErr_Result>;
-  
   UnknownInteractionsAjarProtocol_FlexibleEventErr_Result(fpromise::result<void, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -8134,7 +8109,6 @@ class UnknownInteractionsAjarProtocol_FlexibleEventFieldsErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsAjarProtocol_FlexibleEventFieldsErr_Result>;
-  
   UnknownInteractionsAjarProtocol_FlexibleEventFieldsErr_Result(fpromise::result<int32_t, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -8360,7 +8334,6 @@ class UnknownInteractionsAjarProtocol_FlexibleEventUnionErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsAjarProtocol_FlexibleEventUnionErr_Result>;
-  
   UnknownInteractionsAjarProtocol_FlexibleEventUnionErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsAjarProtocol_FlexibleEventUnionErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -8582,7 +8555,6 @@ class UnknownInteractionsAjarProtocol_FlexibleEventTableErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsAjarProtocol_FlexibleEventTableErr_Result>;
-  
   UnknownInteractionsAjarProtocol_FlexibleEventTableErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsAjarProtocol_FlexibleEventTableErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -9325,7 +9297,6 @@ class UnknownInteractionsClosedProtocol_StrictTwoWayErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsClosedProtocol_StrictTwoWayErr_Result>;
-  
   UnknownInteractionsClosedProtocol_StrictTwoWayErr_Result(fpromise::result<void, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -9492,7 +9463,6 @@ class UnknownInteractionsClosedProtocol_StrictTwoWayFieldsErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsClosedProtocol_StrictTwoWayFieldsErr_Result>;
-  
   UnknownInteractionsClosedProtocol_StrictTwoWayFieldsErr_Result(fpromise::result<int32_t, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -9718,7 +9688,6 @@ class UnknownInteractionsClosedProtocol_StrictTwoWayUnionErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsClosedProtocol_StrictTwoWayUnionErr_Result>;
-  
   UnknownInteractionsClosedProtocol_StrictTwoWayUnionErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsClosedProtocol_StrictTwoWayUnionErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -9940,7 +9909,6 @@ class UnknownInteractionsClosedProtocol_StrictTwoWayTableErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsClosedProtocol_StrictTwoWayTableErr_Result>;
-  
   UnknownInteractionsClosedProtocol_StrictTwoWayTableErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsClosedProtocol_StrictTwoWayTableErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -10308,7 +10276,6 @@ class UnknownInteractionsClosedProtocol_StrictEventErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsClosedProtocol_StrictEventErr_Result>;
-  
   UnknownInteractionsClosedProtocol_StrictEventErr_Result(fpromise::result<void, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -10475,7 +10442,6 @@ class UnknownInteractionsClosedProtocol_StrictEventFieldsErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsClosedProtocol_StrictEventFieldsErr_Result>;
-  
   UnknownInteractionsClosedProtocol_StrictEventFieldsErr_Result(fpromise::result<int32_t, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -10701,7 +10667,6 @@ class UnknownInteractionsClosedProtocol_StrictEventUnionErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsClosedProtocol_StrictEventUnionErr_Result>;
-  
   UnknownInteractionsClosedProtocol_StrictEventUnionErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsClosedProtocol_StrictEventUnionErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -10923,7 +10888,6 @@ class UnknownInteractionsClosedProtocol_StrictEventTableErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsClosedProtocol_StrictEventTableErr_Result>;
-  
   UnknownInteractionsClosedProtocol_StrictEventTableErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsClosedProtocol_StrictEventTableErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -11556,7 +11520,6 @@ class UnknownInteractionsDriverProtocol_StrictTwoWayErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsDriverProtocol_StrictTwoWayErr_Result>;
-  
   UnknownInteractionsDriverProtocol_StrictTwoWayErr_Result(fpromise::result<void, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -11723,7 +11686,6 @@ class UnknownInteractionsDriverProtocol_StrictTwoWayFieldsErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsDriverProtocol_StrictTwoWayFieldsErr_Result>;
-  
   UnknownInteractionsDriverProtocol_StrictTwoWayFieldsErr_Result(fpromise::result<int32_t, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -11949,7 +11911,6 @@ class UnknownInteractionsDriverProtocol_StrictTwoWayUnionErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsDriverProtocol_StrictTwoWayUnionErr_Result>;
-  
   UnknownInteractionsDriverProtocol_StrictTwoWayUnionErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsDriverProtocol_StrictTwoWayUnionErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -12171,7 +12132,6 @@ class UnknownInteractionsDriverProtocol_StrictTwoWayTableErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsDriverProtocol_StrictTwoWayTableErr_Result>;
-  
   UnknownInteractionsDriverProtocol_StrictTwoWayTableErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsDriverProtocol_StrictTwoWayTableErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -13056,7 +13016,6 @@ class UnknownInteractionsDriverProtocol_FlexibleTwoWayErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsDriverProtocol_FlexibleTwoWayErr_Result>;
-  
   UnknownInteractionsDriverProtocol_FlexibleTwoWayErr_Result(fpromise::result<void, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -13239,7 +13198,6 @@ class UnknownInteractionsDriverProtocol_FlexibleTwoWayFieldsErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsDriverProtocol_FlexibleTwoWayFieldsErr_Result>;
-  
   UnknownInteractionsDriverProtocol_FlexibleTwoWayFieldsErr_Result(fpromise::result<int32_t, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -13481,7 +13439,6 @@ class UnknownInteractionsDriverProtocol_FlexibleTwoWayUnionErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsDriverProtocol_FlexibleTwoWayUnionErr_Result>;
-  
   UnknownInteractionsDriverProtocol_FlexibleTwoWayUnionErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsDriverProtocol_FlexibleTwoWayUnionErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -13719,7 +13676,6 @@ class UnknownInteractionsDriverProtocol_FlexibleTwoWayTableErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsDriverProtocol_FlexibleTwoWayTableErr_Result>;
-  
   UnknownInteractionsDriverProtocol_FlexibleTwoWayTableErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsDriverProtocol_FlexibleTwoWayTableErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -14088,7 +14044,6 @@ class UnknownInteractionsAjarDriverProtocol_StrictTwoWayErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsAjarDriverProtocol_StrictTwoWayErr_Result>;
-  
   UnknownInteractionsAjarDriverProtocol_StrictTwoWayErr_Result(fpromise::result<void, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -14255,7 +14210,6 @@ class UnknownInteractionsAjarDriverProtocol_StrictTwoWayFieldsErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsAjarDriverProtocol_StrictTwoWayFieldsErr_Result>;
-  
   UnknownInteractionsAjarDriverProtocol_StrictTwoWayFieldsErr_Result(fpromise::result<int32_t, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -14481,7 +14435,6 @@ class UnknownInteractionsAjarDriverProtocol_StrictTwoWayUnionErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsAjarDriverProtocol_StrictTwoWayUnionErr_Result>;
-  
   UnknownInteractionsAjarDriverProtocol_StrictTwoWayUnionErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsAjarDriverProtocol_StrictTwoWayUnionErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -14703,7 +14656,6 @@ class UnknownInteractionsAjarDriverProtocol_StrictTwoWayTableErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsAjarDriverProtocol_StrictTwoWayTableErr_Result>;
-  
   UnknownInteractionsAjarDriverProtocol_StrictTwoWayTableErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsAjarDriverProtocol_StrictTwoWayTableErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -15071,7 +15023,6 @@ class UnknownInteractionsClosedDriverProtocol_StrictTwoWayErr_Result final {
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsClosedDriverProtocol_StrictTwoWayErr_Result>;
-  
   UnknownInteractionsClosedDriverProtocol_StrictTwoWayErr_Result(fpromise::result<void, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -15238,7 +15189,6 @@ class UnknownInteractionsClosedDriverProtocol_StrictTwoWayFieldsErr_Result final
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsClosedDriverProtocol_StrictTwoWayFieldsErr_Result>;
-  
   UnknownInteractionsClosedDriverProtocol_StrictTwoWayFieldsErr_Result(fpromise::result<int32_t, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -15464,7 +15414,6 @@ class UnknownInteractionsClosedDriverProtocol_StrictTwoWayUnionErr_Result final 
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsClosedDriverProtocol_StrictTwoWayUnionErr_Result>;
-  
   UnknownInteractionsClosedDriverProtocol_StrictTwoWayUnionErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsClosedDriverProtocol_StrictTwoWayUnionErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
@@ -15686,7 +15635,6 @@ class UnknownInteractionsClosedDriverProtocol_StrictTwoWayTableErr_Result final 
   }
 
   friend ::fidl::Equality<::test::unknowninteractions::UnknownInteractionsClosedDriverProtocol_StrictTwoWayTableErr_Result>;
-  
   UnknownInteractionsClosedDriverProtocol_StrictTwoWayTableErr_Result(fpromise::result<::test::unknowninteractions::UnknownInteractionsClosedDriverProtocol_StrictTwoWayTableErr_Response, int32_t>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {

@@ -2005,7 +2005,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_protocols::WithErrorSyntax::ResponseAsStruct> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_protocols::wire::WithErrorSyntaxResponseAsStructTopResponse;
-  
   using DomainError = uint32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_protocols::WithErrorSyntax::ResponseAsStruct>>;
@@ -2038,7 +2037,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_protocols::WithErrorSyntax::ErrorAsPrimitive> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_protocols::wire::WithErrorSyntaxErrorAsPrimitiveTopResponse;
-  
   using DomainError = uint32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_protocols::WithErrorSyntax::ErrorAsPrimitive>>;
@@ -2071,7 +2069,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_protocols::WithErrorSyntax::ErrorAsEnum> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_protocols::wire::WithErrorSyntaxErrorAsEnumTopResponse;
-  
   using DomainError = ::test_protocols::wire::ErrorEnum;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_protocols::WithErrorSyntax::ErrorAsEnum>>;
@@ -2104,7 +2101,6 @@ template<>
 struct ::fidl::internal::WireMethodTypes<::test_protocols::WithErrorSyntax::HandleInResult> {
     static constexpr bool HasRequestPayload = false;
       using Response = ::test_protocols::wire::WithErrorSyntaxHandleInResultTopResponse;
-  
   using DomainError = uint32_t;
     
       using Completer = fidl::Completer<::fidl::internal::WireCompleterBase<::test_protocols::WithErrorSyntax::HandleInResult>>;

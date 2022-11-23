@@ -144,7 +144,6 @@ class {{ .Name }} final {
 
   {{- if .Result }}
   {{- if .Result.HasError }}
-  {{/* TODO(fxbug.dev/88366): Figure out how to handle unknown interactions for HLCPP. */}}
   {{ .Name }}(fpromise::result<{{ .Result.ValueDecl }}, {{ .Result.ErrorDecl }}>&& result) {
     ZX_ASSERT(!result.is_pending());
     if (result.is_ok()) {
