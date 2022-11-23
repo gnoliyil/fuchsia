@@ -2,9 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use crate::ToolSuite;
-use anyhow::{Context, Result};
-use argh::EarlyExit;
+use crate::{Error, Result, ToolSuite};
+use anyhow::Context;
 use argh::FromArgs;
 use errors::ffx_error;
 use ffx_config::EnvironmentContext;
@@ -62,7 +61,7 @@ impl FfxCommandLine {
 
     /// Parse the command line arguments given into an Ffx argument struct, returning the
     /// EarlyExit error if the parse failed
-    pub fn try_parse<T: ToolSuite>(&self) -> Result<Ffx, EarlyExit> {
+    pub fn parse<T: ToolSuite>(&self) -> Result<Ffx> {
         Ffx::from_args(&Vec::from_iter(self.cmd_iter()), &Vec::from_iter(self.args_iter())).map_err(
             |early_exit| {
                 let output = early_exit.output
@@ -71,25 +70,10 @@ impl FfxCommandLine {
                         subcommands = argh::print_subcommands(T::global_command_list().iter().copied()),
                         cmd = self.command.join(" "),
                     );
-                EarlyExit { output, ..early_exit }
+                let code = early_exit.status.map_or(1, |_| 0);
+                Error::Help { output, code }
             },
         )
-    }
-
-    /// Parse the command line arguments given into an Ffx argument struct, exiting with the
-    /// appropriate error code if there's an error parsing.
-    ///
-    /// This function will exit early from the current process if argument parsing
-    /// was unsuccessful or if information like `--help` was requested.
-    pub fn parse<T: ToolSuite>(&self) -> Ffx {
-        self.try_parse::<T>().unwrap_or_else(|early_exit| {
-            println!("{}", early_exit.output);
-
-            std::process::exit(match early_exit.status {
-                Ok(()) => 0,
-                Err(()) => 1,
-            })
-        })
     }
 
     /// Create a string of the current process's `env::args` that replaces user-supplied parameter

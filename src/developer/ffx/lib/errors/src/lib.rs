@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+use std::process::ExitStatus;
+
 use fidl_fuchsia_developer_ffx::{
     DaemonError, OpenTargetError, TargetConnectionError, TunnelError,
 };
@@ -75,6 +77,8 @@ pub enum FfxError {
         is_default_target: bool,
         logs: Option<String>,
     },
+    #[error("Testing Error")]
+    TestingError, // this is here to be used in tests for verifying errors are translated properly.
 }
 
 pub fn target_string(matcher: &Option<String>, is_default: &bool) -> String {
@@ -114,37 +118,86 @@ macro_rules! ffx_error_with_code {
 #[macro_export]
 macro_rules! ffx_bail {
     ($msg:literal $(,)?) => {
-        $crate::macro_deps::anyhow::bail!($crate::ffx_error!($msg))
+        return Err($crate::ffx_error!($msg).into())
     };
     ($fmt:expr, $($arg:tt)*) => {
-        $crate::macro_deps::anyhow::bail!($crate::ffx_error!($fmt, $($arg)*));
+        return Err($crate::ffx_error!($fmt, $($arg)*).into());
     };
 }
 
 #[macro_export]
 macro_rules! ffx_bail_with_code {
     ($code:literal, $msg:literal $(,)?) => {
-        $crate::macro_deps::anyhow::bail!($crate::ffx_error_with_code!($code, $msg))
+        return Err($crate::ffx_error_with_code!($code, $msg).into())
     };
     ($code:expr, $fmt:expr, $($arg:tt)*) => {
-        $crate::macro_deps::anyhow::bail!($crate::ffx_error_with_code!($code, $fmt, $($arg)*));
+        return Err($crate::ffx_error_with_code!($code, $fmt, $($arg)*).into());
     };
 }
 
-pub trait ResultExt {
-    fn ffx_error<'a>(&'a self) -> Option<&'a FfxError>;
-
+pub trait IntoExitCode {
     fn exit_code(&self) -> i32;
 }
 
-impl<T> ResultExt for anyhow::Result<T> {
+pub trait ResultExt: IntoExitCode {
+    fn ffx_error<'a>(&'a self) -> Option<&'a FfxError>;
+}
+
+impl ResultExt for anyhow::Error {
+    fn ffx_error<'a>(&'a self) -> Option<&'a FfxError> {
+        self.downcast_ref()
+    }
+}
+
+impl IntoExitCode for anyhow::Error {
+    fn exit_code(&self) -> i32 {
+        match self.downcast_ref() {
+            Some(FfxError::Error(_, code)) => *code,
+            _ => 1,
+        }
+    }
+}
+
+impl IntoExitCode for FfxError {
+    fn exit_code(&self) -> i32 {
+        match self {
+            FfxError::Error(_, code) => *code,
+            _ => 1,
+        }
+    }
+}
+
+// so that Result<(), E>::Ok is treated as exit code 0.
+impl IntoExitCode for () {
+    fn exit_code(&self) -> i32 {
+        0
+    }
+}
+
+impl IntoExitCode for ExitStatus {
+    fn exit_code(&self) -> i32 {
+        self.code().unwrap_or(0)
+    }
+}
+
+impl<T, E> ResultExt for Result<T, E>
+where
+    T: IntoExitCode,
+    E: ResultExt,
+{
     fn ffx_error<'a>(&'a self) -> Option<&'a FfxError> {
         match self {
             Ok(_) => None,
             Err(ref err) => err.ffx_error(),
         }
     }
+}
 
+impl<T, E> IntoExitCode for Result<T, E>
+where
+    T: IntoExitCode,
+    E: ResultExt,
+{
     fn exit_code(&self) -> i32 {
         match self {
             Ok(_) => 0,
@@ -153,99 +206,27 @@ impl<T> ResultExt for anyhow::Result<T> {
     }
 }
 
-impl ResultExt for anyhow::Error {
-    fn ffx_error<'a>(&'a self) -> Option<&'a FfxError> {
-        self.downcast_ref::<FfxError>()
-    }
-
-    fn exit_code(&self) -> i32 {
-        match self.ffx_error() {
-            Some(FfxError::Error(_, code)) => *code,
-            _ => 1,
-        }
-    }
-}
-
-const BUG_LINE: &str = "BUG: An internal command error occurred.";
-pub fn write_result(err: &anyhow::Error, w: &mut dyn std::io::Write) -> std::io::Result<()> {
-    if let Some(err) = err.ffx_error() {
-        writeln!(w, "{}", err)
-    } else {
-        writeln!(w, "{}\n{:?}", BUG_LINE, err)
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
-    use anyhow::{anyhow, Error, Result};
+    use anyhow::anyhow;
     use assert_matches::assert_matches;
-    use std::io::Cursor;
 
     const FFX_STR: &str = "I am an ffx error";
     const ERR_STR: &str = "I am not an ffx error";
 
     #[test]
     fn test_ffx_result_extension() {
-        let err = Result::<()>::Err(anyhow!(ERR_STR));
+        let err = anyhow::Result::<()>::Err(anyhow!(ERR_STR));
         assert!(err.ffx_error().is_none());
 
-        let err = Result::<()>::Err(Error::new(ffx_error!(FFX_STR)));
+        let err = anyhow::Result::<()>::Err(anyhow::Error::new(ffx_error!(FFX_STR)));
         assert_matches!(err.ffx_error(), Some(FfxError::Error(_, _)));
-    }
-
-    #[test]
-    fn test_ffx_err_extension() {
-        let err = anyhow!(ERR_STR);
-        assert!(err.ffx_error().is_none());
-
-        let err = Error::new(ffx_error!(FFX_STR));
-        assert_matches!(err.ffx_error(), Some(FfxError::Error(_, _)));
-    }
-
-    #[test]
-    fn test_write_result_ffx_error() {
-        let err = Error::new(ffx_error!(FFX_STR));
-        let mut cursor = Cursor::new(Vec::new());
-
-        assert_matches!(write_result(&err, &mut cursor), Ok(_));
-
-        assert!(String::from_utf8(cursor.into_inner()).unwrap().contains(FFX_STR));
-    }
-
-    #[test]
-    fn test_write_result_arbitrary_error() {
-        let err = anyhow!(ERR_STR);
-        let mut cursor = Cursor::new(Vec::new());
-
-        assert_matches!(write_result(&err, &mut cursor), Ok(_));
-
-        let err_str = String::from_utf8(cursor.into_inner()).unwrap();
-        assert!(err_str.contains(BUG_LINE));
-        assert!(err_str.contains(ERR_STR));
-    }
-
-    #[test]
-    fn test_result_ext_exit_code_ffx_error() {
-        let err = Result::<()>::Err(Error::new(ffx_error_with_code!(42, FFX_STR)));
-        assert_eq!(err.exit_code(), 42);
     }
 
     #[test]
     fn test_result_ext_exit_code_arbitrary_error() {
-        let err = Result::<()>::Err(anyhow!(ERR_STR));
-        assert_eq!(err.exit_code(), 1);
-    }
-
-    #[test]
-    fn test_err_ext_exit_code_ffx_error() {
-        let err = Error::new(ffx_error_with_code!(42, FFX_STR));
-        assert_eq!(err.exit_code(), 42);
-    }
-
-    #[test]
-    fn test_err_ext_exit_code_arbitrary_error() {
-        let err = anyhow!(ERR_STR);
+        let err = Result::<(), _>::Err(anyhow!(ERR_STR));
         assert_eq!(err.exit_code(), 1);
     }
 

@@ -2,14 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use anyhow::Result;
 use argh::{FromArgs, SubCommands};
-use errors::{ffx_error, ResultExt};
-use ffx_command::{DaemonVersionCheck, Ffx, FfxCommandLine, FfxToolInfo, ToolRunner, ToolSuite};
+use errors::ffx_error;
+use ffx_command::{
+    argh_to_ffx_err, DaemonVersionCheck, Error, Ffx, FfxCommandLine, FfxToolInfo, Result,
+    ToolRunner, ToolSuite,
+};
 use ffx_config::EnvironmentContext;
 use ffx_lib_args::FfxBuiltIn;
 use ffx_lib_sub_command::SubCommand;
 use fho::ExternalSubToolSuite;
+use std::{os::unix::process::ExitStatusExt, process::ExitStatus};
 
 /// The command to be invoked and everything it needs to invoke
 struct FfxSubCommand {
@@ -51,18 +54,19 @@ impl ToolSuite for FfxSuite {
         &self,
         ffx_cmd: &FfxCommandLine,
         args: &[&str],
-    ) -> Result<Option<Box<(dyn ToolRunner + 'static)>>, argh::EarlyExit> {
+    ) -> Result<Option<Box<(dyn ToolRunner + 'static)>>> {
         let context = self.context.clone();
         let app = self.app.clone();
         match args.first().copied() {
             Some("commands") => {
                 let mut output = String::new();
                 self.print_command_list(&mut output).ok();
-                let status = Ok(());
-                Err(argh::EarlyExit { output, status })
+                let code = 0;
+                Err(Error::Help { output, code })
             }
             Some(name) if SubCommand::COMMANDS.iter().any(|c| c.name == name) => {
-                let cmd = FfxBuiltIn::from_args(&Vec::from_iter(ffx_cmd.cmd_iter()), args)?;
+                let cmd = FfxBuiltIn::from_args(&Vec::from_iter(ffx_cmd.cmd_iter()), args)
+                    .map_err(argh_to_ffx_err)?;
                 Ok(Some(Box::new(FfxSubCommand { cmd, context, app })))
             }
             Some(name) => match self.external_commands.try_from_args(ffx_cmd, args)? {
@@ -72,27 +76,25 @@ impl ToolSuite for FfxSuite {
                         "Unknown ffx tool `{name}`. Did you mean one of the following?\n\n"
                     );
                     self.print_command_list(&mut output).ok();
-                    let status = Err(());
-                    return Err(argh::EarlyExit { output, status });
+                    let code = 1;
+                    return Err(Error::Help { output, code });
                 }
             },
             None => {
                 let help_res = Ffx::from_args(&Vec::from_iter(ffx_cmd.cmd_iter()), &["help"]);
-                help_res.map(|_| None).map_err(|mut help_err| {
-                    self.print_command_list(&mut help_err.output).ok();
-                    help_err
+                help_res.map(|_| None).map_err(|help_err| {
+                    let mut output = help_err.output;
+                    let code = help_err.status.map_or(1, |_| 0);
+                    self.print_command_list(&mut output).ok();
+                    Error::Help { output, code }
                 })
             }
         }
     }
 
-    fn redact_arg_values(
-        &self,
-        ffx_cmd: &FfxCommandLine,
-        args: &[&str],
-    ) -> Result<Vec<String>, argh::EarlyExit> {
+    fn redact_arg_values(&self, ffx_cmd: &FfxCommandLine, args: &[&str]) -> Result<Vec<String>> {
         let cmd_vec = Vec::from_iter(ffx_cmd.cmd_iter());
-        FfxBuiltIn::redact_arg_values(&cmd_vec, args)
+        FfxBuiltIn::redact_arg_values(&cmd_vec, args).map_err(argh_to_ffx_err)
     }
 }
 
@@ -106,21 +108,23 @@ impl ToolRunner for FfxSubCommand {
         }
     }
 
-    async fn run(self: Box<Self>) -> Result<(), anyhow::Error> {
+    async fn run(self: Box<Self>) -> Result<ExitStatus> {
         use SubCommand::FfxSchema;
         match self.cmd {
             FfxBuiltIn { subcommand: Some(FfxSchema(_)) } => {
-                Ok(ffx_lib_suite::ffx_plugin_writer_all_output(0))
+                ffx_lib_suite::ffx_plugin_writer_all_output(0);
+                Ok(ExitStatus::from_raw(0))
             }
             subcommand => {
                 if self.app.machine.is_some()
                     && !ffx_lib_suite::ffx_plugin_is_machine_supported(&subcommand)
                 {
-                    Err(anyhow::Error::new(ffx_error!(
-                        "The machine flag is not supported for this subcommand"
-                    )))
+                    Err(ffx_error!("The machine flag is not supported for this subcommand").into())
                 } else {
-                    run_legacy_subcommand(self.app, self.context, subcommand).await
+                    run_legacy_subcommand(self.app, self.context, subcommand)
+                        .await
+                        .map(|_| ExitStatus::from_raw(0))
+                        .map_err(Error::from)
                 }
             }
         }
@@ -131,7 +135,7 @@ async fn run_legacy_subcommand(
     app: Ffx,
     context: EnvironmentContext,
     subcommand: FfxBuiltIn,
-) -> Result<()> {
+) -> Result<(), anyhow::Error> {
     let router_interval = if is_daemon(&subcommand) { Some(CIRCUIT_REFRESH_RATE) } else { None };
     let cache_path = context.get_cache_path()?;
     std::fs::create_dir_all(&cache_path)?;
@@ -161,12 +165,5 @@ fn is_daemon(subcommand: &FfxBuiltIn) -> bool {
 #[fuchsia_async::run_singlethreaded]
 async fn main() {
     let result = ffx_command::run::<FfxSuite>().await;
-    if let Err(err) = &result {
-        let mut out = std::io::stderr();
-        // abort hard on a failure to print the user error somehow
-        errors::write_result(err, &mut out).unwrap();
-        ffx_command::report_user_error(err).await.unwrap();
-        ffx_config::print_log_hint(&mut out).await;
-    }
-    std::process::exit(result.exit_code());
+    ffx_command::exit(result).await
 }

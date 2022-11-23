@@ -2,11 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use std::{fmt::Write, path::PathBuf};
+use std::{fmt::Write, path::PathBuf, process::ExitStatus};
 
-use crate::{Ffx, FfxCommandLine};
+use crate::{Error, Ffx, FfxCommandLine};
 use anyhow::Result;
-use argh::EarlyExit;
 use async_trait::async_trait;
 use ffx_config::EnvironmentContext;
 
@@ -53,14 +52,14 @@ impl From<&argh::CommandInfo> for FfxToolInfo {
 #[async_trait(?Send)]
 pub trait ToolRunner {
     fn forces_stdout_log(&self) -> bool;
-    async fn run(self: Box<Self>) -> Result<(), anyhow::Error>;
+    async fn run(self: Box<Self>) -> Result<ExitStatus, Error>;
 }
 
 /// Implements discovering and loading the subtools a particular ffx binary
 /// is capable of running.
 pub trait ToolSuite: Sized {
     /// Initializes the tool suite from the ffx invocation's environment.
-    fn from_env(app: &Ffx, env: &EnvironmentContext) -> Result<Self>;
+    fn from_env(app: &Ffx, env: &EnvironmentContext) -> Result<Self, Error>;
 
     /// Lists commands that should be available no matter how and where this tool
     /// is invoked.
@@ -78,27 +77,20 @@ pub trait ToolSuite: Sized {
         &self,
         cmd: &FfxCommandLine,
         args: &[&str],
-    ) -> Result<Option<Box<dyn ToolRunner>>, EarlyExit>;
+    ) -> Result<Option<Box<dyn ToolRunner>>, Error>;
 
     /// Parses the given command line into a command, then returns a redacted string usable in
     /// analytics. See [`FromArgs::redact_arg_values`] for the kind of output to expect.
-    fn redact_arg_values(
-        &self,
-        cmd: &FfxCommandLine,
-        args: &[&str],
-    ) -> Result<Vec<String>, EarlyExit>;
+    fn redact_arg_values(&self, cmd: &FfxCommandLine, args: &[&str]) -> Result<Vec<String>, Error>;
 
     /// Parses the given command line information into a runnable command
     /// object, exiting and printing the early exit output if help is requested
     /// or an error occurs.
     fn from_args(&self, cmd: &FfxCommandLine, args: &[&str]) -> Option<Box<dyn ToolRunner>> {
         self.try_from_args(cmd, args).unwrap_or_else(|early_exit| {
-            println!("{}", early_exit.output);
+            print!("{}", early_exit);
 
-            std::process::exit(match early_exit.status {
-                Ok(()) => 0,
-                Err(()) => 1,
-            })
+            std::process::exit(early_exit.exit_code())
         })
     }
 

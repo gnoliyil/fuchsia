@@ -2,13 +2,18 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use std::{fs::File, path::PathBuf, rc::Rc, sync::Arc};
+use std::{
+    fs::File, os::unix::process::ExitStatusExt, path::PathBuf, process::ExitStatus, rc::Rc,
+    sync::Arc,
+};
 
 use anyhow::Result;
 use argh::{CommandInfo, FromArgs, SubCommand, SubCommands};
 use async_trait::async_trait;
-use errors::{ffx_error, ResultExt};
-use ffx_command::{DaemonVersionCheck, Ffx, FfxCommandLine, ToolRunner, ToolSuite};
+use errors::ffx_error;
+use ffx_command::{
+    argh_to_ffx_err, DaemonVersionCheck, Ffx, FfxCommandLine, FfxContext, ToolRunner, ToolSuite,
+};
 use ffx_config::EnvironmentContext;
 use ffx_core::Injector;
 use fidl::endpoints::Proxy;
@@ -66,12 +71,18 @@ pub struct FhoEnvironment<'a> {
 }
 
 impl MetadataCmd {
-    fn print(&self, info: &CommandInfo) -> Result<()> {
+    fn print(&self, info: &CommandInfo) -> Result<(), ffx_command::Error> {
         let meta = FhoToolMetadata::new(info.name, info.description);
         match &self.output_path {
-            Some(path) => serde_json::to_writer_pretty(&File::create(path)?, &meta)?,
-            None => serde_json::to_writer_pretty(&std::io::stdout(), &meta)?,
-        };
+            Some(path) => serde_json::to_writer_pretty(
+                &File::create(path).with_user_message(|| {
+                    format!("Failed to create metadata file {}", path.display())
+                })?,
+                &meta,
+            ),
+            None => serde_json::to_writer_pretty(&std::io::stdout(), &meta),
+        }
+        .user_message("Failed writing metadata")?;
         Ok(())
     }
 }
@@ -82,13 +93,14 @@ impl<M: FfxMain> ToolRunner for FhoTool<M> {
         M::forces_stdout_log()
     }
 
-    async fn run(self: Box<Self>) -> Result<(), anyhow::Error> {
+    async fn run(self: Box<Self>) -> Result<ExitStatus, ffx_command::Error> {
         match self.command.subcommand {
             FhoHandler::Metadata(metadata) => metadata.print(M::Command::COMMAND),
             FhoHandler::Standalone(tool) => {
                 let cache_path = self.suite.context.get_cache_path()?;
-                std::fs::create_dir_all(&cache_path)?;
-                let hoist_cache_dir = tempfile::tempdir_in(&cache_path)?;
+                let hoist_cache_dir = std::fs::create_dir_all(&cache_path)
+                    .and_then(|_| tempfile::tempdir_in(&cache_path))
+                    .with_user_message(|| format!("Could not create hoist cache root in {}. Do you have permission to write to its parent?", cache_path.display()))?;
                 let build_info = self.suite.context.build_info();
                 let injector = self
                     .suite
@@ -105,14 +117,14 @@ impl<M: FfxMain> ToolRunner for FhoTool<M> {
                     injector: &injector,
                 };
                 let main = M::from_env(env, tool).await?;
-                main.main().await
+                main.main().await.map_err(|err| err.into())
             }
-        }
+        }.map(|_| ExitStatus::from_raw(0))
     }
 }
 
 impl<M: FfxMain> ToolSuite for FhoSuite<M> {
-    fn from_env(ffx: &Ffx, context: &EnvironmentContext) -> Result<Self, anyhow::Error> {
+    fn from_env(ffx: &Ffx, context: &EnvironmentContext) -> Result<Self, ffx_command::Error> {
         let ffx = ffx.clone();
         let context = context.clone();
         Ok(Self { ffx: ffx, context: context, _p: Default::default() })
@@ -126,10 +138,11 @@ impl<M: FfxMain> ToolSuite for FhoSuite<M> {
         &self,
         cmd: &FfxCommandLine,
         args: &[&str],
-    ) -> Result<Option<Box<dyn ToolRunner>>, argh::EarlyExit> {
+    ) -> Result<Option<Box<dyn ToolRunner>>, ffx_command::Error> {
         let found = FhoTool {
             suite: self.clone(),
-            command: ToolCommand::<M>::from_args(&Vec::from_iter(cmd.cmd_iter()), args)?,
+            command: ToolCommand::<M>::from_args(&Vec::from_iter(cmd.cmd_iter()), args)
+                .map_err(argh_to_ffx_err)?,
         };
         Ok(Some(Box::new(found)))
     }
@@ -138,9 +151,9 @@ impl<M: FfxMain> ToolSuite for FhoSuite<M> {
         &self,
         cmd: &FfxCommandLine,
         args: &[&str],
-    ) -> Result<Vec<String>, argh::EarlyExit> {
+    ) -> Result<Vec<String>, ffx_command::Error> {
         let cmd_vec = Vec::from_iter(cmd.cmd_iter());
-        ToolCommand::<M>::redact_arg_values(&cmd_vec, args)
+        ToolCommand::<M>::redact_arg_values(&cmd_vec, args).map_err(argh_to_ffx_err)
     }
 }
 
@@ -161,16 +174,7 @@ pub trait FfxMain: FfxTool {
     /// Executes the tool. This is intended to be invoked by the user in main.
     async fn execute_tool() {
         let result = ffx_command::run::<FhoSuite<Self>>().await;
-
-        if let Err(err) = &result {
-            let mut out = std::io::stderr();
-            // abort hard on a failure to print the user error somehow
-            errors::write_result(err, &mut out).unwrap();
-            ffx_command::report_user_error(err).await.unwrap();
-            ffx_config::print_log_hint(&mut out).await;
-        }
-
-        std::process::exit(result.exit_code());
+        ffx_command::exit(result).await
     }
 }
 
@@ -502,7 +506,7 @@ mod tests {
             vec!["ffx".to_owned(), "fake".to_owned(), "stuff".to_owned()],
         )
         .unwrap();
-        let ffx = ffx_cmd_line.parse::<FhoSuite<T>>();
+        let ffx = ffx_cmd_line.parse::<FhoSuite<T>>().unwrap();
 
         let tool_cmd = ToolCommand::<T>::from_args(
             &Vec::from_iter(ffx_cmd_line.cmd_iter()),

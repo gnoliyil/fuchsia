@@ -3,14 +3,18 @@
 // found in the LICENSE file.
 
 use anyhow::Result;
+use ffx_command::FfxContext;
 use std::{
     collections::HashMap,
     fs::File,
     path::{Path, PathBuf},
+    process::ExitStatus,
 };
 
 use argh::FromArgs;
-use ffx_command::{Ffx, FfxCommandLine, FfxToolInfo, FfxToolSource, ToolRunner, ToolSuite};
+use ffx_command::{
+    argh_to_ffx_err, Ffx, FfxCommandLine, FfxToolInfo, FfxToolSource, ToolRunner, ToolSuite,
+};
 use ffx_config::EnvironmentContext;
 
 use crate::{FhoToolMetadata, FhoVersion};
@@ -35,14 +39,15 @@ impl ToolRunner for ExternalSubTool {
         false
     }
 
-    async fn run(self: Box<Self>) -> Result<(), anyhow::Error> {
+    async fn run(self: Box<Self>) -> Result<ExitStatus, ffx_command::Error> {
         // fho v0: Run the exact same command, just with the first argument replaced with the 'real' tool
         // location.
         std::process::Command::new(&self.path)
             .env(EnvironmentContext::FFX_BIN_ENV, self.context.rerun_bin()?)
             .args(self.cmd_line.cmd_iter().skip(1).chain(self.cmd_line.args_iter()))
-            .spawn()?;
-        Ok(())
+            .spawn()
+            .and_then(|mut child| child.wait())
+            .bug_context("Running external subtool")
     }
 }
 
@@ -50,13 +55,10 @@ impl ExternalSubToolSuite {
     /// Load subtools from `subtool_paths` and use `context` for the environment context.
     /// This is used both by the main implementation of [`ExternalSubToolSuite::from_env`] and
     /// in tests to redirect to different subtool paths.
-    fn with_tools_from(
-        context: EnvironmentContext,
-        subtool_paths: &[impl AsRef<Path>],
-    ) -> Result<Self> {
+    fn with_tools_from(context: EnvironmentContext, subtool_paths: &[impl AsRef<Path>]) -> Self {
         let available_commands =
             find_tools(subtool_paths).map(|tool| (tool.name.to_owned(), tool)).collect();
-        Ok(Self { context, available_commands })
+        Self { context, available_commands }
     }
 
     fn extract_external_subtool(
@@ -80,8 +82,8 @@ impl ExternalSubToolSuite {
 
 #[async_trait::async_trait(?Send)]
 impl ToolSuite for ExternalSubToolSuite {
-    fn from_env(_app: &Ffx, env: &EnvironmentContext) -> Result<Self> {
-        Self::with_tools_from(env.clone(), &env.subtool_paths())
+    fn from_env(_app: &Ffx, env: &EnvironmentContext) -> Result<Self, ffx_command::Error> {
+        Ok(Self::with_tools_from(env.clone(), &env.subtool_paths()))
     }
 
     fn global_command_list() -> &'static [&'static argh::CommandInfo] {
@@ -96,7 +98,7 @@ impl ToolSuite for ExternalSubToolSuite {
         &self,
         ffx_cmd: &FfxCommandLine,
         args: &[&str],
-    ) -> Result<Option<Box<(dyn ToolRunner + 'static)>>, argh::EarlyExit> {
+    ) -> Result<Option<Box<(dyn ToolRunner + 'static)>>, ffx_command::Error> {
         let cmd = match self.extract_external_subtool(ffx_cmd, args) {
             Some(c) => c,
             None => return Ok(None),
@@ -108,13 +110,13 @@ impl ToolSuite for ExternalSubToolSuite {
         &self,
         ffx_cmd: &FfxCommandLine,
         args: &[&str],
-    ) -> Result<Vec<String>, argh::EarlyExit> {
+    ) -> Result<Vec<String>, ffx_command::Error> {
         if self.extract_external_subtool(ffx_cmd, args).is_none() {
             return Ok(Vec::new());
         }
         // This will likely double-report if this is given to analytics.
-        let mut res =
-            Ffx::redact_arg_values(&Vec::from_iter(ffx_cmd.cmd_iter()), &vec!["n_o_o_p"])?;
+        let mut res = Ffx::redact_arg_values(&Vec::from_iter(ffx_cmd.cmd_iter()), &vec!["n_o_o_p"])
+            .map_err(argh_to_ffx_err)?;
         res.pop();
         res.push(args.first().copied().unwrap().to_owned());
         Ok(res)
@@ -316,8 +318,7 @@ mod tests {
         );
 
         let suite =
-            ExternalSubToolSuite::with_tools_from(EnvironmentContext::default(), &[tempdir.path()])
-                .expect("subtool suite scanning should succeed");
+            ExternalSubToolSuite::with_tools_from(EnvironmentContext::default(), &[tempdir.path()]);
 
         assert!(
             ExternalSubToolSuite::global_command_list().is_empty(),

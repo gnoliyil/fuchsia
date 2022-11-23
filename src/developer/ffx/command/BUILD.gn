@@ -25,13 +25,18 @@ rustc_library("lib") {
     "//third_party/rust_crates:async-trait",
     "//third_party/rust_crates:itertools",
     "//third_party/rust_crates:simplelog",
+    "//third_party/rust_crates:thiserror",
     "//third_party/rust_crates:tracing",
   ]
 
-  test_deps = [ "//third_party/rust_crates:tempfile" ]
+  test_deps = [
+    "//third_party/rust_crates:assert_matches",
+    "//third_party/rust_crates:tempfile",
+  ]
 
   sources = [
     "src/describe.rs",
+    "src/error.rs",
     "src/ffx.rs",
     "src/lib.rs",
     "src/tools.rs",

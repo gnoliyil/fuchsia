@@ -506,7 +506,7 @@ mod tests {
     use assembly_images_config::BlobFSLayout;
     use assembly_tool::testing::FakeToolProvider;
     use camino::Utf8PathBuf;
-    use errors::ResultExt;
+    use errors::IntoExitCode;
     use ffx_assembly_args::PackageSizeCheckArgs;
     use fuchsia_hash::Hash;
     use serde_json::json;

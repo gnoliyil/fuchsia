@@ -3,24 +3,27 @@
 // found in the LICENSE file.
 
 use analytics::{get_notice, opt_out_for_this_invocation};
-use anyhow::{Context, Result};
-use errors::{ffx_error, ResultExt};
+use anyhow::Context;
+use errors::{ffx_error, IntoExitCode};
 use ffx_metrics::{add_ffx_launch_and_timing_events, init_metrics_svc};
 use fuchsia_async::TimeoutExt;
 use itertools::Itertools;
 use std::fs::File;
 use std::io::Write;
+use std::process::ExitStatus;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 mod describe;
+mod error;
 mod ffx;
 mod tools;
 
+pub use error::*;
 pub use ffx::*;
 pub use tools::*;
 
-fn stamp_file(stamp: &Option<String>) -> Result<Option<File>> {
+fn stamp_file(stamp: &Option<String>) -> anyhow::Result<Option<File>> {
     if let Some(stamp) = stamp {
         Ok(Some(File::create(stamp)?))
     } else {
@@ -28,16 +31,26 @@ fn stamp_file(stamp: &Option<String>) -> Result<Option<File>> {
     }
 }
 
-fn write_exit_code<T, W: Write>(res: &Result<T>, out: &mut W) -> Result<()> {
-    write!(out, "{}\n", res.exit_code())?;
-    Ok(())
+fn write_exit_code<W: Write>(res: &Result<ExitStatus>, out: &mut W) {
+    let exit_code = match res {
+        Ok(status) => status.code().unwrap_or(1),
+        Err(err) => err.exit_code(),
+    };
+    write!(out, "{}\n", exit_code).ok();
+}
+
+/// Helper function for converting argh early exit errors to ffx errors.
+pub fn argh_to_ffx_err(err: argh::EarlyExit) -> Error {
+    let output = err.output;
+    let code = err.status.map_or(1, |_| 0);
+    Error::Help { output, code }
 }
 
 /// If given an error result, prints a user-meaningful interpretation of it
 /// to the given output handle
-pub async fn report_user_error(err: &anyhow::Error) -> anyhow::Result<()> {
+pub async fn report_user_error(err: &Error) -> anyhow::Result<()> {
     // Report BUG errors as crash events
-    if err.ffx_error().is_none() {
+    if let Error::Unexpected(err) = err {
         // TODO(66918): make configurable, and evaluate chosen time value.
         if let Err(e) = analytics::add_crash_event(&format!("{}", err), None)
             .on_timeout(Duration::from_secs(2), || {
@@ -52,22 +65,19 @@ pub async fn report_user_error(err: &anyhow::Error) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn run<T: ToolSuite>() -> Result<()> {
+pub async fn run<T: ToolSuite>() -> Result<ExitStatus> {
     let cmd = ffx::FfxCommandLine::from_env()?;
-    let app = cmd.parse::<T>();
+    let app = cmd.parse::<T>()?;
 
     let context = app.load_context()?;
 
     ffx_config::init(&context).await?;
 
-    match context.env_file_path() {
-        Ok(path) => path,
-        Err(e) => {
-            eprintln!("ffx could not determine the environment configuration path: {}", e);
-            eprintln!("Ensure that $HOME is set, or pass the --env option to specify an environment configuration path");
-            return Ok(());
-        }
-    };
+    context.env_file_path().map_err(|e| {
+        let output = format!("ffx could not determine the environment configuration path: {}\nEnsure that $HOME is set, or pass the --env option to specify an environment configuration path", e);
+        let code = 1;
+        Error::Help { output, code }
+    })?;
 
     let tools = T::from_env(&app, &context)?;
 
@@ -76,7 +86,7 @@ pub async fn run<T: ToolSuite>() -> Result<()> {
     // If the line above succeeds, then this will succeed as well.
     let sanitized_args = match tools.redact_arg_values(&cmd, &args_ref) {
         Ok(a) => format!("{} {}", cmd.redact_args_flags_only(), a[1..].join(" ")).trim().to_owned(),
-        Err(e) => e.output,
+        Err(e) => format!("{e}"),
     };
 
     let log_to_stdio = tool.as_ref().map(|tool| tool.forces_stdout_log()).unwrap_or(false);
@@ -147,17 +157,36 @@ pub async fn run<T: ToolSuite>() -> Result<()> {
 
     // Write to our stamp file if it was requested
     if let Some(mut stamp) = stamp {
-        write_exit_code(&res, &mut stamp)?;
-        stamp.sync_all()?;
+        write_exit_code(&res, &mut stamp);
+        stamp.sync_all().context("Syncing exit code stamp write")?;
     }
 
     res
 }
 
+/// Terminates the process, outputting errors as appropriately and with the indicated exit code.
+pub async fn exit(res: Result<ExitStatus>) -> ! {
+    let exit_code = res.exit_code();
+    match res {
+        Err(Error::Help { output, .. }) => {
+            writeln!(&mut std::io::stdout(), "{output}").unwrap();
+        }
+        Err(err) => {
+            let mut out = std::io::stderr();
+            // abort hard on a failure to print the user error somehow
+            writeln!(&mut out, "{err}").unwrap();
+            report_user_error(&err).await.unwrap();
+            ffx_config::print_log_hint(&mut out).await;
+        }
+        _ => (),
+    }
+    std::process::exit(exit_code);
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::io::BufWriter;
+    use std::{io::BufWriter, os::unix::process::ExitStatusExt};
     use tempfile;
 
     #[fuchsia_async::run_singlethreaded(test)]
@@ -178,14 +207,14 @@ mod test {
     #[fuchsia_async::run_singlethreaded(test)]
     async fn test_write_exit_code() {
         let mut out = BufWriter::new(Vec::new());
-        write_exit_code(&Ok(0), &mut out).unwrap();
+        write_exit_code(&Ok(ExitStatus::from_raw(0)), &mut out);
         assert_eq!(String::from_utf8(out.into_inner().unwrap()).unwrap(), "0\n");
     }
 
     #[fuchsia_async::run_singlethreaded(test)]
     async fn test_write_exit_code_on_failure() {
         let mut out = BufWriter::new(Vec::new());
-        write_exit_code(&Result::<()>::Err(anyhow::anyhow!("fail")), &mut out).unwrap();
+        write_exit_code(&Result::<ExitStatus>::Err(Error::from(anyhow::anyhow!("fail"))), &mut out);
         assert_eq!(String::from_utf8(out.into_inner().unwrap()).unwrap(), "1\n")
     }
 }
