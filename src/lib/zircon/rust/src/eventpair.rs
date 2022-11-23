@@ -22,7 +22,16 @@ impl EventPair {
     /// Create an event pair, a pair of objects which can signal each other. Wraps the
     /// [zx_eventpair_create](https://fuchsia.dev/fuchsia-src/reference/syscalls/eventpair_create.md)
     /// syscall.
+    #[allow(deprecated)]
     pub fn create() -> Result<(EventPair, EventPair), Status> {
+        Self::try_create()
+    }
+
+    /// Create an event pair, a pair of objects which can signal each other. Wraps the
+    /// [zx_eventpair_create](https://fuchsia.dev/fuchsia-src/reference/syscalls/eventpair_create.md)
+    /// syscall.
+    #[deprecated = "creation APIs will no longer be fallible in the future. Users should prefer `create`"]
+    pub fn try_create() -> Result<(EventPair, EventPair), Status> {
         let mut out0 = 0;
         let mut out1 = 0;
         let options = 0;

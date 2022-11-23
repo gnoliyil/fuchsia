@@ -345,7 +345,17 @@ impl Timer {
     /// Wraps the
     /// [zx_timer_create](https://fuchsia.dev/fuchsia-src/reference/syscalls/timer_create.md)
     /// syscall.
+    #[allow(deprecated)]
     pub fn create() -> Result<Timer, Status> {
+        Self::try_create()
+    }
+
+    /// Create a timer, an object that can signal when a specified point in time has been reached.
+    /// Wraps the
+    /// [zx_timer_create](https://fuchsia.dev/fuchsia-src/reference/syscalls/timer_create.md)
+    /// syscall.
+    #[deprecated = "creation APIs will no longer be fallible in the future. Users should prefer `create`"]
+    pub fn try_create() -> Result<Timer, Status> {
         let mut out = 0;
         let opts = 0;
         let status = unsafe {

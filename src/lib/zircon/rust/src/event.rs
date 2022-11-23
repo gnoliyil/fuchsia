@@ -21,7 +21,16 @@ impl Event {
     /// Create an event object, an object which is signalable but nothing else. Wraps the
     /// [zx_event_create](https://fuchsia.dev/fuchsia-src/reference/syscalls/event_create.md)
     /// syscall.
+    #[allow(deprecated)]
     pub fn create() -> Result<Event, Status> {
+        Self::try_create()
+    }
+
+    /// Create an event object, an object which is signalable but nothing else. Wraps the
+    /// [zx_event_create](https://fuchsia.dev/fuchsia-src/reference/syscalls/event_create.md)
+    /// syscall.
+    #[deprecated = "creation APIs will no longer be fallible in the future. Users should prefer `create`"]
+    pub fn try_create() -> Result<Event, Status> {
         let mut out = 0;
         let opts = 0;
         let status = unsafe { sys::zx_event_create(opts, &mut out) };

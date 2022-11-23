@@ -40,7 +40,19 @@ impl Channel {
     /// Wraps the
     /// [zx_channel_create](https://fuchsia.dev/fuchsia-src/reference/syscalls/channel_create.md)
     /// syscall.
+    #[allow(deprecated)]
     pub fn create() -> Result<(Channel, Channel), Status> {
+        Self::try_create()
+    }
+
+    /// Create a channel, resulting in a pair of `Channel` objects representing both
+    /// sides of the channel. Messages written into one may be read from the opposite.
+    ///
+    /// Wraps the
+    /// [zx_channel_create](https://fuchsia.dev/fuchsia-src/reference/syscalls/channel_create.md)
+    /// syscall.
+    #[deprecated = "creation APIs will no longer be fallible in the future. Users should prefer `create`"]
+    pub fn try_create() -> Result<(Channel, Channel), Status> {
         unsafe {
             let mut handle0 = 0;
             let mut handle1 = 0;
