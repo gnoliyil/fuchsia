@@ -91,7 +91,8 @@ class InstanceRequestorTest : public AgentTest {
   void ReceivePublication(InstanceRequestor& under_test, const std::string& host_full_name,
                           const std::string& service_name, const std::string& instance_name,
                           inet::IpPort port, const std::vector<std::vector<uint8_t>>& text,
-                          ReplyAddress sender_address) {
+                          ReplyAddress sender_address, bool include_txt = true,
+                          bool include_address = true) {
     auto service_full_name = MdnsNames::ServiceFullName(service_name);
     auto instance_full_name = MdnsNames::InstanceFullName(instance_name, service_name);
 
@@ -102,12 +103,61 @@ class InstanceRequestorTest : public AgentTest {
     DnsResource srv_resource(instance_full_name, DnsType::kSrv);
     srv_resource.srv_.port_ = port;
     srv_resource.srv_.target_ = DnsName(host_full_name);
+    under_test.ReceiveResource(srv_resource, MdnsResourceSection::kAdditional, sender_address);
+
+    if (include_txt) {
+      DnsResource txt_resource(instance_full_name, DnsType::kTxt);
+      txt_resource.txt_.strings_ = text;
+      under_test.ReceiveResource(txt_resource, MdnsResourceSection::kAdditional, sender_address);
+    }
+
+    if (include_address) {
+      DnsResource a_resource(host_full_name, sender_address.socket_address().address());
+      under_test.ReceiveResource(a_resource, MdnsResourceSection::kAdditional, sender_address);
+    }
+
+    under_test.EndOfMessage();
+  }
+
+  void ReceivePtr(InstanceRequestor& under_test, const std::string& service_name,
+                  const std::string& instance_name, ReplyAddress sender_address) {
+    auto service_full_name = MdnsNames::ServiceFullName(service_name);
+    auto instance_full_name = MdnsNames::InstanceFullName(instance_name, service_name);
+
+    DnsResource ptr_resource(service_full_name, DnsType::kPtr);
+    ptr_resource.ptr_.pointer_domain_name_ = DnsName(instance_full_name);
+    under_test.ReceiveResource(ptr_resource, MdnsResourceSection::kAnswer, sender_address);
+
+    under_test.EndOfMessage();
+  }
+
+  void ReceiveSrv(InstanceRequestor& under_test, const std::string& host_full_name,
+                  const std::string& service_name, const std::string& instance_name,
+                  inet::IpPort port, ReplyAddress sender_address) {
+    auto instance_full_name = MdnsNames::InstanceFullName(instance_name, service_name);
+
+    DnsResource srv_resource(instance_full_name, DnsType::kSrv);
+    srv_resource.srv_.port_ = port;
+    srv_resource.srv_.target_ = DnsName(host_full_name);
     under_test.ReceiveResource(srv_resource, MdnsResourceSection::kAnswer, sender_address);
+
+    under_test.EndOfMessage();
+  }
+
+  void ReceiveTxt(InstanceRequestor& under_test, const std::string& service_name,
+                  const std::string& instance_name, const std::vector<std::vector<uint8_t>>& text,
+                  ReplyAddress sender_address) {
+    auto instance_full_name = MdnsNames::InstanceFullName(instance_name, service_name);
 
     DnsResource txt_resource(instance_full_name, DnsType::kTxt);
     txt_resource.txt_.strings_ = text;
     under_test.ReceiveResource(txt_resource, MdnsResourceSection::kAnswer, sender_address);
 
+    under_test.EndOfMessage();
+  }
+
+  void ReceiveAddress(InstanceRequestor& under_test, const std::string& host_full_name,
+                      ReplyAddress sender_address) {
     DnsResource a_resource(host_full_name, sender_address.socket_address().address());
     under_test.ReceiveResource(a_resource, MdnsResourceSection::kAnswer, sender_address);
 
@@ -647,6 +697,173 @@ TEST_F(InstanceRequestorTest, AnyResponse) {
                      sender_address);
 
   auto params = subscriber.ExpectInstanceDiscoveredCalled();
+  EXPECT_EQ(ServiceInstance(kServiceName, kInstanceName, kHostName,
+                            {inet::SocketAddress(sender_address.socket_address().address(), kPort)},
+                            kText, 0, 0),
+            *params);
+
+  subscriber.ExpectNoOther();
+}
+
+// Tests the behavior of the requestor when a response containing no addresses is received.
+TEST_F(InstanceRequestorTest, ResponseSansAddresses) {
+  InstanceRequestor under_test(this, kServiceName, Media::kBoth, IpVersions::kBoth, kExcludeLocal,
+                               kExcludeLocalProxies);
+  SetAgent(under_test);
+
+  Subscriber subscriber;
+  under_test.AddSubscriber(&subscriber);
+
+  under_test.Start(kLocalHostFullName);
+
+  // Expect a PTR question on start.
+  auto message = ExpectOutboundMessage(ReplyAddress::Multicast(Media::kBoth, IpVersions::kBoth));
+  ExpectQuestion(message.get(), kServiceFullName, DnsType::kPtr);
+  ExpectNoOtherQuestionOrResource(message.get());
+  ExpectPostTaskForTime(kMinDelay, kMinDelay);
+  ExpectNoOther();
+
+  subscriber.ExpectQueryCalled(DnsType::kPtr);
+  subscriber.ExpectNoOther();
+
+  // Receive a response with no address records.
+  ReplyAddress sender_address(
+      inet::SocketAddress(192, 168, 1, 1, inet::IpPort::From_uint16_t(5353)),
+      inet::IpAddress(192, 168, 1, 100), 1, Media::kWireless, IpVersions::kV4);
+  ReceivePublication(under_test, kHostFullName, kServiceName, kInstanceName, kPort, kText,
+                     sender_address, true, false);  // yes TXT record, no A record.
+
+  // Expect an A question.
+  subscriber.ExpectNoOther();
+  message = ExpectOutboundMessage(ReplyAddress::Multicast(Media::kBoth, IpVersions::kBoth));
+  ExpectQuestion(message.get(), kHostFullName, DnsType::kA);
+
+  // Receive a response with only an address record.
+  ReceiveAddress(under_test, kHostFullName, sender_address);
+
+  // Expect discovery of the instance to be reported to the client.
+  auto params = subscriber.ExpectInstanceDiscoveredCalled();
+  EXPECT_EQ(ServiceInstance(kServiceName, kInstanceName, kHostName,
+                            {inet::SocketAddress(sender_address.socket_address().address(), kPort)},
+                            kText, 0, 0),
+            *params);
+
+  subscriber.ExpectNoOther();
+}
+
+// Tests the behavior of the requestor when a response containing no TXT resource is received.
+TEST_F(InstanceRequestorTest, ResponseSansTxt) {
+  InstanceRequestor under_test(this, kServiceName, Media::kBoth, IpVersions::kBoth, kExcludeLocal,
+                               kExcludeLocalProxies);
+  SetAgent(under_test);
+
+  Subscriber subscriber;
+  under_test.AddSubscriber(&subscriber);
+
+  under_test.Start(kLocalHostFullName);
+
+  // Expect a PTR question on start.
+  auto message = ExpectOutboundMessage(ReplyAddress::Multicast(Media::kBoth, IpVersions::kBoth));
+  ExpectQuestion(message.get(), kServiceFullName, DnsType::kPtr);
+  ExpectNoOtherQuestionOrResource(message.get());
+  ExpectPostTaskForTime(kMinDelay, kMinDelay);
+  ExpectNoOther();
+
+  subscriber.ExpectQueryCalled(DnsType::kPtr);
+  subscriber.ExpectNoOther();
+
+  // Receive a response with no TXT record.
+  ReplyAddress sender_address(
+      inet::SocketAddress(192, 168, 1, 1, inet::IpPort::From_uint16_t(5353)),
+      inet::IpAddress(192, 168, 1, 100), 1, Media::kWireless, IpVersions::kV4);
+  ReceivePublication(under_test, kHostFullName, kServiceName, kInstanceName, kPort, kText,
+                     sender_address, false, true);  // no TXT record, yes A record.
+
+  // Expect the instance to be reported to the client with no text.
+  auto params = subscriber.ExpectInstanceDiscoveredCalled();
+  EXPECT_EQ(ServiceInstance(kServiceName, kInstanceName, kHostName,
+                            {inet::SocketAddress(sender_address.socket_address().address(), kPort)},
+                            {}, 0, 0),
+            *params);
+
+  // Expect a TXT question.
+  message = ExpectOutboundMessage(ReplyAddress::Multicast(Media::kBoth, IpVersions::kBoth));
+  ExpectQuestion(message.get(), MdnsNames::InstanceFullName(kInstanceName, kServiceName),
+                 DnsType::kTxt);
+
+  // Receive a response with only a TXT record.
+  ReceiveTxt(under_test, kServiceName, kInstanceName, kText, sender_address);
+
+  // Expect change of the instance to be reported to the client with text.
+  params = subscriber.ExpectInstanceChangedCalled();
+  EXPECT_EQ(ServiceInstance(kServiceName, kInstanceName, kHostName,
+                            {inet::SocketAddress(sender_address.socket_address().address(), kPort)},
+                            kText, 0, 0),
+            *params);
+
+  subscriber.ExpectNoOther();
+}
+
+// Tests the behavior of the requestor when a response containing only PTR is received.
+TEST_F(InstanceRequestorTest, ResponsePtrOnly) {
+  InstanceRequestor under_test(this, kServiceName, Media::kBoth, IpVersions::kBoth, kExcludeLocal,
+                               kExcludeLocalProxies);
+  SetAgent(under_test);
+
+  Subscriber subscriber;
+  under_test.AddSubscriber(&subscriber);
+
+  under_test.Start(kLocalHostFullName);
+
+  // Expect a PTR question on start.
+  auto message = ExpectOutboundMessage(ReplyAddress::Multicast(Media::kBoth, IpVersions::kBoth));
+  ExpectQuestion(message.get(), kServiceFullName, DnsType::kPtr);
+  ExpectNoOtherQuestionOrResource(message.get());
+  ExpectPostTaskForTime(kMinDelay, kMinDelay);
+  ExpectNoOther();
+
+  subscriber.ExpectQueryCalled(DnsType::kPtr);
+  subscriber.ExpectNoOther();
+
+  // Receive a response only a PTR record.
+  ReplyAddress sender_address(
+      inet::SocketAddress(192, 168, 1, 1, inet::IpPort::From_uint16_t(5353)),
+      inet::IpAddress(192, 168, 1, 100), 1, Media::kWireless, IpVersions::kV4);
+  ReceivePtr(under_test, kServiceName, kInstanceName, sender_address);
+
+  // Expect an SRV question.
+  subscriber.ExpectNoOther();
+  message = ExpectOutboundMessage(ReplyAddress::Multicast(Media::kBoth, IpVersions::kBoth));
+  ExpectQuestion(message.get(), MdnsNames::InstanceFullName(kInstanceName, kServiceName),
+                 DnsType::kSrv);
+
+  // Receive a response with only an SRV record.
+  ReceiveSrv(under_test, kHostFullName, kServiceName, kInstanceName, kPort, sender_address);
+
+  // Expect an A question and a TXT question.
+  subscriber.ExpectNoOther();
+  message = ExpectOutboundMessage(ReplyAddress::Multicast(Media::kBoth, IpVersions::kBoth));
+  ExpectQuestion(message.get(), kHostFullName, DnsType::kA);
+  ExpectQuestion(message.get(), MdnsNames::InstanceFullName(kInstanceName, kServiceName),
+                 DnsType::kTxt);
+
+  // Receive a response with only an address record.
+  ReceiveAddress(under_test, kHostFullName, sender_address);
+
+  // Expect the instance to be reported to the client with no text.
+  auto params = subscriber.ExpectInstanceDiscoveredCalled();
+  EXPECT_EQ(ServiceInstance(kServiceName, kInstanceName, kHostName,
+                            {inet::SocketAddress(sender_address.socket_address().address(), kPort)},
+                            {}, 0, 0),
+            *params);
+
+  subscriber.ExpectNoOther();
+
+  // Receive a response with only a TXT record.
+  ReceiveTxt(under_test, kServiceName, kInstanceName, kText, sender_address);
+
+  // Expect change of the instance to be reported to the client with text.
+  params = subscriber.ExpectInstanceChangedCalled();
   EXPECT_EQ(ServiceInstance(kServiceName, kInstanceName, kHostName,
                             {inet::SocketAddress(sender_address.socket_address().address(), kPort)},
                             kText, 0, 0),

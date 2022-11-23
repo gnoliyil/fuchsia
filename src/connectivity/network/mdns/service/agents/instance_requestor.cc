@@ -106,14 +106,30 @@ void InstanceRequestor::ReceiveResource(const DnsResource& resource, MdnsResourc
 
 void InstanceRequestor::EndOfMessage() {
   // Report updates.
-  for (auto& [_, instance_info] : instance_infos_by_full_name_) {
+  for (auto& [instance_full_name, instance_info] : instance_infos_by_full_name_) {
     if (instance_info.target_.empty()) {
       // We haven't yet seen an SRV record for this instance.
+      if (!instance_info.srv_queried_) {
+        // We have not received an SRV resource, and we haven't asked for one explicitly. Ask for
+        // one now.
+        SendQuestion(std::make_shared<DnsQuestion>(instance_full_name, DnsType::kSrv),
+                     ReplyAddress::Multicast(media_, ip_versions_));
+        instance_info.srv_queried_ = true;
+      }
+
       continue;
     }
 
     auto iter = target_infos_by_full_name_.find(instance_info.target_full_name_);
-    FX_DCHECK(iter != target_infos_by_full_name_.end());
+    if (iter == target_infos_by_full_name_.end()) {
+      FX_DCHECK(false) << "Failed to find target for SRV target name "
+                       << instance_info.target_full_name_;
+      FX_LOGS(ERROR) << "Failed to find target for SRV target name "
+                     << instance_info.target_full_name_;
+      continue;
+    }
+
+    const std::string& target_full_name = iter->first;
     TargetInfo& target_info = iter->second;
 
     // Keep this target info around.
@@ -124,8 +140,29 @@ void InstanceRequestor::EndOfMessage() {
       continue;
     }
 
+    if (!instance_info.txt_received_ && !instance_info.txt_queried_) {
+      // We have not received a TXT resource, and we haven't asked for one explicitly. Ask for one
+      // now. We proceed anyway, which means the client may first get the instance without text
+      // and later get an |InstanceChanged| with text.
+      SendQuestion(std::make_shared<DnsQuestion>(instance_full_name, DnsType::kTxt),
+                   ReplyAddress::Multicast(media_, ip_versions_));
+      instance_info.txt_queried_ = true;
+    }
+
     if (target_info.addresses_.empty()) {
-      // No addresses yet.
+      // No addresses. This happens when an instance doesn't include A/AAAA records along with the
+      // PTR and SRV.
+      if (!target_info.addresses_queried_) {
+        // If we haven't explicitly queried for addresses yet, do so. When they arrive, we'll end
+        // up back in this method with a non-empty |target_info.addresses_|. If they never arrive,
+        // the instance won't be reported to the client.
+        SendQuestion(std::make_shared<DnsQuestion>(target_full_name, DnsType::kA),
+                     ReplyAddress::Multicast(media_, ip_versions_));
+        SendQuestion(std::make_shared<DnsQuestion>(target_full_name, DnsType::kAaaa),
+                     ReplyAddress::Multicast(media_, ip_versions_));
+        target_info.addresses_queried_ = true;
+      }
+
       continue;
     }
 
@@ -278,6 +315,8 @@ void InstanceRequestor::ReceiveTxtResource(const DnsResource& resource, MdnsReso
 
     return;
   }
+
+  instance_info->txt_received_ = true;
 
   if (instance_info->text_.size() != resource.txt_.strings_.size()) {
     instance_info->text_.resize(resource.txt_.strings_.size());
