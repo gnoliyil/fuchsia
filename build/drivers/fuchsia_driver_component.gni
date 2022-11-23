@@ -60,6 +60,10 @@ import("//tools/cmc/build/cmc.gni")
 #     If this is true, the driver will be given access to sysmem.
 #     Type: bool
 #     Default: false
+#   uses_boot_args (optional)
+#     If this is true, the driver will be given access to boot arguments service.
+#     Type: bool
+#     Default: false
 #   default_dispatcher_opts (optional)
 #     If this is set, then the default dispatcher for the driver will be
 #     created with these options.
@@ -139,6 +143,9 @@ template("fuchsia_driver_component") {
         }
         if (defined(invoker.uses_sysmem) && invoker.uses_sysmem) {
           args += [ "--sysmem" ]
+        }
+        if (defined(invoker.uses_boot_args) && invoker.uses_boot_args) {
+          args += [ "--boot_args" ]
         }
 
         if (defined(invoker.device_categories)) {

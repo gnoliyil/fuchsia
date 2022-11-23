@@ -59,6 +59,12 @@ def main():
         'Whether or not to give the driver access to fuchsia.sysmem.Allocator',
     )
     parser.add_argument(
+        '--boot_args',
+        action='store_true',
+        help=
+        'Whether or not to give the driver access to fuchsia.boot.Arguments',
+    )
+    parser.add_argument(
         '--default_dispatcher_opts',
         nargs="*",
         help=
@@ -128,6 +134,8 @@ def main():
             {'protocol': "fuchsia.scheduler.ProfileProvider"})
     if args.sysmem:
         manifest['use'].append({'protocol': "fuchsia.sysmem.Allocator"})
+    if args.boot_args:
+        manifest['use'].append({'protocol': "fuchsia.boot.Arguments"})
     if args.default_dispatcher_opts:
         manifest["program"][
             "default_dispatcher_opts"] = args.default_dispatcher_opts
