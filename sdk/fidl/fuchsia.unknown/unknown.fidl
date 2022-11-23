@@ -17,7 +17,7 @@ protocol Cloneable {
     });
 };
 
-/// Provides a means of synchrnously closing a connection.
+/// Provides a means of synchronously closing a connection.
 protocol Closeable {
     /// Terminates the connection.
     ///
