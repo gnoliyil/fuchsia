@@ -40,7 +40,7 @@ std::optional<std::reference_wrapper<const Devnode>> lookup(const Devnode& paren
 
 TEST(Devfs, Export) {
   std::optional<Devnode> root_slot;
-  const Devfs devfs(root_slot, nullptr);
+  const Devfs devfs(root_slot);
   ASSERT_TRUE(root_slot.has_value());
   Devnode& root_node = root_slot.value();
   std::vector<std::unique_ptr<Devnode>> out;
@@ -57,7 +57,7 @@ TEST(Devfs, Export) {
 
 TEST(Devfs, Export_ExcessSeparators) {
   std::optional<Devnode> root_slot;
-  const Devfs devfs(root_slot, nullptr);
+  const Devfs devfs(root_slot);
   ASSERT_TRUE(root_slot.has_value());
   Devnode& root_node = root_slot.value();
   std::vector<std::unique_ptr<Devnode>> out;
@@ -69,7 +69,7 @@ TEST(Devfs, Export_ExcessSeparators) {
 
 TEST(Devfs, Export_OneByOne) {
   std::optional<Devnode> root_slot;
-  const Devfs devfs(root_slot, nullptr);
+  const Devfs devfs(root_slot);
   ASSERT_TRUE(root_slot.has_value());
   Devnode& root_node = root_slot.value();
   std::vector<std::unique_ptr<Devnode>> out;
@@ -89,7 +89,7 @@ TEST(Devfs, Export_OneByOne) {
 
 TEST(Devfs, Export_InvalidPath) {
   std::optional<Devnode> root_slot;
-  const Devfs devfs(root_slot, nullptr);
+  const Devfs devfs(root_slot);
   ASSERT_TRUE(root_slot.has_value());
   Devnode& root_node = root_slot.value();
   std::vector<std::unique_ptr<Devnode>> out;
@@ -109,7 +109,7 @@ TEST(Devfs, Export_WithProtocol) {
   const async::Loop loop{&kAsyncLoopConfigNoAttachToCurrentThread};
 
   std::optional<Devnode> root_slot;
-  Devfs devfs(root_slot, nullptr);
+  Devfs devfs(root_slot);
   ASSERT_TRUE(root_slot.has_value());
   Devnode& root_node = root_slot.value();
 
@@ -146,7 +146,7 @@ TEST(Devfs, Export_WithProtocol) {
 
 TEST(Devfs, Export_AlreadyExists) {
   std::optional<Devnode> root_slot;
-  const Devfs devfs(root_slot, nullptr);
+  const Devfs devfs(root_slot);
   ASSERT_TRUE(root_slot.has_value());
   Devnode& root_node = root_slot.value();
   std::vector<std::unique_ptr<Devnode>> out;
@@ -157,7 +157,7 @@ TEST(Devfs, Export_AlreadyExists) {
 
 TEST(Devfs, Export_FailedToClone) {
   std::optional<Devnode> root_slot;
-  const Devfs devfs(root_slot, nullptr);
+  const Devfs devfs(root_slot);
   ASSERT_TRUE(root_slot.has_value());
   Devnode& root_node = root_slot.value();
   std::vector<std::unique_ptr<Devnode>> out;
@@ -168,7 +168,7 @@ TEST(Devfs, Export_FailedToClone) {
 
 TEST(Devfs, Export_DropDevfs) {
   std::optional<Devnode> root_slot;
-  const Devfs devfs(root_slot, nullptr);
+  const Devfs devfs(root_slot);
   ASSERT_TRUE(root_slot.has_value());
   Devnode& root_node = root_slot.value();
   std::vector<std::unique_ptr<Devnode>> out;
@@ -194,7 +194,7 @@ TEST(Devfs, ExportWatcher_Export) {
   async::Loop loop{&kAsyncLoopConfigNoAttachToCurrentThread};
 
   std::optional<Devnode> root_slot;
-  Devfs devfs(root_slot, nullptr);
+  Devfs devfs(root_slot);
   ASSERT_TRUE(root_slot.has_value());
   Devnode& root_node = root_slot.value();
 
@@ -257,7 +257,7 @@ TEST(Devfs, ExportWatcher_Export_Invisible) {
   async::Loop loop{&kAsyncLoopConfigNoAttachToCurrentThread};
 
   std::optional<Devnode> root_slot;
-  Devfs devfs(root_slot, nullptr);
+  Devfs devfs(root_slot);
   ASSERT_TRUE(root_slot.has_value());
   Devnode& root_node = root_slot.value();
 
@@ -344,7 +344,7 @@ TEST(Devfs, ExportWatcherCreateFails) {
   async::Loop loop{&kAsyncLoopConfigNoAttachToCurrentThread};
 
   std::optional<Devnode> root_slot;
-  Devfs devfs(root_slot, nullptr);
+  Devfs devfs(root_slot);
   ASSERT_TRUE(root_slot.has_value());
   Devnode& root_node = root_slot.value();
 

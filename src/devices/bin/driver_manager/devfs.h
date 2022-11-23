@@ -36,7 +36,7 @@ class Devnode {
   using Target = std::variant<NoRemote, Service, std::reference_wrapper<Device>>;
 
   // Constructs a root node.
-  Devnode(Devfs& devfs, Device* device);
+  explicit Devnode(Devfs& devfs);
 
   // `parent` must outlive `this`.
   Devnode(Devfs& devfs, PseudoDir& parent, Target target, fbl::String name);
@@ -185,8 +185,8 @@ class ProtoNode {
 
 class Devfs {
  public:
-  // `root` and `device` must outlive `this`.
-  Devfs(std::optional<Devnode>& root, Device* device,
+  // `root` must outlive `this`.
+  Devfs(std::optional<Devnode>& root,
         std::optional<fidl::ClientEnd<fuchsia_io::Directory>> diagnostics = {});
 
   zx::result<fidl::ClientEnd<fuchsia_io::Directory>> Connect(fs::FuchsiaVfs& vfs);

@@ -227,15 +227,8 @@ void MustAddEntry(PseudoDir& parent, const std::string_view name,
 
 }  // namespace
 
-Devnode::Devnode(Devfs& devfs, Device* device)
-    : devfs_(devfs),
-      parent_(nullptr),
-      node_(fbl::MakeRefCounted<VnodeImpl>(*this, [device]() -> Target {
-        if (device != nullptr) {
-          return *device;
-        }
-        return NoRemote{};
-      }())) {}
+Devnode::Devnode(Devfs& devfs)
+    : devfs_(devfs), parent_(nullptr), node_(fbl::MakeRefCounted<VnodeImpl>(*this, NoRemote())) {}
 
 Devnode::Devnode(Devfs& devfs, PseudoDir& parent, Target target, fbl::String name)
     : devfs_(devfs),
@@ -444,9 +437,9 @@ zx::result<fidl::ClientEnd<fio::Directory>> Devfs::Connect(fs::FuchsiaVfs& vfs) 
   return zx::make_result(vfs.ServeDirectory(root_.node_, std::move(server)), std::move(client));
 }
 
-Devfs::Devfs(std::optional<Devnode>& root, Device* device,
+Devfs::Devfs(std::optional<Devnode>& root,
              std::optional<fidl::ClientEnd<fio::Directory>> diagnostics)
-    : root_(root.emplace(*this, device)) {
+    : root_(root.emplace(*this)) {
   PseudoDir& pd = root_.children();
   if (diagnostics.has_value()) {
     MustAddEntry(pd, "diagnostics",

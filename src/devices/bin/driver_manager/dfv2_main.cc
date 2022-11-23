@@ -70,7 +70,7 @@ int RunDfv2(DriverManagerParams driver_manager_params,
   ZX_ASSERT_MSG(diagnostics_client.is_ok(), "%s", diagnostics_client.status_string());
 
   std::optional<Devnode> root_devnode;
-  Devfs devfs(root_devnode, nullptr, std::move(diagnostics_client.value()));
+  Devfs devfs(root_devnode, std::move(diagnostics_client.value()));
 
   // Launch devfs_exporter.
   driver_manager::DevfsExporter devfs_exporter(devfs, &root_devnode.value(), loop.dispatcher());

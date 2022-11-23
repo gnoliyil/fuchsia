@@ -294,7 +294,7 @@ Coordinator::Coordinator(CoordinatorConfig config, InspectManager* inspect_manag
       root_device_(fbl::MakeRefCounted<Device>(this, "root", fbl::String(), "root,", nullptr,
                                                ZX_PROTOCOL_ROOT, zx::vmo(),
                                                fidl::ClientEnd<fio::Directory>())),
-      devfs_(root_device_->self, root_device_.get(),
+      devfs_(root_device_->self,
              [this]() {
                zx::result diagnostics_client = inspect_manager_->Connect();
                ZX_ASSERT_MSG(diagnostics_client.is_ok(), "%s", diagnostics_client.status_string());
