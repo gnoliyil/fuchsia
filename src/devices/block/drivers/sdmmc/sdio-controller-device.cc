@@ -99,7 +99,7 @@ zx_status_t SdioControllerDevice::Probe() {
     return ZX_ERR_NOT_SUPPORTED;
   }
   if (!(ocr & SDIO_SEND_OP_COND_RESP_IORDY)) {
-    zxlogf(ERROR, "IO not ready after SDIO_SEND_OP_COND");
+    zxlogf(WARNING, "IO not ready after SDIO_SEND_OP_COND");
     return ZX_ERR_IO;
   }
   if (ocr & SDIO_SEND_OP_COND_RESP_S18A) {

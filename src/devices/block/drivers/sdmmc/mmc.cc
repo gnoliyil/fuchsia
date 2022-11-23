@@ -7,6 +7,7 @@
 #include <lib/ddk/debug.h>
 #include <lib/ddk/device.h>
 #include <lib/ddk/metadata.h>
+#include <lib/fit/defer.h>
 #include <lib/sdmmc/hw.h>
 #include <lib/zx/time.h>
 #include <stdio.h>
@@ -269,7 +270,9 @@ bool SdmmcBlockDevice::MmcSupportsHs400() {
 }
 
 zx_status_t SdmmcBlockDevice::ProbeMmc() {
-  sdmmc_.SetRequestRetries(0);
+  sdmmc_.SetRequestRetries(10);
+
+  auto reset_retries = fit::defer([&sdmmc = sdmmc_]() { sdmmc.SetRequestRetries(0); });
 
   size_t actual = 0;
   emmc_config_t config = {};
