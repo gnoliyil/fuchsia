@@ -110,9 +110,12 @@ pub async fn pb_create_with_tools(cmd: CreateCommand, tools: Box<dyn ToolProvide
             RepoKeys::from_dir(tuf_keys.as_std_path()).context("Gathering repo keys")?;
 
         RepoBuilder::create(&repo, &repo_keys)
-            .add_package_manifests(packages_a.into_iter())?
-            .add_package_manifests(packages_b.into_iter())?
-            .add_package_manifests(update_packages.into_iter().map(|manifest| (None, manifest)))?
+            .add_package_manifests(packages_a.into_iter())
+            .await?
+            .add_package_manifests(packages_b.into_iter())
+            .await?
+            .add_package_manifests(update_packages.into_iter().map(|manifest| (None, manifest)))
+            .await?
             .commit()
             .await
             .context("Building the repo")?;

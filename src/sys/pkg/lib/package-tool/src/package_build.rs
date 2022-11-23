@@ -6,7 +6,8 @@ use {
     crate::args::PackageBuildCommand,
     anyhow::{bail, Context as _, Result},
     fuchsia_pkg::{
-        PackageBuildManifest, PackageBuilder, SubpackagesManifest, SubpackagesManifestEntryKind,
+        PackageBuildManifest, PackageBuilder, SubpackagesBuildManifest,
+        SubpackagesBuildManifestEntry, SubpackagesBuildManifestEntryKind,
     },
     serde::Serialize,
     std::{
@@ -57,18 +58,18 @@ pub async fn cmd_package_build(cmd: PackageBuildCommand) -> Result<()> {
         builder.repository(repository);
     }
 
-    let subpackages_manifest =
-        if let Some(subpackages_manifest_path) = &cmd.subpackages_manifest_path {
-            let f = File::open(subpackages_manifest_path)?;
-            Some(SubpackagesManifest::deserialize(BufReader::new(f))?)
+    let subpackages_build_manifest =
+        if let Some(subpackages_build_manifest_path) = &cmd.subpackages_build_manifest_path {
+            let f = File::open(subpackages_build_manifest_path)?;
+            Some(SubpackagesBuildManifest::deserialize(BufReader::new(f))?)
         } else {
             None
         };
 
-    if let Some(subpackages_manifest) = &subpackages_manifest {
-        for (url, hash) in subpackages_manifest.to_subpackages()? {
+    if let Some(subpackages_build_manifest) = &subpackages_build_manifest {
+        for (url, hash, package_manifest_path) in subpackages_build_manifest.to_subpackages()? {
             builder
-                .add_subpackage(url.clone(), hash)
+                .add_subpackage(&url, hash, package_manifest_path.into())
                 .with_context(|| format!("adding subpackage {} : {}", url, hash))?;
         }
     }
@@ -110,19 +111,22 @@ pub async fn cmd_package_build(cmd: PackageBuildCommand) -> Result<()> {
             .map(|s| s.as_str())
             .collect::<BTreeSet<_>>();
 
-        if let Some(subpackages_manifest_path) = &cmd.subpackages_manifest_path {
-            deps.insert(subpackages_manifest_path.as_str());
+        if let Some(subpackages_build_manifest_path) = &cmd.subpackages_build_manifest_path {
+            deps.insert(subpackages_build_manifest_path.as_str());
         }
 
-        if let Some(subpackages_manifest) = &subpackages_manifest {
-            for entry in subpackages_manifest.entries() {
-                match entry.kind() {
-                    SubpackagesManifestEntryKind::Url(_) => {}
-                    SubpackagesManifestEntryKind::File(file) => {
-                        deps.insert(file.as_str());
+        if let Some(subpackages_build_manifest) = &subpackages_build_manifest {
+            for entry in subpackages_build_manifest.entries() {
+                let SubpackagesBuildManifestEntry { kind, merkle_file, package_manifest_file } =
+                    entry;
+                match kind {
+                    SubpackagesBuildManifestEntryKind::Url(_) => {}
+                    SubpackagesBuildManifestEntryKind::MetaPackageFile(package_manifest_file) => {
+                        deps.insert(package_manifest_file.as_str());
                     }
                 }
-                deps.insert(entry.merkle_file().as_str());
+                deps.insert(merkle_file.as_str());
+                deps.insert(package_manifest_file.as_str());
             }
         }
 
@@ -254,7 +258,7 @@ mod test {
             meta_far_merkle: false,
             blobs_json: false,
             blobs_manifest: false,
-            subpackages_manifest_path: None,
+            subpackages_build_manifest_path: None,
         };
 
         assert!(cmd_package_build(cmd).await.is_err());
@@ -280,7 +284,7 @@ mod test {
             meta_far_merkle: false,
             blobs_json: false,
             blobs_manifest: false,
-            subpackages_manifest_path: None,
+            subpackages_build_manifest_path: None,
         };
 
         assert!(cmd_package_build(cmd).await.is_err());
@@ -315,7 +319,7 @@ mod test {
             meta_far_merkle: false,
             blobs_json: false,
             blobs_manifest: false,
-            subpackages_manifest_path: None,
+            subpackages_build_manifest_path: None,
         })
         .await
         .unwrap();
@@ -398,7 +402,7 @@ mod test {
             meta_far_merkle: false,
             blobs_json: false,
             blobs_manifest: false,
-            subpackages_manifest_path: None,
+            subpackages_build_manifest_path: None,
         })
         .await
         .unwrap();
@@ -482,7 +486,7 @@ mod test {
             meta_far_merkle: false,
             blobs_json: false,
             blobs_manifest: false,
-            subpackages_manifest_path: None,
+            subpackages_build_manifest_path: None,
         })
         .await
         .is_err());
@@ -524,7 +528,7 @@ mod test {
             depfile: false,
             blobs_json: false,
             blobs_manifest: false,
-            subpackages_manifest_path: None,
+            subpackages_build_manifest_path: None,
         })
         .await
         .unwrap();
@@ -602,23 +606,54 @@ mod test {
         let meta_package = MetaPackage::from_name("my-package".parse().unwrap());
         meta_package.serialize(meta_package_file).unwrap();
 
-        // Write the subpackage manifest file.
-        let meta_subpackages_manifest_path = root.join("subpackages");
-        let meta_subpackages_manifest_file = File::create(&meta_subpackages_manifest_path).unwrap();
+        // Write the subpackages build manifest file, matching the schema from
+        // //src/sys/pkg/lib/fuchsia-pkg/src/subpackages_build_manifest.rs
+        let subpackages_build_manifest_path = root.join("subpackages");
+        let subpackages_build_manifest_file =
+            File::create(&subpackages_build_manifest_path).unwrap();
         let subpackage_url = "subpackage".parse::<RelativePackageUrl>().unwrap();
         let subpackage_hash = fuchsia_merkle::Hash::from([0; fuchsia_merkle::HASH_SIZE]);
         let subpackage_merkle_file = root.join("subpackage.merkle");
         std::fs::write(&subpackage_merkle_file, subpackage_hash.to_string().as_bytes()).unwrap();
 
+        let subpackage_package_manifest_file = root.join("subpackage_package_manifest.json");
+        let subpackage_package_manifest_file_file =
+            File::create(&subpackage_package_manifest_file).unwrap();
+        serde_json::to_writer(
+            subpackage_package_manifest_file_file,
+            &serde_json::json!([
+                {
+                    "package": {
+                        "name": "mock-subpackage",
+                        "version": "0"
+                    },
+                    "blobs": [
+                        {
+                            "path": "meta/",
+                            "merkle": "0000000000000000000000000000000000000000000000000000000000000000",
+                            "size": 0,
+                            "source_path": "../../blobs/0000000000000000000000000000000000000000000000000000000000000000"
+                        }
+                    ],
+                    "version": "1",
+                    "blob_sources_relative": "file",
+                    "subpackages": [],
+                    "repository": "fuchsia.com"
+                }
+            ]),
+        )
+        .unwrap();
+
         let meta_subpackages = MetaSubpackages::from_iter([(subpackage_url, subpackage_hash)]);
         let meta_subpackages_str = serde_json::to_string(&meta_subpackages).unwrap();
 
         serde_json::to_writer(
-            meta_subpackages_manifest_file,
+            subpackages_build_manifest_file,
             &serde_json::json!([
                 {
                     "name": "subpackage",
                     "merkle_file": subpackage_merkle_file.to_string(),
+                    "package_manifest_file": subpackage_package_manifest_file.to_string(),
                 }
             ]),
         )
@@ -653,7 +688,7 @@ mod test {
             meta_far_merkle: true,
             blobs_json: true,
             blobs_manifest: true,
-            subpackages_manifest_path: Some(meta_subpackages_manifest_path.clone()),
+            subpackages_build_manifest_path: Some(subpackages_build_manifest_path.clone()),
         })
         .await
         .unwrap();
@@ -708,10 +743,11 @@ mod test {
         // Make sure the depfile is correct, which should be all the files we touched in sorted
         // order.
         let mut expected = vec![
+            subpackages_build_manifest_path.to_string(),
             empty_file_path.to_string(),
             meta_package_path.to_string(),
             subpackage_merkle_file.to_string(),
-            meta_subpackages_manifest_path.to_string(),
+            subpackage_package_manifest_file.to_string(),
         ];
         expected.sort();
 

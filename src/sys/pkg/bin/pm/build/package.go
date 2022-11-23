@@ -30,9 +30,22 @@ var InvalidRepositoryCharsPattern = regexp.MustCompile("[^a-z0-9-.]").MatchStrin
 
 // Build-time information about a subpackage
 type SubpackageInfo struct {
-	Name            *string `json:"name,omitempty"`
+	// If provided, the subpackage name (relative URI path), relative to the
+	// parent package.
+	Name *string `json:"name,omitempty"`
+
+	// If a subpackage-specific Name override is not explicitly provided,
+	// this field is the path to a JSON serialized pkg.Package object
+	// containing the subpackage's declared package_name.
 	MetaPackageFile *string `json:"meta_package_file,omitempty"`
-	MerkleFile      string  `json:"merkle_file"`
+
+	// The path to the meta.far.merkle file containing (only) the
+	// subpackage's package hash
+	MerkleFile string `json:"merkle_file"`
+
+	// The path to the package_manifest.json of the subpackage (may not be
+	// used by pm tool)
+	PackageManifestFile string `json:"package_manifest_file"`
 }
 
 // subpackages metafile content
@@ -44,10 +57,11 @@ type MetaSubpackages struct {
 // PackageManifest is the json structure representation of a full package
 // manifest.
 type PackageManifest struct {
-	Version    string            `json:"version"`
-	Repository string            `json:"repository,omitempty"`
-	Package    pkg.Package       `json:"package"`
-	Blobs      []PackageBlobInfo `json:"blobs"`
+	Version     string                  `json:"version"`
+	Repository  string                  `json:"repository,omitempty"`
+	Package     pkg.Package             `json:"package"`
+	Blobs       []PackageBlobInfo       `json:"blobs"`
+	Subpackages []PackageSubpackageInfo `json:"subpackages,omitempty"`
 }
 
 // packageManifestMaybeRelative is the json structure representation of a package
@@ -55,11 +69,14 @@ type PackageManifest struct {
 // from PackageManifest so we don't need to touch every use of PackageManifest to
 // avoid writing invalid blob_sources_relative values to disk.
 type packageManifestMaybeRelative struct {
-	Version    string            `json:"version"`
-	Repository string            `json:"repository,omitempty"`
-	Package    pkg.Package       `json:"package"`
-	Blobs      []PackageBlobInfo `json:"blobs"`
-	RelativeTo string            `json:"blob_sources_relative"`
+	Version     string                  `json:"version"`
+	Repository  string                  `json:"repository,omitempty"`
+	Package     pkg.Package             `json:"package"`
+	Blobs       []PackageBlobInfo       `json:"blobs"`
+	Subpackages []PackageSubpackageInfo `json:"subpackages,omitempty"`
+	// TODO(fxbug.dev/114780): rename the json field to `paths_relative` since it
+	// applies to both blobs and subpackages.
+	PathsRelativeTo string `json:"blob_sources_relative"`
 }
 
 // LoadPackageManifest parses the package manifest for a particular package,
@@ -84,16 +101,23 @@ func LoadPackageManifest(packageManifestPath string) (*PackageManifest, error) {
 		return nil, fmt.Errorf("unknown version %q, can't load manifest", manifest.Version)
 	}
 
-	// if the manifest has file-relative blob paths, make them relative to the working directory
-	if rawManifest.RelativeTo == "file" {
+	// if the manifest has file-relative paths, make them relative to the working directory
+	if rawManifest.PathsRelativeTo == "file" {
 		basePath := filepath.Dir(packageManifestPath)
 		for i := 0; i < len(rawManifest.Blobs); i++ {
 			blob := rawManifest.Blobs[i]
 			blob.SourcePath = filepath.Join(basePath, blob.SourcePath)
 			manifest.Blobs = append(manifest.Blobs, blob)
 		}
+
+		for i := 0; i < len(rawManifest.Subpackages); i++ {
+			subpackage := rawManifest.Subpackages[i]
+			subpackage.ManifestPath = filepath.Join(basePath, subpackage.ManifestPath)
+			manifest.Subpackages = append(manifest.Subpackages, subpackage)
+		}
 	} else {
 		manifest.Blobs = rawManifest.Blobs
+		manifest.Subpackages = rawManifest.Subpackages
 	}
 
 	return manifest, nil

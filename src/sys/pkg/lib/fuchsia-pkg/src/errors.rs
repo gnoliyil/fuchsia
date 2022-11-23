@@ -57,6 +57,9 @@ pub enum PackageManifestError {
     #[error("package contains an invalid blob source path '{source_path:?}'. {merkle}")]
     InvalidBlobPath { merkle: Hash, source_path: PathBuf },
 
+    #[error("package contains an invalid subpackage path '{path:?}'. {merkle}")]
+    InvalidSubpackagePath { merkle: Hash, path: PathBuf },
+
     #[error("io error {}", _0)]
     IoError(#[from] io::Error),
 

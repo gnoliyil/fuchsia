@@ -20,7 +20,7 @@ mod package_manifest;
 mod package_manifest_list;
 mod path;
 mod path_to_string;
-mod subpackages_manifest;
+mod subpackages_build_manifest;
 
 pub use {
     crate::{
@@ -32,20 +32,24 @@ pub use {
         meta_package::MetaPackage,
         meta_subpackages::transitional,
         meta_subpackages::MetaSubpackages,
-        package::{BlobEntry, Package},
         package_build_manifest::PackageBuildManifest,
         package_builder::PackageBuilder,
         package_directory::{
             LoadAbiRevisionError, LoadMetaContentsError, OpenRights, PackageDirectory,
             ReadHashError,
         },
-        package_manifest::{BlobInfo, PackageManifest, PackageManifestBuilder, RelativeTo},
+        package_manifest::{
+            BlobInfo, PackageManifest, PackageManifestBuilder, RelativeTo, SubpackageInfo,
+        },
         package_manifest_list::PackageManifestList,
         path::{PackageName, PackagePath, PackageVariant},
-        subpackages_manifest::{
-            SubpackagesManifest, SubpackagesManifestEntry, SubpackagesManifestEntryKind,
+        subpackages_build_manifest::{
+            SubpackagesBuildManifest, SubpackagesBuildManifestEntry,
+            SubpackagesBuildManifestEntryKind,
         },
     },
     fuchsia_url::errors::PackagePathSegmentError,
     path_to_string::PathToStringExt,
 };
+
+pub(crate) use crate::package::{BlobEntry, Package, SubpackageEntry};

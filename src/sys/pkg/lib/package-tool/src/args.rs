@@ -46,8 +46,8 @@ pub struct PackageBuildCommand {
     #[argh(switch, description = "produce a blobs.manifest file")]
     pub blobs_manifest: bool,
 
-    #[argh(option, description = "path to the subpackages manifest file (experimental)")]
-    pub subpackages_manifest_path: Option<Utf8PathBuf>,
+    #[argh(option, description = "path to the subpackages build manifest file")]
+    pub subpackages_build_manifest_path: Option<Utf8PathBuf>,
 
     #[argh(positional, description = "path to the package build manifest file")]
     pub package_build_manifest_path: Utf8PathBuf,

@@ -19,6 +19,8 @@ pub struct MetaContents {
 }
 
 impl MetaContents {
+    pub const PATH: &'static str = "meta/contents";
+
     /// Creates a `MetaContents` from a `map` from resource paths to Merkle roots.
     /// Validates that:
     ///   1. all resource paths are valid Fuchsia package resource paths,

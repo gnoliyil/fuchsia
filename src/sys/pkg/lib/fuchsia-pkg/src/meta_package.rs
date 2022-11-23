@@ -19,6 +19,8 @@ pub struct MetaPackage {
 }
 
 impl MetaPackage {
+    pub const PATH: &'static str = "meta/package";
+
     /// Create a `MetaPackage` with `name`.
     pub fn from_name(name: PackageName) -> Self {
         Self { name, variant: PackageVariant::zero() }

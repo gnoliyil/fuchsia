@@ -8,8 +8,9 @@ use {
     async_fs::File,
     camino::{Utf8Path, Utf8PathBuf},
     chrono::{DateTime, Duration, Utc},
-    fuchsia_pkg::{BlobInfo, PackageManifest, PackageManifestList, PackagePath},
-    std::collections::{hash_map, BTreeMap, HashMap, HashSet},
+    fuchsia_merkle::Hash,
+    fuchsia_pkg::{BlobInfo, PackageManifest, PackageManifestList, PackagePath, SubpackageInfo},
+    std::collections::{hash_map, BTreeMap, HashMap, HashSet, VecDeque},
     tuf::{
         crypto::HashAlgorithm, metadata::TargetPath, pouf::Pouf1,
         repo_builder::RepoBuilder as TufRepoBuilder, Database,
@@ -39,7 +40,8 @@ pub struct RepoBuilder<'a, R: RepoStorageProvider> {
     refresh_metadata: bool,
     refresh_non_root_metadata: bool,
     inherit_from_trusted_targets: bool,
-    packages: HashMap<PackagePath, (Option<Utf8PathBuf>, PackageManifest)>,
+    named_packages: HashMap<PackagePath, (Option<Utf8PathBuf>, PackageManifest)>,
+    additional_subpackages: HashMap<Hash, (Utf8PathBuf, PackageManifest)>,
     deps: HashSet<Utf8PathBuf>,
 }
 
@@ -86,7 +88,8 @@ where
             refresh_metadata: false,
             refresh_non_root_metadata: false,
             inherit_from_trusted_targets: true,
-            packages: HashMap::new(),
+            named_packages: HashMap::new(),
+            additional_subpackages: HashMap::new(),
             deps: HashSet::new(),
         }
     }
@@ -137,7 +140,7 @@ where
         let package = PackageManifest::from_reader(&path, &contents[..])
             .with_context(|| format!("reading package manifest {}", path))?;
 
-        self.add_package_manifest(Some(path), package)
+        self.add_package_manifest(Some(path), package).await
     }
 
     /// Stage the package manifests from the iterator of paths to be published.
@@ -151,18 +154,31 @@ where
         Ok(self)
     }
 
-    /// Stage a package manifest described by `package` from the `path` to be published.
-    pub fn add_package_manifest(
+    /// Stage a top-level package manifest described by `package` from the
+    /// `path` to be published. Duplicates are ignored unless registering two
+    /// packages with the same package path and different package hashes.
+    pub async fn add_package_manifest(
         mut self,
         path: Option<Utf8PathBuf>,
         package: PackageManifest,
     ) -> Result<RepoBuilder<'a, R>> {
-        // Track all the blobs from the package manifest as a dependency.
-        for blob in package.blobs() {
-            self.deps.insert(blob.source_path.clone().into());
+        // If the package was already included, by subpackage reference from
+        // another package, then its blobs and subpackages were already added.
+        // The package is being added as a named_package, so it can be removed
+        // from additional_subpackages (if present).
+        if self.additional_subpackages.remove(&package.hash()).is_none() {
+            // The package was _not_ among the known additional_subpackages, so
+            // add its blobs and subpackages.
+            for blob in package.blobs() {
+                self.deps.insert(blob.source_path.clone().into());
+            }
+
+            for subpackage in package.subpackages() {
+                self = self.add_subpackage(Utf8PathBuf::from(&subpackage.manifest_path)).await?;
+            }
         }
 
-        match self.packages.entry(package.package_path()) {
+        match self.named_packages.entry(package.package_path()) {
             hash_map::Entry::Vacant(entry) => {
                 entry.insert((path.clone(), package));
             }
@@ -186,15 +202,81 @@ where
         Ok(self)
     }
 
-    /// Stage all the package manifests from `iter` to be published.
-    pub fn add_package_manifests(
+    /// Stage all the top-level package manifests from `iter` to be published.
+    pub async fn add_package_manifests(
         mut self,
         iter: impl Iterator<Item = (Option<Utf8PathBuf>, PackageManifest)>,
     ) -> Result<RepoBuilder<'a, R>> {
         for (path, package) in iter {
-            self = self.add_package_manifest(path, package)?;
+            self = self.add_package_manifest(path, package).await?;
         }
         Ok(self)
+    }
+
+    /// Stage a subpackage's package manifest from the `path` to be published.
+    async fn add_subpackage(mut self, path: Utf8PathBuf) -> Result<RepoBuilder<'a, R>> {
+        let mut subpackage_paths = VecDeque::from([path]);
+
+        while let Some(path) = subpackage_paths.pop_front() {
+            if self.deps.get(&path).is_some() {
+                // The package was already added, either as a named target package
+                // or a previously referenced subpackage.
+                continue;
+            }
+
+            let contents = async_fs::read(path.as_std_path())
+                .await
+                .with_context(|| format!("reading package manifest {}", path))?;
+
+            let package = PackageManifest::from_reader(&path, &contents[..])
+                .with_context(|| format!("reading package manifest {}", path))?;
+
+            subpackage_paths.extend(self.add_subpackage_manifest(path, package).into_iter());
+        }
+
+        Ok(self)
+    }
+
+    /// Add a package that is a subpackage of another package. If the same
+    /// package is later added as a named_package, it will be removed from
+    /// the list of additional subpackages.
+    ///
+    /// Returns the paths to subpackages referenced from this subpackage.
+    fn add_subpackage_manifest(
+        &mut self,
+        path: Utf8PathBuf,
+        package: PackageManifest,
+    ) -> Vec<Utf8PathBuf> {
+        if !self.deps.insert(path.clone()) {
+            // The package was already added, either as a named target package
+            // or a previously referenced subpackage.
+            return vec![];
+        }
+
+        // Track all the blobs from the package manifest as a dependency.
+        for blob in package.blobs() {
+            self.deps.insert(blob.source_path.clone().into());
+        }
+
+        let subpackages = package
+            .subpackages()
+            .iter()
+            .map(|subpackage| Utf8PathBuf::from(&subpackage.manifest_path))
+            .collect::<Vec<_>>();
+
+        match self.additional_subpackages.entry(package.hash()) {
+            hash_map::Entry::Vacant(entry) => {
+                entry.insert((path, package));
+            }
+            hash_map::Entry::Occupied(_) => {
+                // Multiple entries, even with different manifest paths, are
+                // possible, but since the `additional_subpackages` hashmap is
+                // only used to collect unique blobs, the duplicates can be
+                // ignored.
+            }
+        }
+
+        subpackages
     }
 
     /// Stage all the packages pointed to by the package list to be published.
@@ -223,7 +305,8 @@ where
         Ok(self)
     }
 
-    /// Commit the changes to the repository.
+    /// Read all remaining subpackages, and then commit the changes to the
+    /// repository.
     ///
     /// Returns the list of the files that were read.
     pub async fn commit(self) -> Result<HashSet<Utf8PathBuf>> {
@@ -293,20 +376,33 @@ where
         let mut staged_blobs = HashMap::new();
         let mut package_meta_fars = HashMap::new();
 
-        for (package_path, (_, package)) in self.packages {
+        for (package_path, (_, package)) in self.named_packages {
             let mut meta_far_blob = None;
-            for blob in package.blobs() {
-                if blob.path == "meta/" {
-                    meta_far_blob = Some(blob.clone());
+            for blob in package.into_blobs() {
+                if blob.path == PackageManifest::META_FAR_BLOB_PATH {
+                    if meta_far_blob.is_none() {
+                        meta_far_blob = Some(blob.clone());
+                    } else {
+                        return Err(anyhow!("multiple meta.far blobs in a package"));
+                    }
                 }
 
-                staged_blobs.insert(blob.merkle, blob.clone());
+                staged_blobs.insert(blob.merkle, blob);
             }
 
             let meta_far_blob = meta_far_blob
                 .ok_or_else(|| anyhow!("package does not contain entry for meta.far"))?;
 
             package_meta_fars.insert(package_path, meta_far_blob);
+        }
+
+        // Any additional_subpackages not added by name via `add_package()` are
+        // anonymous subpackages. Stage the anonymous subpackage blobs, but
+        // don't add the package to the repo as a named target.
+        for (_, anonymous_subpackage) in self.additional_subpackages.values() {
+            for blob in anonymous_subpackage.blobs() {
+                staged_blobs.insert(blob.merkle, blob.clone());
+            }
         }
 
         // Make sure all the blobs exist.
@@ -392,13 +488,13 @@ fn check_manifests_are_equivalent(
     )];
 
     #[derive(PartialEq, Eq)]
-    enum Entry {
+    enum BlobEntry {
         Contents(Vec<u8>),
         Blob(BlobInfo),
     }
 
     // Helper to read in all the package contents so we can compare entries.
-    fn manifest_contents(manifest: &PackageManifest) -> Result<BTreeMap<String, Entry>> {
+    fn manifest_contents(manifest: &PackageManifest) -> Result<BTreeMap<String, BlobEntry>> {
         let mut entries = BTreeMap::new();
 
         for blob in manifest.blobs() {
@@ -411,11 +507,11 @@ fn check_manifests_are_equivalent(
                     far.list().map(|entry| entry.path().to_owned()).collect::<Vec<_>>();
                 for path in far_entries {
                     let contents = far.read_file(&path)?;
-                    entries.insert(path, Entry::Contents(contents));
+                    entries.insert(path, BlobEntry::Contents(contents));
                 }
             }
 
-            entries.insert(blob.path.clone(), Entry::Blob(blob.clone()));
+            entries.insert(blob.path.clone(), BlobEntry::Blob(blob.clone()));
         }
 
         Ok(entries)
@@ -428,7 +524,7 @@ fn check_manifests_are_equivalent(
         for (path, old_entry) in old_contents {
             if let Some(new_entry) = new_contents.remove(&path) {
                 match (old_entry, new_entry) {
-                    (Entry::Blob(old_blob), Entry::Blob(new_blob)) => {
+                    (BlobEntry::Blob(old_blob), BlobEntry::Blob(new_blob)) => {
                         if old_blob.merkle != new_blob.merkle {
                             msg.push(format!(
                                 "  - {}: different contents found in:\n    - {}\n    - {}",
@@ -452,6 +548,45 @@ fn check_manifests_are_equivalent(
         }
     }
 
+    // Helper to read in all the subpackages so we can compare entries.
+    fn manifest_subpackages(
+        manifest: &PackageManifest,
+    ) -> Result<BTreeMap<String, SubpackageInfo>> {
+        let mut entries = BTreeMap::new();
+        for subpackage in manifest.subpackages() {
+            entries.insert(subpackage.name.clone(), subpackage.clone());
+        }
+        Ok(entries)
+    }
+
+    // Compare the subpackages and report any differences.
+    if let (Ok(old_subpackages), Ok(mut new_subpackages)) =
+        (manifest_subpackages(old_manifest), manifest_subpackages(new_manifest))
+    {
+        for (name, old_subpackage) in old_subpackages {
+            if let Some(new_subpackage) = new_subpackages.remove(&name) {
+                if old_subpackage.merkle != new_subpackage.merkle {
+                    msg.push(format!(
+                        "  - {}: different subpackages found in:\n    - {}\n    - {}",
+                        name, old_subpackage.manifest_path, new_subpackage.manifest_path
+                    ));
+                }
+            } else {
+                msg.push(format!(
+                    "  - {}: subpackage missing from manifest {}",
+                    name, new_manifest_path
+                ));
+            }
+        }
+
+        for name in new_subpackages.into_keys() {
+            msg.push(format!(
+                "  - {}: subpackage missing from manifest {}",
+                name, old_manifest_path
+            ));
+        }
+    }
+
     Err(anyhow!(msg.join("\n")))
 }
 
@@ -468,7 +603,7 @@ mod tests {
         camino::Utf8Path,
         fuchsia_pkg::PackageBuilder,
         pretty_assertions::{assert_eq, assert_ne},
-        std::collections::{BTreeMap, HashMap},
+        std::collections::{BTreeMap, BTreeSet, HashMap},
         tuf::{
             crypto::Ed25519PrivateKey,
             metadata::{Metadata as _, MetadataPath},
@@ -518,7 +653,7 @@ mod tests {
 
         let pkg1_dir = dir.join("package1");
         let (pkg1_meta_far_path, pkg1_manifest) =
-            test_utils::make_package_manifest("package1", pkg1_dir.as_std_path());
+            test_utils::make_package_manifest("package1", pkg1_dir.as_std_path(), Vec::new());
         let pkg1_manifest_path = pkg1_dir.join("package1.manifest");
         serde_json::to_writer(std::fs::File::create(&pkg1_manifest_path).unwrap(), &pkg1_manifest)
             .unwrap();
@@ -554,7 +689,7 @@ mod tests {
         // Create the next version of the metadata and add a new package to it.
         let pkg2_dir = dir.join("package2");
         let (pkg2_meta_far_path, pkg2_manifest) =
-            test_utils::make_package_manifest("package2", pkg2_dir.as_std_path());
+            test_utils::make_package_manifest("package2", pkg2_dir.as_std_path(), Vec::new());
         let pkg2_manifest_path = pkg2_dir.join("package2.manifest");
         serde_json::to_writer(std::fs::File::create(&pkg2_manifest_path).unwrap(), &pkg2_manifest)
             .unwrap();
@@ -598,6 +733,159 @@ mod tests {
         let targets_description = trusted_snapshot.meta().get(&MetadataPath::targets()).unwrap();
         assert!(targets_description.length().is_some());
         assert!(!targets_description.hashes().is_empty());
+    }
+
+    #[fuchsia_async::run_singlethreaded(test)]
+    async fn test_create_and_update_repo_with_subpackages() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = Utf8Path::from_path(tmp.path()).unwrap();
+
+        let metadata_repo_path = dir.join("metadata");
+        let blob_repo_path = dir.join("blobs");
+        let repo = FileSystemRepository::new(metadata_repo_path, blob_repo_path.clone());
+        let repo_keys = test_utils::make_repo_keys();
+
+        const ANONYMOUS_SUBPACKAGE: &str = "anonymous_subpackage";
+        const NAMED_SUBPACKAGE: &str = "named_subpackage";
+        const SUPERPACKAGE: &str = "superpackage";
+
+        // Create an anonymous subpackage (a subpackage that is not directly
+        // added to the RepoBuilder, but is added indirectly because it is
+        // referenced as a subpackage of another package added to the repo).
+        let anonsubpkg_dir = dir.join(ANONYMOUS_SUBPACKAGE);
+        let (anonsubpkg_meta_far_path, anonsubpkg_manifest) = test_utils::make_package_manifest(
+            ANONYMOUS_SUBPACKAGE,
+            anonsubpkg_dir.as_std_path(),
+            Vec::new(),
+        );
+        let anonsubpkg_manifest_path = anonsubpkg_dir.join("anonymous_subpackage.manifest");
+        serde_json::to_writer(
+            std::fs::File::create(&anonsubpkg_manifest_path).unwrap(),
+            &anonsubpkg_manifest,
+        )
+        .unwrap();
+        let anonsubpkg_meta_far_contents = std::fs::read(&anonsubpkg_meta_far_path).unwrap();
+
+        // Create a named package (named_subpackage), which will also be a
+        // subpackage of "superpackage". This named_subpackage will include the
+        // anonymous_subpackage.
+        let namedsubpkg_dir = dir.join(NAMED_SUBPACKAGE);
+        let (namedsubpkg_meta_far_path, namedsubpkg_manifest) = test_utils::make_package_manifest(
+            NAMED_SUBPACKAGE,
+            namedsubpkg_dir.as_std_path(),
+            vec![(
+                "anon_subpackage_of_namedsubpkg".parse().unwrap(),
+                anonsubpkg_manifest.hash(),
+                anonsubpkg_manifest_path.clone().into(),
+            )],
+        );
+        let namedsubpkg_manifest_path = namedsubpkg_dir.join("named_subpackage.manifest");
+        serde_json::to_writer(
+            std::fs::File::create(&namedsubpkg_manifest_path).unwrap(),
+            &namedsubpkg_manifest,
+        )
+        .unwrap();
+        let namedsubpkg_meta_far_contents = std::fs::read(&namedsubpkg_meta_far_path).unwrap();
+
+        // Create a named package ("superpackage"), which will also be a superpackage
+        // of both named_subpackage and anonymous_subpackage. Note that
+        // named_subpackage is ALSO a superpackage of anonymous_subpackage, so
+        // anonymous_subpackage is referenced twice. It will only exist once in
+        // the repo.
+        let superpkg_dir = dir.join(SUPERPACKAGE);
+        let (superpkg_meta_far_path, superpkg_manifest) = test_utils::make_package_manifest(
+            SUPERPACKAGE,
+            superpkg_dir.as_std_path(),
+            vec![
+                (
+                    NAMED_SUBPACKAGE.parse().unwrap(),
+                    namedsubpkg_manifest.hash(),
+                    namedsubpkg_manifest_path.clone().into(),
+                ),
+                (
+                    "anon_subpackage_of_superpkg".parse().unwrap(),
+                    anonsubpkg_manifest.hash(),
+                    anonsubpkg_manifest_path.clone().into(),
+                ),
+            ],
+        );
+        let superpkg_manifest_path = superpkg_dir.join("superpackage.manifest");
+        serde_json::to_writer(
+            std::fs::File::create(&superpkg_manifest_path).unwrap(),
+            &superpkg_manifest,
+        )
+        .unwrap();
+        let superpkg_meta_far_contents = std::fs::read(&superpkg_meta_far_path).unwrap();
+
+        // Add the two named packages. The anonymous subpackage will be added
+        // automatically.
+        RepoBuilder::create(&repo, &repo_keys)
+            .add_package(superpkg_manifest_path)
+            .await
+            .unwrap()
+            .add_package(namedsubpkg_manifest_path)
+            .await
+            .unwrap()
+            .commit()
+            .await
+            .unwrap();
+
+        let repo_blobs = read_dir(&blob_repo_path);
+
+        assert_eq!(
+            repo_blobs.keys().map(|k| k.to_owned()).collect::<BTreeSet<String>>(),
+            BTreeSet::from([
+                test_utils::ANONSUBPKG_HASH.into(),
+                test_utils::ANONSUBPKG_BIN_HASH.into(),
+                test_utils::ANONSUBPKG_LIB_HASH.into(),
+                test_utils::NAMEDSUBPKG_HASH.into(),
+                test_utils::NAMEDSUBPKG_BIN_HASH.into(),
+                test_utils::NAMEDSUBPKG_LIB_HASH.into(),
+                test_utils::SUPERPKG_HASH.into(),
+                test_utils::SUPERPKG_BIN_HASH.into(),
+                test_utils::SUPERPKG_LIB_HASH.into(),
+            ])
+        );
+
+        // Make sure we wrote all the blobs from package1.
+        assert_eq!(
+            read_dir(&blob_repo_path),
+            BTreeMap::from([
+                (test_utils::ANONSUBPKG_HASH.into(), anonsubpkg_meta_far_contents.clone()),
+                (test_utils::ANONSUBPKG_BIN_HASH.into(), b"binary anonymous_subpackage".to_vec()),
+                (test_utils::ANONSUBPKG_LIB_HASH.into(), b"lib anonymous_subpackage".to_vec()),
+                (test_utils::NAMEDSUBPKG_HASH.into(), namedsubpkg_meta_far_contents.clone()),
+                (test_utils::NAMEDSUBPKG_BIN_HASH.into(), b"binary named_subpackage".to_vec()),
+                (test_utils::NAMEDSUBPKG_LIB_HASH.into(), b"lib named_subpackage".to_vec()),
+                (test_utils::SUPERPKG_HASH.into(), superpkg_meta_far_contents.clone()),
+                (test_utils::SUPERPKG_BIN_HASH.into(), b"binary superpackage".to_vec()),
+                (test_utils::SUPERPKG_LIB_HASH.into(), b"lib superpackage".to_vec()),
+            ])
+        );
+
+        // Make sure we can update a client from this metadata.
+        let mut repo_client = RepoClient::from_trusted_remote(repo).await.unwrap();
+        assert_matches!(repo_client.update().await, Ok(true));
+
+        assert_eq!(repo_client.database().trusted_root().version(), 1);
+        assert_eq!(repo_client.database().trusted_targets().map(|m| m.version()), Some(1));
+        assert_eq!(repo_client.database().trusted_snapshot().map(|m| m.version()), Some(1));
+        assert_eq!(repo_client.database().trusted_timestamp().map(|m| m.version()), Some(1));
+
+        // Make sure we have targets for the named packages only.
+        let trusted_targets = repo_client.database().trusted_targets().unwrap();
+        assert!(trusted_targets
+            .targets()
+            .get(&TargetPath::new(format!("{SUPERPACKAGE}/0")).unwrap())
+            .is_some());
+        assert!(trusted_targets
+            .targets()
+            .get(&TargetPath::new(format!("{NAMED_SUBPACKAGE}/0")).unwrap())
+            .is_some());
+        assert!(trusted_targets
+            .targets()
+            .get(&TargetPath::new(format!("{ANONYMOUS_SUBPACKAGE}/0")).unwrap())
+            .is_none());
     }
 
     #[fuchsia_async::run_singlethreaded(test)]
@@ -833,7 +1121,7 @@ mod tests {
         // Publish package3 to the repository.
         let pkg3_dir = root.join("pkg3");
         let (_, pkg3_manifest) =
-            test_utils::make_package_manifest("package3", pkg3_dir.as_std_path());
+            test_utils::make_package_manifest("package3", pkg3_dir.as_std_path(), Vec::new());
         let pkg3_manifest_path = pkg3_dir.join("package3.manifest");
         serde_json::to_writer(std::fs::File::create(&pkg3_manifest_path).unwrap(), &pkg3_manifest)
             .unwrap();
@@ -857,7 +1145,7 @@ mod tests {
         // Now do another commit, but this time not inheriting the old packages.
         let pkg4_dir = root.join("pkg4");
         let (_, pkg4_manifest) =
-            test_utils::make_package_manifest("package4", pkg4_dir.as_std_path());
+            test_utils::make_package_manifest("package4", pkg4_dir.as_std_path(), Vec::new());
         let pkg4_manifest_path = pkg4_dir.join("package4.manifest");
         serde_json::to_writer(std::fs::File::create(&pkg4_manifest_path).unwrap(), &pkg4_manifest)
             .unwrap();
@@ -957,7 +1245,7 @@ mod tests {
 
         let pkg1_dir = dir.join("package1");
         let (_, pkg1_manifest) =
-            test_utils::make_package_manifest("package1", pkg1_dir.as_std_path());
+            test_utils::make_package_manifest("package1", pkg1_dir.as_std_path(), Vec::new());
         let pkg1_manifest_path = pkg1_dir.join("package1.manifest");
         serde_json::to_writer(std::fs::File::create(&pkg1_manifest_path).unwrap(), &pkg1_manifest)
             .unwrap();

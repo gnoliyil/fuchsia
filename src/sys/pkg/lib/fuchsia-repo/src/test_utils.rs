@@ -11,7 +11,9 @@ use {
     anyhow::{anyhow, Context, Result},
     camino::{Utf8Path, Utf8PathBuf},
     fidl_fuchsia_pkg_ext::RepositoryKey,
+    fuchsia_hash::Hash,
     fuchsia_pkg::{PackageBuilder, PackageManifest},
+    fuchsia_url::RelativePackageUrl,
     futures::io::AllowStdIo,
     maplit::hashmap,
     std::{
@@ -54,6 +56,42 @@ pub(crate) const PKG2_BIN_HASH: &str =
 #[cfg(test)]
 pub(crate) const PKG2_LIB_HASH: &str =
     "ecc11f7f4b763c5a21be2b4159c9818bbe22ca7e6d8100a72f6a41d3d7b827a9";
+
+#[cfg(test)]
+pub(crate) const ANONSUBPKG_HASH: &str =
+    "1d20cc5163f35cd977cf414d54f8d5b53bcb33944cff0b9560b0627a6bba7441";
+
+#[cfg(test)]
+pub(crate) const ANONSUBPKG_BIN_HASH: &str =
+    "7fb2c78b2ae5ce6b591c4b017b382e5d4f1dc2a6f3e6977cac735632bbffec1f";
+
+#[cfg(test)]
+pub(crate) const ANONSUBPKG_LIB_HASH: &str =
+    "8dda14b0bc837a825c71a8534e402b5c7d4dfbb7348f429c017e57d547be80df";
+
+#[cfg(test)]
+pub(crate) const NAMEDSUBPKG_HASH: &str =
+    "1e67965c0601afbe00e43eb5c50509813400f1ae0ec838b44dfa018a8afcdeac";
+
+#[cfg(test)]
+pub(crate) const NAMEDSUBPKG_BIN_HASH: &str =
+    "5c8e2b5f4f5be036f9694842767a226c776c89e21bf6705e89d03ab4543fea2e";
+
+#[cfg(test)]
+pub(crate) const NAMEDSUBPKG_LIB_HASH: &str =
+    "208995a7397ea03e5b567a966690336d3c2cbbbf03bea95a4ee95724ac42f2e6";
+
+#[cfg(test)]
+pub(crate) const SUPERPKG_HASH: &str =
+    "cb174413bb34d960976f6b82ef6e6d3d3a36ddccdec142faf3d79f76c4baa676";
+
+#[cfg(test)]
+pub(crate) const SUPERPKG_BIN_HASH: &str =
+    "5ece8a1e67d2f16b861ad282667760cda93684b5ab5c80c4be6b9be47395b2b1";
+
+#[cfg(test)]
+pub(crate) const SUPERPKG_LIB_HASH: &str =
+    "b54bb3adf0fc9492d5e12cce9cf0b3dc501075397e8eedb77991503139c1ad40";
 
 pub fn repo_key() -> RepositoryKey {
     RepositoryKey::Ed25519(
@@ -136,7 +174,11 @@ pub async fn make_writable_empty_repository(
     Ok(client)
 }
 
-pub fn make_package_manifest(name: &str, build_path: &Path) -> (PathBuf, PackageManifest) {
+pub fn make_package_manifest(
+    name: &str,
+    build_path: &Path,
+    subpackages: Vec<(RelativePackageUrl, Hash, PathBuf)>,
+) -> (PathBuf, PackageManifest) {
     let package_path = build_path.join(name);
 
     let mut builder = PackageBuilder::new(name);
@@ -171,6 +213,10 @@ pub fn make_package_manifest(name: &str, build_path: &Path) -> (PathBuf, Package
         )
         .unwrap();
 
+    for (name, hash, manifest_path) in subpackages {
+        builder.add_subpackage(&name, hash, manifest_path).unwrap();
+    }
+
     let meta_far_path = package_path.join("meta.far");
     let manifest = builder.build(&package_path, &meta_far_path).unwrap();
 
@@ -196,7 +242,7 @@ pub async fn make_repo_dir(metadata_dir: &Path, blobs_dir: &Path) {
     let build_path = build_tmp.path();
 
     let packages = ["package1", "package2"].map(|name| {
-        let (meta_far_path, manifest) = make_package_manifest(name, build_path);
+        let (meta_far_path, manifest) = make_package_manifest(name, build_path, Vec::new());
 
         // Copy the package blobs into the blobs directory.
         let mut meta_far_merkle = None;

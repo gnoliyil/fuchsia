@@ -35,12 +35,19 @@ func TestLoadPackageManifest(t *testing.T) {
 		wantError          bool
 	}{
 		{
-			name: "success valid path and blobs",
+			name: "success valid path, blobs, and subpackages",
 			buildDirContents: map[string]string{
 				"package_manifest.json": `{
 					"version": "1",
 					"blobs": [
 						{ "merkle": "0000000000000000000000000000000000000000000000000000000000000000" }
+					],
+					"subpackages": [
+						{
+							"name": "some_subpackage",
+							"merkle": "1111111111111111111111111111111111111111111111111111111111111111",
+							"manifest_path": "subpackage_manifest.json"
+						}
 					]
 				}`,
 			},
@@ -49,6 +56,13 @@ func TestLoadPackageManifest(t *testing.T) {
 				Version: "1",
 				Blobs: []PackageBlobInfo{
 					{Merkle: MustDecodeMerkleRoot("0000000000000000000000000000000000000000000000000000000000000000")},
+				},
+				Subpackages: []PackageSubpackageInfo{
+					{
+						Name:         "some_subpackage",
+						Merkle:       MustDecodeMerkleRoot("1111111111111111111111111111111111111111111111111111111111111111"),
+						ManifestPath: "subpackage_manifest.json",
+					},
 				},
 			},
 		},

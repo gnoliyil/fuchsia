@@ -21,6 +21,7 @@ if (is_host) {
       "//src/lib/http-sse:http_sse",
       "//src/sys/lib/fidl-fuchsia-pkg-ext",
       "//src/sys/pkg/lib/far/rust:fuchsia-archive",
+      "//src/sys/pkg/lib/fuchsia-hash",
       "//src/sys/pkg/lib/fuchsia-merkle",
       "//src/sys/pkg/lib/fuchsia-pkg",
       "//third_party/rust_crates:anyhow",

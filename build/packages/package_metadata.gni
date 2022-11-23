@@ -161,6 +161,11 @@ template("generate_meta_subpackages") {
             get_label_info(subpackage.package, "target_out_dir") + "/" +
                 get_label_info(subpackage.package, "name") + "/meta.far.merkle",
             root_build_dir)
+    package_manifest_file =
+        rebase_path(get_label_info(subpackage.package, "target_out_dir") + "/" +
+                        get_label_info(subpackage.package, "name") +
+                        "/package_manifest.json",
+                    root_build_dir)
 
     rebased_subpackages += [
       {
@@ -171,6 +176,8 @@ template("generate_meta_subpackages") {
               meta_package_file  # to get the subpackage package name
         }
         merkle_file = merkle_file  # to get the subpackage package hash
+        package_manifest_file =
+            package_manifest_file  # the package_manifest.json of the subpackage
       },
     ]
     subpackage_targets += [ subpackage.package ]

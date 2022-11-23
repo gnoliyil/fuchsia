@@ -3,7 +3,9 @@
 // found in the LICENSE file.
 
 use crate::errors::BuildError;
-use crate::{MetaContents, MetaPackageError, Package, PackageBuildManifest, PackageManifest};
+use crate::{
+    MetaContents, MetaPackageError, Package, PackageBuildManifest, PackageManifest, SubpackageEntry,
+};
 use fuchsia_merkle::{Hash, MerkleTree};
 use std::collections::{btree_map, BTreeMap};
 use std::io::{Seek, SeekFrom};
@@ -15,12 +17,14 @@ pub(crate) fn build(
     creation_manifest: &PackageBuildManifest,
     meta_far_path: impl AsRef<Path>,
     published_name: impl AsRef<str>,
+    subpackages: Vec<SubpackageEntry>,
     repository: Option<String>,
 ) -> Result<PackageManifest, BuildError> {
     build_with_file_system(
         creation_manifest,
         meta_far_path,
         published_name,
+        subpackages,
         repository,
         &ActualFileSystem {},
     )
@@ -53,6 +57,7 @@ pub(crate) fn build_with_file_system<'a>(
     creation_manifest: &PackageBuildManifest,
     meta_far_path: impl AsRef<Path>,
     published_name: impl AsRef<str>,
+    subpackages: Vec<SubpackageEntry>,
     repository: Option<String>,
     file_system: &'a impl FileSystem<'a>,
 ) -> Result<PackageManifest, BuildError> {
@@ -62,6 +67,10 @@ pub(crate) fn build_with_file_system<'a>(
 
     let mut package_builder =
         Package::builder(published_name.as_ref().parse().map_err(BuildError::PackageName)?);
+
+    for SubpackageEntry { name, merkle, package_manifest_path } in subpackages.into_iter() {
+        package_builder.add_subpackage(name, merkle, package_manifest_path);
+    }
 
     let external_content_infos =
         get_external_content_infos(creation_manifest.external_contents(), file_system)?;
@@ -255,6 +264,7 @@ mod test_build_with_file_system {
             &creation_manifest,
             &meta_far_path,
             "published-name",
+            vec![],
             None,
             &file_system,
         )
@@ -298,6 +308,7 @@ mod test_build_with_file_system {
             &creation_manifest,
             meta_far_path,
             "published-name",
+            vec![],
             None,
             &file_system,
         );
@@ -331,6 +342,7 @@ mod test_build_with_file_system {
                 &creation_manifest,
                 &meta_far_path,
                 "published-name",
+                vec![],
                 None,
                 &file_system,
             )
@@ -368,6 +380,7 @@ mod test_build_with_file_system {
                 &creation_manifest,
                 &meta_far_path,
                 "published-name",
+                vec![],
                 None,
                 &file_system,
             )
@@ -398,6 +411,7 @@ mod test_build_with_file_system {
                 &creation_manifest,
                 &meta_far_path,
                 "published-name",
+                vec![],
                 None,
                 &file_system,
             )
@@ -515,6 +529,7 @@ mod test_build {
                 &creation_manifest,
                 &meta_far_path,
                 "published-name",
+                vec![],
                 None,
             )
                 .unwrap();

@@ -30,6 +30,7 @@ go_library("build") {
     "package_test.go",
     "snapshot.go",
     "snapshot_test.go",
+    "subpackages.go",
     "testutil.go",
   ]
 }

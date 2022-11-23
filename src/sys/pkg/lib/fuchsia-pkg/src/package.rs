@@ -2,23 +2,28 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use crate::{MetaContents, MetaContentsError, MetaPackage};
+#[cfg(test)]
+use crate::MetaSubpackages;
+use crate::{MetaContents, MetaContentsError, MetaPackage, PackageManifest};
 use anyhow::Result;
 use fuchsia_merkle::Hash;
-use fuchsia_url::PackageName;
+use fuchsia_url::{PackageName, RelativePackageUrl};
 use std::collections::{BTreeMap, HashMap};
+#[cfg(test)]
 use std::io::{Read, Seek};
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Package {
+pub(crate) struct Package {
     meta_contents: MetaContents,
     meta_package: MetaPackage,
+    subpackages: Vec<SubpackageEntry>,
     blobs: BTreeMap<String, BlobEntry>,
 }
 
 impl Package {
     /// Get the meta_contents.
+    #[cfg(test)]
     pub fn meta_contents(&self) -> MetaContents {
         self.meta_contents.clone()
     }
@@ -26,6 +31,19 @@ impl Package {
     /// Get the meta_package.
     pub fn meta_package(&self) -> MetaPackage {
         self.meta_package.clone()
+    }
+
+    /// Get the meta_subpackages.
+    #[cfg(test)]
+    pub fn meta_subpackages(&self) -> MetaSubpackages {
+        MetaSubpackages::from_iter(self.subpackages.iter().map(
+            |SubpackageEntry { name, merkle, package_manifest_path: _ }| (name.clone(), *merkle),
+        ))
+    }
+
+    /// Get the subpackages (including package_manifest.json paths, if known).
+    pub fn subpackages(&self) -> Vec<SubpackageEntry> {
+        self.subpackages.clone()
     }
 
     /// Get the blobs.
@@ -39,22 +57,25 @@ impl Package {
     }
 
     /// Generate a Package from a meta.far file.
+    #[cfg(test)]
     pub fn from_meta_far<R: Read + Seek>(
         mut meta_far: R,
         blobs: BTreeMap<String, BlobEntry>,
+        subpackages: Vec<SubpackageEntry>,
     ) -> Result<Self> {
         let mut meta_far = fuchsia_archive::Utf8Reader::new(&mut meta_far)?;
         let meta_contents =
-            MetaContents::deserialize(meta_far.read_file("meta/contents")?.as_slice())?;
+            MetaContents::deserialize(meta_far.read_file(MetaContents::PATH)?.as_slice())?;
         let meta_package =
-            MetaPackage::deserialize(meta_far.read_file("meta/package")?.as_slice())?;
-        Ok(Package { meta_contents, meta_package, blobs })
+            MetaPackage::deserialize(meta_far.read_file(MetaPackage::PATH)?.as_slice())?;
+        Ok(Package { meta_contents, meta_package, subpackages, blobs })
     }
 }
 
 pub(crate) struct Builder {
     contents: HashMap<String, Hash>,
     meta_package: MetaPackage,
+    subpackages: Vec<SubpackageEntry>,
     blobs: BTreeMap<String, BlobEntry>,
 }
 
@@ -63,6 +84,7 @@ impl Builder {
         Self {
             contents: HashMap::new(),
             meta_package: MetaPackage::from_name(name),
+            subpackages: Vec::new(),
             blobs: BTreeMap::new(),
         }
     }
@@ -74,23 +96,33 @@ impl Builder {
         source_path: PathBuf,
         size: u64,
     ) {
-        if blob_path != "meta/" {
+        if blob_path != PackageManifest::META_FAR_BLOB_PATH {
             self.contents.insert(blob_path.clone(), hash);
         }
         self.blobs.insert(blob_path, BlobEntry { source_path, size, hash });
+    }
+
+    pub(crate) fn add_subpackage(
+        &mut self,
+        name: RelativePackageUrl,
+        merkle: Hash,
+        package_manifest_path: PathBuf,
+    ) {
+        self.subpackages.push(SubpackageEntry { name, merkle, package_manifest_path });
     }
 
     pub(crate) fn build(self) -> Result<Package, MetaContentsError> {
         Ok(Package {
             meta_contents: MetaContents::from_map(self.contents)?,
             meta_package: self.meta_package,
+            subpackages: self.subpackages,
             blobs: self.blobs,
         })
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BlobEntry {
+pub(crate) struct BlobEntry {
     source_path: PathBuf,
     hash: Hash,
     size: u64,
@@ -110,6 +142,13 @@ impl BlobEntry {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SubpackageEntry {
+    pub name: RelativePackageUrl,
+    pub merkle: Hash,
+    pub package_manifest_path: PathBuf,
+}
+
 #[cfg(test)]
 mod test_package {
     use super::*;
@@ -124,9 +163,35 @@ mod test_package {
     use std::str::FromStr;
     use tempfile::tempdir;
 
+    fn zeros_hash() -> Hash {
+        "0000000000000000000000000000000000000000000000000000000000000000".parse().unwrap()
+    }
+
+    fn ones_hash() -> Hash {
+        "1111111111111111111111111111111111111111111111111111111111111111".parse().unwrap()
+    }
+
     #[test]
     fn test_create_package() {
         let meta_package = MetaPackage::from_name("package-name".parse().unwrap());
+
+        let subpackages = vec![
+            SubpackageEntry {
+                name: RelativePackageUrl::parse("a_0_subpackage").unwrap(),
+                merkle: zeros_hash(),
+                package_manifest_path: PathBuf::from("some/path/to/package_manifest.json"),
+            },
+            SubpackageEntry {
+                name: RelativePackageUrl::parse("other-1-subpackage").unwrap(),
+                merkle: ones_hash(),
+                package_manifest_path: PathBuf::from("another/path/to/package_manifest.json"),
+            },
+        ];
+
+        let meta_subpackages = MetaSubpackages::from_iter(hashmap! {
+            subpackages[0].name.clone() => subpackages[0].merkle,
+            subpackages[1].name.clone() => subpackages[1].merkle,
+        });
 
         let map = hashmap! {
         "bin/my_prog".to_string() =>
@@ -154,9 +219,12 @@ mod test_package {
         let package = Package {
             meta_contents: meta_contents.clone(),
             meta_package: meta_package.clone(),
+            subpackages: subpackages.clone(),
             blobs: blobs.clone(),
         };
         assert_eq!(meta_package, package.meta_package());
+        assert_eq!(meta_subpackages, package.meta_subpackages());
+        assert_eq!(subpackages, package.subpackages());
         assert_eq!(meta_contents, package.meta_contents());
         assert_eq!(blobs, package.blobs());
     }
@@ -194,14 +262,37 @@ mod test_package {
         )
         .unwrap();
         let component_manifest_contents = "my_component.cml contents";
-        let mut v = vec![];
+        let mut meta_package_json_bytes = vec![];
         let meta_package = MetaPackage::from_name("my-package-name".parse().unwrap());
-        meta_package.serialize(&mut v).unwrap();
+        meta_package.serialize(&mut meta_package_json_bytes).unwrap();
+
+        let subpackages = vec![
+            SubpackageEntry {
+                name: RelativePackageUrl::parse("a_0_subpackage").unwrap(),
+                merkle: zeros_hash(),
+                package_manifest_path: PathBuf::from("some/path/to/package_manifest.json"),
+            },
+            SubpackageEntry {
+                name: RelativePackageUrl::parse("other-1-subpackage").unwrap(),
+                merkle: ones_hash(),
+                package_manifest_path: PathBuf::from("another/path/to/package_manifest.json"),
+            },
+        ];
+
+        let meta_subpackages = MetaSubpackages::from_iter(hashmap! {
+            subpackages[0].name.clone() => subpackages[0].merkle,
+            subpackages[1].name.clone() => subpackages[1].merkle,
+        });
+
+        let mut meta_subpackages_json_bytes = vec![];
+        meta_subpackages.serialize(&mut meta_subpackages_json_bytes).unwrap();
+
         let file_system = FakeFileSystem {
             content_map: hashmap! {
                 "host/mylib.so".to_string() => "mylib.so contents".as_bytes().to_vec(),
                 "host/my_component.cml".to_string() => component_manifest_contents.as_bytes().to_vec(),
-                "host/meta/package".to_string() => v
+                format!("host/{}", MetaPackage::PATH) => meta_package_json_bytes,
+                format!("host/{}", MetaSubpackages::PATH) => meta_subpackages_json_bytes,
             },
         };
 
@@ -209,6 +300,7 @@ mod test_package {
             &creation_manifest,
             &meta_far_path,
             "my-package-name",
+            subpackages.clone(),
             None,
             &file_system,
         )
@@ -226,12 +318,24 @@ mod test_package {
             "bin/my_prog".to_string() => blob_entry.clone(),
             "bin/my_prog2".to_string() => blob_entry,
         };
-        let package =
-            Package::from_meta_far(File::open(&meta_far_path).unwrap(), blobs.clone()).unwrap();
+        let package = Package::from_meta_far(
+            File::open(&meta_far_path).unwrap(),
+            blobs.clone(),
+            subpackages.clone(),
+        )
+        .unwrap();
         assert_eq!(blobs, package.blobs());
         assert_eq!(
             &"my-package-name".parse::<PackageName>().unwrap(),
             package.meta_package().name()
+        );
+        assert_eq!(
+            package.meta_subpackages().subpackages().get(&"a_0_subpackage".try_into().unwrap()),
+            Some(&zeros_hash())
+        );
+        assert_eq!(
+            package.meta_subpackages().subpackages().get(&"other-1-subpackage".try_into().unwrap()),
+            Some(&ones_hash())
         );
     }
 
@@ -253,7 +357,7 @@ mod test_package {
             "bin/my_prog".to_string() => blob_entry.clone(),
             "bin/my_prog2".to_string() => blob_entry,
         };
-        let package = Package::from_meta_far(file, blobs);
+        let package = Package::from_meta_far(file, blobs, Vec::new());
         assert!(package.is_err());
     }
 }

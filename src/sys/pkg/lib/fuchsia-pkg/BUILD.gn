@@ -53,7 +53,7 @@ lib_sources = [
   "src/package_manifest_list.rs",
   "src/path.rs",
   "src/path_to_string.rs",
-  "src/subpackages_manifest.rs",
+  "src/subpackages_build_manifest.rs",
   "src/test.rs",
 ]
 
@@ -72,6 +72,12 @@ if (is_fuchsia) {
       ":dup1",
       ":dup2",
     ]
+    subpackages = [ ":subpackage_for_archive" ]
+  }
+
+  fuchsia_package("subpackage_for_archive") {
+    testonly = true
+    deps = [ ":dup3" ]
   }
 
   fuchsia_package_archive("test_package_archive") {
@@ -89,6 +95,12 @@ if (is_fuchsia) {
     testonly = true
     sources = [ "duplicate-blob.txt" ]
     outputs = [ "data/dup2" ]
+  }
+
+  resource("dup3") {
+    testonly = true
+    sources = [ "duplicate-blob.txt" ]
+    outputs = [ "data/dup3" ]
   }
 
   rustc_test("lib_test") {

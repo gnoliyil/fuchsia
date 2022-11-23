@@ -454,7 +454,7 @@ mod tests {
             let pkg_manifest_path = root.join(format!("{}.json", name));
 
             let (_, pkg_manifest) =
-                test_utils::make_package_manifest(name, pkg_build_path.as_std_path());
+                test_utils::make_package_manifest(name, pkg_build_path.as_std_path(), Vec::new());
 
             serde_json::to_writer(File::create(pkg_manifest_path).unwrap(), &pkg_manifest).unwrap();
 
@@ -555,8 +555,11 @@ mod tests {
 
         // Publish package3 without cleaning enabled. This should preserve the old packages.
         let pkg3_manifest_path = root.join("package3.json");
-        let (_, pkg3_manifest) =
-            test_utils::make_package_manifest("package3", root.join("pkg3").as_std_path());
+        let (_, pkg3_manifest) = test_utils::make_package_manifest(
+            "package3",
+            root.join("pkg3").as_std_path(),
+            Vec::new(),
+        );
         serde_json::to_writer(File::create(&pkg3_manifest_path).unwrap(), &pkg3_manifest).unwrap();
 
         let cmd = RepoPublishCommand {
@@ -586,8 +589,11 @@ mod tests {
 
         // Publish package4 with cleaning should clean out the old packages.
         let pkg4_manifest_path = root.join("package4.json");
-        let (_, pkg4_manifest) =
-            test_utils::make_package_manifest("package4", root.join("pkg4").as_std_path());
+        let (_, pkg4_manifest) = test_utils::make_package_manifest(
+            "package4",
+            root.join("pkg4").as_std_path(),
+            Vec::new(),
+        );
         serde_json::to_writer(File::create(&pkg4_manifest_path).unwrap(), &pkg4_manifest).unwrap();
 
         let cmd = RepoPublishCommand {
