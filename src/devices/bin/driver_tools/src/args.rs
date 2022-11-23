@@ -25,6 +25,7 @@ use {
     // If we are host-side, then we will import the conformance library.
     // Otherwise, we will use the placeholder subcommand declared above.
     conformance_lib::args::ConformanceCommand,
+    static_checks_lib::args::StaticChecksCommand,
 };
 
 #[derive(FromArgs, Debug, PartialEq)]
@@ -70,5 +71,6 @@ pub enum DriverSubCommand {
     Register(RegisterCommand),
     Restart(RestartCommand),
     RunTool(RunToolCommand),
+    StaticChecks(StaticChecksCommand),
     TestNode(TestNodeCommand),
 }

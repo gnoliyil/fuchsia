@@ -52,6 +52,7 @@ rustc_library("lib") {
               "//sdk/fidl/fuchsia.hardware.skipblock:fuchsia.hardware.skipblock_rust",
               "//src/developer/ffx/lib/errors:lib",
               "//src/devices/lib/driver-conformance:lib",
+              "//src/devices/lib/driver-static-checks:lib",
               "//src/devices/pci/bin/lspci:lib",
               "//src/devices/usb/bin/lsusb:lib",
               "//src/lib/storage/fuchsia-vfs-watcher",

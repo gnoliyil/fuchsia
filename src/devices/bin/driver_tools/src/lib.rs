@@ -179,6 +179,12 @@ pub async fn driver(cmd: DriverCommand, driver_connector: impl DriverConnector) 
                 .await
                 .context("RunTool subcommand failed")?;
         }
+        #[cfg(not(target_os = "fuchsia"))]
+        DriverSubCommand::StaticChecks(subcmd) => {
+            static_checks_lib::static_checks(subcmd, &mut io::stdout())
+                .await
+                .context("StaticChecks subcommand failed")?;
+        }
         DriverSubCommand::TestNode(subcmd) => {
             let driver_development_proxy = driver_connector
                 .get_driver_development_proxy(subcmd.select)
