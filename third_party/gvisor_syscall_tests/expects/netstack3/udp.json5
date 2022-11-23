@@ -31,6 +31,10 @@
         {
             type: "skip",
             matchers: [
+                // Tests that flake in Fuchsia's CQ.
+                // https://fxbug.dev/115961
+                "AllInetTests/UdpSocketTest.SendToAddressOtherThanConnected/*",
+
                 // Cases are either skipped entirely (0, 1) or fail (2)
                 "AllInetTests/UdpSocketControlMessagesTest.SendAndReceiveTOSorTClass/*",
             ],
