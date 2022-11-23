@@ -362,6 +362,15 @@
             to: "#boot-drivers",
         },
         {
+            protocol: "fuchsia.boot.Arguments",
+            from: "parent",
+            to: [
+                "#boot-drivers",
+                "#pkg-drivers",
+                "#universe-pkg-drivers",
+            ],
+        },
+        {
             protocol: [
                 "fuchsia.boot.Arguments",
                 "fuchsia.kernel.DebugResource",

@@ -15,6 +15,7 @@
     },
     use: [
         { protocol: "fuchsia.boot.RootResource" },
+        { protocol: "fuchsia.boot.Arguments" },
         { service: "fuchsia.hardware.platform.device.Service" },
     ],
 }

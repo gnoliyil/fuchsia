@@ -74,6 +74,7 @@ if (target_cpu == "arm64") {
     deps = [ ":amlogic_video_decoder-driver" ]
     info = "amlogic_video_decoder-info.json"
     colocate = true
+    uses_profiles = true
   }
 
   # This version of the driver runs tests on startup.

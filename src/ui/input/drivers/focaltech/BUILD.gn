@@ -78,6 +78,7 @@ fuchsia_driver_component("focaltech") {
   deps = [ ":focaltech-driver" ]
   info = "focaltech-info.json"
   colocate = true
+  uses_profiles = true
 }
 
 fuchsia_driver("focaltech-sherlock-driver") {
@@ -104,6 +105,7 @@ fuchsia_driver_component("focaltech-sherlock") {
   deps = [ ":focaltech-sherlock-driver" ]
   info = "focaltech-sherlock-info.json"
   colocate = true
+  uses_profiles = true
 }
 
 test("focaltech-test-bin") {

@@ -31,7 +31,9 @@ fuchsia_driver_component("display") {
   deps = [ ":display-driver" ]
   info = "display-info.json"
   colocate = true
+  uses_profiles = true
   root_resource = true
+  uses_boot_args = true
 }
 
 # Also used by test/.
