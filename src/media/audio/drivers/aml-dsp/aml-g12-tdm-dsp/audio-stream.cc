@@ -19,6 +19,15 @@
 #include <pretty/hexdump.h>
 
 #include "src/media/audio/drivers/aml-dsp/aml-g12-tdm-dsp/aml_tdm-bind.h"
+#include "src/media/lib/memory_barriers/memory_barriers.h"
+
+namespace {
+
+// kTransferInterval is the timer time. The function of this timer is to send the ring buffer
+// position to the HW DSP FW regularly.
+constexpr zx::duration kTransferInterval = zx::msec(20);
+
+}  // namespace
 
 namespace audio {
 namespace aml_g12 {
@@ -49,6 +58,54 @@ int AmlG12TdmDspStream::Thread() {
   }
   zxlogf(INFO, "Exiting interrupt thread");
   return 0;
+}
+
+int AmlG12TdmDspStream::MailboxBind() {
+  auto endpoints = fidl::CreateEndpoints<fuchsia_hardware_mailbox::Device>();
+  if (endpoints.is_error()) {
+    zxlogf(ERROR, "Failed to create endpoints");
+    return endpoints.status_value();
+  }
+
+  auto status = DdkConnectFragmentFidlProtocol("audio-mailbox", std::move(endpoints->server));
+  if (status != ZX_OK) {
+    zxlogf(ERROR, "Failed to connect fidl protocol: %s", zx_status_get_string(status));
+    return status;
+  }
+
+  fidl::WireSyncClient<fuchsia_hardware_mailbox::Device> audio_mailbox =
+      fidl::WireSyncClient(std::move(endpoints->client));
+
+  audio_mailbox_ = std::make_unique<AmlMailboxDevice>(std::move(audio_mailbox));
+  if (audio_mailbox_ == nullptr) {
+    zxlogf(ERROR, "failed to create Mailbox device");
+    return ZX_ERR_NO_MEMORY;
+  }
+  return ZX_OK;
+}
+
+int AmlG12TdmDspStream::DspBind() {
+  auto endpoints = fidl::CreateEndpoints<fuchsia_hardware_dsp::DspDevice>();
+  if (endpoints.is_error()) {
+    zxlogf(ERROR, "Failed to create endpoints");
+    return endpoints.status_value();
+  }
+
+  auto status = DdkConnectFragmentFidlProtocol("audio-dsp", std::move(endpoints->server));
+  if (status != ZX_OK) {
+    zxlogf(ERROR, "Failed to connect fidl protocol: %s", zx_status_get_string(status));
+    return status;
+  }
+
+  fidl::WireSyncClient<fuchsia_hardware_dsp::DspDevice> audio_dsp =
+      fidl::WireSyncClient(std::move(endpoints->client));
+
+  audio_dsp_ = std::make_unique<AmlDspDevice>(std::move(audio_dsp));
+  if (audio_dsp_ == nullptr) {
+    zxlogf(ERROR, "failed to create DSP device");
+    return ZX_ERR_NO_MEMORY;
+  }
+  return ZX_OK;
 }
 
 void AmlG12TdmDspStream::InitDaiFormats() {
@@ -142,6 +199,13 @@ zx_status_t AmlG12TdmDspStream::InitPDev() {
     zxlogf(ERROR, "could not get mmio %d", status);
     return status;
   }
+
+  status = pdev_.MapMmio(1, &dsp_mmio_, ZX_CACHE_POLICY_CACHED);
+  if (status != ZX_OK) {
+    zxlogf(ERROR, "unable to get dsp mmio %d", status);
+    return status;
+  }
+
   status = pdev_.GetInterrupt(0, 0, &irq_);
   if (status != ZX_ERR_OUT_OF_RANGE) {  // Not specified in the board file.
     if (status != ZX_OK) {
@@ -159,22 +223,22 @@ zx_status_t AmlG12TdmDspStream::InitPDev() {
     }
   }
 
+  status = MailboxBind();
+  if (status != ZX_OK) {
+    zxlogf(ERROR, "The mailbox device node binding failed");
+    return status;
+  }
+
+  status = DspBind();
+  if (status != ZX_OK) {
+    zxlogf(ERROR, "The dsp device node binding failed");
+    return status;
+  }
+
   aml_audio_ = std::make_unique<AmlTdmConfigDevice>(metadata_, *std::move(mmio));
   if (aml_audio_ == nullptr) {
     zxlogf(ERROR, "failed to create TDM device with config");
     return ZX_ERR_NO_MEMORY;
-  }
-  // Initial setup of one page of buffer, just to be safe.
-  status = InitBuffer(zx_system_get_page_size());
-  if (status != ZX_OK) {
-    zxlogf(ERROR, "failed to init buffer %d", status);
-    return status;
-  }
-  status = aml_audio_->SetBuffer(pinned_ring_buffer_.region(0).phys_addr,
-                                 pinned_ring_buffer_.region(0).size);
-  if (status != ZX_OK) {
-    zxlogf(ERROR, "failed to set buffer %d", status);
-    return status;
   }
 
   for (size_t i = 0; i < metadata_.codecs.number_of_codecs; ++i) {
@@ -473,7 +537,6 @@ void AmlG12TdmDspStream::ShutdownHook() {
     enable_gpio_.Write(0);
   }
   aml_audio_->Shutdown();
-  pinned_ring_buffer_.Unpin();
 }
 
 zx_status_t AmlG12TdmDspStream::SetGain(const audio_proto::SetGainReq& req) {
@@ -489,6 +552,19 @@ zx_status_t AmlG12TdmDspStream::SetGain(const audio_proto::SetGainReq& req) {
   return ZX_OK;
 }
 
+// At certain intervals, the offset of DMA pointer in the ring buffer is obtained, and the HW DSP FW
+// is notified to adjust the position of the data processing pointer.
+void AmlG12TdmDspStream::RingNotificationReport() {
+  ScopedToken t(domain_token());
+  position_timer_.PostDelayed(dispatcher(), kTransferInterval);
+  uint32_t ring_buffer_pos = aml_audio_->GetRingPosition();
+  zx_status_t status = audio_mailbox_->DspProcessTaskPosition(ring_buffer_pos);
+  if (status != ZX_OK) {
+    zxlogf(ERROR, "Notify DSP data process location information failed: %s",
+           zx_status_get_string(status));
+  }
+}
+
 zx_status_t AmlG12TdmDspStream::GetBuffer(const audio_proto::RingBufGetBufferReq& req,
                                           uint32_t* out_num_rb_frames, zx::vmo* out_buffer) {
   size_t ring_buffer_size =
@@ -499,32 +575,76 @@ zx_status_t AmlG12TdmDspStream::GetBuffer(const audio_proto::RingBufGetBufferReq
     return ZX_ERR_INVALID_ARGS;
   }
 
-  size_t vmo_size = fbl::round_up<size_t, size_t>(ring_buffer_size, zx_system_get_page_size());
-  auto status = InitBuffer(vmo_size);
+  // Make sure the DMA is stopped before releasing quarantine.
+  aml_audio_->Stop();
+  // Make sure that all reads/writes have gone through.
+  BarrierBeforeRelease();
+
+  // Load DSP firmware that processes TDM audio data.
+  zx_status_t status = audio_dsp_->DspHwInit(true);
   if (status != ZX_OK) {
-    zxlogf(ERROR, "failed to init buffer %d", status);
+    zxlogf(ERROR, "HW DSP initialization failed: %s", zx_status_get_string(status));
+    return status;
+  }
+  // After testing, the delay is 1.7ms, which can ensure that the firmware is running.
+  zx::nanosleep(zx::deadline_after(zx::usec(1700)));
+
+  size_t vmo_size = fbl::round_up<size_t, size_t>(ring_buffer_size, zx_system_get_page_size());
+  // The unit of transfer_interval_.get() is nanoseconds.
+  uint32_t transfer_length =
+      frame_size_ * frame_rate_ * static_cast<uint32_t>(kTransferInterval.to_msecs()) / 1000;
+  AddrInfo addr_info = {.addr_length = vmo_size,
+                        .buff_size = ring_buffer_size,
+                        .is_output = static_cast<uint8_t>(metadata_.is_input ? 0 : 1),
+                        .pid = static_cast<uint32_t>(getpid()),
+                        .interval = static_cast<uint32_t>(kTransferInterval.to_msecs()),
+                        .length = transfer_length};
+
+  status = audio_mailbox_->DspCreateProcessingTask(&addr_info, sizeof(addr_info));
+  if (status != ZX_OK) {
     return status;
   }
 
-  constexpr uint32_t rights = ZX_RIGHT_READ | ZX_RIGHT_WRITE | ZX_RIGHT_MAP | ZX_RIGHT_TRANSFER;
-  status = ring_buffer_vmo_.duplicate(rights, out_buffer);
+  const uint32_t dst_addr = static_cast<uint32_t>(addr_info.dst_addr);
+  const uint32_t src_addr = static_cast<uint32_t>(addr_info.src_addr);
+
+  // HW DSP shares SRAM with ARM for data transmission.
+  constexpr uint32_t sram_addr = 0xf7030000;
+  ZX_DEBUG_ASSERT(sram_addr <= src_addr);
+  ZX_DEBUG_ASSERT(src_addr % zx_system_get_page_size() == 0);
+  zx_off_t shared_sram_offset = src_addr - sram_addr;
+  ZX_DEBUG_ASSERT(shared_sram_offset + vmo_size <= dsp_mmio_->get_size());
+  status = dsp_mmio_->get_vmo()->create_child(ZX_VMO_CHILD_SLICE, shared_sram_offset, vmo_size,
+                                              out_buffer);
   if (status != ZX_OK) {
-    zxlogf(ERROR, "failed to duplicate VMO %d", status);
+    zxlogf(ERROR, "src_mmio_ create child vmo failed: %s", zx_status_get_string(status));
     return status;
   }
-  status = aml_audio_->SetBuffer(pinned_ring_buffer_.region(0).phys_addr, ring_buffer_size);
+
+  status = aml_audio_->SetBuffer(dst_addr, ring_buffer_size);
   if (status != ZX_OK) {
-    zxlogf(ERROR, "failed to set buffer %d", status);
+    zxlogf(ERROR, "failed to set buffer: %s", zx_status_get_string(status));
     return status;
   }
-  ring_buffer_physical_address_.Set(pinned_ring_buffer_.region(0).phys_addr);
 
   // This is safe because of the overflow check we made above.
   *out_num_rb_frames = static_cast<uint32_t>(out_frames);
+  ring_buffer_size_ = ring_buffer_size;
   return ZX_OK;
 }
 
 zx_status_t AmlG12TdmDspStream::Start(uint64_t* out_start_time) {
+  /* During playback, before the FRDDR reads data from the specified address, data processing starts
+   * at the HW DSP FW. */
+  if (!metadata_.is_input) {
+    zx_status_t status = audio_mailbox_->DspProcessTaskStart();
+    if (status != ZX_OK) {
+      zxlogf(ERROR, "Dsp data process start failed: %s", zx_status_get_string(status));
+      return status;
+    }
+    position_timer_.PostDelayed(dispatcher(), kTransferInterval);
+  }
+
   *out_start_time = aml_audio_->Start();
   zx_status_t status = StartAllEnabledCodecs();
   if (status != ZX_OK) {
@@ -534,7 +654,8 @@ zx_status_t AmlG12TdmDspStream::Start(uint64_t* out_start_time) {
 
   uint32_t notifs = LoadNotificationsPerRing();
   if (notifs) {
-    us_per_notification_ = static_cast<uint32_t>(1000 * pinned_ring_buffer_.region(0).size /
+    ZX_DEBUG_ASSERT(ring_buffer_size_ > 0);
+    us_per_notification_ = static_cast<uint32_t>(1000 * ring_buffer_size_ /
                                                  (frame_size_ * frame_rate_ / 1000 * notifs));
     notify_timer_.PostDelayed(dispatcher(), zx::usec(us_per_notification_));
   } else {
@@ -542,6 +663,17 @@ zx_status_t AmlG12TdmDspStream::Start(uint64_t* out_start_time) {
   }
   override_mute_ = false;
   UpdateCodecsGainStateFromCurrent();
+
+  /* During recording, after TODDR writes data to the specified address, data processing starts in
+   * HW DSP FW. */
+  if (metadata_.is_input) {
+    status = audio_mailbox_->DspProcessTaskStart();
+    if (status != ZX_OK) {
+      zxlogf(ERROR, "Dsp data process start failed: %s", zx_status_get_string(status));
+      return status;
+    }
+    position_timer_.PostDelayed(dispatcher(), kTransferInterval);
+  }
   return ZX_OK;
 }
 
@@ -587,6 +719,12 @@ zx_status_t AmlG12TdmDspStream::Stop() {
     return status;
   }
   aml_audio_->Stop();
+
+  status = audio_mailbox_->DspProcessTaskStop();
+  if (status != ZX_OK) {
+    return status;
+  }
+  position_timer_.Cancel();
   return ZX_OK;
 }
 
@@ -637,40 +775,6 @@ zx_status_t AmlG12TdmDspStream::AddFormats() {
     format.range.flags =
         ASF_RANGE_FLAG_FPS_CONTINUOUS;  // No need to specify family when min == max.
     supported_formats_.push_back(format);
-  }
-
-  return ZX_OK;
-}
-
-zx_status_t AmlG12TdmDspStream::InitBuffer(size_t size) {
-  // Make sure the DMA is stopped before releasing quarantine.
-  aml_audio_->Stop();
-  // Make sure that all reads/writes have gone through.
-#if defined(__aarch64__)
-  __asm__ volatile("dsb sy" : : : "memory");
-#endif
-  auto status = bti_.release_quarantine();
-  if (status != ZX_OK) {
-    zxlogf(ERROR, "could not release quarantine bti - %d", status);
-    return status;
-  }
-  pinned_ring_buffer_.Unpin();
-  status = zx_vmo_create_contiguous(bti_.get(), size, 0, ring_buffer_vmo_.reset_and_get_address());
-  if (status != ZX_OK) {
-    zxlogf(ERROR, "failed to allocate ring buffer vmo - %d", status);
-    return status;
-  }
-
-  status = pinned_ring_buffer_.Pin(ring_buffer_vmo_, bti_, ZX_VM_PERM_READ | ZX_VM_PERM_WRITE);
-  if (status != ZX_OK) {
-    zxlogf(ERROR, "failed to pin ring buffer vmo - %d", status);
-    return status;
-  }
-  if (pinned_ring_buffer_.region_count() != 1) {
-    if (!AllowNonContiguousRingBuffer()) {
-      zxlogf(ERROR, "buffer is not contiguous");
-      return ZX_ERR_NO_MEMORY;
-    }
   }
 
   return ZX_OK;

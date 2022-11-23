@@ -36,7 +36,7 @@ class AmlDspDevice {
  public:
   explicit AmlDspDevice(DspClient client);
   // Initialize the DSP firmware and start it.
-  zx_status_t DspHwInit();
+  zx_status_t DspHwInit(bool use_tdm_dsp_firmware);
 
  private:
   DspClient client_;

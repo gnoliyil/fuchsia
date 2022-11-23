@@ -41,6 +41,12 @@ static const std::vector<fpbus::Mmio> audio_mmios{
         .base = A5_EE_AUDIO_BASE,
         .length = A5_EE_AUDIO_LENGTH,
     }},
+#ifdef TDM_USE_DSP
+    {{
+        .base = A5_DSP_SRAM_BASE,
+        .length = A5_DSP_SRAM_BASE_LENGTH,
+    }},
+#endif
 };
 
 static const std::vector<fpbus::Bti> tdm_btis{

@@ -70,14 +70,19 @@ zx_status_t AmlMailboxDevice::DspProcessTaskPosition(uint32_t position) {
 
 AmlDspDevice::AmlDspDevice(DspClient client) : client_(std::move(client)) {}
 
-zx_status_t AmlDspDevice::DspHwInit() {
+zx_status_t AmlDspDevice::DspHwInit(bool use_tdm_dsp_firmware) {
   // Since it is unknown whether the HW DSP has firmware running, execute the Stop command first,
   // then execute the firmware loading command LoadFirmware, and finally execute the firmware
   // startup command Start.
   auto dsp_stop_result = client_->Stop();
   // Load DSP FW.
+  // Determine whether to load the DSP firmware that processes TDM audio data.
+  std::string firmware_name = "";
+  if (use_tdm_dsp_firmware == true) {
+    memcpy(firmware_name.data(), TDM_DSP_FIRMWARE_NAME, sizeof(TDM_DSP_FIRMWARE_NAME));
+  }
   auto dsp_load_result =
-      client_->LoadFirmware(fidl::StringView::FromExternal(TDM_DSP_FIRMWARE_NAME));
+      client_->LoadFirmware(fidl::StringView::FromExternal(firmware_name.data()));
   if (!dsp_load_result.ok()) {
     zxlogf(ERROR, "Failed to dsp load firmware: %s",
            zx_status_get_string(dsp_load_result.status()));

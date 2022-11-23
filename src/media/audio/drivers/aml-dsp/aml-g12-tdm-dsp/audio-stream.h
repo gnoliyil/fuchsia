@@ -5,6 +5,8 @@
 #ifndef SRC_MEDIA_AUDIO_DRIVERS_AML_DSP_AML_G12_TDM_DSP_AUDIO_STREAM_H_
 #define SRC_MEDIA_AUDIO_DRIVERS_AML_DSP_AML_G12_TDM_DSP_AUDIO_STREAM_H_
 
+#include <fidl/fuchsia.hardware.dsp/cpp/wire.h>
+#include <fidl/fuchsia.hardware.mailbox/cpp/wire.h>
 #include <fuchsia/hardware/gpio/cpp/banjo.h>
 #include <fuchsia/hardware/platform/device/c/banjo.h>
 #include <lib/ddk/io-buffer.h>
@@ -25,6 +27,7 @@
 #include <soc/aml-common/aml-tdm-audio.h>
 
 #include "aml-tdm-config-device.h"
+#include "src/media/audio/drivers/lib/aml-dsp/dsp.h"
 
 namespace audio {
 namespace aml_g12 {
@@ -54,6 +57,8 @@ class AmlG12TdmDspStream : public SimpleAudioStream {
 
   std::vector<SimpleCodecClient> codecs_;
   std::unique_ptr<AmlTdmConfigDevice> aml_audio_;
+  std::unique_ptr<AmlMailboxDevice> audio_mailbox_;
+  std::unique_ptr<AmlDspDevice> audio_dsp_;
   metadata::AmlConfig metadata_ = {};
 
  private:
@@ -64,6 +69,7 @@ class AmlG12TdmDspStream : public SimpleAudioStream {
   zx_status_t AddFormats() __TA_REQUIRES(domain_token());
   zx_status_t InitBuffer(size_t size);
   void ProcessRingNotification();
+  void RingNotificationReport();
   void UpdateCodecsGainState(GainState state) __TA_REQUIRES(domain_token());
   void UpdateCodecsGainStateFromCurrent() __TA_REQUIRES(domain_token());
   zx_status_t StopAllCodecs();
@@ -72,6 +78,8 @@ class AmlG12TdmDspStream : public SimpleAudioStream {
   virtual bool AllowNonContiguousRingBuffer() { return false; }
   zx_status_t StartCodecIfEnabled(size_t index);
   int Thread();
+  int MailboxBind();
+  int DspBind();
 
   uint32_t us_per_notification_ = 0;
   DaiFormat dai_formats_[metadata::kMaxNumberOfCodecs] = {};
@@ -82,11 +90,11 @@ class AmlG12TdmDspStream : public SimpleAudioStream {
 
   async::TaskClosureMethod<AmlG12TdmDspStream, &AmlG12TdmDspStream::ProcessRingNotification>
       notify_timer_ __TA_GUARDED(domain_token()){this};
+  // Inform DSP FW of ring buffer location information regularly
+  async::TaskClosureMethod<AmlG12TdmDspStream, &AmlG12TdmDspStream::RingNotificationReport>
+      position_timer_ __TA_GUARDED(domain_token()){this};
 
   ddk::PDev pdev_;
-
-  zx::vmo ring_buffer_vmo_;
-  fzl::PinnedVmo pinned_ring_buffer_;
 
   zx::bti bti_;
   const ddk::GpioProtocolClient enable_gpio_;
@@ -99,6 +107,8 @@ class AmlG12TdmDspStream : public SimpleAudioStream {
   inspect::UintProperty dma_status_;
   inspect::UintProperty tdm_status_;
   inspect::UintProperty ring_buffer_physical_address_;
+  size_t ring_buffer_size_ = 0;
+  std::optional<fdf::MmioBuffer> dsp_mmio_;
 };
 
 }  // namespace aml_g12
