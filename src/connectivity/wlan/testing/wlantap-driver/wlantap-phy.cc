@@ -6,6 +6,8 @@
 
 #include <fidl/fuchsia.wlan.softmac/cpp/driver/wire.h>
 #include <fuchsia/wlan/device/cpp/fidl.h>
+#include <lib/async-loop/cpp/loop.h>
+#include <lib/async-loop/default.h>
 #include <lib/ddk/debug.h>
 #include <lib/fidl/cpp/binding.h>
 #include <zircon/assert.h>
@@ -72,12 +74,13 @@ wlan_tap::TxArgs ToTxArgs(const wlan_softmac::WlanTxPacket pkt) {
 
 struct WlantapPhy : public fidl::WireServer<fuchsia_wlan_tap::WlantapPhy>, WlantapMac::Listener {
   WlantapPhy(zx_device_t* device, zx::channel user_channel,
-             std::shared_ptr<wlan_tap::WlantapPhyConfig> phy_config, async_dispatcher_t* loop)
+             std::shared_ptr<wlan_tap::WlantapPhyConfig> phy_config)
       : phy_config_(phy_config),
-        loop_(loop),
-        name_("wlan_tap phy " + std::string(phy_config_->name.get())),
+        user_binding_loop_(std::make_unique<async::Loop>(&kAsyncLoopConfigNoAttachToCurrentThread)),
+        name_("wlantap-phy:" + std::string(phy_config_->name.get())),
         user_binding_(fidl::BindServer(
-            loop_, fidl::ServerEnd<fuchsia_wlan_tap::WlantapPhy>(std::move(user_channel)), this,
+            user_binding_loop_->dispatcher(),
+            fidl::ServerEnd<fuchsia_wlan_tap::WlantapPhy>(std::move(user_channel)), this,
             [this](WlantapPhy* server_impl, fidl::UnbindInfo info,
                    fidl::ServerEnd<fuchsia_wlan_tap::WlantapPhy> server_end) {
               auto name = name_;
@@ -99,7 +102,10 @@ struct WlantapPhy : public fidl::WireServer<fuchsia_wlan_tap::WlantapPhy>, Wlant
               device_async_remove(device_);
 
               zxlogf(INFO, "%s: WlantapPhy FIDL server unbind complete.", name.c_str());
-            })) {}
+            })) {
+    zx_status_t status = this->user_binding_loop_->StartThread("wlantap-phy-loop");
+    ZX_ASSERT_MSG(status == ZX_OK, "%s: failed to start FIDL server loop: %d", __func__, status);
+  }
 
   static void DdkUnbind(void* ctx) {
     auto self = static_cast<WlantapPhy*>(ctx);
@@ -127,7 +133,7 @@ struct WlantapPhy : public fidl::WireServer<fuchsia_wlan_tap::WlantapPhy>, Wlant
       std::mutex m;
       std::unique_lock lk(m);
       std::condition_variable cv;
-      ::async::PostTask(self->loop_, [&lk, &cv]() mutable {
+      ::async::PostTask(self->user_binding_loop_->dispatcher(), [&lk, &cv]() mutable {
         lk.unlock();
         cv.notify_one();
       });
@@ -463,7 +469,7 @@ struct WlantapPhy : public fidl::WireServer<fuchsia_wlan_tap::WlantapPhy>, Wlant
 
   zx_device_t* device_;
   const std::shared_ptr<const wlan_tap::WlantapPhyConfig> phy_config_;
-  async_dispatcher_t* loop_;
+  std::unique_ptr<async::Loop> user_binding_loop_;
   std::mutex wlantap_mac_lock_;
   std::unique_ptr<WlantapMac, std::function<void(WlantapMac*)>> wlantap_mac_
       __TA_GUARDED(wlantap_mac_lock_);
@@ -511,10 +517,9 @@ static wlanphy_impl_protocol_ops_t wlanphy_impl_ops = {
 #undef DEV
 
 zx_status_t CreatePhy(zx_device_t* wlantapctl, zx::channel user_channel,
-                      std::shared_ptr<wlan_tap::WlantapPhyConfig> phy_config,
-                      async_dispatcher_t* loop) {
+                      std::shared_ptr<wlan_tap::WlantapPhyConfig> phy_config) {
   zxlogf(INFO, "Creating phy");
-  auto phy = std::make_unique<WlantapPhy>(wlantapctl, std::move(user_channel), phy_config, loop);
+  auto phy = std::make_unique<WlantapPhy>(wlantapctl, std::move(user_channel), phy_config);
   static zx_protocol_device_t device_ops = {.version = DEVICE_OPS_VERSION,
                                             .unbind = &WlantapPhy::DdkUnbind,
                                             .release = &WlantapPhy::DdkRelease};
