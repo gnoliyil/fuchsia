@@ -229,7 +229,7 @@ impl ToTokens for NamedFieldStruct<'_> {
                 async fn from_env(
                     _env: fho::FhoEnvironment<'_>,
                     cmd: Self::Command,
-                ) -> Result<Self> {
+                ) -> Result<Self, fho::macro_deps::Error> {
                     // Allow unused in the event that things don't compile (then
                     // this will mark the error as coming from the span for the name of the
                     // command).

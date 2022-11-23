@@ -1,11 +1,10 @@
 // Copyright 2022 The Fuchsia Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-use anyhow::Result;
 use argh::FromArgs;
 use async_trait::async_trait;
 use ffx_writer::Writer;
-use fho::{FfxMain, FfxTool};
+use fho::{FfxContext, FfxMain, FfxTool, Result};
 use fidl_fuchsia_developer_ffx as ffx;
 use std::rc::Rc;
 
@@ -29,7 +28,11 @@ pub struct EchoTool {
 impl FfxMain for EchoTool {
     async fn main(self) -> Result<()> {
         let text = self.cmd.text.as_deref().unwrap_or("FFX");
-        let echo_out = self.echo_proxy.echo_string(text).await?;
+        let echo_out = self
+            .echo_proxy
+            .echo_string(text)
+            .await
+            .user_message("Error returned from echo service")?;
         self.writer.line(echo_out)?;
         Ok(())
     }

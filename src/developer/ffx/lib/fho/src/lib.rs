@@ -14,6 +14,10 @@ pub use subtool::*;
 // Used for deriving an FFX tool.
 pub use fho_macro::FfxTool;
 
+// Re-expose the Error, Result, and FfxContext types from ffx_command
+// so you don't have to pull both in all the time.
+pub use ffx_command::{Error, FfxContext, Result};
+
 /// Versions of FHO and their extended metadata
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Hash)]
 pub enum FhoVersion {
@@ -56,6 +60,7 @@ impl FhoToolMetadata {
 
 #[doc(hidden)]
 pub mod macro_deps {
+    pub use ffx_command::{Error, Result};
     pub use ffx_command::{FfxCommandLine, ToolRunner};
     pub use ffx_config::EnvironmentContext;
     pub use ffx_core::Injector;

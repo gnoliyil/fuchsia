@@ -2,24 +2,23 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use std::{
-    fs::File, os::unix::process::ExitStatusExt, path::PathBuf, process::ExitStatus, rc::Rc,
-    sync::Arc,
-};
-
-use anyhow::Result;
 use argh::{CommandInfo, FromArgs, SubCommand, SubCommands};
 use async_trait::async_trait;
-use errors::ffx_error;
+use errors::{ffx_bail, ffx_error};
 use ffx_command::{
-    argh_to_ffx_err, DaemonVersionCheck, Ffx, FfxCommandLine, FfxContext, ToolRunner, ToolSuite,
+    argh_to_ffx_err, DaemonVersionCheck, Error, Ffx, FfxCommandLine, FfxContext, Result,
+    ToolRunner, ToolSuite,
 };
 use ffx_config::EnvironmentContext;
 use ffx_core::Injector;
+use ffx_fidl::DaemonError;
 use fidl::endpoints::Proxy;
 use fidl_fuchsia_developer_ffx as ffx_fidl;
 use selectors::{self, VerboseError};
+use std::os::unix::process::ExitStatusExt;
+use std::process::ExitStatus;
 use std::time::Duration;
+use std::{fs::File, path::PathBuf, rc::Rc, sync::Arc};
 
 use crate::FhoToolMetadata;
 
@@ -71,7 +70,7 @@ pub struct FhoEnvironment<'a> {
 }
 
 impl MetadataCmd {
-    fn print(&self, info: &CommandInfo) -> Result<(), ffx_command::Error> {
+    fn print(&self, info: &CommandInfo) -> Result<ExitStatus> {
         let meta = FhoToolMetadata::new(info.name, info.description);
         match &self.output_path {
             Some(path) => serde_json::to_writer_pretty(
@@ -83,7 +82,7 @@ impl MetadataCmd {
             None => serde_json::to_writer_pretty(&std::io::stdout(), &meta),
         }
         .user_message("Failed writing metadata")?;
-        Ok(())
+        Ok(ExitStatus::from_raw(0))
     }
 }
 
@@ -93,14 +92,12 @@ impl<M: FfxMain> ToolRunner for FhoTool<M> {
         M::forces_stdout_log()
     }
 
-    async fn run(self: Box<Self>) -> Result<ExitStatus, ffx_command::Error> {
+    async fn run(self: Box<Self>) -> Result<ExitStatus> {
         match self.command.subcommand {
             FhoHandler::Metadata(metadata) => metadata.print(M::Command::COMMAND),
             FhoHandler::Standalone(tool) => {
                 let cache_path = self.suite.context.get_cache_path()?;
-                let hoist_cache_dir = std::fs::create_dir_all(&cache_path)
-                    .and_then(|_| tempfile::tempdir_in(&cache_path))
-                    .with_user_message(|| format!("Could not create hoist cache root in {}. Do you have permission to write to its parent?", cache_path.display()))?;
+                let hoist_cache_dir = std::fs::create_dir_all(&cache_path).and_then(|_| tempfile::tempdir_in(&cache_path)).with_user_message(|| format!("Could not create hoist cache root in {}. Do you have permission to write to its parent?", cache_path.display()))?;
                 let build_info = self.suite.context.build_info();
                 let injector = self
                     .suite
@@ -117,14 +114,14 @@ impl<M: FfxMain> ToolRunner for FhoTool<M> {
                     injector: &injector,
                 };
                 let main = M::from_env(env, tool).await?;
-                main.main().await.map_err(|err| err.into())
+                main.main().await.map(|_| ExitStatus::from_raw(0))
             }
-        }.map(|_| ExitStatus::from_raw(0))
+        }
     }
 }
 
 impl<M: FfxMain> ToolSuite for FhoSuite<M> {
-    fn from_env(ffx: &Ffx, context: &EnvironmentContext) -> Result<Self, ffx_command::Error> {
+    fn from_env(ffx: &Ffx, context: &EnvironmentContext) -> Result<Self> {
         let ffx = ffx.clone();
         let context = context.clone();
         Ok(Self { ffx: ffx, context: context, _p: Default::default() })
@@ -138,7 +135,7 @@ impl<M: FfxMain> ToolSuite for FhoSuite<M> {
         &self,
         cmd: &FfxCommandLine,
         args: &[&str],
-    ) -> Result<Option<Box<dyn ToolRunner>>, ffx_command::Error> {
+    ) -> Result<Option<Box<dyn ToolRunner>>> {
         let found = FhoTool {
             suite: self.clone(),
             command: ToolCommand::<M>::from_args(&Vec::from_iter(cmd.cmd_iter()), args)
@@ -147,11 +144,7 @@ impl<M: FfxMain> ToolSuite for FhoSuite<M> {
         Ok(Some(Box::new(found)))
     }
 
-    fn redact_arg_values(
-        &self,
-        cmd: &FfxCommandLine,
-        args: &[&str],
-    ) -> Result<Vec<String>, ffx_command::Error> {
+    fn redact_arg_values(&self, cmd: &FfxCommandLine, args: &[&str]) -> Result<Vec<String>> {
         let cmd_vec = Vec::from_iter(cmd.cmd_iter());
         ToolCommand::<M>::redact_arg_values(&cmd_vec, args).map_err(argh_to_ffx_err)
     }
@@ -174,7 +167,7 @@ pub trait FfxMain: FfxTool {
     /// Executes the tool. This is intended to be invoked by the user in main.
     async fn execute_tool() {
         let result = ffx_command::run::<FhoSuite<Self>>().await;
-        ffx_command::exit(result).await
+        ffx_command::exit(result).await;
     }
 }
 
@@ -249,10 +242,10 @@ impl<T: AsRef<str>> CheckEnv for AvailabilityFlag<T> {
         if ffx_config::get(flag).await.unwrap_or(false) {
             Ok(())
         } else {
-            errors::ffx_bail!(
+            ffx_bail!(
                 "This is an experimental subcommand.  To enable this subcommand run 'ffx config set {} true'",
                 flag
-            )
+            );
         }
     }
 }
@@ -303,8 +296,10 @@ where
     P::Protocol: fidl::endpoints::DiscoverableProtocolMarker,
 {
     async fn try_from_env(env: &FhoEnvironment<'_>) -> Result<Self> {
-        let (proxy, server_end) = fidl::endpoints::create_proxy::<P::Protocol>()?;
-        let _ = selectors::parse_selector::<VerboseError>(S::SELECTOR)?;
+        let (proxy, server_end) = fidl::endpoints::create_proxy::<P::Protocol>()
+            .with_user_message(|| format!("Failed creating proxy for selector {}", S::SELECTOR))?;
+        let _ = selectors::parse_selector::<VerboseError>(S::SELECTOR)
+            .with_bug_context(|| format!("Parsing selector {}", S::SELECTOR))?;
         let retry_count = 1;
         let mut tries = 0;
         // TODO(fxbug.dev/113143): Remove explicit retries/timeouts here so they can be
@@ -352,28 +347,16 @@ impl<P: Clone> std::ops::Deref for DaemonProtocol<P> {
     }
 }
 
-#[async_trait(?Send)]
-impl<P: Proxy + Clone> TryFromEnv for DaemonProtocol<P>
-where
-    P::Protocol: fidl::endpoints::DiscoverableProtocolMarker,
-{
-    async fn try_from_env(env: &FhoEnvironment<'_>) -> Result<Self> {
-        let (proxy, server_end) = fidl::endpoints::create_proxy::<P::Protocol>()?;
-        let daemon = env.injector.daemon_factory().await?;
-        let svc_name = <P::Protocol as fidl::endpoints::DiscoverableProtocolMarker>::PROTOCOL_NAME;
-
-        daemon.connect_to_protocol(svc_name, server_end.into_channel()).await?.map_err(
-            |e| -> anyhow::Error {
-                match e {
-                    ffx_fidl::DaemonError::ProtocolNotFound => ffx_error!(format!(
-                        "The daemon protocol '{svc_name}' did not match any protocols on the daemon
+fn map_daemon_error(svc_name: &str, err: DaemonError) -> Error {
+    match err {
+        DaemonError::ProtocolNotFound => ffx_error!(
+            "The daemon protocol '{svc_name}' did not match any protocols on the daemon
 If you are not developing this plugin or the protocol it connects to, then this is a bug
 
 Please report it at http://fxbug.dev/new/ffx+User+Bug."
-                    ))
-                    .into(),
-                    ffx_fidl::DaemonError::ProtocolOpenError => ffx_error!(format!(
-                        "The daemon protocol '{svc_name}' failed to open on the daemon.
+        ),
+        DaemonError::ProtocolOpenError => ffx_error!(
+            "The daemon protocol '{svc_name}' failed to open on the daemon.
 
 If you are developing the protocol, there may be an internal failure when invoking the start
 function. See the ffx.daemon.log for details at `ffx config get log.dir -p sub`.
@@ -381,9 +364,8 @@ function. See the ffx.daemon.log for details at `ffx config get log.dir -p sub`.
 If you are NOT developing this plugin or the protocol it connects to, then this is a bug.
 
 Please report it at http://fxbug.dev/new/ffx+User+Bug."
-                    ))
-                    .into(),
-                    unexpected => ffx_error!(format!(
+        ),
+        unexpected => ffx_error!(
 "While attempting to open the daemon protocol '{svc_name}', received an unexpected error:
 
 {unexpected:?}
@@ -391,40 +373,56 @@ Please report it at http://fxbug.dev/new/ffx+User+Bug."
 This is not intended behavior and is a bug.
 Please report it at http://fxbug.dev/new/ffx+User+Bug."
 
-                                    ))
-                    .into(),
-                }
-            },
-        )?;
-        Ok(DaemonProtocol { proxy })
+        ),
+    }
+    .into()
+}
+
+#[async_trait(?Send)]
+impl<P: Proxy + Clone> TryFromEnv for DaemonProtocol<P>
+where
+    P::Protocol: fidl::endpoints::DiscoverableProtocolMarker,
+{
+    async fn try_from_env(env: &FhoEnvironment<'_>) -> Result<Self> {
+        let svc_name = <P::Protocol as fidl::endpoints::DiscoverableProtocolMarker>::PROTOCOL_NAME;
+        let (proxy, server_end) = fidl::endpoints::create_proxy::<P::Protocol>()
+            .with_user_message(|| format!("Failed creating proxy for service {}", svc_name))?;
+        let daemon = env.injector.daemon_factory().await?;
+
+        daemon
+            .connect_to_protocol(svc_name, server_end.into_channel())
+            .await
+            .bug_context("Connecting to protocol")?
+            .map_err(|err| map_daemon_error(svc_name, err))
+            .map(|_| DaemonProtocol { proxy })
     }
 }
 
 #[async_trait(?Send)]
 impl TryFromEnv for ffx_fidl::DaemonProxy {
     async fn try_from_env(env: &FhoEnvironment<'_>) -> Result<Self> {
-        env.injector.daemon_factory().await
+        env.injector.daemon_factory().await.user_message("Failed to create daemon proxy")
     }
 }
 
 #[async_trait(?Send)]
 impl TryFromEnv for ffx_fidl::TargetProxy {
     async fn try_from_env(env: &FhoEnvironment<'_>) -> Result<Self> {
-        env.injector.target_factory().await
+        env.injector.target_factory().await.user_message("Failed to create target proxy")
     }
 }
 
 #[async_trait(?Send)]
 impl TryFromEnv for ffx_fidl::FastbootProxy {
     async fn try_from_env(env: &FhoEnvironment<'_>) -> Result<Self> {
-        env.injector.fastboot_factory().await
+        env.injector.fastboot_factory().await.user_message("Failed to create fastboot proxy")
     }
 }
 
 #[async_trait(?Send)]
 impl TryFromEnv for ffx_writer::Writer {
     async fn try_from_env(env: &FhoEnvironment<'_>) -> Result<Self> {
-        env.injector.writer().await
+        env.injector.writer().await.user_message("Failed to create writer")
     }
 }
 
@@ -470,7 +468,7 @@ mod tests {
             if self.0 {
                 Ok(())
             } else {
-                Err(anyhow::anyhow!("SimpleCheck was false"))
+                Err(anyhow::anyhow!("SimpleCheck was false").into())
             }
         }
     }

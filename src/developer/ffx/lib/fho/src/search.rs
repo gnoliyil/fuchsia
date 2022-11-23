@@ -2,20 +2,18 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use anyhow::Result;
-use ffx_command::FfxContext;
+use argh::FromArgs;
+use ffx_command::{
+    argh_to_ffx_err, Ffx, FfxCommandLine, FfxToolInfo, FfxToolSource, ToolRunner, ToolSuite,
+};
+use ffx_command::{FfxContext, Result};
+use ffx_config::EnvironmentContext;
 use std::{
     collections::HashMap,
     fs::File,
     path::{Path, PathBuf},
     process::ExitStatus,
 };
-
-use argh::FromArgs;
-use ffx_command::{
-    argh_to_ffx_err, Ffx, FfxCommandLine, FfxToolInfo, FfxToolSource, ToolRunner, ToolSuite,
-};
-use ffx_config::EnvironmentContext;
 
 use crate::{FhoToolMetadata, FhoVersion};
 
@@ -39,7 +37,7 @@ impl ToolRunner for ExternalSubTool {
         false
     }
 
-    async fn run(self: Box<Self>) -> Result<ExitStatus, ffx_command::Error> {
+    async fn run(self: Box<Self>) -> Result<ExitStatus> {
         // fho v0: Run the exact same command, just with the first argument replaced with the 'real' tool
         // location.
         std::process::Command::new(&self.path)
@@ -55,10 +53,13 @@ impl ExternalSubToolSuite {
     /// Load subtools from `subtool_paths` and use `context` for the environment context.
     /// This is used both by the main implementation of [`ExternalSubToolSuite::from_env`] and
     /// in tests to redirect to different subtool paths.
-    fn with_tools_from(context: EnvironmentContext, subtool_paths: &[impl AsRef<Path>]) -> Self {
+    fn with_tools_from(
+        context: EnvironmentContext,
+        subtool_paths: &[impl AsRef<Path>],
+    ) -> Result<Self> {
         let available_commands =
             find_tools(subtool_paths).map(|tool| (tool.name.to_owned(), tool)).collect();
-        Self { context, available_commands }
+        Ok(Self { context, available_commands })
     }
 
     fn extract_external_subtool(
@@ -82,8 +83,8 @@ impl ExternalSubToolSuite {
 
 #[async_trait::async_trait(?Send)]
 impl ToolSuite for ExternalSubToolSuite {
-    fn from_env(_app: &Ffx, env: &EnvironmentContext) -> Result<Self, ffx_command::Error> {
-        Ok(Self::with_tools_from(env.clone(), &env.subtool_paths()))
+    fn from_env(_app: &Ffx, env: &EnvironmentContext) -> Result<Self> {
+        Self::with_tools_from(env.clone(), &env.subtool_paths())
     }
 
     fn global_command_list() -> &'static [&'static argh::CommandInfo] {
@@ -98,7 +99,7 @@ impl ToolSuite for ExternalSubToolSuite {
         &self,
         ffx_cmd: &FfxCommandLine,
         args: &[&str],
-    ) -> Result<Option<Box<(dyn ToolRunner + 'static)>>, ffx_command::Error> {
+    ) -> Result<Option<Box<(dyn ToolRunner + 'static)>>> {
         let cmd = match self.extract_external_subtool(ffx_cmd, args) {
             Some(c) => c,
             None => return Ok(None),
@@ -106,11 +107,7 @@ impl ToolSuite for ExternalSubToolSuite {
         Ok(Some(Box::new(cmd)))
     }
 
-    fn redact_arg_values(
-        &self,
-        ffx_cmd: &FfxCommandLine,
-        args: &[&str],
-    ) -> Result<Vec<String>, ffx_command::Error> {
+    fn redact_arg_values(&self, ffx_cmd: &FfxCommandLine, args: &[&str]) -> Result<Vec<String>> {
         if self.extract_external_subtool(ffx_cmd, args).is_none() {
             return Ok(Vec::new());
         }
@@ -318,7 +315,8 @@ mod tests {
         );
 
         let suite =
-            ExternalSubToolSuite::with_tools_from(EnvironmentContext::default(), &[tempdir.path()]);
+            ExternalSubToolSuite::with_tools_from(EnvironmentContext::default(), &[tempdir.path()])
+                .expect("subtool suite scanning should succeed");
 
         assert!(
             ExternalSubToolSuite::global_command_list().is_empty(),

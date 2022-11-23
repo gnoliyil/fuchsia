@@ -1,7 +1,7 @@
 // Copyright 2022 The Fuchsia Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-use anyhow::Result;
+
 use async_trait::async_trait;
 use ffx_core::Injector;
 use ffx_writer::Writer;
@@ -20,7 +20,7 @@ macro_rules! factory_func {
         pub fn $func<F, Fut>(mut self, closure: F) -> Self
         where
             F: Fn() -> Fut + 'static,
-            Fut: Future<Output = Result<$output>> + 'static,
+            Fut: Future<Output = anyhow::Result<$output>> + 'static,
         {
             self.inner.$func = Box::new(move || Box::pin(closure()));
             self
@@ -55,14 +55,17 @@ impl FakeInjectorBuilder {
 }
 
 pub struct FakeInjector {
-    daemon_factory_closure: Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<DaemonProxy>>>>>,
+    daemon_factory_closure:
+        Box<dyn Fn() -> Pin<Box<dyn Future<Output = anyhow::Result<DaemonProxy>>>>>,
     remote_factory_closure:
-        Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<RemoteControlProxy>>>>>,
-    fastboot_factory_closure: Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<FastbootProxy>>>>>,
-    target_factory_closure: Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<TargetProxy>>>>>,
+        Box<dyn Fn() -> Pin<Box<dyn Future<Output = anyhow::Result<RemoteControlProxy>>>>>,
+    fastboot_factory_closure:
+        Box<dyn Fn() -> Pin<Box<dyn Future<Output = anyhow::Result<FastbootProxy>>>>>,
+    target_factory_closure:
+        Box<dyn Fn() -> Pin<Box<dyn Future<Output = anyhow::Result<TargetProxy>>>>>,
     is_experiment_closure: Box<dyn Fn(&str) -> Pin<Box<dyn Future<Output = bool>>>>,
-    build_info_closure: Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<VersionInfo>>>>>,
-    writer_closure: Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<Writer>>>>>,
+    build_info_closure: Box<dyn Fn() -> Pin<Box<dyn Future<Output = anyhow::Result<VersionInfo>>>>>,
+    writer_closure: Box<dyn Fn() -> Pin<Box<dyn Future<Output = anyhow::Result<Writer>>>>>,
 }
 
 impl Default for FakeInjector {
@@ -81,19 +84,19 @@ impl Default for FakeInjector {
 
 #[async_trait(?Send)]
 impl Injector for FakeInjector {
-    async fn daemon_factory(&self) -> Result<DaemonProxy> {
+    async fn daemon_factory(&self) -> anyhow::Result<DaemonProxy> {
         (self.daemon_factory_closure)().await
     }
 
-    async fn remote_factory(&self) -> Result<RemoteControlProxy> {
+    async fn remote_factory(&self) -> anyhow::Result<RemoteControlProxy> {
         (self.remote_factory_closure)().await
     }
 
-    async fn fastboot_factory(&self) -> Result<FastbootProxy> {
+    async fn fastboot_factory(&self) -> anyhow::Result<FastbootProxy> {
         (self.fastboot_factory_closure)().await
     }
 
-    async fn target_factory(&self) -> Result<TargetProxy> {
+    async fn target_factory(&self) -> anyhow::Result<TargetProxy> {
         (self.target_factory_closure)().await
     }
 
@@ -101,11 +104,11 @@ impl Injector for FakeInjector {
         (self.is_experiment_closure)(key).await
     }
 
-    async fn build_info(&self) -> Result<VersionInfo> {
+    async fn build_info(&self) -> anyhow::Result<VersionInfo> {
         (self.build_info_closure)().await
     }
 
-    async fn writer(&self) -> Result<Writer> {
+    async fn writer(&self) -> anyhow::Result<Writer> {
         (self.writer_closure)().await
     }
 }
