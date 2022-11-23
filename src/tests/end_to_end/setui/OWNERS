@@ -1,6 +1,6 @@
-cfukuhara@google.com
+include /src/settings/OWNERS
+
 liyl@google.com
-paulfaria@google.com
-sijiec@google.com
-wxyz@google.com
 yuanzhi@google.com
+
+# COMPONENT: SettingsSetupUI
