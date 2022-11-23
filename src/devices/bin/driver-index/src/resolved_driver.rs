@@ -174,18 +174,10 @@ impl ResolvedDriver {
     }
 
     pub fn create_driver_info(&self) -> fdd::DriverInfo {
-        let bind_rules = match &self.bind_rules {
-            DecodedRules::Normal(_) => {
-                Some(fdd::BindRulesBytecode::BytecodeV2(self.bind_bytecode.clone()))
-            }
-            // TODO(fxbug.dev/85651): Support composite bytecode in DriverInfo.
-            DecodedRules::Composite(_) => None,
-        };
-
         fdd::DriverInfo {
             url: Some(self.component_url.clone().to_string()),
             libname: Some(self.get_libname()),
-            bind_rules: bind_rules,
+            bind_rules: Some(fdd::BindRulesBytecode::BytecodeV2(self.bind_bytecode.clone())),
             package_type: fdi::DriverPackageType::from_primitive(self.package_type as u8),
             package_hash: self.package_hash,
             device_categories: Some(self.device_categories.clone()),

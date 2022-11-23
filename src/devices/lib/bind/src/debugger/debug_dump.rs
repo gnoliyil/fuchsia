@@ -4,20 +4,58 @@
 
 use crate::compiler::symbol_table::{get_deprecated_key_identifiers, Symbol};
 use crate::interpreter::common::BytecodeError;
-use crate::interpreter::decode_bind_rules::DecodedRules;
+use crate::interpreter::decode_bind_rules::{DecodedCompositeBindRules, DecodedRules, Node};
 use crate::interpreter::instruction_decoder::{DecodedCondition, DecodedInstruction};
+use crate::parser::common::NodeType;
 
-// TODO(fxb/93365): Print the decoded instructions in the composite bytecode.
+fn dump_node(
+    node: &Node,
+    node_type: NodeType,
+    decoded_rules: &DecodedCompositeBindRules,
+) -> String {
+    let node_name = decoded_rules
+        .symbol_table
+        .get(&node.name_id)
+        .map_or("N/A".to_string(), |name| name.clone());
+    let mut node_dump = match node_type {
+        NodeType::Primary => format!("Node (primary): {}", node_name),
+        NodeType::Additional => format!("Node: {}", node_name),
+        NodeType::Optional => format!("Node (optional): {}", node_name),
+    };
+    node_dump.push_str(&dump_instructions(node.decoded_instructions.clone()));
+    node_dump.push_str("\n");
+    node_dump
+}
+
 pub fn dump_bind_rules(bytecode: Vec<u8>) -> Result<String, BytecodeError> {
     match DecodedRules::new(bytecode.clone())? {
         DecodedRules::Normal(decoded_rules) => {
             Ok(dump_instructions(decoded_rules.decoded_instructions))
         }
-        DecodedRules::Composite(_) => Ok(bytecode
-            .into_iter()
-            .map(|byte| format!("{:#04x}", byte))
-            .collect::<Vec<String>>()
-            .join(", ")),
+        DecodedRules::Composite(rules) => {
+            let mut node_dump = dump_node(&rules.primary_node, NodeType::Primary, &rules);
+
+            if !rules.additional_nodes.is_empty() {
+                let additional_nodes_dump = rules
+                    .additional_nodes
+                    .iter()
+                    .map(|node| dump_node(node, NodeType::Additional, &rules))
+                    .collect::<Vec<String>>()
+                    .concat();
+                node_dump.push_str(&additional_nodes_dump);
+            }
+
+            if !rules.optional_nodes.is_empty() {
+                let optional_nodes_dump = rules
+                    .optional_nodes
+                    .iter()
+                    .map(|node| dump_node(&node, NodeType::Optional, &rules))
+                    .collect::<Vec<String>>()
+                    .concat();
+                node_dump.push_str(&optional_nodes_dump);
+            }
+            Ok(node_dump)
+        }
     }
 }
 
@@ -101,31 +139,33 @@ mod test {
 
     #[test]
     fn test_composite_bytecode_print() {
-        let mut bytecode: Vec<u8> = BIND_HEADER.to_vec();
-        bytecode.push(BYTECODE_DISABLE_DEBUG);
-        append_section_header(&mut bytecode, SYMB_MAGIC_NUM, 9);
+        let bytecode = vec![
+            0x42, 0x49, 0x4e, 0x44, 0x02, 0x00, 0x00, 0x00, // BIND header
+            0x00, // debug_flag byte
+            0x53, 0x59, 0x4e, 0x42, 0x28, 0x00, 0x00, 0x00, // SYMB header
+            0x01, 0x00, 0x00, 0x00, // "wallcreeper" ID
+            0x77, 0x61, 0x6c, 0x6c, 0x63, 0x72, 0x65, 0x65, // "wallcree"
+            0x70, 0x65, 0x72, 0x00, // "per"
+            0x02, 0x00, 0x00, 0x00, // "wagtail" ID
+            0x77, 0x61, 0x67, 0x74, 0x61, 0x69, 0x6c, 0x00, // "wagtail"
+            0x03, 0x00, 0x00, 0x00, // "redpoll" ID
+            0x72, 0x65, 0x64, 0x70, 0x6f, 0x6c, 0x6c, 0x00, // "redpoll"
+            0x43, 0x4f, 0x4d, 0x50, 0x2d, 0x00, 0x00, 0x00, // COMP header
+            0x01, 0x00, 0x00, 0x00, // Device name ID
+            0x50, 0x02, 0x00, 0x00, 0x00, 0x0b, 0x00, 0x00, 0x00, // Primary node header
+            0x01, 0x01, 0x01, 0x00, 0x00, 0x00, // BIND_PROTOCOL ==
+            0x01, 0x01, 0x00, 0x00, 0x00, // 1
+            0x51, 0x03, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x00, 0x00, // Node header
+            0x02, 0x01, 0x01, 0x00, 0x00, 0x00, // BIND_PROTOCOL !=
+            0x01, 0x02, 0x00, 0x00, 0x00, // 2
+            0x30, // abort
+        ];
 
-        let device_name: [u8; 5] = [0x49, 0x42, 0x49, 0x53, 0]; // "IBIS"
-        bytecode.extend_from_slice(&[1, 0, 0, 0]);
-        bytecode.extend_from_slice(&device_name);
-
-        append_section_header(&mut bytecode, COMPOSITE_MAGIC_NUM, 15);
-
-        // Device name.
-        bytecode.extend_from_slice(&[1, 0, 0, 0]);
-
-        bytecode.push(RawNodeType::Primary as u8);
-        bytecode.extend_from_slice(&[1, 0, 0, 0]);
-        bytecode.extend_from_slice(&[2, 0, 0, 0]);
-
-        let node_inst = [0x30, 0x20];
-        bytecode.extend_from_slice(&node_inst);
-
-        let expected_dump = "0x42, 0x49, 0x4e, 0x44, 0x02, 0x00, 0x00, 0x00, 0x00, 0x53, \
-        0x59, 0x4e, 0x42, 0x09, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, \
-        0x49, 0x42, 0x49, 0x53, 0x00, 0x43, 0x4f, 0x4d, 0x50, 0x0f, 0x00, \
-        0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x50, 0x01, 0x00, 0x00, 0x00, 0x02, \
-        0x00, 0x00, 0x00, 0x30, 0x20";
+        let expected_dump = "Node (primary): wagtail\n  \
+            fuchsia.BIND_PROTOCOL == 1\n\
+            Node: redpoll\n  \
+            fuchsia.BIND_PROTOCOL != 2\n  \
+            Abort\n";
         assert_eq!(expected_dump.to_string(), dump_bind_rules(bytecode).unwrap());
     }
 }
