@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 use {
-    crate::{send_scan_complete, ApAdvertisement},
+    crate::{send_scan_complete, ApAdvertisement, ApAdvertisementMode},
     fidl_fuchsia_wlan_tap as wlantap, fuchsia_zircon as zx,
     paste::paste,
     wlan_common::{
@@ -20,7 +20,10 @@ pub fn start_scan_handler<'a>(
         Ok(ap_advertisements) => {
             Box::new(move |&wlantap::StartScanArgs { wlan_softmac_id: _, scan_id }| {
                 for ap_advertisement in &ap_advertisements {
-                    ap_advertisement.send(phy).expect("failed to send beacon or probe response");
+                    ap_advertisement.send(phy).expect(match ap_advertisement.mode() {
+                        ApAdvertisementMode::Beacon => "failed to send beacon",
+                        ApAdvertisementMode::ProbeResponse => "failed to send probe response",
+                    });
                 }
                 send_scan_complete(scan_id, zx::Status::OK.into_raw(), &phy)
                     .expect("failed to send scan complete");
