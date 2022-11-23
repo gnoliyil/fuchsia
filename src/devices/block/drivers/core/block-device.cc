@@ -7,8 +7,14 @@
 #include <fuchsia/hardware/block/partition/cpp/banjo.h>
 #include <lib/fidl-utils/bind.h>
 #include <lib/operation/block.h>
+#include <lib/zx/profile.h>
+#include <lib/zx/thread.h>
+#include <threads.h>
+#include <zircon/threads.h>
 
 #include <storage-metrics/block-metrics.h>
+
+#include "src/devices/block/drivers/core/server.h"
 
 zx_status_t BlockDevice::DdkGetProtocol(uint32_t proto_id, void* out_protocol) {
   switch (proto_id) {
@@ -203,13 +209,70 @@ void BlockDevice::GetStats(GetStatsRequestView request, GetStatsCompleter::Sync&
 
 void BlockDevice::OpenSession(OpenSessionRequestView request,
                               OpenSessionCompleter::Sync& completer) {
-  auto manager = std::make_unique<Manager>();
-  if (zx_status_t status = manager->StartServer(zxdev(), &self_protocol_); status != ZX_OK) {
-    request->session.Close(status);
+  zx::result server = Server::Create(&self_protocol_);
+  if (server.is_error()) {
+    request->session.Close(server.error_value());
     return;
   }
-  fidl::BindServer(fdf::Dispatcher::GetCurrent()->async_dispatcher(), std::move(request->session),
-                   std::move(manager));
+
+  // TODO(https://fxbug.dev/115950): Avoid running a thread per session; make `Server` async
+  // instead.
+  thrd_t thread;
+  if (thrd_create_with_name(
+          &thread,
+          +[](void* arg) {
+            __UNUSED zx_status_t status = reinterpret_cast<Server*>(arg)->Serve();
+            return 0;
+          },
+          server.value().get(), "block_server") != thrd_success) {
+    request->session.Close(ZX_ERR_NO_MEMORY);
+    return;
+  }
+
+  // Set a scheduling deadline profile for the block_server thread.
+  // This is required in order to service the blobfs-pager-thread, which is on a deadline profile.
+  // This will no longer be needed once we have the ability to propagate deadlines. Until then, we
+  // need to set deadline profiles for all threads that the blobfs-pager-thread interacts with in
+  // order to service page requests.
+  //
+  // Also note that this will apply to block_server threads spawned to service each block client
+  // (in the typical case, we have two - blobfs and minfs). The capacity of 1ms is chosen so as to
+  // accommodate most cases without throttling the thread. The desired capacity was 50us, but some
+  // tests that use a large ramdisk require a larger capacity. In the average case though on a real
+  // device, the block_server thread runs for less than 50us. 1ms provides us with a generous
+  // leeway, without hurting performance in the typical case - a thread is not penalized for not
+  // using its full capacity.
+  //
+  // TODO(https://fxbug.dev/40858): Migrate to the role-based API when available, instead of hard
+  // coding parameters.
+  const zx_duration_t capacity = ZX_MSEC(1);
+  const zx_duration_t deadline = ZX_MSEC(2);
+  const zx_duration_t period = deadline;
+
+  [&]() {
+    zx::profile profile;
+    if (zx_status_t status = device_get_deadline_profile(zxdev(), capacity, deadline, period,
+                                                         "driver_host:pdev:05:00:f:block_server",
+                                                         profile.reset_and_get_address());
+        status != ZX_OK) {
+      zxlogf(WARNING, "block: Failed to get deadline profile: %s\n", zx_status_get_string(status));
+      return;
+    }
+    if (zx_status_t status =
+            zx::unowned_thread(thrd_get_zx_handle(thread))->set_profile(profile, 0);
+        status != ZX_OK) {
+      zxlogf(WARNING, "block: Failed to set deadline profile: %s\n", zx_status_get_string(status));
+      return;
+    }
+  }();
+
+  fidl::BindServer(
+      fdf::Dispatcher::GetCurrent()->async_dispatcher(), std::move(request->session),
+      std::move(server.value()),
+      [thread](Server* server, fidl::UnbindInfo, fidl::ServerEnd<fuchsia_hardware_block::Session>) {
+        server->Close();
+        thrd_join(thread, nullptr);
+      });
 }
 
 void BlockDevice::RebindDevice(RebindDeviceCompleter::Sync& completer) {

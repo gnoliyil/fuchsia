@@ -160,6 +160,16 @@ zx::result<vmoid_t> Server::AttachVmo(zx::vmo vmo) {
   return vmoid;
 }
 
+void Server::AttachVmo(AttachVmoRequestView request, AttachVmoCompleter::Sync& completer) {
+  zx::result vmoid = AttachVmo(std::move(request->vmo));
+  if (vmoid.is_error()) {
+    return completer.ReplyError(vmoid.error_value());
+  }
+  completer.ReplySuccess({
+      .id = vmoid.value(),
+  });
+}
+
 void Server::TxnEnd() {
   fbl::AutoLock lock(&server_lock_);
   // N.B. If pending_count_ hits zero, after dropping the lock the instance of Server can be
@@ -169,16 +179,16 @@ void Server::TxnEnd() {
   }
 }
 
-zx_status_t Server::Create(ddk::BlockProtocolClient* bp, std::unique_ptr<Server>* out) {
+zx::result<std::unique_ptr<Server>> Server::Create(ddk::BlockProtocolClient* bp) {
   fbl::AllocChecker ac;
   std::unique_ptr<Server> bs(new (&ac) Server(bp));
   if (!ac.check()) {
-    return ZX_ERR_NO_MEMORY;
+    return zx::error(ZX_ERR_NO_MEMORY);
   }
 
   if (zx_status_t status = fzl::create_fifo(BLOCK_FIFO_MAX_DEPTH, 0, &bs->fifo_peer_, &bs->fifo_);
       status != ZX_OK) {
-    return status;
+    return zx::error(status);
   }
 
   for (size_t i = 0; i < std::size(bs->groups_); i++) {
@@ -189,8 +199,7 @@ zx_status_t Server::Create(ddk::BlockProtocolClient* bp, std::unique_ptr<Server>
 
   // TODO(fxbug.dev/31467): Allocate BlockMsg arena based on block_op_size_.
 
-  *out = std::move(bs);
-  return ZX_OK;
+  return zx::ok(std::move(bs));
 }
 
 zx::result<zx::fifo> Server::GetFifo() {
@@ -201,6 +210,14 @@ zx::result<zx::fifo> Server::GetFifo() {
   zx::fifo fifo;
   zx_status_t status = fifo_peer_.get().duplicate(rights, &fifo);
   return zx::make_result(status, std::move(fifo));
+}
+
+void Server::GetFifo(GetFifoCompleter::Sync& completer) {
+  zx::result fifo = GetFifo();
+  if (fifo.is_error()) {
+    return completer.ReplyError(fifo.error_value());
+  }
+  completer.ReplySuccess(std::move(fifo.value()));
 }
 
 zx_status_t Server::ProcessReadWriteRequest(block_fifo_request_t* request) {
@@ -455,17 +472,26 @@ zx_status_t Server::Serve() {
   }
 }
 
+void Server::Close() {
+  Shutdown();
+  fbl::AutoLock lock(&server_lock_);
+  while (pending_count_ > 0)
+    condition_.Wait(&server_lock_);
+}
+
+void Server::Close(CloseCompleter::Sync& completer) {
+  Close();
+  completer.ReplySuccess();
+  completer.Close(ZX_OK);
+}
+
 Server::Server(ddk::BlockProtocolClient* bp)
     : bp_(bp), block_op_size_(0), pending_count_(0), last_id_(BLOCK_VMOID_INVALID + 1) {
   size_t block_op_size;
   bp->Query(&info_, &block_op_size);
 }
 
-Server::~Server() {
-  fbl::AutoLock lock(&server_lock_);
-  while (pending_count_ > 0)
-    condition_.Wait(&server_lock_);
-}
+Server::~Server() { Close(); }
 
 void Server::Shutdown() { fifo_.signal(0, kSignalFifoTerminate); }
 

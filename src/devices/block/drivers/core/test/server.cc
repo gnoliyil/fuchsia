@@ -21,7 +21,7 @@ class ServerTestFixture : public zxtest::Test {
   ServerTestFixture() : client_(blkdev_.proto()) {}
 
  protected:
-  void SetUp() override {}
+  void SetUp() override;
   void TearDown() override;
 
   void CreateThread();
@@ -34,28 +34,26 @@ class ServerTestFixture : public zxtest::Test {
   std::unique_ptr<Server> server_;
 
  private:
-  static int RunServer(void* arg);
-
   sync_completion_t thread_started_;
   sync_completion_t thread_exited_;
-  bool is_thread_running_ = false;
   std::thread thread_;
 };
 
-void ServerTestFixture::TearDown() { ASSERT_FALSE(is_thread_running_); }
-
-int ServerTestFixture::RunServer(void* arg) {
-  ServerTestFixture* fix = static_cast<ServerTestFixture*>(arg);
-  sync_completion_signal(&fix->thread_started_);
-  fix->server_->Serve();
-  sync_completion_signal(&fix->thread_exited_);
-  return 0;
+void ServerTestFixture::SetUp() {
+  zx::result server = Server::Create(&client_);
+  ASSERT_OK(server);
+  server_ = std::move(server.value());
 }
 
+void ServerTestFixture::TearDown() { ASSERT_FALSE(thread_.joinable()); }
+
 void ServerTestFixture::CreateThread() {
-  std::thread th(RunServer, this);
-  thread_ = std::move(th);
-  is_thread_running_ = true;
+  thread_ = std::thread([this]() {
+    sync_completion_signal(&thread_started_);
+    __UNUSED zx_status_t status = server_->Serve();
+    sync_completion_signal(&thread_exited_);
+    return 0;
+  });
 }
 
 void ServerTestFixture::WaitForThreadStart() {
@@ -66,16 +64,11 @@ void ServerTestFixture::WaitForThreadExit() {
   ASSERT_OK(sync_completion_wait(&thread_exited_, ZX_SEC(5)));
 }
 
-void ServerTestFixture::JoinThread() {
-  thread_.join();
-  is_thread_running_ = false;
-}
+void ServerTestFixture::JoinThread() { thread_.join(); }
 
-TEST_F(ServerTestFixture, CreateServer) { ASSERT_OK(Server::Create(&client_, &server_)); }
+TEST_F(ServerTestFixture, CreateServer) {}
 
 TEST_F(ServerTestFixture, StartServer) {
-  ASSERT_OK(Server::Create(&client_, &server_));
-
   CreateThread();
   WaitForThreadStart();
 
@@ -88,7 +81,6 @@ TEST_F(ServerTestFixture, StartServer) {
 }
 
 TEST_F(ServerTestFixture, SplitRequestAfterFailedRequestReturnsFailure) {
-  ASSERT_OK(Server::Create(&client_, &server_));
   zx::result fifo_result = server_->GetFifo();
   ASSERT_OK(fifo_result);
   fzl::fifo<block_fifo_request_t, block_fifo_response_t> fifo(std::move(fifo_result.value()));

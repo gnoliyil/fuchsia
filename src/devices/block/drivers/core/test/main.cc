@@ -5,51 +5,64 @@
 #include <fuchsia/hardware/block/c/banjo.h>
 #include <lib/async-loop/cpp/loop.h>
 #include <lib/async-loop/default.h>
+#include <lib/fit/defer.h>
 #include <string.h>
 #include <unistd.h>
 
 #include <zxtest/zxtest.h>
 
 #include "block-device.h"
-#include "manager.h"
+#include "server.h"
 #include "src/devices/testing/mock-ddk/mock-device.h"
 #include "test/stub-block-device.h"
 
 namespace {
 
-TEST(ManagerTest, StartServer) {
+TEST(ServerTest, Create) {
   StubBlockDevice blkdev;
   ddk::BlockProtocolClient client(blkdev.proto());
-  Manager manager;
-  ASSERT_OK(manager.StartServer(nullptr, &client));
-  manager.CloseFifoServer();
+  zx::result server = Server::Create(&client);
+  ASSERT_OK(server);
+  std::thread thread([&server = server.value()]() { server->Serve(); });
+  auto join = fit::defer([&server = server.value(), &thread]() {
+    server->Close();
+    thread.join();
+  });
 }
 
-TEST(ManagerTest, AttachVmo) {
+TEST(ServerTest, AttachVmo) {
   StubBlockDevice blkdev;
   ddk::BlockProtocolClient client(blkdev.proto());
-  Manager manager;
-  ASSERT_OK(manager.StartServer(nullptr, &client));
+  zx::result server = Server::Create(&client);
+  ASSERT_OK(server);
+  std::thread thread([&server = server.value()]() { server->Serve(); });
+  auto join = fit::defer([&server = server.value(), &thread]() {
+    server->Close();
+    thread.join();
+  });
 
   zx::vmo vmo;
   ASSERT_OK(zx::vmo::create(8192, 0, &vmo));
 
-  zx::result vmoid = manager.AttachVmo(std::move(vmo));
+  zx::result vmoid = server.value()->AttachVmo(std::move(vmo));
   ASSERT_OK(vmoid);
-
-  manager.CloseFifoServer();
 }
 
-TEST(ManagerTest, CloseVMO) {
+TEST(ServerTest, CloseVMO) {
   StubBlockDevice blkdev;
   ddk::BlockProtocolClient client(blkdev.proto());
-  Manager manager;
-  ASSERT_OK(manager.StartServer(nullptr, &client));
-  zx::result fifo = manager.GetFifo();
+  zx::result server = Server::Create(&client);
+  ASSERT_OK(server);
+  std::thread thread([&server = server.value()]() { server->Serve(); });
+  auto join = fit::defer([&server = server.value(), &thread]() {
+    server->Close();
+    thread.join();
+  });
+  zx::result fifo = server.value()->GetFifo();
   ASSERT_OK(fifo);
   zx::vmo vmo;
   ASSERT_OK(zx::vmo::create(8192, 0, &vmo));
-  zx::result vmoid = manager.AttachVmo(std::move(vmo));
+  zx::result vmoid = server.value()->AttachVmo(std::move(vmo));
   ASSERT_OK(vmoid);
 
   // Request close VMO.
@@ -78,8 +91,6 @@ TEST(ManagerTest, CloseVMO) {
   ASSERT_OK(res.status);
   ASSERT_EQ(req.reqid, res.reqid);
   ASSERT_EQ(res.count, 1);
-
-  manager.CloseFifoServer();
 }
 
 zx_status_t FillVMO(const zx::vmo& vmo, size_t size) {
@@ -97,12 +108,17 @@ zx_status_t FillVMO(const zx::vmo& vmo, size_t size) {
   return ZX_OK;
 }
 
-TEST(ManagerTest, ReadSingleTest) {
+TEST(ServerTest, ReadSingleTest) {
   StubBlockDevice blkdev;
   ddk::BlockProtocolClient client(blkdev.proto());
-  Manager manager;
-  ASSERT_OK(manager.StartServer(nullptr, &client));
-  zx::result fifo = manager.GetFifo();
+  zx::result server = Server::Create(&client);
+  ASSERT_OK(server);
+  std::thread thread([&server = server.value()]() { server->Serve(); });
+  auto join = fit::defer([&server = server.value(), &thread]() {
+    server->Close();
+    thread.join();
+  });
+  zx::result fifo = server.value()->GetFifo();
   ASSERT_OK(fifo);
 
   const size_t vmo_size = 8192;
@@ -110,7 +126,7 @@ TEST(ManagerTest, ReadSingleTest) {
   ASSERT_OK(zx::vmo::create(vmo_size, 0, &vmo));
   ASSERT_OK(FillVMO(vmo, vmo_size));
 
-  zx::result vmoid = manager.AttachVmo(std::move(vmo));
+  zx::result vmoid = server.value()->AttachVmo(std::move(vmo));
   ASSERT_OK(vmoid);
 
   // Request close VMO.
@@ -139,20 +155,24 @@ TEST(ManagerTest, ReadSingleTest) {
   ASSERT_OK(res.status);
   ASSERT_EQ(req.reqid, res.reqid);
   ASSERT_EQ(res.count, 1);
-
-  manager.CloseFifoServer();
 }
 
-TEST(ManagerTest, ReadManyBlocksHasOneResponse) {
+TEST(ServerTest, ReadManyBlocksHasOneResponse) {
   StubBlockDevice blkdev;
   // Restrict max_transfer_size so that the server has to split up our request.
   block_info_t block_info = {
       .block_count = kBlockCount, .block_size = kBlockSize, .max_transfer_size = kBlockSize};
   blkdev.SetInfo(&block_info);
   ddk::BlockProtocolClient client(blkdev.proto());
-  Manager manager;
-  ASSERT_OK(manager.StartServer(nullptr, &client));
-  zx::result fifo = manager.GetFifo();
+  zx::result server = Server::Create(&client);
+  ASSERT_OK(server);
+  std::thread thread([&server = server.value()]() { server->Serve(); });
+  auto join = fit::defer([&server = server.value(), &thread]() {
+    server->Close();
+    thread.join();
+  });
+
+  zx::result fifo = server.value()->GetFifo();
   ASSERT_OK(fifo);
 
   const size_t vmo_size = 8192;
@@ -160,7 +180,7 @@ TEST(ManagerTest, ReadManyBlocksHasOneResponse) {
   ASSERT_OK(zx::vmo::create(vmo_size, 0, &vmo));
   ASSERT_OK(FillVMO(vmo, vmo_size));
 
-  zx::result vmoid = manager.AttachVmo(std::move(vmo));
+  zx::result vmoid = server.value()->AttachVmo(std::move(vmo));
   ASSERT_OK(vmoid);
 
   block_fifo_request_t reqs[2] = {
@@ -208,20 +228,23 @@ TEST(ManagerTest, ReadManyBlocksHasOneResponse) {
   ASSERT_OK(res.status);
   ASSERT_EQ(reqs[1].reqid, res.reqid);
   ASSERT_EQ(res.count, 1);
-
-  manager.CloseFifoServer();
 }
 
-TEST(ManagerTest, TestLargeGroupedTransaction) {
+TEST(ServerTest, TestLargeGroupedTransaction) {
   StubBlockDevice blkdev;
   // Restrict max_transfer_size so that the server has to split up our request.
   block_info_t block_info = {
       .block_count = kBlockCount, .block_size = kBlockSize, .max_transfer_size = kBlockSize};
   blkdev.SetInfo(&block_info);
   ddk::BlockProtocolClient client(blkdev.proto());
-  Manager manager;
-  ASSERT_OK(manager.StartServer(nullptr, &client));
-  zx::result fifo = manager.GetFifo();
+  zx::result server = Server::Create(&client);
+  ASSERT_OK(server);
+  std::thread thread([&server = server.value()]() { server->Serve(); });
+  auto join = fit::defer([&server = server.value(), &thread]() {
+    server->Close();
+    thread.join();
+  });
+  zx::result fifo = server.value()->GetFifo();
   ASSERT_OK(fifo);
 
   const size_t vmo_size = 8192;
@@ -229,7 +252,7 @@ TEST(ManagerTest, TestLargeGroupedTransaction) {
   ASSERT_OK(zx::vmo::create(vmo_size, 0, &vmo));
   ASSERT_OK(FillVMO(vmo, vmo_size));
 
-  zx::result vmoid = manager.AttachVmo(std::move(vmo));
+  zx::result vmoid = server.value()->AttachVmo(std::move(vmo));
   ASSERT_OK(vmoid);
 
   block_fifo_request_t reqs[2] = {
@@ -278,27 +301,29 @@ TEST(BlockTest, TestReadWriteSingle) {
   ASSERT_OK(BlockDevice::Bind(nullptr, fake_parent.get()));
   MockDevice* child_dev = fake_parent->GetLatestChild();
   auto* dut = child_dev->GetDeviceContext<BlockDevice>();
-  // Set up fidl connection
-  async::Loop loop(&kAsyncLoopConfigAttachToCurrentThread);
-  ASSERT_OK(loop.StartThread("fidl-thread"));
+
+  async::Loop loop(&kAsyncLoopConfigNeverAttachToThread);
 
   zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_block_volume::Volume>();
   ASSERT_OK(endpoints.status_value());
-  auto& [client, server] = endpoints.value();
+  auto& [client_end, server_end] = endpoints.value();
 
-  fidl::BindServer(loop.dispatcher(), std::move(server), dut);
-  auto sync_client = fidl::WireSyncClient(std::move(client));
-  auto info_result = sync_client->GetInfo();
-  ASSERT_TRUE(info_result.ok());
+  fidl::BindServer(loop.dispatcher(), std::move(server_end), dut);
 
   zx::vmo vmo;
   constexpr uint64_t kBufferLength = kBlockCount * 5;
   ASSERT_OK(zx::vmo::create(kBufferLength, 0, &vmo));
 
-  // Now, call write:
-  auto result = sync_client->WriteBlocks(std::move(vmo), kBufferLength, 0, 0);
-
-  ASSERT_TRUE(result.ok());
+  fidl::WireClient<fuchsia_hardware_block_volume::Volume> client(std::move(client_end),
+                                                                 loop.dispatcher());
+  client->WriteBlocks(std::move(vmo), kBufferLength, 0, 0)
+      .ThenExactlyOnce(
+          [](fidl::WireUnownedResult<fuchsia_hardware_block_volume::Volume::WriteBlocks>& result) {
+            ASSERT_OK(result.status());
+            const fit::result response = result.value();
+            ASSERT_TRUE(response.is_ok(), "%s", zx_status_get_string(response.error_value()));
+          });
+  ASSERT_OK(loop.RunUntilIdle());
 }
 
 }  // namespace

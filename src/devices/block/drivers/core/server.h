@@ -5,6 +5,7 @@
 #ifndef SRC_DEVICES_BLOCK_DRIVERS_CORE_SERVER_H_
 #define SRC_DEVICES_BLOCK_DRIVERS_CORE_SERVER_H_
 
+#include <fidl/fuchsia.hardware.block/cpp/wire.h>
 #include <fuchsia/hardware/block/cpp/banjo.h>
 #include <lib/fzl/fifo.h>
 #include <lib/sync/completion.h>
@@ -29,18 +30,24 @@
 #include "message-group.h"
 #include "message.h"
 
-class Server {
+class Server : public fidl::WireServer<fuchsia_hardware_block::Session> {
  public:
   // Creates a new Server.
-  static zx_status_t Create(ddk::BlockProtocolClient* bp, std::unique_ptr<Server>* out);
+  static zx::result<std::unique_ptr<Server>> Create(ddk::BlockProtocolClient* bp);
 
   // This will block until all outstanding messages have been processed.
-  ~Server();
+  ~Server() override;
 
   // Starts the Server using the current thread
   zx_status_t Serve() TA_EXCL(server_lock_);
+
   zx::result<zx::fifo> GetFifo();
   zx::result<vmoid_t> AttachVmo(zx::vmo vmo) TA_EXCL(server_lock_) TA_EXCL(server_lock_);
+  void Close();
+
+  void GetFifo(GetFifoCompleter::Sync& completer) override;
+  void AttachVmo(AttachVmoRequestView request, AttachVmoCompleter::Sync& completer) override;
+  void Close(CloseCompleter::Sync& completer) override;
 
   // Updates the total number of pending requests.
   void TxnEnd();

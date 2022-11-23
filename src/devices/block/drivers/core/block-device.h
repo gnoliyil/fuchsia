@@ -41,7 +41,6 @@
 #include <storage-metrics/block-metrics.h>
 
 #include "src/devices/block/drivers/core/block-core-bind.h"
-#include "src/devices/block/drivers/core/manager.h"
 
 // To maintain stats related to time taken by a command or its success/failure, we need to
 // intercept command completion with a callback routine. This might introduce memory
