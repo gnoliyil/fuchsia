@@ -80,7 +80,7 @@ use {
 // Exposed for serialized_types.
 pub use allocator::{AllocatorInfo, AllocatorKey, AllocatorValue};
 pub use extent_record::{ExtentKey, ExtentValue, DEFAULT_DATA_ATTRIBUTE_ID};
-pub use journal::{JournalRecord, SuperBlock, SuperBlockRecord};
+pub use journal::{JournalRecord, SuperBlockHeader, SuperBlockRecord};
 pub use object_record::{
     AttributeKey, EncryptionKeys, ObjectAttributes, ObjectKey, ObjectKeyData, ObjectKind,
     ObjectValue,
@@ -522,7 +522,7 @@ impl ObjectStore {
     }
 
     /// Cycle breaker constructor that returns an ObjectStore without a filesystem.
-    /// This should only be used from SuperBlock code.
+    /// This should only be used from super block code.
     pub fn new_root_parent(device: Arc<dyn Device>, block_size: u64, store_object_id: u64) -> Self {
         ObjectStore {
             parent_store: None,

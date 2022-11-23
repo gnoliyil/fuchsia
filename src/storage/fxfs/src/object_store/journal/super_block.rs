@@ -56,7 +56,7 @@ const MIN_SUPER_BLOCK_SIZE: u64 = 524_288;
 /// All superblocks start with the magic bytes "FxfsSupr".
 const SUPER_BLOCK_MAGIC: &[u8; 8] = b"FxfsSupr";
 
-/// An enum representing one of our [SuperBlock] instances.
+/// An enum representing one of our super block instances.
 ///
 /// This provides hard-coded constants related to the location and properties of the super blocks
 /// that are required to bootstrap the filesystem.
@@ -97,7 +97,7 @@ impl SuperBlockInstance {
 /// We currently store two of these super blocks (A/B) located in two logical consecutive
 /// 512kiB extents at the start of the device.
 ///
-/// Immediately following the serialized `SuperBlock` structure below is a stream of serialized
+/// Immediately following the serialized `SuperBlockHeader` structure below is a stream of serialized
 /// operations that are replayed into the root parent `ObjectStore`. Note that the root parent
 /// object store exists entirely in RAM until serialized back into the super-block.
 ///
@@ -105,7 +105,7 @@ impl SuperBlockInstance {
 /// At mount time, the super block used is the valid `SuperBlock` with the highest generation
 /// number.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize, TypeHash, Versioned)]
-pub struct SuperBlock {
+pub struct SuperBlockHeader {
     /// The globally unique identifier for the filesystem.
     guid: UuidWrapper,
 
@@ -171,7 +171,7 @@ impl type_hash::TypeHash for UuidWrapper {
     }
 }
 
-// Uuid serializes like a slice, but SuperBlock used to contain [u8; 16] and we want to remain
+// Uuid serializes like a slice, but SuperBlockHeader used to contain [u8; 16] and we want to remain
 // compatible.
 impl Serialize for UuidWrapper {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -217,8 +217,8 @@ impl Default for SuperBlockMetrics {
     }
 }
 
-/// This encapsulates the A/B alternating SuperBlock logic.
-/// All SuperBlockload/save operations should be via the methods on this type.
+/// This encapsulates the A/B alternating super block logic.
+/// All super block load/save operations should be via the methods on this type.
 pub struct SuperBlockManager {
     next_instance: Arc<Mutex<SuperBlockInstance>>,
     metrics: SuperBlockMetrics,
@@ -242,10 +242,10 @@ impl SuperBlockManager {
         &self,
         device: Arc<dyn Device>,
         block_size: u64,
-    ) -> Result<(SuperBlock, ObjectStore), Error> {
+    ) -> Result<(SuperBlockHeader, ObjectStore), Error> {
         let (super_block, current_super_block, root_parent) = match futures::join!(
-            SuperBlock::read(device.clone(), block_size, SuperBlockInstance::A),
-            SuperBlock::read(device.clone(), block_size, SuperBlockInstance::B)
+            SuperBlockHeader::read(device.clone(), block_size, SuperBlockInstance::A),
+            SuperBlockHeader::read(device.clone(), block_size, SuperBlockInstance::B)
         ) {
             (Err(e1), Err(e2)) => {
                 bail!("Failed to load both superblocks due to {:?}\nand\n{:?}", e1, e2)
@@ -270,7 +270,7 @@ impl SuperBlockManager {
     /// Requires that the filesystem is fully loaded and writable as this may require allocation.
     pub async fn save(
         &self,
-        super_block: &SuperBlock,
+        super_block_header: &SuperBlockHeader,
         root_parent: Arc<ObjectStore>,
     ) -> Result<(), Error> {
         let filesystem = root_parent.filesystem();
@@ -288,8 +288,8 @@ impl SuperBlockManager {
             None,
         )
         .await?;
-        super_block.write(&root_parent, handle).await?;
-        self.metrics.last_super_block_offset.set(super_block.super_block_journal_file_offset);
+        super_block_header.write(&root_parent, handle).await?;
+        self.metrics.last_super_block_offset.set(super_block_header.super_block_journal_file_offset);
         self.metrics.last_super_block_update_time_ms.set(
             SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
@@ -302,8 +302,8 @@ impl SuperBlockManager {
     }
 }
 
-impl SuperBlock {
-    /// Creates a new SuperBlock with random GUID.
+impl SuperBlockHeader {
+    /// Creates a new instance with random GUID.
     pub fn new(
         root_parent_store_object_id: u64,
         root_parent_graveyard_directory_object_id: u64,
@@ -313,7 +313,7 @@ impl SuperBlock {
         journal_checkpoint: JournalCheckpoint,
         earliest_version: Version,
     ) -> Self {
-        SuperBlock {
+        SuperBlockHeader {
             guid: UuidWrapper(Uuid::new_v4()),
             generation: 1u64,
             root_parent_store_object_id,
@@ -332,17 +332,17 @@ impl SuperBlock {
         device: Arc<dyn Device>,
         block_size: u64,
         instance: SuperBlockInstance,
-    ) -> Result<(SuperBlock, SuperBlockInstance, ObjectStore), Error> {
-        let (super_block, mut reader) = SuperBlock::read_header(device.clone(), instance)
+    ) -> Result<(SuperBlockHeader, SuperBlockInstance, ObjectStore), Error> {
+        let (super_block_header, mut reader) = SuperBlockHeader::read_header(device.clone(), instance)
             .await
             .context("Failed to read superblocks")?;
         let root_parent = ObjectStore::new_root_parent(
             device,
             block_size,
-            super_block.root_parent_store_object_id,
+            super_block_header.root_parent_store_object_id,
         );
         root_parent.set_graveyard_directory_object_id(
-            super_block.root_parent_graveyard_directory_object_id,
+            super_block_header.root_parent_graveyard_directory_object_id,
         );
 
         loop {
@@ -367,7 +367,7 @@ impl SuperBlock {
                 .await?;
         }
 
-        Ok((super_block, instance, root_parent))
+        Ok((super_block_header, instance, root_parent))
     }
 
     /// Shreds the super-block, rendering it unreadable.  This is used in mkfs to ensure that we
@@ -388,7 +388,7 @@ impl SuperBlock {
     async fn read_header(
         device: Arc<dyn Device>,
         target_super_block: SuperBlockInstance,
-    ) -> Result<(SuperBlock, ItemReader), Error> {
+    ) -> Result<(SuperBlockHeader, ItemReader), Error> {
         let mut handle = BootstrapObjectHandle::new(target_super_block.object_id(), device);
         handle.push_extent(target_super_block.first_extent());
         let mut reader = JournalReader::new(
@@ -398,7 +398,7 @@ impl SuperBlock {
         );
 
         reader.fill_buf().await?;
-        let mut super_block;
+        let mut super_block_header;
         let super_block_version;
         reader.consume({
             let mut cursor = std::io::Cursor::new(reader.buffer());
@@ -408,7 +408,8 @@ impl SuperBlock {
             if magic_bytes.as_slice() != SUPER_BLOCK_MAGIC.as_slice() {
                 bail!(format!("Invalid magic: {:?}", magic_bytes));
             }
-            (super_block, super_block_version) = SuperBlock::deserialize_with_version(&mut cursor)?;
+            (super_block_header, super_block_version) =
+                SuperBlockHeader::deserialize_with_version(&mut cursor)?;
 
             if super_block_version < EARLIEST_SUPPORTED_VERSION {
                 bail!(format!("Unsupported SuperBlock version: {:?}", super_block_version));
@@ -417,28 +418,28 @@ impl SuperBlock {
             // NOTE: It is possible that data was written to the journal with an old version
             // but no compaction ever happened, so the journal version could potentially be older
             // than the layer file versions.
-            if super_block.journal_checkpoint.version < EARLIEST_SUPPORTED_VERSION {
+            if super_block_header.journal_checkpoint.version < EARLIEST_SUPPORTED_VERSION {
                 bail!(format!(
                     "Unsupported JournalCheckpoint version: {:?}",
-                    super_block.journal_checkpoint.version
+                    super_block_header.journal_checkpoint.version
                 ));
             }
 
-            if super_block.earliest_version < EARLIEST_SUPPORTED_VERSION {
+            if super_block_header.earliest_version < EARLIEST_SUPPORTED_VERSION {
                 bail!(format!(
                     "Filesystem contains struct with unsupported version: {:?}",
-                    super_block.earliest_version
+                    super_block_header.earliest_version
                 ));
             }
 
             cursor.position() as usize
         });
         // If guid is zeroed (e.g. in a newly imaged system), assign one randomly.
-        if super_block.guid.0.is_nil() {
-            super_block.guid = UuidWrapper(Uuid::new_v4());
+        if super_block_header.guid.0.is_nil() {
+            super_block_header.guid = UuidWrapper(Uuid::new_v4());
         }
         reader.set_version(super_block_version);
-        Ok((super_block, ItemReader { reader }))
+        Ok((super_block_header, ItemReader { reader }))
     }
 
     /// Writes the super-block and the records from the root parent store to |handle|.
@@ -563,7 +564,7 @@ impl ItemReader {
 mod tests {
     use {
         super::{
-            SuperBlock, SuperBlockInstance, SuperBlockItem, UuidWrapper, MIN_SUPER_BLOCK_SIZE,
+            SuperBlockHeader, SuperBlockInstance, SuperBlockItem, UuidWrapper, MIN_SUPER_BLOCK_SIZE,
         },
         crate::{
             filesystem::{Filesystem, FxFilesystem},
@@ -668,7 +669,7 @@ mod tests {
             journal_offset = transaction.commit().await.expect("commit failed");
         }
 
-        let mut super_block_a = SuperBlock::new(
+        let mut super_block_header_a = SuperBlockHeader::new(
             fs.object_manager().root_parent_store().store_object_id(),
             /* root_parent_graveyard_directory_object_id: */ 1000,
             fs.root_store().store_object_id(),
@@ -677,18 +678,18 @@ mod tests {
             JournalCheckpoint { file_offset: 1234, checksum: 5678, version: LATEST_VERSION },
             /* earliest_version: */ LATEST_VERSION,
         );
-        super_block_a.super_block_journal_file_offset = journal_offset + 1;
-        let mut super_block_b = super_block_a.clone();
+        super_block_header_a.super_block_journal_file_offset = journal_offset + 1;
+        let mut super_block_b = super_block_header_a.clone();
         super_block_b.journal_file_offsets.insert(1, 2);
         super_block_b.generation += 1;
 
         // Check that a non-zero GUID has been assigned.
-        assert!(!super_block_a.guid.0.is_nil());
+        assert!(!super_block_header_a.guid.0.is_nil());
 
         let layer_set = fs.object_manager().root_parent_store().tree().layer_set();
         let mut merger = layer_set.merger();
 
-        super_block_a
+        super_block_header_a
             .write(fs.object_manager().root_parent_store().as_ref(), handle_a)
             .await
             .expect("write failed");
@@ -709,11 +710,15 @@ mod tests {
         assert!(handle.get_size() > MIN_SUPER_BLOCK_SIZE);
 
         let mut written_super_block_a =
-            SuperBlock::read_header(fs.device(), SuperBlockInstance::A).await.expect("read failed");
+            SuperBlockHeader::read_header(fs.device(), SuperBlockInstance::A)
+                .await
+                .expect("read failed");
 
-        assert_eq!(written_super_block_a.0, super_block_a);
+        assert_eq!(written_super_block_a.0, super_block_header_a);
         let written_super_block_b =
-            SuperBlock::read_header(fs.device(), SuperBlockInstance::B).await.expect("read failed");
+            SuperBlockHeader::read_header(fs.device(), SuperBlockInstance::B)
+                .await
+                .expect("read failed");
         assert_eq!(written_super_block_b.0, super_block_b);
 
         // Check that the records match what we expect in the root parent store.
@@ -741,7 +746,7 @@ mod tests {
     async fn test_guid_assign_on_read() {
         let (fs, handle_a, _handle_b) = filesystem_and_super_block_handles().await;
         const JOURNAL_OBJECT_ID: u64 = 5;
-        let mut super_block_a = SuperBlock::new(
+        let mut super_block_header_a = SuperBlockHeader::new(
             fs.object_manager().root_parent_store().store_object_id(),
             /* root_parent_graveyard_directory_object_id: */ 1000,
             fs.root_store().store_object_id(),
@@ -751,15 +756,16 @@ mod tests {
             /* earliest_version: */ LATEST_VERSION,
         );
         // Ensure the superblock has no set GUID.
-        super_block_a.guid = UuidWrapper(Uuid::nil());
-        super_block_a
+        super_block_header_a.guid = UuidWrapper(Uuid::nil());
+        super_block_header_a
             .write(fs.object_manager().root_parent_store().as_ref(), handle_a)
             .await
             .expect("write failed");
-        let super_block =
-            SuperBlock::read_header(fs.device(), SuperBlockInstance::A).await.expect("read failed");
+        let super_block_header = SuperBlockHeader::read_header(fs.device(), SuperBlockInstance::A)
+            .await
+            .expect("read failed");
         // Ensure a GUID has been assigned.
-        assert!(!super_block.0.guid.0.is_nil());
+        assert!(!super_block_header.0.guid.0.is_nil());
     }
 
     #[fuchsia::test]
@@ -789,8 +795,12 @@ mod tests {
         let device = fs.take_device().await;
         device.reopen(false);
 
-        SuperBlock::read_header(device.clone(), SuperBlockInstance::A).await.expect("read failed");
-        SuperBlock::read_header(device.clone(), SuperBlockInstance::B).await.expect("read failed");
+        SuperBlockHeader::read_header(device.clone(), SuperBlockInstance::A)
+            .await
+            .expect("read failed");
+        SuperBlockHeader::read_header(device.clone(), SuperBlockInstance::B)
+            .await
+            .expect("read failed");
 
         // Re-initialize the filesystem.  The A block should be reset and the B block should be
         // wiped.
@@ -799,8 +809,10 @@ mod tests {
         let device = fs.take_device().await;
         device.reopen(false);
 
-        SuperBlock::read_header(device.clone(), SuperBlockInstance::A).await.expect("read failed");
-        SuperBlock::read_header(device.clone(), SuperBlockInstance::B)
+        SuperBlockHeader::read_header(device.clone(), SuperBlockInstance::A)
+            .await
+            .expect("read failed");
+        SuperBlockHeader::read_header(device.clone(), SuperBlockInstance::B)
             .await
             .map(|_| ())
             .expect_err("Super-block B was readable after a re-format");
@@ -814,9 +826,10 @@ mod tests {
         let device = fs.take_device().await;
         device.reopen(false);
 
-        let (super_block_a, _) = SuperBlock::read_header(device.clone(), SuperBlockInstance::A)
-            .await
-            .expect("read failed");
+        let (super_block_header_a, _) =
+            SuperBlockHeader::read_header(device.clone(), SuperBlockInstance::A)
+                .await
+                .expect("read failed");
 
         // The second super-block won't be valid at this time so there's no point reading it.
 
@@ -843,12 +856,12 @@ mod tests {
         let device = fs.take_device().await;
         device.reopen(false);
 
-        let (super_block_a_after, _) =
-            SuperBlock::read_header(device.clone(), SuperBlockInstance::A)
+        let (super_block_header_a_after, _) =
+            SuperBlockHeader::read_header(device.clone(), SuperBlockInstance::A)
                 .await
                 .expect("read failed");
-        let (super_block_b_after, _) =
-            SuperBlock::read_header(device.clone(), SuperBlockInstance::B)
+        let (super_block_header_b_after, _) =
+            SuperBlockHeader::read_header(device.clone(), SuperBlockInstance::B)
                 .await
                 .expect("read failed");
 
@@ -856,17 +869,21 @@ mod tests {
 
         // The sequence numbers should be one apart.
         assert_eq!(
-            (super_block_b_after.generation as i64 - super_block_a_after.generation as i64).abs(),
+            (super_block_header_b_after.generation as i64
+                - super_block_header_a_after.generation as i64)
+                .abs(),
             1
         );
 
         // At least one super-block should have been written.
         assert!(
-            std::cmp::max(super_block_a_after.generation, super_block_b_after.generation)
-                > super_block_a.generation
+            std::cmp::max(
+                super_block_header_a_after.generation,
+                super_block_header_b_after.generation
+            ) > super_block_header_a.generation
         );
 
         // They should have the same oddness.
-        assert_eq!(super_block_a_after.generation & 1, super_block_a.generation & 1);
+        assert_eq!(super_block_header_a_after.generation & 1, super_block_header_a.generation & 1);
     }
 }

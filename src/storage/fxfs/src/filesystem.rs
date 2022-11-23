@@ -14,7 +14,9 @@ use {
             allocator::{Allocator, Hold, Reservation, SimpleAllocator},
             directory::Directory,
             graveyard::Graveyard,
-            journal::{self, super_block::SuperBlock, Journal, JournalCheckpoint, JournalOptions},
+            journal::{
+                self, super_block::SuperBlockHeader, Journal, JournalCheckpoint, JournalOptions,
+            },
             object_manager::ObjectManager,
             transaction::{
                 self, AssocObj, LockKey, LockManager, MetadataReservation, Mutation, ReadGuard,
@@ -113,8 +115,8 @@ pub trait Filesystem: TransactionHandler {
     /// Returns filesystem information.
     fn get_info(&self) -> Info;
 
-    /// Returns the super-block.
-    fn super_block(&self) -> SuperBlock;
+    /// Returns the super-block header.
+    fn super_block_header(&self) -> SuperBlockHeader;
 
     /// Returns the graveyard manager (whilst there exists a graveyard per store, the manager
     /// handles all of them).
@@ -518,8 +520,8 @@ impl Filesystem for FxFilesystem {
         }
     }
 
-    fn super_block(&self) -> SuperBlock {
-        self.journal.super_block()
+    fn super_block_header(&self) -> SuperBlockHeader {
+        self.journal.super_block_header()
     }
 
     fn graveyard(&self) -> &Arc<Graveyard> {

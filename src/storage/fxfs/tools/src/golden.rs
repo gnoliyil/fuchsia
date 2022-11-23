@@ -86,7 +86,7 @@ pub async fn create_image() -> Result<(), Error> {
     // Write enough stuff to the journal (journal::BLOCK_SIZE per sync) to ensure we would fill
     // the disk without reclaim of both journal and file data.
     let num_iters = 2000;
-    let before_generation = fs.super_block().generation;
+    let before_generation = fs.super_block_header().generation;
     for _i in 0..num_iters {
         ops::put(&fs, &vol, &Path::new("some/repeat.txt"), EXPECTED_FILE_CONTENT.to_vec()).await?;
         fs.sync(SyncOptions { flush_device: true, precondition: None }).await?;
@@ -94,7 +94,7 @@ pub async fn create_image() -> Result<(), Error> {
         fs.sync(SyncOptions { flush_device: true, precondition: None }).await?;
     }
     // Ensure that we have reclaimed the journal at least once.
-    assert_ne!(before_generation, fs.super_block().generation);
+    assert_ne!(before_generation, fs.super_block_header().generation);
     fs.close().await?;
     save_device(device, &path).await?;
 

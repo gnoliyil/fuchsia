@@ -8,7 +8,7 @@ use {
         object_store::{
             allocator::{Allocator, SimpleAllocator},
             graveyard::Graveyard,
-            journal::{JournalCheckpoint, SuperBlock},
+            journal::{JournalCheckpoint, SuperBlockHeader},
             object_manager::ObjectManager,
             transaction::{
                 self, LockKey, LockManager, MetadataReservation, ReadGuard, Transaction,
@@ -88,8 +88,8 @@ impl Filesystem for FakeFilesystem {
         Info { total_bytes: 1024 * 1024, used_bytes: 0 }
     }
 
-    fn super_block(&self) -> SuperBlock {
-        SuperBlock::default()
+    fn super_block_header(&self) -> SuperBlockHeader {
+        SuperBlockHeader::default()
     }
 
     fn graveyard(&self) -> &Arc<Graveyard> {

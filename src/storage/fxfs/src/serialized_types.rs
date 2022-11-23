@@ -27,9 +27,9 @@
 //!
 //! ```ignore
 //! versioned_type! {
-//!   3.. => SuperBlockV3,
-//!   2.. => SuperBlockV2,
-//!   1.. => SuperBlockV1,
+//!   3.. => SuperBlockHeaderV3,
+//!   2.. => SuperBlockHeaderV2,
+//!   1.. => SuperBlockHeaderV1,
 //! }
 //!
 //! // Note the reuse of SuperBlockRecordV1 for two versions.

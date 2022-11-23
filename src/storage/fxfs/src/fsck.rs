@@ -105,16 +105,17 @@ pub async fn fsck_with_options(
     let mut fsck = Fsck::new(options);
 
     let object_manager = filesystem.object_manager();
-    let super_block = filesystem.super_block();
+    let super_block_header = filesystem.super_block_header();
 
     // Keep track of all things that might exist in journal checkpoints so we can check for
     // unexpected entries.
     let mut journal_checkpoint_ids: HashSet<u64> = HashSet::new();
-    journal_checkpoint_ids.insert(super_block.allocator_object_id);
-    journal_checkpoint_ids.insert(super_block.root_store_object_id);
+    journal_checkpoint_ids.insert(super_block_header.allocator_object_id);
+    journal_checkpoint_ids.insert(super_block_header.root_store_object_id);
 
     // Scan the root parent object store.
-    let mut root_objects = vec![super_block.root_store_object_id, super_block.journal_object_id];
+    let mut root_objects =
+        vec![super_block_header.root_store_object_id, super_block_header.journal_object_id];
     root_objects.append(&mut object_manager.root_store().parent_objects());
     fsck.verbose("Scanning root parent store...");
     store_scanner::scan_store(&fsck, object_manager.root_parent_store().as_ref(), &root_objects)
@@ -124,7 +125,7 @@ pub async fn fsck_with_options(
     let root_store = &object_manager.root_store();
     let mut root_store_root_objects = Vec::new();
     root_store_root_objects.append(&mut vec![
-        super_block.allocator_object_id,
+        super_block_header.allocator_object_id,
         SuperBlockInstance::A.object_id(),
         SuperBlockInstance::B.object_id(),
     ]);
@@ -190,7 +191,7 @@ pub async fn fsck_with_options(
     // Excess entries mean we won't be able to reap the journal to free space.
     // Missing entries are OK. Entries only exist if there is data for the store that hasn't been
     // flushed yet.
-    for object_id in super_block.journal_file_offsets.keys() {
+    for object_id in super_block_header.journal_file_offsets.keys() {
         if !journal_checkpoint_ids.contains(object_id) {
             fsck.error(FsckError::UnexpectedJournalFileOffset(*object_id))?;
         }

@@ -76,7 +76,7 @@ use {
 };
 
 // Exposed for serialized_types.
-pub use super_block::{SuperBlock, SuperBlockRecord};
+pub use super_block::{SuperBlockHeader, SuperBlockRecord};
 
 // The journal file is written to in blocks of this size.
 pub const BLOCK_SIZE: u64 = 8192;
@@ -159,7 +159,7 @@ pub struct Journal {
 }
 
 struct Inner {
-    super_block: SuperBlock,
+    super_block_header: SuperBlockHeader,
 
     // This event is used when we are waiting for a compaction to free up journal space.
     reclaim_event: Option<Event>,
@@ -243,7 +243,7 @@ impl Journal {
             handle: OnceCell::new(),
             super_block_manager: SuperBlockManager::new(),
             inner: Mutex::new(Inner {
-                super_block: SuperBlock::default(),
+                super_block_header: SuperBlockHeader::default(),
                 reclaim_event: None,
                 zero_offset: None,
                 device_flushed_offset: 0,
@@ -420,7 +420,7 @@ impl Journal {
         self.objects.set_last_end_offset(super_block.super_block_journal_file_offset);
         {
             let mut inner = self.inner.lock().unwrap();
-            inner.super_block = super_block.clone();
+            inner.super_block_header = super_block.clone();
         }
         let root_store = ObjectStore::new(
             Some(root_parent.clone()),
@@ -869,7 +869,7 @@ impl Journal {
 
         transaction.commit().await?;
 
-        self.inner.lock().unwrap().super_block = SuperBlock::new(
+        self.inner.lock().unwrap().super_block_header = SuperBlockHeader::new(
             root_parent.store_object_id(),
             root_parent.graveyard_directory_object_id(),
             root_store.store_object_id(),
@@ -882,7 +882,7 @@ impl Journal {
         // Initialize the journal writer.
         let _ = self.handle.set(journal_handle);
         self.write_super_block().await?;
-        SuperBlock::shred(super_block_b_handle).await
+        SuperBlockHeader::shred(super_block_b_handle).await
     }
 
     /// Commits a transaction.  This is not thread safe; the caller must take appropriate locks.
@@ -974,12 +974,12 @@ impl Journal {
     // all records should be applied because the object store or allocator might already contain the
     // mutation.  After replay, that obviously isn't the case and we want to apply all mutations.
     fn should_apply(&self, object_id: u64, journal_file_checkpoint: &JournalCheckpoint) -> bool {
-        let super_block = &self.inner.lock().unwrap().super_block;
-        let offset = super_block
+        let super_block_header = &self.inner.lock().unwrap().super_block_header;
+        let offset = super_block_header
             .journal_file_offsets
             .get(&object_id)
             .cloned()
-            .unwrap_or(super_block.super_block_journal_file_offset);
+            .unwrap_or(super_block_header.super_block_journal_file_offset);
         journal_file_checkpoint.file_offset >= offset
     }
 
@@ -999,25 +999,25 @@ impl Journal {
             result
         };
 
-        let mut new_super_block = self.inner.lock().unwrap().super_block.clone();
+        let mut new_super_block_header = self.inner.lock().unwrap().super_block_header.clone();
 
-        let old_super_block_offset = new_super_block.journal_checkpoint.file_offset;
+        let old_super_block_offset = new_super_block_header.journal_checkpoint.file_offset;
 
         let (journal_file_offsets, min_checkpoint) = self.objects.journal_file_offsets();
 
-        new_super_block.generation =
-            new_super_block.generation.checked_add(1).ok_or(FxfsError::Inconsistent)?;
-        new_super_block.super_block_journal_file_offset = checkpoint.file_offset;
-        new_super_block.journal_checkpoint = min_checkpoint.unwrap_or(checkpoint);
-        new_super_block.journal_checkpoint.version = LATEST_VERSION;
-        new_super_block.journal_file_offsets = journal_file_offsets;
-        new_super_block.borrowed_metadata_space = borrowed;
+        new_super_block_header.generation =
+            new_super_block_header.generation.checked_add(1).ok_or(FxfsError::Inconsistent)?;
+        new_super_block_header.super_block_journal_file_offset = checkpoint.file_offset;
+        new_super_block_header.journal_checkpoint = min_checkpoint.unwrap_or(checkpoint);
+        new_super_block_header.journal_checkpoint.version = LATEST_VERSION;
+        new_super_block_header.journal_file_offsets = journal_file_offsets;
+        new_super_block_header.borrowed_metadata_space = borrowed;
 
-        self.super_block_manager.save(&new_super_block, root_parent_store).await?;
+        self.super_block_manager.save(&new_super_block_header, root_parent_store).await?;
 
         {
             let mut inner = self.inner.lock().unwrap();
-            inner.super_block = new_super_block;
+            inner.super_block_header = new_super_block_header;
             inner.zero_offset = Some(round_down(old_super_block_offset, BLOCK_SIZE));
         }
 
@@ -1121,9 +1121,9 @@ impl Journal {
         Ok(())
     }
 
-    /// Returns a copy of the super-block.
-    pub fn super_block(&self) -> SuperBlock {
-        self.inner.lock().unwrap().super_block.clone()
+    /// Returns a copy of the super-block header.
+    pub fn super_block_header(&self) -> SuperBlockHeader {
+        self.inner.lock().unwrap().super_block_header.clone()
     }
 
     /// Waits for there to be sufficient space in the journal.
@@ -1136,7 +1136,8 @@ impl Journal {
                     // extend the journal any more.
                     break Err(anyhow!(FxfsError::JournalFlushError).context("Journal closed"));
                 }
-                if self.objects.last_end_offset() - inner.super_block.journal_checkpoint.file_offset
+                if self.objects.last_end_offset()
+                    - inner.super_block_header.journal_checkpoint.file_offset
                     < inner.reclaim_size
                 {
                     break Ok(());
@@ -1234,7 +1235,7 @@ impl Journal {
                     && !inner.terminate
                     && !inner.disable_compactions
                     && self.objects.last_end_offset()
-                        - inner.super_block.journal_checkpoint.file_offset
+                        - inner.super_block_header.journal_checkpoint.file_offset
                         > inner.reclaim_size / 2
                 {
                     compact_fut = Some(self.compact().boxed());
@@ -1293,7 +1294,7 @@ impl Journal {
         }
         trace_duration!("Journal::compact");
         let earliest_version = self.objects.flush().await?;
-        self.inner.lock().unwrap().super_block.earliest_version = earliest_version;
+        self.inner.lock().unwrap().super_block_header.earliest_version = earliest_version;
         self.write_super_block().await?;
         if trace {
             info!("J: end compaction");
