@@ -961,10 +961,8 @@ library example;
 }
 
 TEST(VersioningTests, BadNoteWithoutDeprecation) {
-  TestLibrary library(R"FIDL(
-@available(added=1, note="no need for a note")
-library example;
-)FIDL");
+  TestLibrary library;
+  library.AddFile("bad/fi-0148.test.fidl");
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrNoteWithoutDeprecation);
 }
 

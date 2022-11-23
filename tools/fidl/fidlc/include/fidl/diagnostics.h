@@ -348,7 +348,7 @@ constexpr WarningDef<145, std::string_view, std::string_view> WarnAttributeTypo(
 constexpr ErrorDef<146> ErrInvalidGeneratedName("generated name must be a valid identifier");
 constexpr UndocumentedErrorDef<147> ErrAvailableMissingArguments(
     "at least one argument is required: 'added', 'deprecated', or 'removed'");
-constexpr UndocumentedErrorDef<148> ErrNoteWithoutDeprecation(
+constexpr ErrorDef<148> ErrNoteWithoutDeprecation(
     "the argument 'note' cannot be used without 'deprecated'");
 constexpr UndocumentedErrorDef<149> ErrPlatformNotOnLibrary(
     "the argument 'platform' can only be used on the library's @available attribute");
