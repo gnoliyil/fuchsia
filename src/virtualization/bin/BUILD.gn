@@ -19,6 +19,7 @@ group("bin") {
   deps = [
     "guest",
     "guest_manager:packages",
+    "guest_manager_rs:packages",
     "termina_guest_manager",
     "vmm",
     "vsh",
@@ -31,6 +32,7 @@ group("tests") {
   deps = [
     "guest:tests",
     "guest_manager:tests",
+    "guest_manager_rs:tests",
     "termina_guest_manager:tests",
     "vmm:tests",
   ]
