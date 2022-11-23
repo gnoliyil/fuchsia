@@ -156,18 +156,6 @@ driver_bind_rules("astro-video-bind") {
   ]
 }
 
-driver_bind_rules("gt92xx-touch-bind") {
-  rules = "bind/gt92xx-touch.bind"
-  header_output = "gt92xx-touch-bind.h"
-  bind_output = "gt92xx-touch-bind.bc"
-  tests = "bind-tests/gt92xx-touch-test.json"
-  deps = [
-    "//src/devices/bind/fuchsia.amlogic.platform.s905d2",
-    "//src/devices/bind/fuchsia.gpio",
-    "//src/devices/bind/fuchsia.i2c",
-  ]
-}
-
 driver_bind_rules("astro-gpio-light-bind") {
   rules = "bind/astro-gpio-light.bind"
   header_output = "astro-gpio-light-bind.h"
@@ -368,7 +356,6 @@ fuchsia_driver("astro-driver") {
     ":astro-wifi-bind_header",
     ":astro-xhci-bind_header",
     ":audio-codec-tas27xx-bind_header",
-    ":gt92xx-touch-bind_header",
     ":pd-armcore-bind_header",
     ":pwm-ao-d-bind_header",
     ":tcs3400-light-bind_header",
@@ -464,7 +451,6 @@ group("tests") {
     ":astro-wifi-bind_test",
     ":astro-xhci-bind_test",
     ":audio-codec-tas27xx-bind_test",
-    ":gt92xx-touch-bind_test",
     ":pd-armcore-bind_test",
     ":pwm-ao-d-bind_test",
     ":tcs3400-light-bind_test",

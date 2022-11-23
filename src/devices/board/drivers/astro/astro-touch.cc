@@ -23,7 +23,6 @@
 
 #include "astro-gpios.h"
 #include "astro.h"
-#include "src/devices/board/drivers/astro/gt92xx-touch-bind.h"
 
 namespace astro {
 namespace fpbus = fuchsia_hardware_platform_bus;
@@ -48,6 +47,19 @@ const device_bind_prop_t kFocaltechI2cProperties[] = {
     ddk::MakeProperty(bind_fuchsia::FIDL_PROTOCOL, bind_fuchsia_i2c::BIND_FIDL_PROTOCOL_DEVICE),
     ddk::MakeProperty(bind_fuchsia::I2C_ADDRESS,
                       bind_fuchsia_i2c::BIND_I2C_ADDRESS_FOCALTECH_TOUCH),
+};
+
+const ddk::NodeGroupBindRule kGoodixI2cRules[] = {
+    ddk::MakeAcceptBindRule(bind_fuchsia::FIDL_PROTOCOL,
+                            bind_fuchsia_i2c::BIND_FIDL_PROTOCOL_DEVICE),
+    ddk::MakeAcceptBindRule(bind_fuchsia::I2C_BUS_ID, bind_fuchsia_i2c::BIND_I2C_BUS_ID_ASTRO_2),
+    ddk::MakeAcceptBindRule(bind_fuchsia::I2C_ADDRESS,
+                            bind_fuchsia_i2c::BIND_I2C_ADDRESS_GOODIX_TOUCH),
+};
+
+const device_bind_prop_t kGoodixI2cProperties[] = {
+    ddk::MakeProperty(bind_fuchsia::FIDL_PROTOCOL, bind_fuchsia_i2c::BIND_FIDL_PROTOCOL_DEVICE),
+    ddk::MakeProperty(bind_fuchsia::I2C_ADDRESS, bind_fuchsia_i2c::BIND_I2C_ADDRESS_GOODIX_TOUCH),
 };
 
 const ddk::NodeGroupBindRule kInterruptRules[] = {
@@ -85,26 +97,13 @@ zx_status_t Astro::TouchInit() {
   gpio_impl_.Read(S905D2_GPIOH(5), &gpio_state);
 
   if (gpio_state) {
-    const zx_device_prop_t props[] = {
-        {BIND_PLATFORM_DEV_VID, 0, PDEV_VID_GOOGLE},
-        {BIND_PLATFORM_DEV_PID, 0, PDEV_PID_ASTRO},
-        {BIND_PLATFORM_DEV_DID, 0, PDEV_DID_ASTRO_GOODIXTOUCH},
-    };
-
-    const composite_device_desc_t comp_desc = {
-        .props = props,
-        .props_count = std::size(props),
-        .fragments = gt92xx_touch_fragments,
-        .fragments_count = std::size(gt92xx_touch_fragments),
-        .primary_fragment = "i2c",
-        .spawn_colocated = false,
-        .metadata_list = nullptr,
-        .metadata_count = 0,
-    };
-
-    zx_status_t status = DdkAddComposite("gt92xx-touch", &comp_desc);
+    auto status = DdkAddNodeGroup("gt92xx_touch",
+                                  ddk::NodeGroupDesc(kGoodixI2cRules, kGoodixI2cProperties)
+                                      .AddNodeRepresentation(kInterruptRules, kInterruptProperties)
+                                      .AddNodeRepresentation(kResetRules, kResetProperties)
+                                      .set_spawn_colocated(false));
     if (status != ZX_OK) {
-      zxlogf(INFO, "astro_touch_init(gt92xx): composite_device_add failed: %d", status);
+      zxlogf(INFO, "gt92xx: DdkAddNodeGroup failed: %s", zx_status_get_string(status));
       return status;
     }
   } else {
@@ -115,7 +114,7 @@ zx_status_t Astro::TouchInit() {
                                       .set_metadata(ft3x27_touch_metadata)
                                       .set_spawn_colocated(false));
     if (status != ZX_OK) {
-      zxlogf(ERROR, "%s(ft3x27): DdkAddNodeGroup failed: %d", __func__, status);
+      zxlogf(ERROR, "ft3x27: DdkAddNodeGroup failed: %s", zx_status_get_string(status));
       return status;
     }
   }

@@ -12,8 +12,16 @@ driver_bind_rules("gt92xx_bind") {
   rules = "gt92xx.bind"
   header_output = "gt92xx_bind.h"
   bind_output = "goodix.bindbc"
+
+  # TODO(fxb/115757): Remove this once we no longer need to generate
+  # fragments for composite bind rules.
+  disable_fragment_gen = true
+
   tests = "bind_tests.json"
-  deps = [ "//src/devices/bind/fuchsia.google.platform" ]
+  deps = [
+    "//src/devices/bind/fuchsia.gpio",
+    "//src/devices/bind/fuchsia.i2c",
+  ]
 }
 
 astro_firmware_path =
