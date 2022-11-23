@@ -74,13 +74,13 @@ const MAX_DATAGRAM_LEN_BYTES uint32 = 32768;
 type LogMessage = struct {
     pid uint64;
     tid uint64;
-    /// https://fuchsia.dev/fuchsia-src/reference/syscalls/clock_get_monotonic.md
+    /// [zx_clock_get_monotonic](https://fuchsia.dev/fuchsia-src/reference/syscalls/clock_get_monotonic.md)
     time zx.time;
     severity int32;
 
-    /// See //zircon/system/ulib/syslog/include/lib/syslog/wire_format.h. As messages
-    /// can be served out of order, this should only be logged if more than last
-    /// count.
+    /// See [wire_format.h](https://cs.opensource.google/fuchsia/fuchsia/+/main:zircon/system/ulib/syslog/include/lib/syslog/wire_format.h).
+    /// As messages can be served out of order, this should only be logged if more than
+    /// last count.
     dropped_logs uint32;
     tags vector<string:MAX_TAG_LEN_BYTES>:MAX_TAGS_PER_LOG_MESSAGE;
     msg string:MAX_DATAGRAM_LEN_BYTES;
@@ -126,8 +126,8 @@ type InterestChangeError = strict enum : uint32 {
 protocol LogSink {
     /// Send this socket to be drained.
     ///
-    /// See //zircon/system/ulib/syslog/include/lib/syslog/wire_format.h for what is expected to be
-    /// received over the socket.
+    /// See [wire_format.h](https://cs.opensource.google/fuchsia/fuchsia/+/main:zircon/system/ulib/syslog/include/lib/syslog/wire_format.h)
+    /// for what is expected to be received over the socket.
     Connect(resource struct {
         socket zx.handle:SOCKET;
     });
@@ -145,8 +145,8 @@ protocol LogSink {
 
     /// Send this socket to be drained, using the structured logs format.
     ///
-    /// See //docs/reference/platform-spec/diagnostics/logs-encoding.md for what is expected to be
-    /// received over the socket.
+    /// See [Encoding structured records](https://fuchsia.dev/fuchsia-src/reference/platform-spec/diagnostics/logs-encoding)
+    /// for what is expected to be received over the socket.
     ConnectStructured(resource struct {
         socket zx.handle:SOCKET;
     });
