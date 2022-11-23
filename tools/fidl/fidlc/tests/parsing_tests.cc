@@ -708,6 +708,12 @@ type Foo = struct {
                                       fidl::ErrUnexpectedTokenOfKind);
 }
 
+TEST(ParsingTests, BadMultipleConstraintDefinitionDoubleColon) {
+  TestLibrary library;
+  library.AddFile("bad/fi-0163.test.fidl");
+  ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrMultipleConstraintDefinitions);
+}
+
 TEST(ParsingTests, BadMultipleConstraintDefinitions) {
   TestLibrary library(R"FIDL(
 library example;

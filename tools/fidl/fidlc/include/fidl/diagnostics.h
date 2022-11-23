@@ -382,7 +382,7 @@ constexpr UndocumentedErrorDef<161, flat::Name> ErrMustHaveNonZeroSize(
     "{} must have non-zero size");
 constexpr ErrorDef<162, flat::Name, size_t, size_t> ErrWrongNumberOfLayoutParameters(
     "{} expected {} layout parameter(s), but got {}");
-constexpr UndocumentedErrorDef<163> ErrMultipleConstraintDefinitions(
+constexpr ErrorDef<163> ErrMultipleConstraintDefinitions(
     "cannot specify multiple constraint sets on a type");
 constexpr UndocumentedErrorDef<164, flat::Name, size_t, size_t> ErrTooManyConstraints(
     "{} expected at most {} constraints, but got {}");
