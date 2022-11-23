@@ -108,34 +108,6 @@ zx_status_t BlockDevice::DoIo(zx::vmo& vmo, size_t buf_len, zx_off_t off, zx_off
   return io_status_;
 }
 
-zx_status_t BlockDevice::DdkRead(void* buf, size_t buf_len, zx_off_t off, size_t* actual) {
-  zx::vmo vmo;
-  if (zx::vmo::create(std::max(buf_len, static_cast<size_t>(zx_system_get_page_size())), 0, &vmo) !=
-      ZX_OK) {
-    return ZX_ERR_INTERNAL;
-  }
-  zx_status_t status = DoIo(vmo, buf_len, off, 0, false);
-  if (vmo.read(buf, 0, buf_len) != ZX_OK) {
-    return ZX_ERR_INTERNAL;
-  }
-  *actual = (status == ZX_OK) ? buf_len : 0;
-  return status;
-}
-
-zx_status_t BlockDevice::DdkWrite(const void* buf, size_t buf_len, zx_off_t off, size_t* actual) {
-  zx::vmo vmo;
-  if (zx::vmo::create(std::max(buf_len, static_cast<size_t>(zx_system_get_page_size())), 0, &vmo) !=
-      ZX_OK) {
-    return ZX_ERR_INTERNAL;
-  }
-  if (vmo.write(buf, 0, buf_len) != ZX_OK) {
-    return ZX_ERR_INTERNAL;
-  }
-  zx_status_t status = DoIo(vmo, buf_len, off, 0, true);
-  *actual = (status == ZX_OK) ? buf_len : 0;
-  return status;
-}
-
 zx_off_t BlockDevice::DdkGetSize() { return device_get_size(parent()); }
 
 void BlockDevice::DdkRelease() { delete this; }

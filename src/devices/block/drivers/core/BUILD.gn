@@ -64,11 +64,6 @@ test("core-unittest-bin") {
     "//zircon/system/ulib/zxtest",
   ]
 
-  # TODO(fxbug.dev/33822): Move the block driver off of deprecated APIs.
-  # TODO(fxbug.dev/33820): This target uses the deprecated Readable/Writeable.
-  # Please migrate away from these features.
-  configs += [ "//src/lib/ddktl:deprecated-read-write" ]
-
   # TODO(fxbug.dev/33820): This target uses the deprecated GetSizable.
   # Please migrate away from this feature.
   configs += [ "//src/lib/ddktl:deprecated-getsizable" ]
@@ -123,11 +118,6 @@ source_set("shared") {
     "//zircon/system/ulib/fidl-utils",
     "//zircon/system/ulib/storage-metrics",
   ]
-
-  # TODO(fxbug.dev/33822): Move the block driver off of deprecated APIs.
-  # TODO(fxbug.dev/33820): This target uses the deprecated Readable/Writeable.
-  # Please migrate away from these features.
-  configs += [ "//src/lib/ddktl:deprecated-read-write" ]
 
   # TODO(fxbug.dev/33820): This target uses the deprecated GetSizable.
   # Please migrate away from this feature.

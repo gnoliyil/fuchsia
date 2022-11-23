@@ -51,10 +51,9 @@ struct StatsCookie {
 };
 
 class BlockDevice;
-using BlockDeviceType =
-    ddk::Device<BlockDevice, ddk::GetProtocolable,
-                ddk::Messageable<fuchsia_hardware_block_volume::Volume>::Mixin,
-                ddk_deprecated::Readable, ddk_deprecated::Writable, ddk_deprecated::GetSizable>;
+using BlockDeviceType = ddk::Device<BlockDevice, ddk::GetProtocolable,
+                                    ddk::Messageable<fuchsia_hardware_block_volume::Volume>::Mixin,
+                                    ddk_deprecated::GetSizable>;
 
 class BlockDevice : public BlockDeviceType,
                     public ddk::BlockProtocol<BlockDevice, ddk::base_protocol> {
@@ -80,9 +79,7 @@ class BlockDevice : public BlockDeviceType,
   // ddk::GetProtocolable
   zx_status_t DdkGetProtocol(uint32_t proto_id, void* out_protocol);
 
-  // ddk::Readable, ddk::Writable, ddk::GetSizable
-  zx_status_t DdkRead(void* buf, size_t buf_len, zx_off_t off, size_t* actual);
-  zx_status_t DdkWrite(const void* buf, size_t buf_len, zx_off_t off, size_t* actual);
+  // ddk::GetSizable
   zx_off_t DdkGetSize();
 
   // ddk::BlockProtocol
