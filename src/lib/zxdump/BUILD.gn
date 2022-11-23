@@ -31,6 +31,9 @@ zx_library("zxdump") {
 
     # <lib/zxdump/types.h> has #include <lib/stdcompat/span.h>.
     "//sdk/lib/stdcompat",
+
+    # <lib/zxdump/types.h> has #include <lib/elfldltl/internal/byte.h> // TODO(fxbug.dev/115994)
+    "//src/lib/elfldltl",
   ]
 
   if (is_fuchsia) {
