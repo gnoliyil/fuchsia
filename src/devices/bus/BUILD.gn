@@ -21,6 +21,7 @@ group("drivers") {
     "drivers/platform/test:test-composite",
     "drivers/platform/test:test-gpio",
     "drivers/platform/test:test-i2c",
+    "drivers/platform/test:test-node-group",
     "drivers/platform/test:test-parent",
     "drivers/platform/test:test-pci",
     "drivers/platform/test:test-power",

@@ -64,6 +64,10 @@ void RestrictPlatformBus::AddComposite(AddCompositeRequestView request, fdf::Are
                                        AddCompositeCompleter::Sync& completer) {
   completer.buffer(arena).ReplyError(ZX_ERR_NOT_SUPPORTED);
 }
+void RestrictPlatformBus::AddNodeGroup(AddNodeGroupRequestView request, fdf::Arena& arena,
+                                       AddNodeGroupCompleter::Sync& completer) {
+  completer.buffer(arena).ReplyError(ZX_ERR_NOT_SUPPORTED);
+}
 
 void RestrictPlatformBus::AddCompositeImplicitPbusFragment(
     AddCompositeImplicitPbusFragmentRequestView request, fdf::Arena& arena,

@@ -43,6 +43,7 @@ fuchsia_driver("test-board-driver") {
     "test-clock.cc",
     "test-gpio.cc",
     "test-i2c.cc",
+    "test-node-group.cc",
     "test-pci.cc",
     "test-power-sensor.cc",
     "test-power.cc",
@@ -55,6 +56,9 @@ fuchsia_driver("test-board-driver") {
     ":test-board-bind",
     "//sdk/banjo/fuchsia.hardware.platform.device:fuchsia.hardware.platform.device_banjo_cpp",
     "//sdk/fidl/fuchsia.hardware.platform.bus:fuchsia.hardware.platform.bus_cpp_driver",
+    "//sdk/lib/driver/component/cpp:cpp",
+    "//src/devices/bind/fuchsia.test:fuchsia.test_cpp",
+    "//src/devices/bind/fuchsia.test.platform:fuchsia.test.platform_cpp",
     "//src/devices/bus/lib/platform-bus-composites",
     "//src/devices/lib/amlogic",
     "//src/devices/lib/driver",
@@ -355,6 +359,36 @@ fuchsia_driver_component("test-vreg") {
   colocate = true
 }
 
+driver_bind_rules("test-node-group-bind") {
+  rules = "test/test-node-group.bind"
+  header_output = "test-node-group-bind.h"
+  deps = [
+    "//src/devices/bind/fuchsia.platform",
+    "//src/devices/bind/fuchsia.test",
+    "//src/devices/bind/fuchsia.test.platform",
+  ]
+}
+
+fuchsia_driver("test-node-group-driver") {
+  output_name = "test-node-group"
+  configs += [ "//build/config:all_source" ]
+  sources = [ "test/node-group.cc" ]
+  deps = [
+    ":test-node-group-bind",
+    "//src/devices/lib/driver",
+    "//src/lib/ddk",
+    "//src/lib/ddktl",
+    "//zircon/system/ulib/zx",
+  ]
+}
+
+fuchsia_driver_component("test-node-group") {
+  component_name = "test-node-group"
+  deps = [ ":test-node-group-driver" ]
+  info = "test-driver-info.json"
+  colocate = true
+}
+
 driver_bind_rules("test-composite-bind") {
   rules = "test/test-composite.bind"
   header_output = "test-composite-bind.h"
@@ -375,6 +409,7 @@ fuchsia_driver("test-composite-driver") {
     "//sdk/banjo/fuchsia.hardware.pwm:fuchsia.hardware.pwm_banjo_cpp",
     "//sdk/banjo/fuchsia.hardware.spi:fuchsia.hardware.spi_banjo_cpp",
     "//sdk/banjo/fuchsia.hardware.vreg:fuchsia.hardware.vreg_banjo_cpp",
+    "//src/devices/bind/fuchsia.test:fuchsia.test_cpp",
     "//src/devices/lib/driver",
     "//src/devices/pci/lib/fuchsia.hardware.pci:fuchsia.hardware.pci_banjo_cpp",
     "//src/lib/ddk",
@@ -461,6 +496,7 @@ fuchsia_unittest_package("platform-bus-test") {
     ":test-composite",
     ":test-gpio",
     ":test-i2c",
+    ":test-node-group",
     ":test-pci",
     ":test-power",
     ":test-power-sensor",

@@ -217,8 +217,9 @@ zx_status_t BindDriverManager::BindDriverToFragment(const MatchedCompositeDriver
   auto& composite = driver_index_composite_devices_[name];
   zx_status_t status = composite->BindFragment(driver.composite.node, dev);
   if (status != ZX_OK) {
-    LOGF(ERROR, "Failed to BindFragment for '%.*s': %s", static_cast<uint32_t>(dev->name().size()),
-         dev->name().data(), zx_status_get_string(status));
+    LOGF(WARNING, "Failed to BindFragment for '%.*s': %s",
+         static_cast<uint32_t>(dev->name().size()), dev->name().data(),
+         zx_status_get_string(status));
   }
   return status;
 }

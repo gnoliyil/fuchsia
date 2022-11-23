@@ -63,6 +63,28 @@ static zx_status_t test_bind(void* ctx, zx_device_t* parent) {
     return status;
   }
 
+  zx_device_prop_t node_props[] = {
+      {BIND_PLATFORM_DEV_VID, 0, PDEV_VID_TEST},
+      {BIND_PLATFORM_DEV_PID, 0, PDEV_PID_PBUS_TEST},
+      {BIND_PLATFORM_DEV_DID, 0, PDEV_DID_TEST_NODE_REPRESENTATION},
+  };
+
+  device_add_args_t node_args = {
+      .version = DEVICE_ADD_ARGS_VERSION,
+      .name = "node_a",
+      .ctx = test,
+      .ops = &test_device_protocol,
+      .props = node_props,
+      .prop_count = countof(node_props),
+  };
+
+  status = device_add(parent, &node_args, &test->zxdev);
+  if (status != ZX_OK) {
+    zxlogf(ERROR, "%s: device_add failed: %d", DRIVER_NAME, status);
+    free(test);
+    return status;
+  }
+
   return ZX_OK;
 }
 

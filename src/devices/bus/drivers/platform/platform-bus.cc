@@ -29,6 +29,8 @@
 
 #include <algorithm>
 
+#include <bind/fuchsia/cpp/bind.h>
+#include <bind/fuchsia/platform/cpp/bind.h>
 #include <ddktl/device.h>
 #include <ddktl/fidl.h>
 #include <fbl/algorithm.h>
@@ -104,6 +106,52 @@ zx_status_t AddProtocolPassthrough(const char* name, cpp20::span<const zx_device
   };
 
   return device_add(parent->zxdev(), &args, out_device);
+}
+
+device_bind_prop_key_t ConvertFidlPropertyKey(
+    const fuchsia_driver_framework::NodePropertyKey& key) {
+  switch (key.Which()) {
+    case fuchsia_driver_framework::NodePropertyKey::Tag::kIntValue:
+      return device_bind_prop_int_key(key.int_value().value());
+    case fuchsia_driver_framework::NodePropertyKey::Tag::kStringValue:
+      return device_bind_prop_str_key(key.string_value().value().c_str());
+  }
+}
+
+device_bind_prop_value_t ConvertFidlPropertyValue(
+    const fuchsia_driver_framework::NodePropertyValue& value) {
+  switch (value.Which()) {
+    case fuchsia_driver_framework::NodePropertyValue::Tag::kIntValue:
+      return device_bind_prop_int_val(value.int_value().value());
+    case fuchsia_driver_framework::NodePropertyValue::Tag::kStringValue:
+      return device_bind_prop_str_val(value.string_value().value().c_str());
+    case fuchsia_driver_framework::NodePropertyValue::Tag::kBoolValue:
+      return device_bind_prop_bool_val(value.bool_value().value());
+    case fuchsia_driver_framework::NodePropertyValue::Tag::kEnumValue:
+      return device_bind_prop_enum_val(value.enum_value().value().c_str());
+  }
+}
+
+ddk::NodeGroupBindRule ConvertFidlBindRule(const fuchsia_driver_framework::BindRule& fidl_rule) {
+  auto key = ConvertFidlPropertyKey(fidl_rule.key());
+
+  std::vector<device_bind_prop_value_t> values;
+  values.reserve(fidl_rule.values().size());
+  for (const auto& fidl_value : fidl_rule.values()) {
+    values.push_back(ConvertFidlPropertyValue(fidl_value));
+  }
+
+  device_bind_rule_condition condition;
+  switch (fidl_rule.condition()) {
+    case fuchsia_driver_framework::Condition::kAccept:
+      condition = DEVICE_BIND_RULE_CONDITION_ACCEPT;
+      break;
+    case fuchsia_driver_framework::Condition::kReject:
+      condition = DEVICE_BIND_RULE_CONDITION_REJECT;
+      break;
+  }
+
+  return ddk::NodeGroupBindRule(key, condition, values);
 }
 
 }  // anonymous namespace
@@ -588,6 +636,103 @@ void PlatformBus::AddComposite(AddCompositeRequestView request, fdf::Arena& aren
   }
   // devmgr is now in charge of the device.
   __UNUSED auto* dummy = dev.release();
+
+  completer.buffer(arena).ReplySuccess();
+}
+
+void PlatformBus::AddNodeGroup(AddNodeGroupRequestView request, fdf::Arena& arena,
+                               AddNodeGroupCompleter::Sync& completer) {
+  // Create the pdev fragments
+  auto vid = request->node.has_vid() ? request->node.vid() : 0;
+  auto pid = request->node.has_pid() ? request->node.pid() : 0;
+  auto did = request->node.has_did() ? request->node.did() : 0;
+  auto instance_id = request->node.has_instance_id() ? request->node.instance_id() : 0;
+
+  const ddk::NodeGroupBindRule kPDevBindRules[] = {
+      ddk::MakeAcceptBindRule(bind_fuchsia::PLATFORM_DEV_VID, vid),
+      ddk::MakeAcceptBindRule(bind_fuchsia::PLATFORM_DEV_PID, pid),
+      ddk::MakeAcceptBindRule(bind_fuchsia::PLATFORM_DEV_DID, did),
+  };
+
+  const device_bind_prop_t kPDevProperties[] = {
+      ddk::MakeProperty(bind_fuchsia::PROTOCOL, bind_fuchsia_platform::BIND_PROTOCOL_DEVICE),
+      ddk::MakeProperty(bind_fuchsia::PLATFORM_DEV_VID, vid),
+      ddk::MakeProperty(bind_fuchsia::PLATFORM_DEV_PID, pid),
+      ddk::MakeProperty(bind_fuchsia::PLATFORM_DEV_DID, did),
+      ddk::MakeProperty(bind_fuchsia::PLATFORM_DEV_INSTANCE_ID, instance_id),
+  };
+
+  auto node_group_desc = ddk::NodeGroupDesc(kPDevBindRules, kPDevProperties);
+
+  auto node_group = fidl::ToNatural(request->group);
+  for (const auto& node : node_group.nodes().value()) {
+    if (node.bind_rules().empty()) {
+      zxlogf(ERROR, "Node group bind rules cannot be empty");
+      completer.buffer(arena).ReplyError(ZX_ERR_INVALID_ARGS);
+      return;
+    }
+
+    if (node.bind_properties().empty()) {
+      zxlogf(ERROR, "Node representation properties cannot be empty");
+      completer.buffer(arena).ReplyError(ZX_ERR_INVALID_ARGS);
+      return;
+    }
+
+    std::vector<ddk::NodeGroupBindRule> rules;
+    rules.reserve(node.bind_rules().size());
+    for (const auto& bind_rule : node.bind_rules()) {
+      rules.push_back(ConvertFidlBindRule(bind_rule));
+    }
+
+    std::vector<device_bind_prop_t> properties;
+    properties.reserve(node.bind_properties().size());
+    for (auto property : node.bind_properties()) {
+      if (!property.key() || !property.value()) {
+        zxlogf(ERROR, "Node representation properties must contain a key and value");
+        completer.buffer(arena).ReplyError(ZX_ERR_INVALID_ARGS);
+        return;
+      }
+
+      properties.push_back(device_bind_prop_t{
+          .key = ConvertFidlPropertyKey(property.key().value()),
+          .value = ConvertFidlPropertyValue(property.value().value()),
+      });
+    }
+    node_group_desc.AddNodeRepresentation(rules, properties);
+  }
+
+  // TODO(fxb/114235): Resolve the spawn colocated source.
+  node_group_desc.set_spawn_colocated(false);
+  auto status = DdkAddNodeGroup(node_group.name()->c_str(), node_group_desc);
+
+  if (status != ZX_OK) {
+    zxlogf(ERROR, "DdkAddNodeGroup failed %s", zx_status_get_string(status));
+    completer.buffer(arena).ReplyError(status);
+    return;
+  }
+
+  // Create a platform device for the node.
+  std::unique_ptr<platform_bus::PlatformDevice> dev;
+  auto natural = fidl::ToNatural(request->node);
+  auto valid = ValidateResources(natural);
+  if (valid.is_error()) {
+    completer.buffer(arena).ReplyError(valid.error_value());
+    return;
+  }
+
+  status =
+      PlatformDevice::Create(std::move(natural), zxdev(), this, PlatformDevice::Fragment, &dev);
+  if (status != ZX_OK) {
+    completer.buffer(arena).ReplyError(status);
+    return;
+  }
+  status = dev->Start();
+  if (status != ZX_OK) {
+    completer.buffer(arena).ReplyError(status);
+    return;
+  }
+  // devmgr is now in charge of the device.
+  __UNUSED auto* dev_ptr = dev.release();
 
   completer.buffer(arena).ReplySuccess();
 }

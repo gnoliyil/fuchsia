@@ -57,6 +57,9 @@ class RestrictPlatformBus : public fdf::WireServer<fuchsia_hardware_platform_bus
   void AddComposite(AddCompositeRequestView request, fdf::Arena& arena,
                     AddCompositeCompleter::Sync& completer) override;
 
+  void AddNodeGroup(AddNodeGroupRequestView request, fdf::Arena& arena,
+                    AddNodeGroupCompleter::Sync& completer) override;
+
   void AddCompositeImplicitPbusFragment(
       AddCompositeImplicitPbusFragmentRequestView request, fdf::Arena& arena,
       AddCompositeImplicitPbusFragmentCompleter::Sync& completer) override;

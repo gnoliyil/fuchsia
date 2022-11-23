@@ -64,6 +64,7 @@ TEST(PbusTest, Enumeration) {
       RecursiveWaitForFile(devfs_root, "sys/platform/11:01:10/composite-dev-2/composite", &fd),
       ZX_OK);
   EXPECT_EQ(RecursiveWaitForFile(devfs_root, "sys/platform/11:01:21/test-pci", &fd), ZX_OK);
+  EXPECT_EQ(RecursiveWaitForFile(devfs_root, "sys/platform/11:01:23/node_group", &fd), ZX_OK);
 
   const int dirfd = devfs_root.get();
   struct stat st;
@@ -80,6 +81,7 @@ TEST(PbusTest, Enumeration) {
   EXPECT_EQ(fstatat(dirfd, "sys/platform/11:01:f/composite-dev/composite", &st, 0), 0);
   EXPECT_EQ(fstatat(dirfd, "sys/platform/11:01:21/test-pci", &st, 0), 0);
   EXPECT_EQ(fstatat(dirfd, "sys/platform/11:01:22/test-power-sensor", &st, 0), 0);
+  EXPECT_EQ(fstatat(dirfd, "sys/platform/11:01:23/node_group/test-node-group", &st, 0), 0);
 
   // Check that we see multiple entries that begin with "fragment-" for a device that is a
   // fragment of multiple composites
