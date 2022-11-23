@@ -332,7 +332,10 @@ template("fuchsia_structured_config_rust_lib") {
     forward_variables_from(invoker, [ "testonly" ])
     sources = [ fidl_source_file ]
     non_fidl_deps = [ ":${fidl_source_target}($default_toolchain)" ]
-    should_lint = false  # disables copyright and library name checks
+    excluded_checks = [
+      "invalid-copyright-for-platform-source-library",
+      "wrong-prefix-for-platform-source-library",
+    ]
   }
 
   # generate the wrapper Rust library
@@ -506,7 +509,10 @@ template("fuchsia_structured_config_cpp_elf_lib") {
     forward_variables_from(invoker, [ "testonly" ])
     sources = [ fidl_source_file ]
     non_fidl_deps = [ ":${fidl_source_target}($default_toolchain)" ]
-    should_lint = false  # disables copyright and library name checks
+    excluded_checks = [
+      "invalid-copyright-for-platform-source-library",
+      "wrong-prefix-for-platform-source-library",
+    ]
   }
 
   library_headers(cpp_elf_headers_target) {
@@ -691,7 +697,10 @@ template("fuchsia_structured_config_cpp_driver_lib") {
     forward_variables_from(invoker, [ "testonly" ])
     sources = [ fidl_source_file ]
     non_fidl_deps = [ ":${fidl_source_target}($default_toolchain)" ]
-    should_lint = false  # disables copyright and library name checks
+    excluded_checks = [
+      "invalid-copyright-for-platform-source-library",
+      "wrong-prefix-for-platform-source-library",
+    ]
   }
 
   library_headers(cpp_driver_headers_target) {

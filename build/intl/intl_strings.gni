@@ -204,10 +204,7 @@ template("intl_strings") {
     fidl(library) {
       sources = [ generated_fidl_file_name ]
       non_fidl_deps = [ ":${strings_to_fidl_name}" ]
-
-      # Since we use FIDL as intermediate representation and nobody will read
-      # it, we don't need to lint.
-      should_lint = false
+      excluded_checks = [ "invalid-copyright-for-platform-source-library" ]
     }
   } else {
     # The non-FIDL toolchain FIDL libraries are built normally; except based

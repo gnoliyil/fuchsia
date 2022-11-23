@@ -80,7 +80,10 @@ fidl(fidl_library_target) {
   testonly = true
   sources = [ fidl_source_file ]
   non_fidl_deps = [ ":${fidl_source_target}($default_toolchain)" ]
-  should_lint = false  # disables copyright and library name checks
+  excluded_checks = [
+    "invalid-copyright-for-platform-source-library",
+    "wrong-prefix-for-platform-source-library",
+  ]
 }
 
 library_headers(cpp_elf_headers_target) {
