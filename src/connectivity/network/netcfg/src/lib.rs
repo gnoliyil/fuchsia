@@ -1506,14 +1506,18 @@ impl<'a> NetCfg<'a> {
     ) -> Result<(), errors::Error> {
         let class: DeviceClass = info.device_class.into();
         let ForwardedDeviceClasses { ipv4, ipv6 } = &self.forwarded_device_classes;
+        let ipv4_forwarding = ipv4.contains(&class);
+        let ipv6_forwarding = ipv6.contains(&class);
         let config: fnet_interfaces_admin::Configuration = control
             .set_configuration(fnet_interfaces_admin::Configuration {
                 ipv6: Some(fnet_interfaces_admin::Ipv6Configuration {
-                    forwarding: Some(ipv6.contains(&class)),
+                    forwarding: Some(ipv6_forwarding),
+                    multicast_forwarding: Some(ipv6_forwarding),
                     ..fnet_interfaces_admin::Ipv6Configuration::EMPTY
                 }),
                 ipv4: Some(fnet_interfaces_admin::Ipv4Configuration {
-                    forwarding: Some(ipv4.contains(&class)),
+                    forwarding: Some(ipv4_forwarding),
+                    multicast_forwarding: Some(ipv4_forwarding),
                     ..fnet_interfaces_admin::Ipv4Configuration::EMPTY
                 }),
                 ..fnet_interfaces_admin::Configuration::EMPTY

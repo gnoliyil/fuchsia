@@ -629,22 +629,26 @@ async fn test_forwarding<E: netemul::Endpoint, M: Manager>(name: &str) {
     let control = realm
         .interface_control(id)
         .expect("connect to fuchsia.net.interfaces.admin/Control for new interface");
-    let fnet_interfaces_admin::Configuration { ipv4: ipv4_config, ipv6: ipv6_config, .. } = control
-        .get_configuration()
-        .await
-        .expect("get_configuration FIDL error")
-        .expect("to get configuration");
-
-    let fnet_interfaces_admin::Ipv4Configuration { forwarding: v4, .. } =
-        ipv4_config.expect("to have a v4 config");
-    let fnet_interfaces_admin::Ipv6Configuration { forwarding: v6, .. } =
-        ipv6_config.expect("to have a v6 config");
 
     // The configuration installs forwarding on v4 on Virtual interfaces and v6 on Ethernet. We
     // should only observe the configuration to be installed on v4 because the device installed by
     // this test doesn't match the Ethernet device class.
-    assert_eq!(v4, Some(true));
-    assert_eq!(v6, Some(false));
+    assert_eq!(
+        control.get_configuration().await.expect("get_configuration FIDL error"),
+        Ok(fnet_interfaces_admin::Configuration {
+            ipv4: Some(fnet_interfaces_admin::Ipv4Configuration {
+                forwarding: Some(true),
+                multicast_forwarding: Some(true),
+                ..fnet_interfaces_admin::Ipv4Configuration::EMPTY
+            }),
+            ipv6: Some(fnet_interfaces_admin::Ipv6Configuration {
+                forwarding: Some(false),
+                multicast_forwarding: Some(false),
+                ..fnet_interfaces_admin::Ipv6Configuration::EMPTY
+            }),
+            ..fnet_interfaces_admin::Configuration::EMPTY
+        })
+    );
 
     // Wait for orderly shutdown of the test realm to complete before allowing
     // test interfaces to be cleaned up.
