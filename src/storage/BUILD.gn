@@ -14,7 +14,6 @@ group("tests") {
     "blobfs:tests",
     "conformance:tests",
     "ext4:tests",
-    "extractor:tests",
     "f2fs:tests",
     "factory:tests",
     "fshost:tests",
@@ -39,7 +38,6 @@ group("tests") {
 # a set of storage tools useful for development and debugging
 group("tools") {
   deps = [
-    "extractor:tools",
     "factory/export_ffs:export-ffs",
     "fxfs/tools",
     "tools",

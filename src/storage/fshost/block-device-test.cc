@@ -25,7 +25,6 @@
 #include "src/lib/storage/fs_management/cpp/mount.h"
 #include "src/storage/fshost/block-watcher.h"
 #include "src/storage/fshost/config.h"
-#include "src/storage/fshost/extract-metadata.h"
 #include "src/storage/fshost/filesystem-mounter.h"
 #include "src/storage/fshost/fs-manager.h"
 #include "src/storage/minfs/format.h"
@@ -284,101 +283,6 @@ TEST_F(BlockDeviceTest, TestMinfsCorruptionEventLogged) {
       corruption_events->node().get_property<inspect::UintPropertyValue>("minfs");
   ASSERT_NE(property, nullptr);
   ASSERT_EQ(property->value(), 1u);
-}
-
-std::unique_ptr<std::string> GetData(int fd) {
-  constexpr size_t kBufferSize = 10L * 1024L * 1024L;
-  auto buffer = std::make_unique<char[]>(kBufferSize);
-  memset(buffer.get(), 0, kBufferSize);
-  ssize_t read_length;
-  size_t offset = 0;
-  while ((read_length = read(fd, &buffer.get()[offset], kBufferSize - offset - 1)) >= 0) {
-    EXPECT_GE(read_length, 0);
-    offset += read_length;
-    if (offset >= kBufferSize - 1 || read_length == 0) {
-      buffer.get()[kBufferSize - 1] = '\0';
-      return std::make_unique<std::string>(std::string(buffer.get()));
-    }
-  }
-  EXPECT_GE(read_length, 0);
-  return nullptr;
-}
-
-std::pair<fbl::unique_fd, fbl::unique_fd> SetupLog() {
-  int pipefd[2];
-  EXPECT_EQ(pipe2(pipefd, O_NONBLOCK), 0);
-  fbl::unique_fd fd_to_close1(pipefd[0]);
-  fbl::unique_fd fd_to_close2(pipefd[1]);
-  fx_logger_activate_fallback(fx_log_get_logger(), pipefd[0]);
-
-  return {std::move(fd_to_close1), std::move(fd_to_close2)};
-}
-
-TEST_F(BlockDeviceTest, ExtractMinfsOnCorruptionToLog) {
-  auto fd_pair = SetupLog();
-  auto config = EmptyConfig();
-  config.check_filesystems() = true;
-  FilesystemMounter mounter(manager_, &config);
-
-  // Initialize Ramdisk with a data GUID.
-  ASSERT_NO_FATAL_FAILURE(CreateRamdisk(true));
-
-  BlockDevice device(&mounter, GetRamdiskFd(), &config);
-  device.SetFormat(fs_management::kDiskFormatMinfs);
-  EXPECT_EQ(device.GetFormat(), fs_management::kDiskFormatMinfs);
-  // Format minfs.
-  EXPECT_EQ(device.FormatFilesystem(), ZX_OK);
-
-  // Corrupt minfs.
-  uint64_t buffer_size = minfs::kMinfsBlockSize * 8LL;
-  std::unique_ptr<uint8_t[]> buffer(new uint8_t[buffer_size]);
-  memset(buffer.get(), 0, buffer_size);
-  zx::result ramdisk_device = RamdiskDevice();
-  ASSERT_TRUE(ramdisk_device.is_ok()) << ramdisk_device.status_string();
-  {
-    zx_status_t status =
-        block_client::SingleReadBytes(ramdisk_device.value(), buffer.get(), buffer_size, 0);
-    ASSERT_EQ(status, ZX_OK) << zx_status_get_string(status);
-  }
-  // Corrupt checksum of both copies of superblocks.
-  buffer.get()[offsetof(minfs::Superblock, checksum)] += 1;
-  buffer.get()[(minfs::kMinfsBlockSize * 7LL) + offsetof(minfs::Superblock, checksum)] += 1;
-  {
-    zx_status_t status =
-        block_client::SingleWriteBytes(ramdisk_device.value(), buffer.get(), buffer_size, 0);
-    ASSERT_EQ(status, ZX_OK) << zx_status_get_string(status);
-  }
-
-  EXPECT_NE(device.CheckFilesystem(), ZX_OK);
-  fd_pair.first.reset();
-  auto logs = GetData(fd_pair.second.get());
-  auto header_line = logs->find("EIL: Extracting minfs to serial.");
-  auto helper_line1 =
-      logs->find("EIL: Following lines that start with \"EIL\" are from extractor.");
-  auto helper_line2 =
-      logs->find("EIL: Successful extraction ends with \"EIL: Done extracting minfs to serial.\"");
-  auto dump_option_line =
-      logs->find("EIL: Compression:off Checksum:on Offset:on bytes_per_line:64");
-  auto offsets_string = logs->find("EIL 0-63:");
-  auto checksum_line = logs->find(":checksum: ");
-
-  if (ExtractMetadataEnabled()) {
-    ASSERT_NE(header_line, std::string::npos);
-    ASSERT_NE(helper_line1, std::string::npos);
-    ASSERT_NE(helper_line2, std::string::npos);
-    ASSERT_NE(dump_option_line, std::string::npos);
-    ASSERT_NE(offsets_string, std::string::npos);
-    ASSERT_NE(checksum_line, std::string::npos);
-    ASSERT_NE(logs->find("EIL: Done extracting minfs to serial", checksum_line), std::string::npos);
-  } else {
-    ASSERT_EQ(header_line, std::string::npos);
-    ASSERT_EQ(helper_line1, std::string::npos);
-    ASSERT_EQ(helper_line2, std::string::npos);
-    ASSERT_EQ(dump_option_line, std::string::npos);
-    ASSERT_EQ(offsets_string, std::string::npos);
-    ASSERT_EQ(checksum_line, std::string::npos);
-    ASSERT_EQ(logs->find("EIL: Done extracting minfs to serial"), std::string::npos);
-  }
 }
 
 // TODO(unknown): Add tests for Zxcrypt binding.

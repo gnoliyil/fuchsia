@@ -50,7 +50,6 @@
 
 #include "constants.h"
 #include "encrypted-volume.h"
-#include "extract-metadata.h"
 #include "src/devices/block/drivers/block-verity/verified-volume-client.h"
 #include "src/lib/storage/block_client/cpp/remote_block_device.h"
 #include "src/lib/storage/fs_management/cpp/admin.h"
@@ -681,7 +680,6 @@ zx_status_t BlockDevice::CheckFilesystem() {
                       "|   possible.\n"
                       "|\n"
                       "--------------------------------------------------------------";
-    MaybeDumpMetadata(fd_.duplicate(), {.disk_format = format_});
     mounter_->ReportPartitionCorrupted(format_);
   } else {
     FX_LOGS(INFO) << "fsck of " << DiskFormatString(format_) << " completed OK";
@@ -793,7 +791,6 @@ zx_status_t BlockDevice::MountFilesystem() {
               MountData(options, std::move(copier), block_device.value().TakeChannel());
           status != ZX_OK) {
         FX_LOGS(ERROR) << "Failed to mount data partition: " << zx_status_get_string(status) << ".";
-        MaybeDumpMetadata(fd_.duplicate(), {.disk_format = format_});
         return status;
       }
       return ZX_OK;

@@ -167,14 +167,6 @@ source_set("block-watcher") {
     "//zircon/system/ulib/trace-engine",
     "//zircon/system/ulib/zx",
   ]
-
-  if (extract_minfs_metadata_on_corruption) {
-    sources += [ "extract-metadata.cc" ]
-    public_deps += [ "//src/storage/extractor/cpp:disk_extractor" ]
-    deps += [ "//src/storage/minfs" ]
-  } else {
-    sources += [ "extract-metadata-noop.cc" ]
-  }
 }
 
 source_set("config") {
