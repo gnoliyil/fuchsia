@@ -154,11 +154,7 @@ pub(crate) mod for_tests {
                 .unwrap();
 
             let pkg_cache = realm_builder
-                .add_child(
-                    "pkg_cache",
-                    "#meta/pkg-cache-ignore-system-image.cm",
-                    ChildOptions::new(),
-                )
+                .add_child("pkg_cache", "#meta/pkg-cache.cm", ChildOptions::new())
                 .await
                 .unwrap();
             let system_update_committer = realm_builder

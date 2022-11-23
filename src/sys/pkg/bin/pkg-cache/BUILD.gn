@@ -43,7 +43,6 @@ rustc_library("lib") {
     "//src/sys/pkg/lib/package-directory",
     "//src/sys/pkg/lib/system-image",
     "//third_party/rust_crates:anyhow",
-    "//third_party/rust_crates:argh",
     "//third_party/rust_crates:async-lock",
     "//third_party/rust_crates:async-trait",
     "//third_party/rust_crates:futures",
@@ -105,6 +104,15 @@ fuchsia_structured_config_values("config_values_from_gn") {
   cm_label = ":manifest"
   values = {
     enable_subpackages = true
+    use_system_image = true
+  }
+}
+
+fuchsia_structured_config_values("config_values_from_gn-ignore-system-image") {
+  cm_label = ":manifest"
+  values = {
+    enable_subpackages = true
+    use_system_image = false
   }
 }
 
@@ -117,27 +125,17 @@ fuchsia_component("component") {
   deps = [ ":bin" ]
 }
 
-fuchsia_component_manifest("manifest-ignore-system-image") {
-  component_name = "pkg-cache-ignore-system-image"
-  manifest = "meta/pkg-cache-ignore-system-image.cml"
-}
-
-fuchsia_component("component-ignore-system-image") {
-  cm_label = ":manifest-ignore-system-image"
-  deps = [ ":bin" ]
-}
-
-fuchsia_structured_config_values("config_values_from_gn-ignore-system-image") {
-  cm_label = ":manifest-ignore-system-image"
-  values = {
-    enable_subpackages = true
-  }
-}
-
 group("production-component-and-config") {
   public_deps = [
     ":component",
     ":config_values_from_gn",
+  ]
+}
+
+group("ignore-system-image-component-and-config") {
+  public_deps = [
+    ":component",
+    ":config_values_from_gn-ignore-system-image",
   ]
 }
 

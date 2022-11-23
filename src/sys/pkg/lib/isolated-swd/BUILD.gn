@@ -74,8 +74,7 @@ fuchsia_test_component("isolated-swd-tests-component") {
 }
 
 isolated_swd_components = [
-  "//src/sys/pkg/bin/pkg-cache:component-ignore-system-image",
-  "//src/sys/pkg/bin/pkg-cache:config_values_from_gn-ignore-system-image",
+  "//src/sys/pkg/bin/pkg-cache:ignore-system-image-component-and-config",
   "//src/sys/pkg/bin/pkg-resolver:component",
   "//src/sys/pkg/bin/system-updater:isolated",
 ]
@@ -85,8 +84,7 @@ fuchsia_component("pkg-component") {
   manifest = "//src/sys/pkg/meta/pkg-recovery.cml"
   deps = [
     "//src/sys/pkg/bin/fake-system-update-committer",
-    "//src/sys/pkg/bin/pkg-cache:component-ignore-system-image",
-    "//src/sys/pkg/bin/pkg-cache:config_values_from_gn-ignore-system-image",
+    "//src/sys/pkg/bin/pkg-cache:ignore-system-image-component-and-config",
     "//src/sys/pkg/bin/pkg-resolver:component",
   ]
 }

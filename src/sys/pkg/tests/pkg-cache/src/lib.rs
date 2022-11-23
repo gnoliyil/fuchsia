@@ -455,18 +455,22 @@ where
 
         let local_child_out_dir = Mutex::new(Some(local_child_out_dir));
 
-        let pkg_cache_manifest = if self.ignore_system_image {
-            "#meta/pkg-cache-ignore-system-image.cm"
-        } else {
-            "#meta/pkg-cache.cm"
-        };
-
         let builder = RealmBuilder::new().await.unwrap();
-        let pkg_cache =
-            builder.add_child("pkg_cache", pkg_cache_manifest, ChildOptions::new()).await.unwrap();
-        if self.enable_subpackages {
+        let pkg_cache = builder
+            .add_child("pkg_cache", "#meta/pkg-cache.cm", ChildOptions::new())
+            .await
+            .unwrap();
+        if self.enable_subpackages || self.ignore_system_image {
             builder.init_mutable_config_from_package(&pkg_cache).await.unwrap();
-            builder.set_config_value_bool(&pkg_cache, "enable_subpackages", true).await.unwrap();
+            if self.enable_subpackages {
+                builder
+                    .set_config_value_bool(&pkg_cache, "enable_subpackages", true)
+                    .await
+                    .unwrap();
+            }
+            if self.ignore_system_image {
+                builder.set_config_value_bool(&pkg_cache, "use_system_image", false).await.unwrap();
+            }
         }
         let system_update_committer = builder
             .add_child("system_update_committer", "fuchsia-pkg://fuchsia.com/pkg-cache-integration-tests#meta/system-update-committer.cm", ChildOptions::new()).await.unwrap();

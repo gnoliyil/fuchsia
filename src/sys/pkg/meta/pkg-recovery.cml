@@ -15,7 +15,7 @@
     children: [
         {
             name: "pkg-cache",
-            url: "#meta/pkg-cache-ignore-system-image.cm",
+            url: "#meta/pkg-cache.cm",
         },
         {
             name: "pkg-resolver",

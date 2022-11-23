@@ -11,7 +11,6 @@
 use {
     crate::{base_packages::BasePackages, index::PackageIndex},
     anyhow::{anyhow, format_err, Context as _, Error},
-    argh::FromArgs,
     cobalt_sw_delivery_registry as metrics,
     fidl::endpoints::DiscoverableProtocolMarker as _,
     fidl_contrib::{protocol_connector::ConnectedProtocol, ProtocolConnector},
@@ -42,14 +41,6 @@ mod retained_packages_service;
 mod test_utils;
 
 const COBALT_CONNECTOR_BUFFER_SIZE: usize = 1000;
-
-#[derive(FromArgs, Debug, PartialEq)]
-/// Flags to the package cache.
-pub struct Args {
-    /// whether to ignore the system image when starting pkg-cache.
-    #[argh(switch)]
-    ignore_system_image: bool,
-}
 
 struct CobaltConnectedService;
 impl ConnectedProtocol for CobaltConnectedService {
@@ -114,15 +105,20 @@ pub fn main() -> Result<(), Error> {
 
 async fn main_inner() -> Result<(), Error> {
     info!("starting package cache service");
-
-    let subpackages_config =
-        match pkg_cache_config::Config::take_from_startup_handle().enable_subpackages {
-            true => SubpackagesConfig::Enable,
-            false => SubpackagesConfig::Disable,
-        };
-    let Args { ignore_system_image } = argh::from_env();
-
     let inspector = finspect::Inspector::new();
+
+    let (subpackages_config, use_system_image) = {
+        let config = pkg_cache_config::Config::take_from_startup_handle();
+        inspector.root().record_child("config", |config_node| config.record_inspect(config_node));
+        (
+            match config.enable_subpackages {
+                true => SubpackagesConfig::Enable,
+                false => SubpackagesConfig::Disable,
+            },
+            config.use_system_image,
+        )
+    };
+
     let mut package_index = PackageIndex::new(inspector.root().create_child("index"));
     let blobfs = blobfs::Client::open_from_namespace_rwx().context("error opening blobfs")?;
 
@@ -132,17 +128,7 @@ async fn main_inner() -> Result<(), Error> {
         non_static_allow_list,
         base_packages,
         cache_packages,
-    ) = if ignore_system_image {
-        info!("not loading system_image due to process arguments");
-        inspector.root().record_string("system_image", "ignored");
-        (
-            None,
-            system_image::ExecutabilityRestrictions::Enforce,
-            system_image::NonStaticAllowList::empty(),
-            BasePackages::empty(inspector.root().create_child("base-packages")),
-            None,
-        )
-    } else {
+    ) = if use_system_image {
         let boot_args = connect_to_protocol::<fidl_fuchsia_boot::ArgumentsMarker>()
             .context("error connecting to fuchsia.boot/Arguments")?;
         let system_image = system_image::SystemImage::new(blobfs.clone(), &boot_args)
@@ -181,6 +167,16 @@ async fn main_inner() -> Result<(), Error> {
             non_static_allow_list,
             base_packages,
             cache_packages,
+        )
+    } else {
+        info!("not loading system_image due to structured config");
+        inspector.root().record_string("system_image", "ignored");
+        (
+            None,
+            system_image::ExecutabilityRestrictions::Enforce,
+            system_image::NonStaticAllowList::empty(),
+            BasePackages::empty(inspector.root().create_child("base-packages")),
+            None,
         )
     };
 
