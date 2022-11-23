@@ -136,9 +136,8 @@ impl EventLoop {
         let if_watcher_stream = {
             let interface_state = connect_to_protocol::<fnet_interfaces::StateMarker>()
                 .context("network_manager failed to connect to interface state")?;
-            // TODO(https://fxbug.dev/110445): Either not register interest in
-            // valid-until or don't calculate reachability upon valid lifetime
-            // changes. Note that the event stream returned by the extension
+            // TODO(https://fxbug.dev/110445): Don't register interest in
+            // valid-until. Note that the event stream returned by the extension
             // crate is created from a watcher with interest in all fields.
             fnet_interfaces_ext::event_stream_from_state(&interface_state)
                 .context("get interface event stream")?
@@ -255,15 +254,51 @@ impl EventLoop {
                 .await;
                 return Ok(Some(id));
             }
-            fnet_interfaces_ext::UpdateResult::Changed { previous: _, current: properties } => {
-                Self::compute_state(
-                    &mut self.monitor,
-                    &mut self.watchdog,
-                    &stack,
-                    properties,
-                    &self.neighbor_cache,
-                )
-                .await;
+            fnet_interfaces_ext::UpdateResult::Changed {
+                previous:
+                    fnet_interfaces::Properties {
+                        online,
+                        addresses,
+                        has_default_ipv4_route,
+                        has_default_ipv6_route,
+                        ..
+                    },
+                current:
+                    properties @ fnet_interfaces_ext::Properties {
+                        addresses: current_addresses,
+                        id: _,
+                        name: _,
+                        device_class: _,
+                        online: _,
+                        has_default_ipv4_route: _,
+                        has_default_ipv6_route: _,
+                    },
+            } => {
+                // TODO(https://fxbug.dev/110445): Don't register interest in
+                // valid-until instead of filtering out address property
+                // changes manually here.
+                if online.is_some()
+                    || has_default_ipv4_route.is_some()
+                    || has_default_ipv6_route.is_some()
+                    || addresses.map_or(false, |addresses| {
+                        let previous = addresses
+                            .iter()
+                            .filter_map(|fnet_interfaces::Address { addr, .. }| addr.as_ref());
+                        let current = current_addresses
+                            .iter()
+                            .map(|fnet_interfaces_ext::Address { addr, valid_until: _ }| addr);
+                        previous.ne(current)
+                    })
+                {
+                    Self::compute_state(
+                        &mut self.monitor,
+                        &mut self.watchdog,
+                        &stack,
+                        properties,
+                        &self.neighbor_cache,
+                    )
+                    .await;
+                }
             }
             fnet_interfaces_ext::UpdateResult::Removed(properties) => {
                 self.watchdog.handle_interface_removed(properties.id);
