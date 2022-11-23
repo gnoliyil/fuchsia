@@ -273,7 +273,7 @@ fpromise::result<std::array<uint8_t, kMacAddrLen>, zx_status_t>
 BtHciBroadcom::GetBdaddrFromBootloader() {
   std::array<uint8_t, kMacAddrLen> mac_addr;
   size_t actual_len;
-  zx_status_t status = device_get_metadata(zxdev(), DEVICE_METADATA_MAC_ADDRESS, mac_addr.data(),
+  zx_status_t status = device_get_metadata(parent(), DEVICE_METADATA_MAC_ADDRESS, mac_addr.data(),
                                            sizeof(mac_addr), &actual_len);
   if (status != ZX_OK) {
     return fpromise::error(status);
