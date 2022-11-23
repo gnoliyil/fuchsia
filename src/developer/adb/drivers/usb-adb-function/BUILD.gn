@@ -38,7 +38,6 @@ source_set("usb-adb-common") {
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/sync",
     "//zircon/system/ulib/trace",
-    "//zircon/system/ulib/trace:trace-driver",
   ]
 }
 

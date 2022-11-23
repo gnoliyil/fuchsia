@@ -65,11 +65,6 @@ trace_library("trace") {
   ]
 }
 
-# TODO(fxbug.dev/111104): Remove this after all users have been migrated.
-group("trace-driver") {
-  public_deps = [ ":trace" ]
-}
-
 # A special version for programs and shared libraries that can't use
 # libtrace-engine.so.
 # N.B. Please verify that you really need this before using it.
