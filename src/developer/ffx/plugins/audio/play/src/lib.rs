@@ -12,12 +12,10 @@ use {
         MAX_AUDIO_BUFFER_BYTES,
     },
     fidl_fuchsia_io as _,
-    fidl_fuchsia_media::{
-        AudioRendererEvent::OnMinLeadTimeChanged, AudioSampleFormat, AudioStreamType,
-    },
+    fidl_fuchsia_media::{AudioRendererEvent::OnMinLeadTimeChanged, AudioStreamType},
     fidl_fuchsia_media_audio as _, fuchsia_async as _,
     futures::TryStreamExt,
-    hound::{SampleFormat, WavReader},
+    hound::WavReader,
     std::{cell::RefCell, cmp::min, collections::VecDeque, io, ops::Range, rc::Rc, sync::mpsc},
     tokio as _,
 };
@@ -33,24 +31,6 @@ pub async fn play_cmd(audio_proxy: AudioDaemonProxy, cmd: PlayCommand) -> Result
         }
     }
     Ok(())
-}
-
-fn get_sample_format_from_file(
-    bits_per_sample: u16,
-    sample_format: SampleFormat,
-) -> AudioSampleFormat {
-    match sample_format {
-        SampleFormat::Int => {
-            if bits_per_sample == 8 {
-                AudioSampleFormat::Unsigned8
-            } else if bits_per_sample <= 16 {
-                AudioSampleFormat::Signed16
-            } else {
-                AudioSampleFormat::Signed24In32
-            }
-        }
-        SampleFormat::Float => AudioSampleFormat::Float,
-    }
 }
 
 pub async fn renderer_play(audio_proxy: AudioDaemonProxy, cmd: RenderCommand) -> Result<()> {
@@ -165,7 +145,7 @@ pub async fn renderer_play(audio_proxy: AudioDaemonProxy, cmd: RenderCommand) ->
     // Settings for AudioRenderer, from command parameters or WavSpec of stdin wav file.
     renderer_proxy.set_usage(cmd.usage)?;
     renderer_proxy.set_pcm_stream_type(&mut AudioStreamType {
-        sample_format: get_sample_format_from_file(spec.bits_per_sample, spec.sample_format),
+        sample_format: audio_utils::wav_spec_to_sample_format(spec),
         channels: spec.channels as u32,
         frames_per_second: spec.sample_rate,
     })?;

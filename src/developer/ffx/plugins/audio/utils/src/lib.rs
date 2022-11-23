@@ -6,11 +6,15 @@ use {
     anyhow::{Error, Result},
     errors::ffx_bail,
     fidl_fuchsia_audio_ffxdaemon::*,
+    fidl_fuchsia_media::AudioSampleFormat,
     hound::{WavReader, WavSpec},
-    std::{cmp, str::FromStr, time::Duration},
+    std::{cmp, convert::From, str::FromStr, time::Duration},
 };
 
 pub const DURATION_REGEX: &'static str = r"^(\d+)(h|m|s|ms)$";
+
+// Size of WAV (RIFF) header is 44 bytes.
+pub const WAV_HEADER_BYTE_COUNT: u32 = 44;
 
 /// Parses a Duration from string.
 pub fn parse_duration(value: &str) -> Result<Duration, String> {
@@ -33,26 +37,26 @@ pub fn parse_duration(value: &str) -> Result<Duration, String> {
     }
 }
 
-pub fn num_samples_in_stdin_chunk(spec: WavSpec) -> u32 {
-    return MAX_AUDIO_BUFFER_BYTES / bytes_per_sample(spec);
-}
-
-pub fn bytes_per_sample(spec: WavSpec) -> u32 {
+pub fn wav_spec_to_sample_format(spec: WavSpec) -> AudioSampleFormat {
     match spec.bits_per_sample {
-        1..=8 => 1,
-        9..=16 => 2,
-        17..=32 => 4,
-        _ => panic!("Unsupported value for bits_per_sample: {}", spec.bits_per_sample),
+        0..=8 => AudioSampleFormat::Unsigned8,
+        9..=16 => AudioSampleFormat::Signed16,
+        17.. => match spec.sample_format {
+            hound::SampleFormat::Int => AudioSampleFormat::Signed24In32,
+            hound::SampleFormat::Float => AudioSampleFormat::Float,
+        },
     }
 }
 
-pub fn bytes_per_frame(spec: WavSpec) -> u32 {
-    bytes_per_sample(spec) * spec.channels as u32
+pub fn packets_per_second(spec: WavSpec) -> u32 {
+    let output_format = AudioOutputFormat::from(spec);
+    let vmo_size_bytes = spec.sample_rate * output_format.bytes_per_frame();
+    (vmo_size_bytes as f64 / MAX_AUDIO_BUFFER_BYTES as f64).ceil() as u32
 }
 
-pub fn packets_per_second(spec: WavSpec) -> u32 {
-    let vmo_size_bytes = spec.sample_rate * bytes_per_frame(spec);
-    (vmo_size_bytes as f64 / MAX_AUDIO_BUFFER_BYTES as f64).ceil() as u32
+pub fn bytes_per_frame(spec: WavSpec) -> u32 {
+    let output_format = AudioOutputFormat::from(spec);
+    output_format.bytes_per_frame()
 }
 
 pub fn packets_per_file<R>(reader: &WavReader<R>) -> u64
@@ -62,9 +66,10 @@ where
     // TODO(camlloyd): For infinite files, we need to add a custom reader of the
     // WAVE format chunk since WavReader cannot be constructed from such a header.
     let num_samples_in_file = reader.len() as u64;
-    let num_bytes_in_file = num_samples_in_file * bytes_per_sample(reader.spec()) as u64;
+    let output_format = AudioOutputFormat::from(reader.spec());
+    let num_bytes_in_file = num_samples_in_file * output_format.bytes_per_sample() as u64;
     let buffer_size_bytes =
-        reader.spec().sample_rate as u64 * bytes_per_frame(reader.spec()) as u64;
+        output_format.sample_rate as u64 * output_format.bytes_per_frame() as u64;
 
     let bytes_per_packet = cmp::min(buffer_size_bytes / 2, MAX_AUDIO_BUFFER_BYTES as u64);
 
@@ -74,8 +79,22 @@ where
 #[derive(Debug, Eq, PartialEq)]
 pub struct AudioOutputFormat {
     pub sample_rate: u32,
-    pub sample_type: SampleType,
+    pub sample_type: CommandSampleType,
     pub channels: u16,
+}
+
+impl AudioOutputFormat {
+    pub fn bytes_per_sample(&self) -> u32 {
+        match self.sample_type {
+            CommandSampleType::Uint8 => 1,
+            CommandSampleType::Int16 => 2,
+            CommandSampleType::Int32 | CommandSampleType::Float32 => 4,
+        }
+    }
+
+    pub fn bytes_per_frame(&self) -> u32 {
+        self.bytes_per_sample() * self.channels as u32
+    }
 }
 
 impl FromStr for AudioOutputFormat {
@@ -97,7 +116,7 @@ impl FromStr for AudioOutputFormat {
             Err(_) => ffx_bail!("First value (sample rate) should be an integer."),
         };
 
-        let sample_type = match SampleType::from_str(splits[1]) {
+        let sample_type = match CommandSampleType::from_str(splits[1]) {
             Ok(sample_type) => sample_type,
             Err(_) => ffx_bail!(
                 "Second value (sample type) should be one of: uint8, int16, int32, float32."
@@ -117,22 +136,71 @@ impl FromStr for AudioOutputFormat {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub enum SampleType {
+pub enum CommandSampleType {
     Uint8,
     Int16,
     Int32,
     Float32,
 }
 
-impl FromStr for SampleType {
+impl FromStr for CommandSampleType {
     type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self> {
         match s {
-            "uint8" => Ok(SampleType::Uint8),
-            "int16" => Ok(SampleType::Int16),
-            "int32" => Ok(SampleType::Int32),
-            "float32" => Ok(SampleType::Float32),
+            "uint8" => Ok(CommandSampleType::Uint8),
+            "int16" => Ok(CommandSampleType::Int16),
+            "int32" => Ok(CommandSampleType::Int32),
+            "float32" => Ok(CommandSampleType::Float32),
             _ => ffx_bail!("Invalid sampletype: {}.", s),
+        }
+    }
+}
+
+impl From<WavSpec> for AudioOutputFormat {
+    fn from(item: WavSpec) -> Self {
+        AudioOutputFormat {
+            sample_rate: item.sample_rate,
+            sample_type: match item.bits_per_sample {
+                0..=8 => CommandSampleType::Uint8,
+                9..=16 => CommandSampleType::Int16,
+                17.. => match item.sample_format {
+                    hound::SampleFormat::Int => CommandSampleType::Int32,
+                    hound::SampleFormat::Float => CommandSampleType::Float32,
+                },
+            },
+            channels: item.channels,
+        }
+    }
+}
+
+impl From<&AudioOutputFormat> for WavSpec {
+    fn from(item: &AudioOutputFormat) -> Self {
+        WavSpec {
+            channels: item.channels,
+            sample_rate: item.sample_rate,
+            bits_per_sample: match item.sample_type {
+                CommandSampleType::Uint8 => 8,
+                CommandSampleType::Int16 => 16,
+                CommandSampleType::Int32 => 32,
+                CommandSampleType::Float32 => 32,
+            },
+            sample_format: match item.sample_type {
+                CommandSampleType::Uint8 | CommandSampleType::Int16 | CommandSampleType::Int32 => {
+                    hound::SampleFormat::Int
+                }
+                CommandSampleType::Float32 => hound::SampleFormat::Float,
+            },
+        }
+    }
+}
+
+impl From<&AudioOutputFormat> for AudioSampleFormat {
+    fn from(item: &AudioOutputFormat) -> Self {
+        match item.sample_type {
+            CommandSampleType::Uint8 => AudioSampleFormat::Unsigned8,
+            CommandSampleType::Int16 => AudioSampleFormat::Signed16,
+            CommandSampleType::Int32 => AudioSampleFormat::Signed24In32,
+            CommandSampleType::Float32 => AudioSampleFormat::Float,
         }
     }
 }
@@ -145,8 +213,16 @@ pub mod test {
 
     fn example_formats() -> Vec<AudioOutputFormat> {
         vec![
-            AudioOutputFormat { sample_rate: 48000, sample_type: SampleType::Uint8, channels: 2 },
-            AudioOutputFormat { sample_rate: 44100, sample_type: SampleType::Float32, channels: 1 },
+            AudioOutputFormat {
+                sample_rate: 48000,
+                sample_type: CommandSampleType::Uint8,
+                channels: 2,
+            },
+            AudioOutputFormat {
+                sample_rate: 44100,
+                sample_type: CommandSampleType::Float32,
+                channels: 1,
+            },
         ]
     }
 

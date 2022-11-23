@@ -4,10 +4,11 @@
 
 use {
     anyhow::Result,
+    audio_utils::{AudioOutputFormat, CommandSampleType},
     errors::ffx_bail,
     ffx_audio_gen_args::{
-        AudioOutputFormat, GenCommand, PinkNoiseCommand, SampleType, SawtoothCommand, SineCommand,
-        SquareCommand, SubCommand, TriangleCommand, WhiteNoiseCommand,
+        GenCommand, PinkNoiseCommand, SawtoothCommand, SineCommand, SquareCommand, SubCommand,
+        TriangleCommand, WhiteNoiseCommand,
     },
     ffx_core::ffx_plugin,
     hound::{SampleFormat, WavSpec},
@@ -15,7 +16,7 @@ use {
     std::{f64::consts::PI, io, io::Write, time::Duration},
 };
 
-// Conversion constants for `SampleType::Uint8`.
+// Conversion constants for `CommandSampleType::Uint8`.
 // Note: Sample data in WAV file are stored as unsigned 8 bit values. However, the hound rust
 // crate API accepts signed 8 bit Ints, and converts to unsigned 8 bit before writing.
 const FLOAT_TO_INT8: i32 = -(i8::MIN as i32);
@@ -24,14 +25,14 @@ fn float_to_i8(value: f64) -> i8 {
     ((value * FLOAT_TO_INT8 as f64).round() as i16).clamp(i8::MIN as i16, i8::MAX as i16) as i8
 }
 
-// Conversion constants for `SampleType::Int16`.
+// Conversion constants for `CommandSampleType::Int16`.
 const FLOAT_TO_INT16: i32 = -(i16::MIN as i32);
 
 fn float_to_i16(value: f64) -> i16 {
     ((value * FLOAT_TO_INT16 as f64).round() as i32).clamp(i16::MIN as i32, i16::MAX as i32) as i16
 }
 
-// Conversion constants for `SampleType::Int32`.
+// Conversion constants for `CommandSampleType::Int32`.
 const FLOAT_TO_INT32: i64 = -(i32::MIN as i64);
 
 fn float_to_i32(value: f64) -> i32 {
@@ -85,14 +86,16 @@ impl GenericSignal {
             channels: self.format.channels,
             sample_rate: self.format.sample_rate,
             bits_per_sample: match self.format.sample_type {
-                SampleType::Uint8 => 8,
-                SampleType::Int16 => 16,
-                SampleType::Int32 => 32,
-                SampleType::Float32 => 32,
+                CommandSampleType::Uint8 => 8,
+                CommandSampleType::Int16 => 16,
+                CommandSampleType::Int32 => 32,
+                CommandSampleType::Float32 => 32,
             },
             sample_format: match self.format.sample_type {
-                SampleType::Float32 => SampleFormat::Float,
-                SampleType::Uint8 | SampleType::Int16 | SampleType::Int32 => SampleFormat::Int,
+                CommandSampleType::Float32 => SampleFormat::Float,
+                CommandSampleType::Uint8 | CommandSampleType::Int16 | CommandSampleType::Int32 => {
+                    SampleFormat::Int
+                }
             },
         }
     }
@@ -353,7 +356,7 @@ pub mod test {
                 amplitude: Some(1.0),
                 format: AudioOutputFormat {
                     sample_rate: 48000,
-                    sample_type: SampleType::Uint8,
+                    sample_type: CommandSampleType::Uint8,
                     channels: 1,
                 },
                 signal_type: SignalType::Sine,
@@ -365,7 +368,7 @@ pub mod test {
                 amplitude: Some(0.5),
                 format: AudioOutputFormat {
                     sample_rate: 48000,
-                    sample_type: SampleType::Uint8,
+                    sample_type: CommandSampleType::Uint8,
                     channels: 1,
                 },
                 signal_type: SignalType::Sine,
@@ -378,7 +381,7 @@ pub mod test {
                 amplitude: Some(0.0),
                 format: AudioOutputFormat {
                     sample_rate: 48000,
-                    sample_type: SampleType::Int16,
+                    sample_type: CommandSampleType::Int16,
                     channels: 1,
                 },
                 signal_type: SignalType::Sine,
@@ -390,7 +393,7 @@ pub mod test {
                 amplitude: Some(1.0),
                 format: AudioOutputFormat {
                     sample_rate: 48000,
-                    sample_type: SampleType::Int16,
+                    sample_type: CommandSampleType::Int16,
                     channels: 1,
                 },
                 signal_type: SignalType::Sine,
@@ -402,7 +405,7 @@ pub mod test {
                 amplitude: Some(1.0),
                 format: AudioOutputFormat {
                     sample_rate: 48000,
-                    sample_type: SampleType::Int32,
+                    sample_type: CommandSampleType::Int32,
                     channels: 1,
                 },
                 signal_type: SignalType::Sine,
@@ -414,7 +417,7 @@ pub mod test {
                 amplitude: Some(1.0),
                 format: AudioOutputFormat {
                     sample_rate: 48000,
-                    sample_type: SampleType::Int16,
+                    sample_type: CommandSampleType::Int16,
                     channels: 1,
                 },
                 signal_type: SignalType::Square,
@@ -426,7 +429,7 @@ pub mod test {
                 amplitude: Some(1.0),
                 format: AudioOutputFormat {
                     sample_rate: 48000,
-                    sample_type: SampleType::Int32,
+                    sample_type: CommandSampleType::Int32,
                     channels: 1,
                 },
                 signal_type: SignalType::Square,
@@ -438,7 +441,7 @@ pub mod test {
                 amplitude: Some(0.5),
                 format: AudioOutputFormat {
                     sample_rate: 48000,
-                    sample_type: SampleType::Int32,
+                    sample_type: CommandSampleType::Int32,
                     channels: 2,
                 },
                 signal_type: SignalType::Square,
@@ -450,7 +453,7 @@ pub mod test {
                 amplitude: Some(0.5),
                 format: AudioOutputFormat {
                     sample_rate: 48000,
-                    sample_type: SampleType::Float32,
+                    sample_type: CommandSampleType::Float32,
                     channels: 1,
                 },
                 signal_type: SignalType::Square,
@@ -462,7 +465,7 @@ pub mod test {
                 amplitude: Some(1.0),
                 format: AudioOutputFormat {
                     sample_rate: 48000,
-                    sample_type: SampleType::Float32,
+                    sample_type: CommandSampleType::Float32,
                     channels: 2,
                 },
                 signal_type: SignalType::Square,
@@ -873,7 +876,7 @@ pub mod test {
             amplitude: Some(0.0),
             format: AudioOutputFormat {
                 sample_rate: 48000,
-                sample_type: SampleType::Int16,
+                sample_type: CommandSampleType::Int16,
                 channels: 1,
             },
             signal_type: SignalType::Sine,

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use fidl_fuchsia_audio_ffxdaemon::AudioDaemonCreateAudioRendererResponse;
+use fidl_fuchsia_audio_ffxdaemon::MAX_AUDIO_BUFFER_BYTES;
 
 use {
     anyhow::{self, Context, Error},
@@ -12,9 +12,12 @@ use {
         HandleBased,
     },
     fidl_fuchsia_audio_ffxdaemon::{
-        AudioDaemonRequest, AudioDaemonRequestStream, VmoWrapperMarker, VmoWrapperRequest,
+        AudioDaemonCreateAudioCapturerResponse, AudioDaemonCreateAudioRendererResponse,
+        AudioDaemonRequest, AudioDaemonRequestStream, VmoWrapperMarker, VmoWrapperReadResponse,
+        VmoWrapperRequest,
     },
-    fidl_fuchsia_media, fidl_fuchsia_media_audio,
+    fidl_fuchsia_media::AudioStreamType,
+    fidl_fuchsia_media_audio,
     fuchsia_component::server::ServiceFs,
     fuchsia_inspect::{component, health::Reporter},
     fuchsia_zircon::{self as zx},
@@ -46,6 +49,7 @@ async fn serve(
             VmoWrapperRequest::Write { responder, payload } => {
                 let data =
                     payload.data.ok_or(anyhow::anyhow!("No data passed to VmoWrapper write."))?;
+
                 let offset = payload
                     .offset
                     .ok_or(anyhow::anyhow!("No offset passed to VmoWrapper write."))?;
@@ -54,6 +58,33 @@ async fn serve(
                 responder
                     .send(&mut Ok(()))
                     .expect("Error sending response to VmoWrapper write call.");
+            }
+
+            VmoWrapperRequest::Read { payload, responder } => {
+                let offset = payload
+                    .offset
+                    .ok_or(anyhow::anyhow!("No offset passed to VmoWrapper read."))?;
+                let buffer_size_bytes = payload
+                    .buffer_size_bytes
+                    .ok_or(anyhow::anyhow!("No buffer size passed to VmoWrapper read."))?;
+
+                if buffer_size_bytes > MAX_AUDIO_BUFFER_BYTES.into() {
+                    responder
+                        .send(&mut std::result::Result::Err(zx::sys::ZX_ERR_INVALID_ARGS))
+                        .expect("Failed sending error response to read call.");
+                    break;
+                }
+
+                // Fill with 0s so len is actually correct for vmo read.
+                let mut buffer = vec![0; buffer_size_bytes as usize];
+
+                vmo.read(&mut buffer, offset)?;
+
+                let response =
+                    VmoWrapperReadResponse { data: Some(buffer), ..VmoWrapperReadResponse::EMPTY };
+                responder
+                    .send(&mut Ok(response))
+                    .expect("Error sending response to VmoWrapper read call.");
             }
         }
     }
@@ -109,6 +140,55 @@ impl<'a> AudioDaemon<'a> {
                     responder
                         .send(&mut Ok(response))
                         .expect("Failed to send response to CreateAudioRendererRequest");
+
+                    // Waits for serve to finish so that each new AudioDaemon will get the vmo proxy calls completed.
+                    serve(vmo.duplicate_handle(zx::Rights::SAME_RIGHTS).unwrap(), vmo_server_end)
+                        .await?;
+                }
+                AudioDaemonRequest::CreateAudioCapturer { payload, responder } => {
+                    let loopback: bool = payload.loopback.unwrap_or_default();
+                    let mut stream_type: AudioStreamType =
+                        payload.stream_type.ok_or(anyhow::anyhow!("No stream type provided"))?;
+
+                    let (client_end, server_end) = fidl::endpoints::create_endpoints::<
+                        fidl_fuchsia_media::AudioCapturerMarker,
+                    >()?;
+
+                    let (gain_control_client_end, gain_control_server_end) =
+                        fidl::endpoints::create_endpoints::<
+                            fidl_fuchsia_media_audio::GainControlMarker,
+                        >()?;
+
+                    self.audio.create_audio_capturer(server_end, loopback)?;
+
+                    let buffer_size = payload
+                        .buffer_size
+                        .ok_or(anyhow::anyhow!("No buffer size passed to CreateAudioCapturer"))?;
+                    let vmo = zx::Vmo::create(buffer_size).expect("Failed to allocate VMO.");
+
+                    let (vmo_client_end, vmo_server_end) =
+                        fidl::endpoints::create_endpoints::<VmoWrapperMarker>()?;
+
+                    let proxy = client_end.into_proxy()?;
+                    proxy.bind_gain_control(gain_control_server_end)?;
+
+                    if !loopback {
+                        proxy.set_pcm_stream_type(&mut stream_type)?;
+                    }
+
+                    proxy.add_payload_buffer(0, vmo.duplicate_handle(zx::Rights::SAME_RIGHTS)?)?;
+
+                    let response = AudioDaemonCreateAudioCapturerResponse {
+                        capturer: Some(ClientEnd::new(
+                            proxy.into_channel().unwrap().into_zx_channel(),
+                        )),
+                        vmo_channel: Some(vmo_client_end),
+                        gain_control: Some(gain_control_client_end),
+                        ..AudioDaemonCreateAudioCapturerResponse::EMPTY
+                    };
+                    responder
+                        .send(&mut Ok(response))
+                        .expect("Failed to send response to CreateAudioCaptuererRequest");
 
                     // Waits for serve to finish so that each new AudioDaemon will get the vmo proxy calls completed.
                     serve(vmo.duplicate_handle(zx::Rights::SAME_RIGHTS).unwrap(), vmo_server_end)

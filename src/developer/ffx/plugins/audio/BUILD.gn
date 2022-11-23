@@ -12,6 +12,7 @@ ffx_plugin("ffx_audio") {
   plugin_deps = [
     "gen:ffx_audio_gen",
     "play:ffx_audio_play",
+    "record:ffx_audio_record",
   ]
   args_sources = [ "src/args.rs" ]
 

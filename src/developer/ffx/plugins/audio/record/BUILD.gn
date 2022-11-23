@@ -2,21 +2,29 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/rust/rustc_library.gni")
+import("//src/developer/ffx/build/ffx_plugin.gni")
 
-rustc_library("audio-utils") {
-  name = "audio-utils"
+ffx_plugin("ffx_audio_record") {
   version = "0.1.0"
   edition = "2021"
+
+  args_deps = [
+    "//sdk/fidl/fuchsia.media:fuchsia.media_rust",
+    "//src/developer/ffx/plugins/audio/utils:audio-utils",
+    "//third_party/rust_crates:anyhow",
+  ]
 
   deps = [
     "//sdk/fidl/fuchsia.audio.ffxdaemon:fuchsia.audio.ffxdaemon_rust",
     "//sdk/fidl/fuchsia.media:fuchsia.media_rust",
+    "//sdk/fidl/fuchsia.media.audio:fuchsia.media.audio_rust",
     "//src/developer/ffx/lib/errors:lib",
+    "//src/developer/ffx/plugins/audio/utils:audio-utils",
     "//third_party/rust_crates:anyhow",
+    "//third_party/rust_crates:futures",
     "//third_party/rust_crates:hound",
-    "//third_party/rust_crates:regex",
   ]
+  args_sources = [ "src/args.rs" ]
 
   sources = [ "src/lib.rs" ]
 }

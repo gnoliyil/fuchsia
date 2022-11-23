@@ -11,13 +11,13 @@ ffx_plugin("ffx_audio_gen") {
   args_with_unit_tests = true
 
   args_deps = [
-    "//src/developer/ffx/lib/errors:lib",
+    "//src/developer/ffx/plugins/audio/utils:audio-utils",
     "//third_party/rust_crates:anyhow",
-    "//third_party/rust_crates:regex",
   ]
 
   deps = [
     "//src/developer/ffx/lib/errors:lib",
+    "//src/developer/ffx/plugins/audio/utils:audio-utils",
     "//third_party/rust_crates:anyhow",
     "//third_party/rust_crates:hound",
     "//third_party/rust_crates:rand",
@@ -25,6 +25,4 @@ ffx_plugin("ffx_audio_gen") {
   args_sources = [ "src/args.rs" ]
 
   sources = [ "src/lib.rs" ]
-
-  args_test_deps = [ "//third_party/rust_crates:pretty_assertions" ]
 }

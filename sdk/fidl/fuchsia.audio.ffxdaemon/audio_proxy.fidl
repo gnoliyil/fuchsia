@@ -27,6 +27,20 @@ protocol VmoWrapper {
         /// Offset index into the VMO. This field is requred.
         2: offset uint64;
     }) -> () error zx.status;
+
+    /// Emulates zx_vmo_read() by reading data into a vector from a VMO at offset.
+    /// Returns an error on failure.
+    Read(resource table {
+        /// Offset index into the VMO. This field is requred.
+        1: offset uint64;
+
+        /// Number of bytes to read from the VMO. This field is required. If value is 
+        /// greater than MAX_AUDIO_BUFFER_BYTES, *ZX_ERR_INVALID_ARGS* is returned.
+        2: buffer_size_bytes uint64;
+    }) -> (resource table {
+        /// Data read from VMO
+        1: data vector<uint8>:MAX_AUDIO_BUFFER_BYTES;
+    }) error zx.status;
 };
 
 /// The main entry point for ffx audio.
@@ -49,6 +63,33 @@ protocol AudioDaemon {
         2: vmo_channel client_end:VmoWrapper;
 
         /// Renderer's gain control
+        3: gain_control client_end:fuchsia.media.audio.GainControl;
+    }) error zx.status;
+
+    /// Creates an AudioCapturer and VMO with buffer_size bytes.
+    /// Returns client channel ends to both the AudioCapturer and
+    /// VmoWrapper. Data packets produced by AudioCapturer can be read
+    /// from the VmoWrapper
+    /// Returns an error on failure.
+    CreateAudioCapturer(resource table {
+        /// The AudioCapturer will have a single payload buffer with this size, in bytes.
+        1: buffer_size uint64;
+
+        /// Whether to loopback from the current default audio output device,
+        /// or capture from the current default audio input device.
+        2: loopback bool;
+
+        /// AudioStreamType
+        3: stream_type fuchsia.media.AudioStreamType;
+    }) -> (resource table {
+        /// The new AudioCapturer. This capturer has a single payload buffer (id 0) of
+        /// the requested size.
+        1: capturer client_end:fuchsia.media.AudioCapturer;
+
+        /// The capturer's payload buffer.
+        2: vmo_channel client_end:VmoWrapper;
+
+        /// Capturer's gain control.
         3: gain_control client_end:fuchsia.media.audio.GainControl;
     }) error zx.status;
 };
