@@ -226,7 +226,7 @@ class MagmaExecuteMsdVsi : public testing::Test {
 
     gen_cmd_stream(command_stream.get(), code.get(), output_buffer.get());
 
-    static constexpr uint32_t kTimeoutMs = 10;
+    static constexpr uint32_t kTimeoutMs = 100;
     ExecuteCommand(command_stream, kTimeoutMs);
 
     auto data = reinterpret_cast<const char*>(output_buffer->GetCpuAddress());
