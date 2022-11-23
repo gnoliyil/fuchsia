@@ -6,6 +6,8 @@
 #include <lib/zircon-internal/e820.h>
 #include <zircon/boot/image.h>
 
+#include <vector>
+
 #include <efi/boot-services.h>
 #include <efi/runtime-services.h>
 #include <fbl/array.h>
@@ -15,7 +17,7 @@
 
 namespace {
 
-using Bytes = std::basic_string<std::byte>;
+using Bytes = std::vector<std::byte>;
 
 // Append the given objects together as a series of bytes.
 template <typename... T>
@@ -25,7 +27,7 @@ Bytes JoinBytes(const T&... object) {
   // Add the bytes from a single item to |result|.
   auto add_item = [&result](const auto& x) {
     zbitl::ByteView object_bytes = zbitl::AsBytes(x);
-    result.append(object_bytes.begin(), object_bytes.end());
+    result.insert(result.end(), object_bytes.begin(), object_bytes.end());
   };
 
   // Add each item.
