@@ -240,7 +240,8 @@ class AdbFileSyncTest : public gtest::RealLoopFixture {
   FakeDirectory directory_;
 };
 
-TEST_F(AdbFileSyncTest, BadPathLengthConnectTest) {
+// TODO (fxb/115455): Turn on after fixing flake.
+TEST_F(AdbFileSyncTest, DISABLED_BadPathLengthConnectTest) {
   SyncRequest request{.id = ID_LIST, .path_length = 1025};
   size_t actual;
   EXPECT_EQ(adb_.write(0, &request, sizeof(request), &actual), ZX_OK);
@@ -248,7 +249,8 @@ TEST_F(AdbFileSyncTest, BadPathLengthConnectTest) {
   ExpectSendFail();
 }
 
-TEST_F(AdbFileSyncTest, BadIDConnectTest) {
+// TODO (fxb/115455): Turn on after fixing flake.
+TEST_F(AdbFileSyncTest, DISABLED_BadIDConnectTest) {
   std::string filename = "filename";
 
   SyncRequest request{.id = MKID('B', 'A', 'D', 'D'),
@@ -262,7 +264,8 @@ TEST_F(AdbFileSyncTest, BadIDConnectTest) {
   ExpectSendFail();
 }
 
-TEST_F(AdbFileSyncTest, HandleListTest) {
+// TODO (fxb/115455): Turn on after fixing flake.
+TEST_F(AdbFileSyncTest, DISABLED_HandleListTest) {
   directory_.ExpectRewind();
   directory_.ExpectReadDirents({0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 'a', 'b'});
   std::string path = "./" + kComponent + "::/" + kTest;
@@ -313,7 +316,8 @@ TEST_F(AdbFileSyncTest, HandleListTest) {
   EXPECT_EQ(msg.dent.time, 0U);
 }
 
-TEST_F(AdbFileSyncTest, HandleStatTest) {
+// TODO (fxb/115455): Turn on after fixing flake.
+TEST_F(AdbFileSyncTest, DISABLED_HandleStatTest) {
   directory_.ExpectGetAttr(fuchsia_io::wire::NodeAttributes{
       .mode = 5,
       .storage_size = 15,
@@ -342,7 +346,8 @@ TEST_F(AdbFileSyncTest, HandleStatTest) {
   EXPECT_EQ(msg.stat_v1.time, 1234U);
 }
 
-TEST_F(AdbFileSyncTest, HandleSendTest) {
+// TODO (fxb/115455): Turn on after fixing flake.
+TEST_F(AdbFileSyncTest, DISABLED_HandleSendTest) {
   std::string path = "./" + kComponent + "::/" + kTest + "/tmp.txt,0755";
   SyncRequest request{.id = ID_SEND, .path_length = static_cast<uint32_t>(path.length())};
   size_t actual;
@@ -390,7 +395,8 @@ TEST_F(AdbFileSyncTest, HandleSendTest) {
   }
 }
 
-TEST_F(AdbFileSyncTest, HandleReceiveTest) {
+// TODO (fxb/115455): Turn on after fixing flake.
+TEST_F(AdbFileSyncTest, DISABLED_HandleReceiveTest) {
   directory_.file_.set_data(std::vector<uint8_t>{4, 3, 2, 1});
 
   std::string path = "./" + kComponent + "::/" + kTest + "/tmp.txt";
