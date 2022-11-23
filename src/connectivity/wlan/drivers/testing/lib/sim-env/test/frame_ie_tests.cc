@@ -20,6 +20,7 @@ using ::testing::SizeIs;
 
 const cssid_t kDefaultSsid{.len = 15, .data = "Fuchsia Fake AP"};
 const common::MacAddr kDefaultBssid{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc};
+const common::MacAddr kDefaultDest{0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa};
 constexpr wlan_channel_t kDefaultChannel = {
     .primary = 20, .cbw = CHANNEL_BANDWIDTH_CBW20, .secondary80 = 0};
 
@@ -78,6 +79,47 @@ TEST_F(FrameIeTest, SimDisassocReqFrameType) {
 TEST_F(FrameIeTest, SimAuthFrameType) {
   simulation::SimAuthFrame auth_frame;
   EXPECT_EQ(auth_frame.MgmtFrameType(), simulation::SimManagementFrame::FRAME_TYPE_AUTH);
+}
+
+TEST_F(FrameIeTest, SimDeauthFrameType) {
+  simulation::SimDeauthFrame deauth_frame;
+  EXPECT_EQ(deauth_frame.MgmtFrameType(), simulation::SimManagementFrame::FRAME_TYPE_DEAUTH);
+}
+
+TEST_F(FrameIeTest, SimReassocReqFrameType) {
+  simulation::SimReassocReqFrame reassoc_req_frame;
+  EXPECT_EQ(reassoc_req_frame.MgmtFrameType(),
+            simulation::SimManagementFrame::FRAME_TYPE_REASSOC_REQ);
+}
+
+TEST_F(FrameIeTest, SimReassocRespFrameType) {
+  simulation::SimReassocRespFrame reassoc_resp_frame;
+  EXPECT_EQ(reassoc_resp_frame.MgmtFrameType(),
+            simulation::SimManagementFrame::FRAME_TYPE_REASSOC_RESP);
+}
+
+// SimActionFrame
+TEST_F(FrameIeTest, SimActionFrameType) {
+  simulation::SimActionFrame action_frame{kDefaultBssid, kDefaultDest,
+                                          simulation::SimActionFrame::WNM};
+  EXPECT_EQ(action_frame.MgmtFrameType(), simulation::SimManagementFrame::FRAME_TYPE_ACTION);
+}
+
+// SimWnmActionFrame
+TEST_F(FrameIeTest, SimWnmActionFrameType) {
+  simulation::SimWnmActionFrame wnm_action_frame{kDefaultBssid, kDefaultDest};
+  EXPECT_EQ(wnm_action_frame.MgmtFrameType(), simulation::SimManagementFrame::FRAME_TYPE_ACTION);
+  EXPECT_EQ(wnm_action_frame.ActionCategory(), simulation::SimActionFrame::SimActionCategory::WNM);
+}
+
+// SimBtmReqFrame
+TEST_F(FrameIeTest, SimBtmReqFrameType) {
+  simulation::SimBtmReqMode mode;
+  simulation::SimBtmReqFrame btm_req_frame{kDefaultBssid, kDefaultDest, mode, {}};
+  EXPECT_EQ(btm_req_frame.MgmtFrameType(), simulation::SimManagementFrame::FRAME_TYPE_ACTION);
+  EXPECT_EQ(btm_req_frame.ActionCategory(), simulation::SimActionFrame::SimActionCategory::WNM);
+  EXPECT_EQ(btm_req_frame.WnmAction(),
+            simulation::SimWnmActionFrame::SimWnmAction::BSS_TRANSITION_MANAGEMENT_REQUEST);
 }
 
 TEST_F(FrameIeTest, SsidIeAddRemove) {

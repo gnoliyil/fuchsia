@@ -17,6 +17,7 @@
 
 #include "src/connectivity/wlan/drivers/testing/lib/sim-env/sim-sta-ifc.h"
 #include "src/connectivity/wlan/lib/common/cpp/include/wlan/common/mac_frame.h"
+#include "wlan/common/macaddr.h"
 
 namespace wlan::simulation {
 
@@ -120,6 +121,7 @@ class SimManagementFrame : public SimFrame {
     FRAME_TYPE_DEAUTH,
     FRAME_TYPE_REASSOC_REQ,
     FRAME_TYPE_REASSOC_RESP,
+    FRAME_TYPE_ACTION,
   };
 
   SimManagementFrame() = default;
@@ -340,6 +342,90 @@ class SimReassocRespFrame : public SimManagementFrame {
 
   ::fuchsia::wlan::ieee80211::StatusCode status_;
   wlan::CapabilityInfo capability_info_;
+};
+
+// IEEE 802.11-2020 9.3.3.13.
+class SimActionFrame : public SimManagementFrame {
+ public:
+  // IEEE 802.11-2020 Table 9-51.
+  enum SimActionCategory {
+    WNM,
+  };
+
+  explicit SimActionFrame(const common::MacAddr& src, const common::MacAddr& dst,
+                          SimActionCategory category)
+      : SimManagementFrame(src, dst), category_(category) {}
+
+  SimActionFrame(const SimActionFrame& action);
+
+  ~SimActionFrame() override;
+
+  SimMgmtFrameType MgmtFrameType() const override;
+
+  SimFrame* CopyFrame() const override;
+
+  SimActionCategory ActionCategory() const;
+
+ private:
+  SimActionCategory category_;
+};
+
+// IEEE 802.11-2020 9.6.13.
+class SimWnmActionFrame : public SimActionFrame {
+ public:
+  // IEEE 802.11-2020 9.6.13.1
+  enum SimWnmAction {
+    BSS_TRANSITION_MANAGEMENT_REQUEST,
+  };
+
+  explicit SimWnmActionFrame(const common::MacAddr& src, const common::MacAddr& dst)
+      : SimActionFrame(src, dst, SimActionCategory::WNM) {}
+
+  SimWnmActionFrame(const SimWnmActionFrame& wnm_action);
+
+  ~SimWnmActionFrame() override;
+
+  SimFrame* CopyFrame() const override;
+
+  SimWnmAction WnmAction() const { return wnm_action_; }
+
+ private:
+  // Only WNM action, later will include other actions and will be non const.
+  const SimWnmAction wnm_action_ = BSS_TRANSITION_MANAGEMENT_REQUEST;
+};
+
+// IEEE 802.11-2020 Fig. 9-924.
+struct SimBtmReqMode {
+  bool preferred_candidate_list_included = false;
+};
+
+// Info about a neighboring AP. IEEE 802.11-2020 9.4.2.36.
+struct SimNeighborReportElement {
+  common::MacAddr bssid;
+  uint8_t operating_class;  // IEEE 802.11-2020 Annex E
+  uint8_t channel_number;
+};
+
+// IEEE 802.11-2020 9.6.13.9.
+class SimBtmReqFrame : public SimWnmActionFrame {
+ public:
+  explicit SimBtmReqFrame(const common::MacAddr& src, const common::MacAddr& dst,
+                          const SimBtmReqMode& request_mode,
+                          const std::vector<SimNeighborReportElement>& candidate_list)
+      : SimWnmActionFrame(src, dst), request_mode_(request_mode), candidate_list_(candidate_list) {}
+
+  SimBtmReqFrame(const SimBtmReqFrame& btm_req);
+
+  ~SimBtmReqFrame() override;
+
+  SimFrame* CopyFrame() const override;
+
+  std::vector<SimNeighborReportElement> CandidateList() const;
+
+ private:
+  SimBtmReqMode request_mode_;
+  // IEEE 802.11-2020 9.4.2.36
+  std::vector<SimNeighborReportElement> candidate_list_;
 };
 
 // No support for contention-free data frames, aggregation or fragmentation for now

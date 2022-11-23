@@ -277,6 +277,38 @@ SimManagementFrame::SimMgmtFrameType SimReassocRespFrame::MgmtFrameType() const 
 
 SimFrame* SimReassocRespFrame::CopyFrame() const { return new SimReassocRespFrame(*this); }
 
+/* SimActionFrame function implementations.*/
+SimActionFrame::SimActionFrame(const SimActionFrame& action) = default;
+
+SimActionFrame::~SimActionFrame() = default;
+
+SimManagementFrame::SimMgmtFrameType SimActionFrame::MgmtFrameType() const {
+  return FRAME_TYPE_ACTION;
+}
+
+SimFrame* SimActionFrame::CopyFrame() const { return new SimActionFrame(*this); }
+
+SimActionFrame::SimActionCategory SimActionFrame::ActionCategory() const { return category_; }
+
+/* SimWnmActionFrame function implementations.*/
+SimWnmActionFrame::SimWnmActionFrame(const SimWnmActionFrame& wnm_action) = default;
+
+SimWnmActionFrame::~SimWnmActionFrame() = default;
+
+SimFrame* SimWnmActionFrame::CopyFrame() const { return new SimWnmActionFrame(*this); }
+
+/* SimBtmReqFrame function implementations.*/
+SimBtmReqFrame::SimBtmReqFrame(const SimBtmReqFrame& btm_req) = default;
+
+SimBtmReqFrame::~SimBtmReqFrame() = default;
+
+SimFrame* SimBtmReqFrame::CopyFrame() const { return new SimBtmReqFrame(*this); }
+
+std::vector<SimNeighborReportElement> SimBtmReqFrame::CandidateList() const {
+  std::vector<SimNeighborReportElement> candidates = candidate_list_;
+  return candidates;
+}
+
 /* SimDataFrame function implementations.*/
 SimDataFrame::SimDataFrame(const SimDataFrame& data_frame) {
   toDS_ = data_frame.toDS_;

@@ -518,6 +518,14 @@ zx_status_t FakeAp::DisassocSta(const common::MacAddr& sta_mac, wlan_ieee80211::
   return ZX_ERR_INVALID_ARGS;
 }
 
+void FakeAp::SendBtmReq(const simulation::SimBtmReqFrame& btm_req) {
+  for (const auto& client : clients_) {
+    if (client->mac_addr_ == btm_req.dst_addr_ && client->status_ == Client::ASSOCIATED) {
+      environment_->Tx(btm_req, tx_info_, this);
+    }
+  }
+}
+
 void FakeAp::HandleBeaconNotification() {
   ZX_ASSERT(beacon_state_.is_beaconing);
   SimBeaconFrame tmp_beacon_frame(beacon_state_.beacon_frame_);

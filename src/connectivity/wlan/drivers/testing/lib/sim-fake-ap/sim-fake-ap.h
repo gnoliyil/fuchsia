@@ -105,6 +105,9 @@ class FakeAp final : public StationIfc {
   zx_status_t DisassocSta(const common::MacAddr& sta_mac,
                           ::fuchsia::wlan::ieee80211::ReasonCode reason);
 
+  // Send a BSS Transition Management request.
+  void SendBtmReq(const simulation::SimBtmReqFrame& btm_req);
+
   // Beacon-specific error injection.
   // The beacon_mutator functor will be applied to each beacon frame before transmission.
   void AddErrInjBeacon(std::function<SimBeaconFrame(const SimBeaconFrame&)> beacon_mutator);

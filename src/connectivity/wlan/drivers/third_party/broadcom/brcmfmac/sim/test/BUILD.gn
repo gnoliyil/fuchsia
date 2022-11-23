@@ -373,6 +373,16 @@ executable("wmm_status_test") {
   configs += [ "//build/config:Wno-conversion" ]
 }
 
+executable("wnm_test") {
+  output_name = "wnm_test"
+  testonly = true
+  sources = [ "wnm_test.cc" ]
+  deps = [
+    ":sim_test",
+    "//src/connectivity/wlan/lib/common/cpp:common",
+  ]
+}
+
 executable("ifc_query_test") {
   output_name = "ifc_query_test"
   testonly = true
@@ -656,6 +666,7 @@ _tests = [
   "start_ap_while_scanning_test",
   "timeout_test",
   "wmm_status_test",
+  "wnm_test",
 ]
 
 foreach(test_name, _tests) {
