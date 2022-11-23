@@ -67,6 +67,15 @@ class Node : public fbl::RefCounted<Node> {
   // buffers_logically_allocated() must be false to call this.
   virtual void OnBuffersAllocated(const AllocationResult& allocation_result) = 0;
 
+  // Consider whether to use the sub-class accessors below, or whether to use
+  // NodeProperties::is_token(), is_token_group(), is_collection() instead, depending on the
+  // situation.  A client Close() + channel close will replace the sub-class of Node with an
+  // OrphanedNode, yet the NodeProperties still needs to be treated as a token, collection, or
+  // group when it comes to the logical node tree and allocation.  These accessors are for getting a
+  // pointer to the current Node sub-class, not for checking the logical node type.  These can also
+  // be used to determine if the current Node sub-class indicates that the client still has a
+  // connection open to this logical node.
+  //
   // If this Node is a BufferCollectionToken, returns the BufferCollectionToken*, else returns
   // nullptr.
   virtual BufferCollectionToken* buffer_collection_token() = 0;
@@ -81,9 +90,11 @@ class Node : public fbl::RefCounted<Node> {
   // returns nullptr.
   virtual BufferCollectionTokenGroup* buffer_collection_token_group() = 0;
   virtual const BufferCollectionTokenGroup* buffer_collection_token_group() const = 0;
+
   // This is a constant per sub-class of Node.  When a "connected" node is no longer connected, the
   // Node sub-class is replaced with OrphanedNode, or deleted as appropriate.
   virtual bool is_connected_type() const = 0;
+
   // This is dynamic depending on whether the Node sub-class server-side binding is currently bound
   // or in other words whether the node is currently connected.  This will always return false
   // when !is_connected_type(), and can return true or false if is_connected_type().
@@ -264,7 +275,11 @@ class Node : public fbl::RefCounted<Node> {
     clear_marked.call();
 
     ZX_DEBUG_ASSERT(common_parent);
-    bool is_alternate_for = !!common_parent->node()->buffer_collection_token_group();
+    // The common_parent can presently be associated with an OrphanedNode, but
+    // common_parent->is_token_group() will still return true if the original Node sub-class was
+    // BufferCollectionTokenGroup (even after the client has done a Close() + channel close on
+    // common_parent).
+    bool is_alternate_for = common_parent->is_token_group();
     completer.ReplySuccess(is_alternate_for);
   }
 

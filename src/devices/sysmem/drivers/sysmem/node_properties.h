@@ -164,6 +164,17 @@ class NodeProperties : public std::enable_shared_from_this<NodeProperties> {
 
   void SetNode(fbl::RefPtr<Node> node);
 
+  // Even if the associated Node is currently an OrphanedNode, one of these three will return true,
+  // and the other two will return false, depending on what type of Node was originally associated
+  // with this NodeProperties.  There is intentionally no accessor for is_orphaned_node(), because
+  // OrphanedNode isn't a logical node type, it's just a Node sub-class that "handles" protocol and
+  // connection lifetime aspects for a channel that's already been Close()ed and channel-closed.
+  // The original/logical node type is what matters for the more abstract NodeProperties tree and
+  // associated LogicalBufferCollection processing of the logical tree.
+  bool is_token() const { return logical_node_type_ == NodeType::kToken; }
+  bool is_token_group() const { return logical_node_type_ == NodeType::kGroup; }
+  bool is_collection() const { return logical_node_type_ == NodeType::kCollection; }
+
   // Only used on NodeConstraints corresponding to a BufferCollectionTokenGroup.
   //
   // During attempted constraints aggregation, only the which_child child is aggregated.
@@ -264,10 +275,29 @@ class NodeProperties : public std::enable_shared_from_this<NodeProperties> {
   uint32_t buffer_collection_count_ = 0;
   uint32_t buffer_collection_token_count_ = 0;
 
+  enum class NodeType : uint32_t {
+    kInvalid,
+    kToken,
+    kCollection,
+    kGroup,
+  };
+  // A token group has special semantics that must continue to apply even after the group Node is
+  // replaced with OrphanedNode.  We track the original node type here in the NodeProperties.  This
+  // is set when SetNode() is called with a Node sub-class other than OrphanedNode.
+  //
+  // The Node base class and sub-classes are for handling protocol aspects (including connection
+  // lifetime).  The NodeProperties tree fully and independently (from Node / Node sub-classes)
+  // defines the logical structure of the tree, including remembering the original/logical type of
+  // each corresponding Node, so that each NodeProperties can retain its role and meaning in the
+  // tree despite any replacements of Node(s) with OrphanedNode(s).
+  NodeType logical_node_type_ = NodeType::kInvalid;
+
   // If not set, all children.  If set, just the one specified child.  Only ever set in
-  // NodeProperties corresponding to BufferCollectionTokenGroup Node(s).  This can be set and
-  // changed repeatedly for a BufferCollectionTokenGroup as we enumerate through combinations of
-  // child selections among all groups.
+  // NodeProperties with is_token_group_ true, which can be a NodeProperties corresponding to a
+  // BufferCollectionTokenGroup Node(s), or a NodeProperties that was corresponding to a
+  // BufferCollectionTokenGroup Node but is now corresponding to an OrphanedNode Node.  This can be
+  // set and changed repeatedly (if is_token_group_) as we enumerate through combinations of child
+  // selections among all groups.
   std::optional<uint32_t> which_child_ = std::nullopt;
 
   // We can duplicate this handle out to a client, then the client can provide a handle to this same

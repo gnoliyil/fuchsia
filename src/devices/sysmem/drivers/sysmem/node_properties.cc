@@ -221,6 +221,18 @@ void NodeProperties::SetNode(fbl::RefPtr<Node> node) {
     logical_buffer_collection_->RemoveCountsForNode(*node_);
     node_->EnsureDetachedFromNodeProperties();
   }
+
+  // Remember the logical node type.  This intentionally does not check for OrphanedNode because
+  // OrphanedNode does not correspond to a logical node type.  The logical node type persists after
+  // potential replacement of the (non-OrphanedNode) Node by an OrphanedNode.
+  if (!!node->buffer_collection_token()) {
+    logical_node_type_ = NodeType::kToken;
+  } else if (!!node->buffer_collection()) {
+    logical_node_type_ = NodeType::kCollection;
+  } else if (!!node->buffer_collection_token_group()) {
+    logical_node_type_ = NodeType::kGroup;
+  }
+
   node_ = std::move(node);
 }
 

@@ -1979,7 +1979,10 @@ LogicalBufferCollection::PrioritizedGroupsOfPrunedSubtreeEligibleForLogicalAlloc
       // were kDoNotPropagate, we wouldn't be iterating this child node of that parent node.
       in_pruned_subtree = true;
     }
-    bool is_group = !!node_properties.node()->buffer_collection_token_group();
+
+    // The node_properties can be presently associated with an OrphanedNode; this is whether the
+    // logical node is a group, not about whether the client is still connected.
+    bool is_group = node_properties.is_token_group();
     // We can assert that all groups that we actually iterate to are in the
     // pruned subtree, since we iterate only from "subtree" down, and because
     // the nodes that we do potentially iterate which are not in the pruned
@@ -3610,8 +3613,10 @@ void LogicalBufferCollection::CreationTimedOut(async_dispatcher_t* dispatcher,
 
   std::string name = name_.has_value() ? name_->name : "Unknown";
 
-  LogError(FROM_HERE, "Allocation of %s timed out. Waiting for tokens: ", name.c_str());
+  LogError(FROM_HERE, "Allocation of %s timed out. Waiting for (connected) tokens: ", name.c_str());
   ZX_DEBUG_ASSERT(root_);
+  // Current token Node(s), not logical token nodes that are presently OrphanedNode, as those can't
+  // be blocking allocation.
   auto token_nodes = root_->BreadthFirstOrder([](const NodeProperties& node) {
     ZX_DEBUG_ASSERT(node.node());
     bool potentially_included_in_initial_allocation =
@@ -3629,7 +3634,9 @@ void LogicalBufferCollection::CreationTimedOut(async_dispatcher_t* dispatcher,
     }
   }
 
-  LogError(FROM_HERE, "Collections:");
+  // Current collection Node(s), not logical collection nodes that are presently OrphanedNode, as
+  // those can't be blocking allocation.
+  LogError(FROM_HERE, "Connected collections:");
   auto collection_nodes = root_->BreadthFirstOrder([](const NodeProperties& node) {
     ZX_DEBUG_ASSERT(node.node());
     bool potentially_included_in_initial_allocation =
@@ -3647,6 +3654,29 @@ void LogicalBufferCollection::CreationTimedOut(async_dispatcher_t* dispatcher,
                node_properties->client_debug_info().id, constraints_state);
     } else {
       LogError(FROM_HERE, "Name unknown (constraints %s)", constraints_state);
+    }
+  }
+
+  // Current group Node(s), not logical group nodes that are presently OrphanedNode, as those can't
+  // be blocking allocation.
+  LogError(FROM_HERE, "Connected groups:");
+  auto group_nodes = root_->BreadthFirstOrder([](const NodeProperties& node) {
+    ZX_DEBUG_ASSERT(node.node());
+    bool potentially_included_in_initial_allocation =
+        IsPotentiallyIncludedInInitialAllocation(node);
+    return NodeFilterResult{.keep_node = potentially_included_in_initial_allocation &&
+                                         !!node.node()->buffer_collection_token_group(),
+                            .iterate_children = potentially_included_in_initial_allocation};
+  });
+  for (auto node_properties : group_nodes) {
+    const char* children_created_state_string =
+        node_properties->node()->ReadyForAllocation() ? "" : " NOT";
+    if (!node_properties->client_debug_info().name.empty()) {
+      LogError(FROM_HERE, "Name \"%s\" id %ld (children%s done creating)",
+               node_properties->client_debug_info().name.c_str(),
+               node_properties->client_debug_info().id, children_created_state_string);
+    } else {
+      LogError(FROM_HERE, "Name unknown (children%s done creating)", children_created_state_string);
     }
   }
 }
