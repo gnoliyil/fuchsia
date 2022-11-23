@@ -14,6 +14,7 @@
 #include <tuple>
 #include <type_traits>
 
+#include "internal/byte.h"
 #include "layout.h"
 #include "phdr.h"
 
@@ -25,7 +26,7 @@ namespace elfldltl {
 // This represents one decoded ELF note.  It's created ephemerally to yield
 // views on the name and desc (payload), along with the type value.
 struct ElfNote {
-  using Bytes = std::basic_string_view<std::byte>;
+  using Bytes = std::basic_string_view<std::byte, internal::ByteCharTraits>;
 
   ElfNote() = delete;
 
