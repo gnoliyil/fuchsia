@@ -6,9 +6,9 @@ use assembly_structured_config::{validate_component, Repackager, ValidationError
 use assembly_validate_product::{validate_package, PackageValidationError};
 use camino::Utf8Path;
 use fuchsia_archive::Utf8Reader;
-use fuchsia_pkg::{BlobInfo, PackageBuilder, PackageManifest};
+use fuchsia_pkg::{BlobInfo, PackageManifest};
 use maplit::btreemap;
-use std::io::Cursor;
+use std::{io::Cursor, path::Path};
 use tempfile::TempDir;
 
 const PASS_WITH_CONFIG: &str = "meta/pass_with_config.cm";
@@ -16,21 +16,14 @@ const PASS_WITHOUT_CONFIG: &str = "meta/pass_without_config.cm";
 const FAIL_MISSING_CONFIG: &str = "meta/fail_missing_config.cm";
 
 fn test_package_manifest() -> (PackageManifest, TempDir) {
-    // read the archive file
-    let archive =
-        Utf8Reader::new(Cursor::new(std::fs::read(env!("TEST_PACKAGE_FAR")).unwrap())).unwrap();
-
     // unpack the archive and create a manifest
+    let archive_path = env!("TEST_PACKAGE_FAR");
     let tmp = TempDir::new().unwrap();
     let outdir = Utf8Path::from_path(tmp.path()).unwrap();
 
-    let mut builder = PackageBuilder::from_archive(archive, outdir).unwrap();
-    let manifest_path = outdir.join("package_manifest.json");
-    builder.manifest_path(&manifest_path);
-    builder.build(&outdir, outdir.join("meta.far")).unwrap();
+    let manifest =
+        PackageManifest::from_archive(Path::new(&archive_path), outdir.as_std_path()).unwrap();
 
-    // load the manifest back into memory for testing
-    let manifest = PackageManifest::try_load_from(&manifest_path).unwrap();
     (manifest, tmp)
 }
 
