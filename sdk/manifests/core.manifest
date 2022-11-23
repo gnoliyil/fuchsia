@@ -167,7 +167,12 @@ sdk://pkg/fidl
 sdk://pkg/fidl_base
 sdk://pkg/fidl_cpp
 sdk://pkg/fidl_cpp_base
+sdk://pkg/fidl_cpp_base_v2
+sdk://pkg/fidl_cpp_hlcpp_conversion
+sdk://pkg/fidl_cpp_natural_ostream
 sdk://pkg/fidl_cpp_sync
+sdk://pkg/fidl_cpp_v2
+sdk://pkg/fidl_cpp_wire
 sdk://pkg/fit
 sdk://pkg/fit-promise
 sdk://pkg/images_cpp

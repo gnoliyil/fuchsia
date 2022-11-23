@@ -285,6 +285,7 @@ sdk_molecule("core_lib") {
   deps = [
     "//sdk/lib/fdio:fdio_sdk",
     "//sdk/lib/fidl/cpp:cpp_sdk",
+    "//sdk/lib/fidl/cpp/wire:wire_sdk",
     "//sdk/lib/fit-promise:fit-promise_sdk",
     "//sdk/lib/inspect",
     "//sdk/lib/inspect/service/cpp:cpp_sdk",
@@ -301,6 +302,9 @@ sdk_molecule("core_lib") {
     "//sdk/lib/ui/scenic/cpp:cpp_sdk",
     "//sdk/lib/vfs/cpp:cpp_sdk",
     "//sdk/lib/vulkan",
+    "//src/lib/fidl/cpp:cpp_sdk",
+    "//src/lib/fidl/cpp:hlcpp_conversion_sdk",
+    "//src/lib/fidl/cpp:natural_ostream_sdk",
     "//src/storage/memfs:memfs_sdk",
     "//zircon/system/ulib/async:async-cpp_sdk",
     "//zircon/system/ulib/async:async_sdk",

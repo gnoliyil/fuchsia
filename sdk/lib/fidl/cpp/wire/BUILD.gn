@@ -20,8 +20,7 @@ wavl_tree_headers = [
 ]
 
 sdk_source_set("wire") {
-  # TODO(fxbug.dev/80525): Change this back to "partner" post API stability.
-  category = "experimental"
+  category = "partner"
   api = "fidl_cpp_wire.api"
   sdk_name = "fidl_cpp_wire"
 
