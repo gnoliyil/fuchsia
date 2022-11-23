@@ -176,6 +176,7 @@ pub(super) enum RecognizedGesture {
     Motion,
     Scroll,
     OneButtonDown,
+    SecondaryButtonDown,
 }
 
 #[derive(Debug)]
@@ -412,6 +413,7 @@ impl RecognizedGesture {
             RecognizedGesture::Motion => "motion",
             RecognizedGesture::Scroll => "scroll",
             RecognizedGesture::OneButtonDown => "one_button_down",
+            RecognizedGesture::SecondaryButtonDown => "secondary_button_down",
         }
     }
 }

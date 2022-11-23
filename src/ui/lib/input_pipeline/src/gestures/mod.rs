@@ -9,6 +9,7 @@ mod motion;
 mod one_finger_button;
 mod primary_tap;
 mod scroll;
+mod secondary_button;
 mod secondary_tap;
 
 #[cfg(test)]
