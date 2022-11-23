@@ -136,11 +136,23 @@ fio::wire::NodeAttributes VnodeAttributes::ToIoV1NodeAttributes() const {
                                    .modification_time = modification_time};
 }
 
+namespace {
+
+// See https://en.cppreference.com/w/cpp/utility/variant/visit.
+//
+// helper constant for the visitor #3
+template <class>
+__UNUSED inline constexpr bool always_false_v = false;
+
+}  // namespace
+
 void ConvertToIoV1NodeInfo(VnodeRepresentation representation,
                            fit::callback<void(fio::wire::NodeInfoDeprecated&&)> callback) {
   representation.visit([&](auto&& repr) {
     using T = std::decay_t<decltype(repr)>;
-    if constexpr (std::is_same_v<T, fs::VnodeRepresentation::Connector>) {
+    if constexpr (std::is_same_v<T, std::monostate>) {
+      ZX_PANIC("Representation variant is not initialized");
+    } else if constexpr (std::is_same_v<T, fs::VnodeRepresentation::Connector>) {
       callback(fio::wire::NodeInfoDeprecated::WithService({}));
     } else if constexpr (std::is_same_v<T, fs::VnodeRepresentation::File>) {
       fio::wire::FileObject file = {.event = std::move(repr.observer),
@@ -150,7 +162,7 @@ void ConvertToIoV1NodeInfo(VnodeRepresentation representation,
     } else if constexpr (std::is_same_v<T, fs::VnodeRepresentation::Directory>) {
       callback(fio::wire::NodeInfoDeprecated::WithDirectory({}));
     } else {
-      ZX_PANIC("Representation variant is not initialized");
+      static_assert(always_false_v<T>, "non-exhaustive visitor");
     }
   });
 }
@@ -158,7 +170,9 @@ void ConvertToIoV1NodeInfo(VnodeRepresentation representation,
 ConnectionInfoConverter::ConnectionInfoConverter(VnodeRepresentation vnode_representation) {
   vnode_representation.visit([&](auto&& repr) {
     using T = std::decay_t<decltype(repr)>;
-    if constexpr (std::is_same_v<T, fs::VnodeRepresentation::Connector>) {
+    if constexpr (std::is_same_v<T, std::monostate>) {
+      ZX_PANIC("Representation variant is not initialized");
+    } else if constexpr (std::is_same_v<T, fs::VnodeRepresentation::Connector>) {
       representation = fio::wire::Representation::WithConnector(arena);
     } else if constexpr (std::is_same_v<T, fs::VnodeRepresentation::File>) {
       fio::wire::FileInfo file(arena);
@@ -172,7 +186,7 @@ ConnectionInfoConverter::ConnectionInfoConverter(VnodeRepresentation vnode_repre
     } else if constexpr (std::is_same_v<T, fs::VnodeRepresentation::Directory>) {
       representation = fio::wire::Representation::WithDirectory(arena);
     } else {
-      ZX_PANIC("Representation variant is not initialized");
+      static_assert(always_false_v<T>, "non-exhaustive visitor");
     }
   });
 }
