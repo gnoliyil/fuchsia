@@ -91,7 +91,9 @@ constexpr uint8_t CRG_UDC_ADDR_TO_INDEX(uint8_t addr) {
   // IEP: Inbound EP (EP_OUT from Host perspective)
   return static_cast<uint8_t>((2 * (addr & 0xF)) + ((addr & USB_DIR_IN) ? 0 : 1));
 }
-constexpr bool CRG_UDC_EP_IS_OUT(uint8_t ep) { return ((ep / 2) == 0); }
+// Refer the above table, the direction is from the perspective of USB host,
+// On the perspective of USB device, we should reverse the direction.
+constexpr bool CRG_UDC_EP_IS_OUT(uint8_t ep) { return ((ep % 2) != 0); }
 
 // CRG UDC
 constexpr uint32_t CTRL_REQ_QUEUE_DEPTH = 5;
