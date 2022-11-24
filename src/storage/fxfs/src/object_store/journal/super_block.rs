@@ -185,7 +185,7 @@ impl<'de> Deserialize<'de> for UuidWrapper {
     }
 }
 
-#[derive(Serialize, Deserialize, TypeHash, Versioned)]
+#[derive(Debug, Serialize, Deserialize, TypeHash, Versioned)]
 pub enum SuperBlockRecord {
     // When reading the super-block we know the initial extent, but not subsequent extents, so these
     // records need to exist to allow us to completely read the super-block.
@@ -289,7 +289,9 @@ impl SuperBlockManager {
         )
         .await?;
         super_block_header.write(&root_parent, handle).await?;
-        self.metrics.last_super_block_offset.set(super_block_header.super_block_journal_file_offset);
+        self.metrics
+            .last_super_block_offset
+            .set(super_block_header.super_block_journal_file_offset);
         self.metrics.last_super_block_update_time_ms.set(
             SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
@@ -333,9 +335,10 @@ impl SuperBlockHeader {
         block_size: u64,
         instance: SuperBlockInstance,
     ) -> Result<(SuperBlockHeader, SuperBlockInstance, ObjectStore), Error> {
-        let (super_block_header, mut reader) = SuperBlockHeader::read_header(device.clone(), instance)
-            .await
-            .context("Failed to read superblocks")?;
+        let (super_block_header, mut reader) =
+            SuperBlockHeader::read_header(device.clone(), instance)
+                .await
+                .context("Failed to read superblocks")?;
         let root_parent = ObjectStore::new_root_parent(
             device,
             block_size,
@@ -347,10 +350,11 @@ impl SuperBlockHeader {
 
         loop {
             let (mutation, sequence) = match reader.next_item().await? {
-                SuperBlockItem::End => break,
-                SuperBlockItem::Object(item) => {
+                SuperBlockRecord::Extent(_) => bail!("Unexpected extent record"),
+                SuperBlockRecord::ObjectItem(item) => {
                     (Mutation::insert_object(item.key, item.value), item.sequence)
                 }
+                SuperBlockRecord::End => break,
             };
             root_parent
                 .apply_mutation(
@@ -388,7 +392,7 @@ impl SuperBlockHeader {
     async fn read_header(
         device: Arc<dyn Device>,
         target_super_block: SuperBlockInstance,
-    ) -> Result<(SuperBlockHeader, ItemReader), Error> {
+    ) -> Result<(SuperBlockHeader, RecordReader), Error> {
         let mut handle = BootstrapObjectHandle::new(target_super_block.object_id(), device);
         handle.push_extent(target_super_block.first_extent());
         let mut reader = JournalReader::new(
@@ -439,7 +443,7 @@ impl SuperBlockHeader {
             super_block_header.guid = UuidWrapper(Uuid::new_v4());
         }
         reader.set_version(super_block_version);
-        Ok((super_block_header, ItemReader { reader }))
+        Ok((super_block_header, RecordReader { reader }))
     }
 
     /// Writes the super-block and the records from the root parent store to |handle|.
@@ -531,18 +535,12 @@ impl<'a, S: AsRef<ObjectStore> + Send + Sync + 'static> SuperBlockWriter<'a, S> 
     }
 }
 
-#[derive(Debug)]
-pub enum SuperBlockItem {
-    End,
-    Object(ObjectItem),
-}
-
-pub struct ItemReader {
+pub struct RecordReader {
     reader: JournalReader<BootstrapObjectHandle>,
 }
 
-impl ItemReader {
-    pub async fn next_item(&mut self) -> Result<SuperBlockItem, Error> {
+impl RecordReader {
+    pub async fn next_item(&mut self) -> Result<SuperBlockRecord, Error> {
         loop {
             match self.reader.deserialize().await? {
                 ReadResult::Reset => bail!("Unexpected reset"),
@@ -551,10 +549,7 @@ impl ItemReader {
                     ensure!(extent.is_valid(), FxfsError::Inconsistent);
                     self.reader.handle().push_extent(extent)
                 }
-                ReadResult::Some(SuperBlockRecord::ObjectItem(item)) => {
-                    return Ok(SuperBlockItem::Object(item))
-                }
-                ReadResult::Some(SuperBlockRecord::End) => return Ok(SuperBlockItem::End),
+                ReadResult::Some(x) => return Ok(x),
             }
         }
     }
@@ -564,7 +559,8 @@ impl ItemReader {
 mod tests {
     use {
         super::{
-            SuperBlockHeader, SuperBlockInstance, SuperBlockItem, UuidWrapper, MIN_SUPER_BLOCK_SIZE,
+            SuperBlockHeader, SuperBlockInstance, SuperBlockRecord, UuidWrapper,
+            MIN_SUPER_BLOCK_SIZE,
         },
         crate::{
             filesystem::{Filesystem, FxFilesystem},
@@ -727,7 +723,7 @@ mod tests {
         let mut written_item = written_super_block_a.1.next_item().await.expect("next_item failed");
 
         while let Some(item) = iter.get() {
-            if let SuperBlockItem::Object(i) = written_item {
+            if let SuperBlockRecord::ObjectItem(i) = written_item {
                 assert_eq!(i.as_item_ref(), item);
             } else {
                 panic!("missing item: {:?}", item);
@@ -736,7 +732,7 @@ mod tests {
             written_item = written_super_block_a.1.next_item().await.expect("next_item failed");
         }
 
-        if let SuperBlockItem::End = written_item {
+        if let SuperBlockRecord::End = written_item {
         } else {
             panic!("unexpected extra item: {:?}", written_item);
         }
