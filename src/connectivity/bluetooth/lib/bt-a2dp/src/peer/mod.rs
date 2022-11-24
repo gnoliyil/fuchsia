@@ -321,13 +321,13 @@ impl Peer {
             }
             inner.lock().set_remote_endpoints(&remote_streams);
             if let Some(sender) = metrics {
-                Self::record_cobalt_metrics(sender, &remote_streams).await;
+                Self::record_cobalt_metrics(sender, &remote_streams)
             }
             Ok(remote_streams)
         }
     }
 
-    async fn record_cobalt_metrics(
+    fn record_cobalt_metrics(
         metrics: fidl_fuchsia_metrics::MetricEventLoggerProxy,
         endpoints: &[StreamEndpoint],
     ) {

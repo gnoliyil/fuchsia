@@ -170,32 +170,24 @@ async fn make_connection(peer: Arc<RwLock<RemotePeer>>, conn_type: AVCTPConnecti
     fuchsia_async::Timer::new(random_delay.after_now()).await;
 
     // Initiate outgoing connection.
+    let peer_id = peer.read().peer_id;
     let conn_call = peer.write().connect(conn_type);
-    if conn_call.is_none() {
-        return;
-    }
-    match conn_call.unwrap().await {
+
+    match conn_call.await {
         Err(fidl_err) => {
-            warn!("Profile service connect error: {:?}", fidl_err);
+            warn!("Profile service connect error for {peer_id}: {fidl_err:?}");
             peer.write().connect_failed(conn_type, true);
         }
-        Ok(Ok(channel)) => {
-            let mut peer_guard = peer.write();
-            let channel = match channel.try_into() {
-                Ok(chan) => chan,
-                Err(e) => {
-                    error!("Unable to make peer {} from socket: {:?}", peer_guard.peer_id, e);
-                    peer_guard.connect_failed(conn_type, true);
-                    return;
-                }
-            };
-
-            peer_guard.connected(conn_type, channel);
-        }
+        Ok(Ok(channel)) => match channel.try_into() {
+            Ok(chan) => peer.write().connected(conn_type, chan),
+            Err(e) => {
+                error!("Can't make peer {peer_id} channel: {e:?}");
+                peer.write().connect_failed(conn_type, true);
+            }
+        },
         Ok(Err(e)) => {
-            let mut peer_guard = peer.write();
-            error!("Couldn't connect to peer {}: {:?}", peer_guard.peer_id, e);
-            peer_guard.connect_failed(conn_type, false);
+            error!("Couldn't connect to peer {peer_id}: {e:?}");
+            peer.write().connect_failed(conn_type, false);
         }
     }
 }

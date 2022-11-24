@@ -151,6 +151,8 @@ impl AVCTPConnectionType {
         }
     }
 
+    /// Get the the correct L2cap ChannelParameters for this connection type.
+    /// (basic for control, enhanced retransmission for browsing)
     pub fn parameters(&self) -> bredr::ChannelParameters {
         // TODO(fxbug.dev/101260): set minimum MTU to 335.
         match self {
@@ -162,6 +164,20 @@ impl AVCTPConnectionType {
                 ..bredr::ChannelParameters::EMPTY
             },
         }
+    }
+
+    // Return the L2CAP channel parameters appropriate for this connection, given the discovered
+    // descriptors.
+    pub fn connect_parameters(
+        &self,
+        controller_desc: &Option<AvrcpService>,
+        target_desc: &Option<AvrcpService>,
+    ) -> bredr::ConnectParameters {
+        bredr::ConnectParameters::L2cap(bredr::L2capParameters {
+            psm: Some(self.psm(controller_desc, target_desc).into()),
+            parameters: Some(self.parameters()),
+            ..bredr::L2capParameters::EMPTY
+        })
     }
 }
 
@@ -364,41 +380,34 @@ impl RemotePeer {
         self.wake_state_watcher();
     }
 
+    fn is_connecting(&self, conn_type: AVCTPConnectionType) -> bool {
+        match conn_type {
+            AVCTPConnectionType::Control => self.control_channel.is_connecting(),
+            AVCTPConnectionType::Browse => self.browse_channel.is_connecting(),
+        }
+    }
+
     /// Method for initiating outbound connection request.
-    /// Returns None if control/browse channel is not in connecting mode.
+    /// Immediately resolves to Ok(Err(ErrorCode::BadState)) if the connection type is not ready to
+    /// connect.
     pub fn connect(
         &mut self,
         conn_type: AVCTPConnectionType,
-    ) -> Option<
-        impl Future<
-            Output = Result<Result<bredr::Channel, fidl_fuchsia_bluetooth::ErrorCode>, fidl::Error>,
-        >,
+    ) -> impl Future<
+        Output = Result<Result<bredr::Channel, fidl_fuchsia_bluetooth::ErrorCode>, fidl::Error>,
     > {
-        match conn_type {
-            AVCTPConnectionType::Control => {
-                if !self.control_channel.is_connecting() {
-                    return None;
-                }
-            }
-            AVCTPConnectionType::Browse => {
-                if !self.browse_channel.is_connecting() {
-                    return None;
-                }
-            }
-        }
+        let connect_parameters = self.is_connecting(conn_type).then(|| {
+            conn_type.connect_parameters(&self.controller_descriptor, &self.target_descriptor)
+        });
 
-        // Depending on AVCTPConnectionType, define the L2CAP channel parameters
-        // (basic for control, enhanced retransmission for browsing)
-        return Some(self.profile_proxy.connect(
-            &mut self.peer_id.into(),
-            &mut bredr::ConnectParameters::L2cap(bredr::L2capParameters {
-                psm: Some(
-                    conn_type.psm(&self.controller_descriptor, &self.target_descriptor).into(),
-                ),
-                parameters: Some(conn_type.parameters()),
-                ..bredr::L2capParameters::EMPTY
-            }),
-        ));
+        let mut peer_id = self.peer_id.into();
+        let proxy = self.profile_proxy.clone();
+        async move {
+            let Some(mut params) = connect_parameters else {
+                return Ok(Err(fidl_fuchsia_bluetooth::ErrorCode::BadState));
+            };
+            proxy.connect(&mut peer_id, &mut params).await
+        }
     }
 
     /// Called when outgoing L2CAP connection was successfully established.
@@ -857,7 +866,7 @@ mod tests {
     }
 
     // Check that the remote will attempt to connect to a peer if we have a profile.
-    #[test]
+    #[fuchsia::test]
     fn trigger_connection_test() -> Result<(), Error> {
         let mut exec = fasync::TestExecutor::new_with_fake_time().expect("executor should build");
         exec.set_fake_time(fasync::Time::from_nanos(5_000000000));
@@ -922,7 +931,7 @@ mod tests {
 
     // Check that the remote will attempt to connect to a peer for both control
     // and browsing.
-    #[test]
+    #[fuchsia::test]
     fn trigger_connections_test() -> Result<(), Error> {
         let mut exec = fasync::TestExecutor::new_with_fake_time().expect("executor should build");
         exec.set_fake_time(fasync::Time::from_nanos(5_000000000));
@@ -1006,7 +1015,7 @@ mod tests {
     /// Tests initial connection establishment to a peer.
     /// Tests peer reconnection correctly terminates the old processing task, including the
     /// underlying channel, and spawns a new task to handle incoming requests.
-    #[test]
+    #[fuchsia::test]
     fn test_peer_reconnection() -> Result<(), Error> {
         let mut exec = fasync::TestExecutor::new_with_fake_time().expect("executor should build");
         exec.set_fake_time(fasync::Time::from_nanos(5_000000000));
@@ -1091,7 +1100,7 @@ mod tests {
     /// Tests that when inbound and outbound control connections are
     /// established at the same time, AVRCP drops both, and attempts to
     /// reconnect.
-    #[test]
+    #[fuchsia::test]
     fn test_simultaneous_control_connections() -> Result<(), Error> {
         let mut exec = fasync::TestExecutor::new_with_fake_time().expect("executor should build");
         exec.set_fake_time(fasync::Time::from_nanos(5_000000000));
@@ -1192,7 +1201,7 @@ mod tests {
     }
 
     /// Tests that when connection fails, we don't infinitely retry.
-    #[test]
+    #[fuchsia::test]
     fn test_connection_no_retries() -> Result<(), Error> {
         let mut exec = fasync::TestExecutor::new_with_fake_time().expect("executor should build");
         exec.set_fake_time(fasync::Time::from_nanos(5_000000000));
@@ -1305,7 +1314,7 @@ mod tests {
     /// Tests that when inbound and outbound browse connections are
     /// established at the same time, AVRCP drops both, and attempts to
     /// reconnect.
-    #[test]
+    #[fuchsia::test]
     fn test_simultaneous_browse_connections() -> Result<(), Error> {
         let mut exec = fasync::TestExecutor::new_with_fake_time().expect("executor should build");
         exec.set_fake_time(fasync::Time::from_nanos(5_000000000));
@@ -1431,7 +1440,7 @@ mod tests {
 
     /// Tests that when new inbound control connection comes in, previous
     /// control and browse connections are dropped.
-    #[test]
+    #[fuchsia::test]
     fn incoming_channel_resets_connections() -> Result<(), Error> {
         let mut exec = fasync::TestExecutor::new_with_fake_time().expect("executor should build");
         exec.set_fake_time(fasync::Time::from_nanos(5_000000000));
@@ -1539,7 +1548,7 @@ mod tests {
 
     /// Tests that when new inbound control connection comes in, previous
     /// control and browse connections are dropped.
-    #[test]
+    #[fuchsia::test]
     fn incoming_browse_channel_dropped() -> Result<(), Error> {
         let mut exec = fasync::TestExecutor::new_with_fake_time().expect("executor should build");
         exec.set_fake_time(fasync::Time::from_nanos(5_000000000));
@@ -1580,7 +1589,7 @@ mod tests {
         (inspect, metrics_node)
     }
 
-    #[test]
+    #[fuchsia::test]
     fn outgoing_connection_error_updates_inspect() -> Result<(), Error> {
         let mut exec = fasync::TestExecutor::new_with_fake_time().expect("executor should build");
         exec.set_fake_time(fasync::Time::from_nanos(5_000000000));
@@ -1625,7 +1634,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[fuchsia::test]
     fn successful_inbound_connection_updates_inspect_metrics() -> Result<(), Error> {
         let mut exec = fasync::TestExecutor::new().unwrap();
 

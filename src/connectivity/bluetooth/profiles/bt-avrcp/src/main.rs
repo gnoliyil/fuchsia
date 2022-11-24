@@ -7,6 +7,7 @@
 use {
     anyhow::{format_err, Context, Error},
     fuchsia_bluetooth::profile::{psm_from_protocol, Psm},
+    fuchsia_bluetooth::types::PeerId,
     fuchsia_component::server::ServiceFs,
     fuchsia_inspect as inspect,
     fuchsia_inspect_derive::Inspect,
@@ -31,10 +32,14 @@ use crate::{
     profile::{AvrcpService, AvrcpTargetFeatures},
 };
 
-async fn record_avrcp_capabilities(
-    metrics_proxy: fidl_fuchsia_metrics::MetricEventLoggerProxy,
+fn record_avrcp_capabilities(
+    metrics_proxy: Option<fidl_fuchsia_metrics::MetricEventLoggerProxy>,
     service: &AvrcpService,
+    peer_id: PeerId,
 ) {
+    let Some(metrics_proxy) = metrics_proxy else {
+        return;
+    };
     let mut event_codes_list = Vec::new();
     let remote_role = match service {
         AvrcpService::Controller { .. } => {
@@ -59,18 +64,22 @@ async fn record_avrcp_capabilities(
             bt_metrics::AvrcpRemotePeerCapabilitiesMetricDimensionFeature::SupportsBrowsing as u32,
         ]);
     }
-    // Log the occurrences.
-    for event_codes in event_codes_list {
-        bt_metrics::log_on_failure(
-            metrics_proxy
-                .log_occurrence(
-                    bt_metrics::AVRCP_REMOTE_PEER_CAPABILITIES_METRIC_ID,
-                    1,
-                    &event_codes,
-                )
-                .await,
-        );
-    }
+    // Log the occurrences (in the background)
+    fuchsia_async::Task::spawn(async move {
+        for event_codes in event_codes_list {
+            bt_metrics::log_on_failure(
+                metrics_proxy
+                    .log_occurrence(
+                        bt_metrics::AVRCP_REMOTE_PEER_CAPABILITIES_METRIC_ID,
+                        1,
+                        &event_codes,
+                    )
+                    .await,
+            );
+        }
+        info!("Finished recording AVRCP capabilities for {peer_id}");
+    })
+    .detach();
 }
 
 #[fuchsia::main(logging_tags = ["avrcp"])]
@@ -114,12 +123,12 @@ async fn main() -> Result<(), Error> {
             request = profile_client.next() => {
                 let request = match request {
                     None => return Err(format_err!("BR/EDR Profile unexpectedly closed")),
-                    Some(Err(e)) => return Err(format_err!("Profile client error: {:?}", e)),
+                    Some(Err(e)) => return Err(format_err!("Profile client error: {e:?}")),
                     Some(Ok(r)) => r,
                 };
                 match request {
                     ProfileEvent::PeerConnected { id, protocol, channel } => {
-                        info!("Incoming connection request from {:?} with protocol: {:?}", id, protocol);
+                        info!("Incoming connection request from {id} with protocol: {protocol:?}");
                         let protocol = protocol.iter().map(Into::into).collect();
                         match psm_from_protocol(&protocol) {
                             Some(Psm::AVCTP) => {
@@ -129,7 +138,7 @@ async fn main() -> Result<(), Error> {
                                 peer_manager.new_browse_connection(&id, channel);
                             },
                             _ => {
-                                info!("Received connection over non-AVRCP protocol: {:?}", protocol);
+                                info!("Received connection over non-AVRCP protocol: {protocol:?}");
                             },
                         }
                     },
@@ -143,14 +152,12 @@ async fn main() -> Result<(), Error> {
                         };
                         match AvrcpService::from_search_result(protocol, attributes) {
                             Ok(service) => {
-                                info!("Valid service found on {:?}: {:?}", id, service);
+                                info!("Valid service found on {id}: {service:?}");
                                 peer_manager.services_found(&id, vec![service]);
-                                if let Some(metrics) = cobalt.clone() {
-                                    record_avrcp_capabilities(metrics, &service).await;
-                                }
+                                record_avrcp_capabilities(cobalt.clone(), &service, id.into());
                             }
                             Err(e) => {
-                                warn!("Invalid service found: {:?}", e);
+                                warn!("Invalid service found: {e:?}");
                             }
                         }
                     },
@@ -160,7 +167,7 @@ async fn main() -> Result<(), Error> {
                 peer_manager.handle_service_request(request);
             },
             service_result = service_fut => {
-                error!("Service task finished unexpectedly: {:?}", service_result);
+                error!("Service task finished unexpectedly: {service_result:?}");
                 break;
             },
             complete => break,
@@ -172,11 +179,9 @@ async fn main() -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use async_test_helpers::run_while;
-    use async_utils::PollExt;
     use bt_metrics::respond_to_metrics_req_for_test;
     use fidl_fuchsia_metrics::*;
-    use pin_utils::pin_mut;
+    use fuchsia_async::{Time, WaitState};
 
     use crate::profile::{AvrcpControllerFeatures, AvrcpProtocolVersion};
 
@@ -193,12 +198,11 @@ mod tests {
             psm: Psm::AVCTP,
             protocol_version: AvrcpProtocolVersion(1, 6),
         };
-        let test_fut = record_avrcp_capabilities(proxy, &test_target);
+        // Spins off a Task to record to metrics.
+        record_avrcp_capabilities(Some(proxy), &test_target, PeerId(1));
 
-        pin_mut!(test_fut);
-
-        let cobalt_recv_fut = receiver.next();
-        let (log_request, test_fut) = run_while(&mut exec, test_fut, cobalt_recv_fut);
+        let mut cobalt_recv_fut = receiver.next();
+        let log_request = exec.run_singlethreaded(&mut cobalt_recv_fut);
 
         // First log request for cover art.
         let got = respond_to_metrics_req_for_test(log_request.unwrap().expect("should be ok"));
@@ -206,8 +210,8 @@ mod tests {
         assert_eq!(vec![0, 1], got.event_codes);
         assert_eq!(MetricEventPayload::Count(1), got.payload);
 
-        let cobalt_recv_fut = receiver.next();
-        let (log_request, mut test_fut) = run_while(&mut exec, test_fut, cobalt_recv_fut);
+        let mut cobalt_recv_fut = receiver.next();
+        let log_request = exec.run_singlethreaded(&mut cobalt_recv_fut);
 
         // Second log request for browsing.
         let got = respond_to_metrics_req_for_test(log_request.unwrap().expect("should be ok"));
@@ -215,7 +219,9 @@ mod tests {
         assert_eq!(vec![0, 0], got.event_codes);
         assert_eq!(MetricEventPayload::Count(1), got.payload);
 
-        let () = exec.run_until_stalled(&mut test_fut).expect("should be done");
+        // Running the background task should empty out the executor of things to do.
+        let _ = exec.run_until_stalled(&mut futures::future::pending::<()>());
+        assert_eq!(WaitState::Waiting(Time::INFINITE), exec.is_waiting());
     }
 
     #[fuchsia::test]
@@ -231,12 +237,11 @@ mod tests {
             psm: Psm::AVCTP,
             protocol_version: AvrcpProtocolVersion(1, 6),
         };
-        let test_fut = record_avrcp_capabilities(proxy, &test_controller);
+        // Spins off a Task to record to metrics.
+        record_avrcp_capabilities(Some(proxy), &test_controller, PeerId(1));
 
-        pin_mut!(test_fut);
-
-        let cobalt_recv_fut = receiver.next();
-        let (log_request, mut test_fut) = run_while(&mut exec, test_fut, cobalt_recv_fut);
+        let mut cobalt_recv_fut = receiver.next();
+        let log_request = exec.run_singlethreaded(&mut cobalt_recv_fut);
 
         // Log request for browsing.
         let got = respond_to_metrics_req_for_test(log_request.unwrap().expect("should be ok"));
@@ -244,6 +249,8 @@ mod tests {
         assert_eq!(vec![1, 0], got.event_codes);
         assert_eq!(MetricEventPayload::Count(1), got.payload);
 
-        let () = exec.run_until_stalled(&mut test_fut).expect("should be done");
+        // Running the background task should empty out the executor of things to do.
+        let _ = exec.run_until_stalled(&mut futures::future::pending::<()>());
+        assert_eq!(WaitState::Waiting(Time::INFINITE), exec.is_waiting());
     }
 }

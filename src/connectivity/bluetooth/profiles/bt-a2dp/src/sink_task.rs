@@ -225,17 +225,23 @@ impl RunningSinkTask {
             receiver.await.unwrap_or(Ok(()))
         });
         let result_fut = recv_task.shared();
-        let cobalt_result = result_fut.clone();
-        fasync::Task::spawn(async move {
-            let start_time = fasync::Time::now();
-            trace::instant!("bt-a2dp", "Media:Start", trace::Scope::Thread);
-            let _ = cobalt_result.await;
-            trace::instant!("bt-a2dp", "Media:Stop", trace::Scope::Thread);
-            let end_time = fasync::Time::now();
+        fasync::Task::spawn({
+            let task_finished = result_fut.clone();
+            async move {
+                let start_time = fasync::Time::now();
+                trace::instant!("bt-a2dp", "Media:Start", trace::Scope::Thread);
+                let _ = task_finished.await;
+                trace::instant!("bt-a2dp", "Media:Stop", trace::Scope::Thread);
+                let end_time = fasync::Time::now();
 
-            if let Some(sender) = metrics {
-                report_stream_metrics(sender, &codec_type, (end_time - start_time).into_seconds())
+                if let Some(sender) = metrics {
+                    report_stream_metrics(
+                        sender,
+                        &codec_type,
+                        (end_time - start_time).into_seconds(),
+                    )
                     .await;
+                }
             }
         })
         .detach();

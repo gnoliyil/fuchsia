@@ -117,6 +117,12 @@ core_shard("bt-avrcp-testonly-core-shard") {
 }
 
 fuchsia_unittest_package("bt-avrcp-tests") {
+  # tests various errors connecting to a peer and produces error logs
+  test_specs = {
+    log_settings = {
+      max_severity = "ERROR"
+    }
+  }
   deps = [ ":bin_test" ]
 }
 
