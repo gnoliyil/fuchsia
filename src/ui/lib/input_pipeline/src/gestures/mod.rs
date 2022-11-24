@@ -11,6 +11,7 @@ mod primary_tap;
 mod scroll;
 mod secondary_button;
 mod secondary_tap;
+mod utils;
 
 #[cfg(test)]
 mod tests;

@@ -8,12 +8,13 @@ use {
         ProcessBufferedEventsResult, ProcessNewEventResult, Reason, RecognizedGesture,
         TouchpadEvent, VerifyEventResult,
     },
+    super::utils::{movement_from_events, MovementDetail},
     crate::mouse_binding::{MouseButton, MouseEvent, MouseLocation, MousePhase, RelativeLocation},
     crate::utils::{euclidean_distance, Position},
     fuchsia_syslog::fx_log_err,
     fuchsia_zircon as zx,
     maplit::hashset,
-    std::collections::{HashMap, HashSet},
+    std::collections::HashSet,
 };
 
 /// The initial state of this recognizer, before a secondary tap has been
@@ -333,13 +334,14 @@ impl gesture_arena::Contender for TwoFingerContactContender {
         }
 
         // both touch contact should not move > threshold.
-        let (displacement_mm, _) = movement_from_events(&self.two_finger_contact_event, &event);
-        if displacement_mm >= self.spurious_to_intentional_motion_threshold_mm {
+        let MovementDetail { euclidean_distance, movement: _ } =
+            movement_from_events(&self.two_finger_contact_event, &event);
+        if euclidean_distance >= self.spurious_to_intentional_motion_threshold_mm {
             return ExamineEventResult::Mismatch(Reason::DetailedFloat(DetailedReasonFloat {
                 criterion: "displacement_mm",
                 min: None,
                 max: Some(self.spurious_to_intentional_motion_threshold_mm),
-                actual: displacement_mm,
+                actual: euclidean_distance,
             }));
         }
 
@@ -424,8 +426,9 @@ impl gesture_arena::Winner for ButtonDownWinner {
             };
 
         // Check for drag (button held, with sufficient contact movement).
-        let (distance_mm, _) = movement_from_events(&self.pressed_event, &event);
-        if distance_mm >= motion_threshold {
+        let MovementDetail { euclidean_distance, movement: _ } =
+            movement_from_events(&self.pressed_event, &event);
+        if euclidean_distance >= motion_threshold {
             let drag_winner = self.into_drag_winner();
             return drag_winner.process_new_event(event);
         }
@@ -533,15 +536,16 @@ impl gesture_arena::Winner for ButtonUpWinner {
         }
 
         // Events move more than threshold should end the ButtonUpWinner.
-        let (displacement_mm, _) = movement_from_events(&self.button_up_event, &event);
-        if displacement_mm > self.spurious_to_intentional_motion_threshold_button_change_mm {
+        let MovementDetail { euclidean_distance, movement: _ } =
+            movement_from_events(&self.button_up_event, &event);
+        if euclidean_distance > self.spurious_to_intentional_motion_threshold_button_change_mm {
             return ProcessNewEventResult::EndGesture(
                 EndGestureEvent::UnconsumedEvent(event),
                 Reason::DetailedFloat(DetailedReasonFloat {
                     criterion: "displacement_mm",
                     min: None,
                     max: Some(self.spurious_to_intentional_motion_threshold_button_change_mm),
-                    actual: displacement_mm,
+                    actual: euclidean_distance,
                 }),
             );
         }
@@ -581,10 +585,11 @@ fn touchpad_event_to_mouse_drag_event(
     last_event: &TouchpadEvent,
     event: &TouchpadEvent,
 ) -> gesture_arena::MouseEvent {
-    let (_, position_in_mm) = movement_from_events(last_event, event);
+    let MovementDetail { movement, euclidean_distance: _ } =
+        movement_from_events(last_event, event);
     make_mouse_event(
         event.timestamp,
-        position_in_mm,
+        movement,
         MousePhase::Move,
         hashset! {},
         hashset! {gesture_arena::SECONDARY_BUTTON},
@@ -593,7 +598,7 @@ fn touchpad_event_to_mouse_drag_event(
 
 fn make_mouse_event(
     timestamp: zx::Time,
-    position_in_mm: Position,
+    movement_in_mm: Position,
     phase: MousePhase,
     affected_buttons: HashSet<MouseButton>,
     pressed_buttons: HashSet<MouseButton>,
@@ -603,7 +608,7 @@ fn make_mouse_event(
         mouse_data: MouseEvent::new(
             MouseLocation::Relative(RelativeLocation {
                 counts: Position { x: 0.0, y: 0.0 },
-                millimeters: position_in_mm,
+                millimeters: movement_in_mm,
             }),
             /* wheel_delta_v= */ None,
             /* wheel_delta_h= */ None,
@@ -613,35 +618,6 @@ fn make_mouse_event(
             /* is_precision_scroll= */ None,
         ),
     }
-}
-
-// Take the finger that moves the furthest as events' movement.
-fn movement_from_events(
-    previous_event: &TouchpadEvent,
-    new_event: &TouchpadEvent,
-) -> (f32, Position) {
-    let mut previous_contacts: HashMap<u32, Position> = HashMap::new();
-    for c in &previous_event.contacts {
-        previous_contacts.insert(c.id, c.position.clone());
-    }
-
-    let mut movement = Position { x: 0.0, y: 0.0 };
-    let mut max_distance = 0.0;
-    for new_contact in &new_event.contacts {
-        let previous = previous_contacts.get(&new_contact.id);
-        match previous {
-            None => {}
-            Some(&previous) => {
-                let dis = euclidean_distance(new_contact.position, previous.clone());
-                if dis > max_distance {
-                    max_distance = dis;
-                    movement = new_contact.position - previous;
-                }
-            }
-        }
-    }
-
-    (max_distance, movement)
 }
 
 #[cfg(test)]

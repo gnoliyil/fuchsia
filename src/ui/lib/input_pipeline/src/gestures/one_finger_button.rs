@@ -8,6 +8,7 @@ use {
         MouseEvent, ProcessBufferedEventsResult, ProcessNewEventResult, Reason, RecognizedGesture,
         TouchpadEvent, VerifyEventResult,
     },
+    super::utils::{movement_from_events, MovementDetail},
     crate::mouse_binding::{self, MouseButton},
     crate::utils::{euclidean_distance, Position},
     fuchsia_syslog::fx_log_err,
@@ -300,18 +301,6 @@ impl gesture_arena::Winner for ButtonDownWinner {
                 self.spurious_to_intentional_motion_threshold_button_change_mm
             };
 
-        // Check for drag (button held, with sufficient contact movement).
-        // TODO(fxbug.dev/93688): may want to handle contact > 1 with different logic.
-        if event.contacts.len() > 0
-            && euclidean_distance(
-                position_from_event(&event),
-                position_from_event(&self.pressed_event),
-            ) > motion_threshold
-        {
-            let drag_winner = self.into_drag_winner();
-            return drag_winner.process_new_event(event);
-        }
-
         let num_pressed_buttons = event.pressed_buttons.len();
         match num_pressed_buttons {
             // All small motion before button up, and motion in button up event
@@ -320,7 +309,17 @@ impl gesture_arena::Winner for ButtonDownWinner {
                 Some(touchpad_event_to_mouse_up_event(&event)),
                 self.into_button_up(event),
             ),
-            1 => ProcessNewEventResult::ContinueGesture(None, self),
+            1 => {
+                // Check for drag (button held, with sufficient contact movement).
+                let MovementDetail { euclidean_distance, movement: _ } =
+                    movement_from_events(&self.pressed_event, &event);
+
+                if euclidean_distance > motion_threshold {
+                    let drag_winner = self.into_drag_winner();
+                    return drag_winner.process_new_event(event);
+                }
+                ProcessNewEventResult::ContinueGesture(None, self)
+            }
             // Also wait for the button release to complete the click or drag gesture.
             // this should never happens unless there is a touchpad has more than 1 button.
             _ => ProcessNewEventResult::ContinueGesture(None, self),
@@ -415,18 +414,16 @@ impl gesture_arena::Winner for ButtonUpWinner {
         }
 
         // Events move more than threshold should end the ButtonUpWinner.
-        let displacement_mm = euclidean_distance(
-            position_from_event(&event),
-            position_from_event(&self.button_up_event),
-        );
-        if displacement_mm > self.spurious_to_intentional_motion_threshold_button_change_mm {
+        let MovementDetail { euclidean_distance, movement: _ } =
+            movement_from_events(&self.button_up_event, &event);
+        if euclidean_distance > self.spurious_to_intentional_motion_threshold_button_change_mm {
             return ProcessNewEventResult::EndGesture(
                 EndGestureEvent::UnconsumedEvent(event),
                 Reason::DetailedFloat(DetailedReasonFloat {
                     criterion: "displacement_mm",
                     min: None,
                     max: Some(self.spurious_to_intentional_motion_threshold_button_change_mm),
-                    actual: displacement_mm,
+                    actual: euclidean_distance,
                 }),
             );
         }
@@ -466,9 +463,11 @@ fn touchpad_event_to_mouse_drag_event(
     last_event: &TouchpadEvent,
     event: &TouchpadEvent,
 ) -> MouseEvent {
+    let MovementDetail { movement, euclidean_distance: _ } =
+        movement_from_events(last_event, event);
     make_mouse_event(
         event.timestamp,
-        event.contacts[0].position - last_event.contacts[0].position,
+        movement,
         mouse_binding::MousePhase::Move,
         hashset! {},
         hashset! {1},
@@ -477,7 +476,7 @@ fn touchpad_event_to_mouse_drag_event(
 
 fn make_mouse_event(
     timestamp: zx::Time,
-    position_in_mm: Position,
+    movement_in_mm: Position,
     phase: mouse_binding::MousePhase,
     affected_buttons: HashSet<MouseButton>,
     pressed_buttons: HashSet<MouseButton>,
@@ -487,7 +486,7 @@ fn make_mouse_event(
         mouse_data: mouse_binding::MouseEvent::new(
             mouse_binding::MouseLocation::Relative(mouse_binding::RelativeLocation {
                 counts: Position { x: 0.0, y: 0.0 },
-                millimeters: position_in_mm,
+                millimeters: movement_in_mm,
             }),
             /* wheel_delta_v= */ None,
             /* wheel_delta_h= */ None,
@@ -797,6 +796,14 @@ mod tests {
             make_touch_contact(1, Position{x: 9.0, y: 1.0}),
         ],
     };"move less than threshold out of edge state")]
+    #[test_case(TouchpadEvent{
+        timestamp: zx::Time::from_nanos(41),
+        pressed_buttons: vec![1],
+        contacts: vec![
+            make_touch_contact(1, Position{x: 1.0, y: 1.0}),
+            make_touch_contact(2, Position{x: 1.0, y: 2.0}),
+        ],
+    };"add more finger")]
     #[fuchsia::test]
     fn button_down_winner_continue(event: TouchpadEvent) {
         let winner: Box<dyn gesture_arena::Winner> = Box::new(ButtonDownWinner {
@@ -924,6 +931,73 @@ mod tests {
                 mouse_binding::MouseLocation::Relative(mouse_binding::RelativeLocation {
                     counts: Position { x: 0.0, y: 0.0 },
                     millimeters: Position { x: 19.0, y: 1.0 },
+                }),
+                /* wheel_delta_v= */ None,
+                /* wheel_delta_h= */ None,
+                mouse_binding::MousePhase::Move,
+                /* affected_buttons= */ hashset!{},
+                /* pressed_buttons= */ hashset!{1},
+                /* is_precision_scroll= */ None,
+            ));
+            pretty_assertions::assert_eq!(got_winner.get_type_name(), "input_pipeline_lib_test::gestures::one_finger_button::DragWinner");
+        });
+    }
+
+    #[fuchsia::test]
+    fn drag_winner_continue_2_finger() {
+        let mut winner: Box<dyn gesture_arena::Winner> = Box::new(DragWinner {
+            spurious_to_intentional_motion_threshold_button_change_mm:
+                SPURIOUS_TO_INTENTIONAL_MOTION_THRESHOLD_BUTTON_CHANGE_MM,
+            button_change_state_timeout: BUTTON_CHANGE_STATE_TIMEOUT,
+            last_event: TouchpadEvent {
+                timestamp: zx::Time::ZERO,
+                pressed_buttons: vec![1],
+                contacts: vec![make_touch_contact(1, Position { x: 0.0, y: 0.0 })],
+            },
+        });
+
+        let event = TouchpadEvent {
+            timestamp: zx::Time::from_nanos(41),
+            pressed_buttons: vec![1],
+            contacts: vec![
+                make_touch_contact(1, Position { x: 0.0, y: 0.0 }),
+                make_touch_contact(2, Position { x: 0.0, y: 5.0 }),
+            ],
+        };
+
+        let got = winner.process_new_event(event);
+        assert_matches!(got, ProcessNewEventResult::ContinueGesture(Some(MouseEvent {mouse_data, ..}), got_winner)=>{
+            pretty_assertions::assert_eq!(mouse_data, mouse_binding::MouseEvent::new(
+                mouse_binding::MouseLocation::Relative(mouse_binding::RelativeLocation {
+                    counts: Position { x: 0.0, y: 0.0 },
+                    millimeters: Position { x: 0.0, y: 0.0 },
+                }),
+                /* wheel_delta_v= */ None,
+                /* wheel_delta_h= */ None,
+                mouse_binding::MousePhase::Move,
+                /* affected_buttons= */ hashset!{},
+                /* pressed_buttons= */ hashset!{1},
+                /* is_precision_scroll= */ None,
+            ));
+            winner = got_winner;
+            pretty_assertions::assert_eq!(winner.get_type_name(), "input_pipeline_lib_test::gestures::one_finger_button::DragWinner");
+        });
+
+        let event = TouchpadEvent {
+            timestamp: zx::Time::from_nanos(41),
+            pressed_buttons: vec![1],
+            contacts: vec![
+                make_touch_contact(1, Position { x: 0.0, y: 0.0 }),
+                make_touch_contact(2, Position { x: 19.0, y: 5.0 }),
+            ],
+        };
+
+        let got = winner.process_new_event(event);
+        assert_matches!(got, ProcessNewEventResult::ContinueGesture(Some(MouseEvent {mouse_data, ..}), got_winner)=>{
+            pretty_assertions::assert_eq!(mouse_data, mouse_binding::MouseEvent::new(
+                mouse_binding::MouseLocation::Relative(mouse_binding::RelativeLocation {
+                    counts: Position { x: 0.0, y: 0.0 },
+                    millimeters: Position { x: 19.0, y: 0.0 },
                 }),
                 /* wheel_delta_v= */ None,
                 /* wheel_delta_h= */ None,

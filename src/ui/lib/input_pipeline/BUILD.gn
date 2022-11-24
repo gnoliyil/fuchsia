@@ -108,6 +108,7 @@ rustc_library("input_pipeline") {
     "src/gestures/tests/secondary_button.rs",
     "src/gestures/tests/secondary_tap.rs",
     "src/gestures/tests/utils.rs",
+    "src/gestures/utils.rs",
     "src/ime_handler.rs",
     "src/immersive_mode_shortcut_handler.rs",
     "src/input_device.rs",
