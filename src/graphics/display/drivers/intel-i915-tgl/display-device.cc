@@ -195,15 +195,32 @@ void DisplayDevice::ApplyConfiguration(const display_config_t* config,
   ZX_ASSERT(config);
 
   if (CheckNeedsModeset(&config->mode)) {
-    info_ = config->mode;
-
     if (pipe_) {
-      DdiModeset(info_);
+      // TODO(fxbug.dev/116009): When ApplyConfiguration() early returns on the
+      // following error conditions, we should reset the DDI, pipe and transcoder
+      // so that they can be possibly reused.
+      if (!DdiModeset(config->mode)) {
+        zxlogf(ERROR, "Display %lu: Modeset failed; ApplyConfiguration() aborted.", id());
+        return;
+      }
 
-      PipeConfigPreamble(info_, pipe_->pipe_id(), pipe_->connected_transcoder_id());
-      pipe_->ApplyModeConfig(info_);
-      PipeConfigEpilogue(info_, pipe_->pipe_id(), pipe_->connected_transcoder_id());
+      if (!PipeConfigPreamble(config->mode, pipe_->pipe_id(), pipe_->connected_transcoder_id())) {
+        zxlogf(ERROR,
+               "Display %lu: Transcoder configuration failed before pipe setup; "
+               "ApplyConfiguration() aborted.",
+               id());
+        return;
+      }
+      pipe_->ApplyModeConfig(config->mode);
+      if (!PipeConfigEpilogue(config->mode, pipe_->pipe_id(), pipe_->connected_transcoder_id())) {
+        zxlogf(ERROR,
+               "Display %lu: Transcoder configuration failed after pipe setup; "
+               "ApplyConfiguration() aborted.",
+               id());
+        return;
+      }
     }
+    info_ = config->mode;
   }
 
   if (pipe_) {
