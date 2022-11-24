@@ -6,6 +6,7 @@
 #define SRC_DEVICES_BIN_DRIVER_MANAGER_DEVFS_H_
 
 #include <fidl/fuchsia.device.fs/cpp/wire.h>
+#include <fidl/fuchsia.device.manager/cpp/wire.h>
 #include <fidl/fuchsia.io/cpp/wire.h>
 #include <lib/async/dispatcher.h>
 
@@ -32,8 +33,11 @@ class Devnode {
     std::string path;
     mutable ExportOptions export_options;
   };
+  struct Remote {
+    fidl::WireSharedClient<fuchsia_device_manager::DeviceController> connector;
+  };
 
-  using Target = std::variant<NoRemote, Service, std::reference_wrapper<Device>>;
+  using Target = std::variant<NoRemote, Service, Remote>;
 
   // Constructs a root node.
   explicit Devnode(Devfs& devfs);

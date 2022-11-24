@@ -71,14 +71,14 @@ std::string_view Devnode::name() const {
 Devnode::ExportOptions Devnode::export_options() const {
   return std::visit(overloaded{[](const NoRemote& no_remote) { return no_remote.export_options; },
                                [](const Service& service) { return service.export_options; },
-                               [](const Device&) { return ExportOptions{}; }},
+                               [](const Remote&) { return ExportOptions{}; }},
                     target());
 }
 
 Devnode::ExportOptions* Devnode::export_options() {
   return std::visit(overloaded{[](const NoRemote& no_remote) { return &no_remote.export_options; },
                                [](const Service& service) { return &service.export_options; },
-                               [](const Device&) -> ExportOptions* { return nullptr; }},
+                               [](const Remote&) -> ExportOptions* { return nullptr; }},
                     target());
 }
 
@@ -118,7 +118,7 @@ Devnode::VnodeImpl::VnodeImpl(Devnode& holder, Target target)
 bool Devnode::VnodeImpl::IsDirectory() const {
   return std::visit(
       overloaded{[&](const NoRemote&) { return true; }, [&](const Service&) { return false; },
-                 [&](const Device& device) { return !device.device_controller().is_valid(); }},
+                 [&](const Remote& remote) { return !remote.connector.is_valid(); }},
       target_);
 }
 
@@ -178,16 +178,16 @@ zx_status_t Devnode::VnodeImpl::RemoteNode::OpenRemote(fio::OpenFlags flags, uin
   ZX_ASSERT_MSG(path.get() == ".", "unexpected path to remote '%.*s'",
                 static_cast<int>(path.size()), path.data());
   return std::visit(
-      overloaded{
-          [&](const NoRemote&) { return ZX_ERR_NOT_SUPPORTED; },
-          [&](const Service& service) {
-            return fidl::WireCall(service.remote)
-                ->Open(flags, mode, fidl::StringView::FromExternal(service.path), std::move(object))
-                .status();
-          },
-          [&](const Device& device) {
-            return device.device_controller()->Open(flags, mode, path, std::move(object)).status();
-          }},
+      overloaded{[&](const NoRemote&) { return ZX_ERR_NOT_SUPPORTED; },
+                 [&](const Service& service) {
+                   return fidl::WireCall(service.remote)
+                       ->Open(flags, mode, fidl::StringView::FromExternal(service.path),
+                              std::move(object))
+                       .status();
+                 },
+                 [&](const Remote& remote) {
+                   return remote.connector->Open(flags, mode, path, std::move(object)).status();
+                 }},
       parent_.target_);
 }
 
@@ -233,44 +233,42 @@ Devnode::Devnode(Devfs& devfs, PseudoDir& parent, Target target, fbl::String nam
         return it->first;
       }()) {
   auto [device_controller, device_protocol] = std::visit(
-      overloaded{[](const NoRemote&) {
-                   return std::make_tuple(fbl::RefPtr<fs::Service>(), fbl::RefPtr<fs::Service>());
-                 },
-                 [](const Service& service) {
-                   auto device_controller =
-                       fbl::MakeRefCounted<fs::Service>([&service](zx::channel channel) {
-                         return fidl::WireCall(service.remote)
-                             ->Open(fio::OpenFlags::kRightReadable | fio::OpenFlags::kRightWritable,
-                                    0, fidl::StringView::FromExternal(service.path),
-                                    fidl::ServerEnd<fuchsia_io::Node>(std::move(channel)))
-                             .status();
-                       });
-                   auto device_protocol =
-                       fbl::MakeRefCounted<fs::Service>([&service](zx::channel channel) {
-                         return fidl::WireCall(service.remote)
-                             ->Open(fio::OpenFlags::kRightReadable | fio::OpenFlags::kRightWritable,
-                                    0, fidl::StringView::FromExternal(service.path),
-                                    fidl::ServerEnd<fuchsia_io::Node>(std::move(channel)))
-                             .status();
-                       });
-                   return std::make_tuple(std::move(device_controller), std::move(device_protocol));
-                 },
-                 [](const Device& device) {
-                   auto device_controller =
-                       fbl::MakeRefCounted<fs::Service>([&device](zx::channel channel) {
-                         return device.device_controller()
-                             ->ConnectToController(
-                                 fidl::ServerEnd<fuchsia_device::Controller>(std::move(channel)))
-                             .status();
-                       });
-                   auto device_protocol =
-                       fbl::MakeRefCounted<fs::Service>([&device](zx::channel channel) {
-                         return device.device_controller()
-                             ->ConnectToDeviceProtocol(std::move(channel))
-                             .status();
-                       });
-                   return std::make_tuple(std::move(device_controller), std::move(device_protocol));
-                 }},
+      overloaded{
+          [](const NoRemote&) {
+            return std::make_tuple(fbl::RefPtr<fs::Service>(), fbl::RefPtr<fs::Service>());
+          },
+          [](const Service& service) {
+            auto device_controller =
+                fbl::MakeRefCounted<fs::Service>([&service](zx::channel channel) {
+                  return fidl::WireCall(service.remote)
+                      ->Open(fio::OpenFlags::kRightReadable | fio::OpenFlags::kRightWritable, 0,
+                             fidl::StringView::FromExternal(service.path),
+                             fidl::ServerEnd<fuchsia_io::Node>(std::move(channel)))
+                      .status();
+                });
+            auto device_protocol =
+                fbl::MakeRefCounted<fs::Service>([&service](zx::channel channel) {
+                  return fidl::WireCall(service.remote)
+                      ->Open(fio::OpenFlags::kRightReadable | fio::OpenFlags::kRightWritable, 0,
+                             fidl::StringView::FromExternal(service.path),
+                             fidl::ServerEnd<fuchsia_io::Node>(std::move(channel)))
+                      .status();
+                });
+            return std::make_tuple(std::move(device_controller), std::move(device_protocol));
+          },
+          [](const Remote& remote) {
+            auto device_controller =
+                fbl::MakeRefCounted<fs::Service>([&remote](zx::channel channel) {
+                  return remote.connector
+                      ->ConnectToController(
+                          fidl::ServerEnd<fuchsia_device::Controller>(std::move(channel)))
+                      .status();
+                });
+            auto device_protocol = fbl::MakeRefCounted<fs::Service>([&remote](zx::channel channel) {
+              return remote.connector->ConnectToDeviceProtocol(std::move(channel)).status();
+            });
+            return std::make_tuple(std::move(device_controller), std::move(device_protocol));
+          }},
       this->target());
   if (device_controller) {
     children().AddEntry(fuchsia_device_fs::wire::kDeviceControllerName,
@@ -384,7 +382,10 @@ zx_status_t Devfs::initialize(Device& device) {
            name.data());
       return ZX_ERR_ALREADY_EXISTS;
     }
-    device.self.emplace(*this, parent_directory, device, name);
+    Devnode::Remote remote = {
+        .connector = device.device_controller().Clone(),
+    };
+    device.self.emplace(*this, parent_directory, std::move(remote), name);
   }
 
   switch (const uint32_t id = device.protocol_id(); id) {
@@ -407,7 +408,10 @@ zx_status_t Devfs::initialize(Device& device) {
           name = seq_name.value();
         }
 
-        device.link.emplace(*this, dir.children(), device, name);
+        Devnode::Remote remote = {
+            .connector = device.device_controller().Clone(),
+        };
+        device.link.emplace(*this, dir.children(), std::move(remote), name);
       }
     }
   }
