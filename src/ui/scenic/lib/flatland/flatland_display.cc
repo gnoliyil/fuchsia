@@ -90,13 +90,15 @@ void FlatlandDisplay::SetContent(ViewportCreationToken token,
 
   auto child_transform = transform_graph_.CreateTransform();
 
-  const auto kDevicePixelRatio = display_->device_pixel_ratio();
+  const auto device_pixel_ratio = display_->device_pixel_ratio();
+  FX_LOGS(INFO) << "Device Pixel Ratio: " << device_pixel_ratio.x << "x" << device_pixel_ratio.y;
+
   ViewportProperties properties;
   {
     // To calculate the logical size, we need to divide the physical pixel size by the DPR.
     fuchsia::math::SizeU size;
-    size.width = display_->width_in_px() / kDevicePixelRatio.x;
-    size.height = display_->height_in_px() / kDevicePixelRatio.y;
+    size.width = display_->width_in_px() / device_pixel_ratio.x;
+    size.height = display_->height_in_px() / device_pixel_ratio.y;
     properties.set_logical_size(size);
     properties.set_inset({0, 0, 0, 0});
   }
@@ -151,7 +153,7 @@ void FlatlandDisplay::SetContent(ViewportCreationToken token,
   // internally, the sizes of content on flatland instances that are hooked up to this display are
   // scaled up by the appropriate amount.
   uber_struct->local_matrices[link_to_child_.parent_transform_handle] =
-      glm::scale(glm::mat3(), kDevicePixelRatio);
+      glm::scale(glm::mat3(), device_pixel_ratio);
 
   auto present_id = scheduling::GetNextPresentId();
   uber_struct_queue_->Push(present_id, std::move(uber_struct));
