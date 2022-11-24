@@ -304,7 +304,7 @@ a value. The callback function is invoked when the property value is read.
     a.GetRoot().CreateString("version", "1.0", &a);
     a.GetRoot().CreateLazy{Node,Values}("lazy", [] {
       Inspector b;
-      b.GetRoot().CreateInt("value", 10, &b);
+      b.GetRoot().RecordInt("value", 10);
       return fpromise::make_ok_promise(std::move(b));
     }, &a);
 
@@ -319,14 +319,14 @@ a value. The callback function is invoked when the property value is read.
     lazy:
       version = "1.0"
       lazy:
-        val = 10
+        value = 10
   ```
 
   Output (CreateLazyValues):
 
   ```
   root:
-    val = 10
+    value = 10
     version = "1.0"
   ```
 
@@ -367,8 +367,8 @@ a value. The callback function is invoked when the property value is read.
           // lazy_ = ...
 
           // The value is set to the result of calling a method on "this".
-          inspector.GetRoot().CreateInt("performance_score",
-                                        this->CalculatePerformance(), &inspector);
+          inspector.GetRoot().RecordInt("performance_score",
+                                        this->CalculatePerformance());
 
           // Callbacks return a fpromise::promise<Inspector>, so return a result
           // promise containing the value we created.
@@ -414,11 +414,11 @@ a value. The callback function is invoked when the property value is read.
     lazy:
       version = "1.0"
       lazy:
-        val = 10
+        value = 10
 
   Output (create_lazy_values):
   root:
-    val = 10
+    value = 10
     version = "1.0"
   ```
 
