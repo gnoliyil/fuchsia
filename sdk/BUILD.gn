@@ -360,14 +360,23 @@ sdk_molecule("platform_fidls") {
       [ "//sdk/fidl/fuchsia.exception:fuchsia.exception_sdk($fidl_toolchain)" ]
 }
 
+# This SDK molecule is a collection of libraries only available to the in-tree
+# Bazel build. See https://fxrev.dev/737558 and https://fxbug.dev/113063.
 sdk_molecule("platform_libs") {
   visibility = [ ":*" ]
 
   deps = [
     ":version_history",
+    "//src/developer/debug/shared:shared_sdk",
+    "//src/lib/containers/cpp:cpp_sdk",
     "//src/lib/fxl:fxl_sdk",
+    "//src/lib/process:process_sdk",
     "//third_party/re2:re2_sdk",
     "//zircon/public/sysroot/sdk:sysroot_sdk",
+
+    # TODO(https://fxbug.dev/115709): Include ipc_sdk when "defines" is
+    # supported.
+    # "//src/developer/debug/ipc:ipc_sdk",
   ]
 }
 

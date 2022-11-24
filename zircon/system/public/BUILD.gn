@@ -2,6 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/cpp/sdk_source_set.gni")
+
 # If not building for Fuchsia (e.g., linux, macos) then binaries need to get
 # zircon headers directly from source. Otherwise they come from sysroot.
 config("public_config") {
@@ -10,7 +12,9 @@ config("public_config") {
 }
 
 # These headers are exported for use in building non-fuchsia-host binaries.
-source_set("public") {
+sdk_source_set("public") {
+  category = "internal"
+
   public = [
     "zircon/analyzer.h",
     "zircon/boot/image.h",

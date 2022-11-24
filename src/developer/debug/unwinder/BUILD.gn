@@ -2,12 +2,22 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-static_library("unwinder") {
+import("//build/cpp/sdk_source_set.gni")
+
+sdk_source_set("unwinder") {
+  category = "internal"
+  build_as_static = true
+
   public = [
     "error.h",
     "memory.h",
     "registers.h",
     "unwind.h",
+  ]
+  private_headers = [
+    "dwarf_cfi.h",
+    "dwarf_cfi_parser.h",
+    "dwarf_expr.h",
   ]
   sources = [
     "dwarf_cfi.cc",
@@ -33,6 +43,7 @@ static_library("unwinder") {
       "third_party/libunwindstack/context.h",
       "unwind_local.cc",
     ]
+    private_headers += [ "third_party/libunwindstack/context.h" ]
     if (current_cpu == "x64") {
       sources += [ "third_party/libunwindstack/context_x86_64.S" ]
     }

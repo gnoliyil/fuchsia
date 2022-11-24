@@ -48,6 +48,7 @@ config("suppress-warning.config") {
     "//src/performance/lib/fxt/*",
     "//third_party/zstd/*",
     "//zircon/kernel/*",
+    "//zircon/system/public/*",
     "//zircon/system/ulib/*",
     "//zircon/third_party/lib/*",
     "//zircon/third_party/ulib/*",

@@ -3,8 +3,11 @@
 # found in the LICENSE file.
 
 import("//build/components.gni")
+import("//build/cpp/sdk_source_set.gni")
 
-source_set("process") {
+sdk_source_set("process") {
+  category = "internal"
+
   sources = [
     "process_builder.cc",
     "process_builder.h",

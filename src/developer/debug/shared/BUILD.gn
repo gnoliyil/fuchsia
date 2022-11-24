@@ -2,9 +2,14 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/cpp/sdk_source_set.gni")
+
 # This library contains helper classes used by both the debug_agent and zxdb
 # but that aren't directly related to the protocol.
-static_library("shared") {
+sdk_source_set("shared") {
+  category = "internal"
+  build_as_static = true
+
   sources = [
     "address_range.cc",
     "address_range.h",
@@ -14,6 +19,7 @@ static_library("shared") {
     "arch_x86.h",
     "buffered_fd.cc",
     "buffered_fd.h",
+    "buffered_stream.h",
     "handle_info.cc",
     "handle_info.h",
     "largest_less_or_equal.h",
@@ -28,6 +34,7 @@ static_library("shared") {
     "register_value.h",
     "serialization.cc",
     "serialization.h",
+    "socket_watcher.h",
     "status.cc",
     "status.h",
     "stream_buffer.cc",
