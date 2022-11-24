@@ -56,6 +56,7 @@ std::string StateToString(Device::State state) {
 
 Device::Device(Coordinator* coord, fbl::String name, fbl::String libname, fbl::String args,
                fbl::RefPtr<Device> parent, uint32_t protocol_id, zx::vmo inspect,
+               fidl::ClientEnd<fuchsia_device_manager::DeviceController> device_controller,
                fidl::ClientEnd<fio::Directory> outgoing_dir)
     : coordinator(coord),
       name_(std::move(name)),
@@ -71,6 +72,9 @@ Device::Device(Coordinator* coord, fbl::String name, fbl::String libname, fbl::S
       outgoing_dir_(std::move(outgoing_dir)),
       inspect_(coord->inspect_manager().devices(), coord->inspect_manager().device_count(),
                name_.c_str(), std::move(inspect)) {
+  if (device_controller.is_valid()) {
+    device_controller_.Bind(std::move(device_controller), coordinator->dispatcher());
+  }
   set_state(Device::State::kActive);  // set default state
 }
 
@@ -143,9 +147,9 @@ zx_status_t Device::Create(
     real_parent = real_parent->parent();
   }
 
-  auto dev = fbl::MakeRefCounted<Device>(coordinator, std::move(name), std::move(driver_path),
-                                         std::move(args), real_parent, protocol_id,
-                                         std::move(inspect), std::move(outgoing_dir));
+  auto dev = fbl::MakeRefCounted<Device>(
+      coordinator, std::move(name), std::move(driver_path), std::move(args), real_parent,
+      protocol_id, std::move(inspect), std::move(device_controller), std::move(outgoing_dir));
   if (!dev) {
     return ZX_ERR_NO_MEMORY;
   }
@@ -184,7 +188,6 @@ zx_status_t Device::Create(
     return status;
   }
 
-  dev->device_controller_.Bind(std::move(device_controller), coordinator->dispatcher());
   dev->Serve(std::move(coordinator_request));
 
   // We exist within our parent's device host
@@ -247,9 +250,9 @@ zx_status_t Device::CreateComposite(
     real_parent = real_parent->parent();
   }
 
-  auto dev =
-      fbl::MakeRefCounted<Device>(coordinator, composite.name(), fbl::String(), fbl::String(),
-                                  real_parent, 0, zx::vmo(), fidl::ClientEnd<fio::Directory>());
+  auto dev = fbl::MakeRefCounted<Device>(
+      coordinator, composite.name(), fbl::String(), fbl::String(), real_parent, 0, zx::vmo(),
+      std::move(device_controller), fidl::ClientEnd<fio::Directory>());
   if (!dev) {
     return ZX_ERR_NO_MEMORY;
   }
@@ -269,7 +272,6 @@ zx_status_t Device::CreateComposite(
     return status;
   }
 
-  dev->device_controller_.Bind(std::move(device_controller), coordinator->dispatcher());
   dev->Serve(std::move(coordinator_request));
   // We exist within our parent's device host
   dev->set_host(std::move(driver_host));
@@ -288,7 +290,8 @@ zx_status_t Device::CreateComposite(
   return ZX_OK;
 }
 
-zx_status_t Device::CreateProxy() {
+zx_status_t Device::CreateProxy(
+    fidl::ClientEnd<fuchsia_device_manager::DeviceController> controller) {
   ZX_ASSERT(proxy_ == nullptr);
 
   fbl::String driver_path = libname_;
@@ -306,9 +309,10 @@ zx_status_t Device::CreateProxy() {
     }
   }
 
-  auto dev = fbl::MakeRefCounted<Device>(
-      this->coordinator, fbl::String::Concat({name_, "-proxy"}), std::move(driver_path),
-      fbl::String(), fbl::RefPtr(this), protocol_id_, zx::vmo(), fidl::ClientEnd<fio::Directory>());
+  auto dev = fbl::MakeRefCounted<Device>(this->coordinator, fbl::String::Concat({name_, "-proxy"}),
+                                         std::move(driver_path), fbl::String(), fbl::RefPtr(this),
+                                         protocol_id_, zx::vmo(), std::move(controller),
+                                         fidl::ClientEnd<fio::Directory>());
   if (dev == nullptr) {
     return ZX_ERR_NO_MEMORY;
   }
@@ -322,10 +326,12 @@ zx_status_t Device::CreateProxy() {
   return ZX_OK;
 }
 
-zx_status_t Device::CreateFidlProxy(fbl::RefPtr<Device>* fidl_proxy_out) {
+zx_status_t Device::CreateFidlProxy(
+    fidl::ClientEnd<fuchsia_device_manager::DeviceController> controller,
+    fbl::RefPtr<Device>* fidl_proxy_out) {
   auto dev = fbl::MakeRefCounted<Device>(
       this->coordinator, fbl::String::Concat({name_, "-fidl-proxy"}), fbl::String(), fbl::String(),
-      fbl::RefPtr(this), 0, zx::vmo(), fidl::ClientEnd<fio::Directory>());
+      fbl::RefPtr(this), 0, zx::vmo(), std::move(controller), fidl::ClientEnd<fio::Directory>());
   if (dev == nullptr) {
     return ZX_ERR_NO_MEMORY;
   }

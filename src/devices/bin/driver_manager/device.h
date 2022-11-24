@@ -101,6 +101,7 @@ class Device final
 
   Device(Coordinator* coord, fbl::String name, fbl::String libname, fbl::String args,
          fbl::RefPtr<Device> parent, uint32_t protocol_id, zx::vmo inspect,
+         fidl::ClientEnd<fuchsia_device_manager::DeviceController> device_controller,
          fidl::ClientEnd<fio::Directory> outgoing_dir);
   ~Device() override;
 
@@ -123,8 +124,9 @@ class Device final
       fidl::ServerEnd<fuchsia_device_manager::Coordinator> coordinator_request,
       fidl::ClientEnd<fuchsia_device_manager::DeviceController> device_controller,
       fbl::RefPtr<Device>* device);
-  zx_status_t CreateProxy();
-  zx_status_t CreateFidlProxy(fbl::RefPtr<Device>* fidl_proxy_out);
+  zx_status_t CreateProxy(fidl::ClientEnd<fuchsia_device_manager::DeviceController> controller);
+  zx_status_t CreateFidlProxy(fidl::ClientEnd<fuchsia_device_manager::DeviceController> controller,
+                              fbl::RefPtr<Device>* fidl_proxy_out);
 
   void Serve(fidl::ServerEnd<fuchsia_device_manager::Coordinator> request);
 
@@ -365,13 +367,6 @@ class Device final
   const std::optional<fidl::ServerBindingRef<fuchsia_device_manager::Coordinator>>&
   coordinator_binding() const {
     return coordinator_binding_;
-  }
-
-  fidl::ServerEnd<fuchsia_device_manager::DeviceController> ConnectDeviceController(
-      async_dispatcher_t* dispatcher) {
-    auto endpoints = fidl::CreateEndpoints<fuchsia_device_manager::DeviceController>();
-    device_controller_.Bind(std::move(endpoints->client), dispatcher);
-    return std::move(endpoints->server);
   }
 
   bool DriverLivesInSystemStorage() const;
