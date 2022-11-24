@@ -25,6 +25,31 @@ common --experimental_downloader_config={config_file}
 build --java_runtime_version=embedded_jdk
 build --tool_java_runtime_version=embedded_jdk
 
+# Common sanitizer options
+build:sanitizer_common --strip=never
+build:sanitizer_common --copt=-O1
+build:sanitizer_common --copt=-fno-omit-frame-pointer
+
+# AddressSanitizer (asan)
+build:asan --config=sanitizer_common
+build:asan --copt=-fsanitize=address
+build:asan --linkopt=-fsanitize=address
+
+# LeakSanitizer (lsan)
+build:lsan --config=sanitizer_common
+build:lsan --copt=-fsanitize=leak
+build:lsan --linkopt=-fsanitize=leak
+
+# ThreadSanitizer (tsan)
+build:tsan --config=sanitizer_common
+build:tsan --copt=-fsanitize=thread
+build:tsan --linkopt=-fsanitize=thread
+
+# UndefinedBehaviorSanitizer (ubsan)
+build:ubsan --config=sanitizer_common
+build:ubsan --copt=-fsanitize=undefined
+build:ubsan --linkopt=-fsanitize=undefined
+
 # Setup remote build
 build:remote --remote_instance_name={remote_instance_name}
 build:remote --define=EXECUTOR=remote
