@@ -29,6 +29,7 @@ var cmpOpt = cmp.AllowUnexported(
 	Alias{},
 	SyscallFamily{},
 	Syscall{},
+	SyscallParameter{},
 )
 
 func TestGeneratedFileCount(t *testing.T) {
@@ -1019,6 +1020,30 @@ protocol Category {
     Test2();
 };
 
+@no_protocol_prefix
+@transport("Syscall")
+protocol SyscallWithParameters {
+	SyscallWithInputs(struct{
+		in1 uint64;
+		in2 bool;
+	});
+
+	SyscallWithOutputs() -> (struct{
+		out1 int32;
+		out2 uint16;
+	});
+
+	SyscallWithMixedOrientation(struct{
+		in uint64;
+		@inout
+		inout uint32;
+		@out
+		out1 uint32;
+	}) -> (struct{
+		out2 int8;
+	});
+};
+
 `)
 	summaries, err := Summarize(ir, wd, SourceDeclOrder)
 	if err != nil {
@@ -1107,6 +1132,90 @@ protocol Category {
 				{
 					member:   member{Name: "CategoryVdsoCall"},
 					Category: SyscallCategoryVdsoCall,
+				},
+			},
+		},
+		{
+			decl: decl{Name: fidlgen.MustReadName("example/SyscallWithParameters")},
+			Syscalls: []Syscall{
+				{
+					member: member{Name: "SyscallWithInputs"},
+					Parameters: []SyscallParameter{
+						{
+							member: member{Name: "in1"},
+							Type: TypeDescriptor{
+								Type: "uint64",
+								Kind: TypeKindInteger,
+							},
+							Orientation: ParameterOrientationIn,
+						},
+						{
+							member: member{Name: "in2"},
+							Type: TypeDescriptor{
+								Type: "bool",
+								Kind: TypeKindBool,
+							},
+							Orientation: ParameterOrientationIn,
+						},
+					},
+				},
+				{
+					member: member{Name: "SyscallWithMixedOrientation"},
+					Parameters: []SyscallParameter{
+						{
+							member: member{Name: "in"},
+							Type: TypeDescriptor{
+								Type: "uint64",
+								Kind: TypeKindInteger,
+							},
+							Orientation: ParameterOrientationIn,
+						},
+						{
+							member: member{Name: "inout"},
+							Type: TypeDescriptor{
+								Type: "uint32",
+								Kind: TypeKindInteger,
+							},
+							Orientation: ParameterOrientationInOut,
+						},
+						{
+							member: member{Name: "out1"},
+							Type: TypeDescriptor{
+								Type: "uint32",
+								Kind: TypeKindInteger,
+							},
+							Orientation: ParameterOrientationOut,
+						},
+						{
+							member: member{Name: "out2"},
+							Type: TypeDescriptor{
+								Type: "int8",
+								Kind: TypeKindInteger,
+							},
+							Orientation: ParameterOrientationOut,
+						},
+					},
+				},
+				{
+					member: member{Name: "SyscallWithOutputs"},
+					Parameters: []SyscallParameter{
+						{
+							member: member{Name: "out1"},
+							Type: TypeDescriptor{
+								Type: "int32",
+								Kind: TypeKindInteger,
+							},
+							Orientation: ParameterOrientationOut,
+						},
+						{
+							member: member{Name: "out2"},
+							Type: TypeDescriptor{
+								Type: "uint16",
+								Kind: TypeKindInteger,
+							},
+							Orientation: ParameterOrientationOut,
+						},
+					},
 				},
 			},
 		},

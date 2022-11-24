@@ -61,6 +61,7 @@ var _ = []Element{
 	(*Alias)(nil),
 	(*SyscallFamily)(nil),
 	(*Syscall)(nil),
+	(*SyscallParameter)(nil),
 }
 
 // Decl represents a summarized FIDL declaration.
@@ -109,6 +110,7 @@ var _ = []Member{
 	(*BitsMember)(nil),
 	(*StructMember)(nil),
 	(*Syscall)(nil),
+	(*SyscallParameter)(nil),
 }
 
 type member struct {
@@ -331,7 +333,7 @@ func Summarize(ir fidlgen.Root, sourceDir string, order DeclOrder) ([]FileSummar
 		case *fidlgen.Alias:
 			decl, err = newAlias(*fidlDecl, processedDecls, typeKinds)
 		case *fidlgen.Protocol:
-			decl, err = newSyscallFamily(*fidlDecl)
+			decl, err = newSyscallFamily(*fidlDecl, processedDecls)
 		}
 		if err != nil {
 			return nil, err
@@ -727,13 +729,18 @@ type StructMember struct {
 
 	// Offset is the offset of the field.
 	Offset int
+
+	// TODO(fxbug.dev/110021): The following two attributes may annotate
+	// "syscall" request and response structs. While we have to synthesize
+	// syscall information manually, we record these values here during
+	// member processing for later syscall processing.
+	//
+	// See the definitions of @inout and @out in //zircon/vdso/README.md.
+	inout bool
+	out   bool
 }
 
 func newStruct(strct fidlgen.Struct, decls declMap, typeKinds map[TypeKind]struct{}) (*Struct, error) {
-	if strct.IsAnonymous() {
-		return nil, nil
-	}
-
 	s := &Struct{
 		decl: newDecl(strct),
 		Size: strct.TypeShapeV2.InlineSize,
@@ -744,16 +751,31 @@ func newStruct(strct fidlgen.Struct, decls declMap, typeKinds map[TypeKind]struc
 			return nil, fmt.Errorf("%s.%s: failed to derive type: %w", s.Name, member.Name, err)
 		}
 		if typ == nil { // TODO(fxbug.dev/106538): Skip if unknown.
-			return nil, nil
+			continue
 		}
+		attrs := member.GetAttributes()
 		s.Members = append(s.Members, StructMember{
 			member: newMember(member),
 			Type:   *typ,
 			Offset: member.FieldShapeV2.Offset,
+
+			// TODO(fxbug.dev/110021): Eventually the IR will effectively
+			// surface this information directly in the syscall-related
+			// elements: at that point this can be removed.
+			inout: attrs.HasAttribute("inout"),
+			out:   attrs.HasAttribute("out"),
 		})
 	}
-	return s, nil
 
+	// Syscall parameters are encoded in anonymous structs. While we do not
+	// want conventional bindings for these structs, we do want to make them
+	// available to later syscall processing: record them here but return
+	// nothing.
+	if strct.IsAnonymous() {
+		decls[s.Name.String()] = s
+		return nil, nil
+	}
+	return s, nil
 }
 
 // Alias represents a FIDL type alias declaration.
@@ -919,6 +941,10 @@ type Syscall struct {
 	//
 	// See the definition of @testonly in //zircon/vdso/README.md.
 	Testonly bool
+
+	// Parameters gives the list of parameters in the C vDSO signature of the
+	// syscall in order.
+	Parameters []SyscallParameter
 }
 
 func (syscall Syscall) IsInternal() bool      { return syscall.Category == SyscallCategoryInternal }
@@ -927,7 +953,28 @@ func (syscall Syscall) IsNext() bool          { return syscall.Category == Sysca
 func (syscall Syscall) IsTestCategory1() bool { return syscall.Category == SyscallCategoryTest1 }
 func (syscall Syscall) IsTestCategory2() bool { return syscall.Category == SyscallCategoryTest2 }
 
-func newSyscallFamily(protocol fidlgen.Protocol) (*SyscallFamily, error) {
+// ParameterOrientation describes whether the parameter serves as input,
+// output, or both.
+type ParameterOrientation int
+
+const (
+	ParameterOrientationIn ParameterOrientation = iota
+	ParameterOrientationOut
+	ParameterOrientationInOut
+)
+
+// SyscallParameter represents a C syscall parameter.
+type SyscallParameter struct {
+	member
+
+	// Type gives the type of the parameter.
+	Type TypeDescriptor
+
+	// Orientation gives whether this is an in, out, or in-out parameter.
+	Orientation ParameterOrientation
+}
+
+func newSyscallFamily(protocol fidlgen.Protocol, decls declMap) (*SyscallFamily, error) {
 	if protocol.OverTransport() != "Syscall" {
 		return nil, nil
 	}
@@ -978,6 +1025,49 @@ func newSyscallFamily(protocol fidlgen.Protocol) (*SyscallFamily, error) {
 		if (syscall.IsTestCategory1() || syscall.IsTestCategory2()) && !syscall.Testonly {
 			return nil, fmt.Errorf("annotation @%s on syscall %s must be paired with @testonly", syscall.Category, syscall.Name)
 		}
+
+		// Aggregate parameters from both the request and response structs, as
+		// 'out' parameters may appear in the request struct. With request
+		// struct members first, the default ordering results in the desired
+		// order of parameters in the vDSO intertace.
+		processParams := func(typ *fidlgen.Type, request bool) {
+			if typ == nil {
+				return
+			}
+
+			what := "request"
+			if !request {
+				what = "response"
+			}
+			if typ.Kind != fidlgen.IdentifierType {
+				panic(fmt.Sprintf("method %s type is not given by an indentifier", what))
+			}
+			ident, ok := decls[string(typ.Identifier)]
+			if !ok {
+				panic(fmt.Sprintf("unknown method %s type: %s", what, typ.Identifier))
+			}
+			s, ok := ident.(*Struct)
+			if !ok {
+				panic(fmt.Sprintf("method %s type %s is not a struct", what, typ.Identifier))
+			}
+			for _, m := range s.Members {
+				param := SyscallParameter{
+					member: m.member,
+					Type:   m.Type,
+				}
+				if !request || m.out {
+					param.Orientation = ParameterOrientationOut
+				} else if m.inout {
+					param.Orientation = ParameterOrientationInOut
+				} else {
+					param.Orientation = ParameterOrientationIn
+				}
+				syscall.Parameters = append(syscall.Parameters, param)
+			}
+
+		}
+		processParams(method.RequestPayload, true)
+		processParams(method.ResponsePayload, false)
 
 		family.Syscalls = append(family.Syscalls, syscall)
 	}
