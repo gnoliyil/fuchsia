@@ -155,7 +155,13 @@ impl<T: AsyncRead + AsyncWrite + Unpin> FastbootImpl<T> {
         tracing::debug!("fastboot - received req: {:?}", req);
         match req {
             FastbootRequest::Prepare { listener, responder } => {
-                match self.prepare_device(&listener.into_proxy()?).await {
+                let res = future::ready(
+                    listener.into_proxy().map_err(|_| RebootError::TargetCommunication),
+                )
+                .and_then(|proxy| async move { self.prepare_device(&proxy).await })
+                .await;
+
+                match res {
                     Ok(_) => responder.send(&mut Ok(()))?,
                     Err(e) => {
                         tracing::error!("Error preparing device: {:?}", e);
@@ -164,7 +170,11 @@ impl<T: AsyncRead + AsyncWrite + Unpin> FastbootImpl<T> {
                 }
             }
             FastbootRequest::GetVar { name, responder } => {
-                match get_var(self.interface().await?, &name).await {
+                let res = self
+                    .interface()
+                    .and_then(|interface| async { get_var(interface, &name).await })
+                    .await;
+                match res {
                     Ok(value) => responder.send(&mut Ok(value))?,
                     Err(e) => {
                         tracing::error!("Error getting variable '{}': {:?}", name, e);
@@ -175,8 +185,17 @@ impl<T: AsyncRead + AsyncWrite + Unpin> FastbootImpl<T> {
                 }
             }
             FastbootRequest::GetAllVars { listener, responder } => {
-                let variable_listener = VariableListener::new(listener)?;
-                match get_all_vars(self.interface().await?, &variable_listener).await {
+                let res = future::ready(VariableListener::new(listener))
+                    .and_then(|variable_listener| async move {
+                        let iface = self.interface().await?;
+                        Ok((iface, variable_listener))
+                    })
+                    .and_then(|iface_listen| async move {
+                        get_all_vars(iface_listen.0, &iface_listen.1).await
+                    })
+                    .await;
+
+                match res {
                     Ok(()) => {
                         responder.send(&mut Ok(()))?;
                     }
@@ -189,9 +208,30 @@ impl<T: AsyncRead + AsyncWrite + Unpin> FastbootImpl<T> {
                 }
             }
             FastbootRequest::Flash { partition_name, path, listener, responder } => {
-                let upload_listener = UploadProgressListener::new(listener)?;
-                match flash(self.interface().await?, &path, &partition_name, &upload_listener).await
-                {
+                let upload_listener_res = UploadProgressListener::new(listener);
+                if let Err(ref e) = upload_listener_res {
+                    tracing::error!(
+                        "Error while flashing \"{}\" from {}. Cannot make Upload Listener:\n{:?}",
+                        partition_name,
+                        path,
+                        e,
+                    );
+                    responder
+                        .send(&mut Err(FastbootError::ProtocolError))
+                        .context("sending error response")?;
+                    anyhow::bail!("Got error while creating UploadProgressListener: {}", e);
+                }
+
+                let upload_listener = upload_listener_res.unwrap();
+
+                let res = future::ready(Ok(()))
+                    .and_then(|_| async { self.interface().await })
+                    .and_then(|interface| async {
+                        flash(interface, &path, &partition_name, &upload_listener).await
+                    })
+                    .await;
+
+                match res {
                     Ok(_) => responder.send(&mut Ok(()))?,
                     Err(e) => {
                         tracing::error!(
@@ -208,7 +248,12 @@ impl<T: AsyncRead + AsyncWrite + Unpin> FastbootImpl<T> {
                 }
             }
             FastbootRequest::Erase { partition_name, responder } => {
-                match erase(self.interface().await?, &partition_name).await {
+                let res = future::ready(Ok(()))
+                    .and_then(|_| async { self.interface().await })
+                    .and_then(|interface| async { erase(interface, &partition_name).await })
+                    .await;
+
+                match res {
                     Ok(_) => responder.send(&mut Ok(()))?,
                     Err(e) => {
                         tracing::error!("Error erasing \"{}\": {:?}", partition_name, e);
@@ -218,29 +263,42 @@ impl<T: AsyncRead + AsyncWrite + Unpin> FastbootImpl<T> {
                     }
                 }
             }
-            FastbootRequest::Boot { responder } => match boot(self.interface().await?).await {
-                Ok(_) => responder.send(&mut Ok(()))?,
-                Err(e) => {
-                    tracing::error!("Error booting: {:?}", e);
-                    responder
-                        .send(&mut Err(FastbootError::ProtocolError))
-                        .context("sending error response")?;
+            FastbootRequest::Boot { responder } => {
+                let res = future::ready(Ok(()))
+                    .and_then(|_| async { self.interface().await })
+                    .and_then(|interface| async { boot(interface).await })
+                    .await;
+                match res {
+                    Ok(_) => responder.send(&mut Ok(()))?,
+                    Err(e) => {
+                        tracing::error!("Error booting: {:?}", e);
+                        responder
+                            .send(&mut Err(FastbootError::ProtocolError))
+                            .context("sending error response")?;
+                    }
                 }
-            },
-            FastbootRequest::Reboot { responder } => match reboot(self.interface().await?).await {
-                Ok(_) => responder.send(&mut Ok(()))?,
-                Err(e) => {
-                    tracing::error!("Error rebooting: {:?}", e);
-                    responder
-                        .send(&mut Err(FastbootError::ProtocolError))
-                        .context("sending error response")?;
+            }
+            FastbootRequest::Reboot { responder } => {
+                let res = future::ready(Ok(()))
+                    .and_then(|_| async { self.interface().await })
+                    .and_then(|interface| async { reboot(interface).await })
+                    .await;
+                match res {
+                    Ok(_) => responder.send(&mut Ok(()))?,
+                    Err(e) => {
+                        tracing::error!("Error rebooting: {:?}", e);
+                        responder
+                            .send(&mut Err(FastbootError::ProtocolError))
+                            .context("sending error response")?;
+                    }
                 }
-            },
+            }
             FastbootRequest::RebootBootloader { listener, responder } => {
-                match reboot_bootloader(self.interface().await?)
-                    .await
-                    .map_err(|_| RebootError::FastbootError)
-                {
+                let res = future::ready(Ok(()))
+                    .and_then(|_| async { self.interface().await })
+                    .and_then(|interface| async { reboot_bootloader(interface).await })
+                    .await;
+                match res.map_err(|_| RebootError::FastbootError) {
                     Ok(_) => {
                         let reboot_timeout: u64 =
                             get("fastboot.reboot.reconnect_timeout").await.unwrap_or(10);
@@ -290,7 +348,11 @@ impl<T: AsyncRead + AsyncWrite + Unpin> FastbootImpl<T> {
                 }
             }
             FastbootRequest::ContinueBoot { responder } => {
-                match continue_boot(self.interface().await?).await {
+                let res = future::ready(Ok(()))
+                    .and_then(|_| async { self.interface().await })
+                    .and_then(|interface| async { continue_boot(interface).await })
+                    .await;
+                match res {
                     Ok(_) => responder.send(&mut Ok(()))?,
                     Err(e) => {
                         tracing::error!("Error continuing boot: {:?}", e);
@@ -301,7 +363,11 @@ impl<T: AsyncRead + AsyncWrite + Unpin> FastbootImpl<T> {
                 }
             }
             FastbootRequest::SetActive { slot, responder } => {
-                match set_active(self.interface().await?, &slot).await {
+                let res = future::ready(Ok(()))
+                    .and_then(|_| async { self.interface().await })
+                    .and_then(|interface| async { set_active(interface, &slot).await })
+                    .await;
+                match res {
                     Ok(_) => responder.send(&mut Ok(()))?,
                     Err(e) => {
                         tracing::error!("Error setting active: {:?}", e);
@@ -312,9 +378,16 @@ impl<T: AsyncRead + AsyncWrite + Unpin> FastbootImpl<T> {
                 }
             }
             FastbootRequest::Stage { path, listener, responder } => {
-                match stage(self.interface().await?, &path, &UploadProgressListener::new(listener)?)
-                    .await
-                {
+                let res = future::ready(UploadProgressListener::new(listener))
+                    .and_then(|upload_listener| async {
+                        let interface = self.interface().await?;
+                        Ok((interface, upload_listener))
+                    })
+                    .and_then(|interface_listener| async move {
+                        stage(interface_listener.0, &path, &interface_listener.1).await
+                    })
+                    .await;
+                match res {
                     Ok(_) => responder.send(&mut Ok(()))?,
                     Err(e) => {
                         tracing::error!("Error setting active: {:?}", e);
@@ -325,7 +398,11 @@ impl<T: AsyncRead + AsyncWrite + Unpin> FastbootImpl<T> {
                 }
             }
             FastbootRequest::Oem { command, responder } => {
-                match oem(self.interface().await?, &command).await {
+                let res = future::ready(Ok(()))
+                    .and_then(|_| async { self.interface().await })
+                    .and_then(|interface| async { oem(interface, &command).await })
+                    .await;
+                match res {
                     Ok(_) => responder.send(&mut Ok(()))?,
                     Err(e) => {
                         tracing::error!("Error sending oem \"{}\": {:?}", command, e);
@@ -336,7 +413,11 @@ impl<T: AsyncRead + AsyncWrite + Unpin> FastbootImpl<T> {
                 }
             }
             FastbootRequest::GetStaged { path, responder } => {
-                match get_staged(self.interface().await?, &path).await {
+                let res = match self.interface().await {
+                    Ok(iface) => get_staged(iface, &path).await,
+                    Err(e) => Err(e),
+                };
+                match res {
                     Ok(_) => responder.send(&mut Ok(()))?,
                     Err(e) => {
                         tracing::error!("Error getting staged file: {:?}", e);
