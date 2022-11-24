@@ -12,6 +12,7 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace cmdline {
@@ -223,16 +224,21 @@ class ArgsParser : public GeneralArgsParser {
                            return status;
                          }
                        }
-                       std::stringstream ss(v);
-                       ss >> result_.*value;
-                       if (ss.fail()) {
-                         return Status::Error("'" + v + "' is invalid for --" + long_name);
-                       }
-                       std::string trailing;
-                       ss >> trailing;
-                       if (trailing.size() > 0) {
-                         return Status::Error("Invalid trailing characters '" + trailing +
-                                              "' for --" + long_name);
+                       if constexpr (std::is_same_v<T, std::string>) {
+                         (void)long_name;  // Unused.
+                         result_.*value = v;
+                       } else {
+                         std::stringstream ss(v);
+                         ss >> result_.*value;
+                         if (ss.fail()) {
+                           return Status::Error("'" + v + "' is invalid for --" + long_name);
+                         }
+                         std::string trailing;
+                         ss >> trailing;
+                         if (trailing.size() > 0) {
+                           return Status::Error("Invalid trailing characters '" + trailing +
+                                                "' for --" + long_name);
+                         }
                        }
                        return Status::Ok();
                      });
@@ -275,16 +281,21 @@ class ArgsParser : public GeneralArgsParser {
                            }
                          }
                          T tmp_val;
-                         std::stringstream ss(v);
-                         ss >> tmp_val;
-                         if (ss.fail()) {
-                           return Status::Error("'" + v + "' is invalid for --" + long_name);
-                         }
-                         std::string trailing;
-                         ss >> trailing;
-                         if (!trailing.empty()) {
-                           return Status::Error("Invalid trailing characters '" + trailing +
-                                                "' for --" + long_name);
+                         if constexpr (std::is_same_v<T, std::string>) {
+                           (void)long_name;  // Unused.
+                           tmp_val = v;
+                         } else {
+                           std::stringstream ss(v);
+                           ss >> tmp_val;
+                           if (ss.fail()) {
+                             return Status::Error("'" + v + "' is invalid for --" + long_name);
+                           }
+                           std::string trailing;
+                           ss >> trailing;
+                           if (!trailing.empty()) {
+                             return Status::Error("Invalid trailing characters '" + trailing +
+                                                  "' for --" + long_name);
+                           }
                          }
                          (result_.*value).push_back(tmp_val);
                        }

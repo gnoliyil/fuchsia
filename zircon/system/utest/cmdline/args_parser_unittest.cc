@@ -235,7 +235,7 @@ TEST(ArgsParser, OptStruct) {
   EXPECT_STRING_EQ("bar", params[0]);
 
   const char* off_sizet_string_optionalbool_validate[7] = {
-      "program",         "--noon_by_default",       "--size_t=50", "--not-optional-str=hasvalue",
+      "program",         "--noon_by_default",       "--size_t=50", "--not-optional-str=has space",
       "--optional-bool", "--validated-format=json", "bar"};
 
   params.clear();
@@ -244,7 +244,7 @@ TEST(ArgsParser, OptStruct) {
 
   EXPECT_FALSE(options.on_by_default);
   EXPECT_EQ(50u, options.size_t_val);
-  EXPECT_STRING_EQ("hasvalue", options.not_optional_str);
+  EXPECT_STRING_EQ("has space", options.not_optional_str);
   EXPECT_TRUE(options.optional_bool.has_value());
   EXPECT_TRUE(*options.optional_bool);
   EXPECT_STRING_EQ("json", options.validated_format);
@@ -377,6 +377,8 @@ TEST(ArgsParser, VectorTypes) {
   struct MyOptions {
     std::vector<std::string> string_vector;
 
+    std::vector<std::string> string_vector_with_delimiter;
+
     std::vector<int> int_vector;
 
     std::vector<double> double_vector;
@@ -394,13 +396,20 @@ TEST(ArgsParser, VectorTypes) {
   };
 
   ArgsParser<MyOptions> parser;
-  parser.AddSwitch("string_vector", 0, "", &MyOptions::string_vector, nullptr, ',');
+  parser.AddSwitch("string_vector", 0, "", &MyOptions::string_vector, nullptr);
+  parser.AddSwitch("string_vector_with_delimiter", 0, "", &MyOptions::string_vector_with_delimiter,
+                   nullptr, ',');
   parser.AddSwitch("int_vector", 0, "", &MyOptions::int_vector, int_validator);
   parser.AddSwitch("double_vector", 'd', "", &MyOptions::double_vector);
   parser.AddSwitch("char_vector", 'c', "", &MyOptions::char_vector);
 
   const char* args[] = {"program",
-                        "--string_vector=foo,bar,baz",
+                        "--string_vector=foo",
+                        "--string_vector=foo bar",
+                        "--string_vector",
+                        "foo bar baz",
+                        "--string_vector_with_delimiter=foo,bar",
+                        "--string_vector_with_delimiter=has space, baz ",
                         "--int_vector=3",
                         "--int_vector=7",
                         "-d",
@@ -414,10 +423,12 @@ TEST(ArgsParser, VectorTypes) {
 
   MyOptions options;
   std::vector<std::string> params;
-  Status status = parser.Parse(12, args, &options, &params);
+  Status status = parser.Parse(sizeof(args) / sizeof(char*), args, &options, &params);
   ASSERT_FALSE(status.has_error(), "%s", status.error_message().c_str());
 
-  EXPECT_EQ(options.string_vector, std::vector<std::string>({"foo", "bar", "baz"}));
+  EXPECT_EQ(options.string_vector, std::vector<std::string>({"foo", "foo bar", "foo bar baz"}));
+  EXPECT_EQ(options.string_vector_with_delimiter,
+            std::vector<std::string>({"foo", "bar", "has space", " baz "}));
   EXPECT_EQ(options.int_vector, std::vector<int>({3, 7}));
   EXPECT_EQ(options.double_vector, std::vector<double>({1.5, 2.7}));
   EXPECT_EQ(options.char_vector, std::vector<char>({'x', 'y', 'z'}));
