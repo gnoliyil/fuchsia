@@ -4,8 +4,11 @@
 
 #include <lib/elfldltl/container.h>
 #include <lib/elfldltl/diagnostics.h>
+#include <lib/elfldltl/preallocated-vector.h>
 #include <lib/elfldltl/static-vector.h>
+#include <lib/stdcompat/span.h>
 
+#include <array>
 #include <string_view>
 
 #include <zxtest/zxtest.h>
@@ -71,8 +74,8 @@ TEST(ElfldltlContainerTests, TemplateArgs) {
 }
 
 template <class List>
-void CheckContainerAPI(List& list) {
-  EXPECT_EQ(list.max_size(), 10);
+void CheckContainerAPI(List& list, size_t max_size = 10) {
+  EXPECT_EQ(list.max_size(), max_size);
   EXPECT_EQ(list.capacity(), 10);
   cpp20::span<const typename List::value_type> span = list.as_span();
   EXPECT_EQ(span.size(), 0);
@@ -349,6 +352,60 @@ TEST(ElfldltlContainerTests, StaticVectorCorrectlyMoves) {
   for (int i = 0; i < 10; i++) {
     list.erase(list.begin());
     EXPECT_EQ(count, 10 - i - 1);
+  }
+}
+
+TEST(ElfldltlContainerTests, PreallocatedVectorStaticExtentApi) {
+  std::array<int, 10> arr;
+  elfldltl::PreallocatedVector vec{cpp20::span{arr}};
+  CheckContainerAPI(vec);
+  CheckContainerAPI(std::cref(vec).get());
+}
+
+TEST(ElfldltlContainerTests, PreallocatedVectorStaticExtent) {
+  auto diag = ExpectOkDiagnostics();
+
+  std::array<int, 5> arr{};
+  elfldltl::PreallocatedVector vec{cpp20::span{arr}};
+
+  auto insert_range = {1, 5, 7, 1293, 2};
+  auto it_or_err = vec.insert(diag, "", vec.begin(), insert_range.begin(), insert_range.end());
+  ASSERT_TRUE(it_or_err);
+  EXPECT_TRUE(std::equal(vec.begin(), vec.end(), insert_range.begin()));
+
+  {
+    ExpectedSingleError expected("error", ": maximum 5");
+    vec.emplace_back(expected.diag(), "error", 1);
+  }
+}
+
+TEST(ElfldltlContainerTests, PreallocatedVectorDynamicExtentApi) {
+  std::array<int, 20> arr{};
+  elfldltl::PreallocatedVector vec{cpp20::span{arr.data(), 10}};
+
+  CheckContainerAPI(vec, cpp20::dynamic_extent);
+  CheckContainerAPI(std::cref(vec).get(), cpp20::dynamic_extent);
+}
+
+TEST(ElfldltlContainerTests, PreallocatedVectorDynamicExtent) {
+  auto diag = ExpectOkDiagnostics();
+
+  std::array<int, 5> arr{};
+  elfldltl::PreallocatedVector vec{cpp20::span{arr.data(), 5}};
+
+  EXPECT_EQ(vec.max_size(), cpp20::dynamic_extent);
+  EXPECT_EQ(vec.size(), 0);
+
+  auto insert_range = {1, 5, 7, 1293, 2};
+  auto it_or_err = vec.insert(diag, "", vec.begin(), insert_range.begin(), insert_range.end());
+  ASSERT_TRUE(it_or_err);
+  EXPECT_TRUE(std::equal(vec.begin(), vec.end(), insert_range.begin()));
+
+  EXPECT_EQ(vec.size(), 5);
+
+  {
+    ExpectedSingleError expected("error", ": maximum ", 5);
+    vec.emplace_back(expected.diag(), "error", 1);
   }
 }
 

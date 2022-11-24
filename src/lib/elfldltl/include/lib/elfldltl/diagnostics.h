@@ -233,10 +233,19 @@ class Diagnostics {
                        requested);
   }
 
+  constexpr bool ResourceLimit(size_t max, std::string_view error, size_t requested) {
+    return FormatError(error, internal::ConstString(": maximum "), max,
+                       internal::ConstString(" < requested "), requested);
+  }
+
   template <size_t MaxObjects>
   constexpr bool ResourceLimit(std::string_view error) {
     return FormatError(
         error, internal::ConstString(": maximum ") + internal::IntegerConstString<MaxObjects>());
+  }
+
+  constexpr bool ResourceLimit(size_t max, std::string_view error) {
+    return FormatError(error, internal::ConstString(": maximum "), max);
   }
 
  private:

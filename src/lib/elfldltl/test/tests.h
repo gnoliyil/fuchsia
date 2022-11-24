@@ -9,6 +9,7 @@
 #include <lib/elfldltl/layout.h>
 
 #include <functional>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <tuple>

@@ -146,8 +146,8 @@ class PreallocatedVector {
 
   template <class Diagnostics>
   constexpr bool resize(Diagnostics& diagnostics, std::string_view error, size_t new_size) {
-    if (new_size > N) [[unlikely]] {
-      diagnostics.template ResourceLimit<max_size()>(error, new_size);
+    if (new_size > capacity()) [[unlikely]] {
+      ResourceLimit(diagnostics, error, new_size);
       return false;
     }
     if (new_size < size_) {
@@ -176,8 +176,8 @@ class PreallocatedVector {
 
   template <class Diagnostics, typename... Args>
   constexpr bool emplace_back(Diagnostics& diagnostics, std::string_view error, Args&&... args) {
-    if (size_ >= max_size()) [[unlikely]] {
-      diagnostics.template ResourceLimit<max_size()>(error);
+    if (size_ >= capacity()) [[unlikely]] {
+      ResourceLimit(diagnostics, error);
       return false;
     }
     new (std::addressof(data()[size_++])) T{std::forward<Args>(args)...};
@@ -187,8 +187,8 @@ class PreallocatedVector {
   template <class Diagnostics, typename... Args>
   constexpr std::optional<iterator> emplace(Diagnostics& diagnostics, std::string_view error,
                                             const_iterator it, Args&&... args) {
-    if (size_ >= max_size()) [[unlikely]] {
-      diagnostics.template ResourceLimit<max_size()>(error);
+    if (size_ >= capacity()) [[unlikely]] {
+      ResourceLimit(diagnostics, error);
       return std::nullopt;
     }
 
@@ -218,8 +218,8 @@ class PreallocatedVector {
   constexpr std::optional<iterator> insert(Diagnostics& diagnostics, std::string_view error,
                                            const_iterator it, InputIt first, InputIt last) {
     const size_t count = std::distance(first, last);
-    if (max_size() - size_ < count) [[unlikely]] {
-      diagnostics.template ResourceLimit<max_size()>(error, size_ + count);
+    if (capacity() - size_ < count) [[unlikely]] {
+      ResourceLimit(diagnostics, error, size_ + count);
       return std::nullopt;
     }
 
@@ -237,6 +237,15 @@ class PreallocatedVector {
   }
 
  private:
+  template <class Diagnostics, typename... Args>
+  constexpr void ResourceLimit(Diagnostics& diag, Args... args) {
+    if constexpr (N != cpp20::dynamic_extent) {
+      diag.template ResourceLimit<N>(args...);
+    } else {
+      diag.ResourceLimit(capacity(), args...);
+    }
+  }
+
   template <typename OtherT, size_t OtherN>
   friend class PreallocatedVector;
 
