@@ -643,10 +643,6 @@ impl Locks {
                     entry.state = LockState::ReadLock;
                     true
                 }
-                LockState::Upgrade => {
-                    entry.state = LockState::Locked;
-                    true
-                }
             };
             if wake {
                 // SAFETY: The lock in `LockManager::locks` is held.
@@ -679,12 +675,9 @@ impl Locks {
     // Downgrades locks from WriteLock to Locked.
     fn downgrade_locks(&mut self, lock_keys: &[LockKey]) {
         for lock in lock_keys {
-            let entry = self.keys.get_mut(lock).unwrap();
-            assert_eq!(entry.state, LockState::WriteLock);
-            entry.state = LockState::Locked;
             // SAFETY: The lock in `LockManager::locks` is held.
             unsafe {
-                entry.wake();
+                self.keys.get_mut(lock).unwrap().downgrade_lock();
             }
         }
     }
@@ -726,6 +719,9 @@ struct LockWaker {
     // The target state for this waker.
     target_state: LockState,
 
+    // True if this is an upgrade.
+    is_upgrade: bool,
+
     // We need to be pinned because these form part of the linked list.
     _pin: PhantomPinned,
 }
@@ -760,7 +756,11 @@ impl LockWaker {
             unsafe {
                 if (*self.waker.get()).is_woken() {
                     // We were woken, but didn't actually run, so we must drop the lock.
-                    locks.drop_lock(self.key.clone(), self.target_state);
+                    if self.is_upgrade {
+                        locks.keys.get_mut(&self.key).unwrap().downgrade_lock();
+                    } else {
+                        locks.drop_lock(self.key.clone(), self.target_state);
+                    }
                 } else {
                     // We haven't been woken but we've been dropped so we must remove ourself from
                     // the waker list.
@@ -797,11 +797,6 @@ enum LockState {
 
     // A writer has exclusive access; all other readers and writers are blocked.
     WriteLock,
-
-    // An upgrade from Locked to WriteLock.  This is only used within a waker so that we know we
-    // want to upgrade from Locked to WriteLock.  When the lock is actually upgraded, the state is
-    // set to WriteLock.
-    Upgrade,
 }
 
 impl LockManager {
@@ -828,7 +823,6 @@ impl LockManager {
             LockState::Locked | LockState::WriteLock => {
                 Right(WriteGuard { manager: self, lock_keys: Vec::new() })
             }
-            LockState::Upgrade => unreachable!(),
         };
         let guard_keys = match &mut guard {
             Left(g) => &mut g.lock_keys,
@@ -859,28 +853,8 @@ impl LockManager {
                     }
                     Entry::Occupied(mut occupied) => {
                         let entry = occupied.get_mut();
-                        let allow = match entry.state {
-                            LockState::ReadLock => {
-                                // Allow ReadLock and Locked so long as nothing else is waiting.
-                                (target_state == LockState::Locked
-                                    || target_state == LockState::ReadLock)
-                                    && entry.head.is_null()
-                            }
-                            LockState::Locked => {
-                                // Always allow reads unless there's an upgrade waiting.  We have to
-                                // always allow reads in this state because tasks that have locks in
-                                // the Locked state can later try and acquire ReadLock.
-                                target_state == LockState::ReadLock
-                                    && (entry.head.is_null()
-                                        // SAFETY: We've acquired the lock.
-                                        || unsafe {
-                                            (*entry.head).target_state != LockState::Upgrade
-                                        })
-                            }
-                            LockState::WriteLock => false,
-                            LockState::Upgrade => unreachable!(),
-                        };
-                        if allow {
+                        // SAFETY: We've acquired the lock.
+                        if unsafe { entry.is_allowed(target_state, entry.head.is_null()) } {
                             if let LockState::ReadLock = target_state {
                                 entry.read_count += 1;
                                 guard_keys.push(lock.clone());
@@ -898,6 +872,7 @@ impl LockManager {
                                     key: lock.clone(),
                                     waker: UnsafeCell::new(WakerState::Pending),
                                     target_state: target_state,
+                                    is_upgrade: false,
                                     _pin: PhantomPinned,
                                 });
                             }
@@ -955,7 +930,8 @@ impl LockManager {
                             prev: UnsafeCell::new(std::ptr::null()),
                             key: lock.clone(),
                             waker: UnsafeCell::new(WakerState::Pending),
-                            target_state: LockState::Upgrade,
+                            target_state: LockState::WriteLock,
+                            is_upgrade: true,
                             _pin: PhantomPinned,
                         });
                     }
@@ -1003,26 +979,18 @@ impl LockEntry {
 
         let waker = &*self.head;
 
-        match self.state {
-            LockState::ReadLock => {
-                if self.read_count > 0 && waker.target_state == LockState::WriteLock {
-                    return;
-                }
+        if waker.is_upgrade {
+            if self.read_count > 0 {
+                return;
             }
-            LockState::Locked => {
-                if waker.target_state != LockState::ReadLock
-                    && waker.target_state != LockState::Upgrade
-                {
-                    return;
-                }
-            }
-            LockState::WriteLock | LockState::Upgrade => unreachable!(),
+        } else if !self.is_allowed(waker.target_state, true) {
+            return;
         }
 
         self.pop_and_wake();
 
-        // If the waker was a write lock, there's no point waking any more up, but otherwise, we
-        // can keep waking up readers.
+        // If the waker was a write lock, we can't wake any more up, but otherwise, we can keep
+        // waking up readers.
         if waker.target_state == LockState::WriteLock {
             return;
         }
@@ -1047,11 +1015,7 @@ impl LockEntry {
         if waker.target_state == LockState::ReadLock {
             self.read_count += 1;
         } else {
-            self.state = if waker.target_state == LockState::Upgrade {
-                LockState::WriteLock
-            } else {
-                waker.target_state
-            };
+            self.state = waker.target_state;
         }
 
         // Now wake the task.
@@ -1082,6 +1046,33 @@ impl LockEntry {
             // We must call wake in case we erased a pending write lock and readers can now proceed.
             self.wake();
         }
+    }
+
+    // Returns whether or not a lock with given `target_state` can proceed.  `is_head` should be
+    // true if this is something at the head of the waker list (or the waker list is empty) and
+    // false if there are other items on the waker list that are prior.
+    unsafe fn is_allowed(&self, target_state: LockState, is_head: bool) -> bool {
+        match self.state {
+            LockState::ReadLock => {
+                // Allow ReadLock and Locked so long as nothing else is waiting.
+                (self.read_count == 0
+                    || target_state == LockState::Locked
+                    || target_state == LockState::ReadLock)
+                    && is_head
+            }
+            LockState::Locked => {
+                // Always allow reads unless there's an upgrade waiting.  We have to
+                // always allow reads in this state because tasks that have locks in
+                // the Locked state can later try and acquire ReadLock.
+                target_state == LockState::ReadLock && (is_head || !(*self.head).is_upgrade)
+            }
+            LockState::WriteLock => false,
+        }
+    }
+
+    unsafe fn downgrade_lock(&mut self) {
+        assert_eq!(std::mem::replace(&mut self.state, LockState::Locked), LockState::WriteLock);
+        self.wake();
     }
 }
 
@@ -1134,7 +1125,6 @@ mod tests {
     use {
         super::{LockKey, LockManager, LockState, Mutation, Options, TransactionHandler},
         crate::filesystem::FxFilesystem,
-        assert_matches::assert_matches,
         fuchsia_async as fasync,
         futures::{
             channel::oneshot::channel, future::FutureExt, join, pin_mut, stream::FuturesUnordered,
@@ -1346,12 +1336,12 @@ mod tests {
         let mut read_lock: FuturesUnordered<_> = std::iter::once(manager.read_lock(keys)).collect();
 
         // Trying to acquire a read lock now should be blocked.
-        assert_matches!(futures::poll!(read_lock.next()), Poll::Pending);
+        assert!(futures::poll!(read_lock.next()).is_pending());
 
         manager.downgrade_locks(keys);
 
         // After downgrading, it should be possible to take a read lock.
-        assert_matches!(futures::poll!(read_lock.next()), Poll::Ready(_));
+        assert!(futures::poll!(read_lock.next()).is_ready());
     }
 
     #[fuchsia::test]
@@ -1367,14 +1357,14 @@ mod tests {
             pin_mut!(write_lock);
 
             // The write lock should be blocked because of the read lock.
-            assert_matches!(futures::poll!(write_lock), Poll::Pending);
+            assert!(futures::poll!(write_lock).is_pending());
 
             // Another read lock should be blocked because of the write lock.
-            assert_matches!(futures::poll!(read_lock.as_mut()), Poll::Pending);
+            assert!(futures::poll!(read_lock.as_mut()).is_pending());
         }
 
         // Dropping the write lock should allow the read lock to proceed.
-        assert_matches!(futures::poll!(read_lock), Poll::Ready(_));
+        assert!(futures::poll!(read_lock).is_ready());
     }
 
     #[fuchsia::test]
@@ -1387,7 +1377,7 @@ mod tests {
             let commit_prepare = manager.commit_prepare_keys(keys);
             pin_mut!(commit_prepare);
             let _read_guard = manager.lock(keys, LockState::ReadLock).await;
-            assert_matches!(futures::poll!(commit_prepare), Poll::Pending);
+            assert!(futures::poll!(commit_prepare).is_pending());
 
             // Now we test dropping read_guard which should wake commit_prepare and
             // then dropping commit_prepare.
@@ -1395,5 +1385,37 @@ mod tests {
 
         // We should be able to still commit_prepare.
         manager.commit_prepare_keys(keys).await;
+    }
+
+    #[fasync::run_singlethreaded(test)]
+    async fn test_woken_upgrade_blocks_reads() {
+        let manager = LockManager::new();
+        let keys = &[LockKey::object(1, 1)];
+        // Start with a transaction lock.
+        let guard = manager.lock(keys, LockState::Locked).await;
+
+        // Take a read lock.
+        let read1 = manager.lock(keys, LockState::ReadLock).await;
+
+        // Try and upgrade the transaction lock, which should not be possible because of the read.
+        let commit_prepare = manager.commit_prepare_keys(keys);
+        pin_mut!(commit_prepare);
+        assert!(futures::poll!(commit_prepare.as_mut()).is_pending());
+
+        // Taking another read should also be blocked.
+        let read2 = manager.lock(keys, LockState::ReadLock);
+        pin_mut!(read2);
+        assert!(futures::poll!(read2.as_mut()).is_pending());
+
+        // Drop the first read and the upgrade should complete.
+        std::mem::drop(read1);
+        assert!(futures::poll!(commit_prepare).is_ready());
+
+        // But the second read should still be blocked.
+        assert!(futures::poll!(read2.as_mut()).is_pending());
+
+        // If we drop the write lock now, the read should be unblocked.
+        std::mem::drop(guard);
+        assert!(futures::poll!(read2).is_ready());
     }
 }
