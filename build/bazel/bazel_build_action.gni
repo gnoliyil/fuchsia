@@ -164,8 +164,26 @@ template("bazel_build_action") {
       ]
     }
 
+    args += [ "--" ]
     if (defined(invoker.extra_bazel_args)) {
-      args += [ "--" ] + invoker.extra_bazel_args
+      args += invoker.extra_bazel_args
+    }
+
+    # Additional extra args to bazel
+    if (is_asan) {
+      args += [ "--config=asan" ]
+    }
+    if (is_lsan) {
+      args += [ "--config=lsan" ]
+    }
+    if (is_msan) {
+      args += [ "--config=msan" ]
+    }
+    if (is_tsan) {
+      args += [ "--config=tsan" ]
+    }
+    if (is_ubsan) {
+      args += [ "--config=ubsan" ]
     }
 
     deps = _bazel_inputs +
