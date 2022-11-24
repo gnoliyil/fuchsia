@@ -945,10 +945,8 @@ library example;
 }
 
 TEST(VersioningTests, BadNoArguments) {
-  TestLibrary library(R"FIDL(
-@available
-library example;
-)FIDL");
+  TestLibrary library;
+  library.AddFile("bad/fi-0147.test.fidl");
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrAvailableMissingArguments);
 }
 
