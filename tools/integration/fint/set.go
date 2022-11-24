@@ -302,9 +302,7 @@ func genArgs(staticSpec *fintpb.Static, contextSpec *fintpb.Context) ([]string, 
 		for _, file := range contextSpec.ChangedFiles {
 			profileSourceFiles = append(profileSourceFiles, fmt.Sprintf("//%s", file.Path))
 		}
-		// Profile changed files, and only changed files.
 		vars["profile_source_files"] = profileSourceFiles
-		vars["profile_source_files_list_files"] = []string{}
 	}
 
 	if staticSpec.EnableGoCache {

@@ -1,7 +1,0 @@
-# See: fxbug.dev/109920
-# Disallow //third_party/*
-!src:\.\.\/\.\.\/third_party\/*
-# Allow //* (expressed as ../../* when relativized to the output directory)
-src:\.\.\/\.\.\/*
-# Disallow <out_dir>/*
-!src:*
