@@ -13,6 +13,7 @@
 #include <hwreg/bitfields.h>
 
 #include "src/graphics/display/drivers/intel-i915-tgl/acpi-memory-region.h"
+#include "src/graphics/display/drivers/intel-i915-tgl/firmware-bridge.h"
 #include "src/graphics/display/drivers/intel-i915-tgl/intel-i915-tgl.h"
 
 namespace i915_tgl {
@@ -24,15 +25,6 @@ namespace {
 
 // The number of eDP panel types supported by the IGD API
 static const uint32_t kNumPanelTypes = 16;
-
-// GMCH SWSCI Register - 5.1.1
-class GmchSwsciRegister : public hwreg::RegisterBase<GmchSwsciRegister, uint16_t> {
- public:
-  DEF_BIT(15, sci_event_select);
-  DEF_BIT(0, gmch_sw_sci_trigger);
-
-  static auto Get() { return hwreg::RegisterAddr<GmchSwsciRegister>(0); }
-};
 
 // Entry half of Software SCI Entry/Exit Parameters - 3.3.1
 class SciEntryParam : public hwreg::RegisterBase<SciEntryParam, uint32_t> {
@@ -278,16 +270,17 @@ bool IgdOpRegion::ProcessDdiConfigs() {
   return true;
 }
 
-bool IgdOpRegion::Swsci(const ddk::Pci& pci, uint16_t function, uint16_t subfunction,
+bool IgdOpRegion::Swsci(ddk::Pci& pci, uint16_t function, uint16_t subfunction,
                         uint32_t additional_param, uint16_t* exit_param, uint32_t* additional_res) {
-  uint16_t val;
-  if (pci.ReadConfig16(kIgdSwSciReg, &val) != ZX_OK) {
-    zxlogf(WARNING, "Failed to read SWSCI register");
+  PciConfigOpRegion pci_op_region(pci);
+  zx::result<bool> in_use_result = pci_op_region.IsSystemControlInterruptInUse();
+  if (in_use_result.is_error()) {
+    zxlogf(WARNING, "Failed to read System Control Interrupt status from PCI OpRegion: %s",
+           in_use_result.status_string());
     return false;
   }
-  auto gmch_swsci_reg = GmchSwsciRegister::Get().FromValue(val);
-  if (!gmch_swsci_reg.sci_event_select() || gmch_swsci_reg.gmch_sw_sci_trigger()) {
-    zxlogf(WARNING, "Bad GMCH SWSCI register value (%04x)", val);
+  if (in_use_result.value()) {
+    zxlogf(WARNING, "OpRegion System Control Interrupt still in use after boot firmware handoff");
     return false;
   }
 
@@ -301,9 +294,10 @@ bool IgdOpRegion::Swsci(const ddk::Pci& pci, uint16_t function, uint16_t subfunc
   sci_interface->entry_and_exit_params = sci_entry_param.reg_value();
   sci_interface->additional_params = additional_param;
 
-  if (pci.WriteConfig16(kIgdSwSciReg, gmch_swsci_reg.set_gmch_sw_sci_trigger(1).reg_value()) !=
-      ZX_OK) {
-    zxlogf(WARNING, "Failed to write SWSCI register");
+  zx::result<> trigger_result = pci_op_region.TriggerSystemControlInterrupt();
+  if (trigger_result.is_error()) {
+    zxlogf(WARNING, "OpRegion System Control Interrupt triggering failed: %s",
+           trigger_result.status_string());
     return false;
   }
 
@@ -311,6 +305,9 @@ bool IgdOpRegion::Swsci(const ddk::Pci& pci, uint16_t function, uint16_t subfunc
   // long enough. I've seen delays as long as 10ms, so use 50ms to be safe.
   int timeout_ms = sci_interface->driver_sleep_timeout ? sci_interface->driver_sleep_timeout : 50;
   while (timeout_ms-- > 0) {
+    // TODO(costan): Polling should check both the "SWSCI in use" bit in SCIC in
+    // Mailbox 2 (currently checked) and the SWSCI trigger bit in the PCI config
+    // OpRegion.
     auto sci_exit_param = SciExitParam::Get().FromValue(sci_interface->entry_and_exit_params);
     if (!sci_exit_param.swsci_indicator()) {
       if (sci_exit_param.exit_result() == SciExitParam::kResultOk) {
@@ -328,7 +325,7 @@ bool IgdOpRegion::Swsci(const ddk::Pci& pci, uint16_t function, uint16_t subfunc
   return false;
 }
 
-bool IgdOpRegion::GetPanelType(const ddk::Pci& pci, uint8_t* type) {
+bool IgdOpRegion::GetPanelType(ddk::Pci& pci, uint8_t* type) {
   uint16_t exit_param;
   uint32_t additional_res;
   // TODO(stevensd): cache the supported calls when we need to use Swsci more than once
@@ -360,7 +357,7 @@ bool IgdOpRegion::GetPanelType(const ddk::Pci& pci, uint8_t* type) {
   return true;
 }
 
-bool IgdOpRegion::CheckForLowVoltageEdp(const ddk::Pci& pci) {
+bool IgdOpRegion::CheckForLowVoltageEdp(ddk::Pci& pci) {
   bool has_edp = true;
   for (const auto& kv : ddi_features_) {
     has_edp |= kv.second.is_edp;
@@ -399,17 +396,24 @@ void IgdOpRegion::ProcessBacklightData() {
   }
 }
 
-zx_status_t IgdOpRegion::Init(const ddk::Pci& pci) {
-  uint32_t igd_addr;
-  zx_status_t status = pci.ReadConfig32(kIgdOpRegionAddrReg, &igd_addr);
-  if (status != ZX_OK || !igd_addr) {
-    zxlogf(ERROR, "Failed to locate IGD OpRegion (%d)", status);
-    return status;
+zx_status_t IgdOpRegion::Init(ddk::Pci& pci) {
+  PciConfigOpRegion pci_op_region(pci);
+
+  zx::result<zx_paddr_t> memory_op_region_address = pci_op_region.ReadMemoryOpRegionAddress();
+  if (memory_op_region_address.is_error()) {
+    // Not logging at the ERROR level because this is an entirely plausible
+    // situation (since OpRegion support is optional for workstation systems),
+    // and we can do display initialization in many cases without OpRegion
+    // information.
+    zxlogf(WARNING, "Failed to get Memory OpRegion address: %s",
+           memory_op_region_address.status_string());
+    return memory_op_region_address.error_value();
   }
 
+  zxlogf(TRACE, "Memory OpRegion start: %08" PRIx64, memory_op_region_address.value());
   {
     zx::result<AcpiMemoryRegion> memory_op_region =
-        AcpiMemoryRegion::Create(igd_addr, kIgdOpRegionLen);
+        AcpiMemoryRegion::Create(memory_op_region_address.value(), kIgdOpRegionLen);
     if (memory_op_region.is_error()) {
       zxlogf(ERROR, "Failed to map IGD Memory OpRegion: %s",
              zx_status_get_string(memory_op_region.error_value()));
@@ -431,7 +435,7 @@ zx_status_t IgdOpRegion::Init(const ddk::Pci& pci) {
     auto [rvda, rvds] = igd_opregion_->vbt_region();
 
     zx::result<AcpiMemoryRegion> extended_vbt_region =
-        AcpiMemoryRegion::Create(igd_addr + rvda, rvds);
+        AcpiMemoryRegion::Create(memory_op_region_address.value() + rvda, rvds);
     if (extended_vbt_region.is_error()) {
       zxlogf(ERROR, "Failed to map extended VBT: %s",
              zx_status_get_string(extended_vbt_region.error_value()));

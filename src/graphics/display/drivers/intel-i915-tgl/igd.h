@@ -23,10 +23,6 @@
 namespace i915_tgl {
 // Various definitions from IGD OpRegion/Software SCI documentation.
 
-// Offsets into the PCI configuration space of IGD registers
-constexpr uint16_t kIgdSwSciReg = 0xe8;
-constexpr uint16_t kIgdOpRegionAddrReg = 0xfc;
-
 // Length of the igd opregion
 constexpr uint32_t kIgdOpRegionLen = 0x2000;
 
@@ -235,7 +231,11 @@ class IgdOpRegion {
  public:
   IgdOpRegion() = default;
   ~IgdOpRegion();
-  zx_status_t Init(const ddk::Pci& pci);
+
+  // Returns ZX_ERR_NOT_SUPPORTED if the boot firmware doesn't support the
+  // OpRegion protocol. The firmware might be completely missing OpRegion
+  // support, or may have a broken implementation that reports invalid data.
+  zx_status_t Init(ddk::Pci& pci);
 
   bool HasDdi(DdiId ddi_id) const { return ddi_features_.find(ddi_id) != ddi_features_.end(); }
   bool SupportsHdmi(DdiId ddi_id) const {
@@ -282,10 +282,10 @@ class IgdOpRegion {
   T* GetSection(uint16_t* size);
   uint8_t* GetSection(uint8_t tag, uint16_t* size);
   bool ProcessDdiConfigs();
-  bool CheckForLowVoltageEdp(const ddk::Pci& pci);
-  bool GetPanelType(const ddk::Pci& pci, uint8_t* type);
-  bool Swsci(const ddk::Pci& pci, uint16_t function, uint16_t subfunction,
-             uint32_t additional_param, uint16_t* exit_param, uint32_t* additional_res);
+  bool CheckForLowVoltageEdp(ddk::Pci& pci);
+  bool GetPanelType(ddk::Pci& pci, uint8_t* type);
+  bool Swsci(ddk::Pci& pci, uint16_t function, uint16_t subfunction, uint32_t additional_param,
+             uint16_t* exit_param, uint32_t* additional_res);
   void ProcessBacklightData();
 
   AcpiMemoryRegion memory_op_region_;

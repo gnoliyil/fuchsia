@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <zircon/assert.h>
+#include <zircon/errors.h>
 #include <zircon/syscalls.h>
 #include <zircon/types.h>
 
@@ -2236,8 +2237,10 @@ zx_status_t Controller::Init() {
 
   status = igd_opregion_.Init(pci_);
   if (status != ZX_OK) {
-    zxlogf(ERROR, "Failed to init VBT (%d)", status);
-    return status;
+    if (status != ZX_ERR_NOT_SUPPORTED) {
+      zxlogf(ERROR, "VBT initializaton failed: %s", zx_status_get_string(status));
+      return status;
+    }
   }
 
   zxlogf(TRACE, "Mapping registers");
