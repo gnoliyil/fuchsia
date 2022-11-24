@@ -351,20 +351,11 @@ impl F2fs {
 }
 
 impl FSConfig for F2fs {
-    // TODO(fxbug.dev/111606): Need to be modified to run as a component.
     fn mode(&self) -> Mode<'_> {
-        Mode::Legacy(LegacyConfig {
-            binary_path: cstr!("/pkg/bin/f2fs"),
-            generic_args: {
-                let args = vec![];
-                args
-            },
-            mount_args: {
-                let args = vec![];
-                args
-            },
-            ..Default::default()
-        })
+        Mode::Component { name: "f2fs", reuse_component_after_serving: false }
+    }
+    fn is_multi_volume(&self) -> bool {
+        false
     }
 
     fn disk_format(&self) -> format::DiskFormat {

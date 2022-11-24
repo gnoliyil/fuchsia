@@ -39,7 +39,6 @@ rustc_binary("fuchsia-storage-benchmarks") {
     "//third_party/rust_crates:either",
     "//third_party/rust_crates:regex",
   ]
-  data_deps = [ "//src/storage/bin/f2fs" ]
   test_deps = [ "//src/lib/test_util" ]
   with_unit_tests = true
 }
@@ -55,6 +54,7 @@ fuchsia_test_package("benchmarks") {
   test_components = [ ":fuchsia-storage-benchmarks-component" ]
   deps = [
     "//src/storage/benchmarks/fuchsia/memfs-component",
+    "//src/storage/bin/f2fs:f2fs-component",
     "//src/storage/bin/minfs:minfs-component",
     "//src/storage/fxfs:fxfs_component",
     "//src/storage/fxfs-crypt",
@@ -72,6 +72,7 @@ fuchsia_test_package("fuchsia-storage-benchmarks-tests") {
   test_components = [ ":fuchsia-storage-benchmarks-tests-component" ]
   deps = [
     "//src/storage/benchmarks/fuchsia/memfs-component",
+    "//src/storage/bin/f2fs:f2fs-component",
     "//src/storage/bin/minfs:minfs-component",
     "//src/storage/fxfs:fxfs_component",
     "//src/storage/fxfs-crypt",

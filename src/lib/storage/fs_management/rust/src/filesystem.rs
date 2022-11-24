@@ -747,8 +747,8 @@ async fn wait_for_successful_exit(process: Process) -> Result<(), CommandError> 
 mod tests {
     use {
         super::*,
-        crate::{BlobCompression, BlobEvictionPolicy, Blobfs, Factoryfs, Fxfs, Minfs},
-        fuchsia_async as fasync,
+        crate::{BlobCompression, BlobEvictionPolicy, Blobfs, F2fs, Factoryfs, Fxfs, Minfs},
+        fidl_fuchsia_io as fio, fuchsia_async as fasync,
         ramdevice_client::RamdiskClient,
         remote_block_device::{BlockClient as _, RemoteBlockClient},
         std::{
@@ -1089,6 +1089,129 @@ mod tests {
         }
 
         serving.shutdown().await.expect("failed to shutdown minfs");
+
+        std::fs::File::open(test_path).expect_err("test file was not unbound");
+    }
+
+    #[fuchsia::test]
+    async fn f2fs_custom_config() {
+        let block_size = 4096;
+        let ramdisk = ramdisk(block_size);
+        let config = F2fs { verbose: true, readonly: true };
+        let mut f2fs = new_fs(&ramdisk, config);
+
+        f2fs.format().await.expect("failed to format f2fs");
+        f2fs.fsck().await.expect("failed to fsck f2fs");
+        let _ = f2fs.serve().await.expect("failed to serve f2fs");
+
+        ramdisk.destroy().expect("failed to destroy ramdisk");
+    }
+
+    #[fuchsia::test]
+    async fn f2fs_format_fsck_success() {
+        let block_size = 4096;
+        let ramdisk = ramdisk(block_size);
+        let mut f2fs = new_fs(&ramdisk, F2fs::default());
+
+        f2fs.format().await.expect("failed to format f2fs");
+        f2fs.fsck().await.expect("failed to fsck f2fs");
+
+        ramdisk.destroy().expect("failed to destroy ramdisk");
+    }
+
+    #[fuchsia::test]
+    async fn f2fs_format_serve_write_query_restart_read_shutdown() {
+        let block_size = 4096;
+        let ramdisk = ramdisk(block_size);
+        let mut f2fs = new_fs(&ramdisk, F2fs::default());
+
+        f2fs.format().await.expect("failed to format f2fs");
+        let serving = f2fs.serve().await.expect("failed to serve f2fs the first time");
+
+        // snapshot of FilesystemInfo
+        let fs_info1 =
+            serving.query().await.expect("failed to query filesystem info after first serving");
+
+        let filename = "test_file";
+        let content = String::from("test content").into_bytes();
+
+        {
+            let test_file = fuchsia_fs::directory::open_file(
+                serving.root(),
+                filename,
+                fio::OpenFlags::CREATE | fio::OpenFlags::RIGHT_WRITABLE,
+            )
+            .await
+            .expect("failed to create test file");
+            let _: u64 = test_file
+                .write(&content)
+                .await
+                .expect("failed to write to test file")
+                .map_err(Status::from_raw)
+                .expect("write error");
+        }
+
+        // check against the snapshot FilesystemInfo
+        let fs_info2 = serving.query().await.expect("failed to query filesystem info after write");
+        assert_eq!(
+            fs_info2.used_bytes - fs_info1.used_bytes,
+            fs_info2.block_size as u64 // assuming content < 4K
+        );
+
+        serving.shutdown().await.expect("failed to shutdown f2fs the first time");
+        let serving = f2fs.serve().await.expect("failed to serve f2fs the second time");
+
+        {
+            let test_file = fuchsia_fs::directory::open_file(
+                serving.root(),
+                filename,
+                fio::OpenFlags::RIGHT_READABLE,
+            )
+            .await
+            .expect("failed to open test file");
+            let read_content =
+                fuchsia_fs::file::read(&test_file).await.expect("failed to read from test file");
+            assert_eq!(content, read_content);
+        }
+
+        // once more check against the snapshot FilesystemInfo
+        let fs_info3 = serving.query().await.expect("failed to query filesystem info after read");
+        assert_eq!(
+            fs_info3.used_bytes - fs_info1.used_bytes,
+            fs_info3.block_size as u64 // assuming content < 4K
+        );
+
+        serving.shutdown().await.expect("failed to shutdown f2fs the second time");
+        f2fs.fsck().await.expect("failed to fsck f2fs after shutting down the second time");
+
+        ramdisk.destroy().expect("failed to destroy ramdisk");
+    }
+
+    #[fuchsia::test]
+    async fn f2fs_bind_to_path() {
+        let block_size = 4096;
+        let test_content = b"test content";
+        let ramdisk = ramdisk(block_size);
+        let mut f2fs = new_fs(&ramdisk, F2fs::default());
+
+        f2fs.format().await.expect("failed to format f2fs");
+        let mut serving = f2fs.serve().await.expect("failed to serve f2fs");
+        serving.bind_to_path("/test-f2fs-path").expect("bind_to_path failed");
+        let test_path = "/test-f2fs-path/test_file";
+
+        {
+            let mut file = std::fs::File::create(test_path).expect("failed to create test file");
+            file.write_all(test_content).expect("write bytes");
+        }
+
+        {
+            let mut file = std::fs::File::open(test_path).expect("failed to open test file");
+            let mut buf = Vec::new();
+            file.read_to_end(&mut buf).expect("failed to read test file");
+            assert_eq!(buf, test_content);
+        }
+
+        serving.shutdown().await.expect("failed to shutdown f2fs");
 
         std::fs::File::open(test_path).expect_err("test file was not unbound");
     }

@@ -41,13 +41,19 @@ fuchsia_component("fxfs-no-crash") {
 fuchsia_component("f2fs-crash") {
   testonly = true
   manifest = "f2fs/meta/crash.cml"
-  deps = [ "genericfs:stressor-bin" ]
+  deps = [
+    "genericfs:stressor-bin",
+    "//src/storage/bin/f2fs:f2fs-component",
+  ]
 }
 
 fuchsia_component("f2fs-no-crash") {
   testonly = true
   manifest = "f2fs/meta/no-crash.cml"
-  deps = [ "genericfs:stressor-bin" ]
+  deps = [
+    "genericfs:stressor-bin",
+    "//src/storage/bin/f2fs:f2fs-component",
+  ]
 }
 
 fuchsia_component("blobfs-crash") {
@@ -105,7 +111,10 @@ fuchsia_component("fxfs-short") {
 fuchsia_component("f2fs-short") {
   testonly = true
   manifest = "f2fs/meta/short.cml"
-  deps = [ "genericfs:stressor-bin" ]
+  deps = [
+    "genericfs:stressor-bin",
+    "//src/storage/bin/f2fs:f2fs-component",
+  ]
 }
 
 # This test package is designed to run on `core.qemu-x64-stress`.
