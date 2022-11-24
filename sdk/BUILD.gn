@@ -366,6 +366,7 @@ sdk_molecule("platform_libs") {
   deps = [
     ":version_history",
     "//src/lib/fxl:fxl_sdk",
+    "//third_party/re2:re2_sdk",
     "//zircon/public/sysroot/sdk:sysroot_sdk",
   ]
 }

@@ -77,7 +77,22 @@ template("sdk_shared_library") {
   } else {
     atom_name = output_name
   }
-  sdk_id = "sdk://pkg/$atom_name"
+
+  if (invoker.category != "internal") {
+    sdk_root_path = "pkg/${atom_name}"
+  } else {
+    # For internal SDK libraries, the sdk_name is the fully qualified target name with some tweaks. For example:
+    #    //src/lib/fxl:fxl            sdk_name = //src/lib/fxl_fxl          sdk_root_path= src/lib/fxl_fxl
+    #    //src/lib/fxl:functional     sdk_name = //src/lib/fxl_functional   sdk_root_path= src/lib/fxl_functional
+    #    //src/lib/fxl/files:files    sdk_name = //src/lib/fxl/files_files  sdk_root_path= src/lib/fxl/files_files
+    full_label = get_label_info(":${invoker.target_name}", "label_no_toolchain")
+    path = get_label_info(full_label, "dir")
+    path = "${path}_${invoker.target_name}"
+
+    atom_name = path
+    sdk_root_path = string_replace(path, "//", "")
+  }
+  sdk_id = "sdk://${sdk_root_path}"
 
   no_headers = defined(invoker.no_headers) && invoker.no_headers
 
@@ -118,7 +133,7 @@ template("sdk_shared_library") {
                            ])
 
     if (defined(visibility)) {
-      visibility += [ ":$manifest_target_name" ]
+      visibility += [ ":${manifest_target_name}" ]
     }
 
     if (!defined(libcxx_linkage)) {
@@ -135,7 +150,7 @@ template("sdk_shared_library") {
     }
     if (libcxx_linkage == "static") {
       configs += [ "//build/config/fuchsia:static_cpp_standard_library" ]
-    } else {
+    } else if (invoker.category != "internal") {
       # Adding this linker flag keeps us honest about not commiting to a
       # specific C++ ABI. If this flag is causing your library to not
       # compile, consider whether your library really ought to be in the SDK.
@@ -143,12 +158,15 @@ template("sdk_shared_library") {
       # precompiled. If you do require precompilation, you probably need to
       # find a way not to depend on dynamically linking C++ symbols because C++
       # does not have a sufficiently stable ABI for the purposes of our SDK.
+      #
+      # NOTE: This flag is not necessary for internal SDK libraries since they
+      # are not intended to be consumed by SDK users.
       configs += [ "//build/config/fuchsia:no_cpp_standard_library" ]
     }
 
     # Request that the runtime deps be written out to a file. This file will be
     # used later to verify that all runtime deps are available in the SDK.
-    write_runtime_deps = "$target_out_dir/$target_name.runtime_deps"
+    write_runtime_deps = "${target_out_dir}/${target_name}.runtime_deps"
 
     metadata = {
       if (defined(invoker.metadata)) {
@@ -158,18 +176,15 @@ template("sdk_shared_library") {
         component_catalog = [
           {
             sdk_id = sdk_id
-            label = get_label_info(":$target_name", "label_with_toolchain")
+            label = get_label_info(":${target_name}", "label_with_toolchain")
           },
         ]
       }
     }
   }
 
-  # Base path for source files of this library in SDKs.
-  file_base = "pkg/$atom_name"
-
   # Base path for binaries of this library in SDKs.
-  prebuilt_base = "arch/$target_cpu"
+  prebuilt_base = "arch/${target_cpu}"
 
   # Identify dependencies and their metadata files.
   sdk_deps = []
@@ -200,7 +215,7 @@ template("sdk_shared_library") {
   foreach(sdk_dep, sdk_deps) {
     gen_dir = get_label_info(sdk_dep, "target_gen_dir")
     name = get_label_info(sdk_dep, "name")
-    sdk_metas += [ "$gen_dir/$name.meta.json" ]
+    sdk_metas += [ "${gen_dir}/${name}.meta.json" ]
   }
 
   # Process headers.
@@ -217,15 +232,29 @@ template("sdk_shared_library") {
       }
     }
   }
+
   sdk_metadata_headers = []
   sdk_header_files = []
-  foreach(header, all_headers) {
-    include_base = "include"
-    if (defined(invoker.include_base)) {
-      include_base = invoker.include_base
+
+  if (defined(invoker.include_base)) {
+    include_base = invoker.include_base
+  } else {
+    if (invoker.category == "internal") {
+      # by default, we want internal SDK elements to have their include path similar when used through
+      # an SDK (eg Bazel SDk) or directly (GN/Ninja), so that source code doesn't need to be changed
+      # when switching from one to the other.
+      include_base = "//"
+    } else {
+      include_base = "include"
     }
+  }
+  assert(include_base != "")  # Work around for unused variable warning when
+
+  include_dest = "${sdk_root_path}/include"
+
+  foreach(header, all_headers) {
     destination = rebase_path(header, include_base)
-    header_dest = "$file_base/include/$destination"
+    header_dest = "${include_dest}/${destination}"
     sdk_metadata_headers += [ header_dest ]
     sdk_header_files += [
       {
@@ -241,20 +270,20 @@ template("sdk_shared_library") {
   # See shlib_toolchain_no_default_variant_redirect documentation comment
   # in //build/config/BUILDCONFIG.gn to understand why this is needed.
   shared_lib_target =
-      ":$main_target_name($shlib_toolchain_no_default_variant_redirect)"
+      ":${main_target_name}(${shlib_toolchain_no_default_variant_redirect})"
   shared_out_dir = get_label_info(shared_lib_target, "root_out_dir")
-  lib_name = "lib$output_name.so"
-  link_lib = "$prebuilt_base/lib/$lib_name"
-  dist_lib = "$prebuilt_base/dist/$lib_name"
+  lib_name = "lib${output_name}.so"
+  link_lib = "${prebuilt_base}/lib/${lib_name}"
+  dist_lib = "${prebuilt_base}/dist/${lib_name}"
   sdk_files =
       sdk_header_files + [
         {
           # TODO(fxbug.dev/2875): put ABI stubs under lib/, not the full thing.
-          source = "$shared_out_dir/$lib_name"
+          source = "${shared_out_dir}/${lib_name}"
           dest = link_lib
         },
         {
-          source = "$shared_out_dir/$lib_name"
+          source = "${shared_out_dir}/${lib_name}"
           dest = dist_lib
         },
       ]
@@ -270,7 +299,7 @@ template("sdk_shared_library") {
                                "all_deps",
                                "private_headers",
                              ])
-      file_base = file_base
+      file_base = sdk_root_path
     }
   } else {
     not_needed([
@@ -279,9 +308,9 @@ template("sdk_shared_library") {
                ])
   }
 
-  metadata_file = "$target_gen_dir/$metadata_target_name.sdk_meta.json"
-  debug_mapping_file = "$target_gen_dir/$metadata_target_name.mappings.txt"
-  debug_lib_file = "$shared_out_dir/lib.unstripped/$lib_name"
+  metadata_file = "${target_gen_dir}/${metadata_target_name}.sdk_meta.json"
+  debug_mapping_file = "${target_gen_dir}/${metadata_target_name}.mappings.txt"
+  debug_lib_file = "${shared_out_dir}/lib.unstripped/${lib_name}"
 
   action(metadata_target_name) {
     forward_variables_from(invoker, [ "testonly" ])
@@ -306,11 +335,11 @@ template("sdk_shared_library") {
       "--format",
       "shared",
       "--root",
-      file_base,
+      sdk_root_path,
       "--include-dir",
-      "$file_base/include",
+      include_dest,
       "--dist-path",
-      "lib/$lib_name",
+      "lib/${lib_name}",
       "--arch",
       target_cpu,
       "--lib-link",
@@ -338,12 +367,12 @@ template("sdk_shared_library") {
     assert(
         defined(invoker.symbols_api),
         "Must define path to an ifs file. See comment in //build/cpp/verify_public_symbols.gni")
-    main_target_dir = get_label_info(":$main_target_name", "dir")
+    main_target_dir = get_label_info(":${main_target_name}", "dir")
 
     verify_public_symbols_target_name =
         "${target_name}_sdk_verify_public_symbols"
     verify_public_symbols(verify_public_symbols_target_name) {
-      current = "$shared_out_dir/lib$output_name.ifs"
+      current = "${shared_out_dir}/lib${output_name}.ifs"
       reference = invoker.symbols_api
       library_name = main_target_dir
 
@@ -366,7 +395,7 @@ template("sdk_shared_library") {
 
     meta = {
       source = metadata_file
-      dest = "$file_base/meta.json"
+      dest = "${sdk_root_path}/meta.json"
       schema = "cc_prebuilt_library"
     }
 
@@ -377,15 +406,15 @@ template("sdk_shared_library") {
     deps = sdk_deps
 
     non_sdk_deps = [
-      ":$metadata_target_name",
-      ":$verify_pragma_target_name",
+      ":${metadata_target_name}",
+      ":${verify_pragma_target_name}",
       shared_lib_target,
     ]
     if (generate_plasa_artifacts) {
-      non_sdk_deps += [ ":$_plasa_artifacts_target_name" ]
+      non_sdk_deps += [ ":${_plasa_artifacts_target_name}" ]
     }
     if (category == "partner" || category == "public") {
-      non_sdk_deps += [ ":$verify_public_symbols_target_name" ]
+      non_sdk_deps += [ ":${verify_public_symbols_target_name}" ]
     }
 
     # Explicitly add non-public dependencies, in case some of the source files
@@ -396,8 +425,8 @@ template("sdk_shared_library") {
   }
 
   shared_gen_dir = get_label_info(shared_lib_target, "target_out_dir")
-  runtime_deps_file = "$shared_gen_dir/$target_name.runtime_deps"
-  sdk_manifest_file = "$target_gen_dir/$manifest_target_name.sdk"
+  runtime_deps_file = "${shared_gen_dir}/${target_name}.runtime_deps"
+  sdk_manifest_file = "${target_gen_dir}/${manifest_target_name}.sdk"
   verify_target_name = "${target_name}_verify"
 
   # Verify that the SDK manifest for this target includes all of the expected
@@ -412,7 +441,7 @@ template("sdk_shared_library") {
       runtime_deps_file,
     ]
 
-    stamp_file = "$target_gen_dir/$target_name.gn_stamp"
+    stamp_file = "${target_gen_dir}/${target_name}.gn_stamp"
 
     outputs = [ stamp_file ]
 
@@ -426,18 +455,18 @@ template("sdk_shared_library") {
     ]
 
     deps = [
-      ":$manifest_target_name",
+      ":${manifest_target_name}",
       shared_lib_target,
     ]
   }
 
   sdk_atom_alias(sdk_target_name) {
-    atom = ":$manifest_target_name"
+    atom = ":${manifest_target_name}"
 
-    non_sdk_deps = [ ":$verify_target_name" ]
+    non_sdk_deps = [ ":${verify_target_name}" ]
 
     if (generate_plasa_artifacts) {
-      non_sdk_deps += [ ":$_plasa_artifacts_target_name" ]
+      non_sdk_deps += [ ":${_plasa_artifacts_target_name}" ]
     }
   }
 }
