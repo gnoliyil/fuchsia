@@ -120,13 +120,11 @@ async fn do_start(
                 .dispatch(&Event::new_with_timestamp(
                     component,
                     EventPayload::Started {
-                        component: component.into(),
                         runtime: RuntimeInfo::from_runtime(
                             &mut pending_runtime,
                             start_context.resolved_url.clone(),
                         ),
                         component_decl: start_context.component_decl.clone(),
-                        start_reason: start_reason.clone(),
                     },
                     pending_runtime.timestamp,
                 ))

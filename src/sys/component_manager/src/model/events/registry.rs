@@ -603,7 +603,7 @@ mod tests {
         let event = ComponentEvent::new_for_test(
             AbsoluteMoniker::root(),
             "fuchsia-pkg://root",
-            EventPayload::Discovered { instance_id: 0 },
+            EventPayload::Discovered,
         );
         registry.dispatch(&event).await
     }

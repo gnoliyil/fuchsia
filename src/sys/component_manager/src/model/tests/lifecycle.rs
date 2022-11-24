@@ -10,7 +10,7 @@ use {
             component::{ComponentInstance, InstanceState, StartReason},
             error::ModelError,
             events::registry::EventSubscription,
-            hooks::{EventPayload, EventType, HooksRegistration},
+            hooks::{EventType, HooksRegistration},
             model::Model,
             starter::Starter,
             testing::{
@@ -106,11 +106,6 @@ async fn bind_concurrent() {
     .remote_handle();
     fasync::Task::spawn(f).detach();
     let event = event_stream.wait_until(EventType::Started, vec!["system"].into()).await.unwrap();
-    // Verify that the correct StartReason propagates to the event.
-    assert_matches!(
-        event.event.payload,
-        EventPayload::Started { start_reason: StartReason::Root, .. }
-    );
 
     // While the start() is paused, simulate a second start by explicitly scheduling a Start
     // action. Allow the original start to proceed, then check the result of both starts.

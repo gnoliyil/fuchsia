@@ -49,8 +49,7 @@ async fn do_discover(component: &Arc<ComponentInstance>) -> Result<(), ModelErro
     if is_discovered {
         return Ok(());
     }
-    let instance_id = component.incarnation_id();
-    let event = Event::new(&component, EventPayload::Discovered { instance_id });
+    let event = Event::new(&component, EventPayload::Discovered);
     component.hooks.dispatch(&event).await?;
     {
         let mut state = component.lock_state().await;

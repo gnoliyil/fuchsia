@@ -6,16 +6,14 @@ use {
     crate::{
         capability::{CapabilityProvider, CapabilitySource},
         model::{
-            component::{ComponentInstance, Runtime, StartReason, WeakComponentInstance},
+            component::{ComponentInstance, Runtime, WeakComponentInstance},
             error::ModelError,
         },
     },
     anyhow::format_err,
     async_trait::async_trait,
-    cm_moniker::IncarnationId,
     cm_rust::{CapabilityName, ComponentDecl},
     cm_util::io::clone_dir,
-    config_encoder::ConfigFields,
     fidl_fuchsia_diagnostics_types as fdiagnostics, fidl_fuchsia_io as fio,
     fidl_fuchsia_sys2 as fsys, fuchsia_zircon as zx,
     futures::{channel::oneshot, lock::Mutex},
@@ -226,23 +224,17 @@ pub enum EventPayload {
         name: String,
         node: fio::NodeProxy,
     },
-    Discovered {
-        instance_id: IncarnationId,
-    },
+    Discovered,
     Destroyed,
     Resolved {
         component: WeakComponentInstance,
-        resolved_url: String,
         decl: ComponentDecl,
-        config: Option<ConfigFields>,
         package_dir: Option<fio::DirectoryProxy>,
     },
     Unresolved,
     Started {
-        component: WeakComponentInstance,
         runtime: RuntimeInfo,
         component_decl: ComponentDecl,
-        start_reason: StartReason,
     },
     Stopped {
         status: zx::Status,
@@ -302,16 +294,12 @@ impl fmt::Debug for EventPayload {
             EventPayload::Started { component_decl, .. } => {
                 formatter.field("component_decl", &component_decl).finish()
             }
-            EventPayload::Resolved { component: _, resolved_url, decl, config, .. } => {
-                formatter.field("resolved_url", resolved_url);
-                formatter.field("decl", decl);
-                formatter.field("config", config).finish()
+            EventPayload::Resolved { component: _, decl, .. } => {
+                formatter.field("decl", decl).finish()
             }
             EventPayload::Stopped { status } => formatter.field("status", status).finish(),
-            EventPayload::Discovered { instance_id } => {
-                formatter.field("instance_id", instance_id).finish()
-            }
             EventPayload::Unresolved
+            | EventPayload::Discovered
             | EventPayload::Destroyed
             | EventPayload::DebugStarted { .. } => formatter.finish(),
         }
@@ -437,9 +425,6 @@ impl fmt::Display for Event {
             EventPayload::CapabilityRouted { source, .. } => {
                 format!("routed {}", source.to_string())
             }
-            EventPayload::Started { start_reason, .. } => {
-                format!("because {}", start_reason.to_string())
-            }
             EventPayload::Stopped { status } => {
                 format!("with status: {}", status.to_string())
             }
@@ -447,6 +432,7 @@ impl fmt::Display for Event {
             | EventPayload::Destroyed { .. }
             | EventPayload::Resolved { .. }
             | EventPayload::DebugStarted { .. }
+            | EventPayload::Started { .. }
             | EventPayload::Unresolved => "".to_string(),
         };
         write!(f, "[{}] '{}' {}", self.event_type().to_string(), self.target_moniker, payload)
