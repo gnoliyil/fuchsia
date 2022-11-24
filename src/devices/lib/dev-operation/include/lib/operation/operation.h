@@ -426,7 +426,7 @@ class BaseQueue {
     auto* node = op.node();
     queue_.push_front(node);
     // Must prevent Complete/Release from being called in destructor.
-    __UNUSED auto dummy = op.take();
+    [[maybe_unused]] auto dummy = op.take();
   }
 
   void push_next(OpType op) {
@@ -434,7 +434,7 @@ class BaseQueue {
     auto* node = op.node();
     queue_.push_back(node);
     // Must prevent Complete/Release from being called in destructor.
-    __UNUSED auto dummy = op.take();
+    [[maybe_unused]] auto dummy = op.take();
   }
 
   std::optional<OpType> pop() {
@@ -472,7 +472,7 @@ class BaseQueue {
     std::lock_guard<std::mutex> al(lock_);
     while (!queue_.is_empty()) {
       // Transform back into operation to force correct destructor to run.
-      __UNUSED auto op = queue_.pop_back()->operation();
+      [[maybe_unused]] auto op = queue_.pop_back()->operation();
     }
   }
 

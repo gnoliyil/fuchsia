@@ -31,7 +31,7 @@ zx_status_t Ge2dBind(void* ctx, zx_device_t* device) {
   FX_LOGST(INFO, kTag) << "ge2d driver added";
 
   // ge2d device intentionally leaked as it is now held by DevMgr.
-  __UNUSED auto* dev = ge2d_device.release();
+  [[maybe_unused]] auto* dev = ge2d_device.release();
   return status;
 }
 

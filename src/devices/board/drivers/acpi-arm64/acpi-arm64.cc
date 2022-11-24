@@ -54,7 +54,7 @@ zx_status_t AcpiArm64::Create(void* ctx, zx_device_t* parent) {
   status = device->DdkAdd(ddk::DeviceAddArgs("acpi").set_flags(DEVICE_ADD_NON_BINDABLE));
   if (status == ZX_OK) {
     // The DDK now owns the device.
-    __UNUSED auto unused = device.release();
+    [[maybe_unused]] auto unused = device.release();
   }
   return status;
 }

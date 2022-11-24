@@ -352,7 +352,7 @@ TEST_F(VirtioTests, LegacyIoBackendSuccess) {
       std::make_unique<TestVirtioDevice>(fake_parent_.get(), std::move(bti), std::move(backend));
   ASSERT_OK(device->Init());
   // Owned by the framework now.
-  __UNUSED auto ptr = device.release();
+  [[maybe_unused]] auto ptr = device.release();
 }
 
 TEST_F(VirtioTests, LegacyMsiX) {
@@ -379,7 +379,7 @@ TEST_F(VirtioTests, LegacyMsiX) {
       std::make_unique<TestVirtioDevice>(fake_parent_.get(), std::move(bti), std::move(backend));
   ASSERT_OK(device->Init());
   // Owned by the framework now.
-  __UNUSED auto ptr = device.release();
+  [[maybe_unused]] auto ptr = device.release();
 
   // Verify MSI-X state
   pci::RunAsync(loop_, [&] { ASSERT_EQ(fake_pci().GetIrqMode(), PCI_INTERRUPT_MODE_MSI_X); });

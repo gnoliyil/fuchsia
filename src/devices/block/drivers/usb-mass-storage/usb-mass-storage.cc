@@ -361,7 +361,7 @@ zx_status_t UsbMassStorageDevice::ReadCsw(uint32_t* out_residue) {
 
 csw_status_t UsbMassStorageDevice::VerifyCsw(usb_request_t* csw_request, uint32_t* out_residue) {
   ums_csw_t csw = {};
-  __UNUSED size_t result = usb_request_copy_from(csw_request, &csw, sizeof(csw), 0);
+  [[maybe_unused]] size_t result = usb_request_copy_from(csw_request, &csw, sizeof(csw), 0);
 
   // check signature is "USBS"
   if (letoh32(csw.dCSWSignature) != CSW_SIGNATURE) {
@@ -426,7 +426,7 @@ zx_status_t UsbMassStorageDevice::Inquiry(uint8_t lun, uint8_t* out_data) {
   zx_status_t status = ReadCsw(NULL);
   if (status == ZX_OK) {
     memset(out_data, 0, UMS_INQUIRY_TRANSFER_LENGTH);
-    __UNUSED auto result =
+    [[maybe_unused]] auto result =
         usb_request_copy_from(data_req_, out_data, UMS_INQUIRY_TRANSFER_LENGTH, 0);
   }
   return status;
@@ -457,7 +457,7 @@ zx_status_t UsbMassStorageDevice::RequestSense(uint8_t lun, uint8_t* out_data) {
   zx_status_t status = ReadCsw(NULL);
   if (status == ZX_OK) {
     memset(out_data, 0, UMS_REQUEST_SENSE_TRANSFER_LENGTH);
-    __UNUSED auto result =
+    [[maybe_unused]] auto result =
         usb_request_copy_from(data_req_, out_data, UMS_REQUEST_SENSE_TRANSFER_LENGTH, 0);
   }
   return status;
@@ -476,7 +476,7 @@ zx_status_t UsbMassStorageDevice::ReadCapacity(uint8_t lun, scsi_read_capacity_1
   zx_status_t status = ReadCsw(NULL);
   if (status == ZX_OK) {
     memset(out_data, 0, sizeof(*out_data));
-    __UNUSED auto result = usb_request_copy_from(data_req_, out_data, sizeof(*out_data), 0);
+    [[maybe_unused]] auto result = usb_request_copy_from(data_req_, out_data, sizeof(*out_data), 0);
   }
   return status;
 }
@@ -497,7 +497,7 @@ zx_status_t UsbMassStorageDevice::ReadCapacity(uint8_t lun, scsi_read_capacity_1
   zx_status_t status = ReadCsw(NULL);
   if (status == ZX_OK) {
     memset(out_data, 0, sizeof(*out_data));
-    __UNUSED auto result = usb_request_copy_from(data_req_, out_data, sizeof(*out_data), 0);
+    [[maybe_unused]] auto result = usb_request_copy_from(data_req_, out_data, sizeof(*out_data), 0);
   }
   return status;
 }
@@ -528,7 +528,7 @@ zx_status_t UsbMassStorageDevice::ModeSense(uint8_t lun, uint8_t page, void* dat
   zx_status_t status = ReadCsw(NULL);
   if (status == ZX_OK) {
     memset(data, 0, transfer_length);
-    __UNUSED auto result = usb_request_copy_from(data_req_, data, transfer_length, 0);
+    [[maybe_unused]] auto result = usb_request_copy_from(data_req_, data, transfer_length, 0);
   }
   return status;
 }
@@ -549,7 +549,7 @@ zx_status_t UsbMassStorageDevice::ModeSense(uint8_t lun, scsi_mode_sense_6_data_
   zx_status_t status = ReadCsw(NULL);
   if (status == ZX_OK) {
     memset(out_data, 0, sizeof(*out_data));
-    __UNUSED auto result = usb_request_copy_from(data_req_, out_data, sizeof(*out_data), 0);
+    [[maybe_unused]] auto result = usb_request_copy_from(data_req_, out_data, sizeof(*out_data), 0);
   }
   return status;
 }

@@ -186,7 +186,7 @@ zx_status_t PlatformProxy::Create(void* ctx, zx_device_t* parent, const char* na
   }
 
   // devmgr is now in charge of the device.
-  __UNUSED auto* dummy = proxy.release();
+  [[maybe_unused]] auto* dummy = proxy.release();
 
   return ZX_OK;
 }

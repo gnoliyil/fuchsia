@@ -126,7 +126,7 @@ zx_status_t X86::CreateAndBind(void* ctx, zx_device_t* parent) {
   if (status == ZX_OK) {
     // DevMgr now owns this pointer, release it to avoid destroying the
     // object when device goes out of scope.
-    __UNUSED auto* ptr = board.release();
+    [[maybe_unused]] auto* ptr = board.release();
   }
   return status;
 }

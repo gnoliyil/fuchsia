@@ -191,7 +191,7 @@ struct timer_reg_procs {
   uint64_t arch::EarlyTicks::*early_ticks;
 };
 
-__UNUSED static const struct timer_reg_procs cntp_procs = {
+[[maybe_unused]] static const struct timer_reg_procs cntp_procs = {
     .write_ctl = write_cntp_ctl,
     .write_cval = write_cntp_cval,
     .write_tval = write_cntp_tval,
@@ -199,7 +199,7 @@ __UNUSED static const struct timer_reg_procs cntp_procs = {
     .early_ticks = &arch::EarlyTicks::cntpct_el0,
 };
 
-__UNUSED static const struct timer_reg_procs cntp_procs_a73 = {
+[[maybe_unused]] static const struct timer_reg_procs cntp_procs_a73 = {
     .write_ctl = write_cntp_ctl,
     .write_cval = write_cntp_cval,
     .write_tval = write_cntp_tval,
@@ -207,7 +207,7 @@ __UNUSED static const struct timer_reg_procs cntp_procs_a73 = {
     .early_ticks = &arch::EarlyTicks::cntpct_el0,
 };
 
-__UNUSED static const struct timer_reg_procs cntv_procs = {
+[[maybe_unused]] static const struct timer_reg_procs cntv_procs = {
     .write_ctl = write_cntv_ctl,
     .write_cval = write_cntv_cval,
     .write_tval = write_cntv_tval,
@@ -215,7 +215,7 @@ __UNUSED static const struct timer_reg_procs cntv_procs = {
     .early_ticks = &arch::EarlyTicks::cntvct_el0,
 };
 
-__UNUSED static const struct timer_reg_procs cntv_procs_a73 = {
+[[maybe_unused]] static const struct timer_reg_procs cntv_procs_a73 = {
     .write_ctl = write_cntv_ctl,
     .write_cval = write_cntv_cval,
     .write_tval = write_cntv_tval,
@@ -223,7 +223,7 @@ __UNUSED static const struct timer_reg_procs cntv_procs_a73 = {
     .early_ticks = &arch::EarlyTicks::cntvct_el0,
 };
 
-__UNUSED static const struct timer_reg_procs cntps_procs = {
+[[maybe_unused]] static const struct timer_reg_procs cntps_procs = {
     .write_ctl = write_cntps_ctl,
     .write_cval = write_cntps_cval,
     .write_tval = write_cntps_tval,
@@ -231,7 +231,7 @@ __UNUSED static const struct timer_reg_procs cntps_procs = {
     .early_ticks = &arch::EarlyTicks::cntpct_el0,
 };
 
-__UNUSED static const struct timer_reg_procs cntps_procs_a73 = {
+[[maybe_unused]] static const struct timer_reg_procs cntps_procs_a73 = {
     .write_ctl = write_cntps_ctl,
     .write_cval = write_cntps_cval,
     .write_tval = write_cntps_tval,
@@ -249,7 +249,7 @@ static inline void write_ctl(uint32_t val) { reg_procs.write_ctl(val); }
 
 static inline void write_cval(uint64_t val) { reg_procs.write_cval(val); }
 
-__UNUSED static inline void write_tval(uint32_t val) { reg_procs.write_tval(val); }
+[[maybe_unused]] static inline void write_tval(uint32_t val) { reg_procs.write_tval(val); }
 
 static zx_ticks_t read_ct() {
   zx_ticks_t cntpct = static_cast<zx_ticks_t>(reg_procs.read_ct());

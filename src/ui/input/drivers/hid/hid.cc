@@ -210,7 +210,7 @@ zx_status_t HidDevice::DdkOpen(zx_device_t** dev_out, uint32_t flags) {
   *dev_out = inst->zxdev();
 
   // devmgr is now in charge of the memory for inst.
-  __UNUSED auto ptr = inst.release();
+  [[maybe_unused]] auto ptr = inst.release();
   return ZX_OK;
 }
 
@@ -520,7 +520,7 @@ static zx_status_t hid_bind(void* ctx, zx_device_t* parent) {
   status = dev->Bind(std::move(client));
   if (status == ZX_OK) {
     // devmgr is now in charge of the memory for dev.
-    __UNUSED auto ptr = dev.release();
+    [[maybe_unused]] auto ptr = dev.release();
   }
   return status;
 }

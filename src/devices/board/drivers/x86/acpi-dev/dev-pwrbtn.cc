@@ -287,7 +287,7 @@ zx_status_t pwrbtn_init(zx_device_t* parent) {
   }
 
   // devmgr is now in charge of the memory for dev
-  __UNUSED auto ptr = dev.release();
+  [[maybe_unused]] auto ptr = dev.release();
 
   zxlogf(INFO, "acpi-pwrbtn: initialized");
   return ZX_OK;

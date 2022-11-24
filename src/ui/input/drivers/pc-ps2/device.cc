@@ -46,7 +46,7 @@ struct PortInfo {
   const char* devname;
 };
 
-__UNUSED constexpr PortInfo kPortInfo[2] = {
+[[maybe_unused]] constexpr PortInfo kPortInfo[2] = {
     /*[kPort1] =*/
     PortInfo{
         .enable = kCmdPort1Enable,
@@ -112,7 +112,7 @@ zx_status_t I8042Device::Bind(Controller* parent, Port port) {
   zx_status_t status = dev->Bind();
   if (status == ZX_OK) {
     // The DDK takes ownership of the device.
-    __UNUSED auto unused = dev.release();
+    [[maybe_unused]] auto unused = dev.release();
   }
 
   return status;

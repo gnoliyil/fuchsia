@@ -537,7 +537,7 @@ void Channel::MessageWaiter::Wait(zx_time_t deadline) {
   zx_duration_t duration = zx_time_sub_time(deadline, zx_clock_get_monotonic());
   // We do not use the status of the wait. Either the channel updates the status
   // once it delivers the message or cancels the wait, or ZX_ERR_TIMED_OUT is assumed.
-  __UNUSED zx_status_t status = completion_.Wait(zx::duration(duration));
+  [[maybe_unused]] zx_status_t status = completion_.Wait(zx::duration(duration));
 }
 
 zx::result<MessagePacketOwner> Channel::MessageWaiter::TakeLocked() {

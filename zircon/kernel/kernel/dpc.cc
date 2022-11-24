@@ -128,7 +128,7 @@ int DpcQueue::WorkerThread(void* unused) { return percpu::GetCurrent().dpc_queue
 int DpcQueue::Work() {
   for (;;) {
     // Wait for a Dpc to fire.
-    __UNUSED zx_status_t err = event_.Wait();
+    [[maybe_unused]] zx_status_t err = event_.Wait();
     DEBUG_ASSERT(err == ZX_OK);
 
     Dpc dpc_local;

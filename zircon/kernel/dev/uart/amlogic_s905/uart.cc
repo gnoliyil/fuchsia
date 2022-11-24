@@ -133,7 +133,7 @@ static void uart_irq(void* arg) {
       // Drop the data if our buffer is full
       // NOTE: This breaks flow control, but allows
       // serial to work when disconnecting/reconnecting the cable.
-      __UNUSED char c = static_cast<char>(UARTREG(base, S905_UART_RFIFO));
+      [[maybe_unused]] char c = static_cast<char>(UARTREG(base, S905_UART_RFIFO));
       continue;
     }
     char c = static_cast<char>(UARTREG(base, S905_UART_RFIFO));

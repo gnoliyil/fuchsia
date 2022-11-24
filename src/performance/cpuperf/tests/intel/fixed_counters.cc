@@ -16,7 +16,7 @@ class FixedCounterVerifier : public Verifier {
   FixedCounterVerifier(const cpuperf::SessionResultSpec* spec) : Verifier(spec) {
     const perfmon::EventDetails* details;
 
-    bool rc __UNUSED = LookupEventByName("fixed", "instructions_retired", &details);
+    bool rc [[maybe_unused]] = LookupEventByName("fixed", "instructions_retired", &details);
     FX_DCHECK(rc);
     instructions_retired_id_ = details->id;
 

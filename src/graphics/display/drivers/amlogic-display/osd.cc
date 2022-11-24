@@ -68,11 +68,11 @@ constexpr uint32_t kFloatToFixed2_10Mask = 0xFFF;
 
 // AFBC related constants
 constexpr uint32_t kAfbcb16x16Pixel = 0;
-__UNUSED constexpr uint32_t kAfbc32x8Pixel = 1;
+[[maybe_unused]] constexpr uint32_t kAfbc32x8Pixel = 1;
 constexpr uint32_t kAfbcSplitOff = 0;
-__UNUSED constexpr uint32_t kAfbcSplitOn = 1;
+[[maybe_unused]] constexpr uint32_t kAfbcSplitOn = 1;
 constexpr uint32_t kAfbcYuvTransferOff = 0;
-__UNUSED constexpr uint32_t kAfbcYuvTransferOn = 1;
+[[maybe_unused]] constexpr uint32_t kAfbcYuvTransferOn = 1;
 constexpr uint32_t kAfbcRGBA8888 = 5;
 constexpr uint32_t kAfbcColorReorderR = 1;
 constexpr uint32_t kAfbcColorReorderG = 2;

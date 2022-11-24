@@ -226,7 +226,7 @@ TEST_F(MsiTest, Msix) {
   ASSERT_OK(msi.get_info(ZX_INFO_MSI, &msi_info, sizeof(msi_info), nullptr, nullptr));
   uint32_t vmo_size = static_cast<uint32_t>(vmo_info.size_bytes);
   ASSERT_LE(vmo_size, std::numeric_limits<uint32_t>::max());
-  __UNUSED auto msix_table = reinterpret_cast<volatile FakeMsi::TableEntry*>(ptr);
+  [[maybe_unused]] auto msix_table = reinterpret_cast<volatile FakeMsi::TableEntry*>(ptr);
 
   // clang-format off
   const struct MsiCreateTestCase kTests[] = {

@@ -332,7 +332,7 @@ TEST_F(TaskTest, InitTaskTest) {
   ddk_mock::MockMmioReg fake_reg_array[kNumberOfMmios];
   ddk_mock::MockMmioRegRegion fake_regs(fake_reg_array, sizeof(uint32_t), kNumberOfMmios);
 
-  __UNUSED auto task_id = SetupForFrameProcessing(fake_regs);
+  [[maybe_unused]] auto task_id = SetupForFrameProcessing(fake_regs);
 
   std::vector<uint32_t> received_ids;
   for (uint32_t i = 0; i < kMaxTasks; i++) {
@@ -380,7 +380,7 @@ TEST_F(TaskTest, ProcessInvalidFrameTest) {
   ddk_mock::MockMmioReg fake_reg_array[kNumberOfMmios];
   ddk_mock::MockMmioRegRegion fake_regs(fake_reg_array, sizeof(uint32_t), kNumberOfMmios);
 
-  __UNUSED auto task_id = SetupForFrameProcessing(fake_regs);
+  [[maybe_unused]] auto task_id = SetupForFrameProcessing(fake_regs);
 
   // Invalid task id.
   zx_status_t status = gdc_device_->GdcProcessFrame(0xFF, 0, 0);
@@ -391,7 +391,7 @@ TEST_F(TaskTest, InvalidBufferProcessFrameTest) {
   ddk_mock::MockMmioReg fake_reg_array[kNumberOfMmios];
   ddk_mock::MockMmioRegRegion fake_regs(fake_reg_array, sizeof(uint32_t), kNumberOfMmios);
 
-  __UNUSED auto task_id = SetupForFrameProcessing(fake_regs);
+  [[maybe_unused]] auto task_id = SetupForFrameProcessing(fake_regs);
 
   // Invalid buffer id.
   zx_status_t status = gdc_device_->GdcProcessFrame(task_id, kNumberOfBuffers, 0);

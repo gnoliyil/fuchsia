@@ -346,7 +346,7 @@ static zx_status_t usb_hid_bind(void* ctx, zx_device_t* parent) {
   status = usbHid->Bind(usb);
   if (status == ZX_OK) {
     // devmgr is now in charge of the memory for dev.
-    __UNUSED auto ptr = usbHid.release();
+    [[maybe_unused]] auto ptr = usbHid.release();
   }
   return status;
 }

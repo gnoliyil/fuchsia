@@ -87,7 +87,7 @@ zx_status_t As370Thermal::Create(void* ctx, zx_device_t* parent) {
     return status;
   }
 
-  __UNUSED auto* dummy = device.release();
+  [[maybe_unused]] auto* dummy = device.release();
   return ZX_OK;
 }
 

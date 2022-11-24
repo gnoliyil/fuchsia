@@ -31,7 +31,7 @@ zx_status_t FragmentProxy::Create(void* ctx, zx_device_t* parent) {
   status = dev->DdkAdd("fragment-proxy", DEVICE_ADD_NON_BINDABLE);
   if (status == ZX_OK) {
     // devmgr owns the memory now
-    __UNUSED auto ptr = dev.release();
+    [[maybe_unused]] auto ptr = dev.release();
   }
   return status;
 }

@@ -748,7 +748,7 @@ zx_status_t AmlSpi::Create(void* ctx, zx_device_t* device) {
     return status;
   }
 
-  __UNUSED auto* _ = spi.release();
+  [[maybe_unused]] auto* _ = spi.release();
 
   return ZX_OK;
 }

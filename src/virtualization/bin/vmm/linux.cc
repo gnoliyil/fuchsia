@@ -36,9 +36,9 @@ static constexpr uint16_t kMinBootProtocol = 0x200;      // bzImage boot protoco
 static constexpr uint16_t kBootFlagMagic = 0xaa55;
 static constexpr uint32_t kHeaderMagic = 0x53726448;
 static constexpr uintptr_t kEntryOffset = 0x200;
-__UNUSED static constexpr uintptr_t kE820MapOffset = 0x02d0;
-__UNUSED static constexpr size_t kMaxE820Entries = 128;
-__UNUSED static constexpr size_t kSectorSize = 512;
+[[maybe_unused]] static constexpr uintptr_t kE820MapOffset = 0x02d0;
+[[maybe_unused]] static constexpr size_t kMaxE820Entries = 128;
+[[maybe_unused]] static constexpr size_t kSectorSize = 512;
 
 static constexpr uint32_t kArm64ImageMagic = 0x644d5241;  // ARM\x64
 

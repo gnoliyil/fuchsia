@@ -627,7 +627,7 @@ void VmCowPages::CloneParentIntoChildLocked(fbl::RefPtr<VmCowPages>& child) {
   if (paged_ref_) {
     child->paged_ref_ = paged_ref_;
     AssertHeld(paged_ref_->lock_ref());
-    fbl::RefPtr<VmCowPages> __UNUSED previous =
+    [[maybe_unused]] fbl::RefPtr<VmCowPages> previous =
         paged_ref_->SetCowPagesReferenceLocked(ktl::move(child));
     // Validate that we replaced a reference to ourself as we expected, this ensures we can safely
     // drop the refptr without triggering our own destructor, since we know someone else must be
@@ -2359,7 +2359,7 @@ zx_status_t VmCowPages::LookupPagesLocked(uint64_t offset, uint pf_flags,
   // At this point we might not have an actual page, but we should at least have a notional owner.
   DEBUG_ASSERT(page_owner);
 
-  __UNUSED char pf_string[5];
+  [[maybe_unused]] char pf_string[5];
   LTRACEF("vmo %p, offset %#" PRIx64 ", pf_flags %#x (%s)\n", this, offset, pf_flags,
           vmm_pf_flags_to_string(pf_flags, pf_string));
 

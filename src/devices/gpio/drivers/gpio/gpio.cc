@@ -132,7 +132,7 @@ zx_status_t GpioDevice::Create(void* ctx, zx_device_t* parent) {
     }
 
     // dev is now owned by devmgr.
-    __UNUSED auto ptr = dev.release();
+    [[maybe_unused]] auto ptr = dev.release();
   }
 
   return ZX_OK;
@@ -164,7 +164,7 @@ void GpioInitDevice::Create(zx_device_t* parent, const ddk::GpioImplProtocolClie
   zx_status_t status = device->DdkAdd(
       ddk::DeviceAddArgs("gpio-init").set_flags(DEVICE_ADD_ALLOW_MULTI_COMPOSITE).set_props(props));
   if (status == ZX_OK) {
-    __UNUSED auto _ = device.release();
+    [[maybe_unused]] auto _ = device.release();
   } else {
     zxlogf(ERROR, "Failed to add gpio-init: %s", zx_status_get_string(status));
   }

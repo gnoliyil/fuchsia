@@ -46,8 +46,8 @@ TEST(VmoTests, vmo_cache_map_test) {
 
     // read from it
     zx_time_t rt = zx_clock_get_monotonic();
-    for (size_t i = 0; i < size / 4; i++)
-      __UNUSED uint32_t hole = buf[i];
+    for (size_t i = 0; i < size / 4; i++) [[maybe_unused]]
+      uint32_t hole = buf[i];
     rt = zx_clock_get_monotonic() - rt;
 
     printf("took %" PRIu64 " nsec to write %s memory\n", wt, type);

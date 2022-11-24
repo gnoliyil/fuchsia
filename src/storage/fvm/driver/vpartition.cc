@@ -410,7 +410,7 @@ void VPartition::BlockImplQueue(block_op_t* txn, block_impl_queue_callback compl
   }
   // When mullti-transaction operation completes, the state gets deleted from
   // Completion() context. We should not be deleting it again.
-  __UNUSED auto ptr = state.release();
+  [[maybe_unused]] auto ptr = state.release();
 }
 
 void VPartition::BlockImplQuery(block_info_t* info_out, size_t* block_op_size_out) {

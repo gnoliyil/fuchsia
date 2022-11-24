@@ -196,7 +196,7 @@ void MockDevice::CreateThread(fidl::ServerEnd<device_mock::MockDeviceThread> ser
   int ret = thrd_create(&thrd, MockDevice::ThreadFunc, arg.get());
   ZX_ASSERT(ret == thrd_success);
   // The thread now owns this pointer
-  __UNUSED auto ptr = arg.release();
+  [[maybe_unused]] auto ptr = arg.release();
 
   threads_.push_back(thrd);
 }
@@ -496,7 +496,7 @@ zx_status_t ProcessActions(fidl::VectorView<device_mock::wire::Action> actions,
         status = dev->DdkAdd(ddk::DeviceAddArgs(name).set_props(props));
         if (status == ZX_OK) {
           // Devmgr now owns this
-          __UNUSED auto ptr = dev.release();
+          [[maybe_unused]] auto ptr = dev.release();
         }
         if (add_device_action.expect_status != status) {
           return status;

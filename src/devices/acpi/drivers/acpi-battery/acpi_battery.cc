@@ -33,7 +33,7 @@ zx_status_t AcpiBattery::Bind(void* ctx, zx_device_t* parent) {
   auto status = device->Bind();
   if (status == ZX_OK) {
     // The DDK takes ownership of the device.
-    __UNUSED auto unused = device.release();
+    [[maybe_unused]] auto unused = device.release();
   }
   return status;
 }

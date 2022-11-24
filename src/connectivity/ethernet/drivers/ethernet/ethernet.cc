@@ -893,7 +893,7 @@ zx_status_t EthDev0::DdkOpen(zx_device_t** out, uint32_t flags) {
     return status;
   }
 
-  __UNUSED auto dev = fbl::ExportToRawPtr(&edev);
+  [[maybe_unused]] auto dev = fbl::ExportToRawPtr(&edev);
   return ZX_OK;
 }
 
@@ -1008,7 +1008,7 @@ zx_status_t EthDev0::EthBind(void* ctx, zx_device_t* dev) {
 
   // On successful Add, Devmgr takes ownership (relinquished on DdkRelease),
   // so transfer our ownership to a local var, and let it go out of scope.
-  auto __UNUSED temp_ref = edev0.release();
+  [[maybe_unused]] auto temp_ref = edev0.release();
 
   return ZX_OK;
 }

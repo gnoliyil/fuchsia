@@ -129,7 +129,7 @@ void VnodeCache::Downgrade(VnodeF2fs* raw_vnode) {
   // TODO: Need to adjust the size of vnode_table_ according to memory pressure
 
   // It is leaked to keep alive in vnode_table
-  __UNUSED auto leak = fbl::ExportToRawPtr(&vnode);
+  [[maybe_unused]] auto leak = fbl::ExportToRawPtr(&vnode);
   raw_vnode->Deactivate();
 }
 

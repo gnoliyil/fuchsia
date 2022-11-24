@@ -258,7 +258,7 @@ void UnknownInteractionsProtocolStrictTwoWayTableResponse::Encode(::fidl::Encode
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -287,8 +287,8 @@ void UnknownInteractionsProtocolStrictTwoWayTableResponse::Encode(::fidl::Encode
 
 void UnknownInteractionsProtocolStrictTwoWayTableResponse::Decode(::fidl::Decoder* _decoder, UnknownInteractionsProtocolStrictTwoWayTableResponse* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -1305,7 +1305,7 @@ void UnknownInteractionsProtocol_StrictTwoWayTableErr_Response::Encode(::fidl::E
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -1334,8 +1334,8 @@ void UnknownInteractionsProtocol_StrictTwoWayTableErr_Response::Encode(::fidl::E
 
 void UnknownInteractionsProtocol_StrictTwoWayTableErr_Response::Decode(::fidl::Decoder* _decoder, UnknownInteractionsProtocol_StrictTwoWayTableErr_Response* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -2585,7 +2585,7 @@ void UnknownInteractionsProtocol_FlexibleTwoWayTable_Response::Encode(::fidl::En
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -2614,8 +2614,8 @@ void UnknownInteractionsProtocol_FlexibleTwoWayTable_Response::Encode(::fidl::En
 
 void UnknownInteractionsProtocol_FlexibleTwoWayTable_Response::Decode(::fidl::Decoder* _decoder, UnknownInteractionsProtocol_FlexibleTwoWayTable_Response* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -4018,7 +4018,7 @@ void UnknownInteractionsProtocol_FlexibleTwoWayTableErr_Response::Encode(::fidl:
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -4047,8 +4047,8 @@ void UnknownInteractionsProtocol_FlexibleTwoWayTableErr_Response::Encode(::fidl:
 
 void UnknownInteractionsProtocol_FlexibleTwoWayTableErr_Response::Decode(::fidl::Decoder* _decoder, UnknownInteractionsProtocol_FlexibleTwoWayTableErr_Response* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -4622,7 +4622,7 @@ void UnknownInteractionsProtocolStrictEventTableRequest::Encode(::fidl::Encoder*
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -4651,8 +4651,8 @@ void UnknownInteractionsProtocolStrictEventTableRequest::Encode(::fidl::Encoder*
 
 void UnknownInteractionsProtocolStrictEventTableRequest::Decode(::fidl::Decoder* _decoder, UnknownInteractionsProtocolStrictEventTableRequest* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -5669,7 +5669,7 @@ void UnknownInteractionsProtocol_StrictEventTableErr_Response::Encode(::fidl::En
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -5698,8 +5698,8 @@ void UnknownInteractionsProtocol_StrictEventTableErr_Response::Encode(::fidl::En
 
 void UnknownInteractionsProtocol_StrictEventTableErr_Response::Decode(::fidl::Decoder* _decoder, UnknownInteractionsProtocol_StrictEventTableErr_Response* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -6222,7 +6222,7 @@ void UnknownInteractionsProtocolFlexibleEventTableRequest::Encode(::fidl::Encode
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -6251,8 +6251,8 @@ void UnknownInteractionsProtocolFlexibleEventTableRequest::Encode(::fidl::Encode
 
 void UnknownInteractionsProtocolFlexibleEventTableRequest::Decode(::fidl::Decoder* _decoder, UnknownInteractionsProtocolFlexibleEventTableRequest* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -7269,7 +7269,7 @@ void UnknownInteractionsProtocol_FlexibleEventTableErr_Response::Encode(::fidl::
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -7298,8 +7298,8 @@ void UnknownInteractionsProtocol_FlexibleEventTableErr_Response::Encode(::fidl::
 
 void UnknownInteractionsProtocol_FlexibleEventTableErr_Response::Decode(::fidl::Decoder* _decoder, UnknownInteractionsProtocol_FlexibleEventTableErr_Response* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -7822,7 +7822,7 @@ void UnknownInteractionsAjarProtocolStrictTwoWayTableResponse::Encode(::fidl::En
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -7851,8 +7851,8 @@ void UnknownInteractionsAjarProtocolStrictTwoWayTableResponse::Encode(::fidl::En
 
 void UnknownInteractionsAjarProtocolStrictTwoWayTableResponse::Decode(::fidl::Decoder* _decoder, UnknownInteractionsAjarProtocolStrictTwoWayTableResponse* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -8869,7 +8869,7 @@ void UnknownInteractionsAjarProtocol_StrictTwoWayTableErr_Response::Encode(::fid
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -8898,8 +8898,8 @@ void UnknownInteractionsAjarProtocol_StrictTwoWayTableErr_Response::Encode(::fid
 
 void UnknownInteractionsAjarProtocol_StrictTwoWayTableErr_Response::Decode(::fidl::Decoder* _decoder, UnknownInteractionsAjarProtocol_StrictTwoWayTableErr_Response* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -9422,7 +9422,7 @@ void UnknownInteractionsAjarProtocolStrictEventTableRequest::Encode(::fidl::Enco
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -9451,8 +9451,8 @@ void UnknownInteractionsAjarProtocolStrictEventTableRequest::Encode(::fidl::Enco
 
 void UnknownInteractionsAjarProtocolStrictEventTableRequest::Decode(::fidl::Decoder* _decoder, UnknownInteractionsAjarProtocolStrictEventTableRequest* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -10469,7 +10469,7 @@ void UnknownInteractionsAjarProtocol_StrictEventTableErr_Response::Encode(::fidl
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -10498,8 +10498,8 @@ void UnknownInteractionsAjarProtocol_StrictEventTableErr_Response::Encode(::fidl
 
 void UnknownInteractionsAjarProtocol_StrictEventTableErr_Response::Decode(::fidl::Decoder* _decoder, UnknownInteractionsAjarProtocol_StrictEventTableErr_Response* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -11022,7 +11022,7 @@ void UnknownInteractionsAjarProtocolFlexibleEventTableRequest::Encode(::fidl::En
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -11051,8 +11051,8 @@ void UnknownInteractionsAjarProtocolFlexibleEventTableRequest::Encode(::fidl::En
 
 void UnknownInteractionsAjarProtocolFlexibleEventTableRequest::Decode(::fidl::Decoder* _decoder, UnknownInteractionsAjarProtocolFlexibleEventTableRequest* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -12069,7 +12069,7 @@ void UnknownInteractionsAjarProtocol_FlexibleEventTableErr_Response::Encode(::fi
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -12098,8 +12098,8 @@ void UnknownInteractionsAjarProtocol_FlexibleEventTableErr_Response::Encode(::fi
 
 void UnknownInteractionsAjarProtocol_FlexibleEventTableErr_Response::Decode(::fidl::Decoder* _decoder, UnknownInteractionsAjarProtocol_FlexibleEventTableErr_Response* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -12622,7 +12622,7 @@ void UnknownInteractionsClosedProtocolStrictTwoWayTableResponse::Encode(::fidl::
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -12651,8 +12651,8 @@ void UnknownInteractionsClosedProtocolStrictTwoWayTableResponse::Encode(::fidl::
 
 void UnknownInteractionsClosedProtocolStrictTwoWayTableResponse::Decode(::fidl::Decoder* _decoder, UnknownInteractionsClosedProtocolStrictTwoWayTableResponse* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -13669,7 +13669,7 @@ void UnknownInteractionsClosedProtocol_StrictTwoWayTableErr_Response::Encode(::f
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -13698,8 +13698,8 @@ void UnknownInteractionsClosedProtocol_StrictTwoWayTableErr_Response::Encode(::f
 
 void UnknownInteractionsClosedProtocol_StrictTwoWayTableErr_Response::Decode(::fidl::Decoder* _decoder, UnknownInteractionsClosedProtocol_StrictTwoWayTableErr_Response* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -14222,7 +14222,7 @@ void UnknownInteractionsClosedProtocolStrictEventTableRequest::Encode(::fidl::En
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -14251,8 +14251,8 @@ void UnknownInteractionsClosedProtocolStrictEventTableRequest::Encode(::fidl::En
 
 void UnknownInteractionsClosedProtocolStrictEventTableRequest::Decode(::fidl::Decoder* _decoder, UnknownInteractionsClosedProtocolStrictEventTableRequest* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -15269,7 +15269,7 @@ void UnknownInteractionsClosedProtocol_StrictEventTableErr_Response::Encode(::fi
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -15298,8 +15298,8 @@ void UnknownInteractionsClosedProtocol_StrictEventTableErr_Response::Encode(::fi
 
 void UnknownInteractionsClosedProtocol_StrictEventTableErr_Response::Decode(::fidl::Decoder* _decoder, UnknownInteractionsClosedProtocol_StrictEventTableErr_Response* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -15822,7 +15822,7 @@ void UnknownInteractionsDriverProtocolStrictTwoWayTableResponse::Encode(::fidl::
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -15851,8 +15851,8 @@ void UnknownInteractionsDriverProtocolStrictTwoWayTableResponse::Encode(::fidl::
 
 void UnknownInteractionsDriverProtocolStrictTwoWayTableResponse::Decode(::fidl::Decoder* _decoder, UnknownInteractionsDriverProtocolStrictTwoWayTableResponse* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -16869,7 +16869,7 @@ void UnknownInteractionsDriverProtocol_StrictTwoWayTableErr_Response::Encode(::f
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -16898,8 +16898,8 @@ void UnknownInteractionsDriverProtocol_StrictTwoWayTableErr_Response::Encode(::f
 
 void UnknownInteractionsDriverProtocol_StrictTwoWayTableErr_Response::Decode(::fidl::Decoder* _decoder, UnknownInteractionsDriverProtocol_StrictTwoWayTableErr_Response* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -18149,7 +18149,7 @@ void UnknownInteractionsDriverProtocol_FlexibleTwoWayTable_Response::Encode(::fi
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -18178,8 +18178,8 @@ void UnknownInteractionsDriverProtocol_FlexibleTwoWayTable_Response::Encode(::fi
 
 void UnknownInteractionsDriverProtocol_FlexibleTwoWayTable_Response::Decode(::fidl::Decoder* _decoder, UnknownInteractionsDriverProtocol_FlexibleTwoWayTable_Response* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -19582,7 +19582,7 @@ void UnknownInteractionsDriverProtocol_FlexibleTwoWayTableErr_Response::Encode(:
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -19611,8 +19611,8 @@ void UnknownInteractionsDriverProtocol_FlexibleTwoWayTableErr_Response::Encode(:
 
 void UnknownInteractionsDriverProtocol_FlexibleTwoWayTableErr_Response::Decode(::fidl::Decoder* _decoder, UnknownInteractionsDriverProtocol_FlexibleTwoWayTableErr_Response* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -20186,7 +20186,7 @@ void UnknownInteractionsAjarDriverProtocolStrictTwoWayTableResponse::Encode(::fi
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -20215,8 +20215,8 @@ void UnknownInteractionsAjarDriverProtocolStrictTwoWayTableResponse::Encode(::fi
 
 void UnknownInteractionsAjarDriverProtocolStrictTwoWayTableResponse::Decode(::fidl::Decoder* _decoder, UnknownInteractionsAjarDriverProtocolStrictTwoWayTableResponse* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -21233,7 +21233,7 @@ void UnknownInteractionsAjarDriverProtocol_StrictTwoWayTableErr_Response::Encode
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -21262,8 +21262,8 @@ void UnknownInteractionsAjarDriverProtocol_StrictTwoWayTableErr_Response::Encode
 
 void UnknownInteractionsAjarDriverProtocol_StrictTwoWayTableErr_Response::Decode(::fidl::Decoder* _decoder, UnknownInteractionsAjarDriverProtocol_StrictTwoWayTableErr_Response* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -21786,7 +21786,7 @@ void UnknownInteractionsClosedDriverProtocolStrictTwoWayTableResponse::Encode(::
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -21815,8 +21815,8 @@ void UnknownInteractionsClosedDriverProtocolStrictTwoWayTableResponse::Encode(::
 
 void UnknownInteractionsClosedDriverProtocolStrictTwoWayTableResponse::Decode(::fidl::Decoder* _decoder, UnknownInteractionsClosedDriverProtocolStrictTwoWayTableResponse* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -22833,7 +22833,7 @@ void UnknownInteractionsClosedDriverProtocol_StrictTwoWayTableErr_Response::Enco
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -22862,8 +22862,8 @@ void UnknownInteractionsClosedDriverProtocol_StrictTwoWayTableErr_Response::Enco
 
 void UnknownInteractionsClosedDriverProtocol_StrictTwoWayTableErr_Response::Decode(::fidl::Decoder* _decoder, UnknownInteractionsClosedDriverProtocol_StrictTwoWayTableErr_Response* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }

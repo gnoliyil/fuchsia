@@ -428,7 +428,7 @@ TEST_F(TaskTest, InitTaskTest) {
   ddk_mock::MockMmioReg fake_reg_array[kNumberOfMmios];
   ddk_mock::MockMmioRegRegion fake_regs(fake_reg_array, sizeof(uint32_t), kNumberOfMmios);
 
-  __UNUSED uint32_t resize_task_id, watermark_task_id;
+  [[maybe_unused]] uint32_t resize_task_id, watermark_task_id;
   ASSERT_OK(SetupForFrameProcessing(fake_regs, resize_task_id, watermark_task_id));
 
   std::vector<uint32_t> received_ids;
@@ -480,7 +480,7 @@ TEST_F(TaskTest, ProcessInvalidFrameTest) {
   ddk_mock::MockMmioReg fake_reg_array[kNumberOfMmios];
   ddk_mock::MockMmioRegRegion fake_regs(fake_reg_array, sizeof(uint32_t), kNumberOfMmios);
 
-  __UNUSED uint32_t resize_task_id, watermark_task_id;
+  [[maybe_unused]] uint32_t resize_task_id, watermark_task_id;
   ASSERT_OK(SetupForFrameProcessing(fake_regs, resize_task_id, watermark_task_id));
 
   // Invalid task id.
@@ -494,7 +494,7 @@ TEST_F(TaskTest, InvalidBufferProcessFrameTest) {
   ddk_mock::MockMmioReg fake_reg_array[kNumberOfMmios];
   ddk_mock::MockMmioRegRegion fake_regs(fake_reg_array, sizeof(uint32_t), kNumberOfMmios);
 
-  __UNUSED uint32_t resize_task_id;
+  [[maybe_unused]] uint32_t resize_task_id;
   uint32_t watermark_task_id;
   ASSERT_OK(SetupForFrameProcessing(fake_regs, resize_task_id, watermark_task_id));
 

@@ -132,7 +132,7 @@ zx_status_t CadenceHpnfc::Create(void* ctx, zx_device_t* parent) {
     return status;
   }
 
-  __UNUSED auto* unused = device.release();
+  [[maybe_unused]] auto* unused = device.release();
   return ZX_OK;
 }
 

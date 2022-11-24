@@ -129,7 +129,7 @@ static void vmm_set_active_aspace_internal(VmAspace* aspace, Lock lock) {
   }
 
   // grab the thread lock and switch to the new address space
-  GuardType __UNUSED lock_guard{lock, SOURCE_TAG};
+  GuardType lock_guard{lock, SOURCE_TAG};
 
   VmAspace* old = t->switch_aspace(aspace);
   vmm_context_switch(old, t->aspace());

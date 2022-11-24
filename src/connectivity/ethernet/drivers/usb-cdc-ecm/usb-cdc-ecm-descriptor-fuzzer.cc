@@ -60,6 +60,6 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size) {
   usb_protocol_t protocol = {.ops = &kFuzzedUsbProtocolOps, .ctx = &input};
   usb::UsbDevice usb = usb::UsbDevice(&protocol);
 
-  __UNUSED auto parser = usb_cdc_ecm::UsbCdcDescriptorParser::Parse(usb);
+  [[maybe_unused]] auto parser = usb_cdc_ecm::UsbCdcDescriptorParser::Parse(usb);
   return 0;
 }

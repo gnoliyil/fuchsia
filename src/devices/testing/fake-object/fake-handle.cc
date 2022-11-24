@@ -70,8 +70,8 @@ zx::result<zx_handle_t> HandleTable::Add(fbl::RefPtr<Object> obj) {
   }
 
   fbl::AutoLock guard(&lock_);
-  __UNUSED void* obj_ptr = obj.get();
-  __UNUSED zx_obj_type_t type = obj->type();
+  [[maybe_unused]] void* obj_ptr = obj.get();
+  [[maybe_unused]] zx_obj_type_t type = obj->type();
   handles_[handle] = std::move(obj);
   ftracef("handle = 0x%x, obj = %p, type = %u\n", handle, obj_ptr, type);
   return zx::success(handle);

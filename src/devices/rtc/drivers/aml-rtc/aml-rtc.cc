@@ -79,7 +79,7 @@ zx_status_t AmlRtc::Bind(void* ctx, zx_device_t* device) {
   }
   // The object is owned by the DDK, now that it has been added. It will be deleted
   // when the device is released.
-  __UNUSED auto ptr = amlrtc_device.release();
+  [[maybe_unused]] auto ptr = amlrtc_device.release();
 
   return status;
 }

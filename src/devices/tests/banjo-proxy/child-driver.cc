@@ -47,7 +47,7 @@ class Device : public DeviceParent {
     // We've successfully made a banjo call, add a device so the test knows to end.
     status = device->DdkAdd(ddk::DeviceAddArgs("child"));
     if (status == ZX_OK) {
-      __UNUSED auto ptr = device.release();
+      [[maybe_unused]] auto ptr = device.release();
     }
     return status;
   }

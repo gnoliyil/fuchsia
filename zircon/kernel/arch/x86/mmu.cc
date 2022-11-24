@@ -656,11 +656,11 @@ void X86ArchVmAspace::ContextSwitch(X86ArchVmAspace* old_aspace, X86ArchVmAspace
     LTRACEF_LEVEL(3, "switching to aspace %p, pt %#" PRIXPTR "\n", aspace, phys);
     arch::X86Cr3::Write(phys);
     if (old_aspace != nullptr) {
-      __UNUSED uint32_t prev = old_aspace->active_cpus_.fetch_and(~cpu_bit);
+      [[maybe_unused]] uint32_t prev = old_aspace->active_cpus_.fetch_and(~cpu_bit);
       // Make sure we were actually previously running on this CPU
       DEBUG_ASSERT(prev & cpu_bit);
     }
-    __UNUSED uint32_t prev = aspace->active_cpus_.fetch_or(cpu_bit);
+    [[maybe_unused]] uint32_t prev = aspace->active_cpus_.fetch_or(cpu_bit);
     // Should not already be running on this CPU.
     DEBUG_ASSERT(!(prev & cpu_bit));
     aspace->active_since_last_check_.store(true, ktl::memory_order_relaxed);
@@ -668,7 +668,7 @@ void X86ArchVmAspace::ContextSwitch(X86ArchVmAspace* old_aspace, X86ArchVmAspace
     LTRACEF_LEVEL(3, "switching to kernel aspace, pt %#" PRIxPTR "\n", kernel_pt_phys);
     arch::X86Cr3::Write(kernel_pt_phys);
     if (old_aspace != nullptr) {
-      __UNUSED uint32_t prev = old_aspace->active_cpus_.fetch_and(~cpu_bit);
+      [[maybe_unused]] uint32_t prev = old_aspace->active_cpus_.fetch_and(~cpu_bit);
       // Make sure we were actually previously running on this CPU
       DEBUG_ASSERT(prev & cpu_bit);
     }

@@ -17,7 +17,7 @@ namespace block_client {
 Client::Client(fidl::ClientEnd<fuchsia_hardware_block::Session> session, zx::fifo fifo)
     : session_(std::move(session)), fifo_(std::move(fifo)) {}
 
-Client::~Client() { __UNUSED fidl::WireResult result = fidl::WireCall(session_)->Close(); }
+Client::~Client() { [[maybe_unused]] fidl::WireResult result = fidl::WireCall(session_)->Close(); }
 
 zx::result<storage::Vmoid> Client::RegisterVmo(const zx::vmo& vmo) {
   zx::vmo dup;

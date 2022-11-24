@@ -83,7 +83,7 @@ int vmo_run_benchmark() {
 
   t = time_it([&]() {
     for (size_t i = 0; i < size; i += kPageSize) {
-      __UNUSED char a = ((volatile char *)ptr)[i];
+      [[maybe_unused]] char a = ((volatile char *)ptr)[i];
     }
   });
   printf("\ttook %" PRIu64
@@ -92,7 +92,7 @@ int vmo_run_benchmark() {
 
   t = time_it([&]() {
     for (size_t i = 0; i < size; i += kPageSize) {
-      __UNUSED char a = ((volatile char *)ptr)[i];
+      [[maybe_unused]] char a = ((volatile char *)ptr)[i];
     }
   });
   printf("\ttook %" PRIu64
@@ -123,7 +123,7 @@ int vmo_run_benchmark() {
 
   t = time_it([&]() {
     for (size_t i = 0; i < size; i += kPageSize) {
-      __UNUSED char a = ((volatile char *)ptr)[i];
+      [[maybe_unused]] char a = ((volatile char *)ptr)[i];
     }
   });
   printf("\ttook %" PRIu64 " nsecs to read fault in vmo of size %zu in another mapping\n", t, size);

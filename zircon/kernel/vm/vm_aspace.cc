@@ -749,7 +749,7 @@ void VmAspace::MarkAsLatencySensitive() {
     };
     Enumerator enumerator;
     AssertHeld(root_vmar_->lock_ref());
-    __UNUSED zx_status_t result = root_vmar_->EnumerateChildrenLocked(&enumerator);
+    [[maybe_unused]] zx_status_t result = root_vmar_->EnumerateChildrenLocked(&enumerator);
     DEBUG_ASSERT(result == ZX_OK);
   }
 }
@@ -802,7 +802,7 @@ void VmAspace::HarvestAllUserAccessedBits(NonTerminalAction non_terminal_action,
         harvest = false;
       }
       if (harvest) {
-        zx_status_t __UNUSED result = a.arch_aspace().HarvestAccessed(
+        [[maybe_unused]] zx_status_t result = a.arch_aspace().HarvestAccessed(
             a.base(), a.size() / PAGE_SIZE, apply_non_terminal_action, apply_terminal_action);
         DEBUG_ASSERT(result == ZX_OK);
         vm_aspace_accessed_harvests_performed.Add(1);

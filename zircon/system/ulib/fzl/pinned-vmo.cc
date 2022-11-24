@@ -154,7 +154,7 @@ void PinnedVmo::UnpinInternal() {
 
   // Given the level of sanity checking we have done so far, it should be
   // completely impossible for us to fail to unpin this memory.
-  __UNUSED zx_status_t res;
+  [[maybe_unused]] zx_status_t res;
   res = pmt_.unpin();
   ZX_DEBUG_ASSERT(res == ZX_OK);
 

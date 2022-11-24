@@ -564,7 +564,7 @@ static int i8042_wait_write(void) {
 }
 
 static int i8042_flush(void) {
-  unsigned char data __UNUSED;
+  unsigned char data [[maybe_unused]];
   int i = 0;
 
   while ((i8042_read_status() & I8042_STR_OBF) && (i++ < I8042_BUFFER_LENGTH)) {

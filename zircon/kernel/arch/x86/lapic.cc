@@ -220,7 +220,7 @@ void apic_send_ipi(uint8_t vector, uint32_t dst_apic_id, enum apic_interrupt_del
 
   uint32_t request = ICR_LEVEL_ASSERT | ICR_DELIVERY_MODE(dm) | ICR_VECTOR(vector);
   if (x86_hypervisor_has_pv_ipi()) {
-    __UNUSED int ret = pv_ipi(1, 0, dst_apic_id, request);
+    [[maybe_unused]] int ret = pv_ipi(1, 0, dst_apic_id, request);
     DEBUG_ASSERT(ret >= 0);
     return;
   }
@@ -242,7 +242,7 @@ void apic_send_ipi(uint8_t vector, uint32_t dst_apic_id, enum apic_interrupt_del
 void apic_send_self_ipi(uint8_t vector, enum apic_interrupt_delivery_mode dm) {
   uint32_t request = ICR_LEVEL_ASSERT | ICR_DELIVERY_MODE(dm) | ICR_VECTOR(vector);
   if (x86_hypervisor_has_pv_ipi()) {
-    __UNUSED int ret = pv_ipi(1, 0, x86_get_percpu()->apic_id, request);
+    [[maybe_unused]] int ret = pv_ipi(1, 0, x86_get_percpu()->apic_id, request);
     DEBUG_ASSERT(ret >= 0);
     return;
   }
@@ -283,7 +283,7 @@ static void pv_mask_ipi(cpu_mask_t mask, uint32_t request) {
 
   for (size_t i = 0; i < ktl::size(masks); i += 2) {
     if (masks[i] || masks[i + 1]) {
-      __UNUSED int ret = pv_ipi(masks[i], masks[i + 1], i * mask_size, request);
+      [[maybe_unused]] int ret = pv_ipi(masks[i], masks[i + 1], i * mask_size, request);
       DEBUG_ASSERT(ret >= 0);
     }
   }

@@ -457,7 +457,7 @@ TEST_F(SdioControllerDeviceTest, DdkLifecycle) {
   EXPECT_EQ(parent_->descendant_count(), 5);
 
   dut_->DdkAsyncRemove();
-  __UNUSED auto ptr = dut_.release();
+  [[maybe_unused]] auto ptr = dut_.release();
   EXPECT_OK(mock_ddk::ReleaseFlaggedDevices(parent_.get()));
   stop_thread.cancel();
 }
@@ -1023,7 +1023,7 @@ TEST_F(SdioControllerDeviceTest, DifferentManufacturerProductIds) {
 
   dut_->DdkAsyncRemove();
   EXPECT_OK(mock_ddk::ReleaseFlaggedDevices(parent_.get()));
-  __UNUSED auto ptr = dut_.release();
+  [[maybe_unused]] auto ptr = dut_.release();
   stop_thread.cancel();
 }
 

@@ -271,7 +271,7 @@ zx_status_t Vim3UsbPhy::Create(void* ctx, zx_device_t* parent) {
   }
 
   // devmgr is now in charge of the device.
-  __UNUSED auto* _ = dev.release();
+  [[maybe_unused]] auto* _ = dev.release();
   return ZX_OK;
 }
 
@@ -459,9 +459,9 @@ void Vim3UsbPhy::DdkChildPreRelease(void* child_ctx) {
   fbl::AutoLock lock(&lock_);
   // devmgr will own the device until it is destroyed.
   if (xhci_device_ && (child_ctx == xhci_device_.get())) {
-    __UNUSED auto* dev = xhci_device_.release();
+    [[maybe_unused]] auto* dev = xhci_device_.release();
   } else if (dwc2_device_ && (child_ctx == dwc2_device_.get())) {
-    __UNUSED auto* dev = dwc2_device_.release();
+    [[maybe_unused]] auto* dev = dwc2_device_.release();
   } else {
     zxlogf(ERROR, "Vim3UsbPhy::DdkChildPreRelease unexpected child ctx %p", child_ctx);
   }

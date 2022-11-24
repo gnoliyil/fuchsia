@@ -16,7 +16,7 @@ class ProgrammableCounterVerifier : public Verifier {
   ProgrammableCounterVerifier(const cpuperf::SessionResultSpec* spec) : Verifier(spec) {
     const perfmon::EventDetails* details;
 
-    bool rc __UNUSED = LookupEventByName("arch", "llc_references", &details);
+    bool rc [[maybe_unused]] = LookupEventByName("arch", "llc_references", &details);
     FX_DCHECK(rc);
     llc_references_id_ = details->id;
 

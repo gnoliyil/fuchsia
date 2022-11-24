@@ -39,7 +39,7 @@ class MyDevice : public MyDeviceType {
         auto status = device->DdkAdd("my-device-name");
         if (status == ZX_OK) {
           // Intentionally leak this device because it's owned by the driver framework.
-           __UNUSED auto unused = device.release();
+           [[maybe_unused]] auto unused = device.release();
         }
         return status;
     }

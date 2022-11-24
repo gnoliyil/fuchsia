@@ -15,7 +15,7 @@ zx_status_t MyDriverCpp::Bind(void* ctx, zx_device_t* dev) {
     return status;
   }
   // The DriverFramework now owns driver.
-  __UNUSED auto ptr = driver.release();
+  [[maybe_unused]] auto ptr = driver.release();
   return ZX_OK;
 }
 

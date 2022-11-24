@@ -36,7 +36,7 @@ zx_status_t DdkFidlDevice::Create(void* ctx, zx_device_t* dev) {
   }
 
   // devmgr is now in charge of the device.
-  __UNUSED auto* dummy = test_dev.release();
+  [[maybe_unused]] auto* dummy = test_dev.release();
 
   return ZX_OK;
 }
@@ -45,7 +45,7 @@ void DdkFidlDevice::GetChannel(GetChannelCompleter::Sync& completer) {
   zx::channel local;
   zx::channel remote;
   zx::channel::create(0, &local, &remote);
-  __UNUSED auto dummy = local.release();
+  [[maybe_unused]] auto dummy = local.release();
   completer.Reply(std::move(remote));
 }
 

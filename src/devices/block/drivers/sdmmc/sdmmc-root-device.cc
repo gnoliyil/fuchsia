@@ -38,7 +38,7 @@ zx_status_t SdmmcRootDevice::Bind(void* ctx, zx_device_t* parent) {
 
   st = dev->Init();
 
-  __UNUSED auto* placeholder = dev.release();
+  [[maybe_unused]] auto* placeholder = dev.release();
   return st;
 }
 
@@ -72,7 +72,7 @@ static int MaybeAddDevice(const std::string& name, zx_device_t* zxdev, SdmmcDevi
     return thrd_error;
   }
 
-  __UNUSED auto* placeholder = device.release();
+  [[maybe_unused]] auto* placeholder = device.release();
   return thrd_success;
 }
 

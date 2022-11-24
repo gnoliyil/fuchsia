@@ -154,7 +154,8 @@ static void do_msg_futex_test(zx_handle_t channel, const Message* msg) {
   }
 
   int futex_value = 0;
-  zx_status_t __UNUSED status = zx_futex_wait(&futex_value, 0, ZX_HANDLE_INVALID, ZX_TIME_INFINITE);
+  [[maybe_unused]] zx_status_t status =
+      zx_futex_wait(&futex_value, 0, ZX_HANDLE_INVALID, ZX_TIME_INFINITE);
   /* NOTREACHED*/
 }
 

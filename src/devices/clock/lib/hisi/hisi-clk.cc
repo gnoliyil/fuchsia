@@ -63,7 +63,7 @@ zx_status_t HisiClock::Create(const char* name, const Gate gate_list[], const si
   }
 
   // Devmgr owns memory now.
-  __UNUSED auto ptr = device.release();
+  [[maybe_unused]] auto ptr = device.release();
 
   return ZX_OK;
 }

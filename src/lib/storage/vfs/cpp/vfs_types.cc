@@ -142,7 +142,7 @@ namespace {
 //
 // helper constant for the visitor #3
 template <class>
-__UNUSED inline constexpr bool always_false_v = false;
+[[maybe_unused]] inline constexpr bool always_false_v = false;
 
 }  // namespace
 

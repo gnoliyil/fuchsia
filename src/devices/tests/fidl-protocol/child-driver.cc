@@ -37,7 +37,7 @@ class Device : public DeviceParent {
     // We've successfully made a fidl call, add a device so the test knows to end.
     status = device->DdkAdd(ddk::DeviceAddArgs("child").set_str_props(str_props));
     if (status == ZX_OK) {
-      __UNUSED auto ptr = device.release();
+      [[maybe_unused]] auto ptr = device.release();
     }
     return status;
   }

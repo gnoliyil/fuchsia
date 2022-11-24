@@ -59,7 +59,7 @@ class VirtualController : public VirtualControllerDeviceType {
       logf(ERROR, "failed to bind: %s\n", zx_status_get_string(status));
     } else {
       // The driver runtime has taken ownership of |dev|.
-      __UNUSED bt_hci_virtual::LoopbackDevice* unused = dev.release();
+      [[maybe_unused]] bt_hci_virtual::LoopbackDevice* unused = dev.release();
     }
   }
 

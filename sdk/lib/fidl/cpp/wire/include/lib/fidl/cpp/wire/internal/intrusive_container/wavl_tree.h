@@ -493,7 +493,7 @@ class __POINTER(KeyType_) WAVLTree {
         // this temp copy of the reference as UNUSED in case the pointer
         // type is unmanaged.
         ZX_DEBUG_ASSERT(ns.parent_ == owner);
-        __UNUSED PtrType leaf = PtrTraits::Reclaim(*link_ptr);
+        [[maybe_unused]] PtrType leaf = PtrTraits::Reclaim(*link_ptr);
 
         // This leaf node node now has no parent, and the pointer which
         // pointed to us is now null.

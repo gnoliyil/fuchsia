@@ -96,7 +96,7 @@ zx_status_t Tmp112Device::Bind(void* ctx, zx_device_t* parent) {
   }
 
   // devmgr is now in charge of memory for dev
-  __UNUSED auto ptr = dev.release();
+  [[maybe_unused]] auto ptr = dev.release();
 
   return status;
 }

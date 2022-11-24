@@ -132,7 +132,7 @@ class CoreTest : public zxtest::Test {
     // DeviceCompleteRemoval() will drop the device reference added by device_add().
     // Since we never called device_add(), we should increment the reference count here.
     fbl::RefPtr<zx_device_t> dev_add_ref(dev.get());
-    __UNUSED auto ptr = fbl::ExportToRawPtr(&dev_add_ref);
+    [[maybe_unused]] auto ptr = fbl::ExportToRawPtr(&dev_add_ref);
     dev->removal_cb = [](zx_status_t) {};
     ctx_.DeviceCompleteRemoval(dev);
   }

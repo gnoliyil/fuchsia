@@ -999,7 +999,7 @@ zx_status_t Asix88179Ethernet::Bind(void* ctx, zx_device_t* dev) {
 
   // On successful Add, Devmgr takes ownership (relinquished on DdkRelease),
   // so transfer our ownership to a local var, and let it go out of scope.
-  auto __UNUSED temp_ref = eth_device.release();
+  [[maybe_unused]] auto temp_ref = eth_device.release();
 
   return ZX_OK;
 }

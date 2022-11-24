@@ -70,8 +70,7 @@ uint64_t FifoAllocator::AllocateRegion(uint64_t size) {
 
 void FifoAllocator::ReleaseRegion(uint64_t offset) {
   // Start at active_->next. That's usually the region we're looking for.
-  bool __UNUSED released =
-      Release(offset, active_->next, nullptr) || Release(offset, front_, active_);
+  bool released = Release(offset, active_->next, nullptr) || Release(offset, front_, active_);
   FX_DCHECK(released);
 }
 

@@ -32,7 +32,7 @@ zx_status_t bind(void* ctx, zx_device_t* parent_device) {
   auto device = std::make_unique<IsolatedDevice>(parent_device);
   zx_status_t status = device->Bind();
   if (status == ZX_OK) {
-    __UNUSED auto ptr = device.release();
+    [[maybe_unused]] auto ptr = device.release();
   }
   return status;
 }

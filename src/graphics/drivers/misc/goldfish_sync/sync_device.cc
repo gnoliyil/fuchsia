@@ -56,7 +56,7 @@ zx_status_t SyncDevice::Create(void* ctx, zx_device_t* device) {
   zx_status_t status = sync_device->Bind();
   if (status == ZX_OK) {
     // devmgr now owns device.
-    __UNUSED auto* dev = sync_device.release();
+    [[maybe_unused]] auto* dev = sync_device.release();
   }
   return status;
 }

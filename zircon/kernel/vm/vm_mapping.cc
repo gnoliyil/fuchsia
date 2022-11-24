@@ -819,7 +819,7 @@ zx_status_t VmMapping::PageFault(vaddr_t va, const uint pf_flags, LazyPageReques
   va = ROUNDDOWN(va, PAGE_SIZE);
   uint64_t vmo_offset = va - base_ + object_offset_locked();
 
-  __UNUSED char pf_string[5];
+  [[maybe_unused]] char pf_string[5];
   LTRACEF("%p va %#" PRIxPTR " vmo_offset %#" PRIx64 ", pf_flags %#x (%s)\n", this, va, vmo_offset,
           pf_flags, vmm_pf_flags_to_string(pf_flags, pf_string));
 

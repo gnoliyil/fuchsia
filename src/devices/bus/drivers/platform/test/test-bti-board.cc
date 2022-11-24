@@ -50,7 +50,7 @@ zx_status_t TestBoard::Create(void*, zx_device_t* parent) {
     zxlogf(ERROR, "TestBoard::Create: DdkAdd failed: %d", status);
     return status;
   }
-  __UNUSED auto dummy = board.release();
+  [[maybe_unused]] auto dummy = board.release();
 
   static const std::vector<fuchsia_hardware_platform_bus::Bti> kBtis{
       []() {

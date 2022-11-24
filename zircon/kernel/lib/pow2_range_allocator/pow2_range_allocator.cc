@@ -51,7 +51,7 @@ void Pow2RangeAllocator::ReturnFreeBlock(ktl::unique_ptr<Block> block) {
   bool inserted = false;
   for (Block& after : list) {
     // We do not allow ranges to overlap.
-    __UNUSED uint32_t after_len = 1u << after.bucket;
+    [[maybe_unused]] uint32_t after_len = 1u << after.bucket;
     DEBUG_ASSERT((block->start >= (after.start + after_len)) ||
                  (after.start >= (block->start + block_len)));
 

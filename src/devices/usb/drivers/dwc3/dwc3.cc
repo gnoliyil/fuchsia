@@ -28,7 +28,7 @@ zx_status_t Dwc3::Create(void* ctx, zx_device_t* parent) {
   }
 
   // devmgr is now in charge of the device.
-  __UNUSED auto* _ = dev.release();
+  [[maybe_unused]] auto* _ = dev.release();
   return ZX_OK;
 }
 

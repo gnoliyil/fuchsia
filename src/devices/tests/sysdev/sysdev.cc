@@ -69,7 +69,7 @@ zx_status_t TestParent::Create(zx_device_t* parent) {
   }
 
   // Now owned by the driver framework.
-  __UNUSED auto ptr = test_parent.release();
+  [[maybe_unused]] auto ptr = test_parent.release();
 
   return ZX_OK;
 }
@@ -97,7 +97,7 @@ zx_status_t Sysdev::Create(void* ctx, zx_device_t* parent, const char* name,
   status = TestParent::Create(sysdev->zxdev());
 
   // Now owned by devmgr.
-  __UNUSED auto ptr = sysdev.release();
+  [[maybe_unused]] auto ptr = sysdev.release();
 
   return status;
 }

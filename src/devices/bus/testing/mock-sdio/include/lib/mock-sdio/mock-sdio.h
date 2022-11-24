@@ -183,7 +183,7 @@ class MockSdio : ddk::SdioProtocol<MockSdio> {
       zx::vmo vmo(txn->dma_vmo);
       zx_status_t status = mapper.Map(vmo, 0, txn->data_size, ZX_VM_PERM_READ | ZX_VM_PERM_WRITE);
 
-      __UNUSED zx_handle_t handle = vmo.release();
+      [[maybe_unused]] zx_handle_t handle = vmo.release();
 
       ASSERT_OK(status, "Failed to map DMA VMO");
 

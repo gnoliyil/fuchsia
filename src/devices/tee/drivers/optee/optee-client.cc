@@ -270,7 +270,7 @@ OpteeClient::~OpteeClient() {
     LOG(WARNING, "Closing session that was left open by client. uuid: %s session_id: %" PRIu32,
         application_uuid_.ToString().c_str(), id);
     // Regardless of CloseSession response, continue closing all other sessions
-    __UNUSED zx_status_t status = CloseSession(id);
+    [[maybe_unused]] zx_status_t status = CloseSession(id);
   }
 }
 

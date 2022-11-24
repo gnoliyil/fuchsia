@@ -162,7 +162,7 @@ zx_status_t As370NnaDevice::Create(void* ctx, zx_device_t* parent) {
   zxlogf(INFO, "Added as370_nna device");
 
   // intentionally leaked as it is now held by DevMgr.
-  __UNUSED auto ptr = device.release();
+  [[maybe_unused]] auto ptr = device.release();
   return status;
 }
 

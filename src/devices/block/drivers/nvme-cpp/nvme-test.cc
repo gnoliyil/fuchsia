@@ -78,7 +78,7 @@ class NvmeTest : public inspect::InspectTestHelper, public zxtest::Test {
     driver->dispatcher_ = dispatcher_.borrow();
     driver->irq_ = std::move(*irq);
     ASSERT_OK(driver->Bind());
-    __UNUSED auto unused = driver.release();
+    [[maybe_unused]] auto unused = driver.release();
 
     device_ = fake_root_->GetLatestChild();
     nvme_ = device_->GetDeviceContext<Nvme>();

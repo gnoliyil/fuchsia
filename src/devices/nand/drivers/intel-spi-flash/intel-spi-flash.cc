@@ -384,7 +384,7 @@ static zx_status_t CreateSpiFlash(void *ctx, zx_device_t *parent) {
   auto ptr = std::make_unique<SpiFlashDevice>(parent, std::move(mmio.value()));
   status = ptr->Bind();
   if (status == ZX_OK) {
-    __UNUSED auto unused = ptr.release();
+    [[maybe_unused]] auto unused = ptr.release();
   }
   return status;
 }

@@ -36,7 +36,7 @@ class Root : public DeviceType, public ddk::ParentProtocol<Root, ddk::base_proto
       return status;
     }
     // The DriverFramework now owns driver.
-    __UNUSED auto ptr = driver.release();
+    [[maybe_unused]] auto ptr = driver.release();
 
     driver = std::make_unique<Root>(dev);
     status = driver->Bind("root-b");

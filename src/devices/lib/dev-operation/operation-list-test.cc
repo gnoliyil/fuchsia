@@ -166,7 +166,7 @@ TEST(OperationListTest, MultipleOperation) {
     EXPECT_TRUE(list.erase(&operation));
 
     // Force the destructor to run.
-    __UNUSED auto op = Operation(ops[i], kParentOpSize);
+    [[maybe_unused]] auto op = Operation(ops[i], kParentOpSize);
   }
   EXPECT_EQ(list.size(), 0u);
   EXPECT_FALSE(list.begin().has_value());
@@ -192,7 +192,7 @@ TEST(OperationListTest, Release) {
 
   for (size_t i = 0; i < 10; i++) {
     // Force the destructor to run.
-    __UNUSED auto op = Operation(ops[i], kParentOpSize);
+    [[maybe_unused]] auto op = Operation(ops[i], kParentOpSize);
   }
 }
 
@@ -316,7 +316,7 @@ TEST(OperationListTest, MultipleLayerWithStorage) {
 
   for (size_t i = 0; i < 10; i++) {
     // Force the destructor to run.
-    __UNUSED auto op = Operation(ops[i], kParentOpSize);
+    [[maybe_unused]] auto op = Operation(ops[i], kParentOpSize);
   }
 }
 
@@ -381,7 +381,7 @@ TEST(OperationListTest, MultipleLayerWithCallback) {
 
   for (int i = 0; i < 10; i++) {
     // Force the destructor to run.
-    __UNUSED auto op = SecondLayerOp(ops[i], kFirstLayerOpSize);
+    [[maybe_unused]] auto op = SecondLayerOp(ops[i], kFirstLayerOpSize);
   }
 }
 

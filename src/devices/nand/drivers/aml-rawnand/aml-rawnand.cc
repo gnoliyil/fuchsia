@@ -1072,7 +1072,7 @@ zx_status_t AmlRawNand::Create(void* ctx, zx_device_t* parent) {
   }
 
   // devmgr is now in charge of the device.
-  __UNUSED auto* dummy = device.release();
+  [[maybe_unused]] auto* dummy = device.release();
   return ZX_OK;
 }
 

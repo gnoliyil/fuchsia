@@ -350,7 +350,7 @@ class RequestPool : operation::OperationPool<Request<Storage>, OperationTraits, 
     auto node = this->queue_.erase_if([length](const auto& node) {
       auto request = node.operation();
       const size_t size = request.alloc_size();
-      __UNUSED auto* dummy = request.take();  // Don't free request.
+      [[maybe_unused]] auto* dummy = request.take();  // Don't free request.
       return size == length;
     });
     if (node) {

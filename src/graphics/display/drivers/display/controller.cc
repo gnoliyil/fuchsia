@@ -926,7 +926,7 @@ zx_status_t Controller::Bind(std::unique_ptr<display::Controller>* device_ptr) {
     }
   }
 
-  __UNUSED auto ptr = device_ptr->release();
+  [[maybe_unused]] auto ptr = device_ptr->release();
 
   dc_.SetDisplayControllerInterface(this, &display_controller_interface_protocol_ops_);
   if (dc_capture_.is_valid()) {

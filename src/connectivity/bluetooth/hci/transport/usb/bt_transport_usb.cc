@@ -88,7 +88,7 @@ zx_status_t Device::Create(zx_device_t* parent, async_dispatcher_t* dispatcher) 
 
   // Driver Manager is now in charge of the device.
   // Memory will be explicitly freed in DdkUnbind().
-  __UNUSED Device* unused = dev.release();
+  [[maybe_unused]] Device* unused = dev.release();
   return ZX_OK;
 }
 

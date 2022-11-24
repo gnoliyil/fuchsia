@@ -194,7 +194,7 @@ zx_status_t AmlCanvas::Setup(zx_device_t* parent) {
   }
 
   // devmgr is now in charge of the memory for canvas
-  __UNUSED auto ptr = canvas.release();
+  [[maybe_unused]] auto ptr = canvas.release();
 
   return status;
 }

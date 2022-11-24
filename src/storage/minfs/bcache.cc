@@ -30,7 +30,7 @@ std::unique_ptr<block_client::BlockDevice> Bcache::Destroy(std::unique_ptr<Bcach
   {
     // Destroy the VmoBuffer before extracting the underlying device, as it needs
     // to de-register itself from the underlying block device to be terminated.
-    __UNUSED auto unused = std::move(bcache->buffer_);
+    [[maybe_unused]] auto unused = std::move(bcache->buffer_);
   }
   return std::move(bcache->owned_device_);
 }

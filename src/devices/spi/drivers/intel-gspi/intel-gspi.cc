@@ -73,7 +73,7 @@ zx_status_t GspiDevice::Bind(std::unique_ptr<GspiDevice>* device_ptr) {
                                   .set_inspect_vmo(inspect_.DuplicateVmo())
                                   .forward_metadata(parent(), DEVICE_METADATA_SPI_CHANNELS));
   if (status == ZX_OK) {
-    __UNUSED auto dev = device_ptr->release();
+    [[maybe_unused]] auto dev = device_ptr->release();
   }
   return status;
 }

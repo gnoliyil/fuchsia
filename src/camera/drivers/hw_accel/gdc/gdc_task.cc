@@ -94,7 +94,7 @@ zx_status_t GdcTask::PinConfigVmos(const gdc_config_info* config_vmo_list, size_
     config_contig_vmos_.push_back(std::move(config_info));
 
     // Release the vmos so that the handle doesn't get closed
-    __UNUSED zx_handle_t handle = vmo.release();
+    [[maybe_unused]] zx_handle_t handle = vmo.release();
   }
   return ZX_OK;
 }

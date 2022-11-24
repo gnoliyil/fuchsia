@@ -450,7 +450,7 @@ std::vector<TestFilesystemOptions> AllTestFilesystems() {
             .filesystem = filesystem.get()});
       }
     }
-    __UNUSED Filesystem* fs = filesystem.release();  // Deliberate leak
+    [[maybe_unused]] Filesystem* fs = filesystem.release();  // Deliberate leak
     return options;
   }();
 

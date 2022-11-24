@@ -30,7 +30,7 @@ zx_status_t AmlogicSecureMemDevice::Create(void* ctx, zx_device_t* parent) {
   zx_status_t status = sec_mem->Bind();
   if (status == ZX_OK) {
     // devmgr should now own the lifetime
-    __UNUSED auto ptr = sec_mem.release();
+    [[maybe_unused]] auto ptr = sec_mem.release();
   }
 
   return status;

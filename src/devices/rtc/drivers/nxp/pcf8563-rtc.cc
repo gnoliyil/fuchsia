@@ -114,7 +114,7 @@ static zx_status_t pcf8563_bind(void* ctx, zx_device_t* parent) {
   }
 
   // We've passed ownership to the framework.
-  __UNUSED pcf8563* ptr = rtc.release();
+  [[maybe_unused]] pcf8563* ptr = rtc.release();
 
   return ZX_OK;
 }

@@ -107,7 +107,7 @@ class LeafDriver : public driver::DriverBase {
   }
 
   result<void, zx_status_t> CallAck() {
-    __UNUSED auto result = waiter_->Ack();
+    [[maybe_unused]] auto result = waiter_->Ack();
     return ok();
   }
 

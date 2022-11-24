@@ -51,7 +51,7 @@ zx_status_t TpmLpc::Bind(std::unique_ptr<TpmLpc>* driver) {
   }
   status = DdkAdd(ddk::DeviceAddArgs("tpm-lpc").set_inspect_vmo(inspect_.DuplicateVmo()));
   if (status == ZX_OK) {
-    __UNUSED auto ptr = driver->release();
+    [[maybe_unused]] auto ptr = driver->release();
   }
   return status;
 }

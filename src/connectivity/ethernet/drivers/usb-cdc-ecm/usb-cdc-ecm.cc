@@ -445,7 +445,7 @@ zx_status_t UsbCdcEcm::Bind(void* ctx, zx_device_t* parent) {
 
   // The object is owned by the DDK, now that it has been added. It will be deleted
   // when the device is released.
-  __UNUSED auto unused = device.release();
+  [[maybe_unused]] auto unused = device.release();
 
   return ZX_OK;
 }

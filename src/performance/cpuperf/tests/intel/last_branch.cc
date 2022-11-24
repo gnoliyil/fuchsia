@@ -18,7 +18,7 @@ class LastBranchVerifier : public Verifier {
   LastBranchVerifier(const cpuperf::SessionResultSpec* spec) : Verifier(spec) {
     const perfmon::EventDetails* details;
 
-    bool rc __UNUSED = LookupEventByName("arch", "instructions_retired", &details);
+    bool rc [[maybe_unused]] = LookupEventByName("arch", "instructions_retired", &details);
     FX_DCHECK(rc);
     instructions_retired_id_ = details->id;
   }

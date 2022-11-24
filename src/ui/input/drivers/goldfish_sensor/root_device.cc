@@ -53,7 +53,7 @@ zx_status_t RootDevice::Create(void* ctx, zx_device_t* device) {
   }
 
   // the root device will be managed by devmgr.
-  __UNUSED auto* dev = sensor_root.release();
+  [[maybe_unused]] auto* dev = sensor_root.release();
   return ZX_OK;
 }
 

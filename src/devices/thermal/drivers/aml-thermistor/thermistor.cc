@@ -35,7 +35,7 @@ zx_status_t AmlThermistor::Create(void* ctx, zx_device_t* parent) {
     zxlogf(ERROR, "%s: DdkAdd failed", __func__);
     return status;
   }
-  __UNUSED auto* unused = device.release();
+  [[maybe_unused]] auto* unused = device.release();
 
   return ZX_OK;
 }
@@ -82,7 +82,7 @@ zx_status_t AmlThermistor::AddThermChannel(NtcChannel ch, NtcInfo info) {
   if (status != ZX_OK) {
     return status;
   }
-  __UNUSED auto ptr = dev.release();
+  [[maybe_unused]] auto ptr = dev.release();
   return ZX_OK;
 }
 
@@ -96,7 +96,7 @@ zx_status_t AmlThermistor::AddRawChannel(uint32_t adc_chan) {
   if (status != ZX_OK) {
     return status;
   }
-  __UNUSED auto ptr = dev.release();
+  [[maybe_unused]] auto ptr = dev.release();
 
   return ZX_OK;
 }

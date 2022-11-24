@@ -851,8 +851,8 @@ TEST(VectorTest, VectorDataConstness) {
   auto& ref_vector_int = vector_int;
   const auto& const_ref_vector_int = vector_int;
 
-  auto __UNUSED int_ptr = ref_vector_int.data();
-  auto __UNUSED const_int_ptr = const_ref_vector_int.data();
+  auto int_ptr = ref_vector_int.data();
+  auto const_int_ptr = const_ref_vector_int.data();
 
   static_assert(!std::is_const_v<std::remove_pointer_t<decltype(int_ptr)>>);
   static_assert(std::is_const_v<std::remove_pointer_t<decltype(const_int_ptr)>>);
@@ -861,12 +861,12 @@ TEST(VectorTest, VectorDataConstness) {
 // The set of sizes we run each vector test with.
 const size_t kTestSizes[] = {1, 2, 10, 32, 64, 100};
 
-#define RUN_TRAIT_TEST(test_base, test_trait)     \
-  TEST(VectorTest, test_base##_##test_trait) {    \
-    auto fn = test_base<test_trait>;              \
-    for (size_t size : kTestSizes) { \
-      ASSERT_NO_FAILURES(fn(size));               \
-    }                                             \
+#define RUN_TRAIT_TEST(test_base, test_trait)  \
+  TEST(VectorTest, test_base##_##test_trait) { \
+    auto fn = test_base<test_trait>;           \
+    for (size_t size : kTestSizes) {           \
+      ASSERT_NO_FAILURES(fn(size));            \
+    }                                          \
   }
 
 #define RUN_FOR_ALL_TRAITS(test_base)         \

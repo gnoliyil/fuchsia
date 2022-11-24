@@ -143,7 +143,7 @@ TEST(RefCountedTests, WrapDeadPointerAssert) {
 
   // Wrapping the now-destroyed object should trigger an assertion.
   auto lambda = [raw]() {
-    __UNUSED fbl::RefPtr<DestructionTracker<true>> zombie = fbl::RefPtr(raw);
+    [[maybe_unused]] fbl::RefPtr<DestructionTracker<true>> zombie = fbl::RefPtr(raw);
   };
   ASSERT_DEATH(lambda, "Assert should have fired after wraping dead object\n");
 }
@@ -164,7 +164,7 @@ TEST(RefCountedTests, ExtraReleaseAssert) {
 
   auto lambda = [raw]() {
     // Manually releasing again should trigger the assertion.
-    __UNUSED bool unused = raw->Release();
+    [[maybe_unused]] bool unused = raw->Release();
   };
   ASSERT_DEATH(lambda, "Assert should have fired after releasing object with ref count of zero\n");
 
@@ -190,7 +190,7 @@ TEST(RefCountedTests, WrapZeroRefCountAssert) {
 
   auto lambda = [raw]() {
     // Adding another ref (by wrapping) should trigger the assertion.
-    __UNUSED bool unused = raw->Release();
+    [[maybe_unused]] bool unused = raw->Release();
   };
   ASSERT_DEATH(lambda, "Assert should have fired after wraping object with ref count of zero\n");
 
@@ -223,7 +223,7 @@ TEST(RefCountedTests, ReleaseUnadoptedAssert) {
 
   auto lambda = [raw]() {
     // Releasing without adopting first should trigger an assertion.
-    __UNUSED bool unused = raw->Release();
+    [[maybe_unused]] bool unused = raw->Release();
   };
   ASSERT_DEATH(lambda, "Assert should have fired after releasing non-adopted object\n");
 

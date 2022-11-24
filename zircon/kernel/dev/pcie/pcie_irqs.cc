@@ -255,7 +255,7 @@ zx_status_t PcieDevice::EnterLegacyIrqMode(uint requested_irqs) {
 
   // We can never fail to allocated a single handlers (since we are going to
   // use the pre-allocated singleton)
-  __UNUSED zx_status_t res = AllocIrqHandlers(requested_irqs, true);
+  [[maybe_unused]] zx_status_t res = AllocIrqHandlers(requested_irqs, true);
   DEBUG_ASSERT(res == ZX_OK);
   DEBUG_ASSERT(irq_.handlers == &irq_.singleton_handler);
 

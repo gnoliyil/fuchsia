@@ -225,7 +225,7 @@ TEST_F(RadarIntegrationTest, ReadManyBursts) {
   ASSERT_NO_FAILURES(MakeRadarClient(
       [&](const BurstResult& result) {
         if (result.is_response()) {
-          __UNUSED auto call_result = client->UnlockVmo(result.response().burst.vmo_id);
+          [[maybe_unused]] auto call_result = client->UnlockVmo(result.response().burst.vmo_id);
           if (++received_burst_count >= kBurstCount) {
             sync_completion_signal(&completion);
           }
@@ -291,7 +291,8 @@ TEST_F(RadarIntegrationTest, ReadManyBurstsMultipleClients) {
     ASSERT_NO_FAILURES(MakeRadarClient(
         [&](const BurstResult& result) {
           if (result.is_response()) {
-            __UNUSED auto call_result = client.client->UnlockVmo(result.response().burst.vmo_id);
+            [[maybe_unused]] auto call_result =
+                client.client->UnlockVmo(result.response().burst.vmo_id);
             if (++client.received_burst_count >= kBurstCount) {
               sync_completion_signal(&client.completion);
             }

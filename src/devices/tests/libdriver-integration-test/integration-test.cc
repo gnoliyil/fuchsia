@@ -223,7 +223,7 @@ class AsyncWatcher {
 
       size_t bytes_processed = 0;
       while (bytes_read - bytes_processed > 2) {
-        __UNUSED uint8_t event = buf[bytes_processed++];
+        [[maybe_unused]] uint8_t event = buf[bytes_processed++];
         uint8_t name_length = buf[bytes_processed++];
 
         if (size_t remaining = bytes_read - bytes_processed; remaining < name_length) {

@@ -398,7 +398,7 @@ zx_status_t FutexContext::FutexWaitInternal(user_in_ptr<const zx_futex_t> value_
 
       if (validator_status != ZX_OK) {
         if (validator_status == ZX_ERR_BAD_HANDLE) {
-          __UNUSED auto res =
+          [[maybe_unused]] auto res =
               ProcessDispatcher::GetCurrent()->EnforceBasicPolicy(ZX_POL_BAD_HANDLE);
         }
         return validator_status;
@@ -701,7 +701,8 @@ zx_status_t FutexContext::FutexRequeueInternal(
     // If owner validation failed earlier, then bail out now (after we have passed the state check).
     if (validator_status != ZX_OK) {
       if (validator_status == ZX_ERR_BAD_HANDLE) {
-        __UNUSED auto res = ProcessDispatcher::GetCurrent()->EnforceBasicPolicy(ZX_POL_BAD_HANDLE);
+        [[maybe_unused]] auto res =
+            ProcessDispatcher::GetCurrent()->EnforceBasicPolicy(ZX_POL_BAD_HANDLE);
       }
       return validator_status;
     }

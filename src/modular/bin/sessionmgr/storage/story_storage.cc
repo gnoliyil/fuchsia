@@ -27,7 +27,7 @@ fuchsia::modular::ModuleData CloneModuleData(const fuchsia::modular::ModuleData&
             .mutable_additional_services()
             ->host_directory;
     fidl::SynchronousInterfacePtr directory = host_directory.BindSync();
-    __UNUSED zx_status_t status = directory->Clone(
+    [[maybe_unused]] zx_status_t status = directory->Clone(
         fuchsia::io::OpenFlags::CLONE_SAME_RIGHTS,
         fidl::InterfaceRequest<fuchsia::io::Node>(
             copy.mutable_additional_services()->host_directory.NewRequest().TakeChannel()));

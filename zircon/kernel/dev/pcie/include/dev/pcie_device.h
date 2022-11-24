@@ -223,7 +223,7 @@ class PcieDevice {
   void SetIrqModeDisabled() {
     /* It should be impossible to fail a transition to the DISABLED state,
      * regardless of the state of the system.  ASSERT this in debug builds */
-    __UNUSED zx_status_t result;
+    [[maybe_unused]] zx_status_t result;
 
     result = SetIrqMode(PCIE_IRQ_MODE_DISABLED, 0);
 

@@ -42,16 +42,14 @@ zx_status_t TestPowerSensorDevice::Create(void* ctx, zx_device_t* parent) {
     return status;
   }
 
-  __UNUSED auto ptr = dev.release();
+  [[maybe_unused]] auto ptr = dev.release();
 
   return ZX_OK;
 }
 
 void TestPowerSensorDevice::DdkRelease() { delete this; }
 
-zx_status_t TestPowerSensorDevice::PowerSensorConnectServer(zx::channel server) {
-  return ZX_OK;
-}
+zx_status_t TestPowerSensorDevice::PowerSensorConnectServer(zx::channel server) { return ZX_OK; }
 
 constexpr zx_driver_ops_t driver_ops = []() {
   zx_driver_ops_t driver_ops = {};

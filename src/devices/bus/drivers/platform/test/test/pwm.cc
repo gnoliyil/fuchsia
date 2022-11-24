@@ -64,7 +64,7 @@ zx_status_t TestPwmDevice::Create(zx_device_t* parent) {
     return status;
   }
   // devmgr is now in charge of dev.
-  __UNUSED auto unused = dev.release();
+  [[maybe_unused]] auto unused = dev.release();
 
   return ZX_OK;
 }

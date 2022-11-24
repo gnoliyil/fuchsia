@@ -442,7 +442,7 @@ void Device::QmiInterruptHandler(usb_request_t* request) {
   }
 
   usb_cdc_notification_t usb_req = {};
-  __UNUSED auto copy_length =
+  [[maybe_unused]] auto copy_length =
       usb_request_copy_from(request, &usb_req, sizeof(usb_cdc_notification_t), 0);
 
   // TODO (jiamingw): confirm this check is unnecessary

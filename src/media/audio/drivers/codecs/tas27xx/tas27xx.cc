@@ -119,7 +119,7 @@ void Tas27xx::PeriodicStateCheck() {
       Reset();
       SetGainStateInternal(gain_state_);
       if (format_.has_value()) {
-        __UNUSED auto format_info = SetDaiFormatInternal(*format_);
+        [[maybe_unused]] auto format_info = SetDaiFormatInternal(*format_);
       }
       Start();
     }

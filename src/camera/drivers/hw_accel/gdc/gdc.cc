@@ -585,7 +585,7 @@ zx_status_t GdcBind(void* ctx, zx_device_t* device) {
   FX_LOGST(INFO, kTag) << "gdc driver added";
 
   // gdc device intentionally leaked as it is now held by DevMgr.
-  __UNUSED auto* dev = gdc_device.release();
+  [[maybe_unused]] auto* dev = gdc_device.release();
   return status;
 }
 

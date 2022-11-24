@@ -173,8 +173,8 @@ Handle::Handle(Handle* rhs, zx_rights_t rights, uint32_t base_value)
 
 void HandleTableArena::Delete(Handle* handle) {
   fbl::RefPtr<Dispatcher> dispatcher(ktl::move(handle->dispatcher_));
-  uint32_t __UNUSED old_base_value = handle->base_value_;
-  const uint32_t* __UNUSED base_value = &handle->base_value_;
+  [[maybe_unused]] uint32_t old_base_value = handle->base_value_;
+  [[maybe_unused]] const uint32_t* base_value = &handle->base_value_;
   // There may be stale pointers to this slot and they will look at handle_table_id. We expect
   // handle_table_id to already have been cleared by the process dispatcher before the handle got to
   // this point.

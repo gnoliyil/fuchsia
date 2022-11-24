@@ -36,7 +36,7 @@ class Root : public DeviceType, public ddk::ParentProtocol<Root, ddk::base_proto
       return status;
     }
     // The DriverFramework now owns driver.
-    __UNUSED auto ptr = driver.release();
+    [[maybe_unused]] auto ptr = driver.release();
     return ZX_OK;
   }
 

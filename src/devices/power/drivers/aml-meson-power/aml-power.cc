@@ -499,7 +499,7 @@ zx_status_t AmlPower::Create(void* ctx, zx_device_t* parent) {
   }
 
   // Let device runner take ownership of this object.
-  __UNUSED auto* dummy = power_impl_device.release();
+  [[maybe_unused]] auto* dummy = power_impl_device.release();
 
   return st;
 }

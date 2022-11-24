@@ -162,7 +162,7 @@ zx_status_t AmlEthernet::Create(void* ctx, zx_device_t* parent) {
   }
 
   // eth_device intentionally leaked as it is now held by DevMgr
-  __UNUSED auto ptr = eth_device.release();
+  [[maybe_unused]] auto ptr = eth_device.release();
 
   return ZX_OK;
 }

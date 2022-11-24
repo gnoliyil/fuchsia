@@ -272,7 +272,7 @@ zx_status_t Dfu::Create(zx_device_t* parent) {
   status = dev->Bind();
   if (status == ZX_OK) {
     // Intentionally leak as it is now held by DevMgr.
-    __UNUSED auto ptr = dev.release();
+    [[maybe_unused]] auto ptr = dev.release();
   }
   return status;
 }

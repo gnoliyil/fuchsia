@@ -96,7 +96,7 @@ static zx_status_t ControllerDeviceBind(void* /*ctx*/, zx_device_t* parent) {
   FX_LOGS(INFO) << "camera_controller_device driver added";
 
   // controller device intentionally leaked as it is now held by DevMgr.
-  __UNUSED auto* dev = result.take_value().release();
+  [[maybe_unused]] auto* dev = result.take_value().release();
   return ZX_OK;
 }
 

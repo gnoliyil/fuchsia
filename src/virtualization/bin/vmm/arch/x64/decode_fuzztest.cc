@@ -29,7 +29,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
       provider.ConsumeIntegral<uint64_t>(), provider.ConsumeIntegral<uint64_t>(),
       provider.ConsumeIntegral<uint64_t>(),
   };
-  __UNUSED auto inst = DecodeInstruction(span, default_operand_size, vcpu_state);
+  [[maybe_unused]] auto inst = DecodeInstruction(span, default_operand_size, vcpu_state);
   return 0;
 }
 

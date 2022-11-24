@@ -81,7 +81,7 @@ zx_status_t TestGoldfishSyncDevice::Create(zx_device_t* parent) {
     return status;
   }
 
-  __UNUSED auto ptr = dev.release();
+  [[maybe_unused]] auto ptr = dev.release();
 
   return ZX_OK;
 }

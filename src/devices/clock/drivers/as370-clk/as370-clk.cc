@@ -55,7 +55,7 @@ zx_status_t As370Clk::Create(void* ctx, zx_device_t* parent) {
   }
 
   // Intentially leak, devmgr owns the memory now.
-  __UNUSED auto* unused = device.release();
+  [[maybe_unused]] auto* unused = device.release();
 
   return ZX_OK;
 }

@@ -388,7 +388,7 @@ zx_status_t cdc_acm_bind(void* /*ctx*/, zx_device_t* device) {
   }
 
   // Devmgr is now in charge of the memory for dev.
-  __UNUSED auto ptr = dev.release();
+  [[maybe_unused]] auto ptr = dev.release();
   return status;
 }
 

@@ -199,7 +199,7 @@ zx_status_t Gt92xxDevice::Create(zx_device_t* device) {
   cleanup.cancel();
 
   // device intentionally leaked as it is now held by DevMgr
-  __UNUSED auto ptr = goodix_dev.release();
+  [[maybe_unused]] auto ptr = goodix_dev.release();
 
   return ZX_OK;
 }

@@ -41,7 +41,7 @@ zx_status_t TestBti::Create(void*, zx_device_t* parent) {
     zxlogf(ERROR, "DdkAdd failed: %d", status);
     return status;
   }
-  __UNUSED auto dummy = device.release();
+  [[maybe_unused]] auto dummy = device.release();
 
   return ZX_OK;
 }

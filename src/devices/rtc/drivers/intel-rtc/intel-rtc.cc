@@ -275,7 +275,7 @@ zx_status_t Bind(void* ctx, zx_device_t* parent) {
 
   status = rtc->DdkAdd(ddk::DeviceAddArgs("rtc").set_proto_id(ZX_PROTOCOL_RTC));
   if (status == ZX_OK) {
-    __UNUSED auto unused = rtc.release();
+    [[maybe_unused]] auto unused = rtc.release();
   }
 
   return status;

@@ -58,7 +58,7 @@ zx_status_t sysmem_bind(void* driver_ctx, zx_device_t* parent_device) {
     DRIVER_ERROR("Bind() failed for Banjo device: %s\n", zx_status_get_string(status));
     return status;
   }
-  __UNUSED auto ptr2 = banjo_device.release();
+  [[maybe_unused]] auto ptr2 = banjo_device.release();
 
   // Create a second device to serve the FIDL protocol. This is temporary while
   // we migrate sysmem clients from Banjo to FIDL. It is a child of the sysmem
@@ -72,7 +72,7 @@ zx_status_t sysmem_bind(void* driver_ctx, zx_device_t* parent_device) {
     DRIVER_ERROR("Bind() failed for FIDL device: %s\n", zx_status_get_string(status));
     return status;
   }
-  __UNUSED auto ptr3 = fidl_device.release();
+  [[maybe_unused]] auto ptr3 = fidl_device.release();
 
   return ZX_OK;
 }

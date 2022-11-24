@@ -265,7 +265,7 @@ static zx_status_t driver_bind(void* context, zx_device_t* parent) {
     return status;
   }
   // DdkAdd in Init took ownership of device.
-  __UNUSED GpuDevice* ptr = gpu.release();
+  [[maybe_unused]] GpuDevice* ptr = gpu.release();
   return ZX_OK;
 }
 

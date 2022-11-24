@@ -185,7 +185,7 @@ void TestPowerDriverChild::AddDeviceWithPowerArgs(
     completer.ReplyError(status);
   } else {
     completer.ReplySuccess();
-    __UNUSED auto ptr = child2.release();
+    [[maybe_unused]] auto ptr = child2.release();
   }
 }
 
@@ -226,7 +226,7 @@ zx_status_t TestPowerDriverChild::Create(void* ctx, zx_device_t* device) {
   auto status = dev->Bind();
   if (status == ZX_OK) {
     // devmgr is now in charge of the memory for dev
-    __UNUSED auto ptr = dev.release();
+    [[maybe_unused]] auto ptr = dev.release();
   }
   return status;
 }

@@ -26,7 +26,7 @@ zx_status_t Nonbindable::Bind(void* ctx, zx_device_t* dev) {
   if (status != ZX_OK) {
     return status;
   }
-  __UNUSED auto ptr = device.release();
+  [[maybe_unused]] auto ptr = device.release();
   return ZX_OK;
 }
 
@@ -42,7 +42,7 @@ void Nonbindable::DdkInit(ddk::InitTxn txn) {
     txn.Reply(status);
   }
 
-  __UNUSED auto ptr = child.release();
+  [[maybe_unused]] auto ptr = child.release();
 
   txn.Reply(ZX_OK);
 }

@@ -130,7 +130,7 @@ void FakeFtdiFunction::DataOutComplete() {
   }
   std::vector<uint8_t> data(data_out_req_->request()->response.actual);
   // std::vector should zero-initialize
-  __UNUSED size_t copied =
+  [[maybe_unused]] size_t copied =
       usb_request_copy_from(data_out_req_->request(), data.data(), data.size(), 0);
 
   usb_request_complete_callback_t complete = {

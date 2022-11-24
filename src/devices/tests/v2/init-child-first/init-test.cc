@@ -55,7 +55,7 @@ class InitTestParent : public DeviceType {
       return status;
     }
     // The driver framework now owns driver.
-    __UNUSED auto ptr = driver.release();
+    [[maybe_unused]] auto ptr = driver.release();
     return ZX_OK;
   }
 

@@ -149,7 +149,7 @@ zx_status_t VideoFrame::CopyData(usb_request_t* req, uint32_t data_offset) {
 
   uint8_t* dst = reinterpret_cast<uint8_t*>(buffer_.virtual_address()) + bytes_;
   // TODO (fxb/63635): Decide what to do here
-  __UNUSED auto copy_result = usb_request_copy_from(req, dst, data_size, data_offset);
+  [[maybe_unused]] auto copy_result = usb_request_copy_from(req, dst, data_size, data_offset);
 
   bytes_ += data_size;
   return ZX_OK;
@@ -162,7 +162,7 @@ static inline double device_clock_to_ms(uint32_t clock_reading, uint32_t clock_f
 void VideoFrame::ParseHeaderTimestamps(usb_request_t* req) {
   // TODO(jocelyndang): handle other formats, the timestamp offset is variable.
   usb_video_vs_uncompressed_payload_header header = {};
-  __UNUSED auto result =
+  [[maybe_unused]] auto result =
       usb_request_copy_from(req, &header, sizeof(usb_video_vs_uncompressed_payload_header), 0);
 
   // PTS should stay the same for payloads of the same frame,

@@ -214,7 +214,7 @@ zx_status_t FtDevice::Create(void* ctx, zx_device_t* device) {
   cleanup.cancel();
 
   // device intentionally leaked as it is now held by DevMgr
-  __UNUSED auto ptr = ft_dev.release();
+  [[maybe_unused]] auto ptr = ft_dev.release();
 
   return ZX_OK;
 }

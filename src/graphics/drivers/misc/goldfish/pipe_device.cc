@@ -116,7 +116,7 @@ zx_status_t PipeDevice::Create(void* ctx, zx_device_t* device) {
   }
 
   // devmgr now owns the device.
-  __UNUSED auto* dev = pipe_device.release();
+  [[maybe_unused]] auto* dev = pipe_device.release();
   return ZX_OK;
 }
 
@@ -211,7 +211,7 @@ zx_status_t PipeDevice::CreateChildDevice(cpp20::span<const zx_device_prop_t> pr
   zx_status_t status = child_device->Bind(props, dev_name);
   if (status == ZX_OK) {
     // devmgr now owns device.
-    __UNUSED auto* dev = child_device.release();
+    [[maybe_unused]] auto* dev = child_device.release();
   }
   return status;
 }

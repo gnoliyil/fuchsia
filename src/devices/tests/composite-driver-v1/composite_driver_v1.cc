@@ -104,7 +104,7 @@ zx_status_t CompositeDriverV1::Bind(void* ctx, zx_device_t* dev) {
   if (status != ZX_OK) {
     return status;
   }
-  __UNUSED auto ptr = device.release();
+  [[maybe_unused]] auto ptr = device.release();
   return ZX_OK;
 }
 

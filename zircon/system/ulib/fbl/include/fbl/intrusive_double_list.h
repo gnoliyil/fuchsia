@@ -569,7 +569,7 @@ class __POINTER(PtrType_) DoublyLinkedList : public internal::DoublyLinkedListBa
       // goes out of scope a the end of the loop.  Note, this needs to be
       // flagged as UNUSED because for unmanaged pointer types, nothing
       // happens when the pointer goes out of scope.
-      __UNUSED auto tmp = PtrTraits::Reclaim(head_);
+      [[maybe_unused]] auto tmp = PtrTraits::Reclaim(head_);
       head_ = head_ns.next_;
       head_ns.next_ = nullptr;
       head_ns.prev_ = nullptr;

@@ -102,7 +102,7 @@ zx_status_t TestGdcDevice::Create(zx_device_t* parent) {
     return status;
   }
   // devmgr is now in charge of dev.
-  __UNUSED auto ptr = dev.release();
+  [[maybe_unused]] auto ptr = dev.release();
 
   return ZX_OK;
 }

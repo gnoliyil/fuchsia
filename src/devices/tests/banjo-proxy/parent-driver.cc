@@ -62,7 +62,7 @@ class Device : public DeviceParent, public ddk::SysmemProtocol<Device, ddk::base
     }
 
     if (status == ZX_OK) {
-      __UNUSED auto ptr = device.release();
+      [[maybe_unused]] auto ptr = device.release();
     } else {
       zxlogf(ERROR, "Failed to add device");
     }

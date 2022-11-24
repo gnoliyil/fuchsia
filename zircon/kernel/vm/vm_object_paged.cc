@@ -84,7 +84,7 @@ VmObjectPaged::~VmObjectPaged() {
     if (parent_) {
       // Ignore the return since 'this' is a child so we know we are not transitioning from 0->1
       // children.
-      bool __UNUSED notify = parent_->AddChildLocked(child);
+      [[maybe_unused]] bool notify = parent_->AddChildLocked(child);
       DEBUG_ASSERT(!notify);
     }
   }

@@ -1004,7 +1004,7 @@ zx_status_t usb_cdc_bind(void* ctx, zx_device_t* parent) {
   usb_function_set_interface(&cdc->function, cdc.get(), &device_ops);
   {
     // The DDK now owns this reference.
-    __UNUSED auto released = cdc.release();
+    [[maybe_unused]] auto released = cdc.release();
   }
   return ZX_OK;
 }

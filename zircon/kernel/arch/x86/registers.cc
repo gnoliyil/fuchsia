@@ -134,7 +134,7 @@ static void x86_extended_register_cpu_init(void) {
   }
 
   /* Enable the FPU */
-  __UNUSED bool enabled = x86_extended_register_enable_feature(X86_EXTENDED_REGISTER_X87);
+  [[maybe_unused]] bool enabled = x86_extended_register_enable_feature(X86_EXTENDED_REGISTER_X87);
   DEBUG_ASSERT(enabled);
 }
 

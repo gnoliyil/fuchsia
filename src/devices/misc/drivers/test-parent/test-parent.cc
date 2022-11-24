@@ -39,7 +39,7 @@ zx_status_t TestParent::Create(zx_device_t* parent) {
   }
 
   // Now owned by the driver framework.
-  __UNUSED auto ptr = test_parent.release();
+  [[maybe_unused]] auto ptr = test_parent.release();
 
   return ZX_OK;
 }

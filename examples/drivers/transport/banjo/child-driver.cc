@@ -40,7 +40,7 @@ zx_status_t BanjoClientDevice::Create(void* ctx, zx_device_t* parent) {
   status = device->Bind(&misc);
   if (status == ZX_OK) {
     // Driver framework now owns device.
-    __UNUSED auto* dev = device.release();
+    [[maybe_unused]] auto* dev = device.release();
   }
   return status;
 }

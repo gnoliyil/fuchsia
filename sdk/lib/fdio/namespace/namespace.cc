@@ -75,7 +75,7 @@ zx_status_t fdio_ns_create(fdio_ns_t** out) {
 __EXPORT
 zx_status_t fdio_ns_destroy(fdio_ns_t* raw_ns) {
   // This function reclaims a reference which was leaked in fdio_ns_create.
-  __UNUSED auto ns = fbl::ImportFromRawPtr<fdio_namespace>(raw_ns);
+  [[maybe_unused]] auto ns = fbl::ImportFromRawPtr<fdio_namespace>(raw_ns);
   return ZX_OK;
 }
 

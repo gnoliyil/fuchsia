@@ -380,7 +380,7 @@ zx_status_t PcieDevice::ProbeBarsLocked() {
   static_assert(PCIE_MAX_BAR_REGS >= PCIE_BAR_REGS_PER_DEVICE, "");
   static_assert(PCIE_MAX_BAR_REGS >= PCIE_BAR_REGS_PER_BRIDGE, "");
 
-  __UNUSED uint8_t header_type = cfg_->Read(PciConfig::kHeaderType) & PCI_HEADER_TYPE_MASK;
+  [[maybe_unused]] uint8_t header_type = cfg_->Read(PciConfig::kHeaderType) & PCI_HEADER_TYPE_MASK;
 
   DEBUG_ASSERT((header_type == PCI_HEADER_TYPE_STANDARD) ||
                (header_type == PCI_HEADER_TYPE_PCI_BRIDGE));

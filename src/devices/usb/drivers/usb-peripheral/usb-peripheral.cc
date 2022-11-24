@@ -50,7 +50,7 @@ zx_status_t UsbPeripheral::Create(void* ctx, zx_device_t* parent) {
   }
 
   // devmgr is now in charge of the device.
-  __UNUSED auto* dummy = device.release();
+  [[maybe_unused]] auto* dummy = device.release();
   return ZX_OK;
 }
 
@@ -75,7 +75,7 @@ void UsbPeripheral::UsbPeripheralRequestQueue(usb_request_t* usb_request,
   }
   fbl::AutoLock l(&pending_requests_lock_);
   usb::BorrowedRequest<void> request(usb_request, *complete_cb, dci_.GetRequestSize());
-  __UNUSED usb_request_complete_callback_t completion;
+  [[maybe_unused]] usb_request_complete_callback_t completion;
   completion.ctx = this;
   completion.callback = [](void* ctx, usb_request_t* req) {
     reinterpret_cast<UsbPeripheral*>(ctx)->RequestComplete(req);

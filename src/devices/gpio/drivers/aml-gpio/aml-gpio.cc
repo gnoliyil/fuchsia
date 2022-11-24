@@ -165,7 +165,7 @@ zx_status_t AmlGpio::Create(void* ctx, zx_device_t* parent) {
     return status;
   }
 
-  __UNUSED auto* unused = device.release();
+  [[maybe_unused]] auto* unused = device.release();
 
   return ZX_OK;
 }
@@ -177,7 +177,7 @@ void AmlGpio::Bind(fdf::WireSyncClient<fuchsia_hardware_platform_bus::PlatformBu
   };
 
   fdf::Arena arena('GPIO');
-  __UNUSED auto unused = pbus.buffer(arena)->RegisterProtocol(
+  [[maybe_unused]] auto unused = pbus.buffer(arena)->RegisterProtocol(
       ZX_PROTOCOL_GPIO_IMPL, fidl::VectorView<uint8_t>::FromExternal(
                                  reinterpret_cast<uint8_t*>(&gpio_proto), sizeof(gpio_proto)));
 }

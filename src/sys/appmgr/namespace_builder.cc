@@ -233,7 +233,7 @@ fuchsia::sys::FlatNamespace NamespaceBuilder::BuildForRunner() {
 
 void NamespaceBuilder::Release() {
   for (auto& handle : handle_pool_) {
-    __UNUSED const zx_handle_t unused = handle.TakeChannel().release();
+    [[maybe_unused]] const zx_handle_t unused = handle.TakeChannel().release();
   }
   handle_pool_.clear();
 }

@@ -265,7 +265,7 @@ zx::result<> PlatformBus::NodeAddInternal(fuchsia_hardware_platform_bus::Node& n
   }
 
   // devmgr is now in charge of the device.
-  __UNUSED auto* dummy = dev.release();
+  [[maybe_unused]] auto* dummy = dev.release();
   return zx::ok();
 }
 
@@ -298,7 +298,7 @@ void PlatformBus::ProtocolNodeAdd(ProtocolNodeAddRequestView request, fdf::Arena
   }
 
   // devmgr is now in charge of the device.
-  __UNUSED auto* dummy = dev.release();
+  [[maybe_unused]] auto* dummy = dev.release();
 
   // Wait for protocol implementation driver to register its protocol.
   fbl::AutoLock<fbl::Mutex> lock(&proto_completion_mutex_);
@@ -518,7 +518,7 @@ void PlatformBus::AddCompositeImplicitPbusFragment(
   }
 
   // devmgr is now in charge of the device.
-  __UNUSED auto* dummy = dev.release();
+  [[maybe_unused]] auto* dummy = dev.release();
 
   constexpr size_t kMaxFragments = 100;
   if (fragments_list.count() + 1 > kMaxFragments) {
@@ -635,7 +635,7 @@ void PlatformBus::AddComposite(AddCompositeRequestView request, fdf::Arena& aren
     return;
   }
   // devmgr is now in charge of the device.
-  __UNUSED auto* dummy = dev.release();
+  [[maybe_unused]] auto* dummy = dev.release();
 
   completer.buffer(arena).ReplySuccess();
 }
@@ -732,7 +732,7 @@ void PlatformBus::AddNodeGroup(AddNodeGroupRequestView request, fdf::Arena& aren
     return;
   }
   // devmgr is now in charge of the device.
-  __UNUSED auto* dev_ptr = dev.release();
+  [[maybe_unused]] auto* dev_ptr = dev.release();
 
   completer.buffer(arena).ReplySuccess();
 }

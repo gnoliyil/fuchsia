@@ -117,7 +117,7 @@ TEST(UsbRequestListTest, MultipleRequest) {
     EXPECT_TRUE(list.erase(&request));
 
     // Force the destructor to run.
-    __UNUSED auto req = Request(raw_reqs[i], kParentReqSize);
+    [[maybe_unused]] auto req = Request(raw_reqs[i], kParentReqSize);
   }
   EXPECT_EQ(list.size(), 0u);
   EXPECT_FALSE(list.begin().has_value());
@@ -153,7 +153,7 @@ TEST(UsbRequestListTest, Move) {
     EXPECT_TRUE(list2.erase(&request));
 
     // Force the destructor to run.
-    __UNUSED auto req = Request(raw_reqs[count], kParentReqSize);
+    [[maybe_unused]] auto req = Request(raw_reqs[count], kParentReqSize);
 
     count++;
     opt_request = std::move(next);
@@ -182,7 +182,7 @@ TEST(UsbRequestListTest, Release) {
 
   for (size_t i = 0; i < 10; i++) {
     // Force the destructor to run.
-    __UNUSED auto req = Request(raw_reqs[i], kParentReqSize);
+    [[maybe_unused]] auto req = Request(raw_reqs[i], kParentReqSize);
   }
 }
 
@@ -298,7 +298,7 @@ TEST(UsbRequestListTest, MultipleLayerWithStorage) {
 
   for (size_t i = 0; i < 10; i++) {
     // Force the destructor to run.
-    __UNUSED auto req = SecondLayerReq(raw_reqs[i], kFirstLayerReqSize);
+    [[maybe_unused]] auto req = SecondLayerReq(raw_reqs[i], kFirstLayerReqSize);
   }
 }
 
@@ -370,7 +370,7 @@ TEST(UsbRequestListTest, MultipleLayerWithCallback) {
 
   for (size_t i = 0; i < 10; i++) {
     // Force the destructor to run.
-    __UNUSED auto req = SecondLayerReq(raw_reqs[i], kFirstLayerReqSize);
+    [[maybe_unused]] auto req = SecondLayerReq(raw_reqs[i], kFirstLayerReqSize);
   }
 }
 

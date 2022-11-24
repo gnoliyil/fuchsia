@@ -94,7 +94,7 @@ zx_status_t GpioTest::Create(void* ctx, zx_device_t* parent) {
   }
 
   // devmgr is now in charge of the device.
-  __UNUSED auto* dummy = dev.release();
+  [[maybe_unused]] auto* dummy = dev.release();
   return ZX_OK;
 }
 

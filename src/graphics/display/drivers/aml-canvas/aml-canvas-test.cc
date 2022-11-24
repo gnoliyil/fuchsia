@@ -60,7 +60,7 @@ class AmlCanvasTest : public zxtest::Test {
     EXPECT_OK(canvas_->DdkAdd("aml-canvas"));
     // TODO(fxbug.dev/79639): Removed the obsolete fake_ddk.Ok() check.
     // To test Unbind and Release behavior, call UnbindOp and ReleaseOp directly.
-    __UNUSED auto ptr = canvas_.release();
+    [[maybe_unused]] auto ptr = canvas_.release();
   }
 
   zx_status_t CreateNewCanvas() {

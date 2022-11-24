@@ -484,7 +484,7 @@ bool Image::Import(const fidl::WireSyncClient<fhd::Controller>& dc,
   info_out->id = import_response.image_id;
 
   // image has been imported. we can close the connection
-  __UNUSED fidl::Status result = dc->ReleaseBufferCollection(collection_id_);
+  [[maybe_unused]] fidl::Status result = dc->ReleaseBufferCollection(collection_id_);
   return true;
 }
 

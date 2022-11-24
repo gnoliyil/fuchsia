@@ -538,7 +538,7 @@ asocket* create_local_socket(/*unique_fd ufd*/) {
 void release_service_socket(asocket* s) {
   if (s->zx_socket.is_valid()) {
     FX_LOGS(DEBUG) << "Ffx socket returned";
-    __UNUSED auto socket = s->zx_socket.release();
+    [[maybe_unused]] auto socket = s->zx_socket.release();
   }
 }
 

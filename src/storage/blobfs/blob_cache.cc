@@ -36,7 +36,7 @@ void BlobCache::Reset() {
   ForAllOpenNodes([this](const fbl::RefPtr<CacheNode>& node) {
     // If someone races alongside Reset, and evicts an open node concurrently with us,
     // a status other than "ZX_OK" may be returned. This is allowed.
-    __UNUSED zx_status_t status = Evict(node);
+    [[maybe_unused]] zx_status_t status = Evict(node);
     return ZX_OK;
   });
 
@@ -241,7 +241,7 @@ void BlobCache::Downgrade(CacheNode* raw_vnode) {
 
   // To exist in the closed_hash_, this RefPtr must be leaked. See the complement of this leak in
   // UpgradeLocked.
-  __UNUSED auto leak = fbl::ExportToRawPtr(&vnode);
+  [[maybe_unused]] auto leak = fbl::ExportToRawPtr(&vnode);
 }
 
 fbl::RefPtr<CacheNode> BlobCache::UpgradeLocked(const digest::Digest& key) {

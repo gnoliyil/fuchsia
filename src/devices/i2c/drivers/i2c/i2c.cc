@@ -68,7 +68,7 @@ zx_status_t I2cDevice::Create(void* ctx, zx_device_t* parent, async_dispatcher_t
 
   device->AddChildren(dispatcher);
 
-  __UNUSED auto* dummy = device.release();
+  [[maybe_unused]] auto* dummy = device.release();
 
   return ZX_OK;
 }

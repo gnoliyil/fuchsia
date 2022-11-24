@@ -91,7 +91,7 @@ zx_status_t Fragment::Bind(void* ctx, zx_device_t* parent) {
                                 .set_outgoing_dir(endpoints->client.TakeChannel()));
   if (status == ZX_OK) {
     // devmgr owns the memory now
-    __UNUSED auto ptr = dev.release();
+    [[maybe_unused]] auto ptr = dev.release();
   }
   return status;
 }

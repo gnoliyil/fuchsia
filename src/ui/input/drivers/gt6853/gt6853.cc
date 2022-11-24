@@ -108,7 +108,7 @@ zx_status_t Gt6853Device::Create(void* ctx, zx_device_t* parent) {
     return status;
   }
 
-  __UNUSED auto _ = device.release();
+  [[maybe_unused]] auto _ = device.release();
   return ZX_OK;
 }
 

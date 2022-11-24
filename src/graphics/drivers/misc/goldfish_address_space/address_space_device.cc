@@ -75,7 +75,7 @@ zx_status_t AddressSpaceDevice::Create(void* ctx, zx_device_t* device) {
   zx_status_t status = address_space_device->Bind();
   if (status == ZX_OK) {
     // devmgr now owns device.
-    __UNUSED auto* dev = address_space_device.release();
+    [[maybe_unused]] auto* dev = address_space_device.release();
   }
   return status;
 }
@@ -196,7 +196,7 @@ zx_status_t AddressSpaceDevice::Bind() {
     return status;
   }
 
-  __UNUSED auto ptr = passthrough_dev.release();
+  [[maybe_unused]] auto ptr = passthrough_dev.release();
   return ZX_OK;
 }
 

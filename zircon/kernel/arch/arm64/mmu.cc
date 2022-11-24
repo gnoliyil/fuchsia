@@ -718,7 +718,7 @@ void ArmArchVmAspace::FlushTLBEntry(vaddr_t vaddr, bool terminal) const {
     }
     case ArmAspaceType::kGuest: {
       uint64_t vttbr = arm64_vttbr(asid_, tt_phys_);
-      __UNUSED zx_status_t status = arm64_el2_tlbi_ipa(vttbr, vaddr, terminal);
+      [[maybe_unused]] zx_status_t status = arm64_el2_tlbi_ipa(vttbr, vaddr, terminal);
       DEBUG_ASSERT(status == ZX_OK);
       return;
     }
@@ -1896,10 +1896,12 @@ void ArmArchVmAspace::ContextSwitch(ArmArchVmAspace* old_aspace, ArmArchVmAspace
       __arm_wsr64("tcr_el1", tcr);
       __isb(ARM_MB_SY);
     } else {
-      __UNUSED uint32_t prev = old_aspace->num_active_cpus_.fetch_sub(1, ktl::memory_order_relaxed);
+      [[maybe_unused]] uint32_t prev =
+          old_aspace->num_active_cpus_.fetch_sub(1, ktl::memory_order_relaxed);
       DEBUG_ASSERT(prev > 0);
     }
-    __UNUSED uint32_t prev = aspace->num_active_cpus_.fetch_add(1, ktl::memory_order_relaxed);
+    [[maybe_unused]] uint32_t prev =
+        aspace->num_active_cpus_.fetch_add(1, ktl::memory_order_relaxed);
     DEBUG_ASSERT(prev < SMP_MAX_CPUS);
     aspace->active_since_last_check_.store(true, ktl::memory_order_relaxed);
 
@@ -1915,7 +1917,8 @@ void ArmArchVmAspace::ContextSwitch(ArmArchVmAspace* old_aspace, ArmArchVmAspace
     __isb(ARM_MB_SY);
 
     if (likely(old_aspace != nullptr)) {
-      __UNUSED uint32_t prev = old_aspace->num_active_cpus_.fetch_sub(1, ktl::memory_order_relaxed);
+      [[maybe_unused]] uint32_t prev =
+          old_aspace->num_active_cpus_.fetch_sub(1, ktl::memory_order_relaxed);
       DEBUG_ASSERT(prev > 0);
     }
   }

@@ -66,7 +66,7 @@ class Lp8556DeviceTest : public zxtest::Test, public inspect::InspectTestHelper 
     EXPECT_EQ(fake_parent_->child_count(), 1);
     dev_->DdkAsyncRemove();
     EXPECT_OK(mock_ddk::ReleaseFlaggedDevices(fake_parent_.get()));  // Calls DdkRelease() on dev_.
-    __UNUSED auto ptr = dev_.release();
+    [[maybe_unused]] auto ptr = dev_.release();
     EXPECT_EQ(fake_parent_->child_count(), 0);
   }
 

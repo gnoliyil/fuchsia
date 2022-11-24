@@ -53,7 +53,7 @@ void LocalTablePayload::Encode(::fidl::Encoder* _encoder, size_t _offset,
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -82,8 +82,8 @@ void LocalTablePayload::Encode(::fidl::Encoder* _encoder, size_t _offset,
 
 void LocalTablePayload::Decode(::fidl::Decoder* _decoder, LocalTablePayload* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -1277,7 +1277,7 @@ void MainProtocolOneWayAnonRequest::Encode(::fidl::Encoder* _encoder, size_t _of
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -1306,8 +1306,8 @@ void MainProtocolOneWayAnonRequest::Encode(::fidl::Encoder* _encoder, size_t _of
 
 void MainProtocolOneWayAnonRequest::Decode(::fidl::Decoder* _decoder, MainProtocolOneWayAnonRequest* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -1569,7 +1569,7 @@ void MainProtocolTwoWayAnonResponse::Encode(::fidl::Encoder* _encoder, size_t _o
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -1598,8 +1598,8 @@ void MainProtocolTwoWayAnonResponse::Encode(::fidl::Encoder* _encoder, size_t _o
 
 void MainProtocolTwoWayAnonResponse::Decode(::fidl::Decoder* _decoder, MainProtocolTwoWayAnonResponse* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -1684,7 +1684,7 @@ void MainProtocolTwoWayAnonWithErrorRequest::Encode(::fidl::Encoder* _encoder, s
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -1713,8 +1713,8 @@ void MainProtocolTwoWayAnonWithErrorRequest::Encode(::fidl::Encoder* _encoder, s
 
 void MainProtocolTwoWayAnonWithErrorRequest::Decode(::fidl::Decoder* _decoder, MainProtocolTwoWayAnonWithErrorRequest* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -2386,7 +2386,7 @@ void MainProtocol_OnAnonWithError_Response::Encode(::fidl::Encoder* _encoder, si
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -2415,8 +2415,8 @@ void MainProtocol_OnAnonWithError_Response::Encode(::fidl::Encoder* _encoder, si
 
 void MainProtocol_OnAnonWithError_Response::Decode(::fidl::Decoder* _decoder, MainProtocol_OnAnonWithError_Response* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }

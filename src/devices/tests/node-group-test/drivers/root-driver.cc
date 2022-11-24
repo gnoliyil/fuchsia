@@ -22,7 +22,7 @@ zx_status_t RootDriver::Bind(void* ctx, zx_device_t* dev) {
   if (status != ZX_OK) {
     return status;
   }
-  __UNUSED auto ptr = root_dev.release();
+  [[maybe_unused]] auto ptr = root_dev.release();
 
   // Add 2 children that matches the first node group node.
   zx_device_prop_t fragment_props_1[] = {
@@ -42,7 +42,7 @@ zx_status_t RootDriver::Bind(void* ctx, zx_device_t* dev) {
   if (status != ZX_OK) {
     return status;
   }
-  __UNUSED auto fragment_a_1_ptr = fragment_dev_a_1.release();
+  [[maybe_unused]] auto fragment_a_1_ptr = fragment_dev_a_1.release();
 
   auto fragment_dev_a_2 = std::make_unique<RootDriver>(dev);
   status =
@@ -53,7 +53,7 @@ zx_status_t RootDriver::Bind(void* ctx, zx_device_t* dev) {
   if (status != ZX_OK) {
     return status;
   }
-  __UNUSED auto fragment_a_2_ptr = fragment_dev_a_2.release();
+  [[maybe_unused]] auto fragment_a_2_ptr = fragment_dev_a_2.release();
 
   // Add the leaf device.
   zx_device_prop_t leaf_props[] = {
@@ -67,7 +67,7 @@ zx_status_t RootDriver::Bind(void* ctx, zx_device_t* dev) {
   if (status != ZX_OK) {
     return status;
   }
-  __UNUSED auto leaf_ptr = leaf_dev.release();
+  [[maybe_unused]] auto leaf_ptr = leaf_dev.release();
 
   // Add 2 devices that matches the other node group node.
   zx_device_str_prop_t str_fragment_props_2[] = {
@@ -82,7 +82,7 @@ zx_status_t RootDriver::Bind(void* ctx, zx_device_t* dev) {
   if (status != ZX_OK) {
     return status;
   }
-  __UNUSED auto fragment_b_1_ptr = fragment_dev_b_1.release();
+  [[maybe_unused]] auto fragment_b_1_ptr = fragment_dev_b_1.release();
 
   auto fragment_dev_b_2 = std::make_unique<RootDriver>(dev);
   status =
@@ -92,7 +92,7 @@ zx_status_t RootDriver::Bind(void* ctx, zx_device_t* dev) {
   if (status != ZX_OK) {
     return status;
   }
-  __UNUSED auto fragment_b_2_ptr = fragment_dev_b_2.release();
+  [[maybe_unused]] auto fragment_b_2_ptr = fragment_dev_b_2.release();
 
   // Add a third device that matches the optional node group node.
   zx_device_str_prop_t str_fragment_props_3[] = {
@@ -107,7 +107,7 @@ zx_status_t RootDriver::Bind(void* ctx, zx_device_t* dev) {
   if (status != ZX_OK) {
     return status;
   }
-  __UNUSED auto fragment_c_2_ptr = fragment_dev_c_2.release();
+  [[maybe_unused]] auto fragment_c_2_ptr = fragment_dev_c_2.release();
 
   return ZX_OK;
 }

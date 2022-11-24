@@ -25,7 +25,7 @@ zx_status_t ChromiumosEcLpc::Bind(void* ctx, zx_device_t* dev) {
   zx_status_t status = device->Bind();
   if (status == ZX_OK) {
     // Release ownership of the device to the DDK.
-    __UNUSED auto unused = device.release();
+    [[maybe_unused]] auto unused = device.release();
   }
 
   return status;

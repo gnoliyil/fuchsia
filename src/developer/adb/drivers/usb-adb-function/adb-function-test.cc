@@ -121,7 +121,7 @@ class UsbAdbTest : public zxtest::Test {
     adb_ = adb.get();
     ASSERT_OK(adb_->Init());
     // Mock ddk owns the reference.
-    __UNUSED auto released = adb.release();
+    [[maybe_unused]] auto released = adb.release();
 
     auto adb_ctxt = parent_->GetLatestChild()->GetDeviceContext<UsbAdbDevice>();
     ASSERT_EQ(adb_, adb_ctxt);

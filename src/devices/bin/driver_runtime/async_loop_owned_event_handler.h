@@ -46,7 +46,7 @@ class AsyncLoopOwnedEventHandler {
   static zx_status_t BeginWait(std::unique_ptr<T> event, async_dispatcher_t* dispatcher) {
     zx_status_t status = event->wait_.Begin(dispatcher);
     if (status == ZX_OK) {
-      __UNUSED auto ptr = event.release();
+      [[maybe_unused]] auto ptr = event.release();
     }
     return status;
   }

@@ -36,7 +36,7 @@ static void VerifyCounts(const RleBitmap& bitmap, size_t rng_expected, size_t bi
 TEST(RleBitmapTests, InitializedEmpty) {
   RleBitmap bitmap;
   EXPECT_FALSE(bitmap.Get(5, 6), "get one bit");
-  for (__UNUSED auto& range : bitmap) {
+  for ([[maybe_unused]] auto& range : bitmap) {
     EXPECT_FALSE(true, "iterating on empty set");
   }
 }
@@ -93,7 +93,7 @@ TEST(RleBitmapTests, ClearTwice) {
   EXPECT_FALSE(bitmap.GetOne(2), "get bit after clearing again");
   EXPECT_EQ(bitmap.num_bits(), 0U, "unexpected bit count");
 
-  for (__UNUSED auto& range : bitmap) {
+  for ([[maybe_unused]] auto& range : bitmap) {
     EXPECT_FALSE(true, "iterating on empty set");
   }
 }
@@ -157,7 +157,7 @@ TEST(RleBitmapTests, ClearAll) {
 
   bitmap.ClearAll();
 
-  for (__UNUSED auto& range : bitmap) {
+  for ([[maybe_unused]] auto& range : bitmap) {
     EXPECT_FALSE(true, "iterating on empty set");
   }
 

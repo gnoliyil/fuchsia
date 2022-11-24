@@ -29,7 +29,7 @@ class TestNodeGroup : public DeviceType {
       return status;
     }
 
-    __UNUSED auto ptr = dev.release();
+    [[maybe_unused]] auto ptr = dev.release();
 
     return ZX_OK;
   }

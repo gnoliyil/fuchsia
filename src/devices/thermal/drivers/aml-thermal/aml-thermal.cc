@@ -77,7 +77,7 @@ zx_status_t AmlThermal::Create(void* ctx, zx_device_t* device) {
   }
 
   // devmgr is now in charge of the memory for dev.
-  __UNUSED auto ptr = thermal_device.release();
+  [[maybe_unused]] auto ptr = thermal_device.release();
   return ZX_OK;
 }
 

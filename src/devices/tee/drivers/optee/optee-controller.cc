@@ -349,7 +349,7 @@ zx_status_t OpteeController::Create(void* ctx, zx_device_t* parent) {
   auto status = tee->Bind();
   if (status == ZX_OK) {
     // devmgr is now in charge of the memory for tee
-    __UNUSED auto ptr = tee.release();
+    [[maybe_unused]] auto ptr = tee.release();
   }
 
   return status;

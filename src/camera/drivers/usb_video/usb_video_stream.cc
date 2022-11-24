@@ -34,7 +34,8 @@ RequestTask::RequestTask(usb_request_t* req, UsbVideoStream* context)
     return;
   }
   data_.resize(req->response.actual);
-  __UNUSED auto copy_result = usb_request_copy_from(req, data_.data(), req->response.actual, 0);
+  [[maybe_unused]] auto copy_result =
+      usb_request_copy_from(req, data_.data(), req->response.actual, 0);
   req_.virt = reinterpret_cast<uintptr_t>(data_.data());
   req_.offset = 0;
   req_.vmo_handle = ZX_HANDLE_INVALID;
@@ -85,7 +86,7 @@ zx_status_t UsbVideoStream::Bind(void* ctx, zx_device_t* device) {
   status = dev->DdkAdd("usb-video-source");
   if (status == ZX_OK) {
     // devmgr is now in charge of the memory for dev
-    __UNUSED auto ptr = dev.release();
+    [[maybe_unused]] auto ptr = dev.release();
   }
   return status;
 }

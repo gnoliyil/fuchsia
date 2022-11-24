@@ -245,7 +245,7 @@ static int motmot_uart_pgetc() {
       // read and discard character if framing or parity error is queued
       uint32_t err = UARTREG(uart_base, UART_UERSTAT);
       if (err & 0b0110) {  // framing and parity error
-        volatile uint32_t discard __UNUSED = UARTREG(uart_base, UART_URXH);
+        volatile uint32_t discard [[maybe_unused]] = UARTREG(uart_base, UART_URXH);
         continue;
       }
 

@@ -47,7 +47,7 @@ class ChromeosAcpiTest : public InspectTestHelper, public zxtest::Test {
     ASSERT_OK(client.status_value());
     auto device = std::make_unique<ChromeosAcpi>(fake_root_.get(), std::move(client.value()));
     ASSERT_OK(device->Bind());
-    __UNUSED auto unused = device.release();
+    [[maybe_unused]] auto unused = device.release();
 
     MockDevice* dev = fake_root_->GetLatestChild();
     dev->InitOp();

@@ -44,7 +44,7 @@ zx_status_t DeviceManager::Create(void* ctx, zx_device_t* parent) {
   }
 
   // devmgr is now in charge of the memory for |manager|.
-  __UNUSED auto* owned_by_devmgr_now = manager.release();
+  [[maybe_unused]] auto* owned_by_devmgr_now = manager.release();
 
   return ZX_OK;
 }

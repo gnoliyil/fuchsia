@@ -3,9 +3,10 @@
 // found in the LICENSE file.
 
 #include <lib/affine/ratio.h>
+#include <zircon/assert.h>
+
 #include <type_traits>
 #include <utility>
-#include <zircon/assert.h>
 
 namespace affine {
 namespace {
@@ -88,7 +89,7 @@ uint64_t ScaleUInt64(uint64_t value, uint32_t numerator, uint32_t denominator) {
   low |= high_r << 32u;
 
   uint64_t low_q = low / denominator;
-  __UNUSED uint64_t low_r = low % denominator;
+  [[maybe_unused]] uint64_t low_r = low % denominator;
 
   uint64_t result = (high_q << 32u) | low_q;
 

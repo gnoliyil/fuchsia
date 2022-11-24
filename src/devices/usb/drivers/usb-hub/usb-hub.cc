@@ -487,7 +487,7 @@ zx_status_t UsbHubDevice::Bind(std::unique_ptr<fpromise::executor> executor, zx_
   zx_status_t status = dev->Init();
   if (status == ZX_OK) {
     // DDK now owns this pointer.
-    auto __UNUSED ref = dev.release();
+    [[maybe_unused]] auto ref = dev.release();
   }
   return status;
 }
@@ -604,7 +604,7 @@ zx_status_t UsbHubDevice::Bind(void* ctx, zx_device_t* parent) {
   zx_status_t status = dev->Init();
   if (status == ZX_OK) {
     // DDK now owns this pointer.
-    auto __UNUSED ref = dev.release();
+    [[maybe_unused]] auto ref = dev.release();
   }
   return status;
 }

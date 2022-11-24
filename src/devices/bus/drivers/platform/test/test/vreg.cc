@@ -47,7 +47,7 @@ zx_status_t TestVregDevice::Create(void* ctx, zx_device_t* parent) {
     return status;
   }
 
-  __UNUSED auto ptr = dev.release();
+  [[maybe_unused]] auto ptr = dev.release();
 
   return ZX_OK;
 }

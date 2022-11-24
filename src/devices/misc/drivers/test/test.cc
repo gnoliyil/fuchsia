@@ -161,7 +161,7 @@ zx_status_t TestRootDevice::CreateDeviceInternal(std::string_view name, zx::chan
     return status;
   }
   // devmgr now owns this
-  __UNUSED auto ptr = device.release();
+  [[maybe_unused]] auto ptr = device.release();
 
   *path_actual =
       snprintf(path_out, path_size, "%s/%s", fuchsia_device_test::wire::kControlDevice, devname);
@@ -184,7 +184,7 @@ zx_status_t TestDriverBind(void* ctx, zx_device_t* dev) {
     return status;
   }
   // devmgr now owns root
-  __UNUSED auto ptr = root.release();
+  [[maybe_unused]] auto ptr = root.release();
   return ZX_OK;
 }
 

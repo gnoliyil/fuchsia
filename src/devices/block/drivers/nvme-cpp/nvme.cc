@@ -50,7 +50,7 @@ zx_status_t Nvme::Bind(void* ctx, zx_device_t* dev) {
   }
 
   // The DriverFramework now owns driver.
-  __UNUSED auto ptr = driver.release();
+  [[maybe_unused]] auto ptr = driver.release();
   return ZX_OK;
 }
 

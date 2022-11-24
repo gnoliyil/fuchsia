@@ -58,7 +58,7 @@ zx_status_t Buckeye::Create(void* ctx, zx_device_t* parent) {
 
   if (status == ZX_OK) {
     // devmgr is now in charge of the device.
-    __UNUSED auto* unused = board.release();
+    [[maybe_unused]] auto* unused = board.release();
   }
 
   return status;

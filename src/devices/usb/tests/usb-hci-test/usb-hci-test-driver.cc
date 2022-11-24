@@ -204,31 +204,32 @@ void HciTest::TestThread(RunCompleter::Async completer) {
   // We batch 5 1 millisecond transfers at a time.
   for (size_t i = 0; i < 8 * 5; i++) {
     std::optional<Request> request;
-    Request::Alloc(
-        &request, isoch_in_.w_max_packet_size, isoch_in_.b_endpoint_address, parent_size,
-        [&isoch_packets, &clock_val, &dropped_packets, &timestamp, &running,
-         this](Request request) {
-          if (!running) {
-            return;
-          }
-          isoch_packets++;
-          if (clock_val == 0) {
-            __UNUSED auto copy_result = request.CopyFrom(&clock_val, sizeof(clock_val), 0);
-          } else {
-            uint64_t device_val = 0;
-            __UNUSED auto copy_result = request.CopyFrom(&device_val, sizeof(device_val), 0);
-            if (clock_val > device_val) {
-              return;
-            }
-            if (clock_val + 1 != device_val) {
-              dropped_packets = device_val - clock_val;
-            }
-            clock_val = device_val;
-          }
-          request.request()->header.frame = timestamp / 8;
-          timestamp++;
-          Request::Queue(std::move(request), usb_);
-        });
+    Request::Alloc(&request, isoch_in_.w_max_packet_size, isoch_in_.b_endpoint_address, parent_size,
+                   [&isoch_packets, &clock_val, &dropped_packets, &timestamp, &running,
+                    this](Request request) {
+                     if (!running) {
+                       return;
+                     }
+                     isoch_packets++;
+                     if (clock_val == 0) {
+                       [[maybe_unused]] auto copy_result =
+                           request.CopyFrom(&clock_val, sizeof(clock_val), 0);
+                     } else {
+                       uint64_t device_val = 0;
+                       [[maybe_unused]] auto copy_result =
+                           request.CopyFrom(&device_val, sizeof(device_val), 0);
+                       if (clock_val > device_val) {
+                         return;
+                       }
+                       if (clock_val + 1 != device_val) {
+                         dropped_packets = device_val - clock_val;
+                       }
+                       clock_val = device_val;
+                     }
+                     request.request()->header.frame = timestamp / 8;
+                     timestamp++;
+                     Request::Queue(std::move(request), usb_);
+                   });
     (*request).request()->header.frame = timestamp / 8;
     timestamp++;
     request->request()->direct = true;
@@ -345,7 +346,7 @@ zx_status_t HciTest::Create(void* ctx, zx_device_t* parent) {
   zx_status_t status = dev->Bind();
   if (status == ZX_OK) {
     // Intentionally leak as it is now held by DevMgr.
-    __UNUSED auto ptr = dev.release();
+    [[maybe_unused]] auto ptr = dev.release();
   }
   return status;
 }

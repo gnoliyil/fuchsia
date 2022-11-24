@@ -808,7 +808,7 @@ zx_status_t VmAddressRegion::UnmapInternalLocked(vaddr_t base, size_t size,
 
         if (unmap_base == curr->base() && unmap_size == curr->size()) {
           // If we're unmapping the entire region, just call Destroy
-          __UNUSED zx_status_t status = curr->DestroyLocked();
+          [[maybe_unused]] zx_status_t status = curr->DestroyLocked();
           DEBUG_ASSERT(status == ZX_OK);
         } else {
           // VmMapping::Unmap should only fail if it needs to allocate,
@@ -829,7 +829,7 @@ zx_status_t VmAddressRegion::UnmapInternalLocked(vaddr_t base, size_t size,
       } else {
         vaddr_t unmap_base = 0;
         size_t unmap_size = 0;
-        __UNUSED bool intersects =
+        [[maybe_unused]] bool intersects =
             GetIntersect(base, size, curr->base(), curr->size(), &unmap_base, &unmap_size);
         DEBUG_ASSERT(intersects);
         if (allow_partial_vmar) {
@@ -843,7 +843,7 @@ zx_status_t VmAddressRegion::UnmapInternalLocked(vaddr_t base, size_t size,
             at_top = false;
           }
         } else if (unmap_base == curr->base() && unmap_size == curr->size()) {
-          __UNUSED zx_status_t status = curr->DestroyLocked();
+          [[maybe_unused]] zx_status_t status = curr->DestroyLocked();
           DEBUG_ASSERT(status == ZX_OK);
         }
       }

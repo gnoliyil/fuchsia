@@ -36,7 +36,7 @@ class DirentIteratorImpl {
                   "zxio_dirent_iterator_t requires first field of implementation to be zxio_t");
   }
 
-  ~DirentIteratorImpl() { __UNUSED const fidl::WireResult result = client()->Rewind(); }
+  ~DirentIteratorImpl() { [[maybe_unused]] const fidl::WireResult result = client()->Rewind(); }
 
   zx_status_t Next(zxio_dirent_t* inout_entry) {
     if (index_ >= count_) {

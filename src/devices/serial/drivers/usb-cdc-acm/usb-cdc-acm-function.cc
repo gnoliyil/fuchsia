@@ -122,7 +122,7 @@ void FakeUsbCdcAcmFunction::DataOutComplete() {
     return;
   }
   std::vector<uint8_t> data(data_out_req_->request()->response.actual);
-  __UNUSED size_t copied =
+  [[maybe_unused]] size_t copied =
       usb_request_copy_from(data_out_req_->request(), data.data(), data.size(), 0);
 
   usb_request_complete_callback_t complete = {

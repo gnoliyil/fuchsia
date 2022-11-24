@@ -225,7 +225,7 @@ Status HeaderReader::CheckSeekTableEntry(const SeekTableEntry& entry, const Seek
     FX_SLOG(ERROR, "Invalid archive. Chunk exceeds file length");
     return kStatusErrIoDataIntegrity;
   }
-  __UNUSED uint64_t decompressed_end;
+  [[maybe_unused]] uint64_t decompressed_end;
   if (add_overflow(entry.decompressed_offset, entry.decompressed_size, &decompressed_end)) {
     FX_SLOG(ERROR, "Decompressed frame too big");
     return kStatusErrIoDataIntegrity;

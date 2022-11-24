@@ -24,7 +24,7 @@ zx_status_t UmsBlockDevice::Add() {
   return status;
 }
 
-void UmsBlockDevice::DdkRelease() { __UNUSED bool released = Release(); }
+void UmsBlockDevice::DdkRelease() { [[maybe_unused]] bool released = Release(); }
 
 zx_off_t UmsBlockDevice::DdkGetSize() { return parameters_.block_size * parameters_.total_blocks; }
 

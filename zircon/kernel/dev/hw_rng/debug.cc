@@ -19,7 +19,7 @@
 
 static int cmd_rng32(int argc, const cmd_args* argv, uint32_t flags) {
   uint32_t val;
-  __UNUSED size_t fetched;
+  [[maybe_unused]] size_t fetched;
 
   fetched = hw_rng_get_entropy(&val, sizeof(val));
 

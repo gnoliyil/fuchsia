@@ -218,7 +218,7 @@ void Session::OnUnbind(fidl::UnbindInfo info, fidl::ServerEnd<netdev::Session> c
     for (uint8_t i = 0; i < MAX_PORTS; i++) {
       // We can ignore the return from detaching, this port is about to get
       // destroyed.
-      zx::result<bool> __UNUSED result = DetachPortLocked(i, std::nullopt);
+      [[maybe_unused]] zx::result<bool> result = DetachPortLocked(i, std::nullopt);
     }
     dying_ = true;
   }

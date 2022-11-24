@@ -210,7 +210,7 @@ zx_status_t fancy_display_bind(void* ctx, zx_device_t* parent) {
     auto status = dev->Bind();
     if (status == ZX_OK) {
       // The driver/device manager now owns this memory.
-      __UNUSED auto ptr = dev.release();
+      [[maybe_unused]] auto ptr = dev.release();
     }
     return status;
 }

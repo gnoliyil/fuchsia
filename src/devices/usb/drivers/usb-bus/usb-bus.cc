@@ -29,7 +29,7 @@ zx_status_t UsbBus::Create(void* ctx, zx_device_t* parent) {
   }
 
   // devmgr is now in charge of the device.
-  __UNUSED auto* dummy = bus.release();
+  [[maybe_unused]] auto* dummy = bus.release();
   return ZX_OK;
 }
 

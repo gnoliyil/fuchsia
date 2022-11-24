@@ -58,7 +58,7 @@ zx_status_t TpmDevice::Create(void *ctx, zx_device_t *parent) {
                                           .set_inspect_vmo(device->inspect_.DuplicateVmo())
                                           .set_proto_id(ZX_PROTOCOL_TPM));
   if (status == ZX_OK) {
-    __UNUSED auto unused = device.release();
+    [[maybe_unused]] auto unused = device.release();
   }
   return status;
 }

@@ -42,7 +42,7 @@ static constexpr fuchsia::virtualization::NetSpec kSecondNicNetSpec = {
 };
 static constexpr char kDefaultMacString[] = "02:1a:11:00:01:00";
 static constexpr char kSecondNicMacString[] = "02:1a:11:00:01:01";
-__UNUSED static constexpr char kHostMacString[] = "02:1a:11:00:00:00";
+[[maybe_unused]] static constexpr char kHostMacString[] = "02:1a:11:00:00:00";
 
 // Run the two promises, returning the result of the first that completes.
 //

@@ -499,7 +499,7 @@ zx_status_t Imx227Device::CreateAndBind(void* /*ctx*/, zx_device_t* parent) {
   zxlogf(INFO, "imx227 driver added");
 
   // `device` intentionally leaked as it is now held by DevMgr.
-  __UNUSED auto* dev = device.release();
+  [[maybe_unused]] auto* dev = device.release();
   return ZX_OK;
 }
 

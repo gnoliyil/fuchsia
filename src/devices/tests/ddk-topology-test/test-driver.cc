@@ -89,7 +89,7 @@ zx_status_t TestTopologyBind(void* ctx, zx_device_t* device) {
   auto status = dev->Bind();
   if (status == ZX_OK) {
     // devmgr is now in charge of the memory for dev
-    __UNUSED auto ptr = dev.release();
+    [[maybe_unused]] auto ptr = dev.release();
   }
   return status;
 }

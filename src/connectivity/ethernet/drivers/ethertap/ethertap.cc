@@ -43,7 +43,7 @@ zx_status_t TapCtl::Create(void* ctx, zx_device_t* parent) {
     zxlogf(ERROR, "%s: could not add device: %d", __func__, status);
   } else {
     // devmgr owns the memory now
-    __UNUSED auto* ptr = dev.release();
+    [[maybe_unused]] auto* ptr = dev.release();
   }
   return status;
 }
@@ -76,7 +76,7 @@ zx_status_t TapCtl::OpenDeviceInternal(
     zxlogf(ERROR, "tapctl: could not add tap device: %d", status);
   } else {
     // devmgr owns the memory until release is called
-    __UNUSED auto ptr = tap.release();
+    [[maybe_unused]] auto ptr = tap.release();
     zxlogf(INFO, "tapctl: created ethertap device '%s'", name);
   }
   return status;

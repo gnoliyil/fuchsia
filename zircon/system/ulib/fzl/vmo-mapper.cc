@@ -92,7 +92,7 @@ void VmoMapper::Unmap() {
     zx_handle_t vmar_handle =
         (vmar_manager_ == nullptr) ? zx::vmar::root_self()->get() : vmar_manager_->vmar().get();
 
-    __UNUSED zx_status_t res;
+    [[maybe_unused]] zx_status_t res;
     res = zx_vmar_unmap(vmar_handle, start_, size_);
     ZX_DEBUG_ASSERT(res == ZX_OK);
   }

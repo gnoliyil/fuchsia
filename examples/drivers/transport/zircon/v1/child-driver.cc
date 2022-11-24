@@ -35,7 +35,7 @@ zx_status_t ZirconClientDevice::Create(void* ctx, zx_device_t* parent) {
   auto status = device->Bind();
   if (status == ZX_OK) {
     // Driver framework now owns device.
-    __UNUSED auto* dev = device.release();
+    [[maybe_unused]] auto* dev = device.release();
   }
   return status;
 }

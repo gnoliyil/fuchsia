@@ -491,10 +491,10 @@ extern "C" __EXPORT void __libc_extensions_init(uint32_t handle_count, zx_handle
 // zircon/third_party/ulib/musl/src/internal/libc.h
 extern "C" __EXPORT void __libc_extensions_fini(void) __TA_ACQUIRE(fdio_lock) {
   mtx_lock(&fdio_lock);
-  __UNUSED auto root = fdio_root_handle.release();
-  __UNUSED auto cwd = fdio_cwd_handle.release();
+  [[maybe_unused]] auto root = fdio_root_handle.release();
+  [[maybe_unused]] auto cwd = fdio_cwd_handle.release();
   for (auto& var : fdio_fdtab) {
-    __UNUSED const fdio_ptr io = var.release();
+    [[maybe_unused]] const fdio_ptr io = var.release();
   }
 }
 

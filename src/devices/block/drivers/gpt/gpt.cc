@@ -355,7 +355,7 @@ zx_status_t Bind(void* ctx, zx_device_t* parent) {
       return status;
     }
     // Placeholder is managed by ddk.
-    __UNUSED auto p = placeholder.release();
+    [[maybe_unused]] auto p = placeholder.release();
     return ZX_OK;
   }
 

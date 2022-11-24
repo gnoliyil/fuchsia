@@ -68,24 +68,24 @@ class LeafDriver : public driver::DriverBase {
     // Check the left device.
     auto number = GetNumber("left");
     if (number.is_error()) {
-      __UNUSED auto result = waiter->Ack(number.error_value());
+      [[maybe_unused]] auto result = waiter->Ack(number.error_value());
       return zx::ok();
     }
     if (*number != 1) {
       FDF_LOG(ERROR, "Wrong number for left: expecting 1, saw %d", *number);
-      __UNUSED auto result = waiter->Ack(ZX_ERR_INTERNAL);
+      [[maybe_unused]] auto result = waiter->Ack(ZX_ERR_INTERNAL);
       return zx::ok();
     }
 
     // Check the right device.
     number = GetNumber("right");
     if (number.is_error()) {
-      __UNUSED auto result = waiter->Ack(number.error_value());
+      [[maybe_unused]] auto result = waiter->Ack(number.error_value());
       return zx::ok();
     }
     if (*number != 2) {
       FDF_LOG(ERROR, "Wrong number for right: expecting 2, saw %d", *number);
-      __UNUSED auto result = waiter->Ack(ZX_ERR_INTERNAL);
+      [[maybe_unused]] auto result = waiter->Ack(ZX_ERR_INTERNAL);
       return zx::ok();
     }
 
@@ -95,23 +95,23 @@ class LeafDriver : public driver::DriverBase {
       FDF_LOG(INFO, "No 'opt' parent.");
     } else if (*number != 3) {
       FDF_LOG(ERROR, "Wrong number for opt: expecting 3, saw %d", *number);
-      __UNUSED auto result = waiter->Ack(ZX_ERR_INTERNAL);
+      [[maybe_unused]] auto result = waiter->Ack(ZX_ERR_INTERNAL);
       return zx::ok();
     }
 
     // Check the default device (which is the left device).
     number = GetNumber("default");
     if (number.is_error()) {
-      __UNUSED auto result = waiter->Ack(number.error_value());
+      [[maybe_unused]] auto result = waiter->Ack(number.error_value());
       return zx::ok();
     }
     if (*number != 1) {
       FDF_LOG(ERROR, "Wrong number for default: expecting 1, saw %d", *number);
-      __UNUSED auto result = waiter->Ack(ZX_ERR_INTERNAL);
+      [[maybe_unused]] auto result = waiter->Ack(ZX_ERR_INTERNAL);
       return zx::ok();
     }
 
-    __UNUSED auto result = waiter->Ack(ZX_OK);
+    [[maybe_unused]] auto result = waiter->Ack(ZX_OK);
     return zx::ok();
   }
 };

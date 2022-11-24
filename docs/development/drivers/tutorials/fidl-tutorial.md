@@ -100,7 +100,7 @@ class Device : public fidl::WireServer<fidl_examples_echo::Echo> {
                                 // to connect to our outgoing FIDL protocols.
                                 .set_outgoing_dir(endpoints->client.TakeChannel()));
     if (status == ZX_OK) {
-      __UNUSED auto ptr = device.release();
+      [[maybe_unused]] auto ptr = device.release();
     } else {
       zxlogf(ERROR, "Failed to add device");
     }

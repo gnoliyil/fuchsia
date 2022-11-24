@@ -79,7 +79,7 @@ zx_status_t Cr50SpiDevice::Bind(std::unique_ptr<Cr50SpiDevice> *dev) {
   }
 
   status = DdkAdd(ddk::DeviceAddArgs("cr50-spi").set_inspect_vmo(inspect_.DuplicateVmo()));
-  __UNUSED auto unused = dev->release();
+  [[maybe_unused]] auto unused = dev->release();
   return status;
 }
 

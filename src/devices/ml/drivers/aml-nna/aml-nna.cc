@@ -208,7 +208,7 @@ zx_status_t AmlNnaDevice::Create(void* ctx, zx_device_t* parent) {
   zxlogf(INFO, "Added aml_nna device\n");
 
   // intentionally leaked as it is now held by DevMgr.
-  __UNUSED auto ptr = device.release();
+  [[maybe_unused]] auto ptr = device.release();
   return status;
 }
 

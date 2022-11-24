@@ -86,7 +86,7 @@ zx_status_t LeafDriver::Bind(void* ctx, zx_device_t* device) {
     return status;
   }
 
-  __UNUSED auto ptr = dev.release();
+  [[maybe_unused]] auto ptr = dev.release();
 
   return ZX_OK;
 }

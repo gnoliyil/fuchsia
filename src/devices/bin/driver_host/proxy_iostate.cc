@@ -33,7 +33,7 @@ void ProxyIostate::HandleRpc(std::unique_ptr<ProxyIostate> conn, async_dispatche
       conn->dev->proxy_ios = nullptr;
       // The actual destruction will happen when |conn| goes out of scope.
     } else {
-      __UNUSED auto ptr = conn.release();
+      [[maybe_unused]] auto ptr = conn.release();
     }
   };
   if (status != ZX_OK) {

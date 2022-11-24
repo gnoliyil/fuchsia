@@ -52,7 +52,7 @@ zx_status_t Root::Bind(void* ctx, zx_device_t* dev) {
   if (status != ZX_OK) {
     return status;
   }
-  __UNUSED auto ptr = root_dev.release();
+  [[maybe_unused]] auto ptr = root_dev.release();
 
   // Add a child that matches the first node group node.
   zx_device_prop_t node_props_1[] = {
@@ -65,7 +65,7 @@ zx_status_t Root::Bind(void* ctx, zx_device_t* dev) {
   if (status != ZX_OK) {
     return status;
   }
-  __UNUSED auto node_1_ptr = node_dev_1.release();
+  [[maybe_unused]] auto node_1_ptr = node_dev_1.release();
 
   // Add a child that matches the other node group node.
   zx_device_prop_t node_props_2[] = {
@@ -78,7 +78,7 @@ zx_status_t Root::Bind(void* ctx, zx_device_t* dev) {
   if (status != ZX_OK) {
     return status;
   }
-  __UNUSED auto node_2_ptr = node_dev_2.release();
+  [[maybe_unused]] auto node_2_ptr = node_dev_2.release();
 
   return ZX_OK;
 }

@@ -61,7 +61,7 @@ zx_status_t Pinecrest::Create(void* ctx, zx_device_t* parent) {
     return status;
   }
 
-  __UNUSED auto* dummy = board.release();
+  [[maybe_unused]] auto* dummy = board.release();
   return ZX_OK;
 }
 

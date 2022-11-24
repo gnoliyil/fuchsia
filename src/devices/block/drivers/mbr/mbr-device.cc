@@ -297,7 +297,7 @@ zx_status_t MbrDevice::Bind(std::unique_ptr<MbrDevice> device) {
   }
 
   // devmgr owns the device now that it's bound
-  __UNUSED auto* placeholder = device.release();
+  [[maybe_unused]] auto* placeholder = device.release();
 
   return ZX_OK;
 }

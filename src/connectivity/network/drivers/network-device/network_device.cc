@@ -47,7 +47,7 @@ zx_status_t NetworkDevice::Create(void* ctx, zx_device_t* parent, async_dispatch
 
   // On successful Add, Devmgr takes ownership (relinquished on DdkRelease),
   // so transfer our ownership to a local var, and let it go out of scope.
-  auto __UNUSED temp_ref = netdev.release();
+  [[maybe_unused]] auto temp_ref = netdev.release();
 
   return ZX_OK;
 }

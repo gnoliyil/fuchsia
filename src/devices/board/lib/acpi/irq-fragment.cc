@@ -27,7 +27,7 @@ zx::result<> IrqFragment::Create(async_dispatcher_t* dispatcher, acpi::Device& p
   auto result = device->Init(acpi_device_id);
   if (result.is_ok()) {
     // The DDK takes ownership of the device.
-    __UNUSED auto unused = device.release();
+    [[maybe_unused]] auto unused = device.release();
   }
 
   return result;

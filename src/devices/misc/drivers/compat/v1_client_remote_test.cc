@@ -35,7 +35,7 @@ zx_status_t Device::DriverBind(void* ctx_ptr, zx_device_t* dev) {
     return status;
   }
 
-  __UNUSED auto* ptr = v1_dev.release();
+  [[maybe_unused]] auto* ptr = v1_dev.release();
 
   auto ctx = static_cast<Context*>(ctx_ptr);
   const std::lock_guard<std::mutex> lock(ctx->lock);

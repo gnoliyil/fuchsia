@@ -37,7 +37,7 @@ zx_status_t Controller::Bind(void *ctx, zx_device_t *parent) {
   zx_status_t status = dev->DdkAdd(ddk::DeviceAddArgs("i8042").set_flags(DEVICE_ADD_NON_BINDABLE));
   if (status == ZX_OK) {
     // The DDK will manage our memory.
-    __UNUSED auto unused = dev.release();
+    [[maybe_unused]] auto unused = dev.release();
   }
   return status;
 }

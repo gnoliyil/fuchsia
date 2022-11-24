@@ -145,9 +145,9 @@ PipeIo::~PipeIo() {
       buffer->cmd = static_cast<int32_t>(fuchsia_hardware_goldfish_pipe::PipeCmdCode::kClose);
       buffer->status = static_cast<int32_t>(fuchsia_hardware_goldfish_pipe::PipeError::kInval);
 
-      __UNUSED auto result = pipe_->Exec(id_);
+      [[maybe_unused]] auto result = pipe_->Exec(id_);
     }
-    __UNUSED auto destroy_result = pipe_->Destroy(id_);
+    [[maybe_unused]] auto destroy_result = pipe_->Destroy(id_);
     // We don't check the return status as the pipe is destroyed on a
     // best-effort basis.
   }

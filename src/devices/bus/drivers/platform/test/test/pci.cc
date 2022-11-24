@@ -46,7 +46,7 @@ zx_status_t TestPciDevice::Create(void* ctx, zx_device_t* parent) {
     return ddk_status;
   }
 
-  __UNUSED auto ptr = dev.release();
+  [[maybe_unused]] auto ptr = dev.release();
 
   return ZX_OK;
 }

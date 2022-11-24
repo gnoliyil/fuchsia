@@ -62,7 +62,7 @@ zx_status_t AcpiLid::Bind(void* ctx, zx_device_t* dev) {
   zx_status_t status = lid_device->Bind();
   if (status == ZX_OK) {
     // The DDK takes ownership of the device.
-    __UNUSED auto unused = lid_device.release();
+    [[maybe_unused]] auto unused = lid_device.release();
   }
 
   return status;

@@ -46,7 +46,7 @@ zx_status_t PwmInitDevice::Create(void* ctx, zx_device_t* parent) {
   }
 
   // dev is now owned by devmgr.
-  __UNUSED auto ptr = dev.release();
+  [[maybe_unused]] auto ptr = dev.release();
 
   return ZX_OK;
 }

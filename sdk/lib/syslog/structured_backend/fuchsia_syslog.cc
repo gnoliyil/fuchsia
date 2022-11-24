@@ -468,7 +468,7 @@ class Encoder final {
 };
 
 // Compiler thinks this is unused even though WriteLogToSocket uses it.
-__UNUSED const char kMessageFieldName[] = "message";
+[[maybe_unused]] const char kMessageFieldName[] = "message";
 const char kPrintfFieldName[] = "printf";
 const char kVerbosityFieldName[] = "verbosity";
 const char kPidFieldName[] = "pid";

@@ -572,7 +572,7 @@ void Thread::Forget() {
   {
     Guard<MonitoredSpinLock, IrqSave> guard{ThreadLock::Get(), SOURCE_TAG};
 
-    __UNUSED Thread* current_thread = Thread::Current::Get();
+    [[maybe_unused]] Thread* current_thread = Thread::Current::Get();
     DEBUG_ASSERT(current_thread != this);
 
     EraseFromListsLocked();
@@ -969,7 +969,7 @@ void Thread::Current::ProcessPendingSignals(GeneralRegsSource source, void* greg
  * no other threads are waiting to execute.
  */
 void Thread::Current::Yield() {
-  __UNUSED Thread* current_thread = Thread::Current::Get();
+  [[maybe_unused]] Thread* current_thread = Thread::Current::Get();
 
   current_thread->canary_.Assert();
   DEBUG_ASSERT(current_thread->state() == THREAD_RUNNING);

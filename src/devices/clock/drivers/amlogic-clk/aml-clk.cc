@@ -782,7 +782,7 @@ zx_status_t AmlClock::Create(zx_device_t* parent) {
   }
 
   // devmgr is now in charge of the memory for dev.
-  __UNUSED auto ptr = clock_device.release();
+  [[maybe_unused]] auto ptr = clock_device.release();
   return ZX_OK;
 }
 
@@ -1171,7 +1171,7 @@ void AmlClock::Register(fdf::WireSyncClient<fuchsia_hardware_platform_bus::Platf
   };
 
   fdf::Arena arena('CLK_');
-  __UNUSED auto unused = pbus.buffer(arena)->RegisterProtocol(
+  [[maybe_unused]] auto unused = pbus.buffer(arena)->RegisterProtocol(
       ZX_PROTOCOL_CLOCK_IMPL, fidl::VectorView<uint8_t>::FromExternal(
                                   reinterpret_cast<uint8_t*>(&clk_proto), sizeof(clk_proto)));
 }

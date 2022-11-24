@@ -67,40 +67,40 @@ class LeafDriver : public driver::DriverBase {
     // Check the left device.
     auto number = ConnectToDeviceAndGetNumber("fuchsia.composite.test.Service/left/device");
     if (number.is_error()) {
-      __UNUSED auto result = waiter->Ack(number.error_value());
+      [[maybe_unused]] auto result = waiter->Ack(number.error_value());
       return zx::ok();
     }
     if (*number != 1) {
       FDF_LOG(ERROR, "Wrong number for left: expecting 1, saw %d", *number);
-      __UNUSED auto result = waiter->Ack(ZX_ERR_INTERNAL);
+      [[maybe_unused]] auto result = waiter->Ack(ZX_ERR_INTERNAL);
       return zx::ok();
     }
 
     // Check the right device.
     number = ConnectToDeviceAndGetNumber("fuchsia.composite.test.Service/right/device");
     if (number.is_error()) {
-      __UNUSED auto result = waiter->Ack(number.error_value());
+      [[maybe_unused]] auto result = waiter->Ack(number.error_value());
       return zx::ok();
     }
     if (*number != 2) {
       FDF_LOG(ERROR, "Wrong number for right: expecting 2, saw %d", *number);
-      __UNUSED auto result = waiter->Ack(ZX_ERR_INTERNAL);
+      [[maybe_unused]] auto result = waiter->Ack(ZX_ERR_INTERNAL);
       return zx::ok();
     }
 
     // Check the default device (which is the left device).
     number = ConnectToDeviceAndGetNumber("fuchsia.composite.test.Service/default/device");
     if (number.is_error()) {
-      __UNUSED auto result = waiter->Ack(number.error_value());
+      [[maybe_unused]] auto result = waiter->Ack(number.error_value());
       return zx::ok();
     }
     if (*number != 1) {
       FDF_LOG(ERROR, "Wrong number for default: expecting 1, saw %d", *number);
-      __UNUSED auto result = waiter->Ack(ZX_ERR_INTERNAL);
+      [[maybe_unused]] auto result = waiter->Ack(ZX_ERR_INTERNAL);
       return zx::ok();
     }
 
-    __UNUSED auto result = waiter->Ack(ZX_OK);
+    [[maybe_unused]] auto result = waiter->Ack(ZX_OK);
     return zx::ok();
   }
 };

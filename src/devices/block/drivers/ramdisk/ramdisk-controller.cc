@@ -154,7 +154,7 @@ zx_status_t RamdiskDriverBind(void* ctx, zx_device_t* parent) {
   }
 
   // RamdiskController owned by the DDK after being added successfully.
-  __UNUSED auto ptr = ramctl.release();
+  [[maybe_unused]] auto ptr = ramctl.release();
   return ZX_OK;
 }
 

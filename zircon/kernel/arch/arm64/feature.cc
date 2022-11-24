@@ -231,7 +231,7 @@ static void midr_to_core_string(uint32_t midr, char* str, size_t len) {
   auto microarch = midr_to_microarch(midr);
   uint32_t implementer = BITS_SHIFT(midr, 31, 24);
   uint32_t variant = BITS_SHIFT(midr, 23, 20);
-  __UNUSED uint32_t architecture = BITS_SHIFT(midr, 19, 16);
+  [[maybe_unused]] uint32_t architecture = BITS_SHIFT(midr, 19, 16);
   uint32_t partnum = BITS_SHIFT(midr, 15, 4);
   uint32_t revision = BITS_SHIFT(midr, 3, 0);
 

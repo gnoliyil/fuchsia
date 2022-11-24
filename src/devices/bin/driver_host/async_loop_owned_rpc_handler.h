@@ -34,7 +34,7 @@ class AsyncLoopOwnedRpcHandler {
   static zx_status_t BeginWait(std::unique_ptr<T>* conn, async_dispatcher_t* dispatcher) {
     zx_status_t status = (*conn)->wait_.Begin(dispatcher);
     if (status == ZX_OK) {
-      __UNUSED auto ptr = conn->release();
+      [[maybe_unused]] auto ptr = conn->release();
     }
     return status;
   }

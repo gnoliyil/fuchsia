@@ -53,7 +53,7 @@ zx_status_t TiTca6408a::Create(void* ctx, zx_device_t* parent) {
     return status;
   }
 
-  __UNUSED auto* _ = dev.release();
+  [[maybe_unused]] auto* _ = dev.release();
 
   return ZX_OK;
 }

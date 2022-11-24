@@ -322,7 +322,7 @@ void OwnedWaitQueue::QueuePressureChanged(Thread* t, int old_prio, int new_prio)
       // Since the pressure from one of our queues just dropped, we need
       // to recompute the new maximum priority across all of the wait
       // queues currently owned by this thread.
-      __UNUSED int orig_new_prio = new_prio;
+      [[maybe_unused]] int orig_new_prio = new_prio;
       for (const auto& owq : t->wait_queue_state_.owned_wait_queues_) {
         int queue_prio = owq.BlockedPriority();
 

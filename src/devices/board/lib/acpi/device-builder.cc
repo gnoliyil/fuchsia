@@ -392,7 +392,7 @@ zx::result<> DeviceBuilder::BuildComposite(acpi::Manager* manager,
       .parts = &fragment_parts[bus_index],
   };
 
-  __UNUSED composite_device_desc_t composite_desc = {
+  [[maybe_unused]] composite_device_desc_t composite_desc = {
       .props = dev_props_.data(),
       .props_count = dev_props_.size(),
       .str_props = str_props.data(),
@@ -414,7 +414,7 @@ zx::result<> DeviceBuilder::BuildComposite(acpi::Manager* manager,
 
   if (status == ZX_OK) {
     // The DDK takes ownership of the device, but only if DdkAddComposite succeeded.
-    __UNUSED auto unused = composite_device.release();
+    [[maybe_unused]] auto unused = composite_device.release();
   }
 #endif
 

@@ -50,7 +50,9 @@
 #define __ALWAYS_INLINE __attribute__((__always_inline__))
 
 // Avoid issuing a warning if the given variable/function is unused.
+#ifndef __cplusplus
 #define __UNUSED __attribute__((__unused__))
+#endif
 
 // Pack the given structure or class, omitting padding between fields.
 #define __PACKED __attribute__((packed))

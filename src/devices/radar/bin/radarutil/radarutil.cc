@@ -435,7 +435,7 @@ zx_status_t RadarUtil::ReadBursts() {
           zx::nanosleep(zx::deadline_after(burst_process_time_));
         }
 
-        __UNUSED auto result = client_->UnlockVmo(vmo_id);
+        [[maybe_unused]] auto result = client_->UnlockVmo(vmo_id);
 
         if (output_file_) {
           fwrite(burst_buffer_.get(), 1, burst_buffer_.size(), output_file_);

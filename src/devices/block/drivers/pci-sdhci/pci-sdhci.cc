@@ -119,7 +119,7 @@ zx_status_t PciSdhci::Bind(void* /* unused */, zx_device_t* parent) {
 
   // The object is owned by the DDK, now that it has been added. It will be deleted
   // when the device is released.
-  __UNUSED auto ptr = dev.release();
+  [[maybe_unused]] auto ptr = dev.release();
 
   return ZX_OK;
 }

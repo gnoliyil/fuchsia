@@ -385,7 +385,7 @@ zx_status_t AmlDsp::Create(void* ctx, zx_device_t* parent) {
     return status;
   }
 
-  __UNUSED auto* dummy = dev.release();
+  [[maybe_unused]] auto* dummy = dev.release();
   return ZX_OK;
 }
 

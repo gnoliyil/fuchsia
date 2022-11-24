@@ -221,7 +221,7 @@ zx_status_t AmlCpu::Create(void* context, zx_device_t* parent) {
     }
 
     // Intentionally leak this device because it's owned by the driver framework.
-    __UNUSED auto unused = cpu_device.release();
+    [[maybe_unused]] auto unused = cpu_device.release();
   }
 
   return ZX_OK;

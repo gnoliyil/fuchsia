@@ -41,7 +41,7 @@ class Root : public DeviceType, public fdf::Server<fuchsia_compat_runtime::Root>
       return status;
     }
     // The DriverFramework now owns driver.
-    __UNUSED auto ptr = driver.release();
+    [[maybe_unused]] auto ptr = driver.release();
     return ZX_OK;
   }
 

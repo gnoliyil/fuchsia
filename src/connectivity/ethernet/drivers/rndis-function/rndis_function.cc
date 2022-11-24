@@ -1170,7 +1170,7 @@ zx_status_t RndisFunction::Create(void* ctx, zx_device_t* parent) {
   device->Bind();
 
   // Intentionally leak this device because it's owned by the driver framework.
-  __UNUSED auto unused = device.release();
+  [[maybe_unused]] auto unused = device.release();
   return ZX_OK;
 }
 

@@ -238,7 +238,7 @@ TEST(RestrictedMode, InvalidState) {
   zx_status_t status;
   zx_restricted_state state{};
 
-  __UNUSED auto set_state_and_enter = [&]() {
+  [[maybe_unused]] auto set_state_and_enter = [&]() {
     // set the state
     status = zx_restricted_write_state(&state, sizeof(state));
     ASSERT_EQ(ZX_OK, status);

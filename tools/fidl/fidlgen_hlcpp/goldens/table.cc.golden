@@ -36,13 +36,13 @@ void EmptyTable::Encode(::fidl::Encoder* _encoder, size_t _offset,
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
 }
 
 void EmptyTable::Decode(::fidl::Decoder* _decoder, EmptyTable* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -123,7 +123,7 @@ void SimpleTable::Encode(::fidl::Encoder* _encoder, size_t _offset,
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -176,8 +176,8 @@ void SimpleTable::Encode(::fidl::Encoder* _encoder, size_t _offset,
 
 void SimpleTable::Decode(::fidl::Decoder* _decoder, SimpleTable* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -283,7 +283,7 @@ void OlderSimpleTable::Encode(::fidl::Encoder* _encoder, size_t _offset,
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -312,8 +312,8 @@ void OlderSimpleTable::Encode(::fidl::Encoder* _encoder, size_t _offset,
 
 void OlderSimpleTable::Decode(::fidl::Decoder* _decoder, OlderSimpleTable* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -432,7 +432,7 @@ void NewerSimpleTable::Encode(::fidl::Encoder* _encoder, size_t _offset,
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -509,8 +509,8 @@ void NewerSimpleTable::Encode(::fidl::Encoder* _encoder, size_t _offset,
 
 void NewerSimpleTable::Decode(::fidl::Decoder* _decoder, NewerSimpleTable* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -671,7 +671,7 @@ void ReverseOrdinalTable::Encode(::fidl::Encoder* _encoder, size_t _offset,
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -748,8 +748,8 @@ void ReverseOrdinalTable::Encode(::fidl::Encoder* _encoder, size_t _offset,
 
 void ReverseOrdinalTable::Decode(::fidl::Decoder* _decoder, ReverseOrdinalTable* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -876,7 +876,7 @@ void TableWithAttributes::Encode(::fidl::Encoder* _encoder, size_t _offset,
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -905,8 +905,8 @@ void TableWithAttributes::Encode(::fidl::Encoder* _encoder, size_t _offset,
 
 void TableWithAttributes::Decode(::fidl::Decoder* _decoder, TableWithAttributes* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -974,13 +974,13 @@ void ExtensionTable::Encode(::fidl::Encoder* _encoder, size_t _offset,
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
 }
 
 void ExtensionTable::Decode(::fidl::Decoder* _decoder, ExtensionTable* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }
@@ -2115,7 +2115,7 @@ void SixtyFourOrdinalTable::Encode(::fidl::Encoder* _encoder, size_t _offset,
   size_t max_ordinal = MaxOrdinal();
   ::fidl::EncodeVectorPointer(_encoder, max_ordinal, _offset);
   if (max_ordinal == 0) return;
-  __attribute__((__unused__)) size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
+  [[maybe_unused]] size_t base = _encoder->Alloc(max_ordinal * sizeof(fidl_envelope_v2_t));
   if (field_presence_.IsSet<0>()) {
     const size_t length_before = _encoder->CurrentLength();
     const size_t handles_before = _encoder->CurrentHandleCount();
@@ -3656,8 +3656,8 @@ void SixtyFourOrdinalTable::Encode(::fidl::Encoder* _encoder, size_t _offset,
 
 void SixtyFourOrdinalTable::Decode(::fidl::Decoder* _decoder, SixtyFourOrdinalTable* _value, size_t _offset) {
   fidl_vector_t* encoded = _decoder->GetPtr<fidl_vector_t>(_offset);
-  __attribute__((__unused__)) size_t base;
-  __attribute__((__unused__)) size_t count;
+  [[maybe_unused]] size_t base;
+  [[maybe_unused]] size_t count;
   if (!encoded->data) {
     goto clear_all;
   }

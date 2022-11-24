@@ -29,7 +29,7 @@ zx_status_t TestLifecycleDriverChild::Create(zx_device_t* parent,
                                           .set_client_remote(std::move(instance_client)));
   if (status == ZX_OK) {
     // devmgr is now in charge of the memory for dev
-    __UNUSED auto ptr = device.release();
+    [[maybe_unused]] auto ptr = device.release();
   }
   return status;
 }
@@ -52,7 +52,7 @@ zx_status_t TestLifecycleDriverChild::DdkOpen(zx_device_t** out, uint32_t flags)
 
   *out = device->zxdev();
   // devmgr is now in charge of the memory for dev
-  __UNUSED auto ptr = device.release();
+  [[maybe_unused]] auto ptr = device.release();
   return ZX_OK;
 }
 

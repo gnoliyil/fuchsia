@@ -914,7 +914,7 @@ zx_status_t DsiDw::Bind() {
     DSI_ERROR("Dsi Base Initialization failed (%d)", status);
     return status;
   }
-  __UNUSED auto ptr = dw_base.release();
+  [[maybe_unused]] auto ptr = dw_base.release();
   return status;
 }
 
@@ -928,7 +928,7 @@ zx_status_t dsi_dw_bind(void* ctx, zx_device_t* parent) {
   auto status = dev->Bind();
   if (status == ZX_OK) {
     // devmgr is now in charge of the memory for dev
-    __UNUSED auto ptr = dev.release();
+    [[maybe_unused]] auto ptr = dev.release();
   }
   return status;
 }

@@ -69,7 +69,7 @@ zx_status_t Display::Create(void* ctx, zx_device_t* device) {
   zx_status_t status = display->Bind();
   if (status == ZX_OK) {
     // devmgr now owns device.
-    __UNUSED auto* dev = display.release();
+    [[maybe_unused]] auto* dev = display.release();
   }
   return status;
 }

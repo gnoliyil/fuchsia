@@ -25,7 +25,7 @@ class InitTestChild : public ChildDeviceType {
     zx_status_t status = driver->DdkAdd(ddk::DeviceAddArgs("child"));
     if (status == ZX_OK) {
       // The driver framework now owns driver.
-      __UNUSED auto ptr = driver.release();
+      [[maybe_unused]] auto ptr = driver.release();
     }
     return status;
   }
@@ -48,7 +48,7 @@ class InitTestParent : public DeviceType {
       return status;
     }
     // The driver framework now owns driver.
-    __UNUSED auto ptr = driver.release();
+    [[maybe_unused]] auto ptr = driver.release();
     return ZX_OK;
   }
 

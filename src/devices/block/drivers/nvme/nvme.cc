@@ -772,7 +772,7 @@ zx_status_t Nvme::Bind(void* ctx, zx_device_t* dev) {
   }
 
   // The DriverFramework now owns driver.
-  __UNUSED auto placeholder = driver.release();
+  [[maybe_unused]] auto placeholder = driver.release();
   return ZX_OK;
 }
 

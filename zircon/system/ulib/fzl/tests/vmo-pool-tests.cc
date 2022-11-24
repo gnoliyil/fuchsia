@@ -54,7 +54,7 @@ class VmoPoolTester : public zxtest::Test {
     for (size_t i = 0; i < kNumVmos && i < num_buffers; ++i) {
       auto buffer = pool_.LockBufferForWrite();
       ASSERT_TRUE(buffer.has_value());
-      __UNUSED uint32_t index = buffer->ReleaseWriteLockAndGetIndex();
+      [[maybe_unused]] uint32_t index = buffer->ReleaseWriteLockAndGetIndex();
     }
   }
 

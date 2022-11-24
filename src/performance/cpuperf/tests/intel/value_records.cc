@@ -16,7 +16,7 @@ class ValueRecordsVerifier : public Verifier {
   ValueRecordsVerifier(const cpuperf::SessionResultSpec* spec) : Verifier(spec) {
     const perfmon::EventDetails* details;
 
-    bool rc __UNUSED = LookupEventByName("misc", "edram_temperature", &details);
+    bool rc [[maybe_unused]] = LookupEventByName("misc", "edram_temperature", &details);
     FX_DCHECK(rc);
     edram_temperature_id_ = details->id;
 

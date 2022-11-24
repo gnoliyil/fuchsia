@@ -652,7 +652,7 @@ zx_status_t Fusb302::Create(void* context, zx_device_t* parent) {
   }
 
   // Let device runner take ownership of this object.
-  __UNUSED auto* dummy = device.release();
+  [[maybe_unused]] auto* dummy = device.release();
 
   return ZX_OK;
 }

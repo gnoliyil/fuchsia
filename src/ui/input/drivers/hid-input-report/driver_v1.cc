@@ -68,7 +68,7 @@ zx_status_t input_report_bind_v1(void* ctx, zx_device_t* parent) {
   auto status = dev->Bind();
   if (status == ZX_OK) {
     // devmgr is now in charge of the memory for dev
-    __UNUSED auto ptr = dev.release();
+    [[maybe_unused]] auto ptr = dev.release();
   }
   return status;
 }

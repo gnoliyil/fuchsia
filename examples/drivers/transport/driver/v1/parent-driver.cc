@@ -49,7 +49,7 @@ zx_status_t DriverTransportDevice::Create(void* ctx, zx_device_t* parent) {
   zx_status_t status = device->Bind();
   if (status == ZX_OK) {
     // Driver framework now owns device.
-    __UNUSED auto* dev = device.release();
+    [[maybe_unused]] auto* dev = device.release();
   }
   return status;
 }

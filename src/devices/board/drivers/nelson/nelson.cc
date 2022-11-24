@@ -318,7 +318,7 @@ zx_status_t Nelson::Create(void* ctx, zx_device_t* parent) {
   status = board->Start();
   if (status == ZX_OK) {
     // devmgr is now in charge of the device.
-    __UNUSED auto* dummy = board.release();
+    [[maybe_unused]] auto* dummy = board.release();
   }
   return status;
 }

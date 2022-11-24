@@ -140,7 +140,7 @@ class Binder : public fake_ddk::Bind {
     } else {
       // We expect to get a |DeviceRemove| call (from replying to unbind) for the
       // UsbMassStorageDevice.
-      __UNUSED auto ptr = outctx.release();
+      [[maybe_unused]] auto ptr = outctx.release();
     }
     // This needs to come after setting |out|, as this sets the device's internal |zxdev_|,
     // which needs to be present for the InitTxn.

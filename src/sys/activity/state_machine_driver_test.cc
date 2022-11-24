@@ -235,11 +235,11 @@ TEST_F(StateMachineDriverTest, HandlesTimeoutsIfActivitySpuriouslyEnded) {
 TEST_F(StateMachineDriverTest, NotifiesSingleObserverOnStateChanges) {
   int calls = 0;
   fuchsia::ui::activity::State observed_state = fuchsia::ui::activity::State::UNKNOWN;
-  StateChangedCallback callback{
-      [&calls, &observed_state](fuchsia::ui::activity::State state, __UNUSED zx::time time) {
-        calls++;
-        observed_state = state;
-      }};
+  StateChangedCallback callback{[&calls, &observed_state](fuchsia::ui::activity::State state,
+                                                          [[maybe_unused]] zx::time time) {
+    calls++;
+    observed_state = state;
+  }};
   EXPECT_EQ(state_machine_driver_->RegisterObserver(1u, std::move(callback)), ZX_OK);
 
   ASSERT_EQ(state_machine_driver_->ReceiveDiscreteActivity(DiscreteActivity(), Now(), []() {}),
@@ -258,10 +258,10 @@ TEST_F(StateMachineDriverTest, NotifiesSingleObserverOnStateChanges) {
 TEST_F(StateMachineDriverTest, NotifiesMultipleObserversOnStateChanage) {
   int call1_calls = 0;
   int call2_calls = 0;
-  StateChangedCallback callback1{[&call1_calls](__UNUSED fuchsia::ui::activity::State state,
-                                                __UNUSED zx::time time) { call1_calls++; }};
-  StateChangedCallback callback2{[&call2_calls](__UNUSED fuchsia::ui::activity::State state,
-                                                __UNUSED zx::time time) { call2_calls++; }};
+  StateChangedCallback callback1{[&call1_calls]([[maybe_unused]] fuchsia::ui::activity::State state,
+                                                [[maybe_unused]] zx::time time) { call1_calls++; }};
+  StateChangedCallback callback2{[&call2_calls]([[maybe_unused]] fuchsia::ui::activity::State state,
+                                                [[maybe_unused]] zx::time time) { call2_calls++; }};
   EXPECT_EQ(state_machine_driver_->RegisterObserver(1u, std::move(callback1)), ZX_OK);
   EXPECT_EQ(state_machine_driver_->RegisterObserver(2u, std::move(callback2)), ZX_OK);
 
@@ -280,8 +280,8 @@ TEST_F(StateMachineDriverTest, NotifiesMultipleObserversOnStateChanage) {
 
 TEST_F(StateMachineDriverTest, StopsNotifyingUnregisteredObservers) {
   int calls = 0;
-  StateChangedCallback callback{
-      [&calls](__UNUSED fuchsia::ui::activity::State state, __UNUSED zx::time time) { calls++; }};
+  StateChangedCallback callback{[&calls]([[maybe_unused]] fuchsia::ui::activity::State state,
+                                         [[maybe_unused]] zx::time time) { calls++; }};
   EXPECT_EQ(state_machine_driver_->RegisterObserver(1u, std::move(callback)), ZX_OK);
 
   ASSERT_EQ(state_machine_driver_->ReceiveDiscreteActivity(DiscreteActivity(), Now(), []() {}),
@@ -300,8 +300,8 @@ TEST_F(StateMachineDriverTest, StopsNotifyingUnregisteredObservers) {
 
 TEST_F(StateMachineDriverTest, TimeoutsIgnoredIfObjectDestroyedBeforeExpiry) {
   int calls = 0;
-  StateChangedCallback callback{
-      [&calls](__UNUSED fuchsia::ui::activity::State state, __UNUSED zx::time time) { calls++; }};
+  StateChangedCallback callback{[&calls]([[maybe_unused]] fuchsia::ui::activity::State state,
+                                         [[maybe_unused]] zx::time time) { calls++; }};
   {
     StateMachineDriver driver(dispatcher());
     ASSERT_EQ(state_machine_driver_->ReceiveDiscreteActivity(DiscreteActivity(), Now(), []() {}),
@@ -323,11 +323,11 @@ TEST_F(StateMachineDriverTest, TimeoutsIgnoredIfObjectDestroyedBeforeExpiry) {
 TEST_F(StateMachineDriverTest, StateOverride_NotifiesObserversWhenSet) {
   int calls = 0;
   fuchsia::ui::activity::State observed_state = fuchsia::ui::activity::State::UNKNOWN;
-  StateChangedCallback callback{
-      [&calls, &observed_state](fuchsia::ui::activity::State state, __UNUSED zx::time time) {
-        calls++;
-        observed_state = state;
-      }};
+  StateChangedCallback callback{[&calls, &observed_state](fuchsia::ui::activity::State state,
+                                                          [[maybe_unused]] zx::time time) {
+    calls++;
+    observed_state = state;
+  }};
   EXPECT_EQ(state_machine_driver_->RegisterObserver(1u, std::move(callback)), ZX_OK);
 
   state_machine_driver_->SetOverrideState(fuchsia::ui::activity::State::ACTIVE);
@@ -339,11 +339,11 @@ TEST_F(StateMachineDriverTest, StateOverride_NotifiesObserversWhenSet) {
 TEST_F(StateMachineDriverTest, StateOverride_NotifiesObserversWhenChanged) {
   int calls = 0;
   fuchsia::ui::activity::State observed_state = fuchsia::ui::activity::State::UNKNOWN;
-  StateChangedCallback callback{
-      [&calls, &observed_state](fuchsia::ui::activity::State state, __UNUSED zx::time time) {
-        calls++;
-        observed_state = state;
-      }};
+  StateChangedCallback callback{[&calls, &observed_state](fuchsia::ui::activity::State state,
+                                                          [[maybe_unused]] zx::time time) {
+    calls++;
+    observed_state = state;
+  }};
   EXPECT_EQ(state_machine_driver_->RegisterObserver(1u, std::move(callback)), ZX_OK);
 
   state_machine_driver_->SetOverrideState(fuchsia::ui::activity::State::ACTIVE);
@@ -362,11 +362,11 @@ TEST_F(StateMachineDriverTest, StateOverride_NotifiesObserversWhenChanged) {
 TEST_F(StateMachineDriverTest, StateOverride_NotifiesObserverOfRealStateWhenUnset) {
   int calls = 0;
   fuchsia::ui::activity::State observed_state = fuchsia::ui::activity::State::UNKNOWN;
-  StateChangedCallback callback{
-      [&calls, &observed_state](fuchsia::ui::activity::State state, __UNUSED zx::time time) {
-        calls++;
-        observed_state = state;
-      }};
+  StateChangedCallback callback{[&calls, &observed_state](fuchsia::ui::activity::State state,
+                                                          [[maybe_unused]] zx::time time) {
+    calls++;
+    observed_state = state;
+  }};
   EXPECT_EQ(state_machine_driver_->RegisterObserver(1u, std::move(callback)), ZX_OK);
 
   state_machine_driver_->SetOverrideState(fuchsia::ui::activity::State::ACTIVE);
@@ -385,11 +385,11 @@ TEST_F(StateMachineDriverTest, StateOverride_NotifiesObserverOfRealStateWhenUnse
 TEST_F(StateMachineDriverTest, StateOverride_PreventsNotificationsForReportedActivities) {
   int calls = 0;
   fuchsia::ui::activity::State observed_state = fuchsia::ui::activity::State::UNKNOWN;
-  StateChangedCallback callback{
-      [&calls, &observed_state](fuchsia::ui::activity::State state, __UNUSED zx::time time) {
-        calls++;
-        observed_state = state;
-      }};
+  StateChangedCallback callback{[&calls, &observed_state](fuchsia::ui::activity::State state,
+                                                          [[maybe_unused]] zx::time time) {
+    calls++;
+    observed_state = state;
+  }};
   EXPECT_EQ(state_machine_driver_->RegisterObserver(1u, std::move(callback)), ZX_OK);
 
   state_machine_driver_->SetOverrideState(fuchsia::ui::activity::State::IDLE);

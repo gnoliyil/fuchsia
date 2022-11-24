@@ -22,7 +22,7 @@ zx_status_t TestRoot::Bind(void* ctx, zx_device_t* dev) {
     if (status != ZX_OK) {
       return status;
     }
-    __UNUSED auto ptr = device.release();
+    [[maybe_unused]] auto ptr = device.release();
   }
 
   {
@@ -35,7 +35,7 @@ zx_status_t TestRoot::Bind(void* ctx, zx_device_t* dev) {
     if (status != ZX_OK) {
       return status;
     }
-    __UNUSED auto ptr = device.release();
+    [[maybe_unused]] auto ptr = device.release();
   }
 
   {
@@ -48,7 +48,7 @@ zx_status_t TestRoot::Bind(void* ctx, zx_device_t* dev) {
     if (status != ZX_OK) {
       return status;
     }
-    __UNUSED auto ptr = device.release();
+    [[maybe_unused]] auto ptr = device.release();
   }
 
   {
@@ -61,7 +61,7 @@ zx_status_t TestRoot::Bind(void* ctx, zx_device_t* dev) {
     if (status != ZX_OK) {
       return status;
     }
-    __UNUSED auto ptr = device.release();
+    [[maybe_unused]] auto ptr = device.release();
   }
 
   {
@@ -74,7 +74,7 @@ zx_status_t TestRoot::Bind(void* ctx, zx_device_t* dev) {
     if (status != ZX_OK) {
       return status;
     }
-    __UNUSED auto ptr = device.release();
+    [[maybe_unused]] auto ptr = device.release();
   }
 
   {
@@ -133,7 +133,7 @@ zx_status_t TestRoot::Bind(void* ctx, zx_device_t* dev) {
       return status;
     }
 
-    __UNUSED auto ptr = device.release();
+    [[maybe_unused]] auto ptr = device.release();
   }
 
   return ZX_OK;

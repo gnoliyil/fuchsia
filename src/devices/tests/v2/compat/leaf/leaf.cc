@@ -39,7 +39,7 @@ class Leaf : public DeviceType {
       return status;
     }
     // The DriverFramework now owns driver.
-    __UNUSED auto ptr = driver.release();
+    [[maybe_unused]] auto ptr = driver.release();
     return ZX_OK;
   }
 

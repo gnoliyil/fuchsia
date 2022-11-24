@@ -468,7 +468,7 @@ zx_status_t AmlMailbox::Create(void* ctx, zx_device_t* parent) {
                            .set_proto_id(ZX_PROTOCOL_AML_MAILBOX));
   if (status == ZX_OK) {
     // Devmgr is now in charge of the memory for dev.
-    __UNUSED auto* dummy = dev.release();
+    [[maybe_unused]] auto* dummy = dev.release();
     return ZX_OK;
   } else {
     zxlogf(ERROR, "DdkAdd failed: %s", zx_status_get_string(status));

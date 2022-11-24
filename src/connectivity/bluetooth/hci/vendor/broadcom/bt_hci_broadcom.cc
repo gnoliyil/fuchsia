@@ -55,7 +55,7 @@ zx_status_t BtHciBroadcom::Create(void* ctx, zx_device_t* parent, async_dispatch
 
   // Driver Manager is now in charge of the device.
   // Memory will be explicitly freed in DdkRelease().
-  __UNUSED BtHciBroadcom* unused = dev.release();
+  [[maybe_unused]] BtHciBroadcom* unused = dev.release();
   return ZX_OK;
 }
 

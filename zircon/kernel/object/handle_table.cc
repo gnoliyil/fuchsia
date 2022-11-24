@@ -98,7 +98,7 @@ Handle* HandleTable::GetHandleLocked(ProcessDispatcher* caller, zx_handle_t hand
     // depending on the job policy. Note that we don't use the return value from
     // EnforceBasicPolicy() here: ZX_POL_ACTION_ALLOW and ZX_POL_ACTION_DENY are equivalent for
     // ZX_POL_BAD_HANDLE.
-    __UNUSED auto result = caller->EnforceBasicPolicy(ZX_POL_BAD_HANDLE);
+    [[maybe_unused]] auto result = caller->EnforceBasicPolicy(ZX_POL_BAD_HANDLE);
   }
 
   return nullptr;

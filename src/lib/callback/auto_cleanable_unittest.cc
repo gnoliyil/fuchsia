@@ -221,7 +221,7 @@ TEST(AutoCleanableMap, ConstIteration) {
   async::TestLoop loop;
 
   const AutoCleanableMap<int, Cleanable> map(loop.dispatcher());
-  for (__UNUSED const auto& [key, value] : map) {
+  for ([[maybe_unused]] const auto& [key, value] : map) {
   }
 }
 

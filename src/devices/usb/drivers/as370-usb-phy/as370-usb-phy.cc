@@ -107,7 +107,7 @@ zx_status_t UsbPhy::Create(void* ctx, zx_device_t* parent) {
   }
 
   // devmgr is now in charge of the device.
-  __UNUSED auto* dummy = dev.release();
+  [[maybe_unused]] auto* dummy = dev.release();
   return ZX_OK;
 }
 
@@ -140,7 +140,7 @@ zx_status_t UsbPhy::RemoveDwc2Device() {
   }
 
   // devmgr will own the device until it is destroyed.
-  __UNUSED auto* dev = dwc2_device_.release();
+  [[maybe_unused]] auto* dev = dwc2_device_.release();
   dev->DdkAsyncRemove();
 
   return ZX_OK;

@@ -51,7 +51,7 @@ class SpiFlashTest : public zxtest::Test {
     auto device =
         std::make_unique<spiflash::SpiFlashDevice>(fake_parent_.get(), region_.GetMmioBuffer());
     ASSERT_OK(device->Bind());
-    __UNUSED auto unused = device.release();
+    [[maybe_unused]] auto unused = device.release();
     device_ = fake_parent_->GetLatestChild();
   }
 

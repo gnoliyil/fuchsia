@@ -25,7 +25,7 @@ zx_status_t ChromeosAcpi::Bind(void* ctx, zx_device_t* parent) {
   zx_status_t status = device->Bind();
   if (status == ZX_OK) {
     // The driver framework takes ownership of the device if DdkAdd() succeeds.
-    __UNUSED auto unused = device.release();
+    [[maybe_unused]] auto unused = device.release();
   }
   return status;
 }

@@ -221,7 +221,7 @@ inline ArmArchVmAspace::AutoPendingAccessFault::AutoPendingAccessFault(ArmArchVm
 }
 
 inline ArmArchVmAspace::AutoPendingAccessFault::~AutoPendingAccessFault() {
-  __UNUSED const uint64_t previous_value = aspace_->pending_access_faults_.fetch_sub(1);
+  [[maybe_unused]] const uint64_t previous_value = aspace_->pending_access_faults_.fetch_sub(1);
   DEBUG_ASSERT(previous_value >= 1);
 }
 

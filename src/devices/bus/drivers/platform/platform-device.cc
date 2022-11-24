@@ -122,7 +122,7 @@ zx_status_t PlatformDevice::Init() {
       }
 
       // The DDK takes ownership of the device.
-      __UNUSED auto unused = fragment.release();
+      [[maybe_unused]] auto unused = fragment.release();
     }
   }
 

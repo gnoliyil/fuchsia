@@ -558,7 +558,7 @@ static zx_status_t hid_buttons_bind(void* ctx, zx_device_t* parent) {
   zx_status_t status = dev->Bind(std::move(gpios), std::move(buttons));
   if (status == ZX_OK) {
     // devmgr is now in charge of the memory for dev.
-    __UNUSED auto ptr = dev.release();
+    [[maybe_unused]] auto ptr = dev.release();
   }
   return status;
 }

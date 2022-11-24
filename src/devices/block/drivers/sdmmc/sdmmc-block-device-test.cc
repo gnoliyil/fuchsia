@@ -65,7 +65,7 @@ class SdmmcBlockDeviceTest : public zxtest::Test {
   void TearDown() override {
     dut_->StopWorkerThread();
     if (added_) {
-      __UNUSED auto ptr = dut_.release();
+      [[maybe_unused]] auto ptr = dut_.release();
     }
   }
 
@@ -725,7 +725,7 @@ TEST_F(SdmmcBlockDeviceTest, CompleteTransactions) {
     auto dut = std::make_unique<SdmmcBlockDevice>(parent_.get(), SdmmcDevice(sdmmc_.GetClient()));
     dut->SetBlockInfo(FakeSdmmcDevice::kBlockSize, FakeSdmmcDevice::kBlockCount);
     EXPECT_OK(dut->AddDevice());
-    __UNUSED auto ptr = dut.release();
+    [[maybe_unused]] auto ptr = dut.release();
 
     ddk::BlockImplProtocolClient user = GetBlockClient(ptr->zxdev(), USER_DATA_PARTITION);
     ASSERT_TRUE(user.is_valid());
@@ -1249,7 +1249,7 @@ TEST_F(SdmmcBlockDeviceTest, RpmbPartition) {
   FillVmo(tx_frames_mapper, 4, 0);
 
   // Repeated accesses to one partition should not generate more than one MMC_SWITCH command.
-  sdmmc_.set_command_callback(MMC_SWITCH, [](__UNUSED sdmmc_req_t* req) { FAIL(); });
+  sdmmc_.set_command_callback(MMC_SWITCH, []([[maybe_unused]] sdmmc_req_t* req) { FAIL(); });
 
   sdmmc_.set_command_callback(SDMMC_SET_BLOCK_COUNT, [](sdmmc_req_t* req) {
     EXPECT_TRUE(req->arg & MMC_SET_BLOCK_COUNT_RELIABLE_WRITE);
@@ -1294,7 +1294,8 @@ TEST_F(SdmmcBlockDeviceTest, RpmbRequestLimit) {
     request.tx_frames.size = 512;
     rpmb_client_->Request(std::move(request))
         .ThenExactlyOnce(
-            [&](__UNUSED fidl::WireUnownedResult<fuchsia_hardware_rpmb::Rpmb::Request>& result) {});
+            [&]([[maybe_unused]] fidl::WireUnownedResult<fuchsia_hardware_rpmb::Rpmb::Request>&
+                    result) {});
   }
 
   fuchsia_hardware_rpmb::wire::Request error_request = {};
@@ -1506,7 +1507,7 @@ TEST_F(SdmmcBlockDeviceTest, BlockOpsGetToRun) {
     sync_completion_t completion = {};
   } context;
 
-  const auto op_callback = [](void* ctx, zx_status_t status, __UNUSED block_op_t* bop) {
+  const auto op_callback = [](void* ctx, zx_status_t status, [[maybe_unused]] block_op_t* bop) {
     EXPECT_OK(status);
 
     auto& op_ctx = *reinterpret_cast<BlockContext*>(ctx);

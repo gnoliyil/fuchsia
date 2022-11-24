@@ -219,7 +219,7 @@ zx_status_t AmlMipiDevice::Create(zx_device_t* parent) {
   zxlogf(INFO, "aml-mipi driver added");
 
   // mipi_device intentionally leaked as it is now held by DevMgr.
-  __UNUSED auto ptr = mipi_device.release();
+  [[maybe_unused]] auto ptr = mipi_device.release();
 
   return status;
 }

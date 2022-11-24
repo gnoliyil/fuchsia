@@ -105,9 +105,9 @@ class PowerManagementCapability : public Capability {
   PciReg16 pmcsr() { return pmcsr_; }
 
  private:
-  const PciReg16 pmc_;     // Power Management Capabilities
-  const PciReg16 pmcsr_;   // Power Management Control/Status Register
-  __UNUSED PciReg8 data_;  // Data
+  const PciReg16 pmc_;             // Power Management Capabilities
+  const PciReg16 pmcsr_;           // Power Management Control/Status Register
+  [[maybe_unused]] PciReg8 data_;  // Data
 };
 
 }  // namespace pci

@@ -63,7 +63,7 @@ zx_status_t SpiDevice::Create(void* ctx, zx_device_t* parent) {
       fdf_dispatcher_get_async_dispatcher(fdf_dispatcher_get_current_dispatcher());
   device->AddChildren(spi, dispatcher);
 
-  __UNUSED auto* dummy = device.release();
+  [[maybe_unused]] auto* dummy = device.release();
 
   return ZX_OK;
 }
@@ -151,7 +151,7 @@ void SpiDevice::AddChildren(const ddk::SpiImplProtocolClient& spi, async_dispatc
     }
 
     // Owned by the framework now.
-    __UNUSED auto ptr = fidl_dev.release();
+    [[maybe_unused]] auto ptr = fidl_dev.release();
 
     // Create the Banjo child.
     auto banjo_dev = std::make_unique<SpiBanjoChild>(dev->zxdev(), dev.get());
@@ -180,7 +180,7 @@ void SpiDevice::AddChildren(const ddk::SpiImplProtocolClient& spi, async_dispatc
     }
 
     // Owned by the framework now.
-    __UNUSED auto ptr2 = banjo_dev.release();
+    [[maybe_unused]] auto ptr2 = banjo_dev.release();
 
     dev->AddRef();  // DdkAdd succeeded -- increment the counter now that the DDK has a reference.
 

@@ -308,7 +308,7 @@ zx_status_t UsbTest::Create(void* ctx, zx_device_t* parent) {
     return status;
   }
   // The DDK now owns the test.
-  __UNUSED UsbTest* unused = test.release();
+  [[maybe_unused]] UsbTest* unused = test.release();
   return ZX_OK;
 }
 

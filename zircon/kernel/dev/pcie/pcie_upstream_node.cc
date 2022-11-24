@@ -128,7 +128,7 @@ fbl::RefPtr<PcieDevice> PcieUpstreamNode::ScanDevice(const PciConfig* cfg, uint 
   DEBUG_ASSERT(func_id < PCIE_MAX_FUNCTIONS_PER_DEVICE);
   DEBUG_ASSERT(driver().RescanLockIsHeld());
 
-  __UNUSED uint ndx = (dev_id * PCIE_MAX_FUNCTIONS_PER_DEVICE) + func_id;
+  [[maybe_unused]] uint ndx = (dev_id * PCIE_MAX_FUNCTIONS_PER_DEVICE) + func_id;
   DEBUG_ASSERT(ndx < ktl::size(downstream_));
   DEBUG_ASSERT(downstream_[ndx] == nullptr);
 

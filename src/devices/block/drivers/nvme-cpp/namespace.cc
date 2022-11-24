@@ -27,7 +27,7 @@ zx_status_t Namespace::Create(Nvme* controller, uint32_t id) {
   zx_status_t status = dev->Bind();
   if (status == ZX_OK) {
     // The DDK takes ownership of the device.
-    __UNUSED auto unused = dev.release();
+    [[maybe_unused]] auto unused = dev.release();
   }
 
   return status;

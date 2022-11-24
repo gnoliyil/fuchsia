@@ -253,7 +253,7 @@ void FileCache::Downgrade(Page *raw_page) {
   raw_page->ResurrectRef();
   fbl::RefPtr<Page> page = fbl::ImportFromRawPtr(raw_page);
   // Leak it to keep alive in FileCache.
-  __UNUSED auto leak = fbl::ExportToRawPtr(&page);
+  [[maybe_unused]] auto leak = fbl::ExportToRawPtr(&page);
   raw_page->ClearActive();
   recycle_cvar_.notify_all();
 }

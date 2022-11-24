@@ -42,7 +42,7 @@ zx_status_t NetdeviceMigration::Bind(void* ctx, zx_device_t* dev) {
   }
   // On a successful call to Bind(), Devmgr takes ownership of the driver, which it releases by
   // calling DdkRelease(). Consequently, we transfer our ownership to a local and let it drop.
-  auto __UNUSED temp_ref = netdevm.release();
+  [[maybe_unused]] auto temp_ref = netdevm.release();
   return ZX_OK;
 }
 

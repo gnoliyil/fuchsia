@@ -30,7 +30,7 @@ zx_status_t HidCtl::Create(void* ctx, zx_device_t* parent) {
     zxlogf(ERROR, "%s: could not add device: %d", __func__, status);
   } else {
     // devmgr owns the memory now
-    __UNUSED auto* ptr = dev.release();
+    [[maybe_unused]] auto* ptr = dev.release();
   }
   return status;
 }
@@ -62,7 +62,7 @@ void HidCtl::MakeHidDevice(MakeHidDeviceRequestView request,
 
   zxlogf(INFO, "hidctl: created hid device");
   // devmgr owns the memory until release is called
-  __UNUSED auto ptr = hiddev.release();
+  [[maybe_unused]] auto ptr = hiddev.release();
 
   completer.Reply(std::move(remote));
 }

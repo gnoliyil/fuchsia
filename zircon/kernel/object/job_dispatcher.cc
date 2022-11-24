@@ -408,7 +408,7 @@ bool JobDispatcher::Kill(int64_t return_code) {
 
       job->return_code_ = return_code;
       job->state_ = State::KILLING;
-      __UNUSED zx_status_t result;
+      [[maybe_unused]] zx_status_t result;
 
       // Gather the refs for our children. We can use |TakeEachChildLocked| since we will be
       // recording and keeping alive the RefPtrs in the callback in the *_to_kill lists.

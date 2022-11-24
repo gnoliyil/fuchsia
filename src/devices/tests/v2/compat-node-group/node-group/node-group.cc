@@ -25,7 +25,7 @@ class NodeGroupDriver : public driver::DriverBase {
 
     const fidl::WireSharedClient<fcdt::Waiter> client{std::move(connect_result.value()),
                                                       dispatcher()};
-    __UNUSED auto result = client->Ack(ZX_OK);
+    [[maybe_unused]] auto result = client->Ack(ZX_OK);
 
     return zx::ok();
   }

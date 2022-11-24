@@ -398,7 +398,7 @@ zx_status_t SerialDevice::Create(void* ctx, zx_device_t* dev) {
   }
 
   // devmgr is now in charge of the device.
-  __UNUSED auto* dummy = sdev.release();
+  [[maybe_unused]] auto* dummy = sdev.release();
 
   return ZX_OK;
 }

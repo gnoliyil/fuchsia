@@ -31,7 +31,7 @@ zx_status_t EcDevice::Create(zx_device_t* parent, acpi::Acpi* acpi, ACPI_HANDLE 
   zx_status_t status = device->Init();
   if (status == ZX_OK) {
     // The DDK takes ownership of the device.
-    __UNUSED auto unused = device.release();
+    [[maybe_unused]] auto unused = device.release();
     zxlogf(INFO, "initialised acpi-ec");
   } else {
     zxlogf(ERROR, "Failed to init acpi-ec: %s", zx_status_get_string(status));
@@ -353,7 +353,7 @@ void EcDevice::QueryThread() {
       }
 
       // Don't care about return value.
-      __UNUSED auto status = acpi_->EvaluateObject(handle_, method, std::nullopt);
+      [[maybe_unused]] auto status = acpi_->EvaluateObject(handle_, method, std::nullopt);
     }
 
     irq_.signal(EcSignal::kPendingEvent, 0);

@@ -234,7 +234,7 @@ void CrgUdc::HandleEp0Setup() {
   // No data to read, can handle setup now
   if (length == 0 || is_in) {
     // TODO(voydanoff) stall if this fails (after we implement stalling)
-    __UNUSED zx_status_t _ = HandleSetupRequest(&actual);
+    [[maybe_unused]] zx_status_t _ = HandleSetupRequest(&actual);
   }
 
   if (length > 0) {
@@ -1737,7 +1737,7 @@ zx_status_t CrgUdc::Create(void* ctx, zx_device_t* parent) {
   }
 
   // devmgr is now in charge of the device.
-  __UNUSED auto* _ = dev.release();
+  [[maybe_unused]] auto* _ = dev.release();
   return ZX_OK;
 }
 

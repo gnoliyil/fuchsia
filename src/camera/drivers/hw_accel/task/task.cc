@@ -121,7 +121,7 @@ zx_status_t GenericTask::InitInputBuffers(
     // Release the vmos so that the buffer collection could be reused.
     // input_buffer_collection already has the handle so its okay to discard
     // this one.
-    __UNUSED zx_handle_t handle = vmo.release();
+    [[maybe_unused]] zx_handle_t handle = vmo.release();
 
     if (status != ZX_OK) {
       FX_LOGST(ERROR, kTag) << "Unable to pin buffers";

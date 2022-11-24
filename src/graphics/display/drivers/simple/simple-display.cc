@@ -373,7 +373,7 @@ zx_status_t SimpleDisplay::Bind(const char* name, std::unique_ptr<SimpleDisplay>
 
   // DevMgr now owns this pointer, release it to avoid destroying the object
   // when device goes out of scope.
-  __UNUSED auto ptr = vbe_ptr->release();
+  [[maybe_unused]] auto ptr = vbe_ptr->release();
 
   zxlogf(INFO, "%s: initialized display, %u x %u (stride=%u format=%08x)", name, width_, height_,
          stride_, format_);

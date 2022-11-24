@@ -104,7 +104,7 @@ zx_status_t SdmmcBlockDevice::AddDevice() {
     return st;
   }
 
-  __UNUSED auto* placeholder = user_partition.release();
+  [[maybe_unused]] auto* placeholder = user_partition.release();
 
   const uint32_t boot_size = raw_ext_csd_[MMC_EXT_CSD_BOOT_SIZE_MULT] * kBootSizeMultiplier;
   const bool boot_enabled =

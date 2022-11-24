@@ -42,7 +42,7 @@ zx_status_t BtTransportUart::Create(zx_device_t* parent, async_dispatcher_t* dis
 
   // Driver Manager is now in charge of the device.
   // Memory will be explicitly freed in DdkRelease().
-  __UNUSED BtTransportUart* unused = dev.release();
+  [[maybe_unused]] BtTransportUart* unused = dev.release();
   return ZX_OK;
 }
 

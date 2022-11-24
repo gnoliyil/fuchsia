@@ -193,7 +193,7 @@ void BlockDevice::OpenSession(OpenSessionRequestView request,
   if (thrd_create_with_name(
           &thread,
           +[](void* arg) {
-            __UNUSED zx_status_t status = reinterpret_cast<Server*>(arg)->Serve();
+            [[maybe_unused]] zx_status_t status = reinterpret_cast<Server*>(arg)->Serve();
             return 0;
           },
           server.value().get(), "block_server") != thrd_success) {
@@ -419,7 +419,7 @@ zx_status_t BlockDevice::Bind(void* ctx, zx_device_t* dev) {
   }
 
   // The device has been added; we'll release it in blkdev_release.
-  __UNUSED auto r = bdev.release();
+  [[maybe_unused]] auto r = bdev.release();
   return ZX_OK;
 }
 

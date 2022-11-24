@@ -54,7 +54,7 @@ zx_status_t Clover::Create(void* ctx, zx_device_t* parent) {
 
   if (status == ZX_OK) {
     // devmgr is now in charge of the device.
-    __UNUSED auto* dummy = board.release();
+    [[maybe_unused]] auto* dummy = board.release();
   }
 
   return status;

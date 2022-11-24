@@ -89,7 +89,7 @@ bool fdf_arena::Contains(const void* data, size_t num_bytes) {
   return contains_range(allocated_addr, allocated_size, want_addr, num_bytes);
 }
 
-void fdf_arena::Destroy() { __UNUSED auto ref = fbl::ImportFromRawPtr(this); }
+void fdf_arena::Destroy() { [[maybe_unused]] auto ref = fbl::ImportFromRawPtr(this); }
 
 fdf_arena::~fdf_arena() __TA_NO_THREAD_SAFETY_ANALYSIS {
   // Deletes all the extra blocks.

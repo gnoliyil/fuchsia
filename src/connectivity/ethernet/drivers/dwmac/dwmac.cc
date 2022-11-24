@@ -262,7 +262,7 @@ zx_status_t DWMacDevice::Create(void* ctx, zx_device_t* device) {
   cleanup.cancel();
 
   // mac_device intentionally leaked as it is now held by DevMgr.
-  __UNUSED auto ptr = mac_device.release();
+  [[maybe_unused]] auto ptr = mac_device.release();
   return ZX_OK;
 }  // namespace eth
 

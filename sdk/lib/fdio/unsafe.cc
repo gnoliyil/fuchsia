@@ -28,7 +28,7 @@ void fdio_unsafe_wait_end(fdio_t* io, zx_signals_t signals, uint32_t* events_out
 }
 
 __EXPORT
-void fdio_unsafe_release(fdio_t* io) { __UNUSED auto release = fbl::ImportFromRawPtr(io); }
+void fdio_unsafe_release(fdio_t* io) { [[maybe_unused]] auto release = fbl::ImportFromRawPtr(io); }
 
 __EXPORT
 zx_handle_t fdio_unsafe_borrow_channel(fdio_t* io) {

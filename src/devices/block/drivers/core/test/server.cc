@@ -50,7 +50,7 @@ void ServerTestFixture::TearDown() { ASSERT_FALSE(thread_.joinable()); }
 void ServerTestFixture::CreateThread() {
   thread_ = std::thread([this]() {
     sync_completion_signal(&thread_started_);
-    __UNUSED zx_status_t status = server_->Serve();
+    [[maybe_unused]] zx_status_t status = server_->Serve();
     sync_completion_signal(&thread_exited_);
     return 0;
   });

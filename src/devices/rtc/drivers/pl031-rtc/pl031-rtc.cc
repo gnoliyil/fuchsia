@@ -54,7 +54,7 @@ zx_status_t Pl031::Bind(void* /*unused*/, zx_device_t* dev) {
 
   // The object is owned by the DDK, now that it has been added. It will be deleted
   // when the device is released.
-  __UNUSED auto ptr = pl031_device.release();
+  [[maybe_unused]] auto ptr = pl031_device.release();
 
   return status;
 }

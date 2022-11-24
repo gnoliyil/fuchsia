@@ -145,7 +145,7 @@ class NetworkDeviceTests : public zxtest::Test,
     device_->DdkAsyncRemove();
     ASSERT_OK(mock_ddk::ReleaseFlaggedDevices(fake_parent_.get()));
     // Release must have released the memory for us.
-    __UNUSED NetworkDevice* ptr = device_.release();
+    [[maybe_unused]] NetworkDevice* ptr = device_.release();
   }
 
   void PrepareVmo() {

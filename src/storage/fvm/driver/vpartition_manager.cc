@@ -90,7 +90,7 @@ zx_status_t VPartitionManager::Bind(void* /*unused*/, zx_device_t* dev) {
   }
   // The VPartitionManager object is owned by the DDK, now that it has been
   // added. It will be deleted when the device is released.
-  __UNUSED auto ptr = vpm.release();
+  [[maybe_unused]] auto ptr = vpm.release();
   return ZX_OK;
 }
 
@@ -127,7 +127,7 @@ zx_status_t VPartitionManager::AddPartition(std::unique_ptr<VPartition> vp) {
 
   // The VPartition object was added to the DDK and is now owned by it. It will be deleted when the
   // device is released.
-  __UNUSED auto ptr = vp.release();
+  [[maybe_unused]] auto ptr = vp.release();
   return ZX_OK;
 }
 

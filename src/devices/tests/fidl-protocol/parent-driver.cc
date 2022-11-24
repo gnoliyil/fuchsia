@@ -61,7 +61,7 @@ class Device : public DeviceParent, public fidl::WireServer<fidl_examples_echo::
                                 .set_fidl_protocol_offers(offers)
                                 .set_outgoing_dir(endpoints->client.TakeChannel()));
     if (status == ZX_OK) {
-      __UNUSED auto ptr = device.release();
+      [[maybe_unused]] auto ptr = device.release();
     } else {
       zxlogf(ERROR, "Failed to add device");
     }

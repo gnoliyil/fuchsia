@@ -16,7 +16,7 @@ zx_status_t ParentDevice::Bind(void* ctx, zx_device_t* dev) {
     return status;
   }
   // The DriverFramework now owns the driver.
-  __UNUSED auto ptr = driver.release();
+  [[maybe_unused]] auto ptr = driver.release();
   return ZX_OK;
 }
 

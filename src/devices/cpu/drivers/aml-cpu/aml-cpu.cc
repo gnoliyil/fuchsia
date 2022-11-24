@@ -231,7 +231,7 @@ zx_status_t AmlCpu::Create(void* context, zx_device_t* parent) {
       return st;
     }
 
-    __UNUSED auto ptr = device.release();
+    [[maybe_unused]] auto ptr = device.release();
   }
 
   return ZX_OK;

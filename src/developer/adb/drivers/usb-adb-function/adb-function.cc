@@ -556,7 +556,7 @@ zx_status_t UsbAdbDevice::Bind(void* ctx, zx_device_t* parent) {
 
   {
     // The DDK now owns this reference.
-    __UNUSED auto released = adb.release();
+    [[maybe_unused]] auto released = adb.release();
   }
   return ZX_OK;
 }
