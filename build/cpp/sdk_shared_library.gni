@@ -223,11 +223,19 @@ template("sdk_shared_library") {
   if ((defined(invoker.public) || defined(invoker.sources)) && !no_headers) {
     if (defined(invoker.public)) {
       all_headers += invoker.public
-    } else {
-      foreach(source_file, invoker.sources) {
-        extension = get_path_info(source_file, "extension")
-        if (extension == "h") {
-          all_headers += [ source_file ]
+    }
+
+    if (defined(invoker.sources)) {
+      # If public headers are not defined, pick them from `sources`.
+      #
+      # NOTE: If this is an internal SDK library, headers from `sources` are
+      # always made available so Bazel can find them.
+      if (invoker.category == "internal" || !defined(invoker.public)) {
+        foreach(source_file, invoker.sources) {
+          extension = get_path_info(source_file, "extension")
+          if (extension == "h") {
+            all_headers += [ source_file ]
+          }
         }
       }
     }
