@@ -11,6 +11,7 @@
 #include <set>
 #include <unordered_map>
 
+#include "src/lib/fxl/synchronization/thread_annotations.h"
 #include "src/ui/lib/escher/flatland/rectangle_compositor.h"
 #include "src/ui/scenic/lib/allocation/buffer_collection_importer.h"
 #include "src/ui/scenic/lib/allocation/id.h"
@@ -31,6 +32,7 @@ class VkRenderer final : public Renderer {
   ~VkRenderer() override;
 
   // |BufferCollectionImporter|
+  // Only called from the main thread.
   bool ImportBufferCollection(GlobalBufferCollectionId collection_id,
                               fuchsia::sysmem::Allocator_Sync* sysmem_allocator,
                               fidl::InterfaceHandle<fuchsia::sysmem::BufferCollectionToken> token,
@@ -38,38 +40,47 @@ class VkRenderer final : public Renderer {
                               std::optional<fuchsia::math::SizeU> size) override;
 
   // |BufferCollectionImporter|
+  // Only called from the main thread.
   void ReleaseBufferCollection(GlobalBufferCollectionId collection_id,
                                BufferCollectionUsage usage) override;
 
   // |BufferCollectionImporter|
+  // Called from main thread or Flatland threads.
   bool ImportBufferImage(const ImageMetadata& metadata, BufferCollectionUsage usage) override;
 
   // |BufferCollectionImporter|
+  // Called from main thread or Flatland threads.
   void ReleaseBufferImage(GlobalImageId image_id) override;
 
   // |Renderer|.
+  // Only called from the main thread.
   void Render(const ImageMetadata& render_target, const std::vector<ImageRect>& rectangles,
               const std::vector<ImageMetadata>& images,
               const std::vector<zx::event>& release_fences = {},
               bool apply_color_conversion = false) override;
 
   // |Renderer|.
+  // Only called from the main thread.
   void SetColorConversionValues(const std::array<float, 9>& coefficients,
                                 const std::array<float, 3>& preoffsets,
                                 const std::array<float, 3>& postoffsets) override;
 
   // |Renderer|.
+  // Only called from the main thread.
   zx_pixel_format_t ChoosePreferredPixelFormat(
       const std::vector<zx_pixel_format_t>& available_formats) const override;
 
   // |Renderer|.
+  // Only called from the main thread.
   bool SupportsRenderInProtected() const override;
 
   // |Renderer|.
+  // Only called from the main thread.
   bool RequiresRenderInProtected(
       const std::vector<allocation::ImageMetadata>& images) const override;
 
   // Wait for all gpu operations to complete.
+  // Only called from the main thread.
   bool WaitIdle();
 
  private:
@@ -95,7 +106,7 @@ class VkRenderer final : public Renderer {
                         const ImageMetadata& metadata);
 
   std::unordered_map<GlobalBufferCollectionId, CollectionData>* UsageToCollection(
-      BufferCollectionUsage usage);
+      BufferCollectionUsage usage) FXL_EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Escher is how we access Vulkan.
   escher::EscherWeakPtr escher_;
@@ -103,19 +114,26 @@ class VkRenderer final : public Renderer {
   // Vulkan rendering component.
   escher::RectangleCompositor compositor_;
 
-  // This mutex is used to protect access to |collections_|.
-  mutable std::mutex mutex_;
-  std::unordered_map<GlobalBufferCollectionId, CollectionData> texture_collections_;
-  std::unordered_map<GlobalBufferCollectionId, CollectionData> render_target_collections_;
-  std::unordered_map<GlobalBufferCollectionId, CollectionData> readback_collections_;
-  std::unordered_map<GlobalImageId, escher::TexturePtr> texture_map_;
-  std::unordered_map<GlobalImageId, escher::ImagePtr> render_target_map_;
-  std::unordered_map<GlobalImageId, escher::TexturePtr> depth_target_map_;
-  std::unordered_map<GlobalImageId, escher::ImagePtr> readback_image_map_;
-  std::set<GlobalImageId> pending_textures_;
-  std::set<GlobalImageId> pending_render_targets_;
+  // This mutex protects access to class members that are accessed on main thread and the Flatland
+  // threads.
+  mutable std::mutex lock_;
+
+  std::unordered_map<GlobalBufferCollectionId, CollectionData> texture_collections_
+      FXL_GUARDED_BY(lock_);
+  std::unordered_map<GlobalBufferCollectionId, CollectionData> render_target_collections_
+      FXL_GUARDED_BY(lock_);
+  std::unordered_map<GlobalBufferCollectionId, CollectionData> readback_collections_
+      FXL_GUARDED_BY(lock_);
+  std::unordered_map<GlobalImageId, escher::TexturePtr> texture_map_ FXL_GUARDED_BY(lock_);
+  std::unordered_map<GlobalImageId, escher::ImagePtr> render_target_map_ FXL_GUARDED_BY(lock_);
+  std::unordered_map<GlobalImageId, escher::TexturePtr> depth_target_map_ FXL_GUARDED_BY(lock_);
+  std::unordered_map<GlobalImageId, escher::ImagePtr> readback_image_map_ FXL_GUARDED_BY(lock_);
+  std::set<GlobalImageId> pending_textures_ FXL_GUARDED_BY(lock_);
+  std::set<GlobalImageId> pending_render_targets_ FXL_GUARDED_BY(lock_);
 
   uint32_t frame_number_ = 0;
+
+  const async_dispatcher_t* const main_dispatcher_;
 };
 
 }  // namespace flatland

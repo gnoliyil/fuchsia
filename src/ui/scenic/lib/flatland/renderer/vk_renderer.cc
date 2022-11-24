@@ -161,7 +161,9 @@ std::string GetNextBufferCollectionIdString(const char* prefix) {
 namespace flatland {
 
 VkRenderer::VkRenderer(escher::EscherWeakPtr escher)
-    : escher_(std::move(escher)), compositor_(escher::RectangleCompositor(escher_)) {
+    : escher_(std::move(escher)),
+      compositor_(escher::RectangleCompositor(escher_)),
+      main_dispatcher_(async_get_default_dispatcher()) {
   auto gpu_uploader = escher::BatchGpuUploader::New(escher_, /*frame_trace_number*/ 0);
   FX_DCHECK(gpu_uploader);
 
@@ -175,6 +177,8 @@ VkRenderer::VkRenderer(escher::EscherWeakPtr escher)
 }
 
 VkRenderer::~VkRenderer() {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
+
   auto vk_device = escher_->vk_device();
   auto vk_loader = escher_->device()->dispatch_loader();
   for (auto& [_, collection] : texture_collections_) {
@@ -194,6 +198,7 @@ bool VkRenderer::ImportBufferCollection(
     GlobalBufferCollectionId collection_id, fuchsia::sysmem::Allocator_Sync* sysmem_allocator,
     fidl::InterfaceHandle<fuchsia::sysmem::BufferCollectionToken> token,
     BufferCollectionUsage usage, std::optional<fuchsia::math::SizeU> size) {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   TRACE_DURATION("gfx", "flatland::VkRenderer::ImportBufferCollection");
 
   auto vk_device = escher_->vk_device();
@@ -306,10 +311,9 @@ bool VkRenderer::ImportBufferCollection(
     }
   }
 
-  // Multiple threads may be attempting to read/write from |collections_|
-  // so we lock this function here.
   // TODO(fxbug.dev/44335): Convert this to a lock-free structure.
-  std::unique_lock<std::mutex> lock(mutex_);
+  std::scoped_lock lock(lock_);
+
   std::unordered_map<GlobalBufferCollectionId, CollectionData>* collections =
       UsageToCollection(usage);
 
@@ -327,11 +331,12 @@ bool VkRenderer::ImportBufferCollection(
 
 void VkRenderer::ReleaseBufferCollection(GlobalBufferCollectionId collection_id,
                                          BufferCollectionUsage usage) {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   TRACE_DURATION("gfx", "flatland::VkRenderer::ReleaseBufferCollection");
-  // Multiple threads may be attempting to read/write from the various maps,
-  // lock this function here.
+
   // TODO(fxbug.dev/44335): Convert this to a lock-free structure.
-  std::unique_lock<std::mutex> lock(mutex_);
+  std::scoped_lock lock(lock_);
+
   std::unordered_map<GlobalBufferCollectionId, CollectionData>* collections =
       UsageToCollection(usage);
   auto collection_itr = collections->find(collection_id);
@@ -358,9 +363,10 @@ void VkRenderer::ReleaseBufferCollection(GlobalBufferCollectionId collection_id,
 
 bool VkRenderer::ImportBufferImage(const allocation::ImageMetadata& metadata,
                                    BufferCollectionUsage usage) {
+  // Called from main thread or Flatland threads.
   TRACE_DURATION("gfx", "flatland::VkRenderer::ImportBufferImage");
 
-  std::unique_lock<std::mutex> lock(mutex_);
+  std::scoped_lock lock(lock_);
 
   // The metadata can't have an invalid collection id.
   if (metadata.collection_id == allocation::kInvalidId) {
@@ -485,9 +491,10 @@ bool VkRenderer::ImportBufferImage(const allocation::ImageMetadata& metadata,
 }
 
 void VkRenderer::ReleaseBufferImage(allocation::GlobalImageId image_id) {
+  // Called from main thread or Flatland threads.
   TRACE_DURATION("gfx", "flatland::VkRenderer::ReleaseBufferImage");
 
-  std::unique_lock<std::mutex> lock(mutex_);
+  std::scoped_lock lock(lock_);
 
   if (texture_map_.find(image_id) != texture_map_.end()) {
     texture_map_.erase(image_id);
@@ -503,6 +510,7 @@ void VkRenderer::ReleaseBufferImage(allocation::GlobalImageId image_id) {
 escher::ImagePtr VkRenderer::ExtractImage(const allocation::ImageMetadata& metadata,
                                           vk::BufferCollectionFUCHSIA collection,
                                           vk::ImageUsageFlags usage, bool readback) {
+  // Called from main thread or Flatland threads.
   TRACE_DURATION("gfx", "VkRenderer::ExtractImage");
   auto vk_device = escher_->vk_device();
   auto vk_loader = escher_->device()->dispatch_loader();
@@ -612,6 +620,7 @@ escher::ImagePtr VkRenderer::ExtractImage(const allocation::ImageMetadata& metad
 
 escher::TexturePtr VkRenderer::ExtractTexture(const allocation::ImageMetadata& metadata,
                                               vk::BufferCollectionFUCHSIA collection) {
+  // Called from main thread or Flatland threads.
   auto image = ExtractImage(metadata, collection, escher::RectangleCompositor::kTextureUsageFlags);
   if (!image) {
     FX_LOGS(ERROR) << "Image for texture was nullptr.";
@@ -632,6 +641,7 @@ void VkRenderer::Render(const ImageMetadata& render_target,
                         const std::vector<ImageRect>& rectangles,
                         const std::vector<ImageMetadata>& images,
                         const std::vector<zx::event>& release_fences, bool apply_color_conversion) {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   TRACE_DURATION("gfx", "VkRenderer::Render");
 
   FX_DCHECK(rectangles.size() == images.size())
@@ -641,7 +651,7 @@ void VkRenderer::Render(const ImageMetadata& render_target,
   // to be accessed via a lock. We're just doing a shallow copy via the copy assignment
   // operator since the texture and render target data is just referenced through pointers.
   // We manually unlock the lock after copying over the data.
-  std::unique_lock<std::mutex> lock(mutex_);
+  lock_.lock();
   const auto local_texture_map = texture_map_;
   const auto local_render_target_map = render_target_map_;
   const auto local_depth_target_map = depth_target_map_;
@@ -652,7 +662,7 @@ void VkRenderer::Render(const ImageMetadata& render_target,
   const auto local_pending_render_targets = std::move(pending_render_targets_);
   pending_textures_.clear();
   pending_render_targets_.clear();
-  lock.unlock();
+  lock_.unlock();
 
   // If the |render_target| is protected, we should switch to a protected escher::Frame. Otherwise,
   // we should ensure that there is no protected content in |images|.
@@ -787,6 +797,8 @@ void VkRenderer::Render(const ImageMetadata& render_target,
 void VkRenderer::SetColorConversionValues(const std::array<float, 9>& coefficients,
                                           const std::array<float, 3>& preoffsets,
                                           const std::array<float, 3>& postoffsets) {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
+
   // Coefficients are ordered like this:
   // | c0 c1 c2 0 |
   // | c3 c4 c5 0 |
@@ -818,6 +830,8 @@ void VkRenderer::SetColorConversionValues(const std::array<float, 9>& coefficien
 
 zx_pixel_format_t VkRenderer::ChoosePreferredPixelFormat(
     const std::vector<zx_pixel_format_t>& available_formats) const {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
+
   for (auto preferred_format : kPreferredImageFormats) {
     for (zx_pixel_format_t format : available_formats) {
       vk::Format vk_format = ConvertToVkFormat(format);
@@ -830,29 +844,38 @@ zx_pixel_format_t VkRenderer::ChoosePreferredPixelFormat(
   return ZX_PIXEL_FORMAT_NONE;
 }
 
-bool VkRenderer::SupportsRenderInProtected() const { return escher_->allow_protected_memory(); }
+bool VkRenderer::SupportsRenderInProtected() const {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
+
+  return escher_->allow_protected_memory();
+}
 
 bool VkRenderer::RequiresRenderInProtected(
     const std::vector<allocation::ImageMetadata>& images) const {
-  std::unique_lock<std::mutex> lock(mutex_);
-  const auto local_texture_map = texture_map_;
-  lock.unlock();
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
+  std::scoped_lock lock(lock_);
 
   for (const auto& image : images) {
-    FX_DCHECK(local_texture_map.find(image.identifier) != local_texture_map.end());
-    if (local_texture_map.at(image.identifier)->image()->use_protected_memory()) {
+    FX_DCHECK(texture_map_.find(image.identifier) != texture_map_.end());
+    if (texture_map_.at(image.identifier)->image()->use_protected_memory()) {
       return true;
     }
   }
   return false;
 }
 
-bool VkRenderer::WaitIdle() { return escher_->vk_device().waitIdle() == vk::Result::eSuccess; }
+bool VkRenderer::WaitIdle() {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
+
+  return escher_->vk_device().waitIdle() == vk::Result::eSuccess;
+}
 
 void VkRenderer::BlitRenderTarget(escher::CommandBuffer* command_buffer,
                                   escher::ImagePtr source_image,
                                   vk::ImageLayout* source_image_layout, escher::ImagePtr dest_image,
                                   const ImageMetadata& metadata) {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
+
   command_buffer->TransitionImageLayout(source_image, *source_image_layout,
                                         vk::ImageLayout::eTransferSrcOptimal);
   *source_image_layout = vk::ImageLayout::eTransferSrcOptimal;
@@ -865,6 +888,7 @@ void VkRenderer::BlitRenderTarget(escher::CommandBuffer* command_buffer,
 
 std::unordered_map<GlobalBufferCollectionId, VkRenderer::CollectionData>*
 VkRenderer::UsageToCollection(BufferCollectionUsage usage) {
+  // Called from main thread or Flatland threads.
   switch (usage) {
     case BufferCollectionUsage::kRenderTarget:
       return &render_target_collections_;

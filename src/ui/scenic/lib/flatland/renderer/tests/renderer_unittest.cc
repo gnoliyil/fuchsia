@@ -553,8 +553,8 @@ void MultithreadingTest(Renderer* renderer) {
 // This test checks to make sure that the Render() function properly signals
 // a zx::event which can be used by an async::Wait object to asynchronously
 // call a custom function.
-void AsyncEventSignalTest(Renderer* renderer, fuchsia::sysmem::Allocator_Sync* sysmem_allocator,
-                          bool use_vulkan) {
+void AsyncEventSignalTest(async::TestLoop* loop, Renderer* renderer,
+                          fuchsia::sysmem::Allocator_Sync* sysmem_allocator, bool use_vulkan) {
   // Setup the render target collection.
   const uint32_t kWidth = 64, kHeight = 32;
   fuchsia::sysmem::BufferCollectionInfo_2 client_target_info;
@@ -582,9 +582,8 @@ void AsyncEventSignalTest(Renderer* renderer, fuchsia::sysmem::Allocator_Sync* s
 
   // Set up the async::Wait object to wait until the release_fence signals
   // ZX_EVENT_SIGNALED. We make use of a test loop to access an async dispatcher.
-  async::TestLoop loop;
   bool signaled = false;
-  auto dispatcher = loop.dispatcher();
+  auto dispatcher = loop->dispatcher();
   auto wait = std::make_unique<async::Wait>(release_fence.get(), ZX_EVENT_SIGNALED);
   wait->set_handler([&signaled](async_dispatcher_t*, async::Wait*, zx_status_t /*status*/,
                                 const zx_packet_signal_t* /*signal*/) mutable { signaled = true; });
@@ -602,7 +601,7 @@ void AsyncEventSignalTest(Renderer* renderer, fuchsia::sysmem::Allocator_Sync* s
   }
 
   // Close the test loop and test that our handler was called.
-  loop.RunUntilIdle();
+  loop->RunUntilIdle();
   EXPECT_TRUE(signaled);
 }
 
@@ -653,8 +652,9 @@ TEST_F(NullRendererTest, DISABLED_MultithreadingTest) {
 }
 
 TEST_F(NullRendererTest, AsyncEventSignalTest) {
+  async::TestLoop loop;
   NullRenderer renderer;
-  AsyncEventSignalTest(&renderer, sysmem_allocator_.get(), /*use_vulkan*/ false);
+  AsyncEventSignalTest(&loop, &renderer, sysmem_allocator_.get(), /*use_vulkan*/ false);
 }
 
 VK_TEST_F(VulkanRendererTest, ImportCollectionTest) {
@@ -738,8 +738,9 @@ VK_TEST_F(VulkanRendererTest, AsyncEventSignalTest) {
   auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
   auto unique_escher = std::make_unique<escher::Escher>(
       env->GetVulkanDevice(), env->GetFilesystem(), /*gpu_allocator*/ nullptr);
+  async::TestLoop loop;
   VkRenderer renderer(unique_escher->GetWeakPtr());
-  AsyncEventSignalTest(&renderer, sysmem_allocator_.get(), /*use_vulkan*/ true);
+  AsyncEventSignalTest(&loop, &renderer, sysmem_allocator_.get(), /*use_vulkan*/ true);
 }
 
 // This test actually renders a rectangle using the VKRenderer. We create a single rectangle,
@@ -1693,34 +1694,33 @@ VK_TEST_F(VulkanRendererTest, ColorCorrectionTest) {
   // Get a raw pointer from the client collection's vmo that represents the render target
   // and read its values. This should show that the renderable was rendered to the center
   // of the render target, with its associated texture.
-  MapHostPointer(client_target_info, render_target.vmo_index,
-                 [&](uint8_t* vmo_host, uint32_t num_bytes) mutable {
-                   // Flush the cache before reading back target image.
-                   EXPECT_EQ(ZX_OK,
-                             zx_cache_flush(vmo_host, kTargetWidth * kTargetHeight * 4,
-                                            ZX_CACHE_FLUSH_DATA | ZX_CACHE_FLUSH_INVALIDATE));
+  MapHostPointer(
+      client_target_info, render_target.vmo_index,
+      [&](uint8_t* vmo_host, uint32_t num_bytes) mutable {
+        // Flush the cache before reading back target image.
+        EXPECT_EQ(ZX_OK, zx_cache_flush(vmo_host, kTargetWidth * kTargetHeight * 4,
+                                        ZX_CACHE_FLUSH_DATA | ZX_CACHE_FLUSH_INVALIDATE));
 
-                   uint8_t linear_vals[num_bytes];
-                   sRGBtoLinear(vmo_host, linear_vals, num_bytes);
+        uint8_t linear_vals[num_bytes];
+        sRGBtoLinear(vmo_host, linear_vals, num_bytes);
 
-                   // Make sure the pixels are in the right order give that we rotated
-                   // the rectangle. Values are BGRA.
-                   for (uint32_t i = 6; i < 6 + kRenderableWidth; i++) {
-                     for (uint32_t j = 3; j < 3 + kRenderableHeight; j++) {
-                       auto pixel = GetPixel(linear_vals, kTargetWidth, i, j);
-                       for (uint32_t k = 0; k < 4; k++) {
-                         // Due to different GPU floating point implementations, and other rounding
-                         // issues with converting between linear and sRGB, the pixel values may be
-                         // off by 1.
-                         EXPECT_TRUE(pixel[k] == expected_color[k] ||
-                                     pixel[k] == expected_color[k] - 1);
-                       }
-                     }
-                   }
+        // Make sure the pixels are in the right order give that we rotated
+        // the rectangle. Values are BGRA.
+        for (uint32_t i = 6; i < 6 + kRenderableWidth; i++) {
+          for (uint32_t j = 3; j < 3 + kRenderableHeight; j++) {
+            auto pixel = GetPixel(linear_vals, kTargetWidth, i, j);
+            for (uint32_t k = 0; k < 4; k++) {
+              // Due to different GPU floating point implementations, and other rounding
+              // issues with converting between linear and sRGB, the pixel values may be
+              // off by 1.
+              EXPECT_TRUE(pixel[k] == expected_color[k] || pixel[k] == expected_color[k] - 1);
+            }
+          }
+        }
 
-                   // Make sure the remaining pixels are black.
-                   CHECK_BLACK_PIXELS(vmo_host, kTargetWidth, kTargetHeight, 8U);
-                 });
+        // Make sure the remaining pixels are black.
+        CHECK_BLACK_PIXELS(vmo_host, kTargetWidth, kTargetHeight, 8U);
+      });
 }
 
 // Tests if the VK renderer can handle rendering 2 solid color images. Since solid
