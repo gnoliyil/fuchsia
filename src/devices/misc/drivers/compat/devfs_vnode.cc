@@ -166,13 +166,6 @@ void DevfsVnode::HandleFsSpecificMessage(fidl::IncomingHeaderAndMessage& msg,
   }
 }
 
-zx_status_t DevfsVnode::Read(void* data, size_t len, size_t off, size_t* out_actual) {
-  return dev_->ReadOp(data, len, off, out_actual);
-}
-zx_status_t DevfsVnode::Write(const void* data, size_t len, size_t off, size_t* out_actual) {
-  return dev_->WriteOp(data, len, off, out_actual);
-}
-
 void DevfsVnode::ConnectToDeviceFidl(ConnectToDeviceFidlRequestView request,
                                      ConnectToDeviceFidlCompleter::Sync& completer) {
   FidlDispatcher::CreateAndBind(fbl::RefPtr(this), dev_->dispatcher(), std::move(request->server));

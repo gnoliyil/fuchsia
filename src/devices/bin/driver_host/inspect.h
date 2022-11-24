@@ -252,8 +252,6 @@ class DeviceInspect {
 
   void set_parent(fbl::RefPtr<zx_device> parent);
 
-  InspectCallStats& ReadOpStats();
-  InspectCallStats& WriteOpStats();
   InspectCallStats& MessageOpStats();
 
  private:

@@ -286,12 +286,6 @@ void DeviceInspect::set_ops(const zx_protocol_device_t* ops) {
   if (ops->release) {
     ops_str.Append("release ");
   }
-  if (ops->read) {
-    ops_str.Append("read ");
-  }
-  if (ops->write) {
-    ops_str.Append("write ");
-  }
   if (ops->get_size) {
     ops_str.Append("get_size ");
   }
@@ -410,20 +404,6 @@ inspect::Node& DeviceInspect::GetCallStatsNode() {
     call_stats_ = device_node_.CreateChild("call_stats");
   }
   return call_stats_;
-}
-
-InspectCallStats& DeviceInspect::ReadOpStats() {
-  if (!read_stats_) {
-    read_stats_.emplace(GetCallStatsNode(), "read_op");
-  }
-  return *read_stats_;
-}
-
-InspectCallStats& DeviceInspect::WriteOpStats() {
-  if (!write_stats_) {
-    write_stats_.emplace(GetCallStatsNode(), "write_op");
-  }
-  return *write_stats_;
 }
 
 InspectCallStats& DeviceInspect::MessageOpStats() {

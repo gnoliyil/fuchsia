@@ -280,38 +280,6 @@ struct zx_device
     completion.Wait();
   }
 
-  zx_status_t ReadOp(void* buf, size_t count, zx_off_t off, size_t* actual) {
-    libsync::Completion completion;
-    zx_status_t status;
-
-    async::PostTask(driver->dispatcher()->async_dispatcher(), [&]() {
-      TraceLabelBuffer trace_label;
-      TRACE_DURATION("driver_host:driver-hooks", get_trace_label("read", &trace_label));
-      inspect_->ReadOpStats().Update();
-      status = Dispatch(ops_->read, ZX_ERR_NOT_SUPPORTED, buf, count, off, actual);
-      completion.Signal();
-    });
-
-    completion.Wait();
-    return status;
-  }
-
-  zx_status_t WriteOp(const void* buf, size_t count, zx_off_t off, size_t* actual) {
-    libsync::Completion completion;
-    zx_status_t status;
-
-    async::PostTask(driver->dispatcher()->async_dispatcher(), [&]() {
-      TraceLabelBuffer trace_label;
-      TRACE_DURATION("driver_host:driver-hooks", get_trace_label("write", &trace_label));
-      inspect_->WriteOpStats().Update();
-      status = Dispatch(ops_->write, ZX_ERR_NOT_SUPPORTED, buf, count, off, actual);
-      completion.Signal();
-    });
-
-    completion.Wait();
-    return status;
-  }
-
   zx_off_t GetSizeOp() {
     libsync::Completion completion;
     zx_off_t size;

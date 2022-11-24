@@ -37,8 +37,8 @@ namespace mock_device {
 class MockDevice;
 using MockDeviceType =
     ddk::Device<MockDevice, ddk::GetProtocolable, ddk::Initializable, ddk::Openable, ddk::Closable,
-                ddk::Unbindable, ddk_deprecated::Readable, ddk_deprecated::Writable,
-                ddk_deprecated::GetSizable, ddk::Suspendable, ddk::Resumable, ddk::Rxrpcable>;
+                ddk::Unbindable, ddk_deprecated::GetSizable, ddk::Suspendable, ddk::Resumable,
+                ddk::Rxrpcable>;
 
 class MockDevice : public MockDeviceType {
  public:
@@ -54,8 +54,6 @@ class MockDevice : public MockDeviceType {
   zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags);
   zx_status_t DdkClose(uint32_t flags);
   void DdkUnbind(ddk::UnbindTxn txn);
-  zx_status_t DdkRead(void* buf, size_t count, zx_off_t off, size_t* actual);
-  zx_status_t DdkWrite(const void* buf, size_t count, zx_off_t off, size_t* actual);
   zx_off_t DdkGetSize();
   void DdkSuspend(ddk::SuspendTxn txn);
   void DdkResume(ddk::ResumeTxn txn);
@@ -297,32 +295,6 @@ void MockDevice::DdkUnbind(ddk::UnbindTxn txn) {
   ctx.pending_unbind_txn = std::move(txn);
   zx_status_t status = ProcessActions(result.value().actions, &ctx);
   ZX_ASSERT(status == ZX_OK);
-}
-
-zx_status_t MockDevice::DdkRead(void* buf, size_t count, zx_off_t off, size_t* actual) {
-  auto result = controller_->Read(ConstructHookInvocation(), count, off);
-  ZX_ASSERT(result.ok());
-  ProcessActionsContext::ChannelVariants channel = controller_.client_end().borrow().channel();
-  ProcessActionsContext ctx(channel, true, this, zxdev());
-  ctx.associated_buf = buf, ctx.associated_buf_count = count;
-  zx_status_t status = ProcessActions(result.value().actions, &ctx);
-  ZX_ASSERT(status == ZX_OK);
-  *actual = ctx.associated_buf_actual;
-  return ctx.hook_status;
-}
-
-zx_status_t MockDevice::DdkWrite(const void* buf, size_t count, zx_off_t off, size_t* actual) {
-  auto result = controller_->Write(
-      ConstructHookInvocation(),
-      fidl::VectorView<uint8_t>::FromExternal(static_cast<uint8_t*>(const_cast<void*>(buf)), count),
-      off);
-  ZX_ASSERT(result.ok());
-  ProcessActionsContext::ChannelVariants channel = controller_.client_end().borrow().channel();
-  ProcessActionsContext ctx(channel, true, this, zxdev());
-  zx_status_t status = ProcessActions(result.value().actions, &ctx);
-  ZX_ASSERT(status == ZX_OK);
-  *actual = count;
-  return ctx.hook_status;
 }
 
 zx_off_t MockDevice::DdkGetSize() {

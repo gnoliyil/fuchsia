@@ -95,6 +95,9 @@ zx_status_t DevfsVnode::CloseNode() {
 }
 
 zx_status_t DevfsVnode::GetAttributes(fs::VnodeAttributes* a) {
+  if (dev_->Unbound()) {
+    return ZX_ERR_IO_NOT_PRESENT;
+  }
   a->mode = V_TYPE_CDEV | V_IRUSR | V_IWUSR;
   a->content_size = dev_->GetSizeOp();
   a->link_count = 1;
@@ -140,19 +143,6 @@ void DevfsVnode::HandleFsSpecificMessage(fidl::IncomingHeaderAndMessage& msg,
     // Close the connection on any error
     txn->Close(status);
   }
-}
-
-zx_status_t DevfsVnode::Read(void* data, size_t len, size_t off, size_t* out_actual) {
-  if (dev_->Unbound()) {
-    return ZX_ERR_IO_NOT_PRESENT;
-  }
-  return dev_->ReadOp(data, len, off, out_actual);
-}
-zx_status_t DevfsVnode::Write(const void* data, size_t len, size_t off, size_t* out_actual) {
-  if (dev_->Unbound()) {
-    return ZX_ERR_IO_NOT_PRESENT;
-  }
-  return dev_->WriteOp(data, len, off, out_actual);
 }
 
 void DevfsVnode::Bind(BindRequestView request, BindCompleter::Sync& completer) {
@@ -274,8 +264,8 @@ void DevfsVnode::GetMinDriverLogSeverity(GetMinDriverLogSeverityCompleter::Sync&
     completer.Reply(ZX_ERR_UNAVAILABLE, fuchsia_logger::wire::LogLevelFilter::kNone);
     return;
   }
-  uint8_t severity = fx_logger_get_min_severity(dev_->zx_driver()->logger());
-  completer.Reply(ZX_OK, fuchsia_logger::wire::LogLevelFilter(severity));
+  fx_log_severity_t severity = fx_logger_get_min_severity(dev_->zx_driver()->logger());
+  completer.Reply(ZX_OK, static_cast<fuchsia_logger::wire::LogLevelFilter>(severity));
 }
 
 void DevfsVnode::SetMinDriverLogSeverity(SetMinDriverLogSeverityRequestView request,

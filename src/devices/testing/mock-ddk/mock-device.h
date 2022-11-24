@@ -145,8 +145,6 @@ struct MockDevice : public std::enable_shared_from_this<MockDevice> {
   zx_status_t SetPerformanceStateOp(uint32_t requested_state, uint32_t* out_state);
   zx_status_t ConfigureAutoSuspendOp(bool enable, uint8_t requested_state);
   void ResumeNewOp(uint32_t requested_state);
-  zx_status_t ReadOp(void* buf, size_t count, zx_off_t off, size_t* actual);
-  zx_status_t WriteOp(const void* buf, size_t count, zx_off_t off, size_t* actual);
   zx_off_t GetSizeOp();
   zx_status_t MessageOp(fidl_incoming_msg_t* msg, fidl_txn_t* txn);
   void ChildPreReleaseOp(void* child_ctx);

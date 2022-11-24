@@ -264,28 +264,6 @@ constexpr void CheckReleasable() {
                 "'void DdkRelease()'.");
 }
 
-DDKTL_INTERNAL_DECLARE_HAS_MEMBER_FN(has_ddk_read, DdkRead);
-
-template <typename D>
-constexpr void CheckReadable() {
-  static_assert(has_ddk_read<D>::value, "Readable classes must implement DdkRead");
-  static_assert(std::is_same<decltype(&D::DdkRead),
-                             zx_status_t (D::*)(void*, size_t, zx_off_t, size_t*)>::value,
-                "DdkRead must be a public non-static member function with signature "
-                "'zx_status_t DdkRead(void*, size_t, zx_off_t, size_t*)'.");
-}
-
-DDKTL_INTERNAL_DECLARE_HAS_MEMBER_FN(has_ddk_write, DdkWrite);
-
-template <typename D>
-constexpr void CheckWritable() {
-  static_assert(has_ddk_write<D>::value, "Writable classes must implement DdkWrite");
-  static_assert(std::is_same<decltype(&D::DdkWrite),
-                             zx_status_t (D::*)(const void*, size_t, zx_off_t, size_t*)>::value,
-                "DdkWrite must be a public non-static member function with signature "
-                "'zx_status_t DdkWrite(const void*, size_t, zx_off_t, size_t*)'.");
-}
-
 DDKTL_INTERNAL_DECLARE_HAS_MEMBER_FN(has_ddk_get_size, DdkGetSize);
 
 template <typename D>

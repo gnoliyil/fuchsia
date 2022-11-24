@@ -187,8 +187,6 @@ TEST_F(DeviceInspectTestCase, CallStats) {
   device->vnode.reset();
 
   // Make op calls
-  device->ReadOp(nullptr, 0, 0, nullptr);
-  device->WriteOp(nullptr, 0, 0, nullptr);
   fidl_incoming_msg_t dummy_msg = {};
   fidl_message_header_t dummy_hdr = {};
   dummy_msg.bytes = static_cast<void*>(&dummy_hdr);
@@ -204,16 +202,6 @@ TEST_F(DeviceInspectTestCase, CallStats) {
   auto* call_stats =
       hierarchy().GetByPath({"drivers", "test-driver", "devices", "test-device", "call_stats"});
   ASSERT_TRUE(call_stats);
-
-  auto* read_op_stat = call_stats->GetByPath({"read_op"});
-  ASSERT_TRUE(read_op_stat);
-  ASSERT_NO_FATAL_FAILURE(
-      CheckProperty(read_op_stat->node(), "count", inspect::UintPropertyValue(1)));
-
-  auto* write_op_stat = call_stats->GetByPath({"write_op"});
-  ASSERT_TRUE(write_op_stat);
-  ASSERT_NO_FATAL_FAILURE(
-      CheckProperty(write_op_stat->node(), "count", inspect::UintPropertyValue(1)));
 
   auto* message_op_stat = call_stats->GetByPath({"message_op"});
   ASSERT_TRUE(message_op_stat);

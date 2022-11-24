@@ -234,47 +234,6 @@ typedef struct zx_protocol_device {
   // thread.
   void (*release)(void* ctx);
 
-  //@ ## read
-  // DEPRECATED: DO NOT ADD NEW USES
-  //
-  // The read hook is an attempt to do a non-blocking read operation.
-  //
-  // On success *actual* must be set to the number of bytes read (which may be less
-  // than the number requested in *count*), and return **ZX_OK**.
-  //
-  // A successful read of 0 bytes is generally treated as an End Of File notification
-  // by clients.
-  //
-  // If no data is available now, **ZX_ERR_SHOULD_WAIT** must be returned and when
-  // data becomes available `device_state_set(DEVICE_STATE_READABLE)` may be used to
-  // signal waiting clients.
-  //
-  // This hook **must not block**.
-  //
-  // The default read implementation returns **ZX_ERR_NOT_SUPPORTED**.
-  //
-  // This hook will only be executed on the devhost's main thread.
-  zx_status_t (*read)(void* ctx, void* buf, size_t count, zx_off_t off, size_t* actual);
-
-  //@ ## write
-  // DEPRECATED: DO NOT ADD NEW USES
-  //
-  // The write hook is an attempt to do a non-blocking write operation.
-  //
-  // On success *actual* must be set to the number of bytes written (which may be
-  // less than the number requested in *count*), and **ZX_OK** should be returned.
-  //
-  // If it is not possible to write data at present **ZX_ERR_SHOULD_WAIT** must
-  // be returned and when it is again possible to write,
-  // `device_state_set(DEVICE_STATE_WRITABLE)` may be used to signal waiting clients.
-  //
-  // This hook **must not block**.
-  //
-  // The default write implementation returns **ZX_ERR_NOT_SUPPORTED**.
-  //
-  // This hook will only be executed on the devhost's main thread.
-  zx_status_t (*write)(void* ctx, const void* buf, size_t count, zx_off_t off, size_t* actual);
-
   //@ ## get_size
   // DEPRECATED: DO NOT ADD NEW USES
   //

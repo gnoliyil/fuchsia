@@ -33,8 +33,6 @@ For completeness, the following mixins are also provided, but have been deprecat
 
 Deprecated Mixin class                 | Function             | Purpose
 ---------------------------------------|----------------------|------------------------------
-`ddk_deprecated::Readable`             | **DdkRead()**        | client's **read()**
-`ddk_deprecated::Writable`             | **DdkWrite()**       | client's **write()**
 `ddk_deprecated::GetSizable`           | **DdkGetSize()**     | returns size of device
 
 When defining the class for your device, you specify which functions it will
@@ -46,8 +44,7 @@ For example (line numbers added for documentation purposes only):
 [02]                                ddk::Initializable,   // safely initialize after **DdkAdd()**
 [03]                                ddk::Openable,        // we support open()
 [04]                                ddk::Closable,        // close()
-[05]                                ddk_deprecated::Readable,        // read()
-[06]                                ddk::Unbindable>;     // and the device can be unbound
+[05]                                ddk::Unbindable>;     // and the device can be unbound
 ```
 
 This creates a shortcut to `DeviceType`.
@@ -75,7 +72,6 @@ from `DeviceType`:
 [19]     void DdkInit(ddk::InitTxn txn);
 [20]     zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags);
 [21]     zx_status_t DdkClose(uint32_t flags);
-[22]     zx_status_t DdkRead(void* buf, size_t count, zx_off_t off, size_t* actual);
 [23]     void DdkUnbind(ddk::UnbindTxn txn);
 [24]     void DdkRelease();
 [25] };
@@ -124,10 +120,9 @@ of **DdkInit()** with an `InitTxn`. The device will be invisible and not able to
 unbound until the device replies to the `InitTxn`. This reply can be done from any
 thread &mdash; it does not necessarily need to be before returning from **DdkInit()**.
 
-After replying to the `InitTxn`, your device will be visible in the Device filesystem,
-and any **open()**, **close()**, and **read()** client calls
-will now flow to your implementations of **DdkOpen()**, **DdkClose()**,
-and **DdkRead()**, respectively.
+After replying to the `InitTxn`, your device will be visible in the Device
+filesystem, and any **open()** or **close()** client calls will now flow to your
+implementations of **DdkOpen()** and **DdkClose()**, , respectively.
 
 As an example, in the directory [`//src/devices/block/drivers/zxcrypt`](/src/devices/block/drivers/zxcrypt)
 we have a typical device declaration ([`device.h`](/src/devices/block/drivers/zxcrypt/device.h)):

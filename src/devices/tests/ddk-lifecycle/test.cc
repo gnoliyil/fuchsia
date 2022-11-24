@@ -9,6 +9,7 @@
 #include <fidl/fuchsia.io/cpp/wire.h>
 #include <lib/ddk/platform-defs.h>
 #include <lib/driver-integration-test/fixture.h>
+#include <lib/fdio/cpp/caller.h>
 #include <lib/fdio/directory.h>
 #include <lib/fidl/cpp/wire/channel.h>
 #include <lib/fidl/cpp/wire/connect_service.h>
@@ -23,9 +24,6 @@ using driver_integration_test::IsolatedDevmgr;
 using fuchsia_device::Controller;
 using fuchsia_device_lifecycle_test::Lifecycle;
 using fuchsia_device_lifecycle_test::TestDevice;
-using fuchsia_hardware_serial::Device;
-using fuchsia_io::Directory;
-using fuchsia_io::File;
 
 class LifecycleTest : public zxtest::Test {
  public:
@@ -48,17 +46,18 @@ class LifecycleTest : public zxtest::Test {
     fbl::unique_fd fd;
     ASSERT_OK(device_watcher::RecursiveWaitForFile(devmgr_.devfs_root(),
                                                    "sys/platform/11:10:0/ddk-lifecycle-test", &fd));
-    ASSERT_GT(fd.get(), 0);
-
-    ASSERT_OK(fdio_get_service_handle(fd.release(), chan_.channel().reset_and_get_address()));
-    ASSERT_TRUE(chan_.is_valid());
+    ASSERT_TRUE(fd.is_valid());
+    fdio_cpp::FdioCaller caller(std::move(fd));
+    zx::result chan = caller.take_as<TestDevice>();
+    ASSERT_OK(chan);
+    chan_ = std::move(chan.value());
 
     // Subscribe to the device lifecycle events.
     auto endpoints = fidl::CreateEndpoints<Lifecycle>();
     ASSERT_OK(endpoints.status_value());
     auto [local, remote] = *std::move(endpoints);
 
-    auto result = fidl::WireCall<TestDevice>(chan_)->SubscribeToLifecycle(std::move(remote));
+    auto result = fidl::WireCall(chan_)->SubscribeToLifecycle(std::move(remote));
     ASSERT_OK(result.status());
     ASSERT_FALSE(result->is_error());
     lifecycle_chan_ = std::move(local);
@@ -103,8 +102,8 @@ TEST_F(LifecycleTest, ChildPreRelease) {
   std::vector<uint64_t> child_ids;
   const uint32_t num_children = 10;
   for (unsigned int i = 0; i < num_children; i++) {
-    auto result = fidl::WireCall<TestDevice>(chan_)->AddChild(true /* complete_init */,
-                                                              ZX_OK /* init_status */);
+    auto result =
+        fidl::WireCall(chan_)->AddChild(true /* complete_init */, ZX_OK /* init_status */);
     ASSERT_OK(result.status());
     ASSERT_FALSE(result->is_error());
     child_ids.push_back(result->value()->child_id);
@@ -112,7 +111,7 @@ TEST_F(LifecycleTest, ChildPreRelease) {
 
   // Remove the child devices and check the test device received the pre-release notifications.
   for (auto child_id : child_ids) {
-    auto result = fidl::WireCall<TestDevice>(chan_)->RemoveChild(child_id);
+    auto result = fidl::WireCall(chan_)->RemoveChild(child_id);
     ASSERT_OK(result.status());
     ASSERT_FALSE(result->is_error());
 
@@ -124,17 +123,16 @@ TEST_F(LifecycleTest, ChildPreRelease) {
 TEST_F(LifecycleTest, Init) {
   // Add a child device that does not complete its init hook yet.
   uint64_t child_id;
-  auto result = fidl::WireCall<TestDevice>(chan_)->AddChild(false /* complete_init */,
-                                                            ZX_OK /* init_status */);
+  auto result = fidl::WireCall(chan_)->AddChild(false /* complete_init */, ZX_OK /* init_status */);
   ASSERT_OK(result.status());
   ASSERT_FALSE(result->is_error());
   child_id = result->value()->child_id;
 
-  auto remove_result = fidl::WireCall<TestDevice>(chan_)->RemoveChild(child_id);
+  auto remove_result = fidl::WireCall(chan_)->RemoveChild(child_id);
   ASSERT_OK(remove_result.status());
   ASSERT_FALSE(remove_result->is_error());
 
-  auto init_result = fidl::WireCall<TestDevice>(chan_)->CompleteChildInit(child_id);
+  auto init_result = fidl::WireCall(chan_)->CompleteChildInit(child_id);
   ASSERT_OK(init_result.status());
   ASSERT_FALSE(init_result->is_error());
 
@@ -144,8 +142,7 @@ TEST_F(LifecycleTest, Init) {
 
 #ifndef DFV2
 TEST_F(LifecycleTest, CloseAllConnectionsOnInstanceUnbind) {
-  auto result = fidl::WireCall<TestDevice>(chan_)->AddChild(true /* complete_init */,
-                                                            ZX_OK /* init_status */);
+  auto result = fidl::WireCall(chan_)->AddChild(true /* complete_init */, ZX_OK /* init_status */);
   ASSERT_OK(result.status());
   ASSERT_FALSE(result->is_error());
   auto child_id = result->value()->child_id;
@@ -153,20 +150,19 @@ TEST_F(LifecycleTest, CloseAllConnectionsOnInstanceUnbind) {
   ASSERT_OK(device_watcher::RecursiveWaitForFile(
       devmgr_.devfs_root(), "sys/platform/11:10:0/ddk-lifecycle-test/ddk-lifecycle-test-child-0",
       &fd));
-  ASSERT_TRUE(fd.get() > 0);
-  zx::channel chan;
-  fdio_get_service_handle(fd.get(), chan.reset_and_get_address());
-  ASSERT_TRUE(fidl::WireCall<TestDevice>(chan_)->RemoveChild(child_id).ok());
+  ASSERT_TRUE(fd.is_valid());
+  fdio_cpp::UnownedFdioCaller caller(fd);
+  zx::unowned_channel chan = caller.channel();
+  ASSERT_TRUE(fidl::WireCall(chan_)->RemoveChild(child_id).ok());
   zx_signals_t closed;
-  ASSERT_OK(chan.wait_one(ZX_CHANNEL_PEER_CLOSED, zx::time::infinite(), &closed));
+  ASSERT_OK(chan->wait_one(ZX_CHANNEL_PEER_CLOSED, zx::time::infinite(), &closed));
   ASSERT_TRUE(closed & ZX_CHANNEL_PEER_CLOSED);
   // Wait for the child pre-release notification.
   ASSERT_NO_FATAL_FAILURE(WaitPreRelease(child_id));
 }
 
-TEST_F(LifecycleTest, ReadCallFailsDuringUnbind) {
-  auto result = fidl::WireCall<TestDevice>(chan_)->AddChild(true /* complete_init */,
-                                                            ZX_OK /* init_status */);
+TEST_F(LifecycleTest, CallsFailDuringUnbind) {
+  auto result = fidl::WireCall(chan_)->AddChild(true /* complete_init */, ZX_OK /* init_status */);
   ASSERT_OK(result.status());
   ASSERT_FALSE(result->is_error());
   auto child_id = result->value()->child_id;
@@ -175,33 +171,22 @@ TEST_F(LifecycleTest, ReadCallFailsDuringUnbind) {
   ASSERT_OK(device_watcher::RecursiveWaitForFile(
       devmgr_.devfs_root(), "sys/platform/11:10:0/ddk-lifecycle-test/ddk-lifecycle-test-child-0",
       &fd));
-  ASSERT_TRUE(fd.get() > 0);
-  fidl::ClientEnd<File> chan;
-  fdio_get_service_handle(fd.get(), chan.channel().reset_and_get_address());
+  ASSERT_TRUE(fd.is_valid());
+  fdio_cpp::UnownedFdioCaller caller(fd);
+  fidl::UnownedClientEnd chan = caller.file();
 
-  ASSERT_TRUE(fidl::WireCall<TestDevice>(chan_)->AsyncRemoveChild(child_id).ok());
+  ASSERT_TRUE(fidl::WireCall(chan_)->AsyncRemoveChild(child_id).ok());
   {
-    const fidl::WireResult read_result = fidl::WireCall<File>(chan)->Read(10);
-    ASSERT_OK(read_result.status());
-    const fit::result response = read_result.value();
-    ASSERT_TRUE(response.is_error());
-    ASSERT_STATUS(response.error_value(), ZX_ERR_IO_NOT_PRESENT);
-  }
-  {
-    std::array<uint8_t, 5> array;
-    const fidl::WireResult write_result =
-        fidl::WireCall<File>(chan)->Write(fidl::VectorView<uint8_t>::FromExternal(array));
-    ASSERT_OK(write_result.status());
-    const fit::result response = write_result.value();
-    ASSERT_TRUE(response.is_error());
-    ASSERT_STATUS(response.error_value(), ZX_ERR_IO_NOT_PRESENT);
+    const fidl::WireResult result = fidl::WireCall(chan)->GetAttr();
+    ASSERT_OK(result.status());
+    const fidl::WireResponse response = result.value();
+    ASSERT_STATUS(response.s, ZX_ERR_IO_NOT_PRESENT);
   }
   int fd2 = open("sys/platform/11:10:0/ddk-lifecycle-test/ddk-lifecycle-test-child-0", O_RDWR);
   ASSERT_EQ(fd2, -1);
-  ASSERT_EQ(fidl::WireCall<Device>(fidl::UnownedClientEnd<Device>(chan.channel().borrow()))
-                ->GetClass()
-                .status(),
-            ZX_ERR_PEER_CLOSED);
+  ASSERT_EQ(
+      fidl::WireCall(caller.borrow_as<fuchsia_hardware_serial::Device>())->GetClass().status(),
+      ZX_ERR_PEER_CLOSED);
   struct Epitaph {
     zx_txid_t txid;
     uint8_t flags[3];
@@ -212,8 +197,8 @@ TEST_F(LifecycleTest, ReadCallFailsDuringUnbind) {
   constexpr auto kEpitaph = 0xFFFFFFFFFFFFFFFF;
   uint32_t actual_bytes = 0;
   uint32_t actual_handles = 0;
-  ASSERT_OK(chan.channel().read(0, &epitaph, nullptr, sizeof(epitaph), 0, &actual_bytes,
-                                &actual_handles));
+  ASSERT_OK(chan.channel()->read(0, &epitaph, nullptr, sizeof(epitaph), 0, &actual_bytes,
+                                 &actual_handles));
   ASSERT_EQ(actual_bytes, sizeof(epitaph));
   ASSERT_EQ(epitaph.ordinal, kEpitaph);
   ASSERT_EQ(epitaph.error, ZX_ERR_IO_NOT_PRESENT);
@@ -222,9 +207,12 @@ TEST_F(LifecycleTest, ReadCallFailsDuringUnbind) {
 #endif
 
 TEST_F(LifecycleTest, CloseAllConnectionsOnUnbind) {
-  // TODO(fxbug.dev/97955) Consider handling the error instead of ignoring it.
-  (void)fidl::WireCall<Controller>(fidl::UnownedClientEnd<Controller>(chan_.channel().borrow()))
-      ->ScheduleUnbind();
+  const fidl::WireResult result =
+      fidl::WireCall(fidl::UnownedClientEnd<Controller>(chan_.channel().borrow()))
+          ->ScheduleUnbind();
+  ASSERT_OK(result.status());
+  const fit::result response = result.value();
+  ASSERT_TRUE(response.is_ok(), "%s", zx_status_get_string(response.error_value()));
   zx_signals_t closed;
   ASSERT_OK(chan_.channel().wait_one(ZX_CHANNEL_PEER_CLOSED, zx::time::infinite(), &closed));
   ASSERT_TRUE(closed & ZX_CHANNEL_PEER_CLOSED);

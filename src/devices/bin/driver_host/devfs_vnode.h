@@ -23,9 +23,6 @@ class DevfsVnode : public fs::Vnode, public fidl::WireServer<fuchsia_device::Con
       : dev_(std::move(dev)), dispatcher_(dispatcher) {}
 
   // fs::Vnode methods
-  zx_status_t Read(void* data, size_t len, size_t off, size_t* out_actual) override;
-  zx_status_t Write(const void* data, size_t len, size_t off, size_t* out_actual) override;
-
   zx_status_t GetAttributes(fs::VnodeAttributes* a) override;
   fs::VnodeProtocolSet GetProtocols() const override;
   zx_status_t GetNodeInfoForProtocol(fs::VnodeProtocol protocol, fs::Rights rights,

@@ -56,11 +56,11 @@ driver_compat_test("ddk-lifecycle") {
     "//sdk/fidl/fuchsia.device:fuchsia.device_cpp_wire",
     "//sdk/fidl/fuchsia.hardware.serial:fuchsia.hardware.serial_cpp_wire",
     "//sdk/fidl/fuchsia.io:fuchsia.io_cpp_wire",
-    "//sdk/lib/fdio",
     "//sdk/lib/fit",
     "//src/devices/testing/driver-integration-test-shim",
     "//src/lib/ddk",
     "//zircon/system/ulib/fbl",
+    "//zircon/system/ulib/fdio-caller",
     "//zircon/system/ulib/zx",
     "//zircon/system/ulib/zxtest",
   ]

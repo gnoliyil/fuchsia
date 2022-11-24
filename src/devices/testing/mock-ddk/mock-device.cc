@@ -131,14 +131,6 @@ void MockDevice::ResumeNewOp(uint32_t requested_state) {
   Dispatch(ctx_, ops_->resume, requested_state);
 }
 
-zx_status_t MockDevice::ReadOp(void* buf, size_t count, zx_off_t off, size_t* actual) {
-  return Dispatch(ctx_, ops_->read, ZX_ERR_NOT_SUPPORTED, buf, count, off, actual);
-}
-
-zx_status_t MockDevice::WriteOp(const void* buf, size_t count, zx_off_t off, size_t* actual) {
-  return Dispatch(ctx_, ops_->write, ZX_ERR_NOT_SUPPORTED, buf, count, off, actual);
-}
-
 zx_off_t MockDevice::GetSizeOp() { return Dispatch(ctx_, ops_->get_size, 0lu); }
 
 zx_status_t MockDevice::MessageOp(fidl_incoming_msg_t* msg, fidl_txn_t* txn) {

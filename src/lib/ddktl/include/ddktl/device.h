@@ -82,7 +82,6 @@
 // | ddk::Rxrpcable             | zx_status_t DdkRxrpc(zx_handle_t channel)          |
 // +----------------------------+----------------------------------------------------+
 //
-//
 // :: Example ::
 //
 // // Define our device type using a type alias.
@@ -723,48 +722,10 @@ class Device : public ::ddk::internal::base_device<D, Mixins...> {
 // +----------------------------+----------------------------------------------------+
 // | Mixin class                | Required function implementation                   |
 // +----------------------------+----------------------------------------------------+
-// | ddk_deprecated::Readable   | zx_status_t DdkRead(void* buf, size_t count,       |
-// |                            |                     zx_off_t off, size_t* actual)  |
-// |                            |                                                    |
-// | ddk_deprecated::Writable   | zx_status_t DdkWrite(const void* buf,              |
-// |                            |                      size_t count, zx_off_t off,   |
-// |                            |                      size_t* actual)               |
-// |                            |                                                    |
 // | ddk_deprecated::GetSizable | zx_off_t DdkGetSize()                              |
-// |                            |                                                    |
 // +----------------------------+----------------------------------------------------+
 //
 namespace ddk_deprecated {
-#if defined(DDKTL_ALLOW_READ_WRITE)
-template <typename D>
-class Readable : public ddk::base_mixin {
- protected:
-  static constexpr void InitOp(zx_protocol_device_t* proto) {
-    ddk::internal::CheckReadable<D>();
-    proto->read = Read;
-  }
-
- private:
-  static zx_status_t Read(void* ctx, void* buf, size_t count, zx_off_t off, size_t* actual) {
-    return static_cast<D*>(ctx)->DdkRead(buf, count, off, actual);
-  }
-};
-
-template <typename D>
-class Writable : public ddk::base_mixin {
- protected:
-  static constexpr void InitOp(zx_protocol_device_t* proto) {
-    ddk::internal::CheckWritable<D>();
-    proto->write = Write;
-  }
-
- private:
-  static zx_status_t Write(void* ctx, const void* buf, size_t count, zx_off_t off, size_t* actual) {
-    return static_cast<D*>(ctx)->DdkWrite(buf, count, off, actual);
-  }
-};
-
-#endif
 
 #if defined(DDKTL_ALLOW_GETSIZABLE)
 template <typename D>

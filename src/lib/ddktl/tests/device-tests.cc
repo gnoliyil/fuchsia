@@ -61,14 +61,6 @@ BEGIN_SUCCESS_CASE(Unbindable)
 void DdkUnbind(ddk::UnbindTxn txn) {}
 END_SUCCESS_CASE
 
-BEGIN_SUCCESS_DEPRECATED_CASE(Readable)
-zx_status_t DdkRead(void* buf, size_t count, zx_off_t off, size_t* actual) { return ZX_OK; }
-END_SUCCESS_CASE
-
-BEGIN_SUCCESS_DEPRECATED_CASE(Writable)
-zx_status_t DdkWrite(const void* buf, size_t count, zx_off_t off, size_t* actual) { return ZX_OK; }
-END_SUCCESS_CASE
-
 BEGIN_SUCCESS_DEPRECATED_CASE(GetSizable)
 zx_off_t DdkGetSize() { return 0; }
 END_SUCCESS_CASE
@@ -109,8 +101,8 @@ static void do_test() {
 struct TestDispatch;
 using TestDispatchType =
     ddk::Device<TestDispatch, ddk::GetProtocolable, ddk::Initializable, ddk::Openable,
-                ddk::Closable, ddk::Unbindable, ddk_deprecated::Readable, ddk_deprecated::Writable,
-                ddk_deprecated::GetSizable, ddk::Suspendable, ddk::Resumable, ddk::Rxrpcable>;
+                ddk::Closable, ddk::Unbindable, ddk_deprecated::GetSizable, ddk::Suspendable,
+                ddk::Resumable, ddk::Rxrpcable>;
 
 struct TestDispatch : public TestDispatchType {
   TestDispatch() : TestDispatchType(nullptr) {}
@@ -139,16 +131,6 @@ struct TestDispatch : public TestDispatchType {
 
   void DdkRelease() { release_called = true; }
 
-  zx_status_t DdkRead(void* buf, size_t count, zx_off_t off, size_t* actual) {
-    read_called = true;
-    return ZX_OK;
-  }
-
-  zx_status_t DdkWrite(const void* buf, size_t count, zx_off_t off, size_t* actual) {
-    write_called = true;
-    return ZX_OK;
-  }
-
   zx_off_t DdkGetSize() {
     get_size_called = true;
     return 0;
@@ -169,8 +151,6 @@ struct TestDispatch : public TestDispatchType {
   bool close_called = false;
   bool unbind_called = false;
   bool release_called = false;
-  bool read_called = false;
-  bool write_called = false;
   bool get_size_called = false;
   bool suspend_called = false;
   bool resume_called = false;
@@ -190,8 +170,6 @@ TEST(DdktlDevice, Dispatch) {
   EXPECT_EQ(ZX_OK, ops->close(ctx, 0), "");
   ops->unbind(ctx);
   ops->release(ctx);
-  EXPECT_EQ(ZX_OK, ops->read(ctx, nullptr, 0, 0, nullptr), "");
-  EXPECT_EQ(ZX_OK, ops->write(ctx, nullptr, 0, 0, nullptr), "");
   EXPECT_EQ(0, ops->get_size(ctx), "");
   ops->suspend(ctx, 2, false, 0);
   ops->resume(ctx, DEV_POWER_STATE_D0);
@@ -203,8 +181,6 @@ TEST(DdktlDevice, Dispatch) {
   EXPECT_TRUE(dev->close_called, "");
   EXPECT_TRUE(dev->unbind_called, "");
   EXPECT_TRUE(dev->release_called, "");
-  EXPECT_TRUE(dev->read_called, "");
-  EXPECT_TRUE(dev->write_called, "");
   EXPECT_TRUE(dev->get_size_called, "");
   EXPECT_TRUE(dev->suspend_called, "");
   EXPECT_TRUE(dev->resume_called, "");
@@ -290,8 +266,6 @@ TEST(DdktlDevice, MixinInitializable) { do_test<TestInitializable>(); }
 TEST(DdktlDevice, MixinOpenable) { do_test<TestOpenable>(); }
 TEST(DdktlDevice, MixinClosable) { do_test<TestClosable>(); }
 TEST(DdktlDevice, MixinUnbindable) { do_test<TestUnbindable>(); }
-TEST(DdktlDevice, MixinReadable) { do_test<TestReadable>(); }
-TEST(DdktlDevice, MixinWritable) { do_test<TestWritable>(); }
 TEST(DdktlDevice, MixinGetSizable) { do_test<TestGetSizable>(); }
 TEST(DdktlDevice, MixinSuspendable) { do_test<TestSuspendable>(); }
 TEST(DdktlDevice, MixinResumable) { do_test<TestResumable>(); }

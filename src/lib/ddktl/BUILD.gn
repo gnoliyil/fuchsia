@@ -61,17 +61,6 @@ source_set("ddktl") {
   ]
 }
 
-config("deprecated-read-write") {
-  cflags = [ "-DDDKTL_ALLOW_READ_WRITE" ]
-
-  # Please do not add to this list.
-  # TODO(fxbug.dev/33820): Remove all usages and delete this functionality.
-  visibility = [
-    "//src/devices/tests/mock-device:mock-device-driver",
-    "//src/lib/ddktl/tests:ddktl-test",
-  ]
-}
-
 config("deprecated-getsizable") {
   cflags = [ "-DDDKTL_ALLOW_GETSIZABLE" ]
 

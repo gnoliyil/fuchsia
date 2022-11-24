@@ -38,8 +38,6 @@ test("ddktl-test") {
     "//zircon/system/ulib/zxtest",
   ]
 
-  configs += [ "//src/lib/ddktl:deprecated-read-write" ]
-
   # TODO(fxbug.dev/33820): This target uses the deprecated GetSizable.
   # Please migrate away from this feature.
   configs += [ "//src/lib/ddktl:deprecated-getsizable" ]
