@@ -15,7 +15,7 @@ The tasks include:
 
 In VS Code, do the following:
 
-1. Click the **TERMINAL** tab on the VS Code window.
+1. Click **Terminal > New Terminal**.
 
 1. In the terminal, download the latest Fuchsia Workstation prebuilt image
    for the emulator:
@@ -68,19 +68,6 @@ In VS Code, do the following:
    Emulator is ready.
    ```
 
-1. Verify that the new emulator instance is running:
-
-   ```posix-terminal
-   tools/ffx emu list
-   ```
-
-   This command prints output similar to the following:
-
-   ```none {:.devsite-disable-click-to-copy}
-   $ tools/ffx emu list
-   [Active]    fuchsia-emulator
-   ```
-
 1. Verify that the emulator instance is detected as a device:
 
    ```posix-terminal
@@ -95,24 +82,22 @@ In VS Code, do the following:
    fuchsia-emulator    <unknown>    workstation_eng.qemu-x64    Product    [10.0.2.15]    Y
    ```
 
-1. Click the target device icon at the bottom of the VS Code window:
+1. Click the **Not connected** icon at the bottom of VS Code:
 
    <img class="vscode-image vscode-image-center"
-     alt="This figure shows the how to connect the Fuchsia VS Code extension
-     to a Fuchsia device."
-     src="/docs/reference/tools/editors/vscode/images/extensions/ext-connect-target.png"/>
+     alt="This image shows the Not connect icon at the bottom of VS Code"
+     src="images/get-started-vscode-not-connected.png"/>
 
-   This opens the Command Palette at the top of the VS Code window.
+   This opens the Command Palette at the top of VS Code.
 
-1. Verify that `fuchsia-emulator` is set as the default target:
+1. Click **Set fuchsia-emulator as default** in the Command Palette.
+
+1. Verify that `fuchsia-emulator`is set as the default target
+   at the bottom of VS Code:
 
    <img class="vscode-image vscode-image-center"
-     alt="This figure shows the the various options to control a connected
-     Fuchsia device through the Fuchsia VS Code extension."
-     src="/docs/reference/tools/editors/vscode/images/extensions/ext-command-palette.png"/>
-
-     If you see `Not connected` instead of `fuchsia-emulator`, click
-     **Set fuchsia-emulator as default** in the Command Palette.
+     alt="This image shows that VS Code is connected to the Fuchsia emulator"
+     src="images/get-started-vscode-connected-to-fuchsia-emulator.png"/>
 
 1. In the terminal, to verify that you can establish an SSH connection
    to the emulator instance, run the following command:

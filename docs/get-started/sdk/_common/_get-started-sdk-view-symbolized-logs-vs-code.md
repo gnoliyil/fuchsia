@@ -10,7 +10,7 @@ The tasks include:
 
 In VS Code, do the following:
 
-1. Click the Explorer icon on the left side of the VS Code window.
+1. Click the **Explorer** icon on the left side of VS Code.
 1. Open the `src/hello_world/hello_world.cc` file.
 1. Just above the line `return 0;`, add the following line:
 
@@ -33,7 +33,7 @@ In VS Code, do the following:
 
 1. To save the file, press `CTRL+S` (or `CMD+S` on macOS).
 
-1. Click the **TERMINAL** tab on the VS Code window.
+1. Click the **TERMINAL** tab on the VS Code panel.
 
 1. In the terminal, build and run the sample component:
 
@@ -57,7 +57,7 @@ In VS Code, do the following:
    A new instance of the `ffx `daemon starts the next time you run a `ffx`
    command or view device logs in VS Code.
 
-1. Click the **FUCHSIA LOGS** tab on the VS Code window.
+1. Click the **FUCHSIA LOGS** tab on the VS Code panel.
 
 1. In the **Filter logs...** text box, type `moniker:klog` and press
    **Enter**.

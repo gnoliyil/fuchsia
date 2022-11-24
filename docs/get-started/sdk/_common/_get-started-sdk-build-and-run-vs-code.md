@@ -11,8 +11,6 @@ The tasks include:
 
 In VS Code, do the following:
 
-1. Click the **TERMINAL** tab on the VS Code window.
-
 1. In the terminal, build and run the sample component:
 
    ```posix-terminal
@@ -68,14 +66,18 @@ In VS Code, do the following:
    The output shows that the `hello_world` component has run and is now
    terminated (`Stopped`).
 
-1. Click the target device (`fuchsia-emulator`) icon
-   at the bottom of the VS Code window.
+1. Click the **fuchsia-emulator** icon at the bottom of VS Code:
 
-   This opens the Command Palette at the top of the VS Code window.
+   <img class="vscode-image vscode-image-center"
+     alt="This image shows that the Fuchsia emulator icon at the bottom of
+     VS Code"
+     src="images/get-started-vscode-connected-to-fuchsia-emulator.png"/>
+
+   This opens the Command Palette at the top of VS Code.
 
 1. Click **Show log for fuchsia-emulator** in the Command Palette.
 
-   This opens the FUCHSIA LOGS tab and streams the device logs of
+   This opens the **FUCHSIA LOGS** panel and streams the device logs of
    your current Fuchsia target.
 
    <img class="vscode-image vscode-image-center"
@@ -86,10 +88,10 @@ In VS Code, do the following:
    Note: It may take a few minutes to load all the logs cached on the host
    machine. To stop the streaming of logs, click the
    <span class="material-icons">pause</span> icon at the top right corner of
-   the FUCHSIA LOGS panel.
+   the **FUCHSIA LOGS** panel.
 
-1. To fit the messages on the panel, click the "Wrap logs" icon
-   at the top right corner of the FUCHSIA LOGS panel.
+1. To fit the messages on the panel, click the **Wrap logs** icon
+   at the top right corner of the **FUCHSIA LOGS** panel.
 
 1. In the **Filter logs** text box, type `hello_world` and
    press **Enter**.
@@ -103,7 +105,7 @@ In VS Code, do the following:
    Note: For more information on filtering syntax, see
    [Filter Fuchsia logs][filter-vscode-logs].
 
-1. Click the Explorer icon on the left side of the VS Code window.
+1. Click the **Explorer** icon on the left side of VS Code.
 
 1. Open the `src/hello_world/hello_world.cc` file.
 
@@ -120,7 +122,7 @@ In VS Code, do the following:
 
 1. To save the file, press `CTRL+S` (or `CMD+S` on macOS).
 
-1. Click the **TERMINAL** tab on the VS Code window.
+1. Click the **TERMINAL** tab on the VS Code panel.
 
 1. In the terminal, build and run the `hello_world` component again:
 
@@ -128,7 +130,7 @@ In VS Code, do the following:
    tools/bazel run --config=fuchsia_x64 //src/hello_world:pkg.component
    ```
 
-1. Click the **FUCHSIA LOGS** tab on the VS Code window.
+1. Click the **FUCHSIA LOGS** tab on the VS Code panel.
 
 1. Verify that `Hello again, World!` is printed in the logs:
 
