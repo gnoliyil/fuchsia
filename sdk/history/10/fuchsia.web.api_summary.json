@@ -153,6 +153,11 @@
     },
     {
         "kind": "bits/member",
+        "name": "fuchsia.web/ContextFeatureFlags.DISABLE_DYNAMIC_CODE_GENERATION",
+        "value": "1024"
+    },
+    {
+        "kind": "bits/member",
         "name": "fuchsia.web/ContextFeatureFlags.HARDWARE_VIDEO_DECODER",
         "value": "8"
     },

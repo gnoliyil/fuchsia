@@ -108,6 +108,15 @@ type ContextFeatureFlags = strict bits : uint64 {
     /// Requires the [`fuchsia.input.virtualkeyboard/ControllerCreator`] service and the
     /// `KEYBOARD` ContextFeatureFlag.
     VIRTUAL_KEYBOARD = 0x200;
+
+    /// Disables dynamic generation of machine-code from scripts (e.g. JavaScript) and other
+    /// technologies (e.g. WebAssembly). This should typically result in scripts being executed
+    /// by an interpreter, with associated loss in performance. Other technologies relying on
+    /// dynamic code generation may be provided in a limited form where feasible, or unavailable
+    /// if interpreting would render them unusable (as is likely the case for WebAssembly).
+    /// [`fuchsia.kernel/VmexResource`] is not required if this option is set.
+    @available(added=10)
+    DISABLE_DYNAMIC_CODE_GENERATION = 0x400;
 };
 
 /// Parameters specifying the configuration for a new [`Context`].
@@ -118,6 +127,7 @@ type CreateContextParams = resource table {
     /// - [`fuchsia.device/NameProvider`]
     /// - [`fuchsia.fonts/Provider`]
     /// - [`fuchsia.intl/PropertyProvider`]
+    /// - [`fuchsia.kernel/VmexResource`] (unless [`DISABLE_DYNAMIC_CODE_GENERATION`] is set)
     /// - [`fuchsia.logger/LogSink`]
     /// - [`fuchsia.memorypressure/Provider`]
     /// - [`fuchsia.process/Launcher`]
