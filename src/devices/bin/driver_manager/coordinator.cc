@@ -628,6 +628,10 @@ zx_status_t Coordinator::AddMetadata(const fbl::RefPtr<Device>& dev, uint32_t ty
 zx_status_t Coordinator::PrepareProxy(const fbl::RefPtr<Device>& dev,
                                       fbl::RefPtr<DriverHost> target_driver_host) {
   ZX_ASSERT(!(dev->flags & DEV_CTX_PROXY));
+  // If we already have a proxy we don't have to do anything.
+  if (dev->proxy() != nullptr) {
+    return ZX_OK;
+  }
 
   // proxy args are "processname,args"
   const char* arg0 = dev->args().data();
@@ -647,58 +651,54 @@ zx_status_t Coordinator::PrepareProxy(const fbl::RefPtr<Device>& dev,
   char driver_hostname[32];
   snprintf(driver_hostname, sizeof(driver_hostname), "driver_host:%.*s", (int)arg0len, arg0);
 
-  if (dev->proxy() == nullptr) {
-    const zx_status_t status = dev->CreateProxy();
+  const zx_status_t status = dev->CreateProxy();
+  if (status != ZX_OK) {
+    LOGF(ERROR, "Cannot create proxy device '%s': %s", dev->name().data(),
+         zx_status_get_string(status));
+    return status;
+  }
+
+  // Instantiate the proxy's driver host.
+  zx::channel child_channel, parent_channel;
+  // the immortal root devices do not provide proxy rpc
+  bool need_proxy_rpc = !(dev->flags & DEV_CTX_IMMORTAL);
+
+  if (need_proxy_rpc || dev == sys_device_) {
+    // create rpc channel for proxy device to talk to the busdev it proxies
+    const zx_status_t status = zx::channel::create(0, &child_channel, &parent_channel);
     if (status != ZX_OK) {
-      LOGF(ERROR, "Cannot create proxy device '%s': %s", dev->name().data(),
+      return status;
+    }
+  }
+  if (target_driver_host == nullptr) {
+    const zx_status_t status = NewDriverHost(driver_hostname, &target_driver_host);
+    if (status != ZX_OK) {
+      LOGF(ERROR, "Failed to create driver_host '%s': %s", driver_hostname,
            zx_status_get_string(status));
       return status;
     }
   }
 
-  // if this device has no driver_host, first instantiate it
-  if (dev->proxy()->host() == nullptr) {
-    zx::channel child_channel, parent_channel;
-    // the immortal root devices do not provide proxy rpc
-    bool need_proxy_rpc = !(dev->flags & DEV_CTX_IMMORTAL);
-
-    if (need_proxy_rpc || dev == sys_device_) {
-      // create rpc channel for proxy device to talk to the busdev it proxies
-      const zx_status_t status = zx::channel::create(0, &child_channel, &parent_channel);
-      if (status != ZX_OK) {
-        return status;
-      }
+  dev->proxy()->set_host(std::move(target_driver_host));
+  if (const zx_status_t status =
+          CreateProxyDevice(dev->proxy(), dev->proxy()->host(), arg1, std::move(child_channel));
+      status != ZX_OK) {
+    LOGF(ERROR, "Failed to create proxy device '%s' in driver_host '%s': %s", dev->name().data(),
+         driver_hostname, zx_status_get_string(status));
+    return status;
+  }
+  if (need_proxy_rpc) {
+    if (const fidl::Status result =
+            dev->device_controller()->ConnectProxy(std::move(parent_channel));
+        !result.ok()) {
+      LOGF(ERROR, "Failed to connect to proxy device '%s' in driver_host '%s': %s",
+           dev->name().data(), driver_hostname, result.status_string());
     }
-    if (target_driver_host == nullptr) {
-      const zx_status_t status = NewDriverHost(driver_hostname, &target_driver_host);
-      if (status != ZX_OK) {
-        LOGF(ERROR, "Failed to create driver_host '%s': %s", driver_hostname,
-             zx_status_get_string(status));
-        return status;
-      }
-    }
-
-    dev->proxy()->set_host(std::move(target_driver_host));
-    if (const zx_status_t status =
-            CreateProxyDevice(dev->proxy(), dev->proxy()->host(), arg1, std::move(child_channel));
+  }
+  if (dev == sys_device_) {
+    if (const zx_status_t status = fdio_service_connect(kItemsPath, parent_channel.release());
         status != ZX_OK) {
-      LOGF(ERROR, "Failed to create proxy device '%s' in driver_host '%s': %s", dev->name().data(),
-           driver_hostname, zx_status_get_string(status));
-      return status;
-    }
-    if (need_proxy_rpc) {
-      if (const fidl::Status result =
-              dev->device_controller()->ConnectProxy(std::move(parent_channel));
-          !result.ok()) {
-        LOGF(ERROR, "Failed to connect to proxy device '%s' in driver_host '%s': %s",
-             dev->name().data(), driver_hostname, result.status_string());
-      }
-    }
-    if (dev == sys_device_) {
-      if (const zx_status_t status = fdio_service_connect(kItemsPath, parent_channel.release());
-          status != ZX_OK) {
-        LOGF(ERROR, "Failed to connect to %s: %s", kItemsPath, zx_status_get_string(status));
-      }
+      LOGF(ERROR, "Failed to connect to %s: %s", kItemsPath, zx_status_get_string(status));
     }
   }
 
