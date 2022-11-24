@@ -6,8 +6,11 @@
 #define LIB_SMBIOS_SMBIOS_H_
 
 #include <lib/fit/function.h>
+#include <lib/zx/result.h>
 #include <stdint.h>
 #include <zircon/types.h>
+
+#include <variant>
 
 #include <fbl/macros.h>
 #include <fbl/ref_ptr.h>
@@ -85,13 +88,16 @@ class StringTable {
 // Utility for comparing specification versions.  Used to select which version
 // of the spec to use for interpreting a struct.
 struct SpecVersion {
-  SpecVersion(uint8_t major, uint8_t minor) : major_ver(major), minor_ver(minor) {}
+  SpecVersion(uint8_t major, uint8_t minor, uint8_t docrev = 0)
+      : major_ver(major), minor_ver(minor), docrev_ver(docrev) {}
 
   // Returns true if this support for at least the queried version.
-  bool IncludesVersion(uint8_t spec_major_ver, uint8_t spec_minor_ver) const;
+  bool IncludesVersion(uint8_t spec_major_ver, uint8_t spec_minor_ver,
+                       uint8_t spec_docrev_ver = 0) const;
 
   uint8_t major_ver;
   uint8_t minor_ver;
+  uint8_t docrev_ver;
 };
 
 enum class EntryPointVersion {
@@ -134,15 +140,118 @@ struct EntryPoint2_1 {
 
   bool IsValid() const;
 
-  // Walk the known SMBIOS structures, assuming they are mapped at struct_table_virt.  The
-  // callback will be called once for each structure found.
-  zx_status_t WalkStructs(uintptr_t struct_table_virt, StructWalkCallback cb) const;
-
   SpecVersion version() const { return SpecVersion(major_ver, minor_ver); }
 
   void Dump() const;
 } __PACKED;
 static_assert(sizeof(EntryPoint2_1) == 0x1f, "");
+
+struct EntryPoint3_0 {
+  uint8_t anchor_string[5];  // _SM3_
+  uint8_t checksum;
+  uint8_t length;
+
+  // SMBIOS specification revision;
+  uint8_t major_ver;
+  uint8_t minor_ver;
+  uint8_t docrev_ver;
+
+  uint8_t ep_rev;  // Should be 0x01 for SMBIOS 3.0 entry point.
+  uint8_t reserved;
+
+  uint32_t max_struct_size;
+  uint64_t struct_table_phys;
+
+  bool IsValid() const;
+
+  SpecVersion version() const { return SpecVersion(major_ver, minor_ver, docrev_ver); }
+} __PACKED;
+static_assert(sizeof(EntryPoint3_0) == 0x18, "");
+
+class EntryPoint {
+ public:
+  using EntryPointType = std::variant<const EntryPoint2_1*, const EntryPoint3_0*>;
+  // Prefer to use EntryPoint::Create unless you have already validated that the EntryPoint is
+  // correct.
+  explicit EntryPoint(EntryPointType inner) : inner_(inner) {}
+
+  static zx::result<EntryPoint> Create(uintptr_t ep_start) {
+    auto v2 = reinterpret_cast<const EntryPoint2_1*>(ep_start);
+    if (v2->IsValid()) {
+      return zx::ok(EntryPoint(EntryPointType(v2)));
+    }
+    auto v3 = reinterpret_cast<const EntryPoint3_0*>(ep_start);
+    if (v3->IsValid()) {
+      return zx::ok(EntryPoint(EntryPointType(v3)));
+    }
+    return zx::error(ZX_ERR_IO_DATA_INTEGRITY);
+  }
+
+  // Walk the known SMBIOS structures, assuming they are mapped at struct_table_virt.  The
+  // callback will be called once for each structure found.
+  zx_status_t WalkStructs(uintptr_t struct_table_virt, StructWalkCallback cb) const;
+
+  uint64_t struct_table_phys() const {
+    return std::visit(
+        [](auto&& arg) -> uint64_t {
+          using T = std::decay_t<decltype(arg)>;
+          if constexpr (std::is_same_v<T, const EntryPoint2_1*> ||
+                        std::is_same_v<T, const EntryPoint3_0*>) {
+            return arg->struct_table_phys;
+          }
+        },
+        inner_);
+  }
+
+  // Note that this function may return max_struct_size, and the tables should be checked for the
+  // End-of-Table table type.
+  uint32_t struct_table_length() const {
+    return std::visit(
+        [](auto&& arg) -> uint32_t {
+          using T = std::decay_t<decltype(arg)>;
+          if constexpr (std::is_same_v<T, const EntryPoint2_1*>) {
+            return arg->struct_table_length;
+          }
+          if constexpr (std::is_same_v<T, const EntryPoint3_0*>) {
+            return arg->max_struct_size;
+          }
+        },
+        inner_);
+  }
+
+  uint32_t max_struct_size() const {
+    return std::visit(
+        [](auto&& arg) -> uint32_t {
+          using T = std::decay_t<decltype(arg)>;
+          if constexpr (std::is_same_v<T, const EntryPoint2_1*> ||
+                        std::is_same_v<T, const EntryPoint3_0*>) {
+            return arg->max_struct_size;
+          }
+        },
+        inner_);
+  }
+
+  SpecVersion version() const {
+    return std::visit(
+        [](auto&& arg) -> SpecVersion {
+          using T = std::decay_t<decltype(arg)>;
+          if constexpr (std::is_same_v<T, const EntryPoint2_1*> ||
+                        std::is_same_v<T, const EntryPoint3_0*>) {
+            return arg->version();
+          }
+        },
+        inner_);
+  }
+
+  bool has_struct_count() const { return std::get_if<const EntryPoint2_1*>(&inner_) != nullptr; }
+  uint16_t struct_count() const {
+    ZX_DEBUG_ASSERT(has_struct_count());
+    return (*std::get_if<const EntryPoint2_1*>(&inner_))->struct_count;
+  }
+
+ private:
+  EntryPointType inner_;
+};
 
 struct BiosInformationStruct2_0 {
   Header hdr;

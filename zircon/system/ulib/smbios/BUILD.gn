@@ -10,6 +10,8 @@ zx_library("smbios") {
 
   sources = [ "smbios.cc" ]
   deps = [ "//zircon/system/ulib/fbl" ]
+
+  public_deps = [ "//zircon/system/ulib/zxc" ]
 }
 
 group("tests") {

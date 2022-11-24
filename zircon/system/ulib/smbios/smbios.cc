@@ -122,7 +122,7 @@ void StringTable::Dump() const {
 
 bool EntryPoint2_1::IsValid() const {
   if (memcmp(anchor_string, SMBIOS2_ANCHOR, std::size(anchor_string))) {
-    printf("smbios: bad anchor %4s\n", anchor_string);
+    printf("smbios 2.1: bad anchor %4s\n", anchor_string);
     return false;
   }
 
@@ -173,14 +173,41 @@ void EntryPoint2_1::Dump() const {
          struct_count);
 }
 
-bool SpecVersion::IncludesVersion(uint8_t spec_major_ver, uint8_t spec_minor_ver) const {
+bool EntryPoint3_0::IsValid() const {
+  if (memcmp(anchor_string, SMBIOS3_ANCHOR, std::size(anchor_string))) {
+    printf("smbios 3.0: bad anchor %5s\n", anchor_string);
+    return false;
+  }
+
+  if (length != sizeof(EntryPoint3_0)) {
+    printf("smbios 3.0: bad length: %u\n", length);
+    return false;
+  }
+
+  if (ComputeChecksum(reinterpret_cast<const uint8_t*>(this), length) != 0) {
+    printf("smbios 3.0: bad checksum\n");
+    return false;
+  }
+
+  return true;
+}
+
+bool SpecVersion::IncludesVersion(uint8_t spec_major_ver, uint8_t spec_minor_ver,
+                                  uint8_t spec_docrev_ver) const {
   if (major_ver > spec_major_ver) {
     return true;
   }
   if (major_ver < spec_major_ver) {
     return false;
   }
-  return minor_ver >= spec_minor_ver;
+  if (minor_ver > spec_minor_ver) {
+    return true;
+  }
+  if (minor_ver < spec_minor_ver) {
+    return false;
+  }
+
+  return docrev_ver >= spec_docrev_ver;
 }
 
 void BiosInformationStruct2_0::Dump(const StringTable& st) const {
@@ -260,18 +287,23 @@ void BaseboardInformationStruct::Dump(const StringTable& st) const {
 }
 #endif
 
-zx_status_t EntryPoint2_1::WalkStructs(uintptr_t struct_table_virt, StructWalkCallback cb) const {
+zx_status_t EntryPoint::WalkStructs(uintptr_t struct_table_virt, StructWalkCallback cb) const {
   size_t idx = 0;
   uintptr_t curr_addr = struct_table_virt;
-  const uintptr_t table_end = curr_addr + struct_table_length;
+  const uintptr_t table_end = curr_addr + struct_table_length();
   while (curr_addr + sizeof(Header) < table_end) {
     auto hdr = reinterpret_cast<const Header*>(curr_addr);
     if (curr_addr + hdr->length > table_end) {
       return ZX_ERR_IO_DATA_INTEGRITY;
     }
+
+    if (hdr->type == StructType::EndOfTable) {
+      return ZX_OK;
+    }
+
     StringTable st;
     zx_status_t status =
-        st.Init(hdr, std::max(table_end - curr_addr, static_cast<size_t>(max_struct_size)));
+        st.Init(hdr, std::max(table_end - curr_addr, static_cast<size_t>(max_struct_size())));
     if (status != ZX_OK) {
       return status;
     }
@@ -283,8 +315,7 @@ zx_status_t EntryPoint2_1::WalkStructs(uintptr_t struct_table_virt, StructWalkCa
       return status;
     }
     idx++;
-
-    if (idx == struct_count) {
+    if (has_struct_count() && struct_count() == idx) {
       return ZX_OK;
     }
 

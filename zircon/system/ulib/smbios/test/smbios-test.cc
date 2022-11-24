@@ -44,12 +44,31 @@ smbios::EntryPoint2_1 CreateFakeEntryPoint(const fbl::Array<uint8_t>& structs,
   return ep;
 }
 
+smbios::EntryPoint3_0 CreateFakeV3EntryPoint() {
+  smbios::EntryPoint3_0 ep = {
+      .anchor_string = {'_', 'S', 'M', '3', '_'},
+      .checksum = 0,
+      .length = sizeof(ep),
+      .major_ver = 3,
+      .minor_ver = 0,
+      .docrev_ver = 0,
+      .ep_rev = 1,
+      .reserved = 0,
+      .max_struct_size = 256,
+      .struct_table_phys = 0x1000,  // Fake physical address
+  };
+
+  ep.checksum = static_cast<uint8_t>(
+      256 - ComputeChecksum(reinterpret_cast<const uint8_t*>(&ep), sizeof(ep)));
+  return ep;
+}
+
 #define BIOS_STRING1 "string1"
 #define BIOS_STRING2 "string2"
 
+constexpr uint16_t kNumStructures = 2;
 // Create fake SMBIOSv2.1 structures
-void CreateFakeSmbios(smbios::EntryPoint2_1* ep, fbl::Array<uint8_t>* structs) {
-  constexpr uint16_t kNumStructures = 2;
+void CreateFakeSmbiosCommon(fbl::Array<uint8_t>* structs) {
   // A double null terminates the string table
   const char bios_info_strings[] = BIOS_STRING1 "\0" BIOS_STRING2 "\0";
   const size_t bios_info_size =
@@ -57,7 +76,7 @@ void CreateFakeSmbios(smbios::EntryPoint2_1* ep, fbl::Array<uint8_t>* structs) {
   const char sys_info_strings[] = "\0";
   const size_t sys_info_size =
       sizeof(smbios::SystemInformationStruct2_1) + sizeof(sys_info_strings);
-  const size_t struct_data_size = bios_info_size + sys_info_size;
+  const size_t struct_data_size = bios_info_size + sys_info_size + sizeof(smbios::Header);
 
   fbl::Array<uint8_t> struct_data(new uint8_t[struct_data_size](), struct_data_size);
   uint8_t* next_struct_data = struct_data.data();
@@ -80,11 +99,27 @@ void CreateFakeSmbios(smbios::EntryPoint2_1* ep, fbl::Array<uint8_t>* structs) {
   memcpy(next_struct_data, sys_info_strings, sizeof(sys_info_strings));
   next_struct_data += sizeof(sys_info_strings);
 
-  ASSERT_EQ(struct_data.data() + struct_data_size, next_struct_data);
+  smbios::Header end = {};
+  end.type = smbios::StructType::EndOfTable;
+  end.length = sizeof(end);
+  end.handle = 0;
+  memcpy(next_struct_data, &end, sizeof(end));
+  next_struct_data += sizeof(end);
 
-  *ep = CreateFakeEntryPoint(struct_data, kNumStructures);
-  ASSERT_TRUE(ep->IsValid());
+  ASSERT_EQ(struct_data.data() + struct_data_size, next_struct_data);
   *structs = std::move(struct_data);
+}
+
+void CreateFakeSmbios(smbios::EntryPoint2_1* ep, fbl::Array<uint8_t>* structs) {
+  CreateFakeSmbiosCommon(structs);
+  *ep = CreateFakeEntryPoint(*structs, kNumStructures);
+  ASSERT_TRUE(ep->IsValid());
+}
+
+void CreateFakeSmbiosV3(smbios::EntryPoint3_0* ep, fbl::Array<uint8_t>* structs) {
+  CreateFakeSmbiosCommon(structs);
+  *ep = CreateFakeV3EntryPoint();
+  ASSERT_TRUE(ep->IsValid());
 }
 
 TEST(SmbiosTestCase, WalkStructs) {
@@ -109,7 +144,36 @@ TEST(SmbiosTestCase, WalkStructs) {
     }
     return ZX_OK;
   };
-  ASSERT_OK(ep.WalkStructs(reinterpret_cast<uintptr_t>(structs.data()), walk_cb));
+  ASSERT_OK(
+      smbios::EntryPoint(&ep).WalkStructs(reinterpret_cast<uintptr_t>(structs.data()), walk_cb));
+  ASSERT_TRUE(tables_seen[0]);
+  ASSERT_TRUE(tables_seen[1]);
+}
+
+TEST(SmbiosTestCase, WalkStructsV3) {
+  smbios::EntryPoint3_0 ep;
+  fbl::Array<uint8_t> structs;
+  ASSERT_NO_FATAL_FAILURE(CreateFakeSmbiosV3(&ep, &structs));
+
+  bool tables_seen[2] = {};
+  auto walk_cb = [&ep, &tables_seen](smbios::SpecVersion version, const smbios::Header* h,
+                                     const smbios::StringTable& st) {
+    EXPECT_EQ(version.major_ver, ep.major_ver);
+    EXPECT_EQ(version.minor_ver, ep.minor_ver);
+    switch (h->type) {
+      case smbios::StructType::BiosInfo:
+      case smbios::StructType::SystemInfo: {
+        EXPECT_FALSE(tables_seen[static_cast<size_t>(h->type)]);
+        tables_seen[static_cast<size_t>(h->type)] = true;
+        break;
+      }
+      default:
+        ADD_FAILURE("Saw unexpected header type");
+    }
+    return ZX_OK;
+  };
+  ASSERT_OK(
+      smbios::EntryPoint(&ep).WalkStructs(reinterpret_cast<uintptr_t>(structs.data()), walk_cb));
   ASSERT_TRUE(tables_seen[0]);
   ASSERT_TRUE(tables_seen[1]);
 }
@@ -133,7 +197,8 @@ TEST(SmbiosTestCase, WalkStructsEarlyStop) {
     }
     return ZX_OK;
   };
-  ASSERT_OK(ep.WalkStructs(reinterpret_cast<uintptr_t>(structs.data()), walk_cb));
+  ASSERT_OK(
+      smbios::EntryPoint(&ep).WalkStructs(reinterpret_cast<uintptr_t>(structs.data()), walk_cb));
 }
 
 TEST(SmbiosTestCase, GetString) {
@@ -167,7 +232,8 @@ TEST(SmbiosTestCase, GetString) {
     }
     return ZX_OK;
   };
-  ASSERT_OK(ep.WalkStructs(reinterpret_cast<uintptr_t>(structs.data()), walk_cb));
+  ASSERT_OK(
+      smbios::EntryPoint(&ep).WalkStructs(reinterpret_cast<uintptr_t>(structs.data()), walk_cb));
 }
 
 TEST(SmbiosTestCase, BaseboardInformationTruncations) {

@@ -57,14 +57,16 @@ class SmbiosState {
   zx_status_t LoadFromFirmware();
 
   // These values are only valid as long as the instance is around.
-  const smbios::EntryPoint2_1* entry_point() const { return entry_point_; }
+  const smbios::EntryPoint* entry_point() const {
+    return entry_point_.has_value() ? &entry_point_.value() : nullptr;
+  }
   uintptr_t struct_table_start() const { return struct_table_start_; }
 
  private:
   fzl::OwnedVmoMapper entry_point_mapping_;
   fzl::OwnedVmoMapper struct_table_mapping_;
 
-  const smbios::EntryPoint2_1* entry_point_ = nullptr;
+  std::optional<smbios::EntryPoint> entry_point_;
   uintptr_t struct_table_start_ = 0;
 };
 
@@ -91,15 +93,15 @@ zx_status_t SmbiosState::LoadFromFirmware() {
     return status;
   }
 
-  auto ep = reinterpret_cast<const smbios::EntryPoint2_1*>(ep_start);
-  if (!ep->IsValid()) {
+  auto ep = smbios::EntryPoint::Create(ep_start);
+  if (ep.is_error()) {
     return ZX_ERR_IO_DATA_INTEGRITY;
   }
 
   // Map the struct table
   fzl::OwnedVmoMapper struct_table_mapping;
   uintptr_t struct_table_start;
-  status = MapStructure(*root_resource, ep->struct_table_phys, ep->struct_table_length,
+  status = MapStructure(*root_resource, ep->struct_table_phys(), ep->struct_table_length(),
                         &struct_table_mapping, &struct_table_start);
   if (status != ZX_OK) {
     return status;
@@ -107,7 +109,7 @@ zx_status_t SmbiosState::LoadFromFirmware() {
 
   entry_point_mapping_ = std::move(ep_mapping);
   struct_table_mapping_ = std::move(struct_table_mapping);
-  entry_point_ = ep;
+  entry_point_.emplace(std::move(ep.value()));
   struct_table_start_ = struct_table_start;
   return ZX_OK;
 }
