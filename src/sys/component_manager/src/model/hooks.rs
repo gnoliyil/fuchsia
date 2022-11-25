@@ -248,8 +248,6 @@ pub enum EventPayload {
 /// Information about a component's runtime provided to `Started`.
 #[derive(Clone)]
 pub struct RuntimeInfo {
-    pub resolved_url: String,
-    pub package_dir: Option<fio::DirectoryProxy>,
     pub outgoing_dir: Option<fio::DirectoryProxy>,
     pub runtime_dir: Option<fio::DirectoryProxy>,
     pub diagnostics_receiver:
@@ -258,7 +256,7 @@ pub struct RuntimeInfo {
 }
 
 impl RuntimeInfo {
-    pub fn from_runtime(runtime: &mut Runtime, resolved_url: String) -> Self {
+    pub fn from_runtime(runtime: &mut Runtime) -> Self {
         let diagnostics_receiver = Arc::new(Mutex::new(
             runtime
                 .controller
@@ -267,8 +265,6 @@ impl RuntimeInfo {
         ));
 
         Self {
-            resolved_url,
-            package_dir: runtime.namespace.as_ref().and_then(|n| clone_dir(n.package_dir.as_ref())),
             outgoing_dir: clone_dir(runtime.outgoing_dir.as_ref()),
             runtime_dir: clone_dir(runtime.runtime_dir.as_ref()),
             diagnostics_receiver,

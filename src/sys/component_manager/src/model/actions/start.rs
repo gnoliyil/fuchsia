@@ -53,7 +53,6 @@ impl Action for StartAction {
 
 struct StartContext {
     component_decl: cm_rust::ComponentDecl,
-    resolved_url: String,
     runner: Arc<dyn Runner>,
     start_info: fcrunner::ComponentStartInfo,
     controller_server_end: ServerEnd<fcrunner::ComponentControllerMarker>,
@@ -101,7 +100,6 @@ async fn do_start(
         Ok((
             StartContext {
                 component_decl: component_info.decl,
-                resolved_url: component_info.resolved_url.clone(),
                 runner,
                 start_info,
                 controller_server_end,
@@ -120,10 +118,7 @@ async fn do_start(
                 .dispatch(&Event::new_with_timestamp(
                     component,
                     EventPayload::Started {
-                        runtime: RuntimeInfo::from_runtime(
-                            &mut pending_runtime,
-                            start_context.resolved_url.clone(),
-                        ),
+                        runtime: RuntimeInfo::from_runtime(&mut pending_runtime),
                         component_decl: start_context.component_decl.clone(),
                     },
                     pending_runtime.timestamp,
