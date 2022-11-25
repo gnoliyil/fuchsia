@@ -4,6 +4,7 @@
 
 import("//build/bazel/bazel_workspace.gni")
 import("//build/bazel/legacy_ninja_build_outputs.gni")
+import("//build/toolchain/rbe.gni")
 
 # Run a Bazel build action, which is run in the special workspace
 # setup by `//build/bazel:bazel_workspace`.
@@ -184,6 +185,9 @@ template("bazel_build_action") {
     }
     if (is_ubsan) {
       args += [ "--config=ubsan" ]
+    }
+    if (cxx_rbe_enable || rust_rbe_enable) {
+      args += [ "--config=remote" ]
     }
     if (is_coverage) {
       args += [ "--collect_code_coverage" ]
