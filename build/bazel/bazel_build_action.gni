@@ -185,6 +185,9 @@ template("bazel_build_action") {
     if (is_ubsan) {
       args += [ "--config=ubsan" ]
     }
+    if (is_coverage) {
+      args += [ "--collect_code_coverage" ]
+    }
 
     deps = _bazel_inputs +
            [ "//build/bazel:generate_main_workspace($default_toolchain)" ]
