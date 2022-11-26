@@ -560,6 +560,13 @@ void Mdns::Renew(const DnsResource& resource, Media media, IpVersions ip_version
   resource_renewer_->Renew(resource, media, ip_versions);
 }
 
+void Mdns::Query(DnsType type, const std::string& name, Media media, IpVersions ip_versions,
+                 zx::time initial_query_time, zx::duration interval, uint32_t interval_multiplier,
+                 uint32_t max_queries) {
+  resource_renewer_->Query(type, name, media, ip_versions, initial_query_time, interval,
+                           interval_multiplier, max_queries);
+}
+
 void Mdns::RemoveAgent(std::shared_ptr<MdnsAgent> agent) {
   FX_DCHECK(agent);
   FX_DCHECK(!prohibit_agent_removal_);

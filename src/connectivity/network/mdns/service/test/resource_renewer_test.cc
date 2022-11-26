@@ -20,6 +20,12 @@ class ResourceRenewerTest : public AgentTest {
 
 constexpr uint32_t kTimeToLiveSeconds = 120;
 constexpr uint32_t kInterfaceId = 1;
+constexpr DnsType kDnsType = DnsType::kTxt;
+static const std::string kName = "my._yardapult._udp.";
+constexpr zx::duration kInitialDelay = zx::sec(12);
+constexpr zx::duration kInterval = zx::sec(1);
+constexpr uint32_t kIntervalMultiplier = 2;
+constexpr uint32_t kMaxQueries = 3;
 
 // Tests behavior of the requestor when a resource expires.
 TEST_F(ResourceRenewerTest, Expiration) {
@@ -288,6 +294,83 @@ TEST_F(ResourceRenewerTest, V6Only) {
   // Third renewal is at 90% of TTL. Because the resource was renewed, we expect it to be
   // forgotten, and we won't see the third query.
   interval = zx::msec(kTimeToLiveSeconds * 50);
+  ExpectPostTaskForTimeAndInvoke(interval, interval);
+  ExpectNoOther();
+}
+
+// Tests |Query| behavior when no resource is received.
+TEST_F(ResourceRenewerTest, FailedQuery) {
+  ResourceRenewer under_test(this);
+  SetAgent(under_test);
+
+  under_test.Start(kLocalHostFullName);
+  ExpectNoOther();
+
+  under_test.Query(kDnsType, kName, Media::kBoth, IpVersions::kBoth, now() + kInitialDelay,
+                   kInterval, kIntervalMultiplier, kMaxQueries);
+
+  // First query is after |kInitialDelay|.
+  zx::duration interval = kInitialDelay;
+  ExpectPostTaskForTimeAndInvoke(interval, interval);
+
+  auto message = ExpectOutboundMessage(ReplyAddress::Multicast(Media::kBoth, IpVersions::kBoth));
+  ExpectQuestion(message.get(), kName, kDnsType);
+  ExpectNoOtherQuestionOrResource(message.get());
+
+  // First query is after |kInterval|.
+  interval = kInterval;
+  ExpectPostTaskForTimeAndInvoke(interval, interval);
+
+  message = ExpectOutboundMessage(ReplyAddress::Multicast(Media::kBoth, IpVersions::kBoth));
+  ExpectQuestion(message.get(), kName, kDnsType);
+  ExpectNoOtherQuestionOrResource(message.get());
+
+  // Second query is after |kInterval * kIntervalMultiplier|.
+  interval = interval * kIntervalMultiplier;
+  ExpectPostTaskForTimeAndInvoke(interval, interval);
+
+  message = ExpectOutboundMessage(ReplyAddress::Multicast(Media::kBoth, IpVersions::kBoth));
+  ExpectQuestion(message.get(), kName, kDnsType);
+  ExpectNoOtherQuestionOrResource(message.get());
+
+  // Expiration is after |kInterval * kIntervalMultiplier ^ 2|.
+  interval = interval * kIntervalMultiplier;
+  ExpectPostTaskForTimeAndInvoke(interval, interval);
+
+  auto expired = DnsResource(kName, kDnsType);
+  expired.time_to_live_ = 0;
+  ExpectExpiration(expired);
+  ExpectNoOther();
+}
+
+// Tests |Query| behavior when the resource is received.
+TEST_F(ResourceRenewerTest, SuccessfulQuery) {
+  ResourceRenewer under_test(this);
+  SetAgent(under_test);
+
+  under_test.Start(kLocalHostFullName);
+  ExpectNoOther();
+
+  under_test.Query(kDnsType, kName, Media::kBoth, IpVersions::kBoth, now() + kInitialDelay,
+                   kInterval, kIntervalMultiplier, kMaxQueries);
+
+  // First query is after |kInitialDelay|.
+  zx::duration interval = kInitialDelay;
+  ExpectPostTaskForTimeAndInvoke(interval, interval);
+
+  auto message = ExpectOutboundMessage(ReplyAddress::Multicast(Media::kBoth, IpVersions::kBoth));
+  ExpectQuestion(message.get(), kName, kDnsType);
+  ExpectNoOtherQuestionOrResource(message.get());
+
+  ReplyAddress sender_address(
+      inet::SocketAddress(192, 168, 1, 1, inet::IpPort::From_uint16_t(5353)),
+      inet::IpAddress(192, 168, 1, 100), kInterfaceId, Media::kWireless, IpVersions::kV4);
+  DnsResource resource(kName, kDnsType);
+  under_test.ReceiveResource(resource, MdnsResourceSection::kAnswer, sender_address);
+
+  // Second query after |kInterval|. Because the resource was renewed, we expect it to be
+  // forgotten, and we won't see the second query.
+  interval = kInterval;
   ExpectPostTaskForTimeAndInvoke(interval, interval);
   ExpectNoOther();
 }

@@ -194,6 +194,9 @@ const std::vector<inet::SocketAddress> kSocketAddresses{
 const std::vector<inet::SocketAddress> kSocketAddressesReversed{
     inet::SocketAddress(inet::IpAddress(0xfe80, 200), kPort, 1),
     inet::SocketAddress(inet::IpAddress(192, 168, 1, 200), kPort, 1)};
+constexpr zx::duration kAdditionalInterval = zx::sec(1);
+constexpr uint32_t kAdditionalIntervalMultiplier = 2;
+constexpr uint32_t kAdditionalMaxQueries = 3;
 
 // Tests nominal startup behavior of the requestor.
 TEST_F(InstanceRequestorTest, QuerySequence) {
@@ -733,10 +736,13 @@ TEST_F(InstanceRequestorTest, ResponseSansAddresses) {
   ReceivePublication(under_test, kHostFullName, kServiceName, kInstanceName, kPort, kText,
                      sender_address, true, false);  // yes TXT record, no A record.
 
-  // Expect an A question.
   subscriber.ExpectNoOther();
-  message = ExpectOutboundMessage(ReplyAddress::Multicast(Media::kBoth, IpVersions::kBoth));
-  ExpectQuestion(message.get(), kHostFullName, DnsType::kA);
+
+  // Expect a A/AAAA queries.
+  ExpectQueryCall(DnsType::kA, kHostFullName, Media::kBoth, IpVersions::kBoth, now(),
+                  kAdditionalInterval, kAdditionalIntervalMultiplier, kAdditionalMaxQueries);
+  ExpectQueryCall(DnsType::kAaaa, kHostFullName, Media::kBoth, IpVersions::kBoth, now(),
+                  kAdditionalInterval, kAdditionalIntervalMultiplier, kAdditionalMaxQueries);
 
   // Receive a response with only an address record.
   ReceiveAddress(under_test, kHostFullName, sender_address);
@@ -786,10 +792,10 @@ TEST_F(InstanceRequestorTest, ResponseSansTxt) {
                             {}, 0, 0),
             *params);
 
-  // Expect a TXT question.
-  message = ExpectOutboundMessage(ReplyAddress::Multicast(Media::kBoth, IpVersions::kBoth));
-  ExpectQuestion(message.get(), MdnsNames::InstanceFullName(kInstanceName, kServiceName),
-                 DnsType::kTxt);
+  // Expect a TXT query call.
+  ExpectQueryCall(DnsType::kTxt, MdnsNames::InstanceFullName(kInstanceName, kServiceName),
+                  Media::kBoth, IpVersions::kBoth, now(), kAdditionalInterval,
+                  kAdditionalIntervalMultiplier, kAdditionalMaxQueries);
 
   // Receive a response with only a TXT record.
   ReceiveTxt(under_test, kServiceName, kInstanceName, kText, sender_address);
@@ -831,21 +837,26 @@ TEST_F(InstanceRequestorTest, ResponsePtrOnly) {
       inet::IpAddress(192, 168, 1, 100), 1, Media::kWireless, IpVersions::kV4);
   ReceivePtr(under_test, kServiceName, kInstanceName, sender_address);
 
-  // Expect an SRV question.
   subscriber.ExpectNoOther();
-  message = ExpectOutboundMessage(ReplyAddress::Multicast(Media::kBoth, IpVersions::kBoth));
-  ExpectQuestion(message.get(), MdnsNames::InstanceFullName(kInstanceName, kServiceName),
-                 DnsType::kSrv);
+
+  // Expect an SRV query calls.
+  ExpectQueryCall(DnsType::kSrv, MdnsNames::InstanceFullName(kInstanceName, kServiceName),
+                  Media::kBoth, IpVersions::kBoth, now(), kAdditionalInterval,
+                  kAdditionalIntervalMultiplier, kAdditionalMaxQueries);
 
   // Receive a response with only an SRV record.
   ReceiveSrv(under_test, kHostFullName, kServiceName, kInstanceName, kPort, sender_address);
 
-  // Expect an A question and a TXT question.
   subscriber.ExpectNoOther();
-  message = ExpectOutboundMessage(ReplyAddress::Multicast(Media::kBoth, IpVersions::kBoth));
-  ExpectQuestion(message.get(), kHostFullName, DnsType::kA);
-  ExpectQuestion(message.get(), MdnsNames::InstanceFullName(kInstanceName, kServiceName),
-                 DnsType::kTxt);
+
+  // Expect a A, AAAA and TXT query calls.
+  ExpectQueryCall(DnsType::kA, kHostFullName, Media::kBoth, IpVersions::kBoth, now(),
+                  kAdditionalInterval, kAdditionalIntervalMultiplier, kAdditionalMaxQueries);
+  ExpectQueryCall(DnsType::kAaaa, kHostFullName, Media::kBoth, IpVersions::kBoth, now(),
+                  kAdditionalInterval, kAdditionalIntervalMultiplier, kAdditionalMaxQueries);
+  ExpectQueryCall(DnsType::kTxt, MdnsNames::InstanceFullName(kInstanceName, kServiceName),
+                  Media::kBoth, IpVersions::kBoth, now(), kAdditionalInterval,
+                  kAdditionalIntervalMultiplier, kAdditionalMaxQueries);
 
   // Receive a response with only an address record.
   ReceiveAddress(under_test, kHostFullName, sender_address);
@@ -868,6 +879,55 @@ TEST_F(InstanceRequestorTest, ResponsePtrOnly) {
                             {inet::SocketAddress(sender_address.socket_address().address(), kPort)},
                             kText, 0, 0),
             *params);
+
+  subscriber.ExpectNoOther();
+}
+
+// Tests the behavior of the requestor when a response containing no addresses is received on V6.
+TEST_F(InstanceRequestorTest, ResponseSansAddressesV6) {
+  InstanceRequestor under_test(this, kServiceName, Media::kBoth, IpVersions::kBoth, kExcludeLocal,
+                               kExcludeLocalProxies);
+  SetAgent(under_test);
+
+  Subscriber subscriber;
+  under_test.AddSubscriber(&subscriber);
+
+  under_test.Start(kLocalHostFullName);
+
+  // Expect a PTR question on start.
+  auto message = ExpectOutboundMessage(ReplyAddress::Multicast(Media::kBoth, IpVersions::kBoth));
+  ExpectQuestion(message.get(), kServiceFullName, DnsType::kPtr);
+  ExpectNoOtherQuestionOrResource(message.get());
+  ExpectPostTaskForTime(kMinDelay, kMinDelay);
+  ExpectNoOther();
+
+  subscriber.ExpectQueryCalled(DnsType::kPtr);
+  subscriber.ExpectNoOther();
+
+  // Receive a response with no address records.
+  ReplyAddress sender_address(inet::SocketAddress(0xfe80, 1, inet::IpPort::From_uint16_t(5353)),
+                              inet::IpAddress(0xfe80, 100), 1, Media::kWireless, IpVersions::kV6);
+  ReceivePublication(under_test, kHostFullName, kServiceName, kInstanceName, kPort, kText,
+                     sender_address, true, false);  // yes TXT record, no A record.
+
+  subscriber.ExpectNoOther();
+
+  // Expect a A/AAAA queries.
+  ExpectQueryCall(DnsType::kA, kHostFullName, Media::kBoth, IpVersions::kBoth, now(),
+                  kAdditionalInterval, kAdditionalIntervalMultiplier, kAdditionalMaxQueries);
+  ExpectQueryCall(DnsType::kAaaa, kHostFullName, Media::kBoth, IpVersions::kBoth, now(),
+                  kAdditionalInterval, kAdditionalIntervalMultiplier, kAdditionalMaxQueries);
+
+  // Receive a response with only an address record.
+  ReceiveAddress(under_test, kHostFullName, sender_address);
+
+  // Expect discovery of the instance to be reported to the client.
+  auto params = subscriber.ExpectInstanceDiscoveredCalled();
+  EXPECT_EQ(
+      ServiceInstance(kServiceName, kInstanceName, kHostName,
+                      {inet::SocketAddress(sender_address.socket_address().address(), kPort, 1)},
+                      kText, 0, 0),
+      *params);
 
   subscriber.ExpectNoOther();
 }

@@ -63,6 +63,14 @@ class AgentTest : public ::testing::Test, public MdnsAgent::Owner {
   // Expects that the agent has asked |resource| to be renewed.
   void ExpectRenewCall(DnsResource resource);
 
+  // Expects that the agent has not called |Query|.
+  void ExpectNoQueryCalls() { EXPECT_TRUE(query_calls_.empty()); }
+
+  // Expects that the agent has called |Query|.
+  void ExpectQueryCall(DnsType type, const std::string& name, Media media, IpVersions ip_versions,
+                       zx::time initial_query_time, zx::duration interval,
+                       uint32_t interval_multiplier, uint32_t max_queries);
+
   // Expects that the agent has not asked for any resources to be expired.
   void ExpectNoExpirations() { EXPECT_TRUE(expirations_.empty()); }
 
@@ -162,6 +170,17 @@ class AgentTest : public ::testing::Test, public MdnsAgent::Owner {
     DnsResource resource_;
   };
 
+  struct QueryCall {
+    DnsType type_;
+    std::string name_;
+    Media media_;
+    IpVersions ip_versions_;
+    zx::time initial_query_time_;
+    zx::duration interval_;
+    uint32_t interval_multiplier_;
+    uint32_t max_queries_;
+  };
+
   struct ReplyAddressHash {
     std::size_t operator()(const ReplyAddress& reply_address) const noexcept {
       return std::hash<inet::SocketAddress>{}(reply_address.socket_address()) ^
@@ -188,6 +207,10 @@ class AgentTest : public ::testing::Test, public MdnsAgent::Owner {
 
   void Renew(const DnsResource& resource, Media media, IpVersions ip_versions) override;
 
+  void Query(DnsType type, const std::string& name, Media media, IpVersions ip_versions,
+             zx::time initial_query_time, zx::duration interval, uint32_t interval_multiplier,
+             uint32_t max_queries) override;
+
   void RemoveAgent(std::shared_ptr<MdnsAgent> agent) override;
 
   void FlushSentItems() override;
@@ -208,7 +231,8 @@ class AgentTest : public ::testing::Test, public MdnsAgent::Owner {
   std::queue<PostTaskForTimeCall> post_task_for_time_calls_;
   std::unordered_map<ReplyAddress, std::unique_ptr<DnsMessage>, ReplyAddressHash>
       outbound_messages_by_reply_address_;
-  std::vector<DnsResource> renew_calls_;
+  std::vector<RenewCall> renew_calls_;
+  std::vector<QueryCall> query_calls_;
   std::vector<DnsResource> expirations_;
   bool remove_agent_called_ = false;
   bool flush_sent_items_called_ = false;

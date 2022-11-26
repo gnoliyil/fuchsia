@@ -490,6 +490,10 @@ class Mdns : public MdnsAgent::Owner {
 
   void Renew(const DnsResource& resource, Media media, IpVersions ip_versions) override;
 
+  void Query(DnsType type, const std::string& name, Media media, IpVersions ip_versions,
+             zx::time initial_query_time, zx::duration interval, uint32_t interval_multiplier,
+             uint32_t max_queries) override;
+
   void RemoveAgent(std::shared_ptr<MdnsAgent> agent) override;
 
   void FlushSentItems() override;

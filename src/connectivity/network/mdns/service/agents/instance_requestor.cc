@@ -15,8 +15,10 @@
 namespace mdns {
 namespace {
 
-// static
-static constexpr zx::duration kMaxQueryInterval = zx::hour(1);
+constexpr zx::duration kMaxQueryInterval = zx::hour(1);
+constexpr zx::duration kAdditionalInterval = zx::sec(1);
+constexpr uint32_t kAdditionalIntervalMultiplier = 2;
+constexpr uint32_t kAdditionalMaxQueries = 3;
 
 }  // namespace
 
@@ -112,8 +114,8 @@ void InstanceRequestor::EndOfMessage() {
       if (!instance_info.srv_queried_) {
         // We have not received an SRV resource, and we haven't asked for one explicitly. Ask for
         // one now.
-        SendQuestion(std::make_shared<DnsQuestion>(instance_full_name, DnsType::kSrv),
-                     ReplyAddress::Multicast(media_, ip_versions_));
+        Query(DnsType::kSrv, instance_full_name, media_, ip_versions_, now(), kAdditionalInterval,
+              kAdditionalIntervalMultiplier, kAdditionalMaxQueries);
         instance_info.srv_queried_ = true;
       }
 
@@ -144,8 +146,8 @@ void InstanceRequestor::EndOfMessage() {
       // We have not received a TXT resource, and we haven't asked for one explicitly. Ask for one
       // now. We proceed anyway, which means the client may first get the instance without text
       // and later get an |InstanceChanged| with text.
-      SendQuestion(std::make_shared<DnsQuestion>(instance_full_name, DnsType::kTxt),
-                   ReplyAddress::Multicast(media_, ip_versions_));
+      Query(DnsType::kTxt, instance_full_name, media_, ip_versions_, now(), kAdditionalInterval,
+            kAdditionalIntervalMultiplier, kAdditionalMaxQueries);
       instance_info.txt_queried_ = true;
     }
 
@@ -156,10 +158,14 @@ void InstanceRequestor::EndOfMessage() {
         // If we haven't explicitly queried for addresses yet, do so. When they arrive, we'll end
         // up back in this method with a non-empty |target_info.addresses_|. If they never arrive,
         // the instance won't be reported to the client.
-        SendQuestion(std::make_shared<DnsQuestion>(target_full_name, DnsType::kA),
-                     ReplyAddress::Multicast(media_, ip_versions_));
-        SendQuestion(std::make_shared<DnsQuestion>(target_full_name, DnsType::kAaaa),
-                     ReplyAddress::Multicast(media_, ip_versions_));
+        //
+        // Note that these queries will be coalesced into a single message due to the identical
+        // schedule.
+        auto when = now();
+        Query(DnsType::kA, target_full_name, media_, ip_versions_, when, kAdditionalInterval,
+              kAdditionalIntervalMultiplier, kAdditionalMaxQueries);
+        Query(DnsType::kAaaa, target_full_name, media_, ip_versions_, when, kAdditionalInterval,
+              kAdditionalIntervalMultiplier, kAdditionalMaxQueries);
         target_info.addresses_queried_ = true;
       }
 

@@ -70,6 +70,11 @@ class MdnsAgent : public std::enable_shared_from_this<MdnsAgent> {
     // Registers the resource for renewal. See |MdnsAgent::Renew| below.
     virtual void Renew(const DnsResource& resource, Media media, IpVersions ip_versions) = 0;
 
+    // Registers the resource for repeated queries. See |MdnsAgent::Request| below.
+    virtual void Query(DnsType type, const std::string& name, Media media, IpVersions ip_versions,
+                       zx::time initial_query_time, zx::duration interval,
+                       uint32_t interval_multiplier, uint32_t max_queries) = 0;
+
     // Removes the specified agent.
     virtual void RemoveAgent(std::shared_ptr<MdnsAgent> agent) = 0;
 
@@ -221,6 +226,21 @@ class MdnsAgent : public std::enable_shared_from_this<MdnsAgent> {
   // simply refrain from renewing the incoming records.
   void Renew(const DnsResource& resource, Media media, IpVersions ip_versions) const {
     owner_->Renew(resource, media, ip_versions);
+  }
+
+  // Registers a resource for repeated queries. At |initial_query_time|, queries for the resource
+  // will be sent until the resource is received or |max_queries| are sent without receiving the
+  // resource. The first interval between queries will be |interval|, with the interval multiplied
+  // by |interval_multiplier| after each query. If the resource is not received, an expiration for
+  // the resource (TTL of zero) will be distributed to all agents.
+  //
+  // If all parameters but that last two are the same for two or more calls made consecutively
+  // (without yielding the thread), the queries will be sent in the same message.
+  void Query(DnsType type, const std::string& name, Media media, IpVersions ip_versions,
+             zx::time initial_query_time, zx::duration interval, uint32_t interval_multiplier,
+             uint32_t max_queries) {
+    owner_->Query(type, name, media, ip_versions, initial_query_time, interval, interval_multiplier,
+                  max_queries);
   }
 
   // Removes this agent.

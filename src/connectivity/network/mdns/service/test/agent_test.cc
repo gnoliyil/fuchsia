@@ -66,18 +66,53 @@ void AgentTest::SendAddresses(MdnsResourceSection section, const ReplyAddress& r
 }
 
 void AgentTest::Renew(const DnsResource& resource, Media media, IpVersions ip_versions) {
-  renew_calls_.push_back(resource);
+  renew_calls_.push_back(RenewCall{.resource_ = resource});
+}
+
+void AgentTest::Query(DnsType type, const std::string& name, Media media, IpVersions ip_versions,
+                      zx::time initial_query_time, zx::duration interval,
+                      uint32_t interval_multiplier, uint32_t max_queries) {
+  query_calls_.push_back(QueryCall{
+      .type_ = type,
+      .name_ = name,
+      .media_ = media,
+      .ip_versions_ = ip_versions,
+      .initial_query_time_ = initial_query_time,
+      .interval_ = interval,
+      .interval_multiplier_ = interval_multiplier,
+      .max_queries_ = max_queries,
+  });
 }
 
 void AgentTest::ExpectRenewCall(DnsResource resource) {
   for (auto iter = renew_calls_.begin(); iter != renew_calls_.end(); ++iter) {
-    if (*iter == resource) {
+    if (iter->resource_ == resource) {
       renew_calls_.erase(iter);
       return;
     }
   }
 
-  EXPECT_TRUE(false) << "Resource not renewed.";
+  EXPECT_TRUE(false) << "Renew not called for resource " << resource.type_ << " "
+                     << resource.name_.dotted_string_;
+}
+
+void AgentTest::ExpectQueryCall(DnsType type, const std::string& name, Media media,
+                                IpVersions ip_versions, zx::time initial_query_time,
+                                zx::duration interval, uint32_t interval_multiplier,
+                                uint32_t max_queries) {
+  for (auto iter = query_calls_.begin(); iter != query_calls_.end(); ++iter) {
+    if (iter->type_ == type && iter->name_ == name && iter->media_ == media &&
+        iter->ip_versions_ == ip_versions) {
+      EXPECT_EQ(initial_query_time, iter->initial_query_time_);
+      EXPECT_EQ(interval, iter->interval_);
+      EXPECT_EQ(interval_multiplier, iter->interval_multiplier_);
+      EXPECT_EQ(max_queries, iter->max_queries_);
+      query_calls_.erase(iter);
+      return;
+    }
+  }
+
+  EXPECT_TRUE(false) << "Query not called for resource " << type << " " << name;
 }
 
 void AgentTest::ExpectExpiration(DnsResource resource) {

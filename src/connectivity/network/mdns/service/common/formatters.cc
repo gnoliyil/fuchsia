@@ -39,7 +39,7 @@ std::ostream& operator<<(std::ostream& os, const ReplyAddress& value) {
     return os << "mulitcast_placeholder " << value.media() << " " << value.ip_versions();
   }
 
-  return os << value.socket_address() << " interface " << value.interface_address() << ""
+  return os << value.socket_address() << " interface " << value.interface_address() << " "
             << value.media() << " " << value.ip_versions();
 }
 

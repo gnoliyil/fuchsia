@@ -32,6 +32,10 @@ executable("bin") {
     "//zircon/system/ulib/async-loop:async-loop-cpp",
     "//zircon/system/ulib/async-loop:async-loop-default",
   ]
+
+  if (enable_mdns_trace) {
+    defines = [ "MDNS_TRACE" ]
+  }
 }
 
 source_set("source_set") {
@@ -310,6 +314,10 @@ executable("mdns_netemul_multi_network_test_agent") {
     "//zircon/system/ulib/async-loop:async-loop-cpp",
     "//zircon/system/ulib/async-loop:async-loop-default",
   ]
+
+  if (enable_mdns_trace) {
+    defines = [ "MDNS_TRACE" ]
+  }
 }
 
 fuchsia_test_component("test-driver-multi-network") {

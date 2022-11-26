@@ -35,12 +35,20 @@ ResourceRenewer::~ResourceRenewer() { FX_DCHECK(entries_.size() == schedule_.siz
 void ResourceRenewer::Renew(const DnsResource& resource, Media media, IpVersions ip_versions) {
   FX_DCHECK(resource.time_to_live_ != 0);
 
-  auto entry =
-      std::make_unique<Entry>(resource.name_.dotted_string_, resource.type_, media, ip_versions);
+  Query(resource.type_, resource.name_.dotted_string_, media, ip_versions,
+        now() + zx::msec(resource.time_to_live_ * kFirstQueryPerThousand),
+        zx::msec(resource.time_to_live_ * kQueryIntervalPerThousand), 1, kQueriesToAttempt);
+}
+
+void ResourceRenewer::Query(DnsType type, const std::string& name, Media media,
+                            IpVersions ip_versions, zx::time initial_query_time,
+                            zx::duration interval, uint32_t interval_multiplier,
+                            uint32_t max_queries) {
+  auto entry = std::make_unique<Entry>(name, type, media, ip_versions);
   auto iter = entries_.find(entry);
 
   if (iter == entries_.end()) {
-    entry->SetFirstQuery(now(), resource.time_to_live_);
+    entry->SetFirstQuery(initial_query_time, interval, interval_multiplier, max_queries);
 
     Schedule(entry.get());
 
@@ -50,7 +58,7 @@ void ResourceRenewer::Renew(const DnsResource& resource, Media media, IpVersions
 
     entries_.insert(std::move(entry));
   } else {
-    (*iter)->SetFirstQuery(now(), resource.time_to_live_);
+    (*iter)->SetFirstQuery(initial_query_time, interval, interval_multiplier, max_queries);
     (*iter)->delete_ = false;
     (*iter)->media_ = Union((*iter)->media_, media);
     (*iter)->ip_versions_ = Union((*iter)->ip_versions_, ip_versions);
@@ -80,7 +88,9 @@ void ResourceRenewer::Quit() {
 void ResourceRenewer::SendRenewals() {
   zx::time now = this->now();
 
-  while (!schedule_.empty() && schedule_.top()->schedule_time_ <= now) {
+  // We add |kFudgeFactor| when we compare here to increase the chance of coalescing queries that
+  // are scheduled close together. Queries may be sent as much as |kFudgeFactor| early.
+  while (!schedule_.empty() && schedule_.top()->schedule_time_ <= now + kFudgeFactor) {
     Entry* entry = const_cast<Entry*>(schedule_.top());
     schedule_.pop();
 
@@ -124,15 +134,18 @@ void ResourceRenewer::EraseEntry(Entry* entry) {
   unique_entry.release();
 }
 
-void ResourceRenewer::Entry::SetFirstQuery(zx::time now, uint32_t time_to_live) {
-  time_ = now + zx::msec(time_to_live * kFirstQueryPerThousand);
-  interval_ = zx::msec(time_to_live * kQueryIntervalPerThousand);
-  queries_remaining_ = kQueriesToAttempt;
+void ResourceRenewer::Entry::SetFirstQuery(zx::time initial_query_time, zx::duration interval,
+                                           uint32_t interval_multiplier, uint32_t max_queries) {
+  time_ = initial_query_time;
+  interval_ = interval;
+  interval_multiplier_ = interval_multiplier;
+  queries_remaining_ = max_queries;
 }
 
 void ResourceRenewer::Entry::SetNextQueryOrExpiration() {
   FX_DCHECK(queries_remaining_ != 0);
   time_ = time_ + interval_;
+  interval_ = interval_ * interval_multiplier_;
   --queries_remaining_;
 }
 
