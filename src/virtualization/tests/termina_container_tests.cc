@@ -7,14 +7,17 @@
 
 #include "src/virtualization/tests/lib/guest_test.h"
 
-constexpr auto kExpectedContainerName = "penguin";
-
 template <class T>
 class TerminaIntegrationTest : public GuestTest<T> {};
 
 using GuestTypes = ::testing::Types<TerminaContainerEnclosedGuest>;
 
 TYPED_TEST_SUITE(TerminaIntegrationTest, GuestTypes, GuestTestNameGenerator);
+
+// TODO(https://fxbug.dev/115859): This test is flaking on ASAN builds.
+#if !__has_feature(address_sanitizer)
+
+constexpr auto kExpectedContainerName = "penguin";
 
 TYPED_TEST(TerminaIntegrationTest, ContainerStartup) {
   std::string result;
@@ -25,3 +28,4 @@ TYPED_TEST(TerminaIntegrationTest, ContainerStartup) {
   EXPECT_EQ(0, return_code);
   EXPECT_NE(result.find(kExpectedContainerName), std::string::npos);
 }
+#endif
