@@ -50,6 +50,7 @@ test("adb-file-sync-test-bin") {
     ":common",
     "//sdk/fidl/fuchsia.hardware.adb:fuchsia.hardware.adb_hlcpp",
     "//sdk/fidl/fuchsia.io:fuchsia.io_cpp_wire_testing",
+    "//sdk/fidl/fuchsia.sys2:fuchsia.sys2_cpp_wire_testing",
     "//sdk/fidl/fuchsia.sys2:fuchsia.sys2_hlcpp",
     "//sdk/lib/sys/component/cpp/testing:cpp",
     "//src/lib/fxl/test:gtest_main",

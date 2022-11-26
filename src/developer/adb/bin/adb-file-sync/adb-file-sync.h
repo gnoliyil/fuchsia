@@ -47,6 +47,7 @@ class AdbFileSync : public AdbFileSyncBase,
   std::optional<fidl::ServerBindingRef<fuchsia_hardware_adb::Provider>> binding_ref_;
   const std::optional<std::string> default_component_;
   fidl::SyncClient<fuchsia_sys2::RealmQuery> realm_query_;
+  fidl::SyncClient<fuchsia_sys2::LifecycleController> lifecycle_;
 };
 
 }  // namespace adb_file_sync

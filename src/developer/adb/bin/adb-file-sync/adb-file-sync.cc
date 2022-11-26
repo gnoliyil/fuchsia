@@ -53,6 +53,20 @@ zx_status_t AdbFileSync::StartService(std::optional<std::string> default_compone
     return status;
   }
   file_sync->realm_query_.Bind(std::move(endpoints->client));
+
+  auto lifecycle_ep = fidl::CreateEndpoints<fuchsia_sys2::LifecycleController>();
+  if (lifecycle_ep.is_error()) {
+    FX_LOGS(ERROR) << "Could not create endpoints " << lifecycle_ep.error_value();
+    return lifecycle_ep.error_value();
+  }
+  status = file_sync->context_->svc()->Connect("fuchsia.sys2.LifecycleController.root",
+                                               lifecycle_ep->server.TakeChannel());
+  if (status != ZX_OK) {
+    FX_LOGS(ERROR) << "Could not connect to cache RealmQuery " << status;
+    return status;
+  }
+  file_sync->lifecycle_.Bind(std::move(lifecycle_ep->client));
+
   file_sync->loop_.JoinThreads();
   return ZX_OK;
 }
@@ -109,6 +123,16 @@ zx::result<zx::channel> AdbFileSync::ConnectToComponent(std::string name,
     FX_LOGS(ERROR) << "Must have at least directory!";
     return zx::error(ZX_ERR_INVALID_ARGS);
   }
+
+  // Resolve component moniker
+  auto resolve_result = lifecycle_->Resolve(component_moniker);
+  if (resolve_result.is_error()) {
+    FX_LOGS(ERROR) << "FIDL call to resolve moniker failed" << resolve_result.error_value();
+    return zx::error(resolve_result.error_value().is_domain_error()
+                         ? static_cast<uint32_t>(resolve_result.error_value().domain_error())
+                         : resolve_result.error_value().framework_error().status());
+  }
+
   // Connect to component
   auto result = realm_query_->GetInstanceDirectories(component_moniker);
   if (result.is_error()) {
@@ -116,6 +140,11 @@ zx::result<zx::channel> AdbFileSync::ConnectToComponent(std::string name,
     return zx::error(result.error_value().is_domain_error()
                          ? static_cast<uint32_t>(result.error_value().domain_error())
                          : result.error_value().framework_error().status());
+  }
+
+  if (!result->resolved_dirs()) {
+    FX_LOGS(ERROR) << "RealmQuery did not return any directories.";
+    return zx::error(ZX_ERR_INVALID_ARGS);
   }
 
   for (auto& entry : result->resolved_dirs()->ns_entries()) {
