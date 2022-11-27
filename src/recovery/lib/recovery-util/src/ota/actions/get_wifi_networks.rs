@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use crate::ota::action::EventHandlerHolder;
+use crate::ota::controller::SendEvent;
 use crate::ota::state_machine::Event;
 use crate::wlan::{WifiConnect, WifiConnectImpl};
 use fuchsia_async::Task;
@@ -10,25 +10,23 @@ use fuchsia_async::Task;
 pub struct GetWifiNetworksAction {}
 
 impl GetWifiNetworksAction {
-    pub fn run(event_handler: EventHandlerHolder) {
+    pub fn run(event_sender: Box<dyn SendEvent>) {
         // This is split into two parts for testing. It allowing a fake wifi service to be injected.
-        Self::run_with_wifi_service(event_handler, Box::new(WifiConnectImpl::new()));
+        Self::run_with_wifi_service(event_sender, Box::new(WifiConnectImpl::new()));
     }
 
     // Gets a list of local WiFi networks.
     // Asynchronously generates a Networks event which could be empty if there is an error
     fn run_with_wifi_service(
-        event_handler: EventHandlerHolder,
+        mut event_sender: Box<dyn SendEvent>,
         wifi_service: Box<dyn WifiConnect>,
     ) {
-        let event_handler = event_handler.clone();
         let task = async move {
             println!("Getting networks");
-            let mut event_handler = event_handler.lock().unwrap();
             let networks = wifi_service.scan_for_networks().await.unwrap_or_else(|_| Vec::new());
             #[cfg(feature = "debug_logging")]
             println! {"====== Received {:?}", networks};
-            event_handler.handle_event(Event::Networks(networks));
+            event_sender.send(Event::Networks(networks));
         };
         Task::local(task).detach();
     }
@@ -37,14 +35,14 @@ impl GetWifiNetworksAction {
 #[cfg(test)]
 mod tests {
     use super::GetWifiNetworksAction;
-    use crate::ota::state_machine::{Event, EventHandler, MockEventHandler, NetworkInfos};
+    use crate::ota::controller::{MockSendEvent, SendEvent};
+    use crate::ota::state_machine::{Event, NetworkInfos};
     use crate::wlan::{NetworkInfo, WifiConnect};
     use anyhow::{anyhow, Error};
     use async_trait::async_trait;
     use fidl_fuchsia_wlan_policy::{NetworkConfig, SecurityType};
     use fuchsia_async::{self as fasync};
     use futures::future;
-    use std::sync::{Arc, Mutex};
 
     fn create_test_networks() -> Vec<NetworkInfo> {
         let info0 =
@@ -92,9 +90,9 @@ mod tests {
         let infos = create_test_networks();
         let infos_check = create_test_networks();
         let infos_len = infos.len();
-        let mut event_handler = MockEventHandler::new();
-        event_handler
-            .expect_handle_event()
+        let mut event_sender = MockSendEvent::new();
+        event_sender
+            .expect_send()
             .withf(move |event| {
                 if let Event::Networks(received_infos) = event {
                     received_infos.len() == infos_len
@@ -110,10 +108,9 @@ mod tests {
             })
             .times(1)
             .return_const(());
-        let event_handler: Box<dyn EventHandler> = Box::new(event_handler);
-        let event_handler = Arc::new(Mutex::new(event_handler));
+        let event_sender: Box<dyn SendEvent> = Box::new(event_sender);
         GetWifiNetworksAction::run_with_wifi_service(
-            event_handler,
+            event_sender,
             // We will return infos in this test
             Box::new(FakeWifiConnectImpl::new(true, infos)),
         );
@@ -125,9 +122,9 @@ mod tests {
     fn test_get_networks_fail_to_gather_empty_vec_returned() {
         let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
         let infos = create_test_networks();
-        let mut event_handler = MockEventHandler::new();
-        event_handler
-            .expect_handle_event()
+        let mut event_sender = MockSendEvent::new();
+        event_sender
+            .expect_send()
             .withf(move |event| {
                 if let Event::Networks(received_infos) = event {
                     received_infos.len() == 0
@@ -137,10 +134,9 @@ mod tests {
             })
             .times(1)
             .return_const(());
-        let event_handler: Box<dyn EventHandler> = Box::new(event_handler);
-        let event_handler = Arc::new(Mutex::new(event_handler));
+        let event_sender: Box<dyn SendEvent> = Box::new(event_sender);
         GetWifiNetworksAction::run_with_wifi_service(
-            event_handler,
+            event_sender,
             // We will not return infos in this test
             Box::new(FakeWifiConnectImpl::new(false, infos.clone())),
         );

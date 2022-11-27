@@ -14,6 +14,7 @@ use recovery_util::ota::state_machine::{State, StateMachine};
 
 #[cfg(feature = "debug_console")]
 use recovery_ui::console::ConsoleViewAssistant;
+use recovery_util::ota::action::Action;
 
 struct RecoveryAppAssistant {
     _app_sender: AppSender,
@@ -53,7 +54,11 @@ impl AppAssistant for RecoveryAppAssistant {
     fn create_view_assistant(&mut self, _view_key: ViewKey) -> Result<ViewAssistantPtr, Error> {
         // TODO(b/244744635) Add a structured initialization flow for the recovery component
         let state_machine = Box::new(StateMachine::new(State::Home));
-        let _controller = Controller::new(state_machine);
+        let mut controller = Controller::new();
+        let event_sender = controller.get_event_sender();
+        let action = Action::new(event_sender);
+        controller.add_state_handler(Box::new(action));
+        controller.start(state_machine);
         let font_face = font::get_default_font_face();
         #[cfg(feature = "debug_console")]
         let console_view_assistant_ptr = Box::new(ConsoleViewAssistant::new(font_face.clone())?);

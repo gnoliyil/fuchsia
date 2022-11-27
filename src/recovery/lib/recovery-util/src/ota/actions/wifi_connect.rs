@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use crate::ota::action::EventHandlerHolder;
+use crate::ota::controller::SendEvent;
 use crate::ota::state_machine::{Event, Network, Password};
 use crate::wlan::{create_network_info, WifiConnect, WifiConnectImpl};
 use anyhow::Error;
@@ -14,10 +14,10 @@ use fuchsia_zircon::Duration;
 pub struct WifiConnectAction {}
 
 impl WifiConnectAction {
-    pub fn run(event_handler: EventHandlerHolder, network: Network, password: Password) {
+    pub fn run(event_sender: Box<dyn SendEvent>, network: Network, password: Password) {
         // This is split into two parts for testing. It allowing a fake wifi service to be injected.
         Self::run_with_wifi_service(
-            event_handler,
+            event_sender,
             network,
             password,
             Box::new(WifiConnectImpl::new()),
@@ -25,15 +25,14 @@ impl WifiConnectAction {
     }
 
     fn run_with_wifi_service(
-        event_handler: EventHandlerHolder,
+        mut event_sender: Box<dyn SendEvent>,
         network: Network,
         password: Password,
         wifi_service: Box<dyn WifiConnect>,
     ) {
         let task = async move {
-            let mut event_handler = event_handler.lock().unwrap();
             match connect_to_wifi(&*wifi_service, &network, &password).await {
-                Result::Ok(_) => event_handler.handle_event(Event::WiFiConnected),
+                Result::Ok(_) => event_sender.send(Event::WiFiConnected),
                 Result::Err(error) => {
                     // Let the "Connecting" message stay there for a second so the
                     // user can see that something was tried.
@@ -41,7 +40,7 @@ impl WifiConnectAction {
                     let sleep_time = Duration::from_seconds(1);
                     fuchsia_async::Timer::new(sleep_time.after_now()).await;
                     println!("Failed to connect: {}", error);
-                    event_handler.handle_event(Event::Error(error.to_string()));
+                    event_sender.send(Event::Error(error.to_string()));
                 }
             };
         };
@@ -67,7 +66,8 @@ async fn connect_to_wifi(
 #[cfg(test)]
 mod tests {
     use super::WifiConnectAction;
-    use crate::ota::state_machine::{Event, EventHandler, MockEventHandler};
+    use crate::ota::controller::{MockSendEvent, SendEvent};
+    use crate::ota::state_machine::Event;
     use crate::wlan::{NetworkInfo, WifiConnect};
     use anyhow::{anyhow, Error};
     use async_trait::async_trait;
@@ -76,7 +76,6 @@ mod tests {
     use fuchsia_zircon::Duration;
     use futures::future;
     use mockall::predicate::eq;
-    use std::sync::{Arc, Mutex};
 
     struct FakeWifiConnectImpl {
         connected: bool,
@@ -107,16 +106,11 @@ mod tests {
     #[fuchsia::test]
     fn test_connect_ok() {
         let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
-        let mut event_handler = MockEventHandler::new();
-        event_handler
-            .expect_handle_event()
-            .with(eq(Event::WiFiConnected))
-            .times(1)
-            .return_const(());
-        let event_handler: Box<dyn EventHandler> = Box::new(event_handler);
-        let event_handler = Arc::new(Mutex::new(event_handler));
+        let mut event_sender = MockSendEvent::new();
+        event_sender.expect_send().with(eq(Event::WiFiConnected)).times(1).return_const(());
+        let event_sender: Box<dyn SendEvent> = Box::new(event_sender);
         WifiConnectAction::run_with_wifi_service(
-            event_handler,
+            event_sender,
             "network".to_string(),
             "password".to_string(),
             Box::new(FakeWifiConnectImpl::new(true)),
@@ -129,16 +123,11 @@ mod tests {
     fn test_connect_fails() {
         let mut exec = fasync::TestExecutor::new_with_fake_time().unwrap();
         exec.set_fake_time(fasync::Time::from_nanos(0));
-        let mut event_handler = MockEventHandler::new();
-        event_handler
-            .expect_handle_event()
-            .with(eq(Event::Error("".to_string())))
-            .times(1)
-            .return_const(());
-        let event_handler: Box<dyn EventHandler> = Box::new(event_handler);
-        let event_handler = Arc::new(Mutex::new(event_handler));
+        let mut event_sender = MockSendEvent::new();
+        event_sender.expect_send().with(eq(Event::Error("".to_string()))).times(1).return_const(());
+        let event_sender: Box<dyn SendEvent> = Box::new(event_sender);
         WifiConnectAction::run_with_wifi_service(
-            event_handler,
+            event_sender,
             "network".to_string(),
             "password".to_string(),
             Box::new(FakeWifiConnectImpl::new(false)),
