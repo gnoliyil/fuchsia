@@ -4,19 +4,21 @@
 
 declare_args() {
   # List of GN paths to source files to be instrumented by `profile` variants.
-  # If [`profile_source_files_list_files`](#profile_source_files_list_files) is
-  # also set, both lists are used.  Use that option with a file constructed
-  # separately instead to use more complex selection features such as
-  # per-function selection, file name patterns, or exclusion.
   profile_source_files = [
-    # Default: profile all sources under //.
-    # See: fxbug.dev/89451 for context.
+    # fxbug.dev/109920: profile all checked-in sources.
+    # (don't profile generated sources under out/)
     "//*",
   ]
 
+  # List of GN paths to source files to NOT instrument by `profile` variants.
+  # These take precedence over `profile_source_files`.
+  dont_profile_source_files = [
+    # fxbug.dev/109920: don't profile //third_party.
+    "//third_party/*",
+  ]
+
   # List GN path to files in Clang's `-fprofile-list` format describing files
-  # and functions to be instrumented by `profile` variants.  Note that if
-  # [`profile_source_files`](#profile_source_files) is also set, both are used.
+  # and functions to be instrumented by `profile` variants.
   profile_source_files_list_files = []
 }
 
@@ -25,5 +27,5 @@ declare_args() {
 # may be required to ensure particular code (e.g. in tests) gets instrumented.
 #
 # Type: bool
-selective_profiling =
-    profile_source_files + profile_source_files_list_files != []
+selective_profiling = profile_source_files + dont_profile_source_files +
+                      profile_source_files_list_files != []

@@ -13,22 +13,34 @@ _coverage_common_flags = [
   "-fcoverage-mapping",
 ]
 
-if (profile_source_files != []) {
-  _profile_source_files_lines = []
-  foreach(file, profile_source_files) {
-    _profile_source_files_lines +=
-        [ "src:" + rebase_path(file, root_build_dir) ]
-  }
-
-  # This can't use a generated_file() target because there's no way to
-  # express the deps to make GN accept the file in the inputs list if it's
-  # the output of some target.
-  _profile_source_files_file = "$root_out_dir/profile-source-files.list"
-  write_file(_profile_source_files_file,
-             _profile_source_files_lines,
-             "list lines")
-  profile_source_files_list_files += [ _profile_source_files_file ]
+_profile_source_files_lines = []
+foreach(file, dont_profile_source_files) {
+  # Escape "/" and "." since this is parsed as a regex.
+  # Note that the compiler internally expands "*" into ".*".
+  # See: https://clang.llvm.org/docs/SanitizerSpecialCaseList.html
+  file = rebase_path(file, root_build_dir)
+  file = string_replace(file, "/", "\/")
+  file = string_replace(file, ".", "\.")
+  _profile_source_files_lines += [ "!src:$file" ]
 }
+foreach(file, profile_source_files) {
+  # Escape "/" and "." since this is parsed as a regex.
+  # Note that the compiler internally expands "*" into ".*".
+  # See: https://clang.llvm.org/docs/SanitizerSpecialCaseList.html
+  file = rebase_path(file, root_build_dir)
+  file = string_replace(file, "/", "\/")
+  file = string_replace(file, ".", "\.")
+  _profile_source_files_lines += [ "src:$file" ]
+}
+
+# This can't use a generated_file() target because there's no way to
+# express the deps to make GN accept the file in the inputs list if it's
+# the output of some target.
+_profile_source_files_file = "$root_out_dir/profile-source-files.list"
+write_file(_profile_source_files_file,
+           _profile_source_files_lines,
+           "list lines")
+profile_source_files_list_files += [ _profile_source_files_file ]
 
 _coverage_inputs = profile_source_files_list_files
 foreach(file, profile_source_files_list_files) {
