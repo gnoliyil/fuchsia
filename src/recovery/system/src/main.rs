@@ -219,8 +219,11 @@ impl AppAssistant for RecoveryAppAssistant {
 
         // ProxyView is a root view that conditionally displays the top View
         // from a stack (initialized with "RecoveryView"), or the Console.
-        let proxy_ptr =
-            Box::new(ProxyViewAssistant::new(console_view_assistant_ptr, view_assistant_ptr)?);
+        let proxy_ptr = Box::new(ProxyViewAssistant::new(
+            None,
+            console_view_assistant_ptr,
+            view_assistant_ptr,
+        )?);
         Ok(proxy_ptr)
     }
 

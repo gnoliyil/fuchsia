@@ -56,17 +56,21 @@ impl AppAssistant for RecoveryAppAssistant {
         let state_machine = Box::new(StateMachine::new(State::Home));
         let mut controller = Controller::new();
         let event_sender = controller.get_event_sender();
-        let action = Action::new(event_sender);
+        let action = Action::new(event_sender.clone());
         controller.add_state_handler(Box::new(action));
         controller.start(state_machine);
+
         let font_face = font::get_default_font_face();
         #[cfg(feature = "debug_console")]
         let console_view_assistant_ptr = Box::new(ConsoleViewAssistant::new(font_face.clone())?);
         #[cfg(not(feature = "debug_console"))]
         let console_view_assistant_ptr = None;
         let first_screen = Box::new(ConsoleViewAssistant::new(font_face.clone())?);
-        let proxy_ptr =
-            Box::new(ProxyViewAssistant::new(Some(console_view_assistant_ptr), first_screen)?);
+        let proxy_ptr = Box::new(ProxyViewAssistant::new(
+            Some(Box::new(event_sender)),
+            Some(console_view_assistant_ptr),
+            first_screen,
+        )?);
         Ok(proxy_ptr)
     }
 

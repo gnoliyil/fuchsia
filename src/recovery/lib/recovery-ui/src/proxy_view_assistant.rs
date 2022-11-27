@@ -2,26 +2,28 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#[cfg(feature = "debug_console")]
-use crate::console::ConsoleMessages;
-
-use carnelian::input::{self};
+use anyhow::Error;
+use carnelian::{
+    input, render::Context, Message, Size, ViewAssistant, ViewAssistantContext, ViewAssistantPtr,
+};
+use fuchsia_zircon::Event;
+use recovery_util::ota::controller::SendEvent;
+use recovery_util::ota::state_machine::Event as StateMachineEvent;
 use std::collections::VecDeque;
 
-use anyhow::Error;
-use carnelian::render::Context;
-use carnelian::{Message, Size, ViewAssistant, ViewAssistantContext, ViewAssistantPtr};
-use fuchsia_zircon::Event;
-
+#[cfg(feature = "debug_console")]
+use crate::console::ConsoleMessages;
 #[cfg(test)]
 use mockall::{predicate::*, *};
 
 pub enum ProxyMessages {
     NewViewAssistant(Option<ViewAssistantPtr>),
+    ReplaceViewAssistant(Option<ViewAssistantPtr>),
     PopViewAssistant,
 }
 
 pub struct ProxyViewAssistant {
+    event_sender: Option<Box<dyn SendEvent>>,
     #[cfg(feature = "debug_console")]
     console_view_assistant: Option<ViewAssistantPtr>,
     view_assistant_stack: VecDeque<ViewAssistantPtr>,
@@ -34,6 +36,7 @@ impl ProxyViewAssistant {
     /// Creates a new ProxyViewAssistant with the provided view assistants.
     /// Console is disabled if `console_view_assistant` is `None`.
     pub fn new(
+        event_sender: Option<Box<dyn SendEvent>>,
         #[cfg(feature = "debug_console")] console_view_assistant: Option<ViewAssistantPtr>,
         view_assistant_ptr: ViewAssistantPtr,
     ) -> Result<ProxyViewAssistant, Error> {
@@ -41,6 +44,7 @@ impl ProxyViewAssistant {
         view_assistant_stack.push_front(view_assistant_ptr);
 
         Ok(ProxyViewAssistant {
+            event_sender,
             #[cfg(feature = "debug_console")]
             console_view_assistant,
             view_assistant_stack,
@@ -222,6 +226,13 @@ impl ViewAssistant for ProxyViewAssistant {
                     self.first_call_after_switch = true;
                     self.view_assistant_stack.push_front(view_assistant_ptr);
                 }
+                ProxyMessages::ReplaceViewAssistant(mut view_assistant_ptr) => {
+                    let view_assistant_ptr =
+                        std::mem::replace(&mut view_assistant_ptr, None).unwrap();
+                    self.first_call_after_switch = true;
+                    self.view_assistant_stack.pop_front();
+                    self.view_assistant_stack.push_front(view_assistant_ptr);
+                }
                 ProxyMessages::PopViewAssistant => {
                     if self.view_assistant_stack.len() > 1 {
                         self.first_call_after_switch = true;
@@ -230,6 +241,12 @@ impl ViewAssistant for ProxyViewAssistant {
                 }
             }
             return;
+        } else if message.is::<StateMachineEvent>() {
+            if let Some(event) = message.downcast_ref::<StateMachineEvent>() {
+                if let Some(event_sender) = &mut self.event_sender {
+                    event_sender.send(event.clone());
+                }
+            }
         }
 
         if cfg!(feature = "debug_console") {
@@ -291,8 +308,9 @@ mod tests {
         let mut mock2 = MockProxyViewAssistant::new();
         mock2.expect_handle_message().times(1).return_const(());
         let mut proxy = ProxyViewAssistant::new(
+            None,
             #[cfg(feature = "debug_console")]
-            Box::new(mock0),
+            Some(Box::new(mock0)),
             Box::new(mock1),
         )
         .unwrap();
@@ -314,14 +332,37 @@ mod tests {
         let mut mock1 = MockProxyViewAssistant::new();
         mock1.expect_handle_message().times(0).return_const(());
         let mut proxy = ProxyViewAssistant::new(
+            None,
             #[cfg(feature = "debug_console")]
-            Box::new(mock0),
+            Some(Box::new(mock0)),
             Box::new(mock1),
         )
         .unwrap();
         assert_eq!(proxy.view_assistant_stack.len(), 1);
         proxy.handle_message(make_message(ProxyMessages::PopViewAssistant));
         assert_eq!(proxy.view_assistant_stack.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn test_proxy_view_assistant_replace_view() -> std::result::Result<(), anyhow::Error> {
+        #[cfg(feature = "debug_console")]
+        let mock0 = MockProxyViewAssistant::new();
+        let mut mock1 = MockProxyViewAssistant::new();
+        mock1.expect_handle_message().times(1).return_const(());
+        let mut proxy = ProxyViewAssistant::new(
+            None,
+            #[cfg(feature = "debug_console")]
+            None,
+            Box::new(mock0),
+        )
+        .unwrap();
+        assert_eq!(proxy.view_assistant_stack.len(), 1);
+        proxy.handle_message(make_message(ProxyMessages::ReplaceViewAssistant(Some(Box::new(
+            mock1,
+        )))));
+        assert_eq!(proxy.view_assistant_stack.len(), 1);
+        proxy.handle_message(make_message(MockMessageType::MockMessage));
         Ok(())
     }
 
@@ -335,8 +376,9 @@ mod tests {
         mock1.expect_handle_pointer_event().times(2).returning(|_, _, _| Ok(()));
         mock1.expect_handle_focus_event().times(1).returning(|_, _| Ok(()));
         let mut proxy = ProxyViewAssistant::new(
+            None,
             #[cfg(feature = "debug_console")]
-            Box::new(mock0),
+            Some(Box::new(mock0)),
             Box::new(mock1),
         )
         .unwrap();
@@ -363,8 +405,9 @@ mod tests {
         mock1.expect_handle_input_event().times(2).returning(|_, _| Ok(()));
         mock1.expect_handle_focus_event().times(1).returning(|_, _| Ok(()));
         let mut proxy = ProxyViewAssistant::new(
+            None,
             #[cfg(feature = "debug_console")]
-            Box::new(mock0),
+            Some(Box::new(mock0)),
             Box::new(mock1),
         )
         .unwrap();
@@ -388,8 +431,9 @@ mod tests {
         mock1.expect_handle_input_event().times(1).returning(|_, _| Ok(()));
         mock1.expect_handle_focus_event().times(1).returning(|_, _| Ok(()));
         let mut proxy = ProxyViewAssistant::new(
+            None,
             #[cfg(feature = "debug_console")]
-            Box::new(mock0),
+            Some(Box::new(mock0)),
             Box::new(mock1),
         )
         .unwrap();
