@@ -24,12 +24,6 @@
         "vmo": ""
     },
     {
-        "event_code": 4,
-        "name": "Minfs",
-        "process": "/pkg/bin/minfs",
-        "vmo": ""
-    },
-    {
         "event_code": 68,
         "name": "Fxfs",
         "process": "(fxfs|fxfs-crypt)\\.cm",
@@ -68,19 +62,19 @@
     {
         "event_code": 9,
         "name": "Scenic",
-        "process": "scenic\\.cmx",
+        "process": "scenic\\.cm",
         "vmo": ""
     },
     {
         "event_code": 11,
         "name": "Netstack",
-        "process": "netstack\\.cmx",
+        "process": "netstack\\.cm",
         "vmo": ""
     },
     {
         "event_code": 13,
         "name": "Pkgfs",
-        "process": "pkgfs",
+        "process": "pkg-cache\\.cm",
         "vmo": ""
     },
     {
@@ -92,13 +86,13 @@
     {
         "event_code": 23,
         "name": "Cobalt",
-        "process": "cobalt\\.cmx",
+        "process": "cobalt\\.cm|cobalt_system_metrics\\.cm",
         "vmo": ""
     },
     {
         "event_code": 24,
         "name": "Audio",
-        "process": "audio_core\\.cmx",
+        "process": "audio_core\\.cm",
         "vmo": ""
     },
     {
