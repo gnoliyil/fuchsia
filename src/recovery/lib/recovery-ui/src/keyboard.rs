@@ -8,6 +8,7 @@ use crate::constants::constants::{
     TEXT_COLOR, TEXT_FIELD_FONT_SIZE,
 };
 use crate::keys::{get_accent, Accent, Key, SpecialKey, KEYBOARD};
+#[cfg(not(feature = "ota_ui"))]
 use crate::proxy_view_assistant::ProxyMessages;
 use crate::text_field::{SceneBuilderTextFieldExt, TextField, TextFieldOptions, TextVisibility};
 use anyhow::Error;
@@ -33,10 +34,12 @@ use carnelian::{
 };
 use euclid::{size2, Size2D};
 use fuchsia_zircon::{Duration, Event, Time};
+#[cfg(feature = "ota_ui")]
+use recovery_util::ota::state_machine::Event as StateMachineEvent;
 use std::collections::VecDeque;
 use std::hash::{Hash, Hasher};
 
-type FieldName = &'static str;
+type FieldName = String;
 type InputText = String;
 
 // TODO(b/259497403): Calculate hardcoded values from screen width
@@ -276,8 +279,8 @@ pub struct KeyboardViewAssistant {
     app_sender: AppSender,
     view_key: ViewKey,
     focused: bool,
-    field_name: &'static str,
-    user_text: String,
+    field_name: FieldName,
+    user_text: InputText,
     privacy: TextVisibility,
     scene_details: Option<SceneDetails>,
     state_shift: bool,
@@ -299,7 +302,7 @@ impl KeyboardViewAssistant {
             app_sender: app_sender.clone(),
             view_key,
             focused: false,
-            field_name: "",
+            field_name: String::new(),
             user_text: String::new(),
             privacy: TextVisibility::Always,
             scene_details: None,
@@ -312,14 +315,14 @@ impl KeyboardViewAssistant {
         })
     }
 
-    pub fn set_field_name(&mut self, field_name: &'static str) {
-        self.field_name = field_name;
+    pub fn set_field_name(&mut self, field_name: FieldName) {
+        self.field_name = field_name.clone();
         if let Some(scene_details) = &mut self.scene_details {
-            scene_details.text_field.set_title(field_name.to_string());
+            scene_details.text_field.set_title(field_name);
         }
     }
 
-    pub fn set_text_field(&mut self, text: String) {
+    pub fn set_text_field(&mut self, text: InputText) {
         self.user_text = text.clone();
         if let Some(scene_details) = &mut self.scene_details {
             scene_details.text_field.set_text(text);
@@ -400,16 +403,23 @@ impl KeyboardViewAssistant {
                     }
                 }
                 SpecialKey::ENTER => {
+                    #[cfg(feature = "ota_ui")]
+                    self.app_sender.queue_message(
+                        MessageTarget::View(self.view_key),
+                        make_message(StateMachineEvent::UserInput(self.user_text.clone())),
+                    );
                     // Finish this view and return to the calling view
+                    #[cfg(not(feature = "ota_ui"))]
                     self.app_sender.queue_message(
                         MessageTarget::View(self.view_key),
                         make_message(ProxyMessages::PopViewAssistant),
                     );
                     // Send the calling view the result
+                    #[cfg(not(feature = "ota_ui"))]
                     self.app_sender.queue_message(
                         MessageTarget::View(self.view_key),
                         make_message(KeyboardMessages::Result(
-                            self.field_name,
+                            self.field_name.clone(),
                             self.user_text.clone(),
                         )),
                     );
@@ -593,7 +603,7 @@ impl ViewAssistant for KeyboardViewAssistant {
         }
         if let Some(button_message) = message.downcast_ref::<ButtonMessages>() {
             match button_message {
-                ButtonMessages::Pressed(_time, button_text) if button_text == self.field_name => {
+                ButtonMessages::Pressed(_time, button_text) if button_text == &self.field_name => {
                     self.privacy = self.privacy.toggle();
                     self.scene_details = None;
                 }

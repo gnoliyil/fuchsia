@@ -860,11 +860,11 @@ impl RecoveryViewAssistant {
     fn handle_keyboard_message(&mut self, message: &KeyboardMessages) {
         match message {
             KeyboardMessages::NoInput => {}
-            KeyboardMessages::Result(WIFI_SSID, result) => {
+            KeyboardMessages::Result(field_name, result) if field_name == WIFI_SSID => {
                 self.wifi_ssid = if result.len() == 0 { None } else { Some(result.clone()) };
                 self.render_resources = None;
             }
-            KeyboardMessages::Result(WIFI_PASSWORD, result) => {
+            KeyboardMessages::Result(field_name, result) if field_name == WIFI_PASSWORD => {
                 // Allow empty passwords
                 self.wifi_password = Some(result.clone());
                 self.render_resources = None;
@@ -1043,7 +1043,7 @@ impl RecoveryViewAssistant {
                         )
                         .unwrap(),
                     );
-                    keyboard.set_field_name(field_text);
+                    keyboard.set_field_name(field_text.to_string());
                     keyboard.set_text_field(entry_text);
                     self.app_sender.queue_message(
                         MessageTarget::View(self.view_key),

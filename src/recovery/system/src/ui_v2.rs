@@ -14,17 +14,18 @@ use recovery_util::ota::state_machine::{State, StateMachine};
 
 #[cfg(feature = "debug_console")]
 use recovery_ui::console::ConsoleViewAssistant;
+use recovery_ui::screens::Screens;
 use recovery_util::ota::action::Action;
 
 struct RecoveryAppAssistant {
-    _app_sender: AppSender,
+    app_sender: AppSender,
     display_rotation: DisplayRotation,
 }
 
 impl RecoveryAppAssistant {
     pub fn new(app_sender: &AppSender) -> Self {
         let display_rotation = Self::get_display_rotation();
-        Self { _app_sender: app_sender.clone(), display_rotation }
+        Self { app_sender: app_sender.clone(), display_rotation }
     }
 
     fn get_display_rotation() -> DisplayRotation {
@@ -51,13 +52,20 @@ impl AppAssistant for RecoveryAppAssistant {
     }
 
     // Create the State Machine
-    fn create_view_assistant(&mut self, _view_key: ViewKey) -> Result<ViewAssistantPtr, Error> {
+    fn create_view_assistant(&mut self, view_key: ViewKey) -> Result<ViewAssistantPtr, Error> {
         // TODO(b/244744635) Add a structured initialization flow for the recovery component
-        let state_machine = Box::new(StateMachine::new(State::Home));
+        // This initial state will change back to State::Home when the generic view is added
+        let state_machine = Box::new(StateMachine::new(State::EnterWiFi));
         let mut controller = Controller::new();
         let event_sender = controller.get_event_sender();
+
         let action = Action::new(event_sender.clone());
         controller.add_state_handler(Box::new(action));
+
+        let screens = Screens::new(self.app_sender.clone(), view_key);
+        let first_screen = screens.initial_screen();
+        controller.add_state_handler(Box::new(screens));
+
         controller.start(state_machine);
 
         let font_face = font::get_default_font_face();
@@ -65,7 +73,6 @@ impl AppAssistant for RecoveryAppAssistant {
         let console_view_assistant_ptr = Box::new(ConsoleViewAssistant::new(font_face.clone())?);
         #[cfg(not(feature = "debug_console"))]
         let console_view_assistant_ptr = None;
-        let first_screen = Box::new(ConsoleViewAssistant::new(font_face.clone())?);
         let proxy_ptr = Box::new(ProxyViewAssistant::new(
             Some(Box::new(event_sender)),
             Some(console_view_assistant_ptr),
