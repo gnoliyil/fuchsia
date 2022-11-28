@@ -83,8 +83,6 @@ def main():
                     span["file_name"] not in input_files for span in lint["spans"]
                 ):
                     continue
-                if lint["level"] == "error":
-                    returncode = 1
                 lints[fingerprint_diagnostic(lint)] = lint
 
     for lint in lints.values():

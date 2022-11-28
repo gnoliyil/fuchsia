@@ -318,12 +318,9 @@ mod test_package {
             "bin/my_prog".to_string() => blob_entry.clone(),
             "bin/my_prog2".to_string() => blob_entry,
         };
-        let package = Package::from_meta_far(
-            File::open(&meta_far_path).unwrap(),
-            blobs.clone(),
-            subpackages.clone(),
-        )
-        .unwrap();
+        let package =
+            Package::from_meta_far(File::open(&meta_far_path).unwrap(), blobs.clone(), subpackages)
+                .unwrap();
         assert_eq!(blobs, package.blobs());
         assert_eq!(
             &"my-package-name".parse::<PackageName>().unwrap(),

@@ -13,6 +13,7 @@ Options:
   --output FILE : clippy file to output (required)
   --jq FILE : path to 'jq' (required)
   --fail : clippy cause failure
+  --quiet : produce output without printing or failing
 
 EOF
 }
@@ -21,6 +22,7 @@ output=
 jq=
 driver_options=()
 fail=0
+quiet=0
 
 # Extract options before --
 prev_opt=
@@ -46,6 +48,7 @@ do
     --jq) prev_opt=jq ;;
     --jq=*) jq="$optarg" ;;
     --fail) fail=1 ;;
+    --quiet) quiet=1 ;;
     # stop option processing
     --) shift; break ;;
     # Forward all other options to clippy-driver
@@ -86,7 +89,12 @@ command=(
 RUSTC_LOG=error "${command[@]}" 2>"$output"
 result="$?"
 
-if [[ "$result" != 0 && "$fail" = 1 ]]; then
-    "$jq" -sre '.[] | select(.level == "error") | .rendered' "$output" || cat "$output" >&2
-    exit "$result"
+# Print any detected lints if --quiet wasn't passed
+if [[ "$quiet" = 0 ]]; then
+  "$jq" -sre '.[] | select((.level == "error") or (.level == "warning")) | .rendered' "$output"
+fi
+
+# Only fail the build with a nonzero exit code if --fail was passed
+if [[ "$fail" = 1 ]]; then
+  exit "$result"
 fi
