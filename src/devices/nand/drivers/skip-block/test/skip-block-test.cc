@@ -183,7 +183,6 @@ class SkipBlockTest : public zxtest::Test {
   SkipBlockTest() {
     fake_parent().AddProtocol(ZX_PROTOCOL_NAND, &nand_, nand_.proto_ops());
     fake_parent().AddProtocol(ZX_PROTOCOL_BAD_BLOCK, &bad_block_, bad_block_.proto_ops());
-    fake_parent().SetSize(kPageSize * kNumPages * kNumBlocks);
     fake_parent().SetMetadata(DEVICE_METADATA_PRIVATE, &count_, sizeof(count_));
   }
 
@@ -435,7 +434,6 @@ TEST_F(SkipBlockTest, ReadFailure) {
 TEST_F(SkipBlockTest, ReadMultipleCopies) {
   const uint32_t count_ = 4;
   fake_parent().SetMetadata(DEVICE_METADATA_PRIVATE, &count_, sizeof(count_));
-  fake_parent().SetSize(kPageSize * kNumPages * 8);
   nand().set_block_count(8);
   ASSERT_OK(nand::SkipBlockDevice::Create(nullptr, parent()));
 
@@ -461,7 +459,6 @@ TEST_F(SkipBlockTest, ReadMultipleCopies) {
 TEST_F(SkipBlockTest, ReadMultipleCopiesNoneSucceeds) {
   const uint32_t count_ = 4;
   fake_parent().SetMetadata(DEVICE_METADATA_PRIVATE, &count_, sizeof(count_));
-  fake_parent().SetSize(kPageSize * kNumPages * 4);
   nand().set_block_count(4);
   ASSERT_OK(nand::SkipBlockDevice::Create(nullptr, parent()));
 
@@ -837,7 +834,6 @@ TEST_F(SkipBlockTest, WriteMultipleCopiesMultipleBlocks) {
 TEST_F(SkipBlockTest, WriteMultipleCopiesOneSucceeds) {
   const uint32_t count_ = 4;
   fake_parent().SetMetadata(DEVICE_METADATA_PRIVATE, &count_, sizeof(count_));
-  fake_parent().SetSize(kPageSize * kNumPages * 4);
   nand().set_block_count(4);
   ASSERT_OK(nand::SkipBlockDevice::Create(nullptr, parent()));
 
@@ -882,7 +878,6 @@ TEST_F(SkipBlockTest, WriteMultipleCopiesOneSucceeds) {
 TEST_F(SkipBlockTest, WriteMultipleCopiesNoneSucceeds) {
   const uint32_t count_ = 4;
   fake_parent().SetMetadata(DEVICE_METADATA_PRIVATE, &count_, sizeof(count_));
-  fake_parent().SetSize(kPageSize * kNumPages * 4);
   nand().set_block_count(4);
   ASSERT_OK(nand::SkipBlockDevice::Create(nullptr, parent()));
 

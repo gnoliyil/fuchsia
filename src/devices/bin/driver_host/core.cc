@@ -63,8 +63,6 @@ static void default_suspend(void* ctx, uint8_t requested_state, bool enable_wake
 static void default_resume(void* ctx, uint32_t requested_state) {}
 static void default_release(void* ctx) {}
 
-static zx_off_t default_get_size(void* ctx) { return 0; }
-
 static zx_status_t default_set_performance_state(void* ctx, uint32_t requested_state,
                                                  uint32_t* out_state) {
   return ZX_ERR_NOT_SUPPORTED;
@@ -91,7 +89,6 @@ const zx_protocol_device_t internal::kDeviceDefaultOps = []() {
   ops.close = default_close;
   ops.unbind = default_unbind;
   ops.release = default_release;
-  ops.get_size = default_get_size;
   ops.suspend = default_suspend;
   ops.resume = default_resume;
   ops.rxrpc = default_rxrpc;
@@ -117,7 +114,6 @@ static zx_protocol_device_t device_invalid_ops = []() {
   };
   ops.resume = +[](void* ctx, uint32_t) { device_invalid_fatal(ctx); };
   ops.release = +[](void* ctx) { device_invalid_fatal(ctx); };
-  ops.get_size = +[](void* ctx) -> zx_off_t { device_invalid_fatal(ctx); };
   ops.rxrpc = +[](void* ctx, zx_handle_t) -> zx_status_t { device_invalid_fatal(ctx); };
   ops.message = +[](void* ctx, fidl_incoming_msg_t*, fidl_txn_t*) -> zx_status_t {
     device_invalid_fatal(ctx);

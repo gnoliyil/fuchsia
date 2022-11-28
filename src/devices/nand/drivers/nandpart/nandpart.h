@@ -23,8 +23,7 @@
 namespace nand {
 
 class NandPartDevice;
-using DeviceType = ddk::Device<NandPartDevice, ddk_deprecated::GetSizable, ddk::GetProtocolable,
-                               ddk::Initializable>;
+using DeviceType = ddk::Device<NandPartDevice, ddk::GetProtocolable, ddk::Initializable>;
 
 class NandPartDevice : public DeviceType,
                        public ddk::NandProtocol<NandPartDevice, ddk::base_protocol>,
@@ -36,11 +35,6 @@ class NandPartDevice : public DeviceType,
   zx_status_t Bind(const char* name, uint32_t copy_count);
 
   // Device protocol implementation.
-  zx_off_t DdkGetSize() {
-    // TODO: use query() results, *but* fvm returns different query and getsize
-    // results, and the latter are dynamic...
-    return device_get_size(parent());
-  }
   zx_status_t DdkGetProtocol(uint32_t proto_id, void* protocol);
   void DdkInit(ddk::InitTxn txn);
   void DdkRelease() { delete this; }

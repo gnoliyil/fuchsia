@@ -232,7 +232,7 @@ struct Synchronize10CDB {
 static_assert(sizeof(Synchronize10CDB) == 10, "Synchronize 10 CDB must be 10 bytes");
 
 class Disk;
-using DeviceType = ddk::Device<Disk, ddk_deprecated::GetSizable>;
+using DeviceType = ddk::Device<Disk>;
 
 // |Disk| represents a single SCSI direct access block device.
 // |Disk| bridges between the Zircon block protocol and SCSI commands/responses.
@@ -253,9 +253,6 @@ class Disk : public DeviceType, public ddk::BlockImplProtocol<Disk, ddk::base_pr
 
   // DeviceType functions.
   void DdkRelease() { delete this; }
-
-  // ddk_deprecated::GetSizable functions.
-  zx_off_t DdkGetSize() { return blocks_ * block_size_; }
 
   // ddk::BlockImplProtocol functions.
   void BlockImplQuery(block_info_t* info_out, size_t* block_op_size_out) {

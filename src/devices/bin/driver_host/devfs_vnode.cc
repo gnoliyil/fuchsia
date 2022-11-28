@@ -99,7 +99,6 @@ zx_status_t DevfsVnode::GetAttributes(fs::VnodeAttributes* a) {
     return ZX_ERR_IO_NOT_PRESENT;
   }
   a->mode = V_TYPE_CDEV | V_IRUSR | V_IWUSR;
-  a->content_size = dev_->GetSizeOp();
   a->link_count = 1;
   return ZX_OK;
 }

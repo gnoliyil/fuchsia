@@ -147,17 +147,21 @@ TEST_F(BlockVerityTest, BasicWrites) {
 
   // Examine the size of the child device.  Expect it to be 8126 blocks, because
   // we've reserved 1 superblock and 65 integrity blocks of our 8192-block device.
-  struct stat st;
-  ASSERT_EQ(fstat(mutable_block_fd.get(), &st), 0);
-  ASSERT_EQ(st.st_size, 8126 * kBlockSize);
-  uint64_t inner_block_count = st.st_size / kBlockSize;
+  const fidl::WireResult result =
+      fidl::WireCall(caller.borrow_as<fuchsia_hardware_block::Block>())->GetInfo();
+  ASSERT_OK(result.status());
+  const fit::result response = result.value();
+  ASSERT_TRUE(response.is_ok(), "%s", zx_status_get_string(response.error_value()));
+  const fuchsia_hardware_block::wire::BlockInfo& info = response.value()->info;
+  ASSERT_EQ(info.block_size, kBlockSize);
+  ASSERT_EQ(info.block_count, 8126);
 
   // Read the entire inner block device.  Expect to see all zeroes.
   fbl::Array<uint8_t> zero_buf(new uint8_t[kBlockSize], kBlockSize);
   memset(zero_buf.get(), 0, zero_buf.size());
   fbl::Array<uint8_t> read_buf(new uint8_t[kBlockSize], kBlockSize);
   memset(read_buf.get(), 0, read_buf.size());
-  for (uint64_t block = 0; block < inner_block_count; block++) {
+  for (uint64_t block = 0; block < info.block_count; block++) {
     // Seek to start of block
     off_t offset = block * kBlockSize;
     // Verify read succeed
@@ -373,10 +377,10 @@ TEST_F(BlockVerityTest, SealAndVerifiedRead) {
   OpenForAuthoring(mutable_block_fd);
 
   // Close and generate a seal over the all-zeroes data section.
-  fuchsia_hardware_block_verified::wire::DeviceManagerCloseAndGenerateSealResponse result;
-  CloseAndGenerateSeal(&result);
+  fuchsia_hardware_block_verified::wire::DeviceManagerCloseAndGenerateSealResponse seal_result;
+  CloseAndGenerateSeal(&seal_result);
 
-  const fuchsia_hardware_block_verified::wire::Seal& seal = result.seal;
+  const fuchsia_hardware_block_verified::wire::Seal& seal = seal_result.seal;
   fbl::unique_fd verified_block_fd;
   auto verified_block_channel = [&verified_block_fd]() {
     fdio_cpp::UnownedFdioCaller verified_block_caller(verified_block_fd);
@@ -394,15 +398,18 @@ TEST_F(BlockVerityTest, SealAndVerifiedRead) {
 
   // Examine the size of the child device.  Expect it to be 8126 blocks, because
   // we've reserved 1 superblock and 65 integrity blocks of our 8192-block device.
-  struct stat st;
-  ASSERT_EQ(fstat(verified_block_fd.get(), &st), 0);
-  ASSERT_EQ(st.st_size, 8126 * kBlockSize);
-  uint64_t inner_block_count = st.st_size / kBlockSize;
+  const fidl::WireResult result = fidl::WireCall(verified_block_channel())->GetInfo();
+  ASSERT_OK(result.status());
+  const fit::result response = result.value();
+  ASSERT_TRUE(response.is_ok(), "%s", zx_status_get_string(response.error_value()));
+  const fuchsia_hardware_block::wire::BlockInfo& info = response.value()->info;
+  ASSERT_EQ(info.block_size, kBlockSize);
+  ASSERT_EQ(info.block_count, 8126);
 
   // Read all the blocks, and verify they're all zeroes.  Mark the buffer with
   // all 0xcc before each read to show that the reads are, in fact, doing work each
   // iteration.
-  for (uint64_t verified_block = 0; verified_block < inner_block_count; verified_block++) {
+  for (uint64_t verified_block = 0; verified_block < info.block_count; verified_block++) {
     memset(read_buf.get(), 0xcc, kBlockSize);
     off_t offset = verified_block * kBlockSize;
     ASSERT_OK(BRead(verified_block_channel(), read_buf.get(), read_buf.size(), offset),

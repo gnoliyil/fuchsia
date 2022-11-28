@@ -94,19 +94,6 @@ zx_status_t Device::DdkGetProtocol(uint32_t proto_id, void* out) {
   }
 }
 
-zx_off_t Device::DdkGetSize() {
-  LOG_ENTRY();
-
-  zx_off_t reserved, size;
-  if (mul_overflow(info_.block_size, info_.reserved_blocks, &reserved) ||
-      sub_overflow(device_get_size(info_.block_device), reserved, &size)) {
-    zxlogf(ERROR, "device_get_size returned less than what has been reserved");
-    return 0;
-  }
-
-  return size;
-}
-
 // TODO(aarongreen): See fxbug.dev/31081.  Currently, there's no good way to trigger
 // this on demand.
 void Device::DdkUnbind(ddk::UnbindTxn txn) {

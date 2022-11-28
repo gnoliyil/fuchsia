@@ -124,8 +124,6 @@ void PartitionDevice::BlockImplQueue(block_op_t* bop, block_impl_queue_callback 
 
 void PartitionDevice::DdkRelease() { delete this; }
 
-zx_off_t PartitionDevice::DdkGetSize() const { return info_.block_count * info_.block_size; }
-
 static_assert(GPT_GUID_LEN == GUID_LENGTH, "GUID length mismatch");
 
 zx_status_t PartitionDevice::BlockPartitionGetGuid(guidtype_t guid_type, guid_t* out_guid) {

@@ -194,15 +194,6 @@ TEST(BlockDeviceTest, DdkLifetime) {
   ASSERT_OK(mock_ddk::ReleaseFlaggedDevices(fake_parent.get()));
 }
 
-TEST(BlockDeviceTest, GetSize) {
-  FakeNand nand;
-  ftl::BlockDevice device;
-  device.SetVolumeForTest(std::make_unique<FakeVolume>(&device));
-  device.SetNandParentForTest(*nand.proto());
-  ASSERT_OK(device.Init());
-  EXPECT_EQ(kPageSize * kNumPages, device.DdkGetSize());
-}
-
 TEST(BlockDeviceTest, GetName) {
   FakeNand nand;
   ftl::BlockDevice device;

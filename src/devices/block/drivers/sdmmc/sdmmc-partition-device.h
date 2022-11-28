@@ -20,8 +20,7 @@ namespace sdmmc {
 class SdmmcBlockDevice;
 
 class PartitionDevice;
-using PartitionDeviceType =
-    ddk::Device<PartitionDevice, ddk_deprecated::GetSizable, ddk::GetProtocolable>;
+using PartitionDeviceType = ddk::Device<PartitionDevice, ddk::GetProtocolable>;
 
 class PartitionDevice : public PartitionDeviceType,
                         public ddk::BlockImplProtocol<PartitionDevice, ddk::base_protocol>,
@@ -38,7 +37,6 @@ class PartitionDevice : public PartitionDeviceType,
 
   void DdkRelease() { delete this; }
 
-  zx_off_t DdkGetSize();
   zx_status_t DdkGetProtocol(uint32_t proto_id, void* out);
 
   void BlockImplQuery(block_info_t* info_out, size_t* block_op_size_out);

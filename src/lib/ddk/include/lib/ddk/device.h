@@ -234,19 +234,6 @@ typedef struct zx_protocol_device {
   // thread.
   void (*release)(void* ctx);
 
-  //@ ## get_size
-  // DEPRECATED: DO NOT ADD NEW USES
-  //
-  // If the device is seekable, the get_size hook should return the size of the device.
-  //
-  // This is the offset at which no more reads or writes are possible.
-  //
-  // The default implementation returns 0.
-  //
-  // This hook may be executed on any thread, including the devhost's main
-  // thread.
-  zx_off_t (*get_size)(void* ctx);
-
   //@ ## suspend
   // The suspend hook is used for suspending a device from a working to
   // non-working low power state(sleep state), or from a non-working sleep state
@@ -398,8 +385,6 @@ typedef struct zx_protocol_device {
 zx_status_t device_get_protocol(const zx_device_t* dev, uint32_t proto_id, void* protocol);
 
 // Direct Device Ops Functions
-
-zx_off_t device_get_size(zx_device_t* dev);
 
 zx_status_t device_service_connect(zx_device_t* device, const char* service_name,
                                    fdf_handle_t channel);

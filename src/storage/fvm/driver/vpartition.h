@@ -27,8 +27,7 @@ namespace fvm {
 class VPartitionManager;
 class VPartition;
 
-using PartitionDeviceType =
-    ddk::Device<VPartition, ddk::GetProtocolable, ddk_deprecated::GetSizable>;
+using PartitionDeviceType = ddk::Device<VPartition, ddk::GetProtocolable>;
 
 class VPartition : public PartitionDeviceType,
                    public ddk::BlockImplProtocol<VPartition, ddk::base_protocol>,
@@ -41,7 +40,6 @@ class VPartition : public PartitionDeviceType,
                             std::unique_ptr<VPartition>* out);
   // Device Protocol
   zx_status_t DdkGetProtocol(uint32_t proto_id, void* out);
-  zx_off_t DdkGetSize();
   void DdkRelease();
 
   // Block Protocol

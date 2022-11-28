@@ -192,11 +192,6 @@ static zx_status_t sata_device_identify(sata_device_t* dev, Controller* controll
 
 // implement device protocol:
 
-static zx_off_t sata_getsize(void* ctx) {
-  sata_device_t* device = static_cast<sata_device_t*>(ctx);
-  return device->info.block_count * device->info.block_size;
-}
-
 static void sata_release(void* ctx) {
   sata_device_t* device = static_cast<sata_device_t*>(ctx);
   delete device;
@@ -205,7 +200,6 @@ static void sata_release(void* ctx) {
 static zx_protocol_device_t sata_device_proto = []() {
   zx_protocol_device_t device = {};
   device.version = DEVICE_OPS_VERSION;
-  device.get_size = sata_getsize;
   device.release = sata_release;
   return device;
 }();

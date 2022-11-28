@@ -131,23 +131,12 @@ void MockDevice::ResumeNewOp(uint32_t requested_state) {
   Dispatch(ctx_, ops_->resume, requested_state);
 }
 
-zx_off_t MockDevice::GetSizeOp() { return Dispatch(ctx_, ops_->get_size, 0lu); }
-
 zx_status_t MockDevice::MessageOp(fidl_incoming_msg_t* msg, fidl_txn_t* txn) {
   return Dispatch(ctx_, ops_->message, ZX_ERR_NOT_SUPPORTED, msg, txn);
 }
 
 void MockDevice::ChildPreReleaseOp(void* child_ctx) {
   Dispatch(ctx_, ops_->child_pre_release, child_ctx);
-}
-
-void MockDevice::SetSize(size_t size) { size_ = size; }
-
-zx_off_t MockDevice::GetSize() {
-  if (size_ == 0) {
-    size_ = GetSizeOp();
-  }
-  return size_;
 }
 
 void MockDevice::SetMetadata(uint32_t type, const void* data, size_t data_length) {

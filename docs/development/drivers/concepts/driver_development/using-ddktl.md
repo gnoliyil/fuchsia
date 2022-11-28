@@ -29,12 +29,6 @@ Mixin class            | Function             | Purpose
 `ddk::AutoSuspendable`    | **DdkConfigureAutoSuspend()**   | to configure whether a driver can auto suspend the device
 `ddk::Rxrpcable`          | **DdkRxrpc()**       | remote messages for bus devices
 
-For completeness, the following mixins are also provided, but have been deprecated:
-
-Deprecated Mixin class                 | Function             | Purpose
----------------------------------------|----------------------|------------------------------
-`ddk_deprecated::GetSizable`           | **DdkGetSize()**     | returns size of device
-
 When defining the class for your device, you specify which functions it will
 support by including the appropriate mixins.
 For example (line numbers added for documentation purposes only):
@@ -131,25 +125,23 @@ we have a typical device declaration ([`device.h`](/src/devices/block/drivers/zx
 [01] class Device;
 [02] using DeviceType = ddk::Device<Device,
 [03]                                ddk::GetProtocolable,
-[04]                                ddk_deprecated::GetSizable,
-[05]                                ddk::Unbindable>;
+[04]                                ddk::Unbindable>;
 ...
-[06] class Device final : public DeviceType,
-[07]                      public ddk::BlockImplProtocol<Device, ddk::base_protocol>,
-[08]                      public ddk::BlockPartitionProtocol<Device>,
-[09]                      public ddk::BlockVolumeProtocol<Device> {
-[10] public:
+[05] class Device final : public DeviceType,
+[06]                      public ddk::BlockImplProtocol<Device, ddk::base_protocol>,
+[07]                      public ddk::BlockPartitionProtocol<Device>,
+[08]                      public ddk::BlockVolumeProtocol<Device> {
+[09] public:
 ...
-[11]     // ddk::Device methods; see ddktl/device.h
-[12]     zx_status_t DdkGetProtocol(uint32_t proto_id, void* out);
-[13]     zx_off_t DdkGetSize();
-[14]     void DdkUnbind(ddk::UnbindTxn txn);
-[15]     void DdkRelease();
+[10]     // ddk::Device methods; see ddktl/device.h
+[11]     zx_status_t DdkGetProtocol(uint32_t proto_id, void* out);
+[12]     void DdkUnbind(ddk::UnbindTxn txn);
+[13]     void DdkRelease();
 ...
 ```
 
 Lines `[01` .. `05]` declare the shortcut `DeviceType` with the base class
-`Device` and three mixins, `GetProtocolable`, `GetSizable`, and `Unbindable`.
+`Device` and its mixins, `GetProtocolable` and `Unbindable`.
 
 What's interesting here is line `[06]`: we not only inherit from the `DeviceType`,
 but also from other classes on lines `[07` .. `09]`.

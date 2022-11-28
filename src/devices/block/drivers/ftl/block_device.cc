@@ -73,7 +73,7 @@ BlockDevice::~BlockDevice() {
     thrd_join(worker_, &result_code);
   }
   ZX_ASSERT(list_is_empty(&txn_list_));
-  bool volume_created = (DdkGetSize() != 0);
+  bool volume_created = (params_.GetSize() != 0);
   if (volume_created) {
     if (zx_status_t status = volume_->Unmount(); status != ZX_OK) {
       zxlogf(ERROR, "FTL: FtlUmount() failed: %s", zx_status_get_string(status));

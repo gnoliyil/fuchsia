@@ -715,32 +715,4 @@ class Device : public ::ddk::internal::base_device<D, Mixins...> {
 
 }  // namespace ddk
 
-// Each of these Mixins are deprecated. Please do not add new usages, and please
-// remove existing uses.
-//
-// Deprecated Mixins:
-// +----------------------------+----------------------------------------------------+
-// | Mixin class                | Required function implementation                   |
-// +----------------------------+----------------------------------------------------+
-// | ddk_deprecated::GetSizable | zx_off_t DdkGetSize()                              |
-// +----------------------------+----------------------------------------------------+
-//
-namespace ddk_deprecated {
-
-#if defined(DDKTL_ALLOW_GETSIZABLE)
-template <typename D>
-class GetSizable : public ddk::base_mixin {
- protected:
-  static constexpr void InitOp(zx_protocol_device_t* proto) {
-    ddk::internal::CheckGetSizable<D>();
-    proto->get_size = GetSize;
-  }
-
- private:
-  static zx_off_t GetSize(void* ctx) { return static_cast<D*>(ctx)->DdkGetSize(); }
-};
-#endif
-
-}  // namespace ddk_deprecated
-
 #endif  // SRC_LIB_DDKTL_INCLUDE_DDKTL_DEVICE_H_

@@ -379,11 +379,6 @@ __EXPORT zx_status_t device_close_protocol_session_multibindable(const zx_device
   return ZX_ERR_NOT_SUPPORTED;
 }
 
-__EXPORT zx_off_t device_get_size(zx_device_t* dev) {
-  ZX_DEBUG_ASSERT_MSG(dev && dev->magic == DEV_MAGIC, "Dev pointer '%p' is not a real device", dev);
-  return dev->GetSizeOp();
-}
-
 __EXPORT zx_status_t device_service_connect(zx_device_t* dev, const char* service_name,
                                             fdf_handle_t channel) {
   ZX_DEBUG_ASSERT_MSG(dev && dev->magic == DEV_MAGIC, "Dev pointer '%p' is not a real device", dev);

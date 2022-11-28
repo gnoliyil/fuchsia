@@ -145,7 +145,6 @@ struct MockDevice : public std::enable_shared_from_this<MockDevice> {
   zx_status_t SetPerformanceStateOp(uint32_t requested_state, uint32_t* out_state);
   zx_status_t ConfigureAutoSuspendOp(bool enable, uint8_t requested_state);
   void ResumeNewOp(uint32_t requested_state);
-  zx_off_t GetSizeOp();
   zx_status_t MessageOp(fidl_incoming_msg_t* msg, fidl_txn_t* txn);
   void ChildPreReleaseOp(void* child_ctx);
   bool HasUnbindOp() { return ops_->unbind != nullptr; }
@@ -154,10 +153,6 @@ struct MockDevice : public std::enable_shared_from_this<MockDevice> {
   cpp20::span<const zx_device_str_prop_t> GetStringProperties() const { return str_props_; }
 
   const zx::vmo& GetInspectVmo() const { return inspect_; }
-
-  // Size is often set for the parent of a device, to be available when the device
-  // calls device_get_size
-  void SetSize(size_t size);
 
   // Metadata is often set for the parent of a device, to be available when the device
   // calls device_get_metadata
@@ -276,9 +271,6 @@ struct MockDevice : public std::enable_shared_from_this<MockDevice> {
                                                             const char* protocol_name,
                                                             zx_handle_t request);
 
-  zx_off_t GetSize();
-  friend zx_off_t device_get_size(zx_device_t* device);
-
   // device_get_metadata calls GetMetadata:
   zx_status_t GetMetadata(uint32_t type, void* buf, size_t buflen, size_t* actual);
   friend zx_status_t device_get_metadata(zx_device_t* device, uint32_t type, void* buf,
@@ -313,8 +305,6 @@ struct MockDevice : public std::enable_shared_from_this<MockDevice> {
                      std::unordered_map<std::string, fidl::ClientEnd<fuchsia_io::Directory>>>
       fidl_services_;
   std::unordered_map<std::string_view, std::vector<uint8_t>> firmware_;
-
-  size_t size_ = 0;
 
   // Map of metadata set by SetMetadata.
   std::unordered_map<uint32_t, std::vector<uint8_t>> metadata_;

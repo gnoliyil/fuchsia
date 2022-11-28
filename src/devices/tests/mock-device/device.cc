@@ -37,8 +37,7 @@ namespace mock_device {
 class MockDevice;
 using MockDeviceType =
     ddk::Device<MockDevice, ddk::GetProtocolable, ddk::Initializable, ddk::Openable, ddk::Closable,
-                ddk::Unbindable, ddk_deprecated::GetSizable, ddk::Suspendable, ddk::Resumable,
-                ddk::Rxrpcable>;
+                ddk::Unbindable, ddk::Suspendable, ddk::Resumable, ddk::Rxrpcable>;
 
 class MockDevice : public MockDeviceType {
  public:
@@ -54,7 +53,6 @@ class MockDevice : public MockDeviceType {
   zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags);
   zx_status_t DdkClose(uint32_t flags);
   void DdkUnbind(ddk::UnbindTxn txn);
-  zx_off_t DdkGetSize();
   void DdkSuspend(ddk::SuspendTxn txn);
   void DdkResume(ddk::ResumeTxn txn);
   zx_status_t DdkRxrpc(zx_handle_t channel);
@@ -295,18 +293,6 @@ void MockDevice::DdkUnbind(ddk::UnbindTxn txn) {
   ctx.pending_unbind_txn = std::move(txn);
   zx_status_t status = ProcessActions(result.value().actions, &ctx);
   ZX_ASSERT(status == ZX_OK);
-}
-
-zx_off_t MockDevice::DdkGetSize() {
-  auto result = controller_->GetSize(ConstructHookInvocation());
-  ZX_ASSERT(result.ok());
-  ProcessActionsContext::ChannelVariants channel = controller_.client_end().borrow().channel();
-  ProcessActionsContext ctx(channel, false, this, zxdev());
-  zx_status_t status = ProcessActions(result.value().actions, &ctx);
-  ZX_ASSERT(status == ZX_OK);
-
-  ZX_ASSERT_MSG(false, "need to plumb returning values in\n");
-  return ZX_ERR_NOT_SUPPORTED;
 }
 
 void MockDevice::DdkSuspend(ddk::SuspendTxn txn) {

@@ -27,9 +27,8 @@
 namespace ramdisk {
 
 class Ramdisk;
-using RamdiskDeviceType =
-    ddk::Device<Ramdisk, ddk::GetProtocolable, ddk_deprecated::GetSizable, ddk::Unbindable,
-                ddk::Messageable<fuchsia_hardware_ramdisk::Ramdisk>::Mixin>;
+using RamdiskDeviceType = ddk::Device<Ramdisk, ddk::GetProtocolable, ddk::Unbindable,
+                                      ddk::Messageable<fuchsia_hardware_ramdisk::Ramdisk>::Mixin>;
 
 class Ramdisk : public RamdiskDeviceType,
                 public ddk::BlockImplProtocol<Ramdisk, ddk::base_protocol>,
@@ -46,7 +45,6 @@ class Ramdisk : public RamdiskDeviceType,
 
   // Device Protocol
   zx_status_t DdkGetProtocol(uint32_t proto_id, void* out);
-  zx_off_t DdkGetSize();
   void DdkUnbind(ddk::UnbindTxn txn);
   void DdkRelease();
 

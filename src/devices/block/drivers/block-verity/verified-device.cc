@@ -82,17 +82,6 @@ zx_status_t VerifiedDevice::DdkGetProtocol(uint32_t proto_id, void* out) {
   return ZX_ERR_NOT_SUPPORTED;
 }
 
-zx_off_t VerifiedDevice::DdkGetSize() {
-  zx_off_t data_size;
-  if (mul_overflow(info_.geometry.block_size_, info_.geometry.allocation_.data_block_count,
-                   &data_size)) {
-    zxlogf(ERROR, "overflowed when computing device size");
-    return 0;
-  }
-
-  return data_size;
-}
-
 void VerifiedDevice::DdkUnbind(ddk::UnbindTxn txn) {
   fbl::AutoLock lock(&mtx_);
   // Change internal state to stop servicing new block requests.

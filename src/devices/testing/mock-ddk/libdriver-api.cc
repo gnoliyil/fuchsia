@@ -192,9 +192,6 @@ zx_status_t device_open_protocol_session_multibindable(const zx_device_t* dev, u
 }
 
 __EXPORT
-zx_off_t device_get_size(zx_device_t* device) { return device->GetSize(); }
-
-__EXPORT
 zx_status_t device_get_profile(zx_device_t* device, uint32_t priority, const char* name,
                                zx_handle_t* out_profile) {
   // This is currently a no-op.

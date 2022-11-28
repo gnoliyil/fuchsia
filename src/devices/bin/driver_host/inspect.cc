@@ -286,9 +286,6 @@ void DeviceInspect::set_ops(const zx_protocol_device_t* ops) {
   if (ops->release) {
     ops_str.Append("release ");
   }
-  if (ops->get_size) {
-    ops_str.Append("get_size ");
-  }
   if (ops->suspend) {
     ops_str.Append("suspend ");
   }

@@ -31,7 +31,6 @@ TEST(DeviceApiTest, OpsNotImplemented) {
   dev->vnode.reset();
 
   EXPECT_EQ(device_get_protocol(dev.get(), 0, nullptr), ZX_ERR_NOT_SUPPORTED);
-  EXPECT_EQ(device_get_size(dev.get()), 0);
 }
 
 uint64_t test_ctx = 0xabcdef;
@@ -42,11 +41,6 @@ zx_status_t test_get_protocol(void* ctx, uint32_t proto_id, void* out) {
   uint8_t* data = static_cast<uint8_t*>(out);
   *data = 0xab;
   return ZX_OK;
-}
-
-zx_off_t test_get_size(void* ctx) {
-  EXPECT_EQ(ctx, &test_ctx);
-  return 42ul;
 }
 
 TEST(DeviceApiTest, GetProtocol) {
@@ -69,26 +63,6 @@ TEST(DeviceApiTest, GetProtocol) {
   uint8_t out = 0;
   ASSERT_OK(device_get_protocol(dev.get(), 42, &out));
   EXPECT_EQ(out, 0xab);
-}
-
-TEST(DeviceApiTest, GetSize) {
-  DriverHostContext ctx(&kAsyncLoopConfigNoAttachToCurrentThread);
-  fbl::RefPtr<zx_driver> drv;
-  ASSERT_OK(zx_driver::Create("device-api-test", ctx.inspect().drivers(), &drv));
-
-  auto driver = Driver::Create(drv.get());
-  ASSERT_OK(driver.status_value());
-
-  fbl::RefPtr<zx_device> dev;
-  ASSERT_OK(zx_device::Create(&ctx, "test", *std::move(driver), &dev));
-
-  zx_protocol_device_t ops = {};
-  ops.get_size = test_get_size;
-  dev->set_ops(&ops);
-  dev->set_ctx(&test_ctx);
-  dev->vnode.reset();
-
-  ASSERT_EQ(device_get_size(dev.get()), 42ul);
 }
 
 TEST(DeviceApiTest, ReservedDeviceNames) {

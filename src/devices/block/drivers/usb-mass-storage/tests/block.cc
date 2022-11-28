@@ -63,40 +63,14 @@ TEST(UmsBlock, AddTest) {
   Binder ddk;
   Context context;
   auto fake_zxdev = reinterpret_cast<zx_device_t*>(&context);
-  ums::UmsBlockDevice dev(fake_zxdev, 5,
-                          [&](ums::Transaction* txn) { context.txn = txn; });
-  context.dev = &dev;
-  ums::BlockDeviceParameters params = {};
-  params.lun = 5;
-  EXPECT_TRUE(params == dev.GetBlockDeviceParameters(),
-              "Parameters must be set to user-provided values.");
-  dev.Adopt();
-  EXPECT_EQ(ZX_OK, dev.Add(), "Expected Add to succeed");
-  dev.DdkAsyncRemove();
-  ddk.WaitUntilRemove();
-  EXPECT_TRUE(dev.Release(), "Expected to free the device");
-}
-
-TEST(UmsBlock, GetSizeTest) {
-  Binder ddk;
-  Context context;
-  auto fake_zxdev = reinterpret_cast<zx_device_t*>(&context);
   ums::UmsBlockDevice dev(fake_zxdev, 5, [&](ums::Transaction* txn) { context.txn = txn; });
   context.dev = &dev;
   ums::BlockDeviceParameters params = {};
   params.lun = 5;
-  dev.Adopt();
   EXPECT_TRUE(params == dev.GetBlockDeviceParameters(),
               "Parameters must be set to user-provided values.");
+  dev.Adopt();
   EXPECT_EQ(ZX_OK, dev.Add(), "Expected Add to succeed");
-  EXPECT_TRUE(fbl::String("lun-005") == context.name);
-  params = dev.GetBlockDeviceParameters();
-  params.block_size = 15;
-  params.total_blocks = 700;
-  context.info.block_size = params.block_size;
-  context.info.block_count = params.total_blocks;
-  dev.SetBlockDeviceParameters(params);
-  EXPECT_EQ(params.block_size * params.total_blocks, dev.DdkGetSize());
   dev.DdkAsyncRemove();
   ddk.WaitUntilRemove();
   EXPECT_TRUE(dev.Release(), "Expected to free the device");

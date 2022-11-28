@@ -28,7 +28,7 @@ namespace nand {
 using Transaction = nand::BorrowedOperation<>;
 
 class NandDevice;
-using DeviceType = ddk::Device<NandDevice, ddk_deprecated::GetSizable, ddk::Suspendable>;
+using DeviceType = ddk::Device<NandDevice, ddk::Suspendable>;
 
 class NandDevice : public DeviceType, public ddk::NandProtocol<NandDevice, ddk::base_protocol> {
  public:
@@ -48,7 +48,6 @@ class NandDevice : public DeviceType, public ddk::NandProtocol<NandDevice, ddk::
   zx_status_t Init();
 
   // Device protocol implementation.
-  zx_off_t DdkGetSize() { return device_get_size(parent()); }
   void DdkSuspend(ddk::SuspendTxn txn);
   void DdkRelease();
 

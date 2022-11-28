@@ -98,7 +98,6 @@ class Device : public std::enable_shared_from_this<Device>,
 
   zx_status_t OpenOp(zx_device_t** dev_out, uint32_t flags);
   zx_status_t CloseOp(uint32_t flags);
-  zx_off_t GetSizeOp();
 
   fpromise::promise<void, zx_status_t> RebindToLibname(std::string_view libname);
 

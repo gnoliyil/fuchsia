@@ -37,22 +37,6 @@ DEFINE_EACH_DEVICE(ZxcryptTest, TestBind)
 // TODO(aarongreen): When fxbug.dev/31073 is resolved, add tests that check zxcrypt_rekey and
 // zxcrypt_shred.
 
-// Device::DdkGetSize tests
-void TestDdkGetSize(Volume::Version version, bool fvm) {
-  TestDevice device;
-  ASSERT_NO_FATAL_FAILURE(device.SetupDevmgr());
-  ASSERT_NO_FATAL_FAILURE(device.Bind(version, fvm));
-
-  struct stat parent_buf, zxcrypt_buf;
-  ASSERT_EQ(fstat(device.parent().get(), &parent_buf), 0, "%s", strerror(errno));
-  ASSERT_EQ(fstat(device.zxcrypt().get(), &zxcrypt_buf), 0, "%s", strerror(errno));
-
-  ASSERT_GT(parent_buf.st_size, zxcrypt_buf.st_size);
-  EXPECT_EQ((parent_buf.st_size - zxcrypt_buf.st_size) / device.block_size(),
-            device.reserved_blocks());
-}
-DEFINE_EACH_DEVICE(ZxcryptTest, TestDdkGetSize)
-
 // FIDL tests
 void TestBlockGetInfo(Volume::Version version, bool fvm) {
   TestDevice device;
@@ -194,7 +178,6 @@ void TestBlockFvmShrinkAndExtend(Volume::Version version, bool fvm) {
 }
 DEFINE_EACH_DEVICE(ZxcryptTest, TestBlockFvmShrinkAndExtend)
 
-// Device::DdkIotxnQueue tests
 void TestFdZeroLength(Volume::Version version, bool fvm) {
   TestDevice device;
   ASSERT_NO_FATAL_FAILURE(device.SetupDevmgr());

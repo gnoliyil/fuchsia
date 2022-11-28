@@ -264,8 +264,6 @@ TEST_F(ScsilibDiskTest, TestCreateDestroy) {
   EXPECT_EQ(scsi::Disk::Create(&controller_, fake_parent.get(), kTarget, kLun, kTransferSize),
             ZX_OK);
   ASSERT_EQ(1, fake_parent->child_count());
-  auto* dev = fake_parent->GetLatestChild()->GetDeviceContext<scsi::Disk>();
-  EXPECT_EQ(dev->DdkGetSize(), kFakeBlocks * kBlockSize);
 }
 
 // Test creating a disk and executing read commands.

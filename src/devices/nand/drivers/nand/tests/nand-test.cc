@@ -174,12 +174,6 @@ TEST_F(NandTest, DdkLifetime) {
   device->DdkRelease();
 }
 
-TEST_F(NandTest, GetSize) {
-  nand::NandDevice device(fake_ddk::kFakeParent);
-  ASSERT_OK(device.Init());
-  EXPECT_EQ(kPageSize * kNumPages * kNumBlocks, device.DdkGetSize());
-}
-
 TEST_F(NandTest, Query) {
   nand::NandDevice device(fake_ddk::kFakeParent);
   ASSERT_OK(device.Init());

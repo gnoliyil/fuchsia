@@ -19,10 +19,6 @@ fuchsia_driver("core-driver") {
     "//sdk/lib/syslog/cpp:backend",
     "//src/devices/lib/driver",
   ]
-
-  # TODO(fxbug.dev/33820): This target uses the deprecated GetSizable.
-  # Please migrate away from this feature.
-  configs += [ "//src/lib/ddktl:deprecated-getsizable" ]
 }
 
 fuchsia_driver_component("core") {
@@ -63,10 +59,6 @@ test("core-unittest-bin") {
     "//zircon/system/ulib/zx",
     "//zircon/system/ulib/zxtest",
   ]
-
-  # TODO(fxbug.dev/33820): This target uses the deprecated GetSizable.
-  # Please migrate away from this feature.
-  configs += [ "//src/lib/ddktl:deprecated-getsizable" ]
 }
 
 fuchsia_unittest_package("core-unittest") {
@@ -118,10 +110,6 @@ source_set("shared") {
     "//zircon/system/ulib/fidl-utils",
     "//zircon/system/ulib/storage-metrics",
   ]
-
-  # TODO(fxbug.dev/33820): This target uses the deprecated GetSizable.
-  # Please migrate away from this feature.
-  configs += [ "//src/lib/ddktl:deprecated-getsizable" ]
 }
 
 rustc_test("block_driver_integration_test") {

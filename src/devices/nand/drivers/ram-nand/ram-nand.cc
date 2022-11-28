@@ -113,7 +113,7 @@ NandDevice::~NandDevice() {
   }
   ZX_ASSERT(list_is_empty(&txn_list_));
   if (mapped_addr_) {
-    zx_vmar_unmap(zx_vmar_root_self(), mapped_addr_, DdkGetSize());
+    zx_vmar_unmap(zx_vmar_root_self(), mapped_addr_, params_.GetSize());
   }
 }
 
@@ -179,23 +179,23 @@ zx::result<NandDevice::DeviceNameType> NandDevice::Init(zx::vmo vmo) {
     if (status != ZX_OK) {
       return zx::error(status);
     }
-    if (size < DdkGetSize()) {
+    if (size < params_.GetSize()) {
       return zx::error(ZX_ERR_INVALID_ARGS);
     }
   } else {
-    status = zx::vmo::create(DdkGetSize(), 0, &vmo_);
+    status = zx::vmo::create(params_.GetSize(), 0, &vmo_);
     if (status != ZX_OK) {
       return zx::error(status);
     }
   }
 
   status = zx_vmar_map(zx_vmar_root_self(), ZX_VM_PERM_READ | ZX_VM_PERM_WRITE, 0, vmo_.get(), 0,
-                       DdkGetSize(), &mapped_addr_);
+                       params_.GetSize(), &mapped_addr_);
   if (status != ZX_OK) {
     return zx::error(status);
   }
   if (!use_vmo) {
-    memset(reinterpret_cast<char*>(mapped_addr_), 0xff, DdkGetSize());
+    memset(reinterpret_cast<char*>(mapped_addr_), 0xff, params_.GetSize());
   }
 
   if (thrd_create(&worker_, WorkerThreadStub, this) != thrd_success) {

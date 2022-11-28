@@ -305,7 +305,8 @@ void VPartition::BlockImplQueue(block_op_t* txn, block_impl_queue_callback compl
       return;
   }
 
-  const uint64_t device_capacity = DdkGetSize() / BlockSize();
+  uint64_t size = safemath::CheckMul(mgr_->VSliceMax(), mgr_->slice_size()).ValueOrDie();
+  const uint64_t device_capacity = size / BlockSize();
   if (txn_length == 0) {
     completion_cb(cookie, ZX_ERR_INVALID_ARGS, txn);
     return;
@@ -509,14 +510,6 @@ zx_status_t VPartition::BlockVolumeQuerySlices(const uint64_t* start_list, size_
 zx_status_t VPartition::BlockVolumeDestroy() {
   return mgr_->FreeSlices(this, 0, mgr_->VSliceMax());
 }
-
-zx_off_t VPartition::DdkGetSize() {
-  const zx_off_t sz = mgr_->VSliceMax() * mgr_->slice_size();
-  // Check for overflow; enforced when loading driver
-  ZX_ASSERT(sz / mgr_->VSliceMax() == mgr_->slice_size());
-  return sz;
-}
-
 void VPartition::DdkRelease() { delete this; }
 
 zx_device_t* VPartition::GetParent() const { return mgr_->parent(); }

@@ -61,10 +61,6 @@ BEGIN_SUCCESS_CASE(Unbindable)
 void DdkUnbind(ddk::UnbindTxn txn) {}
 END_SUCCESS_CASE
 
-BEGIN_SUCCESS_DEPRECATED_CASE(GetSizable)
-zx_off_t DdkGetSize() { return 0; }
-END_SUCCESS_CASE
-
 class TestMessageable;
 using MessageableDevice =
     ddk::Device<TestMessageable, ddk::Messageable<fuchsia_examples::Echo>::Mixin>;
@@ -101,8 +97,7 @@ static void do_test() {
 struct TestDispatch;
 using TestDispatchType =
     ddk::Device<TestDispatch, ddk::GetProtocolable, ddk::Initializable, ddk::Openable,
-                ddk::Closable, ddk::Unbindable, ddk_deprecated::GetSizable, ddk::Suspendable,
-                ddk::Resumable, ddk::Rxrpcable>;
+                ddk::Closable, ddk::Unbindable, ddk::Suspendable, ddk::Resumable, ddk::Rxrpcable>;
 
 struct TestDispatch : public TestDispatchType {
   TestDispatch() : TestDispatchType(nullptr) {}
@@ -131,11 +126,6 @@ struct TestDispatch : public TestDispatchType {
 
   void DdkRelease() { release_called = true; }
 
-  zx_off_t DdkGetSize() {
-    get_size_called = true;
-    return 0;
-  }
-
   void DdkSuspend(ddk::SuspendTxn txn) { suspend_called = true; }
 
   void DdkResume(ddk::ResumeTxn txn) { resume_called = true; }
@@ -151,7 +141,6 @@ struct TestDispatch : public TestDispatchType {
   bool close_called = false;
   bool unbind_called = false;
   bool release_called = false;
-  bool get_size_called = false;
   bool suspend_called = false;
   bool resume_called = false;
   bool rxrpc_called = false;
@@ -170,7 +159,6 @@ TEST(DdktlDevice, Dispatch) {
   EXPECT_EQ(ZX_OK, ops->close(ctx, 0), "");
   ops->unbind(ctx);
   ops->release(ctx);
-  EXPECT_EQ(0, ops->get_size(ctx), "");
   ops->suspend(ctx, 2, false, 0);
   ops->resume(ctx, DEV_POWER_STATE_D0);
   EXPECT_EQ(ZX_OK, ops->rxrpc(ctx, 0), "");
@@ -181,7 +169,6 @@ TEST(DdktlDevice, Dispatch) {
   EXPECT_TRUE(dev->close_called, "");
   EXPECT_TRUE(dev->unbind_called, "");
   EXPECT_TRUE(dev->release_called, "");
-  EXPECT_TRUE(dev->get_size_called, "");
   EXPECT_TRUE(dev->suspend_called, "");
   EXPECT_TRUE(dev->resume_called, "");
   EXPECT_TRUE(dev->rxrpc_called, "");
@@ -266,7 +253,6 @@ TEST(DdktlDevice, MixinInitializable) { do_test<TestInitializable>(); }
 TEST(DdktlDevice, MixinOpenable) { do_test<TestOpenable>(); }
 TEST(DdktlDevice, MixinClosable) { do_test<TestClosable>(); }
 TEST(DdktlDevice, MixinUnbindable) { do_test<TestUnbindable>(); }
-TEST(DdktlDevice, MixinGetSizable) { do_test<TestGetSizable>(); }
 TEST(DdktlDevice, MixinSuspendable) { do_test<TestSuspendable>(); }
 TEST(DdktlDevice, MixinResumable) { do_test<TestResumable>(); }
 TEST(DdktlDevice, MixinRxrpcable) { do_test<TestRxrpcable>(); }

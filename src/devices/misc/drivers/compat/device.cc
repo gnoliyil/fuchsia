@@ -744,13 +744,6 @@ zx_status_t Device::CloseOp(uint32_t flags) {
   return ops_->close(compat_symbol_.context, flags);
 }
 
-zx_off_t Device::GetSizeOp() {
-  if (!HasOp(ops_, &zx_protocol_device_t::get_size)) {
-    return 0;
-  }
-  return ops_->get_size(compat_symbol_.context);
-}
-
 fpromise::promise<void, zx_status_t> Device::WaitForInitToComplete() {
   std::scoped_lock lock(init_lock_);
   if (init_is_finished_) {

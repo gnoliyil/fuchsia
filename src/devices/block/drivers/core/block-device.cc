@@ -108,8 +108,6 @@ zx_status_t BlockDevice::DoIo(zx::vmo& vmo, size_t buf_len, zx_off_t off, zx_off
   return io_status_;
 }
 
-zx_off_t BlockDevice::DdkGetSize() { return device_get_size(parent()); }
-
 void BlockDevice::DdkRelease() { delete this; }
 
 void BlockDevice::BlockQuery(block_info_t* block_info, size_t* op_size) {

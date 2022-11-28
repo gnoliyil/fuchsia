@@ -110,13 +110,6 @@ static void bootpart_release(void* ctx) {
   free(device);
 }
 
-static zx_off_t bootpart_get_size(void* ctx) {
-  bootpart_device_t* dev = ctx;
-  // TODO: use query() results, *but* fvm returns different query and getsize
-  // results, and the latter are dynamic...
-  return device_get_size(dev->parent);
-}
-
 static block_impl_protocol_ops_t block_ops = {
     .query = bootpart_query,
     .queue = bootpart_queue,
@@ -178,7 +171,6 @@ static zx_status_t bootpart_get_protocol(void* ctx, uint32_t proto_id, void* out
 static zx_protocol_device_t device_proto = {
     .version = DEVICE_OPS_VERSION,
     .get_protocol = bootpart_get_protocol,
-    .get_size = bootpart_get_size,
     .init = bootpart_init,
     .unbind = bootpart_unbind,
     .release = bootpart_release,

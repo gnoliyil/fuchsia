@@ -702,11 +702,6 @@ uint32_t SkipBlockDevice::GetBlockCountLocked() const {
   return logical_block_count;
 }
 
-zx_off_t SkipBlockDevice::DdkGetSize() {
-  fbl::AutoLock al(&lock_);
-  return GetBlockSize() * GetBlockCountLocked();
-}
-
 static constexpr zx_driver_ops_t driver_ops = []() {
   zx_driver_ops_t ops = {};
   ops.version = DRIVER_OPS_VERSION;

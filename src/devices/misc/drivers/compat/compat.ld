@@ -16,7 +16,6 @@
     device_get_protocol;
     device_open_protocol_session_multibindable;
     device_close_protocol_session_multibindable;
-    device_get_size;
     get_root_resource;
     load_firmware_from_driver;
     load_firmware_async_from_driver;

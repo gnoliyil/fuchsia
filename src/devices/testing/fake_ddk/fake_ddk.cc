@@ -480,14 +480,6 @@ zx_status_t device_open_protocol_session_multibindable(const zx_device_t* dev, u
 }
 
 __EXPORT
-zx_off_t device_get_size(zx_device_t* device) {
-  if (!fake_ddk::Bind::Instance()) {
-    return 0;
-  }
-  return fake_ddk::Bind::Instance()->DeviceGetSize(device);
-}
-
-__EXPORT
 zx_status_t device_get_metadata(zx_device_t* device, uint32_t type, void* buf, size_t buflen,
                                 size_t* actual) {
   if (!fake_ddk::Bind::Instance()) {

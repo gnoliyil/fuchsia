@@ -25,8 +25,6 @@ zx_status_t PartitionDevice::AddDevice() {
   }
 }
 
-zx_off_t PartitionDevice::DdkGetSize() { return block_info_.block_count * block_info_.block_size; }
-
 zx_status_t PartitionDevice::DdkGetProtocol(uint32_t proto_id, void* out) {
   auto* proto = reinterpret_cast<ddk::AnyProtocol*>(out);
   switch (proto_id) {

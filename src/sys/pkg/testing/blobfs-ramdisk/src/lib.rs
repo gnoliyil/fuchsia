@@ -550,12 +550,12 @@ mod tests {
 
     #[fuchsia_async::run_singlethreaded(test)]
     async fn ramdisk_builder_sets_block_count() {
-        for block_count in &[1, 2, 3, 16] {
-            let ramdisk = Ramdisk::builder().block_count(*block_count).start().unwrap();
-
-            let (status, attr) = ramdisk.proxy.get_attr().await.unwrap();
-            zx::Status::ok(status).unwrap();
-            assert_eq!(attr.content_size, RAMDISK_BLOCK_SIZE * block_count);
+        for block_count in [1, 2, 3, 16] {
+            let ramdisk = Ramdisk::builder().block_count(block_count).start().unwrap();
+            let client_end = ramdisk.client.open().unwrap();
+            let proxy = client_end.into_proxy().unwrap();
+            let info = proxy.get_info().await.unwrap().unwrap();
+            assert_eq!(info.block_count, block_count);
         }
     }
 

@@ -23,7 +23,7 @@
 namespace gpt {
 
 class PartitionDevice;
-using DeviceType = ddk::Device<PartitionDevice, ddk::GetProtocolable, ddk_deprecated::GetSizable>;
+using DeviceType = ddk::Device<PartitionDevice, ddk::GetProtocolable>;
 
 class PartitionDevice : public DeviceType,
                         public ddk::BlockImplProtocol<PartitionDevice, ddk::base_protocol>,
@@ -47,7 +47,6 @@ class PartitionDevice : public DeviceType,
 
   // Device protocol.
   void DdkRelease();
-  zx_off_t DdkGetSize() const;
   zx_status_t DdkGetProtocol(uint32_t proto_id, void* out);
 
   // Partition protocol implementation.

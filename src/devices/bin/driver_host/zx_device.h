@@ -280,21 +280,6 @@ struct zx_device
     completion.Wait();
   }
 
-  zx_off_t GetSizeOp() {
-    libsync::Completion completion;
-    zx_off_t size;
-
-    async::PostTask(driver->dispatcher()->async_dispatcher(), [&]() {
-      TraceLabelBuffer trace_label;
-      TRACE_DURATION("driver_host:driver-hooks", get_trace_label("get_size", &trace_label));
-      size = Dispatch(ops_->get_size, 0lu);
-      completion.Signal();
-    });
-
-    completion.Wait();
-    return size;
-  }
-
   zx_status_t MessageOp(fidl_incoming_msg_t* msg, fidl_txn_t* txn) {
     libsync::Completion completion;
     zx_status_t status;

@@ -26,8 +26,6 @@ zx_status_t UmsBlockDevice::Add() {
 
 void UmsBlockDevice::DdkRelease() { [[maybe_unused]] bool released = Release(); }
 
-zx_off_t UmsBlockDevice::DdkGetSize() { return parameters_.block_size * parameters_.total_blocks; }
-
 void UmsBlockDevice::BlockImplQuery(block_info_t* info_out, size_t* block_op_size_out) {
   info_out->block_size = parameters_.block_size;
   info_out->block_count = parameters_.total_blocks;

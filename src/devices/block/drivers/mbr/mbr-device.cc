@@ -198,12 +198,6 @@ zx_status_t MbrDevice::BlockPartitionGetName(char* out_name, size_t capacity) {
 
 void MbrDevice::DdkRelease() { delete this; }
 
-zx_off_t MbrDevice::DdkGetSize() {
-  // TODO: use query() results, *but* fvm returns different query and getsize
-  // results, and the latter are dynamic...
-  return device_get_size(parent_);
-}
-
 zx_status_t MbrDevice::DdkGetProtocol(uint32_t proto_id, void* out) {
   auto* proto = static_cast<ddk::AnyProtocol*>(out);
   switch (proto_id) {

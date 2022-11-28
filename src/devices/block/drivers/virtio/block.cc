@@ -48,7 +48,7 @@ void BlockDevice::txn_complete(block_txn_t* txn, zx_status_t status) {
 void BlockDevice::BlockImplQuery(block_info_t* info, size_t* bopsz) {
   memset(info, 0, sizeof(*info));
   info->block_size = GetBlockSize();
-  info->block_count = DdkGetSize() / GetBlockSize();
+  info->block_count = GetBlockCount();
   info->max_transfer_size = (uint32_t)(kPageSize * (ring_size - 2));
 
   // Limit max transfer to our worst case scatter list size.
