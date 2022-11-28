@@ -37,6 +37,7 @@ core_realm_shards += [
   "//src/sys/pkg/bin/system-update-checker:system-update-checker-core-shard",
   "//src/sys/pkg/bin/system-updater:system-updater-core-shard",
   "//src/intl/tzdata_provider:core-shard",
+  "//src/testing/metrics-logger:metrics-logger-shard",
 
   # TODO(fxbug.dev/80375): only include in eng builds
   "//src/sys/test_manager:test_manager_core_shard",

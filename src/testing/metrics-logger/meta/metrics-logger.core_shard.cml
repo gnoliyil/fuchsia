@@ -1,0 +1,76 @@
+// Copyright 2022 The Fuchsia Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+// Add metrics-logger to core
+{
+    children: [
+        {
+            name: "metrics-logger",
+            url: "fuchsia-pkg://fuchsia.com/metrics-logger#meta/metrics-logger.cm",
+            environment: "#core-env",
+        },
+    ],
+    offer: [
+        {
+            directory: "dev-class",
+            from: "parent",
+            as: "dev-class-network",
+            to: [ "#metrics-logger" ],
+            subdir: "network",
+        },
+        {
+            directory: "dev-class",
+            from: "parent",
+            as: "dev-temperature",
+            to: "#metrics-logger",
+            subdir: "temperature",
+        },
+        {
+            directory: "dev-class",
+            from: "parent",
+            as: "dev-thermal",
+            to: "#metrics-logger",
+            subdir: "thermal",
+        },
+        {
+            directory: "dev-class",
+            from: "parent",
+            as: "dev-power-sensor",
+            to: "#metrics-logger",
+            subdir: "power-sensor",
+        },
+        {
+            directory: "dev-class",
+            from: "parent",
+            as: "dev-gpu",
+            to: [ "#metrics-logger" ],
+            subdir: "gpu",
+        },
+        {
+            directory: "config-data",
+            from: "parent",
+            to: "#metrics-logger",
+            subdir: "metrics-logger",
+        },
+        {
+            protocol: [
+                "fuchsia.boot.Items",
+                "fuchsia.kernel.Stats",
+                "fuchsia.logger.LogSink",
+            ],
+            from: "parent",
+            to: "#metrics-logger",
+        },
+        {
+            protocol: [ "fuchsia.tracing.provider.Registry" ],
+            from: "#trace_manager",
+            to: [ "#metrics-logger" ],
+
+            // Trace manager may be excluded from builds where tracing is not
+            // expected to be used for observability, such as in the bringup
+            // product and non-eng builds of any product.
+            source_availability: "unknown",
+        },
+    ],
+}

@@ -148,11 +148,6 @@
             url: "fuchsia-pkg://fuchsia.com/debug-serial#meta/debug-serial.cm",
         },
         {
-            name: "metrics-logger",
-            url: "fuchsia-pkg://fuchsia.com/metrics-logger#meta/metrics-logger.cm",
-            environment: "#core-env",
-        },
-        {
             name: "pkg-resolver",
             url: "fuchsia-pkg://fuchsia.com/pkg-resolver#meta/pkg-resolver.cm",
         },
@@ -296,10 +291,7 @@
             directory: "dev-class",
             from: "parent",
             as: "dev-class-network",
-            to: [
-                "#metrics-logger",
-                "#network",
-            ],
+            to: [ "#network" ],
             subdir: "network",
         },
         {
@@ -392,7 +384,6 @@
                 "#hwinfo",
                 "#log-stats",
                 "#mdns",
-                "#metrics-logger",
                 "#network",
                 "#overnetstack",
                 "#pkg-resolver",
@@ -583,27 +574,6 @@
             subdir: "class/sysmem",
         },
         {
-            directory: "dev-class",
-            from: "parent",
-            as: "dev-temperature",
-            to: "#metrics-logger",
-            subdir: "temperature",
-        },
-        {
-            directory: "dev-class",
-            from: "parent",
-            as: "dev-thermal",
-            to: "#metrics-logger",
-            subdir: "thermal",
-        },
-        {
-            directory: "dev-class",
-            from: "parent",
-            as: "dev-power-sensor",
-            to: "#metrics-logger",
-            subdir: "power-sensor",
-        },
-        {
             directory: "dev",
             from: "parent",
             as: "dev-thermal",
@@ -626,12 +596,6 @@
                 "#pkg-resolver",
                 "#timekeeper",
             ],
-        },
-        {
-            directory: "config-data",
-            from: "parent",
-            to: "#metrics-logger",
-            subdir: "metrics-logger",
         },
         {
             directory: "config-data",
@@ -662,14 +626,6 @@
             from: "parent",
             to: "#cobalt_system_metrics",
             subdir: "cobalt_system_metrics",
-        },
-        {
-            protocol: [
-                "fuchsia.boot.Items",
-                "fuchsia.kernel.Stats",
-            ],
-            from: "parent",
-            to: "#metrics-logger",
         },
         {
             directory: "data",
@@ -736,7 +692,6 @@
             from: "parent",
             as: "dev-gpu",
             to: [
-                "#metrics-logger",
                 "#starnix_manager",
                 "#vulkan_loader",
             ],
@@ -854,7 +809,6 @@
                 "#agis",
                 "#cobalt_system_metrics",
                 "#font_provider",
-                "#metrics-logger",
                 "#starnix_manager",
                 "#sysmem_connector",
             ],

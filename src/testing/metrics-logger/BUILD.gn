@@ -6,6 +6,7 @@ import("//build/components.gni")
 import("//build/config.gni")
 import("//build/json/validate_json.gni")
 import("//build/rust/rustc_binary.gni")
+import("//src/sys/core/build/core_shard.gni")
 
 template("metrics_logger_config") {
   config_data("${target_name}_config_data") {
@@ -86,6 +87,10 @@ rustc_binary("bin") {
     "src/network_activity_logger.rs",
     "src/sensor_logger.rs",
   ]
+}
+
+core_shard("metrics-logger-shard") {
+  shard_file = "meta/metrics-logger.core_shard.cml"
 }
 
 fuchsia_package_with_single_component("metrics-logger") {
