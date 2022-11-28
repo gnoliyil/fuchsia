@@ -2,8 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/fuzzing/fuzzer.gni")
-import("//build/fuzzing/fuzzer_package.gni")
+import("//build/fuzz.gni")
 import("//build/test.gni")
 import("BUILD.generated.gni")
 import("BUILD.generated_tests.gni")
@@ -274,7 +273,10 @@ if (!is_kernel) {
   # Upstream BoringSSL defines a `fuzzers` global variable in the generated
   # GNI files; we rename it to avoid colliding with the similarly-named parameter
   # on the fuzzer_package.
+  #
+  # TODO(fxbug.dev/105707): Remove once `fuzzers` parameter is removed.
   fuzzer_names = fuzzers
+  fuzzers = []
 
   # Explicitly remove the arm_cpuinfo fuzzer, which tests Linux-specific routines
   if (is_fuchsia) {
@@ -282,7 +284,7 @@ if (!is_kernel) {
   }
 
   foreach(name, fuzzer_names) {
-    fuzzer("${name}_fuzzer") {
+    cpp_fuzzer("${name}_fuzzer") {
       visibility = [ ":*" ]
       sources = [ "src/fuzz/${name}.cc" ]
       configs += [ ":fuzz_config" ]
@@ -293,10 +295,32 @@ if (!is_kernel) {
     }
   }
 
-  fuzzer_package("boringssl_fuzzers") {
-    cpp_fuzzers = []
+  if (is_fuchsia) {
     foreach(name, fuzzer_names) {
-      cpp_fuzzers += [ ":${name}_fuzzer" ]
+      fuchsia_fuzzer_component("${name}_fuzzer_component") {
+        manifest = "meta/${name}_fuzzer.cml"
+        deps = [ ":${name}_fuzzer" ]
+      }
+    }
+
+    fuchsia_fuzzer_package("boringssl-fuzzers") {
+      cpp_fuzzer_components = []
+      foreach(name, fuzzer_names) {
+        cpp_fuzzer_components += [ ":${name}_fuzzer_component" ]
+      }
+    }
+
+    group("boringssl_fuzzers") {
+      testonly = true
+      deps = [ ":boringssl-fuzzers" ]
+    }
+  } else {
+    group("boringssl_fuzzers") {
+      testonly = true
+      deps = []
+      foreach(fuzzer, fuzzer_names) {
+        deps += [ ":${name}_fuzzer" ]
+      }
     }
   }
 }
