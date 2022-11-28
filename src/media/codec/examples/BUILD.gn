@@ -213,18 +213,32 @@ fuchsia_unittest_component("use_h264_decoder_stream_switching_test_comp") {
 fuchsia_test_package("use_h264_decoder_stream_switching_tests") {
   test_components = [ ":use_h264_decoder_stream_switching_test_comp" ]
   test_specs = {
-    # Should pass when run on VIM2, sherlock, or QEMU.
-
-    # Disable on qemu because the test flakes so far. TODO(fxbug.dev/49932) Re-enable in emu_env.
     environments = [
-      atlas_env,
+      {
+        dimensions = {
+          device_type = "Atlas"
+        }
+        tags = [ "flaky" ]  # TODO(fxbug.dev/113158): Re-enable when test is no
+                            # longer flaky
+      },
       astro_env,
       nelson_env,
       sherlock_env,
       vim3_env,
-      nuc_env,
-
-      # emu_env,
+      {
+        dimensions = {
+          device_type = "Intel NUC Kit NUC7i5DNHE"
+        }
+        tags = [ "flaky" ]  # TODO(fxbug.dev/113158): Re-enable when test is no
+                            # longer flaky
+      },
+      {
+        dimensions = {
+          device_type = "QEMU"
+        }
+        tags = [ "flaky" ]  # TODO(fxbug.dev/49700): Re-enable when test is no
+                            # longer flaky
+      },
     ]
   }
 }
