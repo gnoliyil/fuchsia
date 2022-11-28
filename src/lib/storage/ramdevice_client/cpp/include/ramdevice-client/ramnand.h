@@ -18,8 +18,26 @@
 
 namespace ramdevice_client {
 
+// A client library for creating, configuring and manipulating ramnands.
+// ```
+// ASSERT_EQ(ZX_OK, wait_for_device("/dev/sys/platform/00:00:2e/nand-ctl", ZX_SEC(60)));
+// fuchsia_hardware_nand::wire::RamNandInfo ram_nand_config = {
+//   .nand_info = {
+//     .page_size = 4096,
+//     .pages_per_block = 32,
+//     .num_blocks = 64,
+//     .ecc_bits = 8,
+//     .oob_size = 16,
+//     .nand_class = fuchsia_hardware_nand::wire::Class::FTL,
+//   }
+// }
+// std::optional<ramdevice_client::RamNand> ram_nand;
+// ASSERT_EQ(ZX_OK,
+//           ramdevice_client::RamNand::Create(std::move(ram_nand_config), &ram_nand));
+// ```
 class RamNand {
  public:
+  // The default path to the system nand-ctl.
   static constexpr char kBasePath[] = "/dev/sys/platform/00:00:2e/nand-ctl";
 
   // Creates a ram_nand under ram_nand_ctl running under the main devmgr.
@@ -40,6 +58,9 @@ class RamNand {
   void NoUnbind() { unbind = false; }
 
   const fidl::ClientEnd<fuchsia_device::Controller>& controller() const { return controller_; }
+
+  // Return the path to the created ramnand device, or nullptr if this object did not create the
+  // device itself.
   const char* path() const {
     if (path_) {
       return path_->c_str();
@@ -47,6 +68,8 @@ class RamNand {
     return nullptr;
   }
 
+  // Return the path to the filename of ramnand device, or nullptr if this object did not create the
+  // device itself.
   const char* filename() {
     if (filename_) {
       return filename_->c_str();
@@ -54,6 +77,8 @@ class RamNand {
     return nullptr;
   }
 
+  // Create a ramnand client from an existing connection. This will not populate the path or
+  // filename for this object.
   explicit RamNand(fidl::ClientEnd<fuchsia_device::Controller> controller)
       : controller_(std::move(controller)), path_(std::nullopt), filename_(std::nullopt) {}
 

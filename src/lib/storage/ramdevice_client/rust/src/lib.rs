@@ -4,35 +4,19 @@
 
 //! A safe rust wrapper for creating and using ramdisks.
 //!
-//! Ramdisks are, by default, placed in `/dev`. If this ramdisk is being used in a sandbox, it has
-//! to have access to `/dev`. This can be done by adding the following to the relevant .cmx file -
+//! When creating a ramdisk always wait for the ramctl device to be ready to avoid racing with
+//! device start up. The ramctl device is normally located at "sys/platform/00:00:2d/ramctl".
+//! ```
+//! wait_for_device(
+//!     "/dev/sys/platform/00:00:2d/ramctl",
+//!     std::time::Duration::from_secs(60)
+//! ).expect("ramctl did not appear"));
 //!
 //! ```
-//! "sandbox": {
-//!     "dev": [ "sys/platform/00:00:2d/ramctl" ]
-//! }
+//! Then a ram device can be created and opened.
 //! ```
-//!
-//! Alternatively, an isolated instance of devmgr can be used to isolate the ramdisks from the
-//! system device manager. Tests can provide their own devmgr through
-//! [`RamdiskClientBuilder::dev_root`] or use the pre-defined ramdisk-only isolated devmgr through
-//! [`RamdiskClientBuilder::isolated_dev_root`] by depending on
-//! `//src/lib/storage/ramdevice_client:ramdisk-isolated-devmgr` and adding the following to the
-//! relevant test .cmx file -
-//!
-//! ```
-//! "facets": {
-//!     "fuchsia.test": {
-//!         "injected-services": {
-//!             "fuchsia.test.IsolatedDevmgr": "fuchsia-pkg://fuchsia.com/ramdevice-client-tests#meta/ramdisk-isolated-devmgr.cmx"
-//!         }
-//!     }
-//! },
-//! "sandbox": {
-//!     "services": [
-//!         "fuchsia.test.IsolatedDevmgr"
-//!     ]
-//! }
+//! let ramdisk = RamdiskClient::create(512, 2048).unwrap();
+//! let client_end = ramdisk.open().unwrap();
 //! ```
 
 #![deny(missing_docs)]

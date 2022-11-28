@@ -12,6 +12,19 @@
 
 __BEGIN_CDECLS
 
+// A client library for creating, configuring and manipulating ramdisks.
+//
+// When creating a ramdisk always wait for the ramctl device to be ready to avoid racing with
+// device start up. The ramctl device is normally located at "sys/platform/00:00:2d/ramctl".
+// ```
+// ASSERT_EQ(ZX_OK, wait_for_device("/dev/sys/platform/00:00:2d/ramctl", ZX_SEC(60)));
+// ```
+// Then a ram device can be created and opened.
+// ```
+// ramdisk_client_t* client;
+// ASSERT_EQ(ramdisk_create(512, 2048, &client), ZX_OK);
+// zx_handle_t block_client = ramdisk_get_block_interface(client);
+// ```
 struct ramdisk_client;
 typedef struct ramdisk_client ramdisk_client_t;
 
@@ -27,16 +40,14 @@ zx_status_t wait_for_device(const char* path, zx_duration_t timeout);
 // the device is not available after "timeout" has elapsed.
 zx_status_t wait_for_device_at(int dirfd, const char* path, zx_duration_t timeout);
 
-// Creates a ramdisk and returns the full path to the ramdisk's block interface in ramdisk_path_out.
-// This path should be at least PATH_MAX characters long.
+// Creates a ramdisk object and writes the pointer into `out`.
 zx_status_t ramdisk_create(uint64_t blk_size, uint64_t blk_count, ramdisk_client_t** out);
 // Same as above except that it opens the ramdisk relative to the passed in 'dev_root_fd'.
 // Ownership of 'dev_root_fd' is not transferred.
 zx_status_t ramdisk_create_at(int dev_root_fd, uint64_t blk_size, uint64_t blk_count,
                               ramdisk_client_t** out);
 
-// Creates a ramdisk and returns the full path to the ramdisk's block interface in ramdisk_path_out.
-// This path should be at least PATH_MAX characters long.
+// Creates a ramdisk and writes the pointer into `out`.
 zx_status_t ramdisk_create_with_guid(uint64_t blk_size, uint64_t blk_count,
                                      const uint8_t* type_guid, size_t guid_len,
                                      ramdisk_client_t** out);
@@ -46,7 +57,7 @@ zx_status_t ramdisk_create_at_with_guid(int dev_root_fd, uint64_t blk_size, uint
                                         const uint8_t* type_guid, size_t guid_len,
                                         ramdisk_client_t** out);
 
-// Same but uses an existing VMO as the ramdisk.
+// Same as above but uses an existing VMO as the ramdisk.
 // The handle is always consumed, and must be the only handle to this VMO.
 zx_status_t ramdisk_create_from_vmo(zx_handle_t vmo, ramdisk_client_t** out);
 // Same as above except that it opens the ramdisk relative to the passed in 'dev_root_fd'.
