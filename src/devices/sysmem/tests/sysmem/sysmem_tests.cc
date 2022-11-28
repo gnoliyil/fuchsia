@@ -4665,6 +4665,52 @@ TEST(Sysmem, GroupPrefersFirstChild) {
               wait_result3->status == ZX_ERR_NOT_SUPPORTED);
 }
 
+TEST(Sysmem, Group_CloseBeforeChildrenSetConstraints) {
+  const uint32_t kFirstChildSize = zx_system_get_page_size() * 16;
+  const uint32_t kSecondChildSize = zx_system_get_page_size() * 32;
+
+  auto root_token = create_initial_token();
+  fidl::WireSyncClient<fuchsia_sysmem::BufferCollectionToken> child_0_token;
+  fidl::WireSyncClient<fuchsia_sysmem::BufferCollectionToken> child_1_token;
+  {
+    auto group = create_group_under_token(root_token);
+    child_0_token = create_token_under_group(group);
+    child_1_token = create_token_under_group(group);
+
+    auto all_children_present_result = group->AllChildrenPresent();
+    ASSERT_TRUE(all_children_present_result.ok());
+
+    auto group_close_result = group->Close();
+    ASSERT_TRUE(group_close_result.ok());
+  }
+
+  auto root = convert_token_to_collection(std::move(root_token));
+  auto child_0 = convert_token_to_collection(std::move(child_0_token));
+  auto child_1 = convert_token_to_collection(std::move(child_1_token));
+  auto set_result =
+      root->SetConstraints(false, ::fuchsia_sysmem::wire::BufferCollectionConstraints{});
+  ASSERT_TRUE(set_result.ok());
+  set_picky_constraints(child_0, kFirstChildSize);
+  set_picky_constraints(child_1, kSecondChildSize);
+
+  auto wait_result1 = root->WaitForBuffersAllocated();
+  ASSERT_TRUE(wait_result1.ok() && wait_result1->status == ZX_OK);
+  ASSERT_OK(wait_result1->status);
+  auto info = std::move(wait_result1->buffer_collection_info);
+  ASSERT_EQ(info.settings.buffer_settings.size_bytes, kFirstChildSize);
+
+  auto wait_result2 = child_0->WaitForBuffersAllocated();
+  ASSERT_TRUE(wait_result2.ok() && wait_result2->status == ZX_OK);
+  ASSERT_OK(wait_result2->status);
+  info = std::move(wait_result2->buffer_collection_info);
+  ASSERT_EQ(info.settings.buffer_settings.size_bytes, kFirstChildSize);
+
+  auto wait_result3 = child_1->WaitForBuffersAllocated();
+  // Most clients calling this way won't get the epitaph; this test doesn't either.
+  ASSERT_TRUE(!wait_result3.ok() && wait_result3.error().status() == ZX_ERR_PEER_CLOSED ||
+              wait_result3->status == ZX_ERR_NOT_SUPPORTED);
+}
+
 TEST(Sysmem, GroupPriority) {
   constexpr uint32_t kIterations = 50;
   for (uint32_t i = 0; i < kIterations; ++i) {
