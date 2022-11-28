@@ -1,0 +1,42 @@
+// Copyright 2022 The Fuchsia Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+{
+    include: [
+        "sys/component/realm_builder.shard.cml",
+        "syslog/client.shard.cml",
+    ],
+    program: {
+        runner: "elf",
+        binary: "bin/ui_context_factory_bin",
+    },
+    capabilities: [
+        {
+            protocol: [ "fuchsia.ui.test.context.Factory" ],
+        },
+    ],
+    use: [
+        {
+            protocol: [ "fuchsia.logger.LogSink" ],
+        },
+    ],
+    offer: [
+        {
+            protocol: [
+                "fuchsia.logger.LogSink",
+                "fuchsia.scheduler.ProfileProvider",
+                "fuchsia.sysmem.Allocator",
+                "fuchsia.tracing.provider.Registry",
+                "fuchsia.vulkan.loader.Loader",
+            ],
+            from: "parent",
+            to: "#realm_builder",
+        },
+    ],
+    expose: [
+        {
+            protocol: [ "fuchsia.ui.test.context.Factory" ],
+            from: "self",
+        },
+    ],
+}

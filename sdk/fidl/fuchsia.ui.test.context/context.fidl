@@ -4,10 +4,10 @@
 
 library fuchsia.ui.test.context;
 
-using fuchsia.element;
 using fuchsia.ui.test.conformance;
 using fuchsia.ui.test.input;
 using fuchsia.ui.composition;
+using fuchsia.ui.views;
 
 /// Manages the required component topology on behalf of a UI conformance
 /// test, and controls access to puppet and UI capabilities.
@@ -20,6 +20,20 @@ using fuchsia.ui.composition;
 /// client closes the connection, the server will clean up all resources
 /// associated with the corresponding test.
 protocol Context {
+
+    /// Returns the view token the test should use to create its "root"
+    /// puppet, i.e. the puppet instance of which all others are
+    /// descendants.
+    ///
+    /// Test writers can assume that a puppet instance created with this
+    /// view token will eventually be connected to the scene graph, and
+    /// can safely block on fuchsia.ui.test.conformance.Puppet/Create
+    /// returning.
+    ///
+    /// Tests should call this method exactly once.
+    GetRootViewToken() -> (resource struct {
+        root_view_token fuchsia.ui.views.ViewCreationToken;
+    });
 
     /// Connects to an instance of the puppet under test.
     ///
@@ -55,12 +69,6 @@ protocol Context {
     /// Enables tests to interact with the graphics compositor.
     ConnectToFlatland(resource struct {
         server_end server_end:<fuchsia.ui.composition.Flatland>;
-    });
-
-    /// Enables tests to present a view to the display; note that most tests
-    /// will use a fake display, NOT the host's.
-    ConnectToGraphicalPresenter(resource struct {
-        server_end server_end:<fuchsia.element.GraphicalPresenter>;
     });
 
     /// Enables tests to simulate hardware input interactions, e.g. touch
