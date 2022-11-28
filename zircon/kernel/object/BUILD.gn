@@ -109,9 +109,6 @@ zx_library("object") {
     # <object/resource_dispatcher.h> has #include <region-alloc/region-alloc.h>.
     "//zircon/system/ulib/region-alloc:headers",
 
-    # <object/vcpu_dispatcher.h> has #include <hypervisor/interrupt_tracker.h>.
-    #"//zircon/kernel/hypervisor:headers",
-
     # <object/process_dispatcher.h> has #include <vm/vm_aspace.h>.
     "//zircon/kernel/vm:headers",
 
