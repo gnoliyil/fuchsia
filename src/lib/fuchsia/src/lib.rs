@@ -128,7 +128,7 @@ fn init_logging_with_threads(
         let mut exec = fuchsia_async::LocalExecutor::new().expect("Failed to create executor");
         let on_interest_changes =
             diagnostics_log::init_publishing(diagnostics_log::PublishOptions {
-                tags: Some(tags.as_slice()),
+                tags: tags.as_slice(),
                 interest,
                 ..Default::default()
             });

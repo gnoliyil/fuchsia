@@ -255,7 +255,11 @@ pub async fn serve_hermetic_resolver(
     let tags = ["test_resolver"];
     let (log_publisher, _interest_listener) = match flog::Publisher::new_with_proxy(
         log_proxy,
-        flog::PublishOptions { interest: flog::interest(tracing::Level::INFO), tags: Some(&tags) },
+        flog::PublishOptions {
+            interest: flog::interest(tracing::Level::INFO),
+            tags: &tags,
+            ..Default::default()
+        },
     ) {
         Ok((publisher, listener)) => (Arc::new(publisher) as Arc<LogSubscriber>, listener.boxed()),
         Err(e) => {

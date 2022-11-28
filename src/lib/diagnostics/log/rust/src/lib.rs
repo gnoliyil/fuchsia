@@ -9,7 +9,7 @@ use fidl_fuchsia_diagnostics_stream::Record;
 use fidl_fuchsia_logger::{LogSinkMarker, LogSinkProxy};
 use fuchsia_component::client::connect_to_protocol;
 use fuchsia_zircon::{self as zx};
-use std::{any::TypeId, fmt::Debug, future::Future};
+use std::{any::TypeId, collections::HashSet, fmt::Debug, future::Future};
 use thiserror::Error;
 use tracing::{
     span::{Attributes, Id, Record as TracingRecord},
@@ -26,6 +26,7 @@ use filter::InterestFilter;
 use sink::Sink;
 
 // Publicly export `Interest` and `Severity` since they are part of the `PublishOptions` API.
+pub use diagnostics_log_encoding::Metatag;
 pub use fidl_fuchsia_diagnostics::{Interest, Severity};
 
 /// Calls [init_publishing`] and spawns the interest listener future as a `fuchsia_async::Task`.
@@ -41,19 +42,34 @@ macro_rules! init {
         fuchsia_async::Task::spawn($crate::init_publishing(Default::default()).unwrap()).detach()
     };
     ($tags:expr) => {
-        if let Ok(result) = $crate::init_publishing($crate::PublishOptions {
-            tags: Some($tags),
-            ..Default::default()
-        }) {
+        if let Ok(result) =
+            $crate::init_publishing($crate::PublishOptions { tags: $tags, ..Default::default() })
+        {
             fuchsia_async::Task::spawn(result).detach()
         }
     };
     ($tags:expr, $interest:expr) => {
         if let Ok(result) = $crate::init_publishing($crate::PublishOptions {
-            tags: Some($tags),
+            tags: $tags,
             interest: $interest,
             ..Default::default()
         }) {
+            fuchsia_async::Task::spawn(result).detach()
+        }
+    };
+}
+
+/// Initializes logging and detaches the publisher task.
+///
+/// This macro creates and installs a global publisher. If successful, then the publisher task
+/// is detached and execution diverges. If an error occurs, the error is discarded and execution
+/// continues.
+///
+/// The `fuchsia_async` crate is required to use this macro.
+#[macro_export]
+macro_rules! init_and_detach_ok {
+    ($options:expr) => {
+        if let Ok(result) = $crate::init_publishing($options) {
             fuchsia_async::Task::spawn(result).detach()
         }
     };
@@ -66,18 +82,24 @@ pub trait OnInterestChanged {
 }
 
 /// Options to configure publishing.
-pub struct PublishOptions<'a> {
+pub struct PublishOptions<'t> {
     /// An interest filter to apply to messages published. Defaults to empty which implies `INFO`
     /// level filtering.
     pub interest: Interest,
-
-    /// The tag to use on all messages published. Defaults to `None` which implies component name.
-    pub tags: Option<&'a [&'a str]>,
+    /// Tags applied to all published events.
+    ///
+    /// When set to an empty slice (the default), events are tagged with the name of the
+    /// component in which they are recorded.
+    pub tags: &'t [&'t str],
+    /// Metatags applied to all published events.
+    ///
+    /// When set to an empty set (the default), no metatags are applied.
+    pub metatags: HashSet<Metatag>,
 }
 
-impl<'a> Default for PublishOptions<'a> {
+impl<'t> Default for PublishOptions<'t> {
     fn default() -> Self {
-        Self { interest: Interest::EMPTY, tags: None }
+        Self { interest: Interest::EMPTY, tags: &[], metatags: HashSet::new() }
     }
 }
 
@@ -138,11 +160,11 @@ impl Publisher {
         proxy: LogSinkProxy,
         options: PublishOptions<'_>,
     ) -> Result<(Self, impl Future<Output = ()>), PublishError> {
+        let PublishOptions { interest, tags, metatags } = options;
         let mut sink = Sink::new(&proxy)?;
-        if let Some(tags) = options.tags {
-            sink.set_tags(&tags);
-        }
-        let (filter, on_change) = InterestFilter::new(proxy, options.interest);
+        sink.tags = tags.iter().copied().map(str::to_string).collect();
+        sink.metatags = metatags;
+        let (filter, on_change) = InterestFilter::new(proxy, interest);
 
         Ok((Self { inner: Registry::default().with(sink).with(filter) }, on_change))
     }

@@ -4,12 +4,12 @@
 
 //! Encoding diagnostic records using the Fuchsia Tracing format.
 
-use crate::{ArgType, Header, SeverityExt, StringRef};
+use crate::{ArgType, Header, Metatag, SeverityExt, StringRef};
 use fidl_fuchsia_diagnostics::Severity;
 use fidl_fuchsia_diagnostics_stream::{Argument, Record, Value};
 use fuchsia_zircon as zx;
 use std::fmt::Debug;
-use std::{array::TryFromSliceError, io::Cursor};
+use std::{array::TryFromSliceError, collections::HashSet, io::Cursor};
 use thiserror::Error;
 use tracing::Event;
 use tracing_core::field::{Field, Visit};
@@ -20,7 +20,7 @@ pub struct TestRecordArgs<'a> {
     /// Severity of the log
     pub severity: Severity,
     /// Tags associated with the log record.
-    pub tags: Option<&'a [String]>,
+    pub tags: &'a [String],
     /// Process that emitted the log.
     pub pid: zx::Koid,
     /// Thread that emitted the log.
@@ -61,17 +61,21 @@ where
     pub fn write_event(
         &mut self,
         event: &Event<'_>,
-        tags: Option<&[String]>,
+        tags: &[impl AsRef<str>],
+        metatags: &HashSet<Metatag>,
         pid: zx::Koid,
         tid: zx::Koid,
         dropped: u32,
     ) -> Result<(), EncodingError> {
-        let mut builder =
-            RecordBuilder::from_tracing_event(event, pid.raw_koid(), tid.raw_koid(), dropped);
-        if let Some(tags) = tags {
-            for tag in tags {
-                builder.add_tag(tag.as_ref());
-            }
+        let mut builder = RecordBuilder::from_tracing_event(
+            event,
+            metatags,
+            pid.raw_koid(),
+            tid.raw_koid(),
+            dropped,
+        );
+        for tag in tags {
+            builder.add_tag(tag.as_ref());
         }
         self.write_record(&builder.inner)
     }
@@ -87,10 +91,8 @@ where
             Some(args.line),
             args.dropped,
         );
-        if let Some(tags) = args.tags {
-            for tag in tags {
-                builder.add_tag(tag.as_ref());
-            }
+        for tag in args.tags {
+            builder.add_tag(tag);
         }
         builder.inner.arguments.extend(args.record_arguments.into_iter());
         self.write_record(&builder.inner)
@@ -242,11 +244,17 @@ impl RecordBuilder {
         }
     }
 
-    fn add_tag(&mut self, tag: &str) {
-        self.inner.arguments.push(arg!("tag", Text(tag.to_string())));
+    fn add_tag(&mut self, tag: impl Into<String>) {
+        self.inner.arguments.push(arg!("tag", Text(tag.into())));
     }
 
-    fn from_tracing_event(event: &Event<'_>, pid: u64, tid: u64, dropped: u32) -> Self {
+    fn from_tracing_event(
+        event: &Event<'_>,
+        metatags: &HashSet<Metatag>,
+        pid: u64,
+        tid: u64,
+        dropped: u32,
+    ) -> Self {
         // normalizing is needed to get log records to show up in trace metadata correctly
         let metadata = event.normalized_metadata();
         let metadata = if let Some(ref m) = metadata { m } else { event.metadata() };
@@ -254,6 +262,13 @@ impl RecordBuilder {
         // TODO(fxbug.dev/56090) do this without allocating all the intermediate values
         let mut builder =
             Self::new(metadata.severity(), pid, tid, metadata.file(), metadata.line(), dropped);
+        for metatag in metatags.iter() {
+            match metatag {
+                Metatag::Target => {
+                    builder.add_tag(metadata.target());
+                }
+            }
+        }
         event.record(&mut builder);
         builder
     }
@@ -607,8 +622,13 @@ mod tests {
         struct RecordBuilderLayer;
         impl<S: Subscriber> Layer<S> for RecordBuilderLayer {
             fn on_event(&self, event: &Event<'_>, _cx: Context<'_, S>) {
-                *LAST_RECORD.lock().unwrap() =
-                    Some(RecordBuilder::from_tracing_event(event, 0, 0, 0));
+                *LAST_RECORD.lock().unwrap() = Some(RecordBuilder::from_tracing_event(
+                    event,
+                    &[Metatag::Target].into_iter().collect(),
+                    0,
+                    0,
+                    0,
+                ));
             }
         }
         static LAST_RECORD: Lazy<Mutex<Option<RecordBuilder>>> = Lazy::new(|| Mutex::new(None));
@@ -633,6 +653,12 @@ mod tests {
                 arguments: vec![
                     Argument { name: "pid".into(), value: Value::UnsignedInt(0) },
                     Argument { name: "tid".into(), value: Value::UnsignedInt(0) },
+                    Argument {
+                        name: "tag".into(),
+                        value: Value::Text(
+                            "diagnostics_log_encoding_lib_test::encode::tests".into()
+                        ),
+                    },
                     Argument {
                         name: "message".into(),
                         value: Value::Text("blarg this is a message".into())

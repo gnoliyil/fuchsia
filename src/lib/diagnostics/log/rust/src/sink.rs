@@ -2,13 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 
 use crate::PublishError;
-use diagnostics_log_encoding::encode::{BufMutShared, Encoder, EncodingError, TestRecordArgs};
+use diagnostics_log_encoding::{
+    encode::{BufMutShared, Encoder, EncodingError, TestRecordArgs},
+    Metatag,
+};
 use fidl_fuchsia_diagnostics_stream::Record;
 use fidl_fuchsia_logger::{LogSinkProxy, MAX_DATAGRAM_LEN_BYTES};
 use fuchsia_runtime as rt;
 use fuchsia_zircon::{self as zx, AsHandleRef};
 use once_cell::sync::Lazy;
 use std::{
+    collections::HashSet,
     io::Cursor,
     sync::atomic::{AtomicU32, Ordering},
 };
@@ -26,7 +30,8 @@ thread_local! {
 
 pub(crate) struct Sink {
     socket: zx::Socket,
-    tags: Option<Vec<String>>,
+    pub tags: Vec<String>,
+    pub metatags: HashSet<Metatag>,
     num_events_dropped: AtomicU32,
 }
 
@@ -36,11 +41,12 @@ impl Sink {
             zx::Socket::create(zx::SocketOpts::DATAGRAM).map_err(PublishError::MakeSocket)?;
         log_sink.connect_structured(remote_socket).map_err(PublishError::SendSocket)?;
 
-        Ok(Self { socket, tags: None, num_events_dropped: AtomicU32::new(0) })
-    }
-
-    pub fn set_tags(&mut self, tags: &[&str]) {
-        self.tags = Some(tags.iter().map(|s| s.to_string()).collect());
+        Ok(Self {
+            socket,
+            tags: Vec::new(),
+            metatags: HashSet::new(),
+            num_events_dropped: AtomicU32::new(0),
+        })
     }
 }
 
@@ -78,7 +84,7 @@ impl Sink {
             encoder.write_record_for_test(TestRecordArgs {
                 severity: record.severity,
                 record_arguments: record.arguments,
-                tags: self.tags.as_ref().map(|t| t.as_ref()),
+                tags: &self.tags,
                 pid: *PROCESS_ID,
                 tid: THREAD_ID.with(|t| *t),
                 file,
@@ -94,7 +100,8 @@ impl<S: Subscriber> Layer<S> for Sink {
         self.encode_and_send(|encoder, previously_dropped| {
             encoder.write_event(
                 event,
-                self.tags.as_ref().map(|t| t.as_ref()),
+                &self.tags,
+                &self.metatags,
                 *PROCESS_ID,
                 THREAD_ID.with(|t| *t),
                 previously_dropped,
@@ -114,12 +121,13 @@ mod tests {
     use tracing::{debug, error, info, trace, warn};
     use tracing_subscriber::{layer::SubscriberExt, Registry};
 
-    async fn init_sink(tags: Option<&[&str]>) -> fidl::Socket {
+    const TARGET: &str = "diagnostics_log_lib_test::sink::tests";
+
+    async fn init_sink(tags: &[&str], metatags: &[Metatag]) -> fidl::Socket {
         let (proxy, mut requests) = create_proxy_and_stream::<LogSinkMarker>().unwrap();
         let mut sink = Sink::new(&proxy).unwrap();
-        if let Some(tags) = tags {
-            sink.set_tags(tags);
-        }
+        sink.tags = tags.iter().copied().map(str::to_string).collect();
+        sink.metatags = metatags.iter().copied().collect();
         tracing::subscriber::set_global_default(Registry::default().with(sink)).unwrap();
 
         match requests.next().await.unwrap().unwrap() {
@@ -140,7 +148,7 @@ mod tests {
 
     #[fuchsia_async::run_singlethreaded(test)]
     async fn packets_are_sent() {
-        let socket = init_sink(None /* tag */).await;
+        let socket = init_sink(&[], &[Metatag::Target]).await;
         let mut buf = [0u8; MAX_DATAGRAM_LEN_BYTES as _];
         let mut next_message = || {
             let len = socket.read(&mut buf).unwrap();
@@ -160,6 +168,7 @@ mod tests {
         let observed_warn = next_message();
         error!(e = "something went pretty wrong", "this is an error");
         let error_line = line!() - 1;
+        let metatag = Argument { name: "tag".into(), value: Value::Text(TARGET.into()) };
         let observed_error = next_message();
 
         // TRACE
@@ -169,6 +178,7 @@ mod tests {
                 severity: Severity::Trace,
                 arguments: arg_prefix(),
             };
+            expected_trace.arguments.push(metatag.clone());
             expected_trace.arguments.push(Argument {
                 name: "message".into(),
                 value: Value::Text("whoa this is noisy".into()),
@@ -186,6 +196,7 @@ mod tests {
                 severity: Severity::Debug,
                 arguments: arg_prefix(),
             };
+            expected_debug.arguments.push(metatag.clone());
             expected_debug.arguments.push(Argument {
                 name: "message".into(),
                 value: Value::Text("don't try this at home".into()),
@@ -203,6 +214,7 @@ mod tests {
                 severity: Severity::Info,
                 arguments: arg_prefix(),
             };
+            expected_info.arguments.push(metatag.clone());
             expected_info.arguments.push(Argument {
                 name: "message".into(),
                 value: Value::Text("this is a message".into()),
@@ -217,6 +229,7 @@ mod tests {
                 severity: Severity::Warn,
                 arguments: arg_prefix(),
             };
+            expected_warn.arguments.push(metatag.clone());
             expected_warn.arguments.push(Argument {
                 name: "message".into(),
                 value: Value::Text("this is a warning".into()),
@@ -240,6 +253,7 @@ mod tests {
             expected_error
                 .arguments
                 .push(Argument { name: "line".into(), value: Value::UnsignedInt(error_line as _) });
+            expected_error.arguments.push(metatag);
             expected_error.arguments.push(Argument {
                 name: "message".into(),
                 value: Value::Text("this is an error".into()),
@@ -254,7 +268,7 @@ mod tests {
 
     #[fuchsia_async::run_singlethreaded(test)]
     async fn tags_are_sent() {
-        let socket = init_sink(Some(&["tags_are_sent"])).await;
+        let socket = init_sink(&["tags_are_sent"], &[]).await;
         let mut buf = [0u8; MAX_DATAGRAM_LEN_BYTES as _];
         let mut next_message = || {
             let len = socket.read(&mut buf).unwrap();
@@ -283,7 +297,7 @@ mod tests {
 
     #[fuchsia_async::run_singlethreaded(test)]
     async fn drop_count_is_tracked() {
-        let socket = init_sink(None /* tag */).await;
+        let socket = init_sink(&[], &[]).await;
         let mut buf = [0u8; MAX_DATAGRAM_LEN_BYTES as _];
         const MESSAGE_SIZE: usize = 104;
         const MESSAGE_SIZE_WITH_DROPS: usize = 136;

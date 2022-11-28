@@ -59,6 +59,19 @@ impl Header {
     }
 }
 
+/// Tag derived from metadata.
+///
+/// Unlike tags, metatags are not represented as strings and instead must be resolved from event
+/// metadata. This means that they may resolve to different text for different events.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum Metatag {
+    /// The location of a span or event.
+    ///
+    /// The target is typically a module path, but this can be configured by a particular span or
+    /// event when it is constructed.
+    Target,
+}
+
 /// These literal values are specified by the tracing format:
 ///
 /// https://fuchsia.dev/fuchsia-src/development/tracing/trace-format#argument_header
