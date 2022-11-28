@@ -5,7 +5,6 @@
 #include "block.h"
 
 #include <lib/fake-bti/bti.h>
-#include <lib/fake_ddk/fake_ddk.h>
 #include <lib/sync/completion.h>
 #include <lib/virtio/backends/fake.h>
 
@@ -13,6 +12,8 @@
 #include <memory>
 
 #include <zxtest/zxtest.h>
+
+#include "src/devices/testing/mock-ddk/mock-device.h"
 
 namespace {
 
@@ -171,12 +172,12 @@ TEST(BlockTest, InitSuccess) {
   zx::bti bti(ZX_HANDLE_INVALID);
   ASSERT_OK(fake_bti_create(bti.reset_and_get_address()));
   std::unique_ptr<virtio::Backend> backend = std::make_unique<FakeBackendForBlock>(bti.get());
-  fake_ddk::Bind ddk;
-  virtio::BlockDevice block(fake_ddk::FakeParent(), std::move(bti), std::move(backend));
+
+  std::shared_ptr<MockDevice> fake_parent = MockDevice::FakeRootParent();
+  virtio::BlockDevice block(fake_parent.get(), std::move(bti), std::move(backend));
   ASSERT_EQ(block.Init(), ZX_OK);
   block.DdkAsyncRemove();
-  EXPECT_TRUE(ddk.Ok());
-  block.DdkRelease();
+  mock_ddk::ReleaseFlaggedDevices(fake_parent.get());
 }
 
 // Provides control primitives for tests that issue IO requests to the device.
@@ -189,17 +190,17 @@ class BlockDeviceTest : public zxtest::Test {
     ASSERT_OK(fake_bti_create(bti.reset_and_get_address()));
     auto backend = std::make_unique<FakeBackendForBlock>(bti.get());
     backend->set_status(status);
-    ddk_ = std::make_unique<fake_ddk::Bind>();
-    device_ = std::make_unique<virtio::BlockDevice>(fake_ddk::FakeParent(), std::move(bti),
-                                                    std::move(backend));
+
+    fake_root_ = MockDevice::FakeRootParent();
+    device_ =
+        std::make_unique<virtio::BlockDevice>(fake_root_.get(), std::move(bti), std::move(backend));
     ASSERT_EQ(device_->Init(), ZX_OK);
     device_->BlockImplQuery(&info_, &operation_size_);
   }
 
   void RemoveDevice() {
     device_->DdkAsyncRemove();
-    EXPECT_TRUE(ddk_->Ok());
-    device_->DdkRelease();
+    mock_ddk::ReleaseFlaggedDevices(fake_root_.get());
   }
 
   static void CompletionCb(void* cookie, zx_status_t status, block_op_t* op) {
@@ -223,7 +224,7 @@ class BlockDeviceTest : public zxtest::Test {
 
  private:
   sync_completion_t event_;
-  std::unique_ptr<fake_ddk::Bind> ddk_;
+  std::shared_ptr<MockDevice> fake_root_;
   zx_status_t operation_status_;
 };
 

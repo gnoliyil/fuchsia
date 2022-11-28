@@ -109,9 +109,7 @@ test("virtio-block-test-bin") {
     ":block_lib",
     "//src/devices/bus/lib/virtio",
     "//src/devices/testing/fake-bti",
-
-    # TODO(fxb/115053): Migrate from fake_ddk to mock-ddk.
-    "//src/devices/testing/fake_ddk",
+    "//src/devices/testing/mock-ddk",
     "//zircon/system/ulib/async-loop:async-loop-cpp",
     "//zircon/system/ulib/async-loop:async-loop-default",
     "//zircon/system/ulib/fidl-async:fidl-async-cpp",
@@ -132,9 +130,7 @@ test("virtio-scsi-test-bin") {
     ":scsi_lib",
     "//src/devices/bus/lib/virtio",
     "//src/devices/testing/fake-bti",
-
-    # TODO(fxb/115053): Migrate from fake_ddk to mock-ddk.
-    "//src/devices/testing/fake_ddk",
+    "//src/devices/testing/mock-ddk",
     "//zircon/system/ulib/async-loop:async-loop-cpp",
     "//zircon/system/ulib/async-loop:async-loop-default",
     "//zircon/system/ulib/fidl-async:fidl-async-cpp",
@@ -154,8 +150,18 @@ group("tests") {
 
 fuchsia_unittest_package("virtio-block-test") {
   deps = [ ":virtio-block-test-bin" ]
+  test_specs = {
+    log_settings = {
+      max_severity = "ERROR"
+    }
+  }
 }
 
 fuchsia_unittest_package("virtio-scsi-test") {
   deps = [ ":virtio-scsi-test-bin" ]
+  test_specs = {
+    log_settings = {
+      max_severity = "ERROR"
+    }
+  }
 }

@@ -4,7 +4,6 @@
 
 #include "scsi.h"
 
-#include <lib/fake_ddk/fake_ddk.h>
 #include <lib/virtio/backends/fake.h>
 
 #include <memory>
