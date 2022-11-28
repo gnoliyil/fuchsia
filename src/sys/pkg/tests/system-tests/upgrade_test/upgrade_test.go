@@ -124,6 +124,28 @@ func doTest(ctx context.Context, deviceClient *device.Client) error {
 		}
 	}
 
+	chainedBuilds, err := c.chainedBuildConfig.GetBuilds(ctx, deviceClient)
+	if err != nil {
+		return fmt.Errorf("failed to get chained builds: %w", err)
+	}
+	logger.Infof(ctx, "Chained build %s", fmt.Sprint(chainedBuilds))
+
+	for i, build := range chainedBuilds {
+		build, err = c.installerConfig.ConfigureBuild(ctx, deviceClient, build)
+		if err != nil {
+			return fmt.Errorf("failed to configure build for device: %w", err)
+		}
+
+		if build == nil {
+			return fmt.Errorf("installer did not configure a build")
+		}
+		chainedBuilds[i] = build
+	}
+
+	if downgradeBuild == nil && len(chainedBuilds) > 0 {
+		downgradeBuild = chainedBuilds[0]
+	}
+
 	ch := make(chan *sl4f.Client, 1)
 	if err := util.RunWithTimeout(ctx, c.paveTimeout, func() error {
 		rpcClient, err := initializeDevice(ctx, deviceClient, downgradeBuild)
@@ -142,27 +164,33 @@ func doTest(ctx context.Context, deviceClient *device.Client) error {
 		}
 	}()
 
-	if upgradeBuild == nil {
-		logger.Infof(ctx, "upgrade build does not exist")
-		return nil
+	if upgradeBuild != nil {
+		return testOTAs(ctx, deviceClient, []artifacts.Build{upgradeBuild}, &rpcClient)
 	}
 
-	return testOTAs(ctx, deviceClient, upgradeBuild, &rpcClient)
+	return testOTAs(ctx, deviceClient, chainedBuilds[1:], &rpcClient)
 }
 
 func testOTAs(
 	ctx context.Context,
 	device *device.Client,
-	build artifacts.Build,
+	builds []artifacts.Build,
 	rpcClient **sl4f.Client,
 ) error {
 	for i := uint(1); i <= c.cycleCount; i++ {
 		logger.Infof(ctx, "OTA Attempt %d", i)
 
-		if err := util.RunWithTimeout(ctx, c.cycleTimeout, func() error {
-			return doTestOTAs(ctx, device, build, rpcClient)
-		}); err != nil {
-			return fmt.Errorf("OTA Attempt %d failed: %w", i, err)
+		for index, build := range builds {
+			checkPrime := false
+			if index == len(builds)-1 {
+				checkPrime = true
+			}
+
+			if err := util.RunWithTimeout(ctx, c.cycleTimeout, func() error {
+				return doTestOTAs(ctx, device, build, rpcClient, checkPrime)
+			}); err != nil {
+				return fmt.Errorf("OTA Attempt %d failed: %w", i, err)
+			}
 		}
 	}
 
@@ -174,6 +202,7 @@ func doTestOTAs(
 	device *device.Client,
 	build artifacts.Build,
 	rpcClient **sl4f.Client,
+	checkPrime bool,
 ) error {
 	logger.Infof(ctx, "Starting OTA test cycle. Time out in %s", c.cycleTimeout)
 
@@ -272,6 +301,16 @@ func doTestOTAs(
 				return fmt.Errorf("unable to connect to sl4f while retrying OTA: %w", err)
 			}
 		}
+	}
+
+	if !checkPrime {
+		return nil
+	}
+
+	expectedSystemImageMerkle, err = repo.LookupUpdatePrimeSystemImageMerkle(ctx)
+	if err != nil {
+		logger.Infof(ctx, "No prime package info")
+		return nil
 	}
 
 	logger.Infof(ctx, "starting OTA N -> N' test")

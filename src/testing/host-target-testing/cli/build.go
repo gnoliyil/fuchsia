@@ -127,3 +127,58 @@ func (c *BuildConfig) GetBuild(ctx context.Context, deviceClient *device.Client,
 
 	return build, nil
 }
+
+type RepeatableBuildConfig struct {
+	archiveConfig *ArchiveConfig
+	deviceConfig  *DeviceConfig
+	builds        []ProductBundleBuild
+}
+
+func NewRepeatableBuildConfig(
+	fs *flag.FlagSet,
+	archiveConfig *ArchiveConfig,
+	deviceConfig *DeviceConfig,
+) *RepeatableBuildConfig {
+	c := &RepeatableBuildConfig{
+		archiveConfig: archiveConfig,
+		deviceConfig:  deviceConfig,
+	}
+
+	fs.Var(
+		c,
+		"product-bundle-dir",
+		"Update to the latest version of this builder",
+	)
+
+	return c
+}
+
+func (c *RepeatableBuildConfig) GetBuilds(ctx context.Context, deviceClient *device.Client) ([]artifacts.Build, error) {
+	sshPrivateKey, err := c.deviceConfig.SSHPrivateKey()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ssh key: %w", err)
+	}
+
+	var builds []artifacts.Build
+	for _, build := range c.builds {
+		builds = append(builds, artifacts.NewProductBundleDirBuild(build.path, sshPrivateKey.PublicKey()))
+	}
+
+	return builds, nil
+}
+
+type ProductBundleBuild struct {
+	path string
+}
+
+func (c *RepeatableBuildConfig) String() string {
+	return fmt.Sprint(c.builds)
+}
+
+func (c *RepeatableBuildConfig) Set(s string) error {
+	if s == "" {
+		return fmt.Errorf("Product bundle path cannot be empty")
+	}
+	c.builds = append(c.builds, ProductBundleBuild{path: s})
+	return nil
+}
