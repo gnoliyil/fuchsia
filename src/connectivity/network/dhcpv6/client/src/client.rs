@@ -20,9 +20,9 @@ use fidl::endpoints::ServerEnd;
 use fidl_fuchsia_net as fnet;
 use fidl_fuchsia_net_dhcpv6::{
     AddressConfig, ClientConfig, ClientMarker, ClientRequest, ClientRequestStream,
-    ClientWatchAddressResponder, ClientWatchPrefixesResponder, ClientWatchServersResponder,
-    InformationConfig, NewClientParams, RELAY_AGENT_AND_SERVER_LINK_LOCAL_MULTICAST_ADDRESS,
-    RELAY_AGENT_AND_SERVER_PORT,
+    ClientWatchAddressResponder, ClientWatchPrefixesResponder, ClientWatchServersResponder, Empty,
+    InformationConfig, NewClientParams, PrefixDelegationConfig,
+    RELAY_AGENT_AND_SERVER_LINK_LOCAL_MULTICAST_ADDRESS, RELAY_AGENT_AND_SERVER_PORT,
 };
 use fidl_fuchsia_net_ext as fnet_ext;
 use fidl_fuchsia_net_name as fnet_name;
@@ -38,7 +38,10 @@ use futures::{
 use anyhow::{Context as _, Result};
 use async_utils::futures::{FutureExt as _, ReplaceValue};
 use dns_server_watcher::DEFAULT_DNS_PORT;
-use net_types::{ip::Ipv6Addr, MulticastAddress as _};
+use net_types::{
+    ip::{Ip as _, Ipv6, Ipv6Addr, Subnet, SubnetError},
+    MulticastAddress as _,
+};
 use packet::ParsablePacket;
 use packet_formats_dhcp::v6;
 use rand::{rngs::StdRng, SeedableRng};
@@ -157,6 +160,11 @@ fn to_configured_addresses(
         .collect())
 }
 
+// The client only supports a single IA_PD.
+//
+// TODO(https://fxbug.dev/114132): Support multiple IA_PDs.
+const IA_PD_IAID: v6::IAID = v6::IAID::new(0);
+
 /// Creates a state machine for the input client config.
 fn create_state_machine(
     transaction_id: [u8; 3],
@@ -166,39 +174,67 @@ fn create_state_machine(
     ClientError,
 > {
     let ClientConfig {
-        non_temporary_address_config,
         information_config,
+        non_temporary_address_config,
         prefix_delegation_config,
         ..
     } = config;
-    // TODO(https://fxbug.dev/80595): Support PD.
-    if let Some(prefix_delegation_config) = prefix_delegation_config {
-        error!(
-            "ignoring prefix delegation configuration {:?} as it's unsupported",
-            prefix_delegation_config
-        );
-    }
-    match non_temporary_address_config {
-        Some(non_temporary_address_config) => {
-            let configured_non_temporary_addresses =
-                to_configured_addresses(non_temporary_address_config)?;
+    let information_config = information_config.map(to_dhcpv6_option_codes);
+    let configured_non_temporary_addresses =
+        non_temporary_address_config.map(to_configured_addresses).transpose()?;
+    let configured_delegated_prefixes = prefix_delegation_config
+        .map(|prefix_delegation_config| {
+            let prefix = match prefix_delegation_config {
+                PrefixDelegationConfig::Empty(Empty {}) => Ok(None),
+                PrefixDelegationConfig::PrefixLength(prefix_len) => {
+                    if prefix_len == 0 {
+                        // Should have used `PrefixDelegationConfig::Empty`.
+                        return Err(ClientError::UnsupportedConfigs);
+                    }
+
+                    Subnet::new(Ipv6::UNSPECIFIED_ADDRESS, prefix_len).map(Some)
+                }
+                PrefixDelegationConfig::Prefix(fnet::Ipv6AddressWithPrefix {
+                    addr: fnet::Ipv6Address { addr, .. },
+                    prefix_len,
+                }) => {
+                    let addr = Ipv6Addr::from_bytes(addr);
+                    if addr == Ipv6::UNSPECIFIED_ADDRESS {
+                        // Should have used `PrefixDelegationConfig::PrefixLength`.
+                        return Err(ClientError::UnsupportedConfigs);
+                    }
+
+                    Subnet::new(addr, prefix_len).map(Some)
+                }
+            };
+
+            match prefix {
+                Ok(o) => Ok(HashMap::from([(IA_PD_IAID, HashSet::from_iter(o.into_iter()))])),
+                Err(SubnetError::PrefixTooLong | SubnetError::HostBitsSet) => {
+                    Err(ClientError::UnsupportedConfigs)
+                }
+            }
+        })
+        .transpose()?;
+
+    match (information_config, configured_non_temporary_addresses, configured_delegated_prefixes) {
+        (None, None, None) => Err(ClientError::UnsupportedConfigs),
+        (Some(information_config), None, None) => {
+            Ok(dhcpv6_core::client::ClientStateMachine::start_stateless(
+                transaction_id,
+                information_config,
+                StdRng::from_entropy(),
+            ))
+        }
+        (information_config, configured_non_temporary_addresses, configured_delegated_prefixes) => {
             Ok(dhcpv6_core::client::ClientStateMachine::start_stateful(
                 transaction_id,
                 v6::duid_uuid(),
-                configured_non_temporary_addresses,
-                // TODO(https://fxbug.dev/80595): Plumb prefixes from FIDL.
-                Default::default(), /* configured_delegated_prefixes */
-                information_config.map_or_else(Vec::new, to_dhcpv6_option_codes),
+                configured_non_temporary_addresses.unwrap_or_else(Default::default),
+                configured_delegated_prefixes.unwrap_or_else(Default::default),
+                information_config.unwrap_or_else(Default::default),
                 StdRng::from_entropy(),
                 Instant::now(),
-            ))
-        }
-        None => {
-            let information_config = information_config.ok_or(ClientError::UnsupportedConfigs)?;
-            Ok(dhcpv6_core::client::ClientStateMachine::start_stateless(
-                transaction_id,
-                to_dhcpv6_option_codes(information_config),
-                StdRng::from_entropy(),
             ))
         }
     }
@@ -590,8 +626,10 @@ mod tests {
 
     use assert_matches::assert_matches;
     use net_declare::{
-        fidl_ip_v6, fidl_socket_addr, fidl_socket_addr_v6, net_ip_v6, std_socket_addr,
+        fidl_ip_v6, fidl_ip_v6_with_prefix, fidl_socket_addr, fidl_socket_addr_v6, net_ip_v6,
+        std_socket_addr,
     };
+    use net_types::ip::IpAddress as _;
     use packet::serialize::InnerPacketBuilder;
     use test_case::test_case;
 
@@ -622,51 +660,52 @@ mod tests {
 
     #[test]
     fn test_create_client_with_unsupported_config() {
-        for unsupported_config in vec![
-            // No address config and no information config.
-            ClientConfig::EMPTY,
-            // Empty address config and no information config.
-            ClientConfig {
-                non_temporary_address_config: None,
-                information_config: None,
-                ..ClientConfig::EMPTY
-            },
-            // Address config requesting no addresses, and no information
-            // config.
-            ClientConfig {
-                non_temporary_address_config: Some(AddressConfig {
-                    address_count: None,
-                    ..AddressConfig::EMPTY
-                }),
-                information_config: None,
-                ..ClientConfig::EMPTY
-            },
-            // Address config requesting zero addresses, and no information
-            // config.
-            ClientConfig {
-                non_temporary_address_config: Some(AddressConfig {
-                    address_count: Some(0),
-                    ..AddressConfig::EMPTY
-                }),
-                information_config: None,
-                ..ClientConfig::EMPTY
-            },
-            // Address config with more preferred addresses than
-            // `address_count`.
-            ClientConfig {
-                non_temporary_address_config: Some(AddressConfig {
-                    address_count: Some(1),
-                    preferred_addresses: Some(vec![fidl_ip_v6!("ff01::1"), fidl_ip_v6!("ff01::1")]),
-                    ..AddressConfig::EMPTY
-                }),
-                information_config: None,
-                ..ClientConfig::EMPTY
-            },
-        ] {
-            assert_matches!(
-                create_state_machine([1, 2, 3], unsupported_config),
-                Err(ClientError::UnsupportedConfigs)
-            );
+        let information_configs = [None];
+
+        let non_temporary_address_configs = [
+            None,
+            // No addresses but provided an address config.
+            Some(AddressConfig { address_count: None, ..AddressConfig::EMPTY }),
+            // No addresses but provided an address config.
+            Some(AddressConfig { address_count: Some(0), ..AddressConfig::EMPTY }),
+            // preferred addresses > address count.
+            Some(AddressConfig {
+                address_count: Some(1),
+                preferred_addresses: Some(vec![fidl_ip_v6!("ff01::1"), fidl_ip_v6!("ff01::1")]),
+                ..AddressConfig::EMPTY
+            }),
+        ];
+        let prefix_delegation_configs = [
+            None,
+            // Prefix length config without a non-zero length.
+            Some(PrefixDelegationConfig::PrefixLength(0)),
+            // Prefix length too long.
+            Some(PrefixDelegationConfig::PrefixLength(Ipv6Addr::BYTES * 8 + 1)),
+            // Network-bits unset.
+            Some(PrefixDelegationConfig::Prefix(fidl_ip_v6_with_prefix!("::/64"))),
+            // Host-bits set.
+            Some(PrefixDelegationConfig::Prefix(fidl_ip_v6_with_prefix!("a::1/64"))),
+        ];
+
+        for information_config in information_configs.iter() {
+            for non_temporary_address_config in non_temporary_address_configs.iter() {
+                for prefix_delegation_config in prefix_delegation_configs.iter() {
+                    assert_matches!(
+                        create_state_machine(
+                            [1, 2, 3],
+                            ClientConfig {
+                                information_config: information_config.clone(),
+                                non_temporary_address_config: non_temporary_address_config.clone(),
+                                prefix_delegation_config: prefix_delegation_config.clone(),
+                                ..ClientConfig::EMPTY
+                            }
+                        ),
+                        Err(ClientError::UnsupportedConfigs),
+                        "information_config={:?}, non_temporary_address_config={:?}, prefix_delegation_config={:?}",
+                        information_config, non_temporary_address_config, prefix_delegation_config
+                    );
+                }
+            }
         }
     }
 
@@ -762,116 +801,137 @@ mod tests {
             .contains("got watch request while the previous one is pending"));
     }
 
+    const VALID_INFORMATION_CONFIGS: [Option<InformationConfig>; 1] =
+        [Some(InformationConfig { ..InformationConfig::EMPTY })];
+    const VALID_DELEGATED_PREFIX_CONFIGS: [Option<PrefixDelegationConfig>; 4] = [
+        Some(PrefixDelegationConfig::Empty(Empty {})),
+        Some(PrefixDelegationConfig::PrefixLength(1)),
+        Some(PrefixDelegationConfig::PrefixLength(127)),
+        Some(PrefixDelegationConfig::Prefix(fidl_ip_v6_with_prefix!("a::/64"))),
+    ];
+
+    // Can't be a const variable because we allocate a vector.
+    fn get_valid_non_temporary_address_configs() -> [Option<AddressConfig>; 4] {
+        [
+            Some(AddressConfig {
+                address_count: Some(1),
+                preferred_addresses: None,
+                ..AddressConfig::EMPTY
+            }),
+            Some(AddressConfig {
+                address_count: Some(1),
+                preferred_addresses: Some(Vec::new()),
+                ..AddressConfig::EMPTY
+            }),
+            Some(AddressConfig {
+                address_count: Some(1),
+                preferred_addresses: Some(vec![fidl_ip_v6!("a::1")]),
+                ..AddressConfig::EMPTY
+            }),
+            Some(AddressConfig {
+                address_count: Some(2),
+                preferred_addresses: Some(vec![fidl_ip_v6!("a::2")]),
+                ..AddressConfig::EMPTY
+            }),
+        ]
+    }
+
     #[test]
     fn test_client_starts_with_valid_args() {
-        for valid_config in vec![
-            // Information config is set.
-            ClientConfig {
-                information_config: Some(InformationConfig { ..InformationConfig::EMPTY }),
-                ..ClientConfig::EMPTY
-            },
-            // Address config is set.
-            ClientConfig {
-                non_temporary_address_config: Some(AddressConfig {
-                    address_count: Some(1),
-                    preferred_addresses: None,
-                    ..AddressConfig::EMPTY
-                }),
-                ..ClientConfig::EMPTY
-            },
-            // Both address config and information config are set.
-            ClientConfig {
-                non_temporary_address_config: Some(AddressConfig {
-                    address_count: Some(1),
-                    preferred_addresses: None,
-                    ..AddressConfig::EMPTY
-                }),
-                information_config: Some(InformationConfig { ..InformationConfig::EMPTY }),
-                ..ClientConfig::EMPTY
-            },
-        ] {
-            let mut exec = fasync::TestExecutor::new().expect("failed to create test executor");
+        for information_config in VALID_INFORMATION_CONFIGS.iter() {
+            for non_temporary_address_config in get_valid_non_temporary_address_configs().iter() {
+                for prefix_delegation_config in VALID_DELEGATED_PREFIX_CONFIGS.iter() {
+                    let mut exec =
+                        fasync::TestExecutor::new().expect("failed to create test executor");
 
-            let (client_proxy, server_end) =
-                create_proxy::<ClientMarker>().expect("failed to create test client proxy");
+                    let (client_proxy, server_end) =
+                        create_proxy::<ClientMarker>().expect("failed to create test client proxy");
 
-            let test_fut = async {
-                join!(
-                    client_proxy.watch_servers(),
-                    serve_client(
-                        NewClientParams {
-                            interface_id: Some(1),
-                            address: Some(fidl_socket_addr_v6!("[::1]:546")),
-                            config: Some(valid_config),
-                            ..NewClientParams::EMPTY
-                        },
-                        server_end
-                    )
-                )
-            };
-            futures::pin_mut!(test_fut);
-            assert_matches!(exec.run_until_stalled(&mut test_fut), Poll::Pending);
+                    let test_fut = async {
+                        join!(
+                            client_proxy.watch_servers(),
+                            serve_client(
+                                NewClientParams {
+                                    interface_id: Some(1),
+                                    address: Some(fidl_socket_addr_v6!("[::1]:546")),
+                                    config: Some(ClientConfig {
+                                        information_config: information_config.clone(),
+                                        non_temporary_address_config: non_temporary_address_config
+                                            .clone(),
+                                        prefix_delegation_config: prefix_delegation_config.clone(),
+                                        ..ClientConfig::EMPTY
+                                    }),
+                                    ..NewClientParams::EMPTY
+                                },
+                                server_end
+                            )
+                        )
+                    };
+                    futures::pin_mut!(test_fut);
+                    assert_matches!(
+                        exec.run_until_stalled(&mut test_fut),
+                        Poll::Pending,
+                        "information_config={:?}, non_temporary_address_config={:?}, prefix_delegation_config={:?}",
+                        information_config, non_temporary_address_config, prefix_delegation_config
+                    );
+                }
+            }
         }
     }
 
     #[fasync::run_singlethreaded(test)]
     async fn test_client_starts_in_correct_mode() {
-        for (config, want_msg_type) in vec![
-            // When only the information config is set, the client should start
-            // in stateless mode, by sending out an information request.
-            (
-                ClientConfig {
-                    information_config: Some(InformationConfig { ..InformationConfig::EMPTY }),
-                    ..ClientConfig::EMPTY
-                },
-                v6::MessageType::InformationRequest,
-            ),
-            // When only the address config is set, the client should start in
-            // stateful mode, by sending out a solicit.
-            (
-                ClientConfig {
-                    non_temporary_address_config: Some(AddressConfig {
-                        address_count: Some(1),
-                        preferred_addresses: None,
-                        ..AddressConfig::EMPTY
-                    }),
-                    ..ClientConfig::EMPTY
-                },
-                v6::MessageType::Solicit,
-            ),
-            // When both the address config and information config are set, the
-            // client should start in stateful mode, by sending out a solicit.
-            (
-                ClientConfig {
-                    non_temporary_address_config: Some(AddressConfig {
-                        address_count: Some(1),
-                        preferred_addresses: None,
-                        ..AddressConfig::EMPTY
-                    }),
-                    information_config: Some(InformationConfig { ..InformationConfig::EMPTY }),
-                    ..ClientConfig::EMPTY
-                },
-                v6::MessageType::Solicit,
-            ),
-        ] {
-            let (_, client_stream): (ClientEnd<ClientMarker>, _) =
-                create_request_stream::<ClientMarker>()
-                    .expect("failed to create test fidl channel");
+        for information_config in [None].into_iter().chain(VALID_INFORMATION_CONFIGS) {
+            for non_temporary_address_config in
+                [None].into_iter().chain(get_valid_non_temporary_address_configs())
+            {
+                for prefix_delegation_config in
+                    [None].into_iter().chain(VALID_DELEGATED_PREFIX_CONFIGS)
+                {
+                    let want_msg_type = if non_temporary_address_config.is_none()
+                        && prefix_delegation_config.is_none()
+                    {
+                        if information_config.is_none() {
+                            continue;
+                        } else {
+                            v6::MessageType::InformationRequest
+                        }
+                    } else {
+                        v6::MessageType::Solicit
+                    };
 
-            let (client_socket, client_addr) = create_test_socket();
-            let (server_socket, server_addr) = create_test_socket();
-            let _: Client<fasync::net::UdpSocket> = Client::start(
-                [1, 2, 3], /* transaction ID */
-                config,
-                1, /* interface ID */
-                client_socket,
-                server_addr,
-                client_stream,
-            )
-            .await
-            .expect("failed to create test client");
+                    let (_, client_stream): (ClientEnd<ClientMarker>, _) =
+                        create_request_stream::<ClientMarker>()
+                            .expect("failed to create test fidl channel");
 
-            assert_received_message(&server_socket, client_addr, want_msg_type).await;
+                    let (client_socket, client_addr) = create_test_socket();
+                    let (server_socket, server_addr) = create_test_socket();
+                    println!(
+                        "{:?} {:?} {:?}",
+                        information_config, non_temporary_address_config, prefix_delegation_config
+                    );
+                    let _: Client<fasync::net::UdpSocket> = Client::start(
+                        [1, 2, 3], /* transaction ID */
+                        ClientConfig {
+                            information_config: information_config.clone(),
+                            non_temporary_address_config: non_temporary_address_config.clone(),
+                            prefix_delegation_config: prefix_delegation_config.clone(),
+                            ..ClientConfig::EMPTY
+                        },
+                        1, /* interface ID */
+                        client_socket,
+                        server_addr,
+                        client_stream,
+                    )
+                    .await
+                        .unwrap_or_else(|e| panic!(
+                            "failed to create test client: {}; information_config={:?}, non_temporary_address_config={:?}, prefix_delegation_config={:?}",
+                            e, information_config, non_temporary_address_config, prefix_delegation_config
+                        ));
+
+                    assert_received_message(&server_socket, client_addr, want_msg_type).await;
+                }
+            }
         }
     }
 

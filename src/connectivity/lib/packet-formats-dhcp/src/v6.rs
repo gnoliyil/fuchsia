@@ -886,7 +886,7 @@ pub struct IAID(u32);
 
 impl IAID {
     /// Constructs an `IAID`.
-    pub fn new(iaid: u32) -> Self {
+    pub const fn new(iaid: u32) -> Self {
         Self(iaid)
     }
 
