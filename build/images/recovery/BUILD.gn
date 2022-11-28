@@ -277,17 +277,26 @@ if (is_fuchsia) {
       image_metadata_overrides = {
         zbi = {
           name = "zircon-r"
+          if (zircon_r_partition != "") {
+            fastboot_flash = [ zircon_r_partition ]
+          }
         }
 
         if (sign_zbi) {
           zbi_signed = {
             name = "zircon-r.signed"
+            if (zircon_r_partition != "") {
+              fastboot_flash = [ zircon_r_partition ]
+            }
           }
         }
 
         if (use_vbmeta) {
           vbmeta = {
             name = "zircon-r"
+            if (vbmeta_r_partition != "") {
+              fastboot_flash = [ vbmeta_r_partition ]
+            }
           }
         }
       }
