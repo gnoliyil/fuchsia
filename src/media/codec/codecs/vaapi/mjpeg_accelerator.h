@@ -57,7 +57,7 @@ class MJPEGAccelerator : public media::MJPEGDecoder::MJPEGAccelerator {
   // decoded |JpegQuantizationTable|.
   static void PopulateIQMatrix(
       const media::JpegQuantizationTable q_table[media::kJpegMaxQuantizationTableNum],
-      VAIQMatrixBufferJPEGBaseline matrix_buffer);
+      VAIQMatrixBufferJPEGBaseline& matrix_buffer);
 
   // Populates the |VAHuffmanTableBufferJPEGBaseline| struct with the given Huffman tables from the
   // decoded |JpegHuffmanTable|. If the Huffman tables were not specified by the decoded JPEG

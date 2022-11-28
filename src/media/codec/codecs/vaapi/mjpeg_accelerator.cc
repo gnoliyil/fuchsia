@@ -148,7 +148,7 @@ void MJPEGAccelerator::PopulatePictureParameterBuffer(
 
 void MJPEGAccelerator::PopulateIQMatrix(
     const media::JpegQuantizationTable q_table[media::kJpegMaxQuantizationTableNum],
-    VAIQMatrixBufferJPEGBaseline matrix_buffer) {
+    VAIQMatrixBufferJPEGBaseline& matrix_buffer) {
   static_assert(media::kJpegMaxQuantizationTableNum ==
                     std::extent<decltype(matrix_buffer.load_quantiser_table)>(),
                 "max number of quantization table mismatched");
