@@ -235,7 +235,15 @@ pub enum ClientTimerType {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Action {
     SendMessage(Vec<u8>),
+    /// Schedules a timer.
+    ///
+    /// If the timer is already scheduled to fire at some time, this action
+    /// will result in the timer being rescheduled to the new time.
     ScheduleTimer(ClientTimerType, Duration),
+    /// Cancels a timer.
+    ///
+    /// If the timer is not scheduled, this action should effectively be a
+    /// no-op.
     CancelTimer(ClientTimerType),
     UpdateDnsServers(Vec<Ipv6Addr>),
     /// The updates for IA_NA bindings.

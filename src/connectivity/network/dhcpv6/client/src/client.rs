@@ -4,14 +4,10 @@
 
 //! Implements a DHCPv6 client.
 use std::{
-    collections::{
-        hash_map::{DefaultHasher, Entry},
-        HashMap, HashSet,
-    },
-    convert::TryFrom,
+    collections::{hash_map::DefaultHasher, HashMap, HashSet},
     hash::{Hash, Hasher},
     net::{IpAddr, SocketAddr},
-    num::{NonZeroU8, TryFromIntError},
+    num::NonZeroU8,
     str::FromStr as _,
     time::{Duration, Instant},
 };
@@ -51,10 +47,6 @@ use dhcpv6_core;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ClientError {
-    #[error("no timer scheduled for {:?}", _0)]
-    MissingTimer(dhcpv6_core::client::ClientTimerType),
-    #[error("a timer is already scheduled for {:?}", _0)]
-    TimerAlreadyExist(dhcpv6_core::client::ClientTimerType),
     #[error("fidl error")]
     Fidl(#[source] fidl::Error),
     #[error("got watch request while the previous one is pending")]
@@ -298,10 +290,10 @@ impl<S: for<'a> AsyncSocket<'a>> Client<S> {
                         };
                     }
                     dhcpv6_core::client::Action::ScheduleTimer(timer_type, timeout) => {
-                        let () = client.schedule_timer(timer_type, timeout)?;
+                        client.schedule_timer(timer_type, timeout)
                     }
                     dhcpv6_core::client::Action::CancelTimer(timer_type) => {
-                        let () = client.cancel_timer(timer_type)?;
+                        client.cancel_timer(timer_type)
                     }
                     dhcpv6_core::client::Action::UpdateDnsServers(servers) => {
                         let () = client.maybe_send_dns_server_updates(servers)?;
@@ -379,45 +371,35 @@ impl<S: for<'a> AsyncSocket<'a>> Client<S> {
     }
 
     /// Schedules a timer for `timer_type` to fire after `timeout`.
+    ///
+    /// If a timer for `timer_type` is already scheduled, the timer is
+    /// updated to fire at the new time.
     fn schedule_timer(
         &mut self,
         timer_type: dhcpv6_core::client::ClientTimerType,
         timeout: Duration,
-    ) -> Result<(), ClientError> {
-        match self.timer_abort_handles.entry(timer_type) {
-            Entry::Vacant(entry) => {
-                let (handle, reg) = AbortHandle::new_pair();
-                let _: &mut AbortHandle = entry.insert(handle);
-                let () = self.timer_futs.push(Abortable::new(
-                    fasync::Timer::new(fasync::Time::after(
-                        i64::try_from(timeout.as_nanos())
-                            .map(zx::Duration::from_nanos)
-                            .unwrap_or_else(|_: TryFromIntError| {
-                                let duration = zx::Duration::from_nanos(i64::MAX);
-                                let () = warn!(
-                                    "time duration {:?} overflows zx::Duration, truncating to {:?}",
-                                    timeout, duration
-                                );
-                                duration
-                            }),
-                    ))
-                    .replace_value(timer_type),
-                    reg,
-                ));
-                Ok(())
-            }
-            Entry::Occupied(_) => Err(ClientError::TimerAlreadyExist(timer_type)),
+    ) {
+        let (handle, reg) = AbortHandle::new_pair();
+        match self.timer_abort_handles.insert(timer_type, handle) {
+            // Abort the previous handle.
+            Some(handle) => handle.abort(),
+            None => {}
         }
+
+        self.timer_futs.push(Abortable::new(
+            fasync::Timer::new(fasync::Time::after(timeout.into())).replace_value(timer_type),
+            reg,
+        ))
     }
 
     /// Cancels a previously scheduled timer for `timer_type`.
-    fn cancel_timer(
-        &mut self,
-        timer_type: dhcpv6_core::client::ClientTimerType,
-    ) -> Result<(), ClientError> {
-        match self.timer_abort_handles.entry(timer_type) {
-            Entry::Vacant(_) => Err(ClientError::MissingTimer(timer_type)),
-            Entry::Occupied(entry) => Ok(entry.remove().abort()),
+    ///
+    /// If a timer was not previously scheduled for `timer_type`, this
+    /// call is effectively a no-op.
+    fn cancel_timer(&mut self, timer_type: dhcpv6_core::client::ClientTimerType) {
+        match self.timer_abort_handles.remove(&timer_type) {
+            Some(handle) => handle.abort(),
+            None => {}
         }
     }
 
@@ -426,7 +408,9 @@ impl<S: for<'a> AsyncSocket<'a>> Client<S> {
         &mut self,
         timer_type: dhcpv6_core::client::ClientTimerType,
     ) -> Result<(), ClientError> {
-        let () = self.cancel_timer(timer_type)?; // This timer just fired.
+        // This timer just fired.
+        self.cancel_timer(timer_type);
+
         let actions = self.state_machine.handle_timeout(timer_type, Instant::now());
         self.run_actions(actions).await
     }
@@ -1309,23 +1293,18 @@ mod tests {
             vec![&dhcpv6_core::client::ClientTimerType::Retransmission]
         );
 
-        let () = client
-            .cancel_timer(dhcpv6_core::client::ClientTimerType::Retransmission)
-            .expect("canceling retransmission timer on test client");
+        let () = client.cancel_timer(dhcpv6_core::client::ClientTimerType::Retransmission);
         assert_eq!(
             client.timer_abort_handles.keys().collect::<Vec<_>>(),
             Vec::<&dhcpv6_core::client::ClientTimerType>::new()
         );
 
         let () = client
-            .schedule_timer(dhcpv6_core::client::ClientTimerType::Refresh, Duration::from_nanos(1))
-            .expect("scheduling refresh timer on test client");
-        let () = client
-            .schedule_timer(
-                dhcpv6_core::client::ClientTimerType::Retransmission,
-                Duration::from_nanos(2),
-            )
-            .expect("scheduling retransmission timer on test client");
+            .schedule_timer(dhcpv6_core::client::ClientTimerType::Refresh, Duration::from_nanos(1));
+        let () = client.schedule_timer(
+            dhcpv6_core::client::ClientTimerType::Retransmission,
+            Duration::from_nanos(2),
+        );
         assert_eq!(
             client.timer_abort_handles.keys().collect::<HashSet<_>>(),
             vec![
@@ -1336,39 +1315,24 @@ mod tests {
             .collect()
         );
 
-        assert_matches!(
-            client.schedule_timer(
-                dhcpv6_core::client::ClientTimerType::Refresh,
-                Duration::from_nanos(1)
-            ),
-            Err(ClientError::TimerAlreadyExist(dhcpv6_core::client::ClientTimerType::Refresh))
-        );
-        assert_matches!(
-            client.schedule_timer(
-                dhcpv6_core::client::ClientTimerType::Retransmission,
-                Duration::from_nanos(2)
-            ),
-            Err(ClientError::TimerAlreadyExist(
-                dhcpv6_core::client::ClientTimerType::Retransmission
-            ))
+        // We are allowed to reschedule a timer to fire at a new time.
+        client
+            .schedule_timer(dhcpv6_core::client::ClientTimerType::Refresh, Duration::from_nanos(1));
+        client.schedule_timer(
+            dhcpv6_core::client::ClientTimerType::Retransmission,
+            Duration::from_nanos(2),
         );
 
-        let () = client
-            .cancel_timer(dhcpv6_core::client::ClientTimerType::Refresh)
-            .expect("canceling retransmission timer on test client");
+        let () = client.cancel_timer(dhcpv6_core::client::ClientTimerType::Refresh);
         assert_eq!(
             client.timer_abort_handles.keys().collect::<Vec<_>>(),
             vec![&dhcpv6_core::client::ClientTimerType::Retransmission]
         );
 
-        assert_matches!(
-            client.cancel_timer(dhcpv6_core::client::ClientTimerType::Refresh),
-            Err(ClientError::MissingTimer(dhcpv6_core::client::ClientTimerType::Refresh))
-        );
+        // Ok to cancel a timer that is not scheduled.
+        client.cancel_timer(dhcpv6_core::client::ClientTimerType::Refresh);
 
-        let () = client
-            .cancel_timer(dhcpv6_core::client::ClientTimerType::Retransmission)
-            .expect("canceling retransmission timer on test client");
+        let () = client.cancel_timer(dhcpv6_core::client::ClientTimerType::Retransmission);
         assert_eq!(
             client
                 .timer_abort_handles
@@ -1377,10 +1341,8 @@ mod tests {
             Vec::<&dhcpv6_core::client::ClientTimerType>::new()
         );
 
-        assert_matches!(
-            client.cancel_timer(dhcpv6_core::client::ClientTimerType::Retransmission),
-            Err(ClientError::MissingTimer(dhcpv6_core::client::ClientTimerType::Retransmission))
-        );
+        // Ok to cancel a timer that is not scheduled.
+        client.cancel_timer(dhcpv6_core::client::ClientTimerType::Retransmission);
     }
 
     #[fasync::run_singlethreaded(test)]
@@ -1460,14 +1422,11 @@ mod tests {
         assert_matches!(client.handle_next_event(&mut buf).await, Ok(Some(())));
 
         // Reschedule a shorter timer for Refresh so we don't spend time waiting in test.
-        client
-            .cancel_timer(dhcpv6_core::client::ClientTimerType::Refresh)
-            .expect("failed to cancel timer on test client");
+        client.cancel_timer(dhcpv6_core::client::ClientTimerType::Refresh);
         // Discard cancelled refresh timer.
         assert_matches!(client.handle_next_event(&mut buf).await, Ok(Some(())));
         client
-            .schedule_timer(dhcpv6_core::client::ClientTimerType::Refresh, Duration::from_nanos(1))
-            .expect("failed to schedule timer on test client");
+            .schedule_timer(dhcpv6_core::client::ClientTimerType::Refresh, Duration::from_nanos(1));
 
         // Trigger a refresh.
         assert_matches!(client.handle_next_event(&mut buf).await, Ok(Some(())));
@@ -1580,17 +1539,13 @@ mod tests {
         let mut buf = vec![0u8; MAX_UDP_DATAGRAM_SIZE];
         // A retransmission timer is scheduled when starting the client in stateless mode. Cancel
         // it and create a new one with a longer timeout so the test is not flaky.
-        let () = client
-            .cancel_timer(dhcpv6_core::client::ClientTimerType::Retransmission)
-            .expect("failed to cancel timer on test client");
+        let () = client.cancel_timer(dhcpv6_core::client::ClientTimerType::Retransmission);
         // Discard cancelled retransmission timer.
         assert_matches!(client.handle_next_event(&mut buf).await, Ok(Some(())));
-        let () = client
-            .schedule_timer(
-                dhcpv6_core::client::ClientTimerType::Retransmission,
-                Duration::from_secs(1_000_000),
-            )
-            .expect("failed to schedule timer on test client");
+        let () = client.schedule_timer(
+            dhcpv6_core::client::ClientTimerType::Retransmission,
+            Duration::from_secs(1_000_000),
+        );
         assert_eq!(
             client.timer_abort_handles.keys().collect::<Vec<_>>(),
             vec![&dhcpv6_core::client::ClientTimerType::Retransmission]
@@ -1612,8 +1567,7 @@ mod tests {
 
         // Inserts a refresh timer that precedes the retransmission.
         let () = client
-            .schedule_timer(dhcpv6_core::client::ClientTimerType::Refresh, Duration::from_nanos(1))
-            .expect("scheduling refresh timer on test client");
+            .schedule_timer(dhcpv6_core::client::ClientTimerType::Refresh, Duration::from_nanos(1));
         // This timer is scheduled.
         assert_eq!(
             client.timer_abort_handles.keys().collect::<HashSet<_>>(),
