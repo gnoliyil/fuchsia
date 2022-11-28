@@ -524,6 +524,13 @@ If you see the following field in the output, your Linux machine
   Virtualization:        VT-x
 ```
 
+For AMD-based machines, you may see something like:
+
+```none {:.devsite-disable-click-to-copy}
+Virtualization features:
+  Virtualization:        AMD-V
+```
+
 Note: If your Linux machine supports KVM hardware virtualization, see
 [Set up KVM virtualization on a Linux machine](#set-up-kvm-virtualization-on-a-linux-machine)
 to verify that KVM is configured correctly.

@@ -53,7 +53,7 @@ In VS Code, do the following:
 
 1. Open the `src/hello_world/hello_world.cc` file.
 
-1. To set a breakpoint at the `main()` method, click the space left to
+1. To set a breakpoint at the `main()` method, click the space to the left of
    the line number.
 
    <img class="vscode-image vscode-image-center"
@@ -66,7 +66,7 @@ In VS Code, do the following:
    **Fuchsia getting started** launch configuration.
 
 1. At the top of the **Run and Debug** panel, click
-   the **Play** icon to launch the debugger.
+   the **Play** icon to launch the debugger - it's to the left of the dropdown menu.
 
    This builds and runs the `hello_world` component, which causes
    the debugger to pause at the line where the breakpoint is set
