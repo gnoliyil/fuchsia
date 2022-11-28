@@ -191,12 +191,12 @@ __BEGIN_CDECLS
 #define PDEV_VID_NXP                0x09
 #define PDEV_PID_IMX8MMEVK          0x02
 
-#define PDEV_DID_IMX_GPIO           0x01
 #define PDEV_DID_IMX_DISPLAY        0x02
 #define PDEV_DID_IMX_SDHCI          0x03
 #define PDEV_DID_IMX_I2C            0x04
 #define PDEV_DID_PCF8563_RTC        0x05
 #define PDEV_DID_SR1XX              0x06
+#define PDEV_DID_IMX_GPIO           0x07
 
 // REALTEK
 #define PDEV_VID_REALTEK            0x0B
