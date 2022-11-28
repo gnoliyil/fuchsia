@@ -50,6 +50,7 @@
 		fdio_handle_fd;
 		fdio_ns_bind;
 		fdio_ns_bind_fd;
+		fdio_ns_bind_local;
 		fdio_ns_chdir;
 		fdio_ns_connect;
 		fdio_ns_create;

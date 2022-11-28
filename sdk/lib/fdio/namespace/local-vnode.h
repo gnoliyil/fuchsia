@@ -6,6 +6,7 @@
 #define LIB_FDIO_NAMESPACE_LOCAL_VNODE_H_
 
 #include <fidl/fuchsia.io/cpp/wire.h>
+#include <lib/fdio/namespace.h>
 #include <lib/fit/function.h>
 #include <lib/zx/channel.h>
 #include <lib/zx/result.h>
@@ -22,6 +23,8 @@
 #include <fbl/ref_ptr.h>
 #include <fbl/string.h>
 #include <fbl/string_buffer.h>
+
+#include "sdk/lib/fdio/internal.h"
 
 namespace fdio_internal {
 
@@ -43,9 +46,16 @@ class LocalVnode : public fbl::RefCounted<LocalVnode> {
                                                     fidl::ClientEnd<fuchsia_io::Directory> remote,
                                                     fbl::String name);
 
+  // Initializes a new vnode with a Local node_type, and attaches a reference to it
+  // inside an (optional) parent.
+  static zx::result<fbl::RefPtr<LocalVnode>> Create(fbl::RefPtr<LocalVnode> parent,
+                                                    fdio_open_local_func_t on_open, void* context,
+                                                    fbl::String name);
+
   // Initializes a new vnode with a Intermediate node_type, and attaches a reference to it
   // inside an (optional) parent.
-  static fbl::RefPtr<LocalVnode> Create(fbl::RefPtr<LocalVnode> parent, fbl::String name);
+  static zx::result<fbl::RefPtr<LocalVnode>> Create(fbl::RefPtr<LocalVnode> parent,
+                                                    fbl::String name);
 
   // Recursively unlinks this Vnode's children, and detaches this node from
   // its parent.
@@ -130,6 +140,16 @@ class LocalVnode : public fbl::RefCounted<LocalVnode> {
     EntryByIdMap entries_by_id_;
   };
 
+  class Local {
+   public:
+    Local(fdio_open_local_func_t on_open, void* context) : on_open_(on_open), context_(context) {}
+    zx::result<fdio_ptr> Open();
+
+   private:
+    const fdio_open_local_func_t on_open_;
+    void* context_;
+  };
+
   class Remote {
    public:
     explicit Remote(zxio_storage_t remote_storage) : remote_storage_(remote_storage) {}
@@ -139,7 +159,7 @@ class LocalVnode : public fbl::RefCounted<LocalVnode> {
     const zxio_storage_t remote_storage_;
   };
 
-  std::variant<Intermediate, Remote>& NodeType() { return node_type_; }
+  std::variant<Local, Intermediate, Remote>& NodeType() { return node_type_; }
 
  private:
   friend class fbl::RefPtr<LocalVnode>;
@@ -150,11 +170,11 @@ class LocalVnode : public fbl::RefCounted<LocalVnode> {
   zx_status_t EnumerateInternal(fbl::StringBuffer<PATH_MAX>* path,
                                 const EnumerateCallback& func) const;
 
-  LocalVnode(fbl::RefPtr<LocalVnode> parent, std::variant<Intermediate, Remote> node_type,
+  LocalVnode(fbl::RefPtr<LocalVnode> parent, std::variant<Local, Intermediate, Remote> node_type,
              fbl::String name);
   ~LocalVnode();
 
-  std::variant<Intermediate, Remote> node_type_;
+  std::variant<Local, Intermediate, Remote> node_type_;
   fbl::RefPtr<LocalVnode> parent_;
   const fbl::String name_;
 };

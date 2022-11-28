@@ -6,6 +6,7 @@
 
 #include <lib/zx/channel.h>
 #include <lib/zxio/cpp/create_with_type.h>
+#include <lib/zxio/ops.h>
 #include <lib/zxio/zxio.h>
 #include <zircon/types.h>
 
@@ -16,6 +17,7 @@
 #include <fbl/string_buffer.h>
 
 #include "sdk/lib/fdio/internal.h"
+#include "sdk/lib/fdio/zxio.h"
 
 namespace fdio_internal {
 
@@ -26,7 +28,7 @@ zx::result<fbl::RefPtr<LocalVnode>> LocalVnode::Create(
     return zx::error(ZX_ERR_INVALID_ARGS);
   }
   zxio_storage_t remote_storage;
-  zxio::CreateDirectory(const_cast<zxio_storage_t*>(&remote_storage), std::move(remote));
+  ::zxio::CreateDirectory(const_cast<zxio_storage_t*>(&remote_storage), std::move(remote));
 
   Remote storage(remote_storage);
 
@@ -34,26 +36,56 @@ zx::result<fbl::RefPtr<LocalVnode>> LocalVnode::Create(
       fbl::AdoptRef(new LocalVnode(std::move(parent), std::move(storage), std::move(name)));
 
   if (vn->parent_ != nullptr) {
-    vn->parent_->AddChild(vn);
+    zx_status_t status = vn->parent_->AddChild(vn);
+    if (status != ZX_OK) {
+      return zx::error(status);
+    }
   }
+
   return zx::ok(vn);
 }
 
-fbl::RefPtr<LocalVnode> LocalVnode::Create(fbl::RefPtr<LocalVnode> parent, fbl::String name) {
+zx::result<fbl::RefPtr<LocalVnode>> LocalVnode::Create(fbl::RefPtr<LocalVnode> parent,
+                                                       fdio_open_local_func_t on_open,
+                                                       void* context, fbl::String name) {
+  Local children(on_open, context);
+
+  fbl::RefPtr vn =
+      fbl::AdoptRef(new LocalVnode(std::move(parent), std::move(children), std::move(name)));
+
+  if (vn->parent_ != nullptr) {
+    zx_status_t status = vn->parent_->AddChild(vn);
+    if (status != ZX_OK) {
+      return zx::error(status);
+    }
+  }
+
+  return zx::ok(vn);
+}
+
+zx::result<fbl::RefPtr<LocalVnode>> LocalVnode::Create(fbl::RefPtr<LocalVnode> parent,
+                                                       fbl::String name) {
   Intermediate children;
 
   fbl::RefPtr vn =
       fbl::AdoptRef(new LocalVnode(std::move(parent), std::move(children), std::move(name)));
 
   if (vn->parent_ != nullptr) {
-    vn->parent_->AddChild(vn);
+    zx_status_t status = vn->parent_->AddChild(vn);
+    if (status != ZX_OK) {
+      return zx::error(status);
+    }
   }
 
-  return vn;
+  return zx::ok(vn);
 }
 
 zx_status_t LocalVnode::AddChild(fbl::RefPtr<LocalVnode> child) {
   return std::visit(fdio::overloaded{
+                        [](LocalVnode::Local& c) {
+                          // Calling AddChild on a Local node is invalid.
+                          return ZX_ERR_NOT_DIR;
+                        },
                         [&child](LocalVnode::Intermediate& c) {
                           c.AddEntry(child);
                           return ZX_OK;
@@ -79,6 +111,10 @@ void LocalVnode::Intermediate::AddEntry(fbl::RefPtr<LocalVnode> vn) {
 
 zx_status_t LocalVnode::RemoveChild(LocalVnode* child) {
   return std::visit(fdio::overloaded{
+                        [](LocalVnode::Local& c) {
+                          // Calling RemoveChild on a Local node fails.
+                          return ZX_ERR_NOT_FOUND;
+                        },
                         [&child](LocalVnode::Intermediate& c) {
                           c.RemoveEntry(child);
                           return ZX_OK;
@@ -103,6 +139,7 @@ void LocalVnode::Intermediate::RemoveEntry(LocalVnode* vn) {
 
 void LocalVnode::Unlink() {
   std::visit(fdio::overloaded{
+                 [](LocalVnode::Local& c) {},
                  [](LocalVnode::Intermediate& c) { c.UnlinkEntries(); },
                  [](LocalVnode::Remote& s) {},
              },
@@ -118,12 +155,13 @@ fbl::RefPtr<LocalVnode> LocalVnode::Intermediate::Lookup(std::string_view name) 
   return nullptr;
 }
 
-LocalVnode::LocalVnode(fbl::RefPtr<LocalVnode> parent, std::variant<Intermediate, Remote> node_type,
-                       fbl::String name)
+LocalVnode::LocalVnode(fbl::RefPtr<LocalVnode> parent,
+                       std::variant<Local, Intermediate, Remote> node_type, fbl::String name)
     : node_type_(std::move(node_type)), parent_(std::move(parent)), name_(std::move(name)) {}
 
 LocalVnode::~LocalVnode() {
   std::visit(fdio::overloaded{
+                 [](LocalVnode::Local& c) {},
                  [](LocalVnode::Intermediate& c) {},
                  [](LocalVnode::Remote& s) {
                    // Close the channel underlying the remote connection without making a Close
@@ -138,6 +176,7 @@ LocalVnode::~LocalVnode() {
 void LocalVnode::Intermediate::UnlinkEntries() {
   for (auto& entry : entries_by_name_) {
     std::visit(fdio::overloaded{
+                   [](LocalVnode::Local& c) {},
                    [](LocalVnode::Intermediate& c) { c.UnlinkEntries(); },
                    [](LocalVnode::Remote& s) {},
                },
@@ -146,6 +185,20 @@ void LocalVnode::Intermediate::UnlinkEntries() {
   }
   entries_by_name_.clear();
   entries_by_id_.clear();
+}
+
+zx::result<fdio_ptr> LocalVnode::Local::Open() {
+  fdio_ptr io = fbl::MakeRefCounted<zxio>();
+  if (io == nullptr) {
+    return zx::error(ZX_ERR_NO_MEMORY);
+  }
+  zxio_ops_t const* ops = nullptr;
+  zx_status_t status = on_open_(&io->zxio_storage(), context_, &ops);
+  if (status != ZX_OK) {
+    return zx::error(status);
+  }
+  zxio_init(&io->zxio_storage().io, ops);
+  return zx::ok(io);
 }
 
 void LocalVnode::UnlinkFromParent() {
@@ -164,6 +217,10 @@ zx_status_t LocalVnode::EnumerateInternal(fbl::StringBuffer<PATH_MAX>* path,
   path->Append(Name().data(), Name().length());
 
   std::visit(fdio::overloaded{
+                 [](const LocalVnode::Local& c) {
+                   // Nothing to do as the node has no children and is not a
+                   // remote node.
+                 },
                  [&path, &func, this](const LocalVnode::Intermediate& c) {
                    // If we added a node with children, add a separator and enumerate all the
                    // children.
@@ -196,6 +253,10 @@ zx_status_t LocalVnode::EnumerateRemotes(const EnumerateCallback& func) const {
 
 zx_status_t LocalVnode::Readdir(uint64_t* last_seen, fbl::RefPtr<LocalVnode>* out_vnode) const {
   return std::visit(fdio::overloaded{
+                        [&](const LocalVnode::Local& c) {
+                          // Calling readdir on a Local node is invalid.
+                          return ZX_ERR_NOT_DIR;
+                        },
                         [&](const LocalVnode::Intermediate& c) {
                           for (auto it = c.GetEntriesById().lower_bound(*last_seen);
                                it != c.GetEntriesById().end(); ++it) {

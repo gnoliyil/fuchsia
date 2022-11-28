@@ -13,6 +13,8 @@
 __BEGIN_CDECLS
 
 typedef struct fdio_namespace fdio_ns_t;
+typedef struct zxio_ops zxio_ops_t;
+typedef struct zxio_storage zxio_storage_t;
 
 // Create a new, empty namespace
 zx_status_t fdio_ns_create(fdio_ns_t** out) ZX_AVAILABLE_SINCE(1);
@@ -23,6 +25,33 @@ zx_status_t fdio_ns_create(fdio_ns_t** out) ZX_AVAILABLE_SINCE(1);
 //
 // This function always returns `ZX_OK`.
 zx_status_t fdio_ns_destroy(fdio_ns_t* ns) ZX_AVAILABLE_SINCE(1);
+
+// Callback function for the `fdio_ns_bind_local` function.
+typedef zx_status_t (*fdio_open_local_func_t)(zxio_storage_t*, void*, zxio_ops_t const**)
+    ZX_AVAILABLE_SINCE(10);
+
+// Create a new local entry within a namespace.
+//
+// Opening the path will run the given `on_open` with the given `context` to
+// populate the file. The callback must set the zxio operations table, and can
+// set an internal state inside the provided storage.
+//
+// The path must be an absolute path like "/x/y/z". It is relative to the root
+// of the namespace.
+//
+// # Errors
+//
+//   * `ZX_ERR_BAD_STATE`: Namespace is already in use and immutable.
+//
+//   * `ZX_ERR_ALREADY_EXISTS`: There is already a mounted directory there.
+//
+//   * `ZX_ERR_NOT_SUPPORTED`: `path` would shadow a mounted directory.
+//
+//   * `ZX_ERR_INVALID_ARGS`: `path` is null or is not an absolute path.
+//
+//   * `ZX_ERR_BAD_PATH`: `path` is not a valid path.
+zx_status_t fdio_ns_bind_local(fdio_ns_t* ns, const char* path, fdio_open_local_func_t on_open,
+                               void* context) ZX_AVAILABLE_SINCE(10);
 
 // Create a new directory within a namespace, bound to the directory-protocol-compatible handle h
 //

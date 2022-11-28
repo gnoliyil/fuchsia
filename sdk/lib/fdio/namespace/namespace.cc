@@ -80,6 +80,24 @@ zx_status_t fdio_ns_destroy(fdio_ns_t* raw_ns) {
 }
 
 __EXPORT
+zx_status_t fdio_ns_bind_local(fdio_ns_t* ns, const char* path, fdio_open_local_func_t on_open,
+                               void* context) {
+  if (path == nullptr || on_open == nullptr) {
+    return ZX_ERR_INVALID_ARGS;
+  }
+  fdio_internal::PathBuffer clean;
+  bool is_dir;
+  if (!fdio_internal::CleanPath(path, &clean, &is_dir)) {
+    return ZX_ERR_BAD_PATH;
+  }
+  if (is_dir) {
+    // Local binding are always files.
+    return ZX_ERR_INVALID_ARGS;
+  }
+  return ns->Bind(clean, on_open, context);
+}
+
+__EXPORT
 zx_status_t fdio_ns_bind(fdio_ns_t* ns, const char* path, zx_handle_t remote_raw) {
   if (path == nullptr) {
     return ZX_ERR_INVALID_ARGS;

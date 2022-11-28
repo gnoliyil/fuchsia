@@ -2,8 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <dirent.h>
 #include <lib/fdio/namespace.h>
+#include <lib/zxio/null.h>
+#include <lib/zxio/ops.h>
+#include <lib/zxio/zxio.h>
 #include <sys/mman.h>
+#include <sys/types.h>
 
 #include <fbl/unique_fd.h>
 #include <zxtest/zxtest.h>
@@ -155,4 +160,60 @@ TEST(NamespaceTest, ConnectOversizedPathComponent) {
   EXPECT_STATUS(fdio_ns_open(ns, long_path_component.c_str(), 0u, ch0.release()), ZX_ERR_BAD_PATH);
 
   ASSERT_OK(fdio_ns_destroy(ns));
+}
+
+TEST(NamespaceTest, LocalBinding) {
+  auto on_test_opened = [](zxio_storage_t* storage, void* context, zxio_ops_t const** ops) {
+    static constexpr zxio_ops_t test_ops = []() {
+      zxio_ops_t ops = zxio_default_ops;
+      ops.attr_get = [](zxio_t* io, zxio_node_attributes_t* out_attr) {
+        zxio_node_attributes_t attr = {};
+        ZXIO_NODE_ATTR_SET(attr, abilities, ZXIO_OPERATION_GET_ATTRIBUTES);
+        *out_attr = attr;
+        return ZX_OK;
+      };
+      return ops;
+    }();
+    EXPECT_NE(storage, nullptr);
+    EXPECT_NE(context, nullptr);
+    *ops = &test_ops;
+    return *static_cast<zx_status_t*>(context);
+  };
+
+  fdio_ns_t* root;
+  ASSERT_OK(fdio_ns_get_installed(&root));
+
+  ASSERT_EQ(fdio_ns_bind_local(root, "/local/dir/", on_test_opened, nullptr), ZX_ERR_INVALID_ARGS);
+
+  const char* local_file = "/local/file";
+
+  ASSERT_EQ(access(local_file, F_OK), -1);
+  ASSERT_EQ(errno, ENOENT, "%s", strerror(errno));
+
+  zx_status_t context = ZX_ERR_NOT_SUPPORTED;
+  ASSERT_OK(fdio_ns_bind_local(root, local_file, on_test_opened, &context));
+
+  // Test when callback fails
+  ASSERT_EQ(access(local_file, F_OK), -1);
+  ASSERT_EQ(errno, EOPNOTSUPP, "%s", strerror(errno));
+
+  // Test when callback succeeds
+  context = ZX_OK;
+  ASSERT_EQ(access(local_file, F_OK), 0);
+
+  DIR* dir = opendir("/local/");
+  ASSERT_NE(dir, nullptr);
+  bool found_file = false;
+  while (struct dirent* entry = readdir(dir)) {
+    if (std::string(entry->d_name) == "file") {
+      found_file = true;
+      break;
+    }
+  }
+  closedir(dir);
+  ASSERT_TRUE(found_file);
+
+  ASSERT_OK(fdio_ns_unbind(root, local_file));
+  ASSERT_EQ(access(local_file, F_OK), -1);
+  ASSERT_EQ(errno, ENOENT, "%s", strerror(errno));
 }

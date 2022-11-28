@@ -52,6 +52,7 @@ Symbols:
   - { Name: fdio_handle_fd, Type: Func }
   - { Name: fdio_ns_bind, Type: Func }
   - { Name: fdio_ns_bind_fd, Type: Func }
+  - { Name: fdio_ns_bind_local, Type: Func }
   - { Name: fdio_ns_chdir, Type: Func }
   - { Name: fdio_ns_connect, Type: Func }
   - { Name: fdio_ns_create, Type: Func }
