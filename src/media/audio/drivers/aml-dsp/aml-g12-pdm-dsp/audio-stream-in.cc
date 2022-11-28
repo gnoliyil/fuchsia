@@ -98,17 +98,17 @@ zx_status_t AudioStreamInDsp::Init() {
 
 zx_status_t AudioStreamInDsp::InitPDev() {
   size_t actual = 0;
-  auto status = device_get_metadata(parent(), DEVICE_METADATA_PRIVATE, &metadata_,
-                                    sizeof(metadata::AmlPdmConfig), &actual);
+  auto status = device_get_fragment_metadata(parent(), "pdev", DEVICE_METADATA_PRIVATE, &metadata_,
+                                             sizeof(metadata::AmlPdmConfig), &actual);
   if (status != ZX_OK || sizeof(metadata::AmlPdmConfig) != actual) {
-    zxlogf(ERROR, "device_get_metadata failed %d", status);
+    zxlogf(ERROR, "device_get_metadata failed %s", zx_status_get_string(status));
     return status;
   }
 
   pdev_protocol_t pdev;
-  status = device_get_protocol(parent(), ZX_PROTOCOL_PDEV, &pdev);
+  status = device_get_fragment_protocol(parent(), "pdev", ZX_PROTOCOL_PDEV, &pdev);
   if (status) {
-    zxlogf(ERROR, "get pdev protocol failed %d", status);
+    zxlogf(ERROR, "get pdev protocol failed %s", zx_status_get_string(status));
     return status;
   }
 

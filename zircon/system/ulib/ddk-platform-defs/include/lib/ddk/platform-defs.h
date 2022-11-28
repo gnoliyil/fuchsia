@@ -170,6 +170,7 @@ __BEGIN_CDECLS
 #define PDEV_DID_AMLOGIC_DSP         0x31
 #define PDEV_DID_AMLOGIC_A1_CLK      0x32
 #define PDEV_DID_AMLOGIC_TDM_USE_DSP 0x33
+#define PDEV_DID_AMLOGIC_PDM_USE_DSP 0x34
 
 // Broadcom
 #define PDEV_VID_BROADCOM           0x06

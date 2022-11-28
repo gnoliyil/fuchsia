@@ -11,6 +11,7 @@ declare_args() {
 
   # Audio data can be processed using HW DSP FW.
   av400_tdm_use_dsp = false
+  av400_pdm_use_dsp = false
 }
 
 driver_bind_rules("av400-emmc-bind") {
@@ -152,6 +153,19 @@ driver_bind_rules("tdm-i2s-bind") {
   deps = [
     "//src/devices/bind/fuchsia.amlogic.platform.a5",
     "//src/devices/bind/fuchsia.gpio",
+  ]
+}
+
+driver_bind_rules("pdm-i2s-dsp-bind") {
+  rules = "bind/pdm-i2s-dsp.bind"
+  header_output = "pdm-i2s-dsp-bind.h"
+  bind_output = "pdm-i2s-dsp-bind.bc"
+  deps = [
+    "//src/devices/bind/fuchsia.amlogic.platform",
+    "//src/devices/bind/fuchsia.amlogic.platform.a5",
+    "//src/devices/bind/fuchsia.dsp",
+    "//src/devices/bind/fuchsia.mailbox",
+    "//src/devices/bind/fuchsia.platform",
   ]
 }
 
@@ -345,6 +359,10 @@ fuchsia_driver("av400-driver") {
   }
   if (av400_has_loopback) {
     defines += [ "TEST_LOOPBACK" ]
+  }
+  if (av400_pdm_use_dsp) {
+    defines += [ "PDM_USE_DSP" ]
+    deps += [ ":pdm-i2s-dsp-bind_header" ]
   }
 }
 

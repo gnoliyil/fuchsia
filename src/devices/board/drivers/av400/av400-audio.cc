@@ -31,6 +31,10 @@
 #include "src/devices/board/drivers/av400/tdm-i2s-bind.h"
 #endif
 
+#ifdef PDM_USE_DSP
+#include "src/devices/board/drivers/av400/pdm-i2s-dsp-bind.h"
+#endif
+
 #include "src/devices/bus/lib/platform-bus-composites/platform-bus-composite.h"
 
 namespace av400 {
@@ -465,13 +469,34 @@ zx_status_t Av400::AudioInit() {
     pdm_dev.name() = pdm_name;
     pdm_dev.vid() = PDEV_VID_AMLOGIC;
     pdm_dev.pid() = PDEV_PID_AMLOGIC_A5;
+#ifdef PDM_USE_DSP
+    pdm_dev.did() = PDEV_DID_AMLOGIC_PDM_USE_DSP;
+#else
     pdm_dev.did() = PDEV_DID_AMLOGIC_PDM;
+#endif
     pdm_dev.mmio() = pdm_mmios;
     pdm_dev.bti() = pdm_btis;
     // pdm use toddr_b by default; (src/media/audio/drivers/aml-g12-pdm/audio-stream-in.cc)
     pdm_dev.irq() = toddr_b_irqs;
     pdm_dev.metadata() = pdm_metadata;
 
+#ifdef PDM_USE_DSP
+    auto result = pbus_.buffer(arena)->AddComposite(
+        fidl::ToWire(fidl_arena, pdm_dev),
+        platform_bus_composite::MakeFidlFragment(fidl_arena, pdm_i2s_dsp_fragments,
+                                                 std::size(pdm_i2s_dsp_fragments)),
+        "pdev");
+    if (!result.ok()) {
+      zxlogf(ERROR, "AddComposite Audio(pdm_dev) request failed: %s",
+             result.FormatDescription().data());
+      return result.status();
+    }
+    if (result->is_error()) {
+      zxlogf(ERROR, "AddComposite Audio(pdm_dev) failed: %s",
+             zx_status_get_string(result->error_value()));
+      return result->error_value();
+    }
+#else
     auto result = pbus_.buffer(arena)->NodeAdd(fidl::ToWire(fidl_arena, pdm_dev));
     if (!result.ok()) {
       zxlogf(ERROR, "%s: NodeAdd Audio(pdm_dev) request failed: %s", __func__,
@@ -483,6 +508,7 @@ zx_status_t Av400::AudioInit() {
              zx_status_get_string(result->error_value()));
       return result->error_value();
     }
+#endif
   }
 
   return ZX_OK;

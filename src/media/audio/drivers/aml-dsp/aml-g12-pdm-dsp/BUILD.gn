@@ -5,10 +5,10 @@
 import("//build/bind/bind.gni")
 import("//build/drivers.gni")
 
-driver_bind_rules("aml_g12_pdm_bind") {
+driver_bind_rules("aml_g12_pdm_dsp_bind") {
   rules = "aml_g12_pdm.bind"
   header_output = "aml_g12_pdm_bind.h"
-  bind_output = "aml-g12-pdm.bindbc"
+  bind_output = "aml-g12-pdm-dsp.bindbc"
   tests = "tests.json"
   deps = [
     "//src/devices/bind/fuchsia.amlogic.platform",
@@ -16,8 +16,8 @@ driver_bind_rules("aml_g12_pdm_bind") {
   ]
 }
 
-fuchsia_driver("aml-g12-pdm-driver") {
-  output_name = "aml-g12-pdm"
+fuchsia_driver("aml-g12-pdm-dsp-driver") {
+  output_name = "aml-g12-pdm-dsp"
   configs += [
     "//build/config:all_source",
     "//build/config/fuchsia:enable_zircon_asserts",
@@ -25,7 +25,7 @@ fuchsia_driver("aml-g12-pdm-driver") {
   sources = [ "audio-stream-in.cc" ]
 
   deps = [
-    ":aml_g12_pdm_bind",
+    ":aml_g12_pdm_dsp_bind",
     "//sdk/banjo/fuchsia.hardware.clock:fuchsia.hardware.clock_banjo_cpp",
     "//sdk/banjo/fuchsia.hardware.gpio:fuchsia.hardware.gpio_banjo_cpp",
     "//sdk/banjo/fuchsia.hardware.platform.device:fuchsia.hardware.platform.device_banjo_cpp",
@@ -46,15 +46,11 @@ fuchsia_driver("aml-g12-pdm-driver") {
     "//zircon/system/ulib/zircon-internal",
     "//zircon/system/ulib/zx",
   ]
-
-  # TODO(fxbug.dev/94768): This target uses mutable tables which are deprecated,
-  # rather than builders.
-  configs += [ "//build/cpp:fidl-wire-deprecated-mutable-tables" ]
 }
 
-fuchsia_driver_component("aml-g12-pdm") {
-  component_name = "aml-g12-pdm"
-  deps = [ ":aml-g12-pdm-driver" ]
+fuchsia_driver_component("aml-g12-pdm-dsp") {
+  component_name = "aml-g12-pdm-dsp"
+  deps = [ ":aml-g12-pdm-dsp-driver" ]
   info = "aml-g12-pdm-info.json"
   colocate = true
 }
