@@ -156,11 +156,7 @@ abstract class {{ .Name }}
 
 {{- if .OneWayUnknownInteractions }}
 abstract class {{ .Name }}Server extends {{ .Name }} {
-  $async.Future<void> $unknownOneWay(int ordinal);
-
-  {{- if .TwoWayUnknownInteractions }}
-  $async.Future<void> $unknownTwoWay(int ordinal);
-  {{ end }}
+  $async.Future<void> $unknownMethod($fidl.UnknownMethodMetadata metadata);
 }
 {{ end -}}
 
@@ -469,14 +465,18 @@ class {{ .BindingName }} extends $fidl.AsyncBinding<{{ .ServerName }}> {
         switch ($message.strictness) {
           case $fidl.CallStrictness.flexible:
             if ($message.txid == 0) {
-              impl!.$unknownOneWay($message.ordinal).catchError((_e) {
+              final $fidl.UnknownMethodMetadata $metadata = $fidl.UnknownMethodMetadata(
+                $message.ordinal, $fidl.UnknownMethodType.oneWay);
+              impl!.$unknownMethod($metadata).catchError((_e) {
                 $fidl.handleException("unknown one-way", _e, close);
               });
             } else {
               final $fidl.Encoder $encoder = $fidl.Encoder($fidl.kWireFormatDefault);
               $encoder.encodeUnknownMethodResponse($message.ordinal, $message.txid);
               $respond($encoder.message);
-              impl!.$unknownTwoWay($message.ordinal).catchError((_e) {
+              final $fidl.UnknownMethodMetadata $metadata = $fidl.UnknownMethodMetadata(
+                $message.ordinal, $fidl.UnknownMethodType.twoWay);
+              impl!.$unknownMethod($metadata).catchError((_e) {
                 $fidl.handleException("unknown one-way", _e, close);
               });
             }
@@ -489,7 +489,9 @@ class {{ .BindingName }} extends $fidl.AsyncBinding<{{ .ServerName }}> {
         switch ($message.strictness) {
           case $fidl.CallStrictness.flexible:
             if ($message.txid == 0) {
-              impl!.$unknownOneWay($message.ordinal).catchError((_e) {
+              final $fidl.UnknownMethodMetadata $metadata = $fidl.UnknownMethodMetadata(
+                $message.ordinal, $fidl.UnknownMethodType.oneWay);
+              impl!.$unknownMethod($metadata).catchError((_e) {
                 $fidl.handleException("unknown one-way", _e, close);
               });
               break;
@@ -531,15 +533,9 @@ class {{ .Name }}$TestBase extends {{ .ServerName }} {
 {{- end }}
 
   {{- if .OneWayUnknownInteractions }}
-  $async.Future<void> $unknownOneWay(int ordinal) {
-    return $async.Future.error(UnimplementedError({{ printf "r'$unknownOneWay not implemented on %s test base. Please implement.'"  .Name }}), StackTrace.current);
+  $async.Future<void> $unknownMethod($fidl.UnknownMethodMetadata metadata) {
+    return $async.Future.error(UnimplementedError({{ printf "r'$unknownMethod not implemented on %s test base. Please implement.'"  .Name }}), StackTrace.current);
   }
-
-  {{- if .TwoWayUnknownInteractions }}
-  $async.Future<void> $unknownTwoWay(int ordinal) {
-    return $async.Future.error(UnimplementedError({{ printf "r'$unknownTwoWay not implemented on %s test base. Please implement.'"  .Name }}), StackTrace.current);
-  }
-  {{ end }}
   {{ end -}}
 }
 

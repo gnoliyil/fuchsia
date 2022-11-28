@@ -16,6 +16,40 @@ import 'package:fidl_test_unknown_interactions/fidl_test.dart';
 import 'package:test/test.dart';
 import 'package:zircon/zircon.dart';
 
+class HasMethodOrdinal extends CustomMatcher {
+  HasMethodOrdinal(matcher)
+      : super(
+            'UnknownMethodMetadata with oridinal that is', 'ordinal', matcher);
+
+  @override
+  int featureValueOf(dynamic actual) =>
+      (actual as UnknownMethodMetadata).ordinal;
+}
+
+class HasMethodType extends CustomMatcher {
+  HasMethodType(matcher)
+      : super('UnknownMethodMetadata with unknownMethodType that is',
+            'unknown method type', matcher);
+
+  @override
+  UnknownMethodType featureValueOf(dynamic actual) =>
+      (actual as UnknownMethodMetadata).unknownMethodType;
+}
+
+Matcher isUnknownMethodMetadata(
+    int ordinal, UnknownMethodType unknownMethodType) {
+  return allOf(HasMethodOrdinal(equals(ordinal)),
+      HasMethodType(equals(unknownMethodType)));
+}
+
+Matcher isUnknownOneWay(int ordinal) {
+  return isUnknownMethodMetadata(ordinal, UnknownMethodType.oneWay);
+}
+
+Matcher isUnknownTwoWay(int ordinal) {
+  return isUnknownMethodMetadata(ordinal, UnknownMethodType.twoWay);
+}
+
 /// Matches on the TXID of message.
 class HasTxid extends CustomMatcher {
   HasTxid(matcher) : super('Message with txid that is', 'txid', matcher);
@@ -60,8 +94,7 @@ class TestProtocol extends UnknownInteractionsProtocol$TestBase {
     Future<void> Function() strictTwoWayErr,
     Future<void> Function() flexibleTwoWay,
     Future<void> Function() flexibleTwoWayErr,
-    Future<void> Function(int) unknownOneWay,
-    Future<void> Function(int) unknownTwoWay,
+    Future<void> Function(UnknownMethodMetadata) unknownMethod,
     Stream<void> strictEvent,
     Stream<void> strictEventErr,
     Stream<void> flexibleEvent,
@@ -72,8 +105,7 @@ class TestProtocol extends UnknownInteractionsProtocol$TestBase {
         _strictTwoWayErr = strictTwoWayErr,
         _flexibleTwoWay = flexibleTwoWay,
         _flexibleTwoWayErr = flexibleTwoWayErr,
-        _$unknownOneWay = unknownOneWay,
-        _$unknownTwoWay = unknownTwoWay,
+        _$unknownMethod = unknownMethod,
         _strictEvent = strictEvent ?? StreamController<void>.broadcast().stream,
         _strictEventErr =
             strictEventErr ?? StreamController<void>.broadcast().stream,
@@ -88,8 +120,7 @@ class TestProtocol extends UnknownInteractionsProtocol$TestBase {
   final Future<void> Function() _strictTwoWayErr;
   final Future<void> Function() _flexibleTwoWay;
   final Future<void> Function() _flexibleTwoWayErr;
-  final Future<void> Function(int) _$unknownOneWay;
-  final Future<void> Function(int) _$unknownTwoWay;
+  final Future<void> Function(UnknownMethodMetadata) _$unknownMethod;
   final Stream<void> _strictEvent;
   final Stream<int> _strictEventFields =
       StreamController<int>.broadcast().stream;
@@ -118,11 +149,8 @@ class TestProtocol extends UnknownInteractionsProtocol$TestBase {
   Future<void> flexibleTwoWayErr() =>
       (_flexibleTwoWayErr ?? super.flexibleTwoWayErr)();
   @override
-  Future<void> $unknownOneWay(int ordinal) =>
-      (_$unknownOneWay ?? super.$unknownOneWay)(ordinal);
-  @override
-  Future<void> $unknownTwoWay(int ordinal) =>
-      (_$unknownTwoWay ?? super.$unknownTwoWay)(ordinal);
+  Future<void> $unknownMethod(UnknownMethodMetadata metadata) =>
+      (_$unknownMethod ?? super.$unknownMethod)(metadata);
   @override
   Stream<void> get strictEvent => _strictEvent;
   @override
@@ -143,14 +171,14 @@ class TestProtocol extends UnknownInteractionsProtocol$TestBase {
 
 class TestAjarProtocol extends UnknownInteractionsAjarProtocol$TestBase {
   TestAjarProtocol({
-    Future<void> Function(int) unknownOneWay,
-  }) : _$unknownOneWay = unknownOneWay;
+    Future<void> Function(UnknownMethodMetadata) unknownMethod,
+  }) : _$unknownMethod = unknownMethod;
 
-  final Future<void> Function(int) _$unknownOneWay;
+  final Future<void> Function(UnknownMethodMetadata) _$unknownMethod;
 
   @override
-  Future<void> $unknownOneWay(int ordinal) =>
-      (_$unknownOneWay ?? super.$unknownOneWay)(ordinal);
+  Future<void> $unknownMethod(UnknownMethodMetadata metadata) =>
+      (_$unknownMethod ?? super.$unknownMethod)(metadata);
 }
 
 void main() {
@@ -619,15 +647,16 @@ void main() {
       group('one-way-calls', () {
         group('open-protocol', () {
           test('unknown-strict', () {
-            final Completer<int> unknownOneWayCall = Completer();
-            final TestProtocol server =
-                TestProtocol(unknownOneWay: (int ordinal) async {
-              unknownOneWayCall.complete(ordinal);
+            final Completer<UnknownMethodMetadata> unknownMethodCall =
+                Completer();
+            final TestProtocol server = TestProtocol(
+                unknownMethod: (UnknownMethodMetadata metadata) async {
+              unknownMethodCall.complete(metadata);
             });
             final UnknownInteractionsProtocolBinding binding =
                 UnknownInteractionsProtocolBinding();
             final Channel client = binding.wrap(server).passChannel();
-            expect(unknownOneWayCall.future, doesNotComplete);
+            expect(unknownMethodCall.future, doesNotComplete);
             expect(binding.whenClosed, completes);
             client.write(toByteData([
               0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x01, //
@@ -635,15 +664,16 @@ void main() {
             ]));
           });
           test('unknown-flexible', () {
-            final Completer<int> unknownOneWayCall = Completer();
-            final TestProtocol server =
-                TestProtocol(unknownOneWay: (int ordinal) async {
-              unknownOneWayCall.complete(ordinal);
+            final Completer<UnknownMethodMetadata> unknownMethodCall =
+                Completer();
+            final TestProtocol server = TestProtocol(
+                unknownMethod: (UnknownMethodMetadata metadata) async {
+              unknownMethodCall.complete(metadata);
             });
             final Channel client =
                 UnknownInteractionsProtocolBinding().wrap(server).passChannel();
-            expect(unknownOneWayCall.future,
-                completion(equals(0xff10ff10ff10ff10)));
+            expect(unknownMethodCall.future,
+                completion(isUnknownOneWay(0xff10ff10ff10ff10)));
             client.write(toByteData([
               0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x80, 0x01, //
               0x10, 0xff, 0x10, 0xff, 0x10, 0xff, 0x10, 0xff, //
@@ -652,15 +682,16 @@ void main() {
         });
         group('ajar-protocol', () {
           test('unknown-strict', () {
-            final Completer<int> unknownOneWayCall = Completer();
-            final TestAjarProtocol server =
-                TestAjarProtocol(unknownOneWay: (int ordinal) async {
-              unknownOneWayCall.complete(ordinal);
+            final Completer<UnknownMethodMetadata> unknownMethodCall =
+                Completer();
+            final TestAjarProtocol server = TestAjarProtocol(
+                unknownMethod: (UnknownMethodMetadata metadata) async {
+              unknownMethodCall.complete(metadata);
             });
             final UnknownInteractionsAjarProtocolBinding binding =
                 UnknownInteractionsAjarProtocolBinding();
             final Channel client = binding.wrap(server).passChannel();
-            expect(unknownOneWayCall.future, doesNotComplete);
+            expect(unknownMethodCall.future, doesNotComplete);
             expect(binding.whenClosed, completes);
             client.write(toByteData([
               0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x01, //
@@ -668,16 +699,17 @@ void main() {
             ]));
           });
           test('unknown-flexible', () {
-            final Completer<int> unknownOneWayCall = Completer();
-            final TestAjarProtocol server =
-                TestAjarProtocol(unknownOneWay: (int ordinal) async {
-              unknownOneWayCall.complete(ordinal);
+            final Completer<UnknownMethodMetadata> unknownMethodCall =
+                Completer();
+            final TestAjarProtocol server = TestAjarProtocol(
+                unknownMethod: (UnknownMethodMetadata metadata) async {
+              unknownMethodCall.complete(metadata);
             });
             final Channel client = UnknownInteractionsAjarProtocolBinding()
                 .wrap(server)
                 .passChannel();
-            expect(unknownOneWayCall.future,
-                completion(equals(0xff10ff10ff10ff10)));
+            expect(unknownMethodCall.future,
+                completion(isUnknownOneWay(0xff10ff10ff10ff10)));
             client.write(toByteData([
               0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x80, 0x01, //
               0x10, 0xff, 0x10, 0xff, 0x10, 0xff, 0x10, 0xff, //
@@ -842,15 +874,16 @@ void main() {
                 ]));
           });
           test('unknown-strict', () {
-            final Completer<int> unknownTwoWayCall = Completer();
-            final TestProtocol server =
-                TestProtocol(unknownTwoWay: (int ordinal) async {
-              unknownTwoWayCall.complete(ordinal);
+            final Completer<UnknownMethodMetadata> unknownMethodCall =
+                Completer();
+            final TestProtocol server = TestProtocol(
+                unknownMethod: (UnknownMethodMetadata metadata) async {
+              unknownMethodCall.complete(metadata);
             });
             final UnknownInteractionsProtocolBinding binding =
                 UnknownInteractionsProtocolBinding();
             final Channel client = binding.wrap(server).passChannel();
-            expect(unknownTwoWayCall.future, doesNotComplete);
+            expect(unknownMethodCall.future, doesNotComplete);
             expect(binding.whenClosed, completes);
             client.write(toByteData([
               0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x01, //
@@ -858,15 +891,16 @@ void main() {
             ]));
           });
           test('unknown-flexible', () async {
-            final Completer<int> unknownTwoWayCall = Completer();
-            final TestProtocol server =
-                TestProtocol(unknownTwoWay: (int ordinal) async {
-              unknownTwoWayCall.complete(ordinal);
+            final Completer<UnknownMethodMetadata> unknownMethodCall =
+                Completer();
+            final TestProtocol server = TestProtocol(
+                unknownMethod: (UnknownMethodMetadata metadata) async {
+              unknownMethodCall.complete(metadata);
             });
             final Channel client =
                 UnknownInteractionsProtocolBinding().wrap(server).passChannel();
-            expect(unknownTwoWayCall.future,
-                completion(equals(0xff10ff10ff10ff10)));
+            expect(unknownMethodCall.future,
+                completion(isUnknownTwoWay(0xff10ff10ff10ff10)));
             client.write(toByteData([
               0xab, 0xcd, 0x00, 0x00, 0x02, 0x00, 0x80, 0x01, //
               0x10, 0xff, 0x10, 0xff, 0x10, 0xff, 0x10, 0xff, //
@@ -888,15 +922,16 @@ void main() {
         });
         group('ajar-protocol', () {
           test('unknown-strict', () {
-            final Completer<int> unknownOneWayCall = Completer();
-            final TestAjarProtocol server =
-                TestAjarProtocol(unknownOneWay: (int ordinal) async {
-              unknownOneWayCall.complete(ordinal);
+            final Completer<UnknownMethodMetadata> unknownMethodCall =
+                Completer();
+            final TestAjarProtocol server = TestAjarProtocol(
+                unknownMethod: (UnknownMethodMetadata metadata) async {
+              unknownMethodCall.complete(metadata);
             });
             final UnknownInteractionsAjarProtocolBinding binding =
                 UnknownInteractionsAjarProtocolBinding();
             final Channel client = binding.wrap(server).passChannel();
-            expect(unknownOneWayCall.future, doesNotComplete);
+            expect(unknownMethodCall.future, doesNotComplete);
             expect(binding.whenClosed, completes);
             client.write(toByteData([
               0xab, 0xcd, 0x00, 0x00, 0x02, 0x00, 0x00, 0x01, //
@@ -904,15 +939,16 @@ void main() {
             ]));
           });
           test('unknown-flexible', () async {
-            final Completer<int> unknownOneWayCall = Completer();
-            final TestAjarProtocol server =
-                TestAjarProtocol(unknownOneWay: (int ordinal) async {
-              unknownOneWayCall.complete(ordinal);
+            final Completer<UnknownMethodMetadata> unknownMethodCall =
+                Completer();
+            final TestAjarProtocol server = TestAjarProtocol(
+                unknownMethod: (UnknownMethodMetadata metadata) async {
+              unknownMethodCall.complete(metadata);
             });
             final UnknownInteractionsAjarProtocolBinding binding =
                 UnknownInteractionsAjarProtocolBinding();
             final Channel client = binding.wrap(server).passChannel();
-            expect(unknownOneWayCall.future, doesNotComplete);
+            expect(unknownMethodCall.future, doesNotComplete);
             expect(binding.whenClosed, completes);
             client.write(toByteData([
               0xab, 0xcd, 0x00, 0x00, 0x02, 0x00, 0x80, 0x01, //

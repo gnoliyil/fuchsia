@@ -12444,7 +12444,7 @@ abstract class UnknownInteractionsAjarProtocol {
 
 abstract class UnknownInteractionsAjarProtocolServer
     extends UnknownInteractionsAjarProtocol {
-  $async.Future<void> $unknownOneWay(int ordinal);
+  $async.Future<void> $unknownMethod($fidl.UnknownMethodMetadata metadata);
 }
 
 // TODO: Remove ServiceData for non-service
@@ -14391,7 +14391,10 @@ class UnknownInteractionsAjarProtocolBinding
         switch ($message.strictness) {
           case $fidl.CallStrictness.flexible:
             if ($message.txid == 0) {
-              impl!.$unknownOneWay($message.ordinal).catchError((_e) {
+              final $fidl.UnknownMethodMetadata $metadata =
+                  $fidl.UnknownMethodMetadata(
+                      $message.ordinal, $fidl.UnknownMethodType.oneWay);
+              impl!.$unknownMethod($metadata).catchError((_e) {
                 $fidl.handleException("unknown one-way", _e, close);
               });
               break;
@@ -16598,8 +16601,7 @@ abstract class UnknownInteractionsProtocol {
 
 abstract class UnknownInteractionsProtocolServer
     extends UnknownInteractionsProtocol {
-  $async.Future<void> $unknownOneWay(int ordinal);
-  $async.Future<void> $unknownTwoWay(int ordinal);
+  $async.Future<void> $unknownMethod($fidl.UnknownMethodMetadata metadata);
 }
 
 // TODO: Remove ServiceData for non-service
@@ -19247,7 +19249,10 @@ class UnknownInteractionsProtocolBinding
         switch ($message.strictness) {
           case $fidl.CallStrictness.flexible:
             if ($message.txid == 0) {
-              impl!.$unknownOneWay($message.ordinal).catchError((_e) {
+              final $fidl.UnknownMethodMetadata $metadata =
+                  $fidl.UnknownMethodMetadata(
+                      $message.ordinal, $fidl.UnknownMethodType.oneWay);
+              impl!.$unknownMethod($metadata).catchError((_e) {
                 $fidl.handleException("unknown one-way", _e, close);
               });
             } else {
@@ -19256,7 +19261,10 @@ class UnknownInteractionsProtocolBinding
               $encoder.encodeUnknownMethodResponse(
                   $message.ordinal, $message.txid);
               $respond($encoder.message);
-              impl!.$unknownTwoWay($message.ordinal).catchError((_e) {
+              final $fidl.UnknownMethodMetadata $metadata =
+                  $fidl.UnknownMethodMetadata(
+                      $message.ordinal, $fidl.UnknownMethodType.twoWay);
+              impl!.$unknownMethod($metadata).catchError((_e) {
                 $fidl.handleException("unknown one-way", _e, close);
               });
             }

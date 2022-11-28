@@ -644,6 +644,28 @@ class Proxy<T> {
   // to avoid name conflicts.
 }
 
+/// Identifies which type of unknown method was received.
+enum UnknownMethodType {
+  /// Unknown method was a one-way method.
+  oneWay,
+
+  /// Unknown method was a two-way method.
+  twoWay,
+}
+
+/// Metadata about an unknown flexible method that was received.
+class UnknownMethodMetadata {
+  UnknownMethodMetadata(this.ordinal, this.unknownMethodType);
+
+  /// Ordinal of the method.
+  final int ordinal;
+
+  /// Type of the unknown method.
+  ///
+  /// For an ajar protocol, this will always be oneWay.
+  final UnknownMethodType unknownMethodType;
+}
+
 /// Event used when an unknown, flexible event is received.
 class UnknownEvent {
   UnknownEvent(this.ordinal);

@@ -9,13 +9,23 @@ import 'dart:async';
 import 'dart:core';
 import 'dart:typed_data';
 
-import 'package:fidl/fidl.dart' show MethodException;
 import 'package:fidl/fidl.dart';
 import 'package:fuchsia_logger/logger.dart';
-import 'package:fidl_fidl_serversuite/fidl_async.dart';
+import 'package:fidl_fidl_serversuite/fidl_async.dart' hide UnknownMethodType;
+import 'package:fidl_fidl_serversuite/fidl_async.dart' as serversuite;
 import 'package:fuchsia_services/services.dart';
 import 'package:zircon/zircon.dart';
 import 'package:fidl_zx/fidl_async.dart' show Rights;
+
+serversuite.UnknownMethodType convertUnknownMethodType(
+    UnknownMethodType unknownMethodType) {
+  switch (unknownMethodType) {
+    case UnknownMethodType.oneWay:
+      return serversuite.UnknownMethodType.oneWay;
+    case UnknownMethodType.twoWay:
+      return serversuite.UnknownMethodType.twoWay;
+  }
+}
 
 class ClosedTargetImpl extends ClosedTarget {
   ClosedTargetImpl({ReporterProxy reporter, ClosedTargetBinding binding})
@@ -98,8 +108,9 @@ class AjarTargetImpl extends AjarTargetServer {
 
   final ReporterProxy _reporter;
 
-  Future<void> $unknownOneWay(int ordinal) async {
-    await _reporter.receivedUnknownMethod(ordinal, UnknownMethodType.oneWay);
+  Future<void> $unknownMethod(UnknownMethodMetadata metadata) async {
+    await _reporter.receivedUnknownMethod(
+        metadata.ordinal, convertUnknownMethodType(metadata.unknownMethodType));
   }
 }
 
@@ -188,12 +199,9 @@ class OpenTargetImpl extends OpenTargetServer {
     }
   }
 
-  Future<void> $unknownOneWay(int ordinal) async {
-    await _reporter.receivedUnknownMethod(ordinal, UnknownMethodType.oneWay);
-  }
-
-  Future<void> $unknownTwoWay(int ordinal) async {
-    await _reporter.receivedUnknownMethod(ordinal, UnknownMethodType.twoWay);
+  Future<void> $unknownMethod(UnknownMethodMetadata metadata) async {
+    await _reporter.receivedUnknownMethod(
+        metadata.ordinal, convertUnknownMethodType(metadata.unknownMethodType));
   }
 }
 

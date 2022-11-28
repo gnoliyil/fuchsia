@@ -2827,6 +2827,60 @@
           },
           "name": "UnknownEvent",
           "type": "ClassDeclarationImpl"
+        },
+        "UnknownMethodMetadata": {
+          "ConstructorDeclarationImpl": {
+            "UnknownMethodMetadata": {
+              "FieldFormalParameterImpl": {
+                "this.ordinal": {
+                  "name": "this.ordinal",
+                  "type": "FieldFormalParameterImpl"
+                },
+                "this.unknownMethodType": {
+                  "name": "this.unknownMethodType",
+                  "type": "FieldFormalParameterImpl"
+                }
+              },
+              "name": "UnknownMethodMetadata",
+              "type": "ConstructorDeclarationImpl"
+            }
+          },
+          "VariableDeclarationImpl": {
+            "ordinal": {
+              "isConst": false,
+              "isFinal": true,
+              "isLate": false,
+              "name": "ordinal",
+              "type": "VariableDeclarationImpl",
+              "varType": "int"
+            },
+            "unknownMethodType": {
+              "isConst": false,
+              "isFinal": true,
+              "isLate": false,
+              "name": "unknownMethodType",
+              "type": "VariableDeclarationImpl",
+              "varType": "UnknownMethodType"
+            }
+          },
+          "name": "UnknownMethodMetadata",
+          "type": "ClassDeclarationImpl"
+        }
+      },
+      "EnumDeclarationImpl": {
+        "UnknownMethodType": {
+          "EnumConstantDeclarationImpl": {
+            "oneWay": {
+              "name": "oneWay",
+              "type": "EnumConstantDeclarationImpl"
+            },
+            "twoWay": {
+              "name": "twoWay",
+              "type": "EnumConstantDeclarationImpl"
+            }
+          },
+          "name": "UnknownMethodType",
+          "type": "EnumDeclarationImpl"
         }
       },
       "VariableDeclarationImpl": {

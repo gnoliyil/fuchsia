@@ -245,10 +245,10 @@ class UnknownInteractionsAjarProtocol$TestBase
         StackTrace.current));
   }
 
-  $async.Future<void> $unknownOneWay(int ordinal) {
+  $async.Future<void> $unknownMethod($fidl.UnknownMethodMetadata metadata) {
     return $async.Future.error(
         UnimplementedError(
-            r'$unknownOneWay not implemented on UnknownInteractionsAjarProtocol test base. Please implement.'),
+            r'$unknownMethod not implemented on UnknownInteractionsAjarProtocol test base. Please implement.'),
         StackTrace.current);
   }
 }
@@ -690,17 +690,10 @@ class UnknownInteractionsProtocol$TestBase
         StackTrace.current));
   }
 
-  $async.Future<void> $unknownOneWay(int ordinal) {
+  $async.Future<void> $unknownMethod($fidl.UnknownMethodMetadata metadata) {
     return $async.Future.error(
         UnimplementedError(
-            r'$unknownOneWay not implemented on UnknownInteractionsProtocol test base. Please implement.'),
-        StackTrace.current);
-  }
-
-  $async.Future<void> $unknownTwoWay(int ordinal) {
-    return $async.Future.error(
-        UnimplementedError(
-            r'$unknownTwoWay not implemented on UnknownInteractionsProtocol test base. Please implement.'),
+            r'$unknownMethod not implemented on UnknownInteractionsProtocol test base. Please implement.'),
         StackTrace.current);
   }
 }
