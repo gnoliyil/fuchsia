@@ -5,11 +5,11 @@
 use anyhow::Error;
 use async_trait::async_trait;
 use blobfs_ramdisk::BlobfsRamdisk;
-use fidl::endpoints::{ClientEnd, DiscoverableProtocolMarker, Proxy, ServerEnd};
+use fidl::endpoints::{ClientEnd, Proxy};
 use fidl_fuchsia_buildinfo as fbi;
 use fidl_fuchsia_fshost as ffsh;
 use fidl_fuchsia_io as fio;
-use fidl_fuchsia_paver::{self as fpaver, Asset, Configuration};
+use fidl_fuchsia_paver::{Asset, Configuration};
 use fidl_fuchsia_recovery_ui as frui;
 use fuchsia_async as fasync;
 use fuchsia_component::server::ServiceFs;
@@ -19,6 +19,7 @@ use fuchsia_component_test::{
 use fuchsia_pkg_testing::{make_current_epoch_json, Package, PackageBuilder};
 use futures::{channel::mpsc, FutureExt, StreamExt, TryStreamExt};
 use isolated_ota::OmahaConfig;
+use isolated_ota_env::expose_mock_paver;
 use isolated_ota_env::{OmahaState, TestEnvBuilder, TestExecutor, TestParams};
 use mock_omaha_server::OmahaResponse;
 use mock_paver::{MockPaverService, PaverEvent};
@@ -346,7 +347,7 @@ async fn route_and_serve_local_mocks(
         .add_local_child(
             "paver",
             move |handles: LocalComponentHandles| {
-                paver_server_mock(
+                expose_mock_paver(
                     handles,
                     fuchsia_fs::directory::clone_no_describe(&paver_dir_proxy, None).unwrap(),
                 )
@@ -485,31 +486,6 @@ async fn build_info_server_mock(
 
     // Run the ServiceFs on the outgoing directory handle from the mock handles
     fs.serve_connection(handles.outgoing_dir).expect("failed to serve build info server");
-    fs.collect::<()>().await;
-    Ok(())
-}
-
-/// Connects the local component to the mock paver.
-///
-/// Unlike other mocks, the `fuchsia.paver.Paver` is serviced by [`isolated_ota_env::TestEnv`], so
-/// this function proxies to the given `paver_dir_proxy` which is expected to host a
-/// file named "fuchsia.paver.Paver" which implements the `fuchsia.paver.Paver` FIDL protocol.
-async fn paver_server_mock(
-    handles: LocalComponentHandles,
-    paver_dir_proxy: fio::DirectoryProxy,
-) -> Result<(), Error> {
-    let mut fs = ServiceFs::new();
-
-    fs.dir("svc").add_service_connector(move |server_end: ServerEnd<fpaver::PaverMarker>| {
-        fdio::service_connect_at(
-            &paver_dir_proxy.as_channel().as_ref(),
-            &format!("/{}", fpaver::PaverMarker::PROTOCOL_NAME),
-            server_end.into_channel(),
-        )
-        .expect("failed to connect to paver service node");
-    });
-
-    fs.serve_connection(handles.outgoing_dir).expect("failed to serve paver fs connection");
     fs.collect::<()>().await;
     Ok(())
 }

@@ -78,14 +78,16 @@ pub(crate) mod for_tests {
         super::*,
         crate::cache::for_tests::CacheForTest,
         anyhow::anyhow,
+        blobfs_ramdisk::BlobfsRamdisk,
         fidl::endpoints::ServerEnd,
         fidl_fuchsia_boot::{ArgumentsRequest, ArgumentsRequestStream},
         fidl_fuchsia_pkg_ext as pkg,
         fidl_fuchsia_pkg_ext::RepositoryConfigs,
+        fuchsia_component_test::ChildRef,
         fuchsia_component_test::{
             Capability, ChildOptions, DirectoryContents, RealmBuilder, RealmInstance, Ref, Route,
         },
-        fuchsia_pkg_testing::{serve::ServedRepository, Repository},
+        fuchsia_pkg_testing::serve::ServedRepository,
         fuchsia_url::RepositoryUrl,
         futures::StreamExt,
         futures::TryStreamExt,
@@ -99,8 +101,12 @@ pub(crate) mod for_tests {
     pub struct ResolverForTest {
         pub cache: CacheForTest,
         pub resolver: Arc<Resolver>,
-        _served_repo: ServedRepository,
-        _realm_instance: RealmInstance,
+        _served_repo: Arc<ServedRepository>,
+    }
+
+    pub struct ResolverRealm {
+        pub resolver: ChildRef,
+        pub cache: ChildRef,
     }
 
     impl ResolverForTest {
@@ -133,18 +139,16 @@ pub(crate) mod for_tests {
             Ok(())
         }
 
-        #[cfg(test)]
-        pub async fn new(
-            repo: Arc<Repository>,
+        pub async fn realm_setup(
+            realm_builder: &RealmBuilder,
+            served_repo: Arc<ServedRepository>,
             repo_url: RepositoryUrl,
             channel: Option<String>,
-            realm_builder: RealmBuilder,
-        ) -> Result<Self, Error> {
-            let blobfs = blobfs_ramdisk::BlobfsRamdisk::start().context("starting blobfs").unwrap();
+            blobfs: &BlobfsRamdisk,
+        ) -> Result<ResolverRealm, Error> {
             let cache_ref =
                 CacheForTest::realm_setup(&realm_builder, &blobfs).await.expect("setting up cache");
 
-            let served_repo = Arc::clone(&repo).server().start()?;
             let repo_config =
                 RepositoryConfigs::Version1(vec![served_repo.make_repo_config(repo_url)]);
 
@@ -237,9 +241,15 @@ pub(crate) mod for_tests {
                 .await
                 .unwrap();
 
-            let realm_instance = realm_builder.build().await.unwrap();
+            Ok(ResolverRealm { resolver: pkg_resolver, cache: cache_ref })
+        }
 
-            let cache = CacheForTest::new(&realm_instance, blobfs).await.unwrap();
+        pub async fn new(
+            realm_instance: &RealmInstance,
+            blobfs: BlobfsRamdisk,
+            served_repo: Arc<ServedRepository>,
+        ) -> Result<Self, Error> {
+            let cache = CacheForTest::new(realm_instance, blobfs).await.unwrap();
 
             let resolver_proxy = realm_instance
                 .root
@@ -260,12 +270,7 @@ pub(crate) mod for_tests {
 
             assert_eq!(cache_proxy.sync().await.unwrap(), Ok(()));
 
-            Ok(ResolverForTest {
-                _realm_instance: realm_instance,
-                cache,
-                resolver: Arc::new(resolver),
-                _served_repo: served_repo,
-            })
+            Ok(ResolverForTest { cache, resolver: Arc::new(resolver), _served_repo: served_repo })
         }
 
         /// Resolve a package using the resolver, returning the root directory of the package,
@@ -318,10 +323,23 @@ pub mod tests {
         );
 
         let realm_builder = RealmBuilder::new().await.unwrap();
-        let resolver =
-            ResolverForTest::new(repo, TEST_REPO_URL.parse().unwrap(), None, realm_builder)
-                .await
-                .context("launching resolver")?;
+        let served_repo = Arc::new(Arc::clone(&repo).server().start().unwrap());
+        let blobfs = blobfs_ramdisk::BlobfsRamdisk::start().context("starting blobfs").unwrap();
+        let _resolver_realm = ResolverForTest::realm_setup(
+            &realm_builder,
+            Arc::clone(&served_repo),
+            TEST_REPO_URL.parse().unwrap(),
+            None,
+            &blobfs,
+        )
+        .await
+        .unwrap();
+
+        let realm_instance = realm_builder.build().await.unwrap();
+
+        let resolver = ResolverForTest::new(&realm_instance, blobfs, served_repo)
+            .await
+            .context("launching resolver")?;
         let (root_dir, _resolved_context) =
             resolver.resolve_package(&format!("{}/{}", TEST_REPO_URL, name)).await.unwrap();
 
@@ -348,14 +366,22 @@ pub mod tests {
         );
 
         let realm_builder = RealmBuilder::new().await.unwrap();
-        let resolver = ResolverForTest::new(
-            repo,
+        let served_repo = Arc::new(Arc::clone(&repo).server().start().unwrap());
+        let blobfs = blobfs_ramdisk::BlobfsRamdisk::start().context("starting blobfs").unwrap();
+        let _resolver_realm = ResolverForTest::realm_setup(
+            &realm_builder,
+            Arc::clone(&served_repo),
             "fuchsia-pkg://x64.resolver-test-channel.fuchsia.com".parse().unwrap(),
             Some("resolver-test-channel".to_owned()),
-            realm_builder,
+            &blobfs,
         )
         .await
-        .context("launching resolver")?;
+        .unwrap();
+
+        let realm_instance = realm_builder.build().await.unwrap();
+        let resolver = ResolverForTest::new(&realm_instance, blobfs, served_repo)
+            .await
+            .context("launching resolver")?;
         let (root_dir, _resolved_context) =
             resolver.resolve_package(&format!("fuchsia-pkg://fuchsia.com/{}", name)).await.unwrap();
 

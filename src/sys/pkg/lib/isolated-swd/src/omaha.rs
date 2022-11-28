@@ -10,18 +10,10 @@ mod installer;
 mod policy;
 mod timer;
 use {
-    crate::{
-        cache::Cache,
-        omaha::{
-            http_request::FuchsiaHyperHttpRequest, installer::IsolatedInstaller,
-            timer::FuchsiaTimer,
-        },
-        resolver::Resolver,
-        updater::UPDATER_URL,
+    crate::omaha::{
+        http_request::FuchsiaHyperHttpRequest, installer::IsolatedInstaller, timer::FuchsiaTimer,
     },
     anyhow::{anyhow, Error},
-    fidl::endpoints::ClientEnd,
-    fidl_fuchsia_io as fio,
     futures::lock::Mutex,
     futures::prelude::*,
     omaha_client::{
@@ -36,7 +28,7 @@ use {
         storage::MemStorage,
         time::StandardTimeSource,
     },
-    std::{rc::Rc, sync::Arc},
+    std::rc::Rc,
     tracing::error,
     version::Version,
 };
@@ -60,11 +52,7 @@ async fn get_omaha_config(version: &str, service_url: &str) -> Config {
 
 /// Get the update URL to use from Omaha, and install the update.
 pub async fn install_update(
-    blobfs: ClientEnd<fio::DirectoryMarker>,
-    paver: ClientEnd<fio::DirectoryMarker>,
-    cache: Arc<Cache>,
-    resolver: Arc<Resolver>,
-    board_name: String,
+    updater: crate::updater::Updater,
     appid: String,
     service_url: String,
     current_version: String,
@@ -83,37 +71,20 @@ pub async fn install_update(
         VecAppSet::new(vec![App::builder().id(appid).version(version).cohort(cohort).build()]);
 
     let config = get_omaha_config(&current_version, &service_url).await;
-    install_update_with_http(
-        blobfs,
-        paver,
-        cache,
-        resolver,
-        board_name,
-        app_set,
-        config,
-        UPDATER_URL.to_owned(),
-        FuchsiaHyperHttpRequest::new(),
-    )
-    .await
+    install_update_with_http(updater, app_set, config, FuchsiaHyperHttpRequest::new()).await
 }
 
 async fn install_update_with_http<HR>(
-    blobfs: ClientEnd<fio::DirectoryMarker>,
-    paver: ClientEnd<fio::DirectoryMarker>,
-    cache: Arc<Cache>,
-    resolver: Arc<Resolver>,
-    board_name: String,
+    updater: crate::updater::Updater,
     app_set: VecAppSet,
     config: Config,
-    updater_url: String,
     http_request: HR,
 ) -> Result<(), Error>
 where
     HR: HttpRequest,
 {
     let storage = Rc::new(Mutex::new(MemStorage::new()));
-    let installer =
-        IsolatedInstaller::new(blobfs, paver, cache, resolver, board_name.to_owned(), updater_url);
+    let installer = IsolatedInstaller { updater };
     let cup_handler = config.omaha_public_keys.as_ref().map(StandardCupv2Handler::new);
     let state_machine = StateMachineBuilder::new(
         policy::IsolatedPolicyEngine::new(StandardTimeSource),
@@ -152,15 +123,8 @@ where
 mod tests {
     use {
         super::*,
-        crate::{
-            resolver::for_tests::ResolverForTest,
-            updater::for_tests::{UpdaterBuilder, UpdaterForTest, UpdaterResult, TEST_UPDATER_URL},
-        },
+        crate::updater::for_tests::{UpdaterBuilder, UpdaterForTest, UpdaterResult},
         anyhow::Context,
-        fidl_fuchsia_paver::PaverRequestStream,
-        fuchsia_async as fasync,
-        fuchsia_component::server::{ServiceFs, ServiceObj},
-        fuchsia_component_test::RealmBuilder,
         fuchsia_pkg_testing::{make_current_epoch_json, PackageBuilder},
         fuchsia_zircon as zx,
         mock_paver::{hooks as mphooks, PaverEvent},
@@ -188,20 +152,6 @@ mod tests {
         config: Config,
         mock_responses: Vec<serde_json::Value>,
     ) -> Result<UpdaterResult, Error> {
-        let mut fs: ServiceFs<ServiceObj<'_, ()>> = ServiceFs::new();
-        let paver_clone = Arc::clone(&updater.paver);
-        fs.add_fidl_service(move |stream: PaverRequestStream| {
-            fasync::Task::spawn(
-                Arc::clone(&paver_clone)
-                    .run_paver_service(stream)
-                    .unwrap_or_else(|e| panic!("Failed to run mock paver: {:?}", e)),
-            )
-            .detach();
-        });
-        let (client, server) = fidl::endpoints::create_endpoints().expect("creating channel");
-        fs.serve_connection(server).expect("Failed to start mock paver");
-        fasync::Task::spawn(fs.collect()).detach();
-
         let mut http = MockHttpRequest::empty();
 
         for response in mock_responses {
@@ -209,30 +159,15 @@ mod tests {
             http.add_response(hyper::Response::new(response));
         }
 
-        let realm_builder = RealmBuilder::new().await.unwrap();
-        let resolver =
-            ResolverForTest::new(updater.repo, TEST_REPO_URL.parse().unwrap(), None, realm_builder)
-                .await
-                .expect("Creating resolver");
-
-        install_update_with_http(
-            resolver.cache.blobfs.root_dir_handle().expect("getting blobfs root handle"),
-            client,
-            Arc::clone(&resolver.cache.cache),
-            Arc::clone(&resolver.resolver),
-            "test".to_owned(),
-            app_set,
-            config,
-            TEST_UPDATER_URL.to_owned(),
-            http,
-        )
-        .await
-        .context("Running omaha client")?;
+        install_update_with_http(updater.updater, app_set, config, http)
+            .await
+            .context("Running omaha client")?;
 
         Ok(UpdaterResult {
             paver_events: updater.paver.take_events(),
-            resolver,
             packages: updater.packages,
+            resolver: updater.resolver,
+            realm_instance: updater.realm_instance,
         })
     }
 

@@ -9,12 +9,14 @@ use {
     anyhow::{Context, Error},
     async_trait::async_trait,
     fidl::endpoints::{ClientEnd, Proxy},
+    fidl::endpoints::{DiscoverableProtocolMarker, ServerEnd},
     fidl_fuchsia_io as fio,
     fidl_fuchsia_io::DirectoryProxy,
     fidl_fuchsia_paver::PaverRequestStream,
     fidl_fuchsia_pkg_ext::RepositoryConfigs,
     fuchsia_async as fasync,
     fuchsia_component::server::ServiceFs,
+    fuchsia_component_test::LocalComponentHandles,
     fuchsia_merkle::Hash,
     fuchsia_pkg_testing::{serve::ServedRepository, Package, PackageBuilder, RepositoryBuilder},
     futures::prelude::*,
@@ -55,6 +57,33 @@ pub struct TestParams {
     pub version: String,
     pub omaha_config: Option<OmahaConfig>,
     pub paver_connector: ClientEnd<fio::DirectoryMarker>,
+}
+
+/// Connects the local component to a mock paver.
+///
+/// Unlike other mocks, the `fuchsia.paver.Paver` is serviced by [`isolated_ota_env::TestEnv`], so
+/// this function proxies to the given `paver_dir_proxy` which is expected to host a
+/// file named "fuchsia.paver.Paver" which implements the `fuchsia.paver.Paver` FIDL protocol.
+pub async fn expose_mock_paver(
+    handles: LocalComponentHandles,
+    paver_dir_proxy: fio::DirectoryProxy,
+) -> Result<(), Error> {
+    let mut fs = ServiceFs::new();
+
+    fs.dir("svc").add_service_connector(
+        move |server_end: ServerEnd<fidl_fuchsia_paver::PaverMarker>| {
+            fdio::service_connect_at(
+                paver_dir_proxy.as_channel().as_ref(),
+                &format!("/{}", fidl_fuchsia_paver::PaverMarker::PROTOCOL_NAME),
+                server_end.into_channel(),
+            )
+            .expect("failed to connect to paver service node");
+        },
+    );
+
+    fs.serve_connection(handles.outgoing_dir).expect("failed to serve paver fs connection");
+    fs.collect::<()>().await;
+    Ok(())
 }
 
 #[async_trait(?Send)]
@@ -245,7 +274,6 @@ impl<R> TestEnvBuilder<R> {
 
 pub struct TestEnv<R> {
     blobfs: Option<ClientEnd<fio::DirectoryMarker>>,
-    board: String,
     channel: String,
     omaha: OmahaState,
     packages: Vec<Package>,
@@ -254,6 +282,7 @@ pub struct TestEnv<R> {
     repo_config_dir: tempfile::TempDir,
     ssl_certs: DirectoryProxy,
     update_merkle: Hash,
+    board: String,
     version: String,
     test_executor: Box<dyn TestExecutor<R>>,
 }

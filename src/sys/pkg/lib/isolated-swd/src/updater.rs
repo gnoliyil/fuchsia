@@ -2,105 +2,35 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 use {
-    crate::cache::Cache,
-    crate::resolver::Resolver,
     anyhow::{anyhow, Context, Error},
-    fidl::endpoints::{ClientEnd, DiscoverableProtocolMarker},
-    fidl_fuchsia_io as fio,
-    fidl_fuchsia_paver::{BootManagerMarker, Configuration, PaverMarker, PaverProxy},
-    fidl_fuchsia_pkg::{PackageCacheMarker, PackageResolverMarker},
+    fidl_fuchsia_paver::Configuration,
+    fidl_fuchsia_paver::{BootManagerMarker, PaverMarker, PaverProxy},
     fidl_fuchsia_update_installer::{InstallerMarker, InstallerProxy, RebootControllerMarker},
     fidl_fuchsia_update_installer_ext::{
         options::{Initiator, Options},
         start_update, UpdateAttempt,
     },
-    fuchsia_async as fasync,
-    fuchsia_component::{
-        client::{App, AppBuilder},
-        server::{NestedEnvironment, ServiceFs, ServiceObj},
-    },
     fuchsia_zircon as zx,
     futures::prelude::*,
-    std::io::Write,
-    std::sync::Arc,
 };
-
-pub const UPDATER_URL: &str =
-    "fuchsia-pkg://fuchsia.com/isolated-swd-components#meta/system-updater-isolated.cmx";
 
 pub const DEFAULT_UPDATE_PACKAGE_URL: &str = "fuchsia-pkg://fuchsia.com/update";
 
 pub struct Updater {
-    _system_updater: App,
-    _resolver: Arc<Resolver>,
     proxy: InstallerProxy,
     paver_proxy: PaverProxy,
-    _env: NestedEnvironment,
 }
 
 impl Updater {
-    /// Launch the system updater using the given components and board name.
-    pub async fn launch(
-        blobfs: ClientEnd<fio::DirectoryMarker>,
-        paver: ClientEnd<fio::DirectoryMarker>,
-        resolver: Arc<Resolver>,
-        cache: Arc<Cache>,
-        board_name: &str,
-    ) -> Result<Self, Error> {
-        Self::launch_with_components(blobfs, paver, resolver, cache, board_name, UPDATER_URL).await
+    pub fn new_with_proxies(proxy: InstallerProxy, paver_proxy: PaverProxy) -> Self {
+        Self { proxy, paver_proxy }
     }
 
-    /// Launch the system updater. This is the same as `launch`, except that it expects the path
-    /// to the `system-updater` component to be provided.
-    pub async fn launch_with_components(
-        blobfs: ClientEnd<fio::DirectoryMarker>,
-        paver: ClientEnd<fio::DirectoryMarker>,
-        resolver: Arc<Resolver>,
-        cache: Arc<Cache>,
-        board_name: &str,
-        updater_url: &str,
-    ) -> Result<Self, Error> {
-        let board_info_dir = tempfile::tempdir()?;
-        let mut path = board_info_dir.path().to_owned();
-        path.push("board");
-        let mut file = std::fs::File::create(path).context("creating board file")?;
-        file.write_all(board_name.as_bytes())?;
-        drop(file);
-
-        let updater = AppBuilder::new(updater_url)
-            .add_handle_to_namespace("/blob".to_owned(), blobfs)
-            .add_dir_to_namespace(
-                "/config/build-info".to_owned(),
-                std::fs::File::open(board_info_dir.into_path())?,
-            )?;
-
-        let mut fs: ServiceFs<ServiceObj<'_, ()>> = ServiceFs::new();
-        let paver = Arc::new(paver);
-        fs.add_proxy_service_to::<PaverMarker, _>(Arc::clone(&paver))
-            .add_proxy_service_to::<PackageResolverMarker, _>(resolver.directory_request()?)
-            .add_proxy_service_to::<PackageCacheMarker, _>(cache.directory_request()?)
-            .add_proxy_service::<fidl_fuchsia_logger::LogSinkMarker, _>();
-
-        let (paver_proxy, remote) =
-            fidl::endpoints::create_proxy::<PaverMarker>().context("Creating paver proxy")?;
-        fdio::service_connect_at(
-            paver.channel(),
-            PaverMarker::PROTOCOL_NAME,
-            remote.into_channel(),
-        )
-        .context("Connecting to paver")?;
-
-        #[allow(deprecated)]
-        let env = fs.create_salted_nested_environment("isolated-swd-updater-env")?;
-        fasync::Task::spawn(fs.collect()).detach();
-
-        let updater = updater.spawn(env.launcher()).context("launching system updater")?;
-
-        let proxy = updater
-            .connect_to_protocol::<InstallerMarker>()
-            .context("connect to fuchsia.update.installer.Installer")?;
-
-        Ok(Self { _system_updater: updater, _resolver: resolver, proxy, paver_proxy, _env: env })
+    pub fn new() -> Result<Self, Error> {
+        Ok(Self::new_with_proxies(
+            fuchsia_component::client::connect_to_protocol::<InstallerMarker>()?,
+            fuchsia_component::client::connect_to_protocol::<PaverMarker>()?,
+        ))
     }
 
     /// Perform an update, skipping the final reboot.
@@ -159,6 +89,7 @@ impl Updater {
     async fn activate_installed_slot(paver: &PaverProxy) -> Result<(), Error> {
         let (boot_manager, remote) = fidl::endpoints::create_proxy::<BootManagerMarker>()
             .context("Creating boot manager proxy")?;
+
         paver.find_boot_manager(remote).context("finding boot manager")?;
 
         let result = boot_manager.query_active_configuration().await;
@@ -194,22 +125,25 @@ pub(crate) mod for_tests {
     use {
         super::*,
         crate::resolver::for_tests::{ResolverForTest, EMPTY_REPO_PATH},
+        anyhow::Context,
+        blobfs_ramdisk::BlobfsRamdisk,
+        fidl_fuchsia_io as fio,
         fidl_fuchsia_paver::PaverRequestStream,
-        fuchsia_component_test::RealmBuilder,
-        fuchsia_merkle::Hash,
-        fuchsia_pkg_testing::{
-            Package, PackageBuilder, Repository, RepositoryBuilder, SystemImageBuilder,
+        fuchsia_async as fasync,
+        fuchsia_component_test::{
+            Capability, ChildOptions, DirectoryContents, RealmBuilder, RealmInstance, Ref, Route,
         },
+        fuchsia_merkle::Hash,
+        fuchsia_pkg_testing::serve::ServedRepository,
+        fuchsia_pkg_testing::{Package, PackageBuilder, RepositoryBuilder, SystemImageBuilder},
         mock_paver::{MockPaverService, MockPaverServiceBuilder, PaverEvent},
         std::collections::HashMap,
+        std::sync::Arc,
+        vfs::directory::entry::DirectoryEntry,
     };
 
-    #[cfg(test)]
     const TEST_CHANNEL: &str = "test";
-    pub const TEST_UPDATER_URL: &str =
-        "fuchsia-pkg://fuchsia.com/isolated-swd-tests#meta/system-updater-isolated.cmx";
     pub const TEST_REPO_URL: &str = "fuchsia-pkg://fuchsia.com";
-
     pub struct UpdaterBuilder {
         paver_builder: MockPaverServiceBuilder,
         packages: Vec<Package>,
@@ -255,6 +189,28 @@ pub(crate) mod for_tests {
             self
         }
 
+        fn serve_mock_paver(stream: PaverRequestStream, paver: Arc<MockPaverService>) {
+            let paver_clone = Arc::clone(&paver);
+            fasync::Task::spawn(
+                Arc::clone(&paver_clone)
+                    .run_paver_service(stream)
+                    .unwrap_or_else(|e| panic!("Failed to run mock paver: {:?}", e)),
+            )
+            .detach();
+        }
+
+        async fn run_mock_paver(
+            handles: fuchsia_component_test::LocalComponentHandles,
+            paver: Arc<MockPaverService>,
+        ) -> Result<(), Error> {
+            let mut fs = fuchsia_component::server::ServiceFs::new();
+            fs.dir("svc")
+                .add_fidl_service(move |stream| Self::serve_mock_paver(stream, Arc::clone(&paver)));
+            fs.serve_connection(handles.outgoing_dir)?;
+            let () = fs.for_each_concurrent(None, |req| async move { req }).await;
+            Ok(())
+        }
+
         /// Create an UpdateForTest from this UpdaterBuilder.
         /// This will construct an update package containing all packages and images added to the
         /// builder, create a repository containing the packages, and create a MockPaver.
@@ -280,14 +236,193 @@ pub(crate) mod for_tests {
                     .await
                     .expect("Building repo"),
             );
+
+            let realm_builder = RealmBuilder::new().await.unwrap();
+            let blobfs = BlobfsRamdisk::start().context("starting blobfs").unwrap();
+
+            let served_repo = Arc::new(Arc::clone(&repo).server().start().unwrap());
+
+            let resolver_realm = ResolverForTest::realm_setup(
+                &realm_builder,
+                Arc::clone(&served_repo),
+                self.repo_url.clone(),
+                Some(TEST_CHANNEL.to_owned()),
+                &blobfs,
+            )
+            .await
+            .unwrap();
+
+            let system_updater = realm_builder
+                .add_child("system-updater", "#meta/system-updater.cm", ChildOptions::new())
+                .await
+                .unwrap();
+
+            // Set up blobfs and routes
+            let blobfs_proxy = blobfs.root_dir_proxy().context("getting root dir proxy").unwrap();
+            let blobfs_vfs = vfs::remote::remote_dir(blobfs_proxy);
+
+            let mock_blobfs = realm_builder
+                .add_local_child(
+                    "system_updater_mock_directories",
+                    move |handles| {
+                        let blobfs_clone = blobfs_vfs.clone();
+                        let out_dir = vfs::pseudo_directory! {
+                            "blob" => blobfs_clone,
+                        };
+                        let scope = vfs::execution_scope::ExecutionScope::new();
+                        let () = out_dir.open(
+                            scope.clone(),
+                            fio::OpenFlags::RIGHT_READABLE
+                                | fio::OpenFlags::RIGHT_WRITABLE
+                                | fio::OpenFlags::RIGHT_EXECUTABLE,
+                            0,
+                            vfs::path::Path::dot(),
+                            handles.outgoing_dir.into_channel().into(),
+                        );
+                        async move { Ok(scope.wait().await) }.boxed()
+                    },
+                    ChildOptions::new(),
+                )
+                .await
+                .unwrap();
+
+            realm_builder
+                .add_route(
+                    Route::new()
+                        .capability(
+                            Capability::directory("blob-exec")
+                                .path("/blob")
+                                .rights(fio::RW_STAR_DIR | fio::Operations::EXECUTE),
+                        )
+                        .from(&mock_blobfs)
+                        .to(&system_updater),
+                )
+                .await
+                .unwrap();
+
+            // Set up paver and routes
             let paver = Arc::new(self.paver_builder.build());
+            let paver_clone = Arc::clone(&paver);
+            let mock_paver = realm_builder
+                .add_local_child(
+                    "paver",
+                    move |handles| Box::pin(Self::run_mock_paver(handles, Arc::clone(&paver))),
+                    ChildOptions::new(),
+                )
+                .await
+                .unwrap();
+
+            realm_builder
+                .add_route(
+                    Route::new()
+                        .capability(Capability::protocol_by_name("fuchsia.paver.Paver"))
+                        .from(&mock_paver)
+                        .to(&system_updater),
+                )
+                .await
+                .unwrap();
+            realm_builder
+                .add_route(
+                    Route::new()
+                        .capability(Capability::protocol_by_name("fuchsia.paver.Paver"))
+                        .from(&mock_paver)
+                        .to(Ref::parent()),
+                )
+                .await
+                .unwrap();
+
+            // Set up build-info and routes
+            realm_builder
+                .read_only_directory(
+                    "build-info",
+                    vec![&system_updater],
+                    DirectoryContents::new().add_file("board", "test".as_bytes()),
+                )
+                .await
+                .unwrap();
+
+            // Set up pkg-resolver and pkg-cache routes
+            realm_builder
+                .add_route(
+                    Route::new()
+                        .capability(Capability::protocol_by_name("fuchsia.pkg.PackageResolver"))
+                        .from(&resolver_realm.resolver)
+                        .to(&system_updater),
+                )
+                .await
+                .unwrap();
+
+            realm_builder
+                .add_route(
+                    Route::new()
+                        .capability(Capability::protocol_by_name("fuchsia.pkg.PackageCache"))
+                        .capability(Capability::protocol_by_name("fuchsia.pkg.RetainedPackages"))
+                        .capability(Capability::protocol_by_name("fuchsia.space.Manager"))
+                        .from(&resolver_realm.cache)
+                        .to(&system_updater),
+                )
+                .await
+                .unwrap();
+
+            // Make sure the component under test can log.
+            realm_builder
+                .add_route(
+                    Route::new()
+                        .capability(Capability::protocol_by_name("fuchsia.logger.LogSink"))
+                        .from(Ref::parent())
+                        .to(&system_updater),
+                )
+                .await
+                .unwrap();
+
+            // Expose system_updater to the parent
+            realm_builder
+                .add_route(
+                    Route::new()
+                        .capability(Capability::protocol_by_name(
+                            "fuchsia.update.installer.Installer",
+                        ))
+                        .from(&system_updater)
+                        .to(Ref::parent()),
+                )
+                .await
+                .unwrap();
+
+            // Expose pkg-cache to these tests, for use by verify_packages
+            realm_builder
+                .add_route(
+                    Route::new()
+                        .capability(Capability::protocol_by_name("fuchsia.pkg.PackageCache"))
+                        .from(&resolver_realm.cache)
+                        .to(Ref::parent()),
+                )
+                .await
+                .unwrap();
+
+            let realm_instance = realm_builder.build().await.unwrap();
+
+            let installer_proxy = realm_instance
+                .root
+                .connect_to_protocol_at_exposed_dir::<InstallerMarker>()
+                .unwrap();
+            let paver_proxy =
+                realm_instance.root.connect_to_protocol_at_exposed_dir::<PaverMarker>().unwrap();
+
+            let updater = Updater::new_with_proxies(installer_proxy, paver_proxy);
+
+            let resolver = ResolverForTest::new(&realm_instance, blobfs, Arc::clone(&served_repo))
+                .await
+                .unwrap();
 
             UpdaterForTest {
-                repo,
-                paver,
+                served_repo,
+                paver: paver_clone,
                 packages: self.packages,
                 update_merkle_root: *update.meta_far_merkle_root(),
                 repo_url: self.repo_url,
+                updater,
+                resolver,
+                realm_instance,
             }
         }
 
@@ -313,62 +448,27 @@ pub(crate) mod for_tests {
     /// This wraps the `Updater` in order to reduce test boilerplate.
     /// Should be constructed using `UpdaterBuilder`.
     pub struct UpdaterForTest {
-        pub repo: Arc<Repository>,
+        pub served_repo: Arc<ServedRepository>,
         pub paver: Arc<MockPaverService>,
         pub packages: Vec<Package>,
         pub update_merkle_root: Hash,
         pub repo_url: fuchsia_url::RepositoryUrl,
+        pub resolver: ResolverForTest,
+        pub updater: Updater,
+        pub realm_instance: RealmInstance,
     }
 
     impl UpdaterForTest {
-        #[cfg(test)]
-        pub async fn run(self) -> UpdaterResult {
-            let resolver = ResolverForTest::new(
-                self.repo.clone(),
-                self.repo_url.clone(),
-                Some(TEST_CHANNEL.to_owned()),
-                RealmBuilder::new().await.unwrap(),
-            )
-            .await
-            .expect("Creating resolver");
-            self.run_with_resolver(resolver).await
-        }
-
         /// Run the system update, returning an `UpdaterResult` containing information about the
         /// result of the update.
-        pub async fn run_with_resolver(self, resolver: ResolverForTest) -> UpdaterResult {
-            let mut fs: ServiceFs<ServiceObj<'_, ()>> = ServiceFs::new();
-            let paver_clone = Arc::clone(&self.paver);
-            fs.add_fidl_service(move |stream: PaverRequestStream| {
-                fasync::Task::spawn(
-                    Arc::clone(&paver_clone)
-                        .run_paver_service(stream)
-                        .unwrap_or_else(|e| panic!("Failed to run mock paver: {:?}", e)),
-                )
-                .detach();
-            });
-
-            let (client, server) = fidl::endpoints::create_endpoints().expect("creating channel");
-            fs.serve_connection(server).expect("Failed to start mock paver");
-            fasync::Task::spawn(fs.collect()).detach();
-
-            let mut updater = Updater::launch_with_components(
-                resolver.cache.blobfs.root_dir_handle().expect("getting blobfs root handle"),
-                client,
-                Arc::clone(&resolver.resolver),
-                Arc::clone(&resolver.cache.cache),
-                "test",
-                TEST_UPDATER_URL,
-            )
-            .await
-            .expect("launching updater");
-
-            let () = updater.install_update(None).await.expect("installing update");
+        pub async fn run(mut self) -> UpdaterResult {
+            let () = self.updater.install_update(None).await.expect("installing update");
 
             UpdaterResult {
                 paver_events: self.paver.take_events(),
-                resolver,
+                resolver: self.resolver,
                 packages: self.packages,
+                realm_instance: self.realm_instance,
             }
         }
     }
@@ -381,26 +481,27 @@ pub(crate) mod for_tests {
         pub resolver: ResolverForTest,
         /// All the packages that should have been resolved by the update.
         pub packages: Vec<Package>,
+        // The RealmInstance used to run this update, for introspection into component states.
+        pub realm_instance: RealmInstance,
     }
 
     impl UpdaterResult {
         /// Verify that all packages that should have been resolved by the update
         /// were resolved.
         pub async fn verify_packages(&self) -> Result<(), Error> {
+            let blobfs_client = self.resolver.cache.blobfs.client();
             for package in self.packages.iter() {
-                // we deliberately avoid the package resolver here,
-                // as we want to make sure that the system-updater retrieved all the correct blobs.
-                let dir = fidl_fuchsia_pkg_ext::cache::Client::from_proxy(
-                    self.resolver.cache.cache.package_cache_proxy()?,
-                )
-                .open((*package.meta_far_merkle_root()).into())
-                .await
-                .context("opening package")?;
-
-                package
-                    .verify_contents(&dir.into_proxy())
-                    .await
-                    .expect("Package verification failed");
+                // We deliberately avoid the package resolver here, as we want
+                // to make sure that the system-updater retrieved all the
+                // correct blobs.
+                // We also want to avoid pkg-cache, since the packages we
+                // installed are listed in the retained but not dynamic indices,
+                // and will not be returned by PackageCache.Open. So, go
+                // straight to blobfs.
+                let blobs = package.content_and_subpackage_blobs().unwrap();
+                for (merkle, _bytes) in blobs.iter() {
+                    assert!(blobfs_client.has_blob(merkle).await);
+                }
             }
             Ok(())
         }
@@ -412,7 +513,9 @@ pub mod tests {
     use {
         super::for_tests::UpdaterBuilder,
         super::*,
+        anyhow::Context,
         fidl_fuchsia_paver::{Asset, Configuration},
+        fuchsia_async as fasync,
         fuchsia_pkg_testing::{make_current_epoch_json, PackageBuilder},
         mock_paver::PaverEvent,
     };
@@ -423,7 +526,7 @@ pub mod tests {
         let test_package = PackageBuilder::new("test_package")
             .add_resource_at("bin/hello", "this is a test".as_bytes())
             .add_resource_at("data/file", "this is a file".as_bytes())
-            .add_resource_at("meta/test_package.cmx", "{}".as_bytes())
+            .add_resource_at("meta/test_package.cm", "{}".as_bytes())
             .build()
             .await
             .context("Building test_package")?;
@@ -468,7 +571,11 @@ pub mod tests {
             ]
         );
 
-        result.verify_packages().await.context("Verifying packages were correctly installed")?;
+        result
+            .verify_packages()
+            .await
+            .context("Verifying packages were correctly installed")
+            .unwrap();
         Ok(())
     }
 }

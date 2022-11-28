@@ -5,10 +5,8 @@
 use {
     // TODO(fxbug.dev/51770): FuchsiaInstallPlan should be shared with omaha-client.
     super::install_plan::FuchsiaInstallPlan,
-    crate::{cache::Cache, resolver::Resolver, updater::Updater},
+    crate::updater::Updater,
     anyhow::anyhow,
-    fidl::endpoints::ClientEnd,
-    fidl_fuchsia_io as fio,
     fuchsia_url::PinnedAbsolutePackageUrl,
     futures::future::LocalBoxFuture,
     futures::prelude::*,
@@ -18,7 +16,6 @@ use {
         protocol::response::{OmahaStatus, Response},
         request_builder::RequestParams,
     },
-    std::sync::Arc,
     thiserror::Error,
     tracing::warn,
 };
@@ -28,41 +25,13 @@ use {
 /// This Installer implementation does not reboot when `perform_reboot` is called, as the caller of
 /// `isolated-swd` is expected to do that.
 pub struct IsolatedInstaller {
-    blobfs: Option<ClientEnd<fio::DirectoryMarker>>,
-    paver_connector: Option<ClientEnd<fio::DirectoryMarker>>,
-    cache: Arc<Cache>,
-    resolver: Arc<Resolver>,
-    board_name: String,
-    updater_url: String,
-}
-
-impl IsolatedInstaller {
-    pub fn new(
-        blobfs: ClientEnd<fio::DirectoryMarker>,
-        paver_connector: ClientEnd<fio::DirectoryMarker>,
-        cache: Arc<Cache>,
-        resolver: Arc<Resolver>,
-        board_name: String,
-        updater_url: String,
-    ) -> Self {
-        IsolatedInstaller {
-            blobfs: Some(blobfs),
-            paver_connector: Some(paver_connector),
-            cache,
-            resolver,
-            board_name,
-            updater_url,
-        }
-    }
+    pub updater: Updater,
 }
 
 #[derive(Debug, Error)]
 pub enum IsolatedInstallError {
     #[error("running updater failed")]
     Failure(#[source] anyhow::Error),
-
-    #[error("can only run the installer once")]
-    AlreadyRun,
 
     #[error("create install plan")]
     InstallPlan(#[source] anyhow::Error),
@@ -82,26 +51,11 @@ impl Installer for IsolatedInstaller {
             o.receive_progress(None, 0., None, None);
         }
 
-        if self.blobfs.is_none() {
-            return async {
-                ((), vec![AppInstallResult::Failed(IsolatedInstallError::AlreadyRun)])
-            }
-            .boxed();
-        }
-
-        let updater = Updater::launch_with_components(
-            self.blobfs.take().unwrap(),
-            self.paver_connector.take().unwrap(),
-            Arc::clone(&self.resolver),
-            Arc::clone(&self.cache),
-            &self.board_name,
-            &self.updater_url,
-        );
         let url = install_plan.url.clone();
 
         async move {
-            let mut updater = updater.await.map_err(IsolatedInstallError::Failure)?;
-            let () = updater
+            let () = self
+                .updater
                 .install_update(Some(&url.clone().into()))
                 .await
                 .map_err(IsolatedInstallError::Failure)?;

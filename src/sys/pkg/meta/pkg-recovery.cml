@@ -22,6 +22,10 @@
             url: "#meta/pkg-resolver.cm",
         },
         {
+            name: "system-updater",
+            url: "#meta/system-updater.cm",
+        },
+        {
             // TODO(fxbug.dev/65383) investigate how isolated-ota should work with commits. GC is
             // traditionally blocked on the previous updated being committed. Here, we relax this
             // restriction because it does not make sense for recovery, and use a fake
@@ -57,31 +61,44 @@
             rights: [ "r*" ],
         },
         {
+            // Needed so system-updater knows what board to install for.
+            directory: "build-info",
+            from: "parent",
+            to: "#system-updater",
+            rights: [ "r*" ],
+        },
+        {
             protocol: [
-                "fuchsia.boot.Arguments",
+                "fuchsia.logger.LogSink",
                 "fuchsia.metrics.MetricEventLoggerFactory",
                 "fuchsia.tracing.provider.Registry",
             ],
             from: "parent",
-            to: "#pkg-cache",
-        },
-        {
-            protocol: [ "fuchsia.logger.LogSink" ],
-            from: "parent",
             to: [
+                "#fake-system-update-committer",
                 "#pkg-cache",
                 "#pkg-resolver",
+                "#system-updater",
             ],
+        },
+        {
+            protocol: [ "fuchsia.boot.Arguments" ],
+            from: "parent",
+            to: "#pkg-cache",
         },
         {
             protocol: [
                 "fuchsia.boot.Arguments",
-                "fuchsia.metrics.MetricEventLoggerFactory",
                 "fuchsia.net.name.Lookup",
                 "fuchsia.posix.socket.Provider",
             ],
             from: "parent",
             to: "#pkg-resolver",
+        },
+        {
+            protocol: "fuchsia.paver.Paver",
+            from: "parent",
+            to: "#system-updater",
         },
 
         // Routes between children
@@ -96,25 +113,24 @@
             to: "#pkg-resolver",
         },
         {
-            protocol: [ "fuchsia.logger.LogSink" ],
-            from: "parent",
-            to: "#fake-system-update-committer",
+            protocol: [
+                "fuchsia.pkg.PackageCache",
+                "fuchsia.pkg.RetainedPackages",
+                "fuchsia.space.Manager",
+            ],
+            from: "#pkg-cache",
+            to: "#system-updater",
+        },
+        {
+            protocol: [ "fuchsia.pkg.PackageResolver" ],
+            from: "#pkg-resolver",
+            to: "#system-updater",
         },
     ],
     expose: [
         {
-            protocol: [
-                // TODO(fxbug.dev/104918) We need these exposed until system-updater-isolated is v2.
-                "fuchsia.pkg.PackageCache",
-                "fuchsia.space.Manager",
-            ],
-            from: "#pkg-cache",
-            to: "parent",
-        },
-        {
-            // TODO(fxbug.dev/104918) We need this exposed until system-updater-isolated is v2.
-            protocol: [ "fuchsia.pkg.PackageResolver" ],
-            from: "#pkg-resolver",
+            protocol: [ "fuchsia.update.installer.Installer" ],
+            from: "#system-updater",
             to: "parent",
         },
     ],

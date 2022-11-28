@@ -15,23 +15,24 @@ use {
     fidl_fuchsia_paver::{Asset, Configuration},
     fidl_fuchsia_pkg_ext::{MirrorConfigBuilder, RepositoryConfigBuilder, RepositoryConfigs},
     fuchsia_async as fasync,
+    fuchsia_component_test::LocalComponentHandles,
     fuchsia_component_test::{Capability, ChildOptions, RealmBuilder, Ref, Route},
     fuchsia_pkg_testing::{make_current_epoch_json, Package, PackageBuilder},
     fuchsia_zircon as zx,
     futures::{future::FutureExt, prelude::*},
     http::uri::Uri,
-    isolated_ota::{
-        download_and_apply_update_with_pre_configured_components, OmahaConfig, UpdateError,
-    },
+    isolated_ota::{download_and_apply_update_with_updater, OmahaConfig, UpdateError},
     isolated_ota_env::{
-        OmahaState, TestEnvBuilder, TestExecutor, TestParams, GLOBAL_SSL_CERTS_PATH,
+        expose_mock_paver, OmahaState, TestEnvBuilder, TestExecutor, TestParams,
+        GLOBAL_SSL_CERTS_PATH,
     },
-    isolated_swd::{cache::Cache, resolver::Resolver},
+    isolated_swd::updater::Updater,
     mock_omaha_server::OmahaResponse,
     mock_paver::{hooks as mphooks, PaverEvent},
     parking_lot::Mutex,
-    std::{collections::BTreeSet, sync::Arc},
+    std::collections::BTreeSet,
     vfs::directory::entry::DirectoryEntry,
+    vfs::file::vmo::read_only_static,
 };
 
 struct TestResult {
@@ -98,6 +99,7 @@ impl IsolatedOtaTestExecutor {
 impl TestExecutor<TestResult> for IsolatedOtaTestExecutor {
     async fn run(&self, params: TestParams) -> TestResult {
         let realm_builder = RealmBuilder::new().await.unwrap();
+
         let pkg_component =
             realm_builder.add_child("pkg", "#meta/pkg.cm", ChildOptions::new()).await.unwrap();
         realm_builder
@@ -118,41 +120,38 @@ impl TestExecutor<TestResult> for IsolatedOtaTestExecutor {
 
         realm_builder
             .add_route(
-                // TODO(fxbug.dev/104918): clean up when system-updater-isolated is v2.
                 Route::new()
-                    .capability(Capability::protocol_by_name("fuchsia.pkg.PackageCache"))
-                    .capability(Capability::protocol_by_name("fuchsia.pkg.PackageResolver"))
-                    .capability(Capability::protocol_by_name("fuchsia.pkg.RetainedPackages"))
-                    .capability(Capability::protocol_by_name("fuchsia.space.Manager"))
+                    .capability(Capability::protocol_by_name("fuchsia.update.installer.Installer"))
                     .from(&pkg_component)
                     .to(Ref::parent()),
             )
             .await
             .unwrap();
 
-        realm_builder.add_route(Route::new().from(&pkg_component).to(Ref::parent())).await.unwrap();
-
-        let pkg_resolver_directories_out_dir = vfs::pseudo_directory! {
+        let directories_out_dir = vfs::pseudo_directory! {
             "config" => vfs::pseudo_directory! {
                 "data" => vfs::pseudo_directory!{
-                        "repositories" => vfs::remote::remote_dir(fuchsia_fs::directory::open_in_namespace(params.repo_config_dir.path().to_str().unwrap(), fio::OpenFlags::RIGHT_READABLE).unwrap())
+                    "repositories" => vfs::remote::remote_dir(fuchsia_fs::directory::open_in_namespace(params.repo_config_dir.path().to_str().unwrap(), fio::OpenFlags::RIGHT_READABLE).unwrap())
                 },
-                "ssl" => vfs::remote::remote_dir(
+                "build-info" => vfs::pseudo_directory!{
+                    "build" => read_only_static(b"test")
+                },
+            "ssl" => vfs::remote::remote_dir(
                     params.ssl_certs
                 ),
             },
         };
-        let pkg_resolver_directories_out_dir = Mutex::new(Some(pkg_resolver_directories_out_dir));
-        let pkg_resolver_directories = realm_builder
+        let directories_out_dir = Mutex::new(Some(directories_out_dir));
+        let directories_component = realm_builder
             .add_local_child(
-                "pkg_resolver_directories",
+                "directories",
                 move |handles| {
-                    let pkg_resolver_directories_out_dir = pkg_resolver_directories_out_dir
+                    let directories_out_dir = directories_out_dir
                         .lock()
                         .take()
                         .expect("mock component should only be launched once");
                     let scope = vfs::execution_scope::ExecutionScope::new();
-                    let () = pkg_resolver_directories_out_dir.open(
+                    directories_out_dir.open(
                         scope.clone(),
                         fio::OpenFlags::RIGHT_READABLE
                             | fio::OpenFlags::RIGHT_WRITABLE
@@ -172,6 +171,45 @@ impl TestExecutor<TestResult> for IsolatedOtaTestExecutor {
             .await
             .unwrap();
 
+        let paver_dir_proxy = params
+            .paver_connector
+            .into_proxy()
+            .expect("failed to convert paver dir client end to proxy");
+        let paver_child = realm_builder
+            .add_local_child(
+                "paver",
+                move |handles: LocalComponentHandles| {
+                    expose_mock_paver(
+                        handles,
+                        fuchsia_fs::directory::clone_no_describe(&paver_dir_proxy, None).unwrap(),
+                    )
+                    .boxed()
+                },
+                ChildOptions::new().eager(),
+            )
+            .await
+            .expect("failed to add paver child");
+
+        realm_builder
+            .add_route(
+                Route::new()
+                    .capability(Capability::protocol_by_name("fuchsia.paver.Paver"))
+                    .from(&paver_child)
+                    .to(&pkg_component),
+            )
+            .await
+            .unwrap();
+
+        realm_builder
+            .add_route(
+                Route::new()
+                    .capability(Capability::protocol_by_name("fuchsia.paver.Paver"))
+                    .from(&paver_child)
+                    .to(Ref::parent()),
+            )
+            .await
+            .unwrap();
+
         // Directory routes
         realm_builder
             .add_route(
@@ -181,7 +219,7 @@ impl TestExecutor<TestResult> for IsolatedOtaTestExecutor {
                             .path("/config/data")
                             .rights(fio::R_STAR_DIR),
                     )
-                    .from(&pkg_resolver_directories)
+                    .from(&directories_component)
                     .to(&pkg_component),
             )
             .await
@@ -194,7 +232,20 @@ impl TestExecutor<TestResult> for IsolatedOtaTestExecutor {
                             .path(GLOBAL_SSL_CERTS_PATH)
                             .rights(fio::R_STAR_DIR),
                     )
-                    .from(&pkg_resolver_directories)
+                    .from(&directories_component)
+                    .to(&pkg_component),
+            )
+            .await
+            .unwrap();
+        realm_builder
+            .add_route(
+                Route::new()
+                    .capability(
+                        Capability::directory("build-info")
+                            .rights(fio::R_STAR_DIR)
+                            .path("/config/build-info"),
+                    )
+                    .from(&directories_component)
                     .to(&pkg_component),
             )
             .await
@@ -231,7 +282,7 @@ impl TestExecutor<TestResult> for IsolatedOtaTestExecutor {
                         "blob" => blobfs_vfs,
                     };
                     let scope = vfs::execution_scope::ExecutionScope::new();
-                    let () = out_dir.open(
+                    out_dir.open(
                         scope.clone(),
                         fio::OpenFlags::RIGHT_READABLE
                             | fio::OpenFlags::RIGHT_WRITABLE
@@ -265,11 +316,13 @@ impl TestExecutor<TestResult> for IsolatedOtaTestExecutor {
             .await
             .unwrap();
 
-        let channel = params.channel.clone();
+        let channel_clone = params.channel.clone();
         let boot_args_mock = realm_builder
             .add_local_child(
                 "boot_arguments",
-                move |handles| Box::pin(Self::run_boot_arguments(handles, Some(channel.clone()))),
+                move |handles| {
+                    Box::pin(Self::run_boot_arguments(handles, Some(params.channel.clone())))
+                },
                 ChildOptions::new(),
             )
             .await
@@ -286,61 +339,23 @@ impl TestExecutor<TestResult> for IsolatedOtaTestExecutor {
             .unwrap();
 
         let realm_instance = realm_builder.build().await.unwrap();
-        let pkg_cache_proxy = realm_instance
-            .root
-            .connect_to_protocol_at_exposed_dir::<fidl_fuchsia_pkg::PackageCacheMarker>()
-            .expect("connect to pkg cache");
-        let space_manager_proxy = realm_instance
-            .root
-            .connect_to_protocol_at_exposed_dir::<fidl_fuchsia_space::ManagerMarker>()
-            .expect("connect to space manager");
 
-        let (cache_clone, remote) =
-            fidl::endpoints::create_endpoints::<fidl_fuchsia_io::DirectoryMarker>().unwrap();
-        realm_instance
+        let installer_proxy = realm_instance
             .root
-            .get_exposed_dir()
-            .clone(
-                fidl_fuchsia_io::OpenFlags::CLONE_SAME_RIGHTS,
-                ServerEnd::from(remote.into_channel()),
-            )
-            .unwrap();
-
-        let cache = Cache::new_with_proxies(
-            pkg_cache_proxy,
-            space_manager_proxy,
-            cache_clone.into_proxy().unwrap(),
-        )
-        .unwrap();
-
-        let pkg_resolver_proxy = realm_instance
+            .connect_to_protocol_at_exposed_dir::<fidl_fuchsia_update_installer::InstallerMarker>()
+            .expect("connect to system updater");
+        let paver_proxy = realm_instance
             .root
-            .connect_to_protocol_at_exposed_dir::<fidl_fuchsia_pkg::PackageResolverMarker>()
-            .expect("connect to package resolver");
-        let (resolver_svc_dir, remote) =
-            fidl::endpoints::create_endpoints::<fidl_fuchsia_io::DirectoryMarker>().unwrap();
-        realm_instance
-            .root
-            .get_exposed_dir()
-            .clone(
-                fidl_fuchsia_io::OpenFlags::CLONE_SAME_RIGHTS,
-                ServerEnd::from(remote.into_channel()),
-            )
-            .unwrap();
+            .connect_to_protocol_at_exposed_dir::<fidl_fuchsia_paver::PaverMarker>()
+            .expect("connect to paver");
 
-        let resolver =
-            Resolver::new_with_proxy(pkg_resolver_proxy, resolver_svc_dir.into_proxy().unwrap())
-                .unwrap();
+        let updater = Updater::new_with_proxies(installer_proxy, paver_proxy);
 
-        let result = download_and_apply_update_with_pre_configured_components(
-            blobfs_proxy,
-            params.paver_connector,
-            &params.channel,
-            &params.board,
+        let result = download_and_apply_update_with_updater(
+            updater,
+            &channel_clone,
             &params.version,
             params.omaha_config,
-            Arc::new(cache),
-            Arc::new(resolver),
         )
         .await;
 

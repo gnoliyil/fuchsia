@@ -115,14 +115,6 @@ fuchsia_unittest_package("system-updater-tests") {
   deps = [ ":bin_test" ]
 }
 
-# TODO(fxbug.dev/76629): omaha-client integration tests must be ported before
-# this can be migrated.
-fuchsia_component("isolated") {
-  component_name = "system-updater-isolated"
-  manifest = "meta/system-updater-isolated.cmx"
-  deps = [ ":bin" ]
-}
-
 fuchsia_component("isolated-v2") {
   component_name = "system-updater-isolated"
   manifest = "meta/system-updater-isolated.cml"

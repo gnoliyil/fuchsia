@@ -7,11 +7,10 @@ use {
         setup::DevhostConfig,
     },
     anyhow::{bail, format_err, Context, Error},
-    fidl::endpoints::ClientEnd,
     fidl::endpoints::ServerEnd,
     fidl_fuchsia_buildinfo::ProviderMarker as BuildInfoMarker,
-    fidl_fuchsia_io as fio, fidl_fuchsia_paver as fpaver, fuchsia_async as fasync,
-    fuchsia_component::{client, server::ServiceFs},
+    fidl_fuchsia_io as fio, fuchsia_async as fasync,
+    fuchsia_component::client,
     futures::prelude::*,
     hyper::Uri,
     isolated_ota::{download_and_apply_update, OmahaConfig},
@@ -22,14 +21,6 @@ use {
 };
 
 const PATH_TO_CONFIGS_DIR: &'static str = "/config/data/ota-configs";
-
-enum PaverType {
-    /// Use the real paver.
-    Real,
-    /// Use a fake paver, which can be connected to using the given connector.
-    #[allow(dead_code)]
-    Fake { connector: ClientEnd<fio::DirectoryMarker> },
-}
 
 enum OtaType {
     /// Ota from a devhost.
@@ -51,7 +42,6 @@ pub struct OtaEnvBuilder {
     board_name: BoardName,
     omaha_config: Option<OmahaConfig>,
     ota_type: OtaType,
-    paver: PaverType,
     ssl_certificates: String,
     outgoing_dir: Arc<Simple>,
     blobfs_proxy: Option<fio::DirectoryProxy>,
@@ -68,7 +58,6 @@ impl OtaEnvBuilder {
             board_name: BoardName::BuildInfo,
             omaha_config: None,
             ota_type: OtaType::WellKnown,
-            paver: PaverType::Real,
             ssl_certificates: "/config/ssl".to_owned(),
             outgoing_dir,
             blobfs_proxy: None,
@@ -98,13 +87,6 @@ impl OtaEnvBuilder {
     /// Use the given StorageType as the storage target.
     pub fn blobfs_proxy(mut self, blobfs_proxy: fio::DirectoryProxy) -> Self {
         self.blobfs_proxy = Some(blobfs_proxy);
-        self
-    }
-
-    #[cfg(test)]
-    /// Use the given connector to connect to a paver service.
-    pub fn fake_paver(mut self, connector: ClientEnd<fio::DirectoryMarker>) -> Self {
-        self.paver = PaverType::Fake { connector };
         self
     }
 
@@ -203,23 +185,10 @@ impl OtaEnvBuilder {
 
         let blobfs_proxy = self.blobfs_proxy.ok_or(format_err!("Blobfs proxy not found"))?;
 
-        let paver_connector = match self.paver {
-            PaverType::Real => {
-                let (paver_connector, remote) = fidl::endpoints::create_endpoints()?;
-                let mut paver_fs = ServiceFs::new();
-                paver_fs.add_proxy_service::<fpaver::PaverMarker, _>();
-                paver_fs.serve_connection(remote).context("Failed to serve on channel")?;
-                fasync::Task::spawn(paver_fs.collect()).detach();
-                paver_connector
-            }
-            PaverType::Fake { connector } => connector,
-        };
-
         Ok(OtaEnv {
             blobfs_proxy,
             board_name,
             omaha_config: self.omaha_config,
-            paver_connector,
             repo_dir,
             ssl_certificates,
             outgoing_dir: self.outgoing_dir,
@@ -231,7 +200,6 @@ pub struct OtaEnv {
     blobfs_proxy: fio::DirectoryProxy,
     board_name: String,
     omaha_config: Option<OmahaConfig>,
-    paver_connector: ClientEnd<fio::DirectoryMarker>,
     repo_dir: File,
     ssl_certificates: File,
     outgoing_dir: Arc<Simple>,
@@ -258,25 +226,18 @@ impl OtaEnv {
                 "ssl" => vfs::remote::remote_dir(
                     proxy_from_file(self.ssl_certificates)?
                 ),
+                "build-info" => vfs::pseudo_directory!{
+                    "board" => vfs::file::vmo::read_only_static(self.board_name.into_bytes()),
+                    "version" => vfs::file::vmo::read_only_static(version.as_bytes()),
+                }
             },
         )?;
 
-        let (blobfs_client, remote) = fidl::endpoints::create_endpoints::<fio::DirectoryMarker>()?;
-        self.blobfs_proxy
-            .clone(fio::OpenFlags::CLONE_SAME_RIGHTS, ServerEnd::from(remote.into_channel()))?;
-
         self.outgoing_dir.add_entry("blob", vfs::remote::remote_dir(self.blobfs_proxy))?;
 
-        download_and_apply_update(
-            blobfs_client,
-            self.paver_connector,
-            channel,
-            &self.board_name,
-            version,
-            self.omaha_config,
-        )
-        .await
-        .context("Installing OTA")?;
+        download_and_apply_update(channel, version, self.omaha_config)
+            .await
+            .context("Installing OTA")?;
 
         Ok(())
     }
@@ -385,7 +346,6 @@ mod tests {
         fuchsia_runtime::{take_startup_handle, HandleType},
         futures::future::{ready, BoxFuture},
         hyper::{header, Body, Request, Response, StatusCode},
-        mock_paver::MockPaverServiceBuilder,
         std::{
             collections::{BTreeSet, HashMap},
             sync::{Arc, Mutex},
@@ -576,24 +536,6 @@ mod tests {
             let config_url = format!("{}/config.json", url);
             request_handler.set_repo_address(url);
 
-            // Set up the mock paver.
-            let mock_paver = Arc::new(MockPaverServiceBuilder::new().build());
-            let (paver_connector, remote) = fidl::endpoints::create_endpoints()?;
-            let mut paver_fs = ServiceFs::new();
-            let paver_clone = Arc::clone(&mock_paver);
-            paver_fs.add_fidl_service(move |stream: fpaver::PaverRequestStream| {
-                fasync::Task::spawn(
-                    Arc::clone(&paver_clone)
-                        .run_paver_service(stream)
-                        .unwrap_or_else(|e| panic!("Failed to run paver: {:?}", e)),
-                )
-                .detach();
-            });
-            paver_fs.serve_connection(remote).context("serving paver svcfs")?;
-            fasync::Task::spawn(paver_fs.collect()).detach();
-            let paver_connector = ClientEnd::from(paver_connector);
-
-            // Get the devhost config
             let cfg = DevhostConfig { url: config_url };
 
             let directory_handle = take_startup_handle(HandleType::DirectoryRequest.into())
@@ -619,7 +561,6 @@ mod tests {
             let ota_env = OtaEnvBuilder::new(outgoing_dir_vfs)
                 .board_name("x64")
                 .blobfs_proxy(blobfs_proxy)
-                .fake_paver(paver_connector)
                 .ssl_certificates(TEST_SSL_CERTS)
                 .devhost(cfg)
                 .build()

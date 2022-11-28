@@ -45,6 +45,11 @@
             rights: [ "r*" ],
             path: "/config/ssl",
         },
+        {
+            directory: "build-info-override",
+            rights: [ "r*" ],
+            path: "/config/build-info",
+        },
     ],
     use: [
         {
@@ -68,12 +73,7 @@
             path: "/tmp",
         },
         {
-            protocol: [
-                "fuchsia.pkg.PackageCache",
-                "fuchsia.pkg.PackageResolver",
-                "fuchsia.pkg.RetainedPackages",
-                "fuchsia.space.Manager",
-            ],
+            protocol: [ "fuchsia.update.installer.Installer" ],
             from: "#pkg-recovery",
         },
         {
@@ -124,6 +124,13 @@
             to: "#pkg-recovery",
             dependency: "weak_for_migration",
         },
+        {
+            directory: "build-info-override",
+            from: "self",
+            as: "build-info",
+            to: "#pkg-recovery",
+            dependency: "weak_for_migration",
+        },
 
         // Offer other protocols that pkg-recovery expects.
         {
@@ -133,6 +140,7 @@
                 "fuchsia.logger.LogSink",
                 "fuchsia.metrics.MetricEventLoggerFactory",
                 "fuchsia.net.name.Lookup",
+                "fuchsia.paver.Paver",
                 "fuchsia.posix.socket.Provider",
                 "fuchsia.tracing.provider.Registry",
             ],

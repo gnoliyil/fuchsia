@@ -10,9 +10,7 @@ rustc_library("isolated-ota") {
   with_unit_tests = true
 
   deps = [
-    "//sdk/fidl/fuchsia.io:fuchsia.io_rust",
     "//src/lib/fidl/rust/fidl",
-    "//src/lib/fuchsia-async",
     "//src/sys/pkg/lib/isolated-swd",
     "//third_party/rust_crates:anyhow",
     "//third_party/rust_crates:thiserror",
