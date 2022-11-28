@@ -926,6 +926,7 @@ zx_status_t VmMapping::PageFault(vaddr_t va, const uint pf_flags, LazyPageReques
     range.mmu_flags &= ~ARCH_MMU_FLAG_PERM_WRITE;
   }
 
+#if ARCH_ARM64
   // If we are faulting a page into a guest, clean the caches.
   //
   // Cleaning pages is required to ensure that guests --- who can disable
@@ -944,6 +945,7 @@ zx_status_t VmMapping::PageFault(vaddr_t va, const uint pf_flags, LazyPageReques
       sync_cm.SyncAddr(vaddr, PAGE_SIZE);        // Sync i-cache with d-cache.
     }
   }
+#endif
 
   VM_KTRACE_DURATION(2, "map_page", va, pf_flags);
 
