@@ -7,7 +7,7 @@ use crate::util;
 use anyhow::{Context, Result};
 use assembly_config_schema::{
     board_config::BoardInformation,
-    product_config::{BuildType, FeatureSupportLevel, ProductAssemblyConfig},
+    product_config::{AssemblyConfig, BuildType, FeatureSupportLevel},
 };
 use assembly_tool::SdkToolProvider;
 use camino::Utf8PathBuf;
@@ -30,7 +30,7 @@ pub fn assemble(args: ProductArgs) -> Result<()> {
     info!("Loading configuration files.");
     info!("  product: {}", product);
 
-    let config: ProductAssemblyConfig =
+    let config: AssemblyConfig =
         util::read_config(&product).context("Loading product configuration")?;
 
     let board_info = board_info

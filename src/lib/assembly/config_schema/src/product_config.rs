@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// (`crate::config::ImageAssemblyConfig`) from that.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct ProductAssemblyConfig {
+pub struct AssemblyConfig {
     pub platform: PlatformConfig,
     pub product: ProductConfig,
 }
@@ -410,7 +410,7 @@ mod tests {
         "#;
 
         let mut cursor = std::io::Cursor::new(json5);
-        let config: ProductAssemblyConfig = util::from_reader(&mut cursor).unwrap();
+        let config: AssemblyConfig = util::from_reader(&mut cursor).unwrap();
         assert_eq!(config.platform.build_type, BuildType::Eng);
         assert_eq!(config.platform.feature_set_level, FeatureSupportLevel::Minimal);
     }
@@ -428,7 +428,7 @@ mod tests {
         "#;
 
         let mut cursor = std::io::Cursor::new(json5);
-        let config: ProductAssemblyConfig = util::from_reader(&mut cursor).unwrap();
+        let config: AssemblyConfig = util::from_reader(&mut cursor).unwrap();
         assert_eq!(config.platform.build_type, BuildType::Eng);
         assert_eq!(config.platform.feature_set_level, FeatureSupportLevel::Bringup);
     }
@@ -446,7 +446,7 @@ mod tests {
         "#;
 
         let mut cursor = std::io::Cursor::new(json5);
-        let config: ProductAssemblyConfig = util::from_reader(&mut cursor).unwrap();
+        let config: AssemblyConfig = util::from_reader(&mut cursor).unwrap();
         assert_eq!(config.platform.build_type, BuildType::Eng);
         assert_eq!(config.platform.feature_set_level, FeatureSupportLevel::Minimal);
     }
@@ -464,7 +464,7 @@ mod tests {
         "#;
 
         let mut cursor = std::io::Cursor::new(json5);
-        let config: ProductAssemblyConfig = util::from_reader(&mut cursor).unwrap();
+        let config: AssemblyConfig = util::from_reader(&mut cursor).unwrap();
         assert_eq!(config.platform.build_type, BuildType::Eng);
         assert_eq!(config.platform.feature_set_level, FeatureSupportLevel::Empty);
     }
@@ -481,7 +481,7 @@ mod tests {
         "#;
 
         let mut cursor = std::io::Cursor::new(json5);
-        let config: ProductAssemblyConfig = util::from_reader(&mut cursor).unwrap();
+        let config: AssemblyConfig = util::from_reader(&mut cursor).unwrap();
         assert_eq!(config.platform.build_type, BuildType::UserDebug);
     }
 
@@ -497,7 +497,7 @@ mod tests {
         "#;
 
         let mut cursor = std::io::Cursor::new(json5);
-        let config: ProductAssemblyConfig = util::from_reader(&mut cursor).unwrap();
+        let config: AssemblyConfig = util::from_reader(&mut cursor).unwrap();
         assert_eq!(config.platform.build_type, BuildType::User);
     }
 
@@ -531,7 +531,7 @@ mod tests {
         "#;
 
         let mut cursor = std::io::Cursor::new(json5);
-        let config: ProductAssemblyConfig = util::from_reader(&mut cursor).unwrap();
+        let config: AssemblyConfig = util::from_reader(&mut cursor).unwrap();
         assert_eq!(config.platform.build_type, BuildType::Eng);
         assert_eq!(
             config.product.packages.base,

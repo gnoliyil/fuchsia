@@ -5,7 +5,7 @@
 use anyhow::ensure;
 use assembly_config_schema::{
     board_config::{BoardInformation, BoardInformationExt},
-    product_config::{BuildType, FeatureControl, ProductAssemblyConfig},
+    product_config::{AssemblyConfig, BuildType, FeatureControl},
 };
 use fidl_fuchsia_logger::MAX_TAGS;
 use std::collections::{BTreeMap, BTreeSet};
@@ -38,7 +38,7 @@ const BASE_CONSOLE_DENIED_TAGS: &[&str] = &["NUD", "klog"];
 ///
 /// Returns a map from components manifest paths to configuration fields.
 pub fn define_bootfs_config(
-    config: &ProductAssemblyConfig,
+    config: &AssemblyConfig,
     _board_info: Option<&BoardInformation>,
 ) -> anyhow::Result<PackageConfigPatch> {
     let mut bootfs_patches = PackageConfigPatch::default();
@@ -71,7 +71,7 @@ pub fn define_bootfs_config(
 ///
 /// Returns a map from package names to configuration updates.
 pub fn define_repackaging(
-    config: &ProductAssemblyConfig,
+    config: &AssemblyConfig,
     board_info: Option<&BoardInformation>,
 ) -> anyhow::Result<StructuredConfigPatches> {
     let mut patches = PatchesBuilder::default();
