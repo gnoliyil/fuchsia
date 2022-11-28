@@ -530,14 +530,10 @@ func (r *RunCommand) runAgainstTarget(ctx context.Context, t targets.Target, arg
 			addr.IP = ipv4
 			addr.Zone = ""
 		}
-		env := map[string]string{
-			constants.DeviceAddrEnvKey: addr.String(),
-			constants.IPv4AddrEnvKey:   ipv4.String(),
-			constants.IPv6AddrEnvKey:   ipv6.String(),
-		}
-		for k, v := range env {
-			testrunnerEnv[k] = v
-		}
+
+		testrunnerEnv[constants.DeviceAddrEnvKey] = addr.String()
+		testrunnerEnv[constants.IPv4AddrEnvKey] = ipv4.String()
+		testrunnerEnv[constants.IPv6AddrEnvKey] = ipv6.String()
 	}
 
 	// One would assume this should only be provisioned when paving, but
@@ -553,9 +549,6 @@ func (r *RunCommand) runAgainstTarget(ctx context.Context, t targets.Target, arg
 		testrunnerEnv[constants.SSHKeyEnvKey] = absKeyPath
 	}
 
-	// Run the provided command against t0, adding |subprocessEnv| into
-	// the environment.
-
 	// TODO(https://fxbug.dev/111922): testrunner does heavy use of env
 	// variables. Setting these env variables is temporary until we refactor
 	// testrunner to take these variables as arguments or flags.
@@ -569,58 +562,13 @@ func (r *RunCommand) runAgainstTarget(ctx context.Context, t targets.Target, arg
 		setEnviron(t.FFXEnv())
 	}
 
-	// Parse testrunner flags.
-	// We need this as an intermediate step for the merge of testrunner and
-	// botanist (https://fxbug.dev/111922). Once we unify the set of flags and remove the path to
-	// testrunner from the args we can remove this.
-	tf := flag.NewFlagSet("testrunner flags", flag.ContinueOnError)
-	var testrunnerFlags testrunner.TestrunnerFlags
-	var testsPath string
+	r.testrunnerFlags.FfxExperimentLevel = r.ffxExperimentLevel
+	r.testrunnerFlags.FfxPath = r.ffxPath
 
-	// In case it is not possible to parse the testrunner flags as botanist flags
-	// it is necessary to parse them in this branch.
-	if len(args) > 1 {
-		logger.Tracef(ctx, "parsing testrunner flags with args=%v", args)
+	logger.Debugf(ctx, "botanist positional args (passed to testrunner) %v", args)
 
-		tf.BoolVar(&testrunnerFlags.Help, "help", false, "Whether to show Usage and exit.")
-		tf.StringVar(&testrunnerFlags.OutDir, "out-dir", "", "Optional path where a directory containing test results should be created.")
-		tf.StringVar(&testrunnerFlags.NsjailPath, "nsjail", "", "Optional path to an NsJail binary to use for linux host test sandboxing.")
-		tf.StringVar(&testrunnerFlags.NsjailRoot, "nsjail-root", "", "Path to the directory to use as the NsJail root directory")
-		tf.StringVar(&testrunnerFlags.LocalWD, "C", "", "Working directory of local testing subprocesses; if unset the current working directory will be used.")
-		tf.BoolVar(&testrunnerFlags.UseRuntests, "use-runtests", false, "Whether to default to running fuchsia tests with runtests; if false, run_test_component will be used.")
-		tf.StringVar(&testrunnerFlags.SnapshotFile, "snapshot-output", "", "The output filename for the snapshot. This will be created in the output directory.")
-		tf.Var(&testrunnerFlags.LogLevel, "level", "Output verbosity, can be fatal, error, warning, info, debug or trace.")
-		tf.StringVar(&testrunnerFlags.FfxPath, "ffx", "", "Path to the ffx tool.")
-		tf.IntVar(&testrunnerFlags.FfxExperimentLevel, "ffx-experiment-level", 0, "The level of experimental features to enable. If -ffx is not set, this will have no effect.")
-		tf.BoolVar(&testrunnerFlags.PrefetchPackages, "prefetch-packages", false, "Prefetch any test packages in the background.")
-		tf.BoolVar(&testrunnerFlags.UseSerial, "use-serial", false, "Use serial to run tests on the target.")
-
-		// Once we remove "./testrunner" from the args we can remove this
-		// branch.
-		if args[0] == "./testrunner" {
-			args = args[1:]
-		}
-
-		if err := tf.Parse(args); err != nil {
-			return err
-		}
-
-		logger.Debugf(ctx, "testrunner positional args %v", tf.Args())
-		testsPath = tf.Arg(0)
-
-	} else {
-		// This branch is only taken when the './testrunner' is not part of the
-		// args, therefore |args| only contain the testspath
-		testrunnerFlags = r.testrunnerFlags
-		testrunnerFlags.FfxExperimentLevel = r.ffxExperimentLevel
-		testrunnerFlags.FfxPath = r.ffxPath
-
-		logger.Debugf(ctx, "testrunner positional args %v", args)
-		testsPath = args[0]
-	}
-
-	if err := testrunner.SetupAndExecute(ctx, testrunnerFlags, testsPath); err != nil {
-		return fmt.Errorf("testrunner with args: %v, with timeout: %s, failed: %w", testrunnerFlags, r.timeout, err)
+	if err := testrunner.SetupAndExecute(ctx, r.testrunnerFlags, args[0]); err != nil {
+		return fmt.Errorf("testrunner with args: %v, with timeout: %s, failed: %w", r.testrunnerFlags, r.timeout, err)
 	}
 	return nil
 }
