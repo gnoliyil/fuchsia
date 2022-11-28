@@ -1,0 +1,92 @@
+# Copyright 2020 The Fuchsia Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import("//build/host.gni")
+import("//build/rust/rustc_binary.gni")
+import("//src/developer/ffx/build/ffx_action.gni")
+import("//src/developer/ffx/lib/version/build/ffx_apply_version.gni")
+
+# Defines an ffx-compatible subtool in the form of a rust binary target
+#
+# All parameters to `rustc_binary` are available, along with a few extra
+# to control the application of version information and compatibility
+# with the legacy ffx plugin interface.
+#
+# The following targets will be produced, in addition to any from `rustc_binary`:
+#
+#   `<target_name>`
+#     The rust binary before applying build version information to it.
+#     Output: `<target_name>`
+#
+#   `<target_name>_versioned`
+#     The rust binary after applying build version information to it.
+#     Output: `<target_name>_unversioned`
+#
+#   `<target_name>_metadata`
+#     The json metadata for this tool that allows ffx to discover it
+#     and determine compatibility information.
+#     Output: `<target_name>.json`
+#
+#   `<target_name>_host_tool`
+#     Installation of the versioned binary and metadata as a host tool.
+#     Output: `host-tools/<target_name>`, `host-tools/<target_name>.json`
+#
+# Additional Parameters
+#
+template("ffx_tool") {
+  if (!defined(invoker.output_name)) {
+    output_name = target_name
+  } else {
+    output_name = invoker.output_name
+  }
+
+  target_versioned = "${target_name}_versioned"
+  target_unversioned = target_name
+  target_metadata = "${target_name}_metadata"
+  target_host_tool_bin = "${target_name}_host_tool_bin"
+  target_host_tool = "${target_name}_host_tool"
+
+  output_versioned = output_name
+  output_unversioned = "${output_name}_unversioned"
+  output_metadata = "${output_name}.json"
+
+  # Make the rust binary
+  rustc_binary(target_unversioned) {
+    output_name = output_unversioned
+    forward_variables_from(invoker, "*", [ "output_name" ])
+  }
+
+  # Replace the special linker sections containing the version information with the real values
+  ffx_apply_version(target_versioned) {
+    output_name = output_versioned
+
+    deps = [ ":$target_unversioned" ]
+  }
+
+  # Create the metadata file for in-tree discovery
+  ffx_action(target_metadata) {
+    ffx_tool = ":$target_versioned"
+    ffx_tool_output_name = output_versioned
+    inputs = []
+    outputs = [ "$host_tools_dir/$output_metadata" ]
+    args = [
+      "metadata",
+      rebase_path("$host_tools_dir/$output_metadata", root_build_dir),
+    ]
+  }
+
+  # Install host tool
+  install_host_tools(target_host_tool_bin) {
+    deps = [ ":$target_versioned" ]
+    outputs = [ output_versioned ]
+  }
+
+  # Install both the host tool and the metadata
+  group(target_host_tool) {
+    deps = [
+      ":$target_host_tool_bin",
+      ":$target_metadata",
+    ]
+  }
+}

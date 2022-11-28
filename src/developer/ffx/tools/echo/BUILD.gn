@@ -2,10 +2,9 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/compiled_action.gni")
 import("//build/host.gni")
-import("//build/rust/rustc_binary.gni")
 import("//build/rust/rustc_library.gni")
+import("//src/developer/ffx/build/ffx_tool.gni")
 import("//src/developer/ffx/lib/version/build/ffx_apply_version.gni")
 
 rustc_library("lib") {
@@ -31,9 +30,9 @@ rustc_library("lib") {
   sources = [ "src/lib.rs" ]
 }
 
-rustc_binary("ffx_echo_tool_unversioned") {
+ffx_tool("ffx_echo") {
   edition = "2021"
-  output_name = "ffx-echo_unversioned"
+  output_name = "ffx-echo"
   deps = [
     ":lib",
     "//src/developer/ffx/lib/fho:lib",
@@ -42,35 +41,10 @@ rustc_binary("ffx_echo_tool_unversioned") {
   sources = [ "src/main.rs" ]
 }
 
-# Replace the special linker sections containing the version information with the real values
-ffx_apply_version("ffx_echo_tool") {
-  output_name = "ffx-echo"
-
-  deps = [ ":ffx_echo_tool_unversioned" ]
-}
-
-install_host_tools("host") {
-  deps = [ ":ffx_echo_tool" ]
-  outputs = [ "ffx-echo" ]
-}
-
-compiled_action("metadata") {
-  tool = ":ffx_echo_tool"
-  tool_output_name = "ffx-echo"
-  outputs = [ "${host_tools_dir}/ffx-echo.json" ]
-  args = [
-    "--config",
-    "ffx.analytics.disabled=true",
-    "metadata",
-    rebase_path("${host_tools_dir}/ffx-echo.json", root_build_dir),
-  ]
-}
-
 group("echo") {
   deps = [
-    ":ffx_echo_tool",
-    ":host",
-    ":metadata",
+    ":ffx_echo",
+    ":ffx_echo_host_tool",
   ]
 }
 
