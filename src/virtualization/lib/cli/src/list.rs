@@ -4,10 +4,11 @@
 
 use {
     crate::platform::PlatformServices,
-    anyhow::Error,
+    anyhow::{anyhow, Error},
     fidl_fuchsia_virtualization::{GuestManagerProxy, GuestStatus},
     guest_cli_args as arguments,
     prettytable::{cell, format::consts::FORMAT_CLEAN, row, Table},
+    std::fmt,
 };
 
 fn guest_status_to_string(status: GuestStatus) -> &'static str {
@@ -38,160 +39,223 @@ fn uptime_to_string(uptime_nanos: Option<i64>) -> String {
     }
 }
 
-async fn get_detailed_information(
-    guest_type: arguments::GuestType,
-    manager: GuestManagerProxy,
-) -> Result<String, Error> {
-    let mut table = Table::new();
-    table.set_format(*FORMAT_CLEAN);
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+pub struct GuestDetails {
+    pub package_url: String,
+    pub status: String,
+    pub uptime_nanos: i64,
+    pub stop_reason: Option<String>,
+    pub cpu_count: Option<u8>,
+    pub memory_bytes: Option<u64>,
+    pub device_counts: Vec<(String, u32)>,
+    pub problems: Vec<String>,
+}
 
-    let guest_info = manager.get_info().await;
-    if let Err(_) = guest_info {
-        return Ok(format!("Failed to query guest information: {}", guest_type.to_string()));
-    }
-    let guest_info = guest_info.unwrap();
-    let guest_status = guest_info.guest_status.expect("guest status should always be set");
+impl fmt::Display for GuestDetails {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut table = Table::new();
+        table.set_format(*FORMAT_CLEAN);
+        table.add_row(row!["Guest package:", self.package_url]);
+        table.add_row(row!["Guest status:", self.status]);
+        table.add_row(row!["Guest uptime:", uptime_to_string(Some(self.uptime_nanos))]);
 
-    table.add_row(row!["Guest package:", guest_type.package_url()]);
-    table.add_row(row!["Guest status:", guest_status_to_string(guest_status)]);
-    table.add_row(row!["Guest uptime:", uptime_to_string(guest_info.uptime)]);
-
-    if guest_status == GuestStatus::NotStarted {
-        return Ok(table.to_string());
-    }
-
-    table.add_empty_row();
-
-    if guest_status == GuestStatus::Stopped {
-        table.add_row(row![
-            "Stop reason:",
-            guest_info
-                .stop_error
-                .map_or_else(|| "Clean shutdown".to_string(), |err| format!("{:?}", err))
-        ]);
-    } else {
-        if guest_info.guest_descriptor.is_none() {
-            return Ok(format!("{}WARNING: No config information found!", table.to_string()));
+        if self.status == "Not started" {
+            write!(f, "{}", table.to_string())?;
+            return Ok(());
         }
-
-        let config = guest_info.guest_descriptor.unwrap();
-
-        table.add_row(row!["CPU count:", config.num_cpus.expect("all config fields must be set")]);
-        table.add_row(row![
-            "Guest memory:",
-            format!(
-                "{} GiB ({} bytes)",
-                f64::trunc(
-                    (config.guest_memory.expect("all config fields must be set") as f64
-                        / (1 << 30) as f64)
-                        * 100.0
-                ) / 100.0,
-                config.guest_memory.expect("all config fields must be set")
-            )
-        ]);
 
         table.add_empty_row();
 
-        let mut active = Table::new();
-        active.set_format(*FORMAT_CLEAN);
-        let mut inactive = Table::new();
-        inactive.set_format(*FORMAT_CLEAN);
+        if let Some(stop_reason) = &self.stop_reason {
+            table.add_row(row!["Stop reason:", stop_reason]);
+        }
+        if let Some(cpu_count) = self.cpu_count {
+            table.add_row(row!["CPU count:", cpu_count]);
+        }
+        if let Some(memory_bytes) = self.memory_bytes {
+            let gib = f64::trunc(memory_bytes as f64 / (1 << 30) as f64) * 100.0 / 100.0;
+            table.add_row(row!["Guest memory:", format!("{} GiB ({} bytes)", gib, memory_bytes)]);
+        }
 
-        let mut add_to_table = |device: &str, is_active: Option<bool>| -> () {
-            let is_active = is_active.expect("all config fields must be set");
-            if is_active {
-                active.add_row(row![device]);
-            } else {
-                inactive.add_row(row![device]);
+        if self.cpu_count.is_some() && self.memory_bytes.is_some() {
+            table.add_empty_row();
+
+            let mut active = Table::new();
+            active.set_format(*FORMAT_CLEAN);
+            let mut inactive = Table::new();
+            inactive.set_format(*FORMAT_CLEAN);
+
+            for (device, count) in self.device_counts.iter() {
+                if *count == 0 {
+                    inactive.add_row(row![device]);
+                } else if *count == 1 {
+                    active.add_row(row![device]);
+                } else {
+                    active.add_row(row![format!("{} ({} devices)", device, *count)]);
+                }
             }
-        };
 
-        add_to_table("wayland", config.wayland);
-        add_to_table("magma", config.magma);
-        add_to_table("balloon", config.balloon);
-        add_to_table("console", config.console);
-        add_to_table("gpu", config.gpu);
-        add_to_table("rng", config.rng);
-        add_to_table("vsock", config.vsock);
-        add_to_table("sound", config.sound);
+            if active.len() == 0 {
+                active.add_row(row!["None"]);
+            }
 
-        match config.networks {
-            Some(network) if !network.is_empty() => active.add_row(row![format!(
-                "network ({} interface{})",
-                network.len(),
-                if network.len() > 1 { "s" } else { "" }
-            )]),
-            _ => inactive.add_row(row!["network"]),
-        };
+            if inactive.len() == 0 {
+                inactive.add_row(row!["None"]);
+            }
 
-        if active.len() == 0 {
-            active.add_row(row!["None"]);
+            table.add_row(row!["Active devices:", active]);
+            table.add_empty_row();
+            table.add_row(row!["Inactive devices:", inactive]);
         }
+        write!(f, "{}", table.to_string())?;
 
-        if inactive.len() == 0 {
-            inactive.add_row(row!["None"]);
-        }
-
-        table.add_row(row!["Active devices:", active]);
-        table.add_empty_row();
-        table.add_row(row!["Inactive devices:", inactive]);
-    }
-
-    let mut table_string = table.to_string();
-
-    if let Some(problems) = guest_info.detected_problems {
-        if !problems.is_empty() {
+        if !self.problems.is_empty() {
             let mut problem_table = Table::new();
             problem_table.set_format(*FORMAT_CLEAN);
             problem_table.add_empty_row();
             problem_table.add_row(row![
                 format!(
                     "{} problem{} detected:",
-                    problems.len(),
-                    if problems.len() > 1 { "s" } else { "" }
+                    self.problems.len(),
+                    if self.problems.len() > 1 { "s" } else { "" }
                 ),
                 " "
             ]);
-            for problem in problems {
+            for problem in self.problems.iter() {
                 problem_table.add_row(row![format!("* {}", problem), " "]);
             }
-            table_string += &problem_table.to_string();
+            write!(f, "{}", problem_table.to_string())?;
+        }
+        return Ok(());
+    }
+}
+
+async fn get_detailed_information(
+    guest_type: arguments::GuestType,
+    manager: GuestManagerProxy,
+) -> Result<GuestDetails, Error> {
+    let guest_info = manager.get_info().await;
+    if let Err(_) = guest_info {
+        return Err(anyhow!("Failed to query guest information: {}", guest_type.to_string()));
+    }
+    let guest_info = guest_info.unwrap();
+    let guest_status = guest_info.guest_status.expect("guest status should always be set");
+
+    let mut details: GuestDetails = Default::default();
+    details.package_url = guest_type.package_url().to_string();
+    details.status = guest_status_to_string(guest_status).to_string();
+    details.uptime_nanos = guest_info.uptime.unwrap_or(0);
+
+    if guest_status == GuestStatus::NotStarted {
+        return Ok(details);
+    }
+
+    if guest_status == GuestStatus::Stopped {
+        let stop_reason = guest_info
+            .stop_error
+            .map_or_else(|| "Clean shutdown".to_string(), |err| format!("{:?}", err));
+        details.stop_reason = Some(stop_reason);
+    } else {
+        if let Some(config) = guest_info.guest_descriptor {
+            details.cpu_count = config.num_cpus;
+            details.memory_bytes = config.guest_memory;
+
+            let add_to_table =
+                |device: &str, is_active: Option<bool>, table: &mut Vec<(String, u32)>| -> () {
+                    let count = is_active.map(|b| b as u32).unwrap_or(0);
+                    table.push((device.to_string(), count));
+                };
+
+            add_to_table("wayland", config.wayland, &mut details.device_counts);
+            add_to_table("magma", config.magma, &mut details.device_counts);
+            add_to_table("balloon", config.balloon, &mut details.device_counts);
+            add_to_table("console", config.console, &mut details.device_counts);
+            add_to_table("gpu", config.gpu, &mut details.device_counts);
+            add_to_table("rng", config.rng, &mut details.device_counts);
+            add_to_table("vsock", config.vsock, &mut details.device_counts);
+            add_to_table("sound", config.sound, &mut details.device_counts);
+            let networks = config.networks.map(|v| v.len()).unwrap_or(0);
+            details.device_counts.push(("network".to_string(), networks as u32));
         }
     }
 
-    Ok(table_string)
+    if let Some(problems) = guest_info.detected_problems {
+        details.problems = problems;
+    }
+    Ok(details)
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct GuestOverview {
+    name: String,
+    status: String,
+    uptime_nanos: Option<i64>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct GuestSummary {
+    guests: Vec<GuestOverview>,
+}
+
+impl fmt::Display for GuestSummary {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut table = Table::new();
+        table.set_titles(row!["Guest", "Status", "Uptime"]);
+        for guest in &self.guests {
+            table.add_row(row![guest.name, guest.status, uptime_to_string(guest.uptime_nanos)]);
+        }
+        write!(f, "{}", table.to_string())
+    }
 }
 
 async fn get_environment_summary(
     managers: Vec<(String, GuestManagerProxy)>,
-) -> Result<String, Error> {
-    let mut table = Table::new();
-    table.set_titles(row!["Guest", "Status", "Uptime"]);
-
+) -> Result<GuestSummary, Error> {
+    let mut summary = GuestSummary { guests: Vec::new() };
     for (name, manager) in managers {
         match manager.get_info().await {
-            Ok(guest_info) => table.add_row(row![
+            Ok(guest_info) => summary.guests.push(GuestOverview {
                 name,
-                guest_status_to_string(
-                    guest_info.guest_status.expect("guest status should always be set")
-                ),
-                uptime_to_string(guest_info.uptime)
-            ]),
-            Err(_) => table.add_row(row![name, "Unavailable", "--:--:-- HH:MM:SS"]),
-        };
+                status: guest_status_to_string(
+                    guest_info.guest_status.expect("guest status should always be set"),
+                )
+                .to_string(),
+                uptime_nanos: guest_info.uptime,
+            }),
+            Err(_) => summary.guests.push(GuestOverview {
+                name,
+                status: "Unavailable".to_string(),
+                uptime_nanos: None,
+            }),
+        }
     }
+    Ok(summary)
+}
 
-    Ok(table.to_string())
+#[derive(serde::Serialize, serde::Deserialize)]
+pub enum GuestList {
+    Summary(GuestSummary),
+    Details(GuestDetails),
+}
+
+impl fmt::Display for GuestList {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GuestList::Summary(summary) => write!(f, "{}", summary)?,
+            GuestList::Details(details) => write!(f, "{}", details)?,
+        }
+        Ok(())
+    }
 }
 
 pub async fn handle_list<P: PlatformServices>(
     services: &P,
     args: &arguments::ListArgs,
-) -> Result<String, Error> {
+) -> Result<GuestList, Error> {
     match args.guest_type {
         Some(guest_type) => {
             let manager = services.connect_to_manager(guest_type).await?;
-            get_detailed_information(guest_type, manager).await
+            Ok(GuestList::Details(get_detailed_information(guest_type, manager).await?))
         }
         None => {
             let mut managers = Vec::new();
@@ -199,7 +263,7 @@ pub async fn handle_list<P: PlatformServices>(
                 let manager = services.connect_to_manager(guest_type).await?;
                 managers.push((guest_type.to_string(), manager));
             }
-            get_environment_summary(managers).await
+            Ok(GuestList::Summary(get_environment_summary(managers).await?))
         }
     }
 }
@@ -279,7 +343,7 @@ mod test {
             ),
         ];
 
-        let actual = get_environment_summary(managers).await.unwrap();
+        let actual = format!("{}", get_environment_summary(managers).await.unwrap());
         let expected = concat!(
             "+---------+-------------+-------------------+\n",
             "| Guest   | Status      | Uptime            |\n",
@@ -303,8 +367,10 @@ mod test {
             ..GuestInfo::EMPTY
         }));
 
-        let actual =
-            get_detailed_information(arguments::GuestType::Termina, manager).await.unwrap();
+        let actual = format!(
+            "{}",
+            get_detailed_information(arguments::GuestType::Termina, manager).await.unwrap()
+        );
         let expected = concat!(
             " Guest package:  fuchsia-pkg://fuchsia.com/termina_guest#meta/termina_guest.cm \n",
             " Guest status:   Stopped \n",
@@ -325,7 +391,10 @@ mod test {
             ..GuestInfo::EMPTY
         }));
 
-        let actual = get_detailed_information(arguments::GuestType::Zircon, manager).await.unwrap();
+        let actual = format!(
+            "{}",
+            get_detailed_information(arguments::GuestType::Zircon, manager).await.unwrap()
+        );
         let expected = concat!(
             " Guest package:  fuchsia-pkg://fuchsia.com/zircon_guest#meta/zircon_guest.cm \n",
             " Guest status:   Stopped \n",
@@ -369,7 +438,10 @@ mod test {
             ..GuestInfo::EMPTY
         }));
 
-        let actual = get_detailed_information(arguments::GuestType::Debian, manager).await.unwrap();
+        let actual = format!(
+            "{}",
+            get_detailed_information(arguments::GuestType::Debian, manager).await.unwrap()
+        );
         let expected = concat!(
             " Guest package:     fuchsia-pkg://fuchsia.com/debian_guest#meta/debian_guest.cm \n",
             " Guest status:      Running \n",
@@ -382,7 +454,7 @@ mod test {
             "                     console  \n",
             "                     rng  \n",
             "                     vsock  \n",
-            "                     network (2 interfaces)  \n",
+            "                     network (2 devices)  \n",
             "                     \n",
             " Inactive devices:   wayland  \n",
             "                     magma  \n",
