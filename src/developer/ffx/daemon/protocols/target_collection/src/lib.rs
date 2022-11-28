@@ -52,6 +52,31 @@ impl Default for TargetCollectionProtocol {
     }
 }
 
+async fn target_is_fastboot_tcp(addr: SocketAddr) -> bool {
+    tracing::info!("Checking if target at addr: {addr:?} in fastboot over tcp");
+    let tclone = Target::new_with_fastboot_addrs(
+        Option::<String>::None,
+        Option::<String>::None,
+        vec![addr].iter().map(|x| From::from(*x)).collect(),
+        FastbootInterface::Tcp,
+    );
+
+    match tclone.is_fastboot_tcp().await {
+        Ok(true) => {
+            tracing::info!("Target is running TCP fastboot");
+            true
+        }
+        Ok(false) => {
+            tracing::info!("Target not running TCP fastboot");
+            false
+        }
+        Err(e) => {
+            tracing::error!("Got error connecting to target over TCP: {:?}", e);
+            false
+        }
+    }
+}
+
 async fn add_manual_target(
     manual_targets: Rc<dyn manual_targets::ManualTargets>,
     tc: &TargetCollection,
@@ -75,13 +100,27 @@ async fn add_manual_target(
         tracing::error!("Unable to persist manual target: {:?}", e);
     });
     let target = Target::new_with_addr_entries(Option::<String>::None, Some(tae).into_iter());
-    if addr.port() != 0 {
-        target.set_ssh_port(Some(addr.port()));
+
+    // When adding a manual target we need to test if the target behind the
+    // address is running in fastboot over tcp or not
+    let is_fastboot_tcp = target_is_fastboot_tcp(addr).await;
+
+    if is_fastboot_tcp {
+        // If the target is in fastboot mode we need to do these:
+        tracing::debug!("Target is fastboot... change target from manual to tcp_fastboot");
+        target.from_manual_to_tcp_fastboot();
+    } else {
+        if addr.port() != 0 {
+            target.set_ssh_port(Some(addr.port()));
+        }
+        target.update_connection_state(|_| TargetConnectionState::Manual(last_seen));
     }
 
-    target.update_connection_state(|_| TargetConnectionState::Manual(last_seen));
     let target = tc.merge_insert(target);
-    target.run_host_pipe();
+    if !is_fastboot_tcp {
+        tracing::error!("Running host pipe");
+        target.run_host_pipe();
+    }
     target
 }
 
@@ -270,6 +309,20 @@ impl FidlProtocol for TargetCollectionProtocol {
                 let target =
                     add_manual_target(self.manual_targets.clone(), &target_collection, addr, None)
                         .await;
+                // If the target is in fastboot then skip rcs
+                match target.get_connection_state() {
+                    TargetConnectionState::Fastboot(_) => {
+                        tracing::info!("skipping rcs verfication as the target is in fastboot ");
+                        let _ = drop_guard.0.take();
+                        return add_target_responder.success().map_err(Into::into);
+                    }
+                    _ => {
+                        tracing::error!(
+                            "target connection state was: {:?}",
+                            target.get_connection_state()
+                        );
+                    }
+                };
                 let rcs = target_handle::wait_for_rcs(&target).await?;
                 match rcs {
                     Ok(mut rcs) => {

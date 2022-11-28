@@ -331,7 +331,11 @@ impl Daemon {
         self.start_ascendd(hoist).await?;
         let _socket_file_watcher =
             self.start_socket_watch(quit_tx.clone()).await.context("Starting socket watcher")?;
-        self.start_target_expiry(Duration::from_secs(1));
+
+        let should_start_expiry = ffx_config::get("discovery.expire_targets").await.unwrap_or(true);
+        if should_start_expiry == true {
+            self.start_target_expiry(Duration::from_secs(1));
+        }
         self.serve(&context, hoist, quit_tx, quit_rx).await.context("Serving clients")
     }
 

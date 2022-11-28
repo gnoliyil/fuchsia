@@ -3,6 +3,8 @@
 // found in the LICENSE file.
 
 use {
+    crate::fastboot::get_var,
+    crate::fastboot::network::tcp::TcpNetworkFactory,
     crate::fastboot::open_interface_with_serial,
     crate::logger::{streamer::DiagnosticsStreamer, Logger},
     crate::overnet::host_pipe::{HostAddr, HostPipeConnection, LogBuffer},
@@ -626,6 +628,25 @@ impl Target {
             });
     }
 
+    pub fn from_manual_to_tcp_fastboot(&self) {
+        let interface = FastbootInterface::Tcp;
+        let repl_addr = self
+            .addrs
+            .borrow()
+            .iter()
+            .map(|e| {
+                TargetAddrEntry::new(
+                    e.addr,
+                    Utc::now(),
+                    TargetAddrType::Fastboot(interface.clone()),
+                )
+            })
+            .collect();
+        self.addrs.replace(repl_addr);
+        self.fastboot_interface().replace(interface);
+        self.update_connection_state(|_| TargetConnectionState::Fastboot(Instant::now()));
+    }
+
     pub fn rcs(&self) -> Option<RcsConnection> {
         match self.get_connection_state() {
             TargetConnectionState::Rcs(conn) => Some(conn),
@@ -935,6 +956,14 @@ impl Target {
             }
         }
         self.rcs().ok_or(anyhow!("rcs dropped after event fired")).map(|r| r.proxy)
+    }
+
+    pub async fn is_fastboot_tcp(&self) -> Result<bool> {
+        let mut factory = TcpNetworkFactory::new();
+        let mut interface = factory.open_with_retry(self, 1, 1).await?;
+        // Dont care what the result is, just need to get it
+        let _result = get_var(&mut interface, &"version".to_string()).await?;
+        Ok(true)
     }
 
     /// Check the current target state, and if it is a state that expires (such

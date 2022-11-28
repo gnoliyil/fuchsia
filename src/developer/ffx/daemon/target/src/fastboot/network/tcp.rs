@@ -147,6 +147,33 @@ impl TcpNetworkFactory {
     pub fn new() -> Self {
         Self {}
     }
+
+    pub async fn open_with_retry(
+        &mut self,
+        target: &Target,
+        retry_count: u64,
+        retry_wait_seconds: u64,
+    ) -> Result<TcpNetworkInterface> {
+        for retry in 0..retry_count {
+            match open_once(target).await {
+                Ok(res) => {
+                    tracing::debug!("TCP connect attempt #{} succeeds", retry);
+                    return Ok(res);
+                }
+                Err(e) => {
+                    if retry + 1 < retry_count {
+                        tracing::debug!("TCP connect attempt #{} failed", retry);
+                        std::thread::sleep(std::time::Duration::from_secs(retry_wait_seconds));
+                        continue;
+                    }
+
+                    return Err(e);
+                }
+            }
+        }
+
+        Err(anyhow::format_err!("Unreachable"))
+    }
 }
 
 async fn handshake(stream: &mut TcpStream) -> Result<()> {
@@ -182,25 +209,7 @@ impl InterfaceFactory<TcpNetworkInterface> for TcpNetworkFactory {
         let retry_count: u64 = get(OPEN_RETRY_COUNT).await.unwrap_or(OPEN_RETRY);
         let retry_wait_seconds: u64 = get(OPEN_RETRY_WAIT).await.unwrap_or(RETRY_WAIT_SECONDS);
 
-        for retry in 0..retry_count {
-            match open_once(target).await {
-                Ok(res) => {
-                    tracing::debug!("TCP connect attempt #{} succeeds", retry);
-                    return Ok(res);
-                }
-                Err(e) => {
-                    if retry + 1 < retry_count {
-                        tracing::debug!("TCP connect attempt #{} failed", retry);
-                        std::thread::sleep(std::time::Duration::from_secs(retry_wait_seconds));
-                        continue;
-                    }
-
-                    return Err(e);
-                }
-            }
-        }
-
-        Err(anyhow::format_err!("Unreachable"))
+        self.open_with_retry(target, retry_count, retry_wait_seconds).await
     }
 
     async fn close(&self) {}
