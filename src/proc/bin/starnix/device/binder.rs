@@ -249,8 +249,6 @@ struct BinderProcess {
     /// The [`SharedMemory`] region mapped in both the driver and the binder process. Allows for
     /// transactions to copy data once from the sender process into the receiver process.
     shared_memory: Mutex<Option<SharedMemory>>,
-    /// The set of threads that are interacting with the binder driver.
-    thread_pool: RwLock<ThreadPool>,
     /// Binder objects hosted by the process shared with other processes.
     objects: Mutex<BTreeMap<UserAddress, Weak<BinderObject>>>,
     /// Handle table of remote binder objects.
@@ -258,9 +256,6 @@ struct BinderProcess {
     /// A queue for commands that could not be scheduled on any existing binder threads. Binder
     /// threads that exhaust their own queue will read from this one.
     command_queue: Mutex<VecDeque<Command>>,
-    /// When there are no commands in a thread's and the process' command queue, a binder thread can
-    /// register with this [`WaitQueue`] to be notified when commands are available.
-    waiters: Mutex<WaitQueue>,
     /// State associated with active transactions, keyed by the userspace addresses of the buffers
     /// allocated to them. When the process frees a transaction buffer with `BC_FREE_BUFFER`, the
     /// state is dropped, releasing temporary strong references and the memory allocated to the
@@ -268,6 +263,11 @@ struct BinderProcess {
     active_transactions: Mutex<BTreeMap<UserAddress, ActiveTransaction>>,
     /// The list of processes that should be notified if this process dies.
     death_subscribers: Mutex<Vec<(Weak<BinderProcess>, binder_uintptr_t)>>,
+    /// The set of threads that are interacting with the binder driver.
+    thread_pool: RwLock<ThreadPool>,
+    /// When there are no commands in a thread's and the process' command queue, a binder thread can
+    /// register with this [`WaitQueue`] to be notified when commands are available.
+    waiters: Mutex<WaitQueue>,
 }
 
 /// An active binder transaction.
@@ -385,18 +385,31 @@ enum RequestType {
 }
 
 impl BinderProcess {
+    #[allow(clippy::let_and_return)]
     fn new(pid: pid_t) -> Self {
-        Self {
+        let result = Self {
             pid,
             shared_memory: Mutex::new(None),
-            thread_pool: RwLock::new(ThreadPool::default()),
             objects: Mutex::new(BTreeMap::new()),
             handles: Mutex::new(HandleTable::default()),
             command_queue: Mutex::new(VecDeque::new()),
-            waiters: Mutex::new(WaitQueue::default()),
             active_transactions: Mutex::new(BTreeMap::new()),
             death_subscribers: Mutex::new(Vec::new()),
+            thread_pool: RwLock::new(ThreadPool::default()),
+            waiters: Mutex::new(WaitQueue::default()),
+        };
+        #[cfg(any(test, debug_assertions))]
+        {
+            let _l1 = result.shared_memory.lock();
+            let _l2 = result.objects.lock();
+            let _l3 = result.handles.lock();
+            let _l4 = result.command_queue.lock();
+            let _l5 = result.active_transactions.lock();
+            let _l6 = result.death_subscribers.lock();
+            let _l7 = result.thread_pool.read();
+            let _l8 = result.waiters.lock();
         }
+        result
     }
 
     /// Enqueues `command` on the first available thread. If none are available, enqueues it on the
@@ -907,7 +920,15 @@ struct BinderThread {
 
 impl BinderThread {
     fn new(binder_proc: &Arc<BinderProcess>, tid: pid_t) -> Self {
-        Self { tid, state: RwLock::new(BinderThreadState::new(tid, binder_proc)) }
+        let state = RwLock::new(BinderThreadState::new(tid, binder_proc));
+        #[cfg(any(test, debug_assertions))]
+        {
+            // The state must be acquired after thread_pool from the `BinderProcess` and before
+            // `waiters`. When the constructor is called, thread_pool has already been acquired.
+            let _l1 = state.read();
+            let _l2 = binder_proc.waiters.lock();
+        }
+        Self { tid, state }
     }
 
     /// Acquire a reader lock to the binder thread's mutable state.
