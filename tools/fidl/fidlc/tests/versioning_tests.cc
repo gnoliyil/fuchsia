@@ -950,11 +950,15 @@ TEST(VersioningTests, BadNoArguments) {
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrAvailableMissingArguments);
 }
 
-TEST(VersioningTests, BadLibraryMissingAdded) {
-  TestLibrary library(R"FIDL(
-@available(removed=2)
-library example;
-)FIDL");
+TEST(VersioningTests, BadLibraryMissingAddedOnlyRemoved) {
+  TestLibrary library;
+  library.AddFile("bad/fi-0150-a.test.fidl");
+  ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrLibraryAvailabilityMissingAdded);
+}
+
+TEST(VersioningTests, BadLibraryMissingAddedOnlyPlatform) {
+  TestLibrary library;
+  library.AddFile("bad/fi-0150-b.test.fidl");
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrLibraryAvailabilityMissingAdded);
 }
 

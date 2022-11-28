@@ -352,7 +352,7 @@ constexpr ErrorDef<148> ErrNoteWithoutDeprecation(
     "the argument 'note' cannot be used without 'deprecated'");
 constexpr UndocumentedErrorDef<149> ErrPlatformNotOnLibrary(
     "the argument 'platform' can only be used on the library's @available attribute");
-constexpr UndocumentedErrorDef<150> ErrLibraryAvailabilityMissingAdded(
+constexpr ErrorDef<150> ErrLibraryAvailabilityMissingAdded(
     "missing 'added' argument on the library's @available attribute");
 constexpr UndocumentedErrorDef<151, std::vector<std::string_view>> ErrMissingLibraryAvailability(
     "to use the @available attribute here, you must also annotate the "
