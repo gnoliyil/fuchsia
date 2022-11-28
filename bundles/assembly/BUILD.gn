@@ -12,6 +12,7 @@ group("assembly") {
   testonly = true
   deps = [
     # The non-testonly assembly bundles
+    ":eng_and_userdebug",
     ":prod_only",
 
     # The testonly assembly bundles
@@ -29,6 +30,13 @@ group("prod_only") {
     ":common_minimal",
     ":emulator_support",
   ]
+}
+
+# This group is used to easily get the set of production (non-testonly) platform
+# assembly input bundles.
+group("eng_and_userdebug") {
+  testonly = false
+  deps = [ ":common_minimal_userdebug" ]
 }
 
 # The most-common, most-basic, Assembly Input Bundle that is included by all
