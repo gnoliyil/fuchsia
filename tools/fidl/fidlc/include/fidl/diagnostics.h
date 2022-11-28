@@ -137,7 +137,7 @@ constexpr ErrorDef<59, const flat::Type *> ErrInvalidConstantType("invalid const
 constexpr ErrorDef<60> ErrCannotResolveConstantValue("unable to resolve constant value");
 constexpr ErrorDef<61> ErrOrOperatorOnNonPrimitiveValue(
     "Or operator can only be applied to primitive-kinded values");
-constexpr UndocumentedErrorDef<62, flat::Name, std::string_view> ErrNewTypesNotAllowed(
+constexpr ErrorDef<62, flat::Name, std::string_view> ErrNewTypesNotAllowed(
     "newtypes not allowed: type declaration {} defines a new type of the existing {} type, which "
     "is not yet supported");
 constexpr ErrorDef<63, flat::Name> ErrExpectedValueButGotType(
@@ -415,8 +415,8 @@ constexpr ErrorDef<177, flat::Name> ErrResourceRightsPropertyMustReferToBits(
 constexpr ErrorDef<178, std::vector<std::string_view>, std::vector<std::string_view>,
                    std::vector<std::string_view>>
     ErrUnusedImport("Library {} imports {} but does not use it. Either use {}, or remove import.");
-constexpr UndocumentedErrorDef<179, flat::Name> ErrNewTypeCannotHaveConstraint(
-    "{} is a new-type, which cannot carry constraints");
+constexpr ErrorDef<179, flat::Name> ErrNewTypeCannotHaveConstraint(
+    "{} is a newtype, which cannot carry constraints");
 constexpr ErrorDef<180, flat::Name> ErrExperimentalZxCTypesDisallowed(
     "{} is an experimental type that must be enabled by with `--experimental zx_c_types`");
 constexpr ErrorDef<181> ErrReferenceInLibraryAttribute(

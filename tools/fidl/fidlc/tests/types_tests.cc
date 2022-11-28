@@ -208,12 +208,8 @@ type TypeDecl = struct {
 }
 
 TEST(NewSyntaxTests, BadTypeDeclOfNewTypeErrors) {
-  TestLibrary library(R"FIDL(
-library example;
-type S = struct{};
-type N = S;
-)FIDL");
-  // allow_new_types is disabled, hence this should fail.
+  TestLibrary library;
+  library.AddFile("bad/fi-0062.test.fidl");
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrNewTypesNotAllowed);
 }
 

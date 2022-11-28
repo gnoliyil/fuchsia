@@ -327,6 +327,18 @@ TEST(ErrcatTests, Good0061) {
   ASSERT_COMPILED(library);
 }
 
+TEST(ErrcatTests, Good0062a) {
+  TestLibrary library;
+  library.AddFile("good/fi-0062-a.test.fidl");
+  ASSERT_COMPILED(library);
+}
+
+TEST(ErrcatTests, Good0062b) {
+  TestLibrary library;
+  library.AddFile("good/fi-0062-b.test.fidl");
+  ASSERT_COMPILED(library);
+}
+
 TEST(ErrcatTests, Good0063) {
   TestLibrary library;
   library.AddFile("good/fi-0063.test.fidl");
@@ -1004,6 +1016,13 @@ TEST(ErrcatTests, Good0175) {
 TEST(ErrcatTests, Good0177) {
   TestLibrary library;
   library.AddFile("good/fi-0177.test.fidl");
+  ASSERT_COMPILED(library);
+}
+
+TEST(ErrcatTests, Good0179) {
+  TestLibrary library;
+  library.AddFile("good/fi-0179.test.fidl");
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kAllowNewTypes);
   ASSERT_COMPILED(library);
 }
 

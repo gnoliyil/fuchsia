@@ -138,13 +138,8 @@ type ConstrainedString = string:108;
 }
 
 TEST(NewTypeTests, BadNewTypesConstraints) {
-  TestLibrary library(R"FIDL(
-library example;
-
-type NewVec = vector<int32>;
-type OptionalNewVec = NewVec:optional;
-)FIDL");
-
+  TestLibrary library;
+  library.AddFile("bad/fi-0179.test.fidl");
   library.EnableFlag(ExperimentalFlags::Flag::kAllowNewTypes);
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrNewTypeCannotHaveConstraint);
 }
