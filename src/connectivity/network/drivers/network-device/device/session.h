@@ -103,7 +103,7 @@ class Session : public fbl::DoublyLinkedListable<std::unique_ptr<Session>>,
   // Returns the session and its data path FIFOs.
   static zx::result<std::pair<std::unique_ptr<Session>, netdev::wire::Fifos>> Create(
       async_dispatcher_t* dispatcher, netdev::wire::SessionInfo& info, fidl::StringView name,
-      DeviceInterface* parent, fidl::ServerEnd<netdev::Session> control);
+      DeviceInterface* parent);
   bool IsPrimary() const;
   bool IsListen() const;
   bool IsPaused() const;
@@ -220,6 +220,9 @@ class Session : public fbl::DoublyLinkedListable<std::unique_ptr<Session>>,
   zx_status_t FetchTx(TxQueue::SessionTransaction& transaction)
       __TA_EXCLUDES(parent_->control_lock(), parent_->rx_lock()) __TA_REQUIRES(parent_->tx_lock());
 
+  // Binds |channel| to this session. Must only be called once.
+  void Bind(fidl::ServerEnd<netdev::Session> channel);
+
  private:
   inline void RxReturned(size_t count) { ZX_ASSERT(in_flight_rx_.fetch_sub(count) >= count); }
   inline void TxReturned(size_t count) { ZX_ASSERT(in_flight_tx_.fetch_sub(count) >= count); }
@@ -227,7 +230,6 @@ class Session : public fbl::DoublyLinkedListable<std::unique_ptr<Session>>,
   Session(async_dispatcher_t* dispatcher, netdev::wire::SessionInfo& info, fidl::StringView name,
           DeviceInterface* parent);
   zx::result<netdev::wire::Fifos> Init();
-  void Bind(fidl::ServerEnd<netdev::Session> channel);
   void OnUnbind(fidl::UnbindInfo info, fidl::ServerEnd<netdev::Session> channel);
 
   // Detaches a port from the session.

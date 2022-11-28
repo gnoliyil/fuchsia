@@ -3103,6 +3103,18 @@ TEST_F(NetworkDeviceTest, LogDebugInfoToSyslog) {
   EXPECT_TRUE(bt_requested);
 }
 
+TEST_F(NetworkDeviceTest, TooManySessions) {
+  ASSERT_OK(CreateDeviceWithPort13());
+
+  std::array<TestSession, MAX_VMOS> sessions;
+  for (TestSession& s : sessions) {
+    ASSERT_OK(OpenSession(&s));
+  }
+
+  TestSession one_too_many;
+  ASSERT_STATUS(OpenSession(&one_too_many), ZX_ERR_NO_RESOURCES);
+}
+
 // Subclass for stress tests with diminished logging to decrease noise.
 class NetworkDeviceStressTest : public NetworkDeviceTest {
   void SetUp() override {

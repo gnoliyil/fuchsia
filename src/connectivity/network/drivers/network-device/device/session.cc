@@ -53,7 +53,7 @@ bool Session::ShouldTakeOverPrimary(const Session* current_primary) const {
 
 zx::result<std::pair<std::unique_ptr<Session>, netdev::wire::Fifos>> Session::Create(
     async_dispatcher_t* dispatcher, netdev::wire::SessionInfo& info, fidl::StringView name,
-    DeviceInterface* parent, fidl::ServerEnd<netdev::Session> control) {
+    DeviceInterface* parent) {
   // Validate required session fields.
   if (!(info.has_data() && info.has_descriptor_count() && info.has_descriptor_length() &&
         info.has_descriptor_version() && info.has_descriptors())) {
@@ -76,8 +76,6 @@ zx::result<std::pair<std::unique_ptr<Session>, netdev::wire::Fifos>> Session::Cr
     LOGF_ERROR("failed to init session %s: %s", session->name(), fifos.status_string());
     return fifos.take_error();
   }
-
-  session->Bind(std::move(control));
 
   return zx::ok(std::make_pair(std::move(session), std::move(fifos.value())));
 }
@@ -185,6 +183,7 @@ zx::result<netdev::wire::Fifos> Session::Init() {
 }
 
 void Session::Bind(fidl::ServerEnd<netdev::Session> channel) {
+  ZX_ASSERT_MSG(!binding_.has_value(), "session already bound");
   binding_ = fidl::BindServer(dispatcher_, std::move(channel), this,
                               [](Session* self, fidl::UnbindInfo info,
                                  fidl::ServerEnd<fuchsia_hardware_network::Session> server_end) {

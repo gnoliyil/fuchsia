@@ -396,8 +396,7 @@ void DeviceInterface::OpenSession(OpenSessionRequestView request,
 
     fidl::StringView& name = request->session_name;
     netdev::wire::SessionInfo& session_info = request->session_info;
-    zx::result session_creation =
-        Session::Create(dispatcher_, session_info, name, this, std::move(endpoints->server));
+    zx::result session_creation = Session::Create(dispatcher_, session_info, name, this);
     if (session_creation.is_error()) {
       return session_creation.take_error();
     }
@@ -427,6 +426,7 @@ void DeviceInterface::OpenSession(OpenSessionRequestView request,
     session->SetDataVmo(vmo_id, vmo_store_.GetVmo(vmo_id));
     session->AssertParentTxLock(*this);
     session->InstallTx();
+    session->Bind(std::move(endpoints->server));
 
     if (session->ShouldTakeOverPrimary(primary_session_.get())) {
       // Set this new session as the primary session.
