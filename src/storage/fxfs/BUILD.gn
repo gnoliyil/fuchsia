@@ -5,9 +5,7 @@
 import("//build/components.gni")
 import("//build/components/fuchsia_unittest_component.gni")
 import("//build/fidl/fidl.gni")
-import("//build/fuzzing/fuzzer.gni")
-import("//build/fuzzing/fuzzer_package.gni")
-import("//build/fuzzing/fuzzer_package.gni")
+import("//build/fuzz.gni")
 import("//build/rust/rustc_binary.gni")
 import("//build/rust/rustc_fuzzer.gni")
 import("//build/rust/rustc_library.gni")
@@ -351,13 +349,13 @@ group("tests") {
 ## Fuzzers
 #################
 
-fuzzers = [
+_fuzzers = [
   "fuzz_lsm_tree_actions",
   "fuzz_journal",
   "fuzz_journal_bytes",
 ]
 
-foreach(fuzzer, fuzzers) {
+foreach(fuzzer, _fuzzers) {
   rustc_fuzzer(fuzzer) {
     edition = "2021"
     deps = fxfs_deps + [
@@ -369,17 +367,18 @@ foreach(fuzzer, fuzzers) {
     if (is_fuchsia) {
       features = [ "tracing" ]
     }
-    options = [
-      "rss_limit_mb=3072",
-      "timeout=60",
-    ]
+  }
+
+  fuchsia_fuzzer_component("${fuzzer}_component") {
+    manifest = "meta/${fuzzer}.cml"
+    deps = [ ":$fuzzer" ]
   }
 }
 
-fuzzer_package("fxfs-fuzzers") {
-  rust_fuzzers = []
-  foreach(fuzzer, fuzzers) {
-    rust_fuzzers += [ ":$fuzzer" ]
+fuchsia_fuzzer_package("fxfs-fuzzers") {
+  rust_fuzzer_components = []
+  foreach(fuzzer, _fuzzers) {
+    rust_fuzzer_components += [ ":${fuzzer}_component" ]
   }
 }
 
