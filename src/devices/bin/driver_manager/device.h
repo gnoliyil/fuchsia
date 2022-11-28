@@ -133,8 +133,7 @@ class Device final
   std::list<const Device*> children() const;
   std::list<Device*> children();
 
-  void AdvertiseModifiedToDevfs();
-  void PublishToDevfs();
+  zx_status_t InitializeToDevfs();
 
   // Signal that this device is ready for bind to happen.  This should happen
   // either immediately after the device is created, if it's created visible,
@@ -317,10 +316,7 @@ class Device final
   // The number of retries left for the driver.
   uint32_t retries = 4;
 
-  std::optional<Devnode> self;
-  // TODO(https://fxbug.dev/111253): These link nodes are currently always empty directories. Change
-  // this to a pure `RemoteNode` that doesn't expose a directory.
-  std::optional<Devnode> link;
+  DevfsDevice devfs;
 
   const fbl::String& link_name() const { return link_name_; }
   void set_link_name(fbl::String link_name) { link_name_ = std::move(link_name); }
@@ -373,8 +369,6 @@ class Device final
 
   // Returns true if this device already has a driver bound.
   bool IsAlreadyBound() const;
-
-  void UnpublishDevfs();
 
  private:
   // fuchsia_device_manager::Coordinator methods.

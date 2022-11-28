@@ -78,18 +78,13 @@ Device::Device(Coordinator* coord, fbl::String name, fbl::String libname, fbl::S
   set_state(Device::State::kActive);  // set default state
 }
 
-void Device::UnpublishDevfs() {
-  self.reset();
-  link.reset();
-}
-
 Device::~Device() {
   // Ideally we'd assert here that immortal devices are never destroyed, but
   // they're destroyed when the Coordinator object is cleaned up in tests.
   // We can probably get rid of the IMMORTAL flag, since if the Coordinator is
   // holding a reference we shouldn't be able to hit that check, in which case
   // the flag is only used to modify the proxy library loading behavior.
-  UnpublishDevfs();
+  devfs.unpublish();
 
   // If we destruct early enough, we may have created the core devices and devfs might not exist
   // yet.
@@ -200,7 +195,7 @@ zx_status_t Device::Create(
     dev->flags |= DEV_CTX_INVISIBLE;
   }
 
-  status = coordinator->devfs().initialize(*dev);
+  status = dev->InitializeToDevfs();
   if (status != ZX_OK) {
     return status;
   }
@@ -276,7 +271,7 @@ zx_status_t Device::CreateComposite(
   // We exist within our parent's device host
   dev->set_host(std::move(driver_host));
 
-  status = coordinator->devfs().initialize(*dev);
+  status = dev->InitializeToDevfs();
   if (status != ZX_OK) {
     return status;
   }
@@ -439,22 +434,27 @@ std::list<const Device*> Device::children() const {
 
 std::list<Device*> Device::children() { return Device::GetChildren<Device>(this); }
 
-void Device::AdvertiseModifiedToDevfs() {
-  if (link) {
-    link->advertise_modified();
+zx_status_t Device::InitializeToDevfs() {
+  ZX_ASSERT(parent_ != nullptr);
+  Device& parent = *parent_;
+  if (!parent.devfs.topological_node().has_value() || devfs.topological_node().has_value() ||
+      devfs.protocol_node().has_value()) {
+    return ZX_ERR_INTERNAL;
   }
-  if (self) {
-    self->advertise_modified();
-  }
-}
 
-void Device::PublishToDevfs() {
-  if (self) {
-    self->publish();
+  zx_status_t status =
+      parent.devfs.topological_node()->add_child(name_, protocol_id_,
+                                                 Devnode::Remote{
+                                                     .connector = device_controller_.Clone(),
+                                                 },
+                                                 devfs);
+  if (status != ZX_OK) {
+    return status;
   }
-  if (link) {
-    link->publish();
+  if (!(flags & DEV_CTX_INVISIBLE)) {
+    devfs.publish();
   }
+  return ZX_OK;
 }
 
 zx_status_t Device::SignalReadyForBind(zx::duration delay) {
@@ -843,7 +843,7 @@ void Device::BindDevice(BindDeviceRequestView request, BindDeviceCompleter::Sync
   // Notify observers that this device is available again
   // Needed for non-auto-binding drivers like GPT against block, etc
   if (driver_path.empty()) {
-    AdvertiseModifiedToDevfs();
+    devfs.advertise_modified();
   }
   if (status != ZX_OK) {
     completer.ReplyError(status);

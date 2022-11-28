@@ -295,7 +295,7 @@ Coordinator::Coordinator(CoordinatorConfig config, InspectManager* inspect_manag
           this, "root", fbl::String(), "root,", nullptr, ZX_PROTOCOL_ROOT, zx::vmo(),
           fidl::ClientEnd<fuchsia_device_manager::DeviceController>(),
           fidl::ClientEnd<fio::Directory>())),
-      devfs_(root_device_->self,
+      devfs_(root_device_->devfs.topological_node(),
              [this]() {
                zx::result diagnostics_client = inspect_manager_->Connect();
                ZX_ASSERT_MSG(diagnostics_client.is_ok(), "%s", diagnostics_client.status_string());
@@ -348,7 +348,7 @@ void Coordinator::LoadV1Drivers(std::string_view sys_device_driver) {
     bind_driver_manager_->BindAllDevices(config);
   });
 
-  const zx_status_t status = devfs_.initialize(*sys_device_);
+  const zx_status_t status = sys_device_->InitializeToDevfs();
   ZX_ASSERT_MSG(status == ZX_OK, "%s", zx_status_get_string(status));
 }
 
@@ -565,7 +565,7 @@ zx_status_t Coordinator::MakeVisible(const fbl::RefPtr<Device>& dev) {
   }
   if (dev->flags & DEV_CTX_INVISIBLE) {
     dev->flags &= ~DEV_CTX_INVISIBLE;
-    dev->PublishToDevfs();
+    dev->devfs.publish();
     zx_status_t r = dev->SignalReadyForBind();
     if (r != ZX_OK) {
       return r;

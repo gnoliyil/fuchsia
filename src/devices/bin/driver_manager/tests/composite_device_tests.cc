@@ -848,7 +848,7 @@ TEST_F(CompositeTestCase, DevfsNotifications) {
     zx::result server =
         fidl::CreateEndpoints<fuchsia_io::DirectoryWatcher>(&client_ends.emplace_back());
     ASSERT_OK(server.status_value());
-    std::optional<Devnode>& dn = device.device->self;
+    std::optional<Devnode>& dn = device.device->devfs.topological_node();
     ASSERT_TRUE(dn.has_value());
     ASSERT_OK(dn.value().children().WatchDir(&vfs, fio::wire::WatchMask::kAdded, 0,
                                              std::move(server.value())));
@@ -920,7 +920,7 @@ TEST_F(CompositeTestCase, Topology) {
   fbl::RefPtr<Device> comp_device = GetCompositeDevice(kCompositeDevName);
   ASSERT_NOT_NULL(comp_device);
 
-  std::optional<Devnode>& dn = coordinator().root_device()->self;
+  std::optional<Devnode>& dn = coordinator().root_device()->devfs.topological_node();
   ASSERT_TRUE(dn.has_value());
   Devnode& root = dn.value();
 
@@ -945,7 +945,7 @@ TEST_F(CompositeTestCase, Topology) {
 
     // Check that the Devnode we got walking the topological path is the same one
     // from our device.
-    ASSERT_EQ(child.value(), &comp_device->self.value());
+    ASSERT_EQ(child.value(), &comp_device->devfs.topological_node().value());
   }
 }
 

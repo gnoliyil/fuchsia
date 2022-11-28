@@ -37,6 +37,6 @@ void InitializeCoordinator(Coordinator* coordinator) {
   coordinator->InitCoreDevices(kSystemDriverPath);
 
   // Initialize devfs.
-  ASSERT_OK(coordinator->devfs().initialize(*coordinator->sys_device()));
+  ASSERT_OK(coordinator->sys_device()->InitializeToDevfs());
   coordinator->set_running(true);
 }

@@ -27,10 +27,10 @@
 #include <fbl/ref_ptr.h>
 
 #include "src/devices/bin/driver_manager/builtin_devices.h"
-#include "src/devices/bin/driver_manager/device.h"
 #include "src/devices/lib/log/log.h"
 #include "src/lib/fxl/strings/split_string.h"
 #include "src/lib/fxl/strings/string_printf.h"
+#include "src/lib/storage/vfs/cpp/fuchsia_vfs.h"
 #include "src/lib/storage/vfs/cpp/pseudo_dir.h"
 #include "src/lib/storage/vfs/cpp/remote_dir.h"
 #include "src/lib/storage/vfs/cpp/service.h"
@@ -338,6 +338,29 @@ void Devnode::publish() {
   MustAddEntry(parent, name, node_);
 }
 
+void DevfsDevice::advertise_modified() {
+  if (topological_.has_value()) {
+    topological_.value().advertise_modified();
+  }
+  if (protocol_.has_value()) {
+    protocol_.value().advertise_modified();
+  }
+}
+
+void DevfsDevice::publish() {
+  if (topological_.has_value()) {
+    topological_.value().publish();
+  }
+  if (protocol_.has_value()) {
+    protocol_.value().publish();
+  }
+}
+
+void DevfsDevice::unpublish() {
+  topological_.reset();
+  protocol_.reset();
+}
+
 ProtoNode::ProtoNode(fbl::String name, uint32_t initial_device_number)
     : name_(std::move(name)), next_device_number_(initial_device_number) {}
 
@@ -365,60 +388,48 @@ zx::result<fbl::String> ProtoNode::seq_name() {
   return zx::error(ZX_ERR_ALREADY_EXISTS);
 }
 
-zx_status_t Devfs::initialize(Device& device) {
-  ZX_ASSERT(device.parent() != nullptr);
-  Device& parent = *device.parent();
-
-  if (!parent.self.has_value() || device.self.has_value() || device.link.has_value()) {
-    return ZX_ERR_INTERNAL;
+zx_status_t Devnode::add_child(std::string_view name, uint32_t protocol, Remote remote,
+                               DevfsDevice& out_child) {
+  // Check that the child does not have a duplicate name.
+  const std::optional other = devfs_.Lookup(children(), name);
+  if (other.has_value()) {
+    LOGF(WARNING, "rejecting duplicate device name '%.*s'", static_cast<int>(name.size()),
+         name.data());
+    return ZX_ERR_ALREADY_EXISTS;
   }
 
-  {
-    PseudoDir& parent_directory = parent.self.value().node().children();
-    const std::string_view name = device.name();
-    const std::optional other = Lookup(parent_directory, name);
-    if (other.has_value()) {
-      LOGF(WARNING, "rejecting duplicate device name '%.*s'", static_cast<int>(name.size()),
-           name.data());
-      return ZX_ERR_ALREADY_EXISTS;
-    }
-    Devnode::Remote remote = {
-        .connector = device.device_controller().Clone(),
-    };
-    device.self.emplace(*this, parent_directory, std::move(remote), name);
-  }
-
-  switch (const uint32_t id = device.protocol_id(); id) {
+  // Find the protocol directory.
+  ProtoNode* proto_dir = nullptr;
+  switch (const uint32_t id = protocol; id) {
     case ZX_PROTOCOL_TEST_PARENT:
     case ZX_PROTOCOL_MISC:
       // misc devices are singletons, not a class in the sense of other device
       // classes.  They do not get aliases in /dev/class/misc/...  instead they
       // exist only under their parent device.
       break;
-    default: {
-      // Create link in /dev/class/... if this id has a published class
-      if (ProtoNode* dir_ptr = proto_node(id); dir_ptr != nullptr) {
-        ProtoNode& dir = *dir_ptr;
-        fbl::String name = device.name();
-        if (id != ZX_PROTOCOL_CONSOLE) {
-          zx::result seq_name = dir.seq_name();
-          if (seq_name.is_error()) {
-            return seq_name.status_value();
-          }
-          name = seq_name.value();
-        }
+    default:
+      proto_dir = devfs_.proto_node(id);
+  }
 
-        Devnode::Remote remote = {
-            .connector = device.device_controller().Clone(),
-        };
-        device.link.emplace(*this, dir.children(), std::move(remote), name);
+  // Get the name of our new device in the protocol directory.
+  fbl::String class_name;
+  if (proto_dir) {
+    class_name = name;
+    if (protocol != ZX_PROTOCOL_CONSOLE) {
+      zx::result seq_name = proto_dir->seq_name();
+      if (seq_name.is_error()) {
+        return seq_name.status_value();
       }
+      class_name = seq_name.value();
     }
   }
 
-  if (!(device.flags & DEV_CTX_INVISIBLE)) {
-    device.PublishToDevfs();
+  // Setup the DevfsDevice.
+  if (proto_dir) {
+    out_child.protocol_node().emplace(devfs_, proto_dir->children(), remote.Clone(), class_name);
   }
+  out_child.topological_node().emplace(devfs_, children(), std::move(remote), name);
+
   return ZX_OK;
 }
 

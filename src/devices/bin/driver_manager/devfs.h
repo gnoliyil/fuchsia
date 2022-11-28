@@ -19,8 +19,8 @@
 #include "src/lib/storage/vfs/cpp/vnode.h"
 
 class Devfs;
-class Device;
 class PseudoDir;
+class DevfsDevice;
 
 class Devnode {
  public:
@@ -35,6 +35,12 @@ class Devnode {
   };
   struct Remote {
     fidl::WireSharedClient<fuchsia_device_manager::DeviceController> connector;
+
+    Remote Clone() {
+      return Remote{
+          .connector = connector.Clone(),
+      };
+    }
   };
 
   using Target = std::variant<NoRemote, Service, Remote>;
@@ -54,6 +60,11 @@ class Devnode {
   Devnode& operator=(Devnode&&) = delete;
 
   zx::result<Devnode*> walk(std::string_view path);
+
+  // Add a child to this devnode with a given `name`, `protocol`, and `remote.
+  // The child will be constructed in `out_child`.
+  zx_status_t add_child(std::string_view name, uint32_t protocol, Remote remote,
+                        DevfsDevice& out_child);
 
   // Exports `service_path` from `service_dir` to `devfs_path`, under `dn`. If
   // `protocol_id` matches a known protocol, `service_path` will also be exposed
@@ -186,6 +197,22 @@ class ProtoNode {
   fbl::RefPtr<PseudoDir> children_ = fbl::MakeRefCounted<PseudoDir>();
 };
 
+class DevfsDevice {
+ public:
+  void advertise_modified();
+  void publish();
+  void unpublish();
+
+  std::optional<Devnode>& protocol_node() { return protocol_; }
+  std::optional<Devnode>& topological_node() { return topological_; }
+
+ private:
+  std::optional<Devnode> topological_;
+  // TODO(https://fxbug.dev/111253): These protocol nodes are currently always empty directories.
+  // Change this to a pure `RemoteNode` that doesn't expose a directory.
+  std::optional<Devnode> protocol_;
+};
+
 class Devfs {
  public:
   // `root` must outlive `this`.
@@ -193,8 +220,6 @@ class Devfs {
         std::optional<fidl::ClientEnd<fuchsia_io::Directory>> diagnostics = {});
 
   zx::result<fidl::ClientEnd<fuchsia_io::Directory>> Connect(fs::FuchsiaVfs& vfs);
-
-  zx_status_t initialize(Device& device);
 
   // This method is exposed for testing.
   ProtoNode* proto_node(uint32_t protocol_id);
