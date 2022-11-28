@@ -14,12 +14,12 @@
 /* zx_status_t vmx_enter_asm(VmxState* vmx_state) */
 FUNCTION(vmx_enter_asm)
     // Save callee-saved registers and flags to stack.
+    push %rbx
     push %rbp
     push %r15
     push %r14
     push %r13
     push %r12
-    push %rbx
     pushf
 
     // Store the host's stack pointer.
@@ -135,12 +135,12 @@ vmx_exit_asm:
 
     // Restore callee-saved registers and flags from stack.
     popf
-    pop %rbx
     pop %r12
     pop %r13
     pop %r14
     pop %r15
     pop %rbp
+    pop %rbx
 
     ret
 
