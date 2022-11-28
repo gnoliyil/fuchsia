@@ -167,8 +167,8 @@ DriverRunner::DriverRunner(fidl::ClientEnd<fcomponent::Realm> realm,
 
 void DriverRunner::BindNodesForNodeGroups() { TryBindAllOrphansUntracked(); }
 
-void DriverRunner::CreateNodeGroup(CreateNodeGroupRequestView request,
-                                   CreateNodeGroupCompleter::Sync& completer) {
+void DriverRunner::AddNodeGroup(AddNodeGroupRequestView request,
+                                AddNodeGroupCompleter::Sync& completer) {
   if (!request->has_name() || !request->has_nodes()) {
     completer.Reply(fit::error(fdf::NodeGroupError::kMissingArgs));
     return;

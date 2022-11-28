@@ -937,7 +937,7 @@ zx_status_t Device::AddNodeGroup(const char* name, const node_group_desc_t* grou
                         .nodes(std::move(nodes))
                         .Build();
 
-  auto result = fidl::WireCall(*node_group_manager)->CreateNodeGroup(std::move(node_group));
+  auto result = fidl::WireCall(*node_group_manager)->AddNodeGroup(std::move(node_group));
   if (result.status() != ZX_OK) {
     FDF_LOG(ERROR, "Error calling connect fidl: %s", result.status_string());
     return result.status();

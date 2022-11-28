@@ -54,8 +54,8 @@ class DriverRunner : public fidl::WireServer<fuchsia_component_runner::Component
                async_dispatcher_t* dispatcher);
 
   // fidl::WireServer<fuchsia_driver_framework::NodeGroupManager>
-  void CreateNodeGroup(CreateNodeGroupRequestView request,
-                       CreateNodeGroupCompleter::Sync& completer) override;
+  void AddNodeGroup(AddNodeGroupRequestView request,
+                    AddNodeGroupCompleter::Sync& completer) override;
 
   // CompositeManagerBridge interface
   void BindNodesForNodeGroups() override;

@@ -410,11 +410,11 @@ class RootDriver : public driver::DriverBase {
 
   void AddNodeGroup(fdf::NodeGroup dev_group, fit::closure callback) {
     auto dev_group_name = dev_group.name();
-    node_group_manager_->CreateNodeGroup(std::move(dev_group))
+    node_group_manager_->AddNodeGroup(std::move(dev_group))
         .Then([this, dev_group_name, callback = std::move(callback)](
-                  fidl::Result<fdf::NodeGroupManager::CreateNodeGroup>& create_result) {
+                  fidl::Result<fdf::NodeGroupManager::AddNodeGroup>& create_result) {
           if (create_result.is_error()) {
-            FDF_LOG(ERROR, "CreateNodeGroup failed: %s",
+            FDF_LOG(ERROR, "AddNodeGroup failed: %s",
                     create_result.error_value().FormatDescription().c_str());
             DropNode();
             return;

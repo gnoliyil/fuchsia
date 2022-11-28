@@ -62,6 +62,6 @@ type NodeGroupError = strict enum {
 /// of nodes in the system so that the driver bind rules are more generic and reusable.
 @discoverable
 protocol NodeGroupManager {
-    /// Creates the given node group in the driver framework.
-    CreateNodeGroup(NodeGroup) -> () error NodeGroupError;
+    /// Adds the given node group to the driver framework.
+    AddNodeGroup(NodeGroup) -> () error NodeGroupError;
 };
