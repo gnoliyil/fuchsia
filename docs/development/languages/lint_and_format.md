@@ -173,11 +173,7 @@ prebuilt/third_party/rust/${HOST_PLATFORM}/bin/rustfmt \
 $FILES
 ```
 
-`clippy` is run by `fx build` on all Rust targets by default. `clippy` warnings
-are treated as build errors during presubmits.
-
-If you want to run only the linter it can also be invoked locally on GN targets
-with our fx helper script:
+`clippy` can be invoked locally on GN targets with our fx helper script:
 
 ```sh
 fx clippy TARGET
@@ -186,21 +182,14 @@ fx lint # Same as --files but implicitly runs on locally changed files
 ```
 
 ### Enabling clippy lints
-
-To see lints for your target you'll need to enable them in one of the following ways:
+**By default all clippy lints are silenced.** To see lints for your target you'll need to enable them in one of the following ways:
 
 - Put an attribute in your source root such as `#![warn(clippy::needless_return)]` or `#![warn(clippy::all)]`.
 - Locally enable all clippy lints as warnings with the gn arg: `fx set core.x64 --args clippy_warn_all=true`. This is useful for figuring out which lints are common before enabling them for your targets, or gathering statistics like lint frequency across the project.
 
 [Here is the list](https://rust-lang.github.io/rust-clippy/stable/) of all available clippy lints and their names.
 
-### Disabling clippy lints for specific code
-
-Add `#[allow(clippy::LINT_NAME)]` to any Rust code where you'd like to ignore a
-particular lint. Note that attributes [cannot be applied to all expressions][rust-attr-expr]
-and it may be necessary to apply the attribute to a containing syntax element.
-
-[rust-attr-expr]: https://doc.rust-lang.org/reference/expressions.html#expression-attributes
+TODO(fxbug.dev/27311): document once clippy is enabled in tricium and can block CL's on denied lints in CQ
 
 ## Go
 

@@ -1041,7 +1041,7 @@ From //build/toolchain/zircon/clang.gni:11
 ### clippy_cause_failure
 Makes clippy targets fail to build when any "deny" lints are found
 
-**Current value (from the default):** `true`
+**Current value (from the default):** `false`
 
 From //build/rust/config.gni:61
 
@@ -3660,7 +3660,7 @@ From //BUILD.gn:99
 Turns rust targets into a group with both the normal target and clippy target. This
 causes clippy targets to get included in the build by default.
 
-**Current value (from the default):** `true`
+**Current value (from the default):** `false`
 
 From //build/rust/config.gni:65
 
@@ -7883,3 +7883,4 @@ be removed after everyone has had a chance to get hold of their machines.
 **Current value (from the default):** `false`
 
 From //zircon/kernel/BUILD.gn:29
+

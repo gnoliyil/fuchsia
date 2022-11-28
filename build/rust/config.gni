@@ -58,11 +58,11 @@ declare_args() {
   clippy_force_warn_all = false
 
   # Makes clippy targets fail to build when any "deny" lints are found
-  clippy_cause_failure = true
+  clippy_cause_failure = false
 
   # Turns rust targets into a group with both the normal target and clippy target. This
   # causes clippy targets to get included in the build by default.
-  include_clippy = true
+  include_clippy = false
 }
 
 if (rustc_prefix == default_rustc_prefix &&

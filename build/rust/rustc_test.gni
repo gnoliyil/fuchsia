@@ -112,7 +112,6 @@ template("rustc_test_internal") {
     forward_variables_from(invoker,
                            [
                              "disable_clippy",
-                             "quiet_clippy",
                              "enforce_source_listing",
                              "features",
                              "edition",

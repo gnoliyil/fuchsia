@@ -104,9 +104,6 @@ import("//build/rust/rustc_test.gni")
 #   disable_clippy (optional)
 #     Don't run clippy on this target.
 #
-#   quiet_clippy (boolean, optional)
-#     Passed through to rustc_artifact(), see that template for documentation.
-#
 #   original_target_name (optional)
 #     The name of the target as it appears in the BUILD file. Enables tooling
 #     to find the template invocation in a BUILD file where this target was defined.
@@ -207,7 +204,6 @@ template("rustc_library") {
     forward_variables_from(invoker,
                            [
                              "disable_clippy",
-                             "quiet_clippy",
                              "edition",
                              "enforce_source_listing",
                              "features",

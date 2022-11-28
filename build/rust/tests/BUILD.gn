@@ -7,10 +7,6 @@ import("//build/rust/rustc_binary.gni")
 import("//build/rust/rustc_library.gni")
 import("//build/testing/host_test_data.gni")
 
-# Note that all of the Rust targets in this module pass quiet_clippy=true. This prevents the lints
-# produced by these targets from failing the build when deny_warnings=true or from being printed
-# when deny_warnings=false.
-
 group("tests") {
   testonly = true
   deps = [ ":clippy_test($host_toolchain)" ]
@@ -28,7 +24,6 @@ rustc_binary("a") {
     "a/main.rs",
     "a/other.rs",
   ]
-  quiet_clippy = true
 }
 
 rustc_library("b") {
@@ -37,7 +32,6 @@ rustc_library("b") {
   deps = [ ":c" ]
   source_root = "b/lib.rs"
   sources = [ "b/lib.rs" ]
-  quiet_clippy = true
 }
 
 rustc_library("c") {
@@ -45,7 +39,6 @@ rustc_library("c") {
   name = "c"
   source_root = "c/lib.rs"
   sources = [ "c/lib.rs" ]
-  quiet_clippy = true
 }
 
 if (is_host) {
@@ -54,7 +47,6 @@ if (is_host) {
     name = "d"
     source_root = "d/lib.rs"
     sources = [ "d/lib.rs" ]
-    quiet_clippy = true
   }
 
   gen_dir = "gen/build/rust/tests"
