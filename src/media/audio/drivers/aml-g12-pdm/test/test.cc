@@ -3,8 +3,8 @@
 // found in the LICENSE file.
 
 #include <fuchsia/hardware/gpio/cpp/banjo-mock.h>
+#include <lib/async-loop/loop.h>
 #include <lib/ddk/metadata.h>
-#include <lib/fake_ddk/fake_ddk.h>
 #include <lib/fidl/cpp/wire/connect_service.h>
 #include <lib/sync/completion.h>
 
@@ -16,6 +16,7 @@
 
 #include "../audio-stream-in.h"
 #include "src/devices/bus/testing/fake-pdev/fake-pdev.h"
+#include "src/devices/testing/mock-ddk/mock-device.h"
 
 namespace audio::aml_g12 {
 
@@ -71,7 +72,7 @@ metadata::AmlPdmConfig GetDefaultMetadata() {
 
 class TestAudioStreamIn : public AudioStreamIn {
  public:
-  explicit TestAudioStreamIn() : AudioStreamIn(fake_ddk::kFakeParent) {}
+  explicit TestAudioStreamIn(zx_device_t* parent) : AudioStreamIn(parent) {}
   bool AllowNonContiguousRingBuffer() override { return true; }
   inspect::Inspector& inspect() { return AudioStreamIn::inspect(); }
 };
@@ -88,6 +89,8 @@ audio_fidl::wire::PcmFormat GetDefaultPcmFormat() {
 
 struct AudioStreamInTest : public inspect::InspectTestHelper, public zxtest::Test {
   void SetUp() override {
+    fake_parent_ = MockDevice::FakeRootParent();
+
     pdev_.set_mmio(0, mmio_.mmio_info());
     pdev_.set_mmio(1, mmio_.mmio_info());
     pdev_.UseFakeBti();
@@ -95,17 +98,24 @@ struct AudioStreamInTest : public inspect::InspectTestHelper, public zxtest::Tes
     ASSERT_OK(zx::interrupt::create(zx::resource(), 0, ZX_INTERRUPT_VIRTUAL, &irq));
     pdev_.set_interrupt(0, std::move(irq));
 
-    tester_.SetProtocol(ZX_PROTOCOL_PDEV, pdev_.proto());
+    fake_parent_->AddProtocol(ZX_PROTOCOL_PDEV, pdev_.proto()->ops, pdev_.proto()->ctx);
   }
 
   void TestRingBufferSize(uint8_t number_of_channels, uint32_t frames_req,
                           uint32_t frames_expected) {
     auto metadata = GetDefaultMetadata();
     metadata.number_of_channels = number_of_channels;
-    tester_.SetMetadata(DEVICE_METADATA_PRIVATE, &metadata, sizeof(metadata));
+    fake_parent_->SetMetadata(DEVICE_METADATA_PRIVATE, &metadata, sizeof(metadata));
 
-    auto stream = audio::SimpleAudioStream::Create<TestAudioStreamIn>();
-    auto stream_client = GetStreamClient(tester_.FidlClient<audio_fidl::StreamConfigConnector>());
+    auto stream = audio::SimpleAudioStream::Create<TestAudioStreamIn>(fake_parent_.get());
+
+    auto connector_endpoints = fidl::CreateEndpoints<audio_fidl::StreamConfigConnector>();
+    ASSERT_TRUE(connector_endpoints.is_ok());
+
+    loop_.StartThread("fidl-thread");
+    fidl::BindServer(loop_.dispatcher(), std::move(connector_endpoints->server), stream.get());
+
+    auto stream_client = GetStreamClient(std::move(connector_endpoints->client));
     ASSERT_TRUE(stream_client.is_valid());
     auto endpoints = fidl::CreateEndpoints<audio_fidl::RingBuffer>();
     ASSERT_OK(endpoints.status_value());
@@ -126,12 +136,13 @@ struct AudioStreamInTest : public inspect::InspectTestHelper, public zxtest::Tes
     ASSERT_EQ(vmo->value()->num_frames, frames_expected);
 
     stream->DdkAsyncRemove();
-    EXPECT_TRUE(tester_.Ok());
-    stream->DdkRelease();
+    mock_ddk::ReleaseFlaggedDevices(fake_parent_.get());
   }
+
   fake_pdev::FakePDev pdev_;
   FakeMmio mmio_;
-  fake_ddk::Bind tester_;
+  std::shared_ptr<MockDevice> fake_parent_;
+  async::Loop loop_{&kAsyncLoopConfigNeverAttachToThread};
 };
 
 // With 16 bits samples, frame size is 2 x number of channels bytes.
@@ -153,12 +164,18 @@ TEST_F(AudioStreamInTest, RingBufferSize6) {
 
 TEST_F(AudioStreamInTest, Inspect) {
   auto metadata = GetDefaultMetadata();
-  tester_.SetMetadata(DEVICE_METADATA_PRIVATE, &metadata, sizeof(metadata));
+  fake_parent_->SetMetadata(DEVICE_METADATA_PRIVATE, &metadata, sizeof(metadata));
 
-  auto server = audio::SimpleAudioStream::Create<TestAudioStreamIn>();
+  auto server = audio::SimpleAudioStream::Create<TestAudioStreamIn>(fake_parent_.get());
   ASSERT_NOT_NULL(server);
 
-  auto stream_client = GetStreamClient(tester_.FidlClient<audio_fidl::StreamConfigConnector>());
+  auto connector_endpoints = fidl::CreateEndpoints<audio_fidl::StreamConfigConnector>();
+  ASSERT_TRUE(connector_endpoints.is_ok());
+
+  loop_.StartThread("fidl-thread");
+  fidl::BindServer(loop_.dispatcher(), std::move(connector_endpoints->server), server.get());
+
+  auto stream_client = GetStreamClient(std::move(connector_endpoints->client));
   ASSERT_TRUE(stream_client.is_valid());
 
   audio_fidl::wire::PcmFormat pcm_format = GetDefaultPcmFormat();
@@ -191,8 +208,7 @@ TEST_F(AudioStreamInTest, Inspect) {
       CheckProperty(hierarchy().node(), "pdm_status", inspect::UintPropertyValue(0)));
 
   server->DdkAsyncRemove();
-  EXPECT_TRUE(tester_.Ok());
-  server->DdkRelease();
+  mock_ddk::ReleaseFlaggedDevices(fake_parent_.get());
 }
 
 }  // namespace audio::aml_g12
