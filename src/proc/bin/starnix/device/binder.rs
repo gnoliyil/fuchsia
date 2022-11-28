@@ -297,7 +297,14 @@ impl Drop for TransactionState {
             for handle in &self.handles {
                 // Ignore the error because there is little we can do about it.
                 // Panicking would be wrong, in case the client issued an extra strong decrement.
-                let _: Result<(), Errno> = handles.dec_strong(handle.object_index());
+                let result = handles.dec_strong(handle.object_index());
+                if let Err(error) = result {
+                    log_warn!(
+                        "Error when dropping transaction state for process {}: {:?}",
+                        proc.pid,
+                        error
+                    );
+                }
             }
         }
     }
