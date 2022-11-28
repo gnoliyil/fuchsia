@@ -22,8 +22,12 @@ use std::str::FromStr;
 use std::{collections::hash_map::DefaultHasher, env, hash::Hasher, path::PathBuf, time::Duration};
 
 /// Lists the virtual device spec names in the specified product.
-pub(crate) async fn list_virtual_devices(cmd: &StartCommand) -> Result<Vec<String>> {
-    let bundle = load_product_bundle(&cmd.product_bundle, ListingMode::ReadyBundlesOnly).await?;
+pub(crate) async fn list_virtual_devices(
+    cmd: &StartCommand,
+    sdk: &ffx_config::Sdk,
+) -> Result<Vec<String>> {
+    let bundle =
+        load_product_bundle(&sdk, &cmd.product_bundle, ListingMode::ReadyBundlesOnly).await?;
     match bundle {
         ProductBundle::V1(product_bundle) => Ok(product_bundle.device_refs.clone()),
         ProductBundle::V2(_) => {

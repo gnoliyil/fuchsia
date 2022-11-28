@@ -27,7 +27,7 @@ use {
         convert::TryInto,
         fs::{read_dir, remove_dir_all},
         io::{stderr, stdin},
-        path::Component,
+        path::{Component, Path},
     },
     structured_ui::{self, Presentation, Response, SimplePresentation, TableRows, TextUi},
     url::Url,
@@ -106,11 +106,15 @@ where
     I: structured_ui::Interface + Sync,
 {
     tracing::debug!("pb_remove");
+    let sdk = ffx_config::global_env_context()
+        .context("loading global environment context")?
+        .get_sdk()
+        .await?;
     let mut pbs_to_remove = Vec::new();
     if cmd.all {
-        let entries = product_bundle_urls().await.context("list pbms")?;
+        let entries = product_bundle_urls(&sdk).await.context("list pbms")?;
         for url in entries {
-            if !is_locally_built(&url) && is_pb_ready(&url).await? {
+            if !is_locally_built(&url) && is_pb_ready(&url, sdk.get_path_prefix()).await? {
                 pbs_to_remove.push(url);
             }
         }
@@ -118,6 +122,7 @@ where
         // We use the default matching functionality.
         let should_print = true;
         match select_product_bundle(
+            &sdk,
             &cmd.product_bundle_name,
             ListingMode::RemovableBundles,
             should_print,
@@ -125,7 +130,7 @@ where
         .await
         {
             Ok(url) => {
-                if !is_locally_built(&url) && is_pb_ready(&url).await? {
+                if !is_locally_built(&url) && is_pb_ready(&url, sdk.get_path_prefix()).await? {
                     pbs_to_remove.push(url);
                 }
             }
@@ -136,7 +141,7 @@ where
         }
     }
     if pbs_to_remove.len() > 0 {
-        pb_remove_all(ui, pbs_to_remove, cmd.force, repos).await
+        pb_remove_all(&sdk, ui, pbs_to_remove, cmd.force, repos).await
     } else {
         // Nothing to remove.
         check_for_custom_metadata(ui, "There are no product bundles to remove.").await;
@@ -168,6 +173,7 @@ async fn get_repos(repos_proxy: &RepositoryRegistryProxy) -> Result<Vec<Reposito
 
 /// Removes a set of product bundle directories, with user confirmation if "force" is false.
 async fn pb_remove_all<I>(
+    sdk: &ffx_config::Sdk,
     ui: &mut I,
     pbs_to_remove: Vec<Url>,
     force: bool,
@@ -218,7 +224,7 @@ where
 
             // If there is a repository for the bundle...
             let repo_name = name.replace('_', "-");
-            if let Ok(repo_path) = pbms::get_packages_dir(&url).await {
+            if let Ok(repo_path) = pbms::get_packages_dir(&url, sdk.get_path_prefix()).await {
                 if all_repos.iter().any(|r| {
                     // The name has to match...
                     r.name == repo_name &&
@@ -270,11 +276,15 @@ where
     I: structured_ui::Interface + Sync,
 {
     tracing::debug!("pb_list");
+    let sdk = ffx_config::global_env_context()
+        .context("loading global environment context")?
+        .get_sdk()
+        .await?;
     if !cmd.cached {
         let storage_dir = pbms::get_storage_dir().await?;
-        update_metadata_all(&storage_dir, select_auth(cmd.oob_auth, &cmd.auth), ui).await?;
+        update_metadata_all(&sdk, &storage_dir, select_auth(cmd.oob_auth, &cmd.auth), ui).await?;
     }
-    let mut entries = product_bundle_urls().await.context("list pbms")?;
+    let mut entries = product_bundle_urls(&sdk).await.context("list pbms")?;
     if entries.is_empty() {
         check_for_custom_metadata(ui, "No product bundles found.").await;
         return Ok(());
@@ -283,7 +293,7 @@ where
     entries.reverse();
     let mut table = TableRows::builder();
     for entry in entries {
-        let ready = if is_pb_ready(&entry).await? { "*" } else { " " };
+        let ready = if is_pb_ready(&entry, sdk.get_path_prefix()).await? { "*" } else { " " };
         table.row(vec![format!("{}", ready), format!("{}", entry)]);
     }
     table.note(
@@ -327,7 +337,11 @@ where
 {
     let start = std::time::Instant::now();
     tracing::debug!("pb_get {:?}", cmd.product_bundle_name);
-    let product_url = match determine_pbm_url(cmd, ui).await {
+    let sdk = ffx_config::global_env_context()
+        .context("loading global environment context")?
+        .get_sdk()
+        .await?;
+    let product_url = match determine_pbm_url(&sdk, cmd, ui).await {
         Ok(url) => url,
         Err(e) => {
             let mut note = TableRows::builder();
@@ -338,7 +352,7 @@ where
         }
     };
 
-    let repo_name = match get_repository_name(cmd, repos, &product_url).await {
+    let repo_name = match get_repository_name(&sdk, cmd, repos, &product_url).await {
         Ok(name) => name,
         Err(e) => {
             let mut note = TableRows::builder();
@@ -349,7 +363,7 @@ where
         }
     };
 
-    match download_product_bundle(ui, cmd, &product_url, repos).await {
+    match download_product_bundle(&sdk, ui, cmd, &product_url, repos).await {
         Ok(true) => tracing::debug!("Product Bundle downloaded successfully."),
         Ok(false) => tracing::debug!("Product Bundle download skipped."),
         Err(e) => {
@@ -361,7 +375,7 @@ where
         }
     }
 
-    match set_up_package_repository(&repo_name, repos, &product_url).await {
+    match set_up_package_repository(&repo_name, repos, &product_url, sdk.get_path_prefix()).await {
         Ok(()) => {
             tracing::debug!("Repository '{}' added for '{}'.", &repo_name, product_url);
             let mut note = TableRows::builder();
@@ -383,6 +397,7 @@ where
 /// or finally defaulting to "devhost". Returns an Err() if the selected repository name is an
 /// invalid domain name or is already in use by another repository.
 async fn get_repository_name(
+    sdk: &ffx_config::Sdk,
     cmd: &GetCommand,
     repos: &RepositoryRegistryProxy,
     product_url: &Url,
@@ -419,7 +434,7 @@ async fn get_repository_name(
     // the user told us to replace it, or if it's already associated with a
     // bundle that matches the product_url.
     let repo_list = get_repos(repos).await?;
-    let repo_path = pbms::get_packages_dir(product_url).await?;
+    let repo_path = pbms::get_packages_dir(product_url, sdk.get_path_prefix()).await?;
     if let Some(r) = repo_list.iter().find(|r| r.name == repo_name) {
         let replace_anyway =
             // --force-repo means "Replace this repo if it exists".
@@ -449,6 +464,7 @@ async fn get_repository_name(
 ///     available in local storage.
 ///   - Ok(true) if the files are successfully downloaded.
 async fn download_product_bundle<I>(
+    sdk: &ffx_config::Sdk,
     ui: &mut I,
     cmd: &GetCommand,
     product_url: &Url,
@@ -460,10 +476,10 @@ where
     let output_dir = pbms::get_product_dir(&product_url).await?;
 
     // Go ahead and download the product images.
-    let path = get_images_dir(&product_url).await;
+    let path = get_images_dir(&product_url, sdk.get_path_prefix()).await;
     if path.is_ok() && path.unwrap().exists() {
         if cmd.force {
-            if let Err(e) = pb_remove_all(ui, vec![product_url.clone()], true, repos).await {
+            if let Err(e) = pb_remove_all(sdk, ui, vec![product_url.clone()], true, repos).await {
                 let mut note = TableRows::builder();
                 let message =
                     format!("Unexpected error removing the existing product bundle: {:?}", e);
@@ -490,9 +506,10 @@ async fn set_up_package_repository(
     repo_name: &str,
     repos: &RepositoryRegistryProxy,
     product_url: &Url,
+    sdk_root: &Path,
 ) -> Result<()> {
     // Register a repository with the daemon if we downloaded any packaging artifacts.
-    if let Ok(repo_path) = pbms::get_packages_dir(&product_url).await {
+    if let Ok(repo_path) = pbms::get_packages_dir(&product_url, sdk_root).await {
         if repo_path.exists() {
             let repo_path = repo_path
                 .canonicalize()
@@ -512,16 +529,21 @@ async fn set_up_package_repository(
 }
 
 /// Convert cli args to a full URL pointing to product bundle metadata
-async fn determine_pbm_url<I>(cmd: &GetCommand, ui: &mut I) -> Result<url::Url>
+async fn determine_pbm_url<I>(
+    sdk: &ffx_config::Sdk,
+    cmd: &GetCommand,
+    ui: &mut I,
+) -> Result<url::Url>
 where
     I: structured_ui::Interface + Sync,
 {
     if !cmd.cached {
         let base_dir = pbms::get_storage_dir().await?;
-        update_metadata_all(&base_dir, select_auth(cmd.oob_auth, &cmd.auth), ui).await?;
+        update_metadata_all(sdk, &base_dir, select_auth(cmd.oob_auth, &cmd.auth), ui).await?;
     }
     let should_print = true;
-    select_product_bundle(&cmd.product_bundle_name, ListingMode::GetableBundles, should_print).await
+    select_product_bundle(sdk, &cmd.product_bundle_name, ListingMode::GetableBundles, should_print)
+        .await
 }
 
 /// `ffx product-bundle create` sub-command.

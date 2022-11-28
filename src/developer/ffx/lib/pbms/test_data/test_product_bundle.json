@@ -17,6 +17,7 @@
                 "repo_uri": "gs://fuchsia/test_fake.tar.gz"
             }
         ],
+        "manifests": {},
         "type": "product_bundle"
     },
     "schema_id": "http://fuchsia.com/schemas/sdk/product_bundle-6320eef1.json"

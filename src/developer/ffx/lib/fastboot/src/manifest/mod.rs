@@ -423,6 +423,7 @@ impl Boot for FlashManifestVersion {
 }
 
 pub async fn from_sdk<W: Write>(
+    sdk: &ffx_config::Sdk,
     writer: &mut W,
     fastboot_proxy: FastbootProxy,
     cmd: ManifestParams,
@@ -431,7 +432,7 @@ pub async fn from_sdk<W: Write>(
     match cmd.product_bundle.as_ref() {
         Some(b) => {
             let product_bundle =
-                load_product_bundle(&Some(b.to_string()), ListingMode::AllBundles).await?;
+                load_product_bundle(sdk, &Some(b.to_string()), ListingMode::AllBundles).await?;
             FlashManifest {
                 resolver: Resolver::new(PathBuf::from(b))?,
                 version: FlashManifestVersion::from_product_bundle(&product_bundle)?,

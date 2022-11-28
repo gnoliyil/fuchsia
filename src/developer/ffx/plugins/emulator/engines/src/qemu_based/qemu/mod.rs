@@ -46,7 +46,10 @@ impl QemuEngine {
 
         // Realistically, the file is always in a directory, so the empty path is a reasonable
         // fallback since it will "never" happen
-        let sdk = ffx_config::get_sdk().await?;
+        let sdk = ffx_config::global_env_context()
+            .context("loading global environment context")?
+            .get_sdk()
+            .await?;
         let qemu_x64_path = match sdk.get_host_tool(QEMU_TOOL) {
             Ok(qemu_path) => qemu_path.canonicalize().context(format!(
                 "Failed to canonicalize the path to the emulator binary: {:?}",

@@ -54,7 +54,10 @@ mod modules {
     use super::*;
 
     pub(super) async fn get_host_tool(name: &str) -> Result<PathBuf> {
-        let sdk = ffx_config::get_sdk().await?;
+        let sdk = ffx_config::global_env_context()
+            .context("loading global environment context")?
+            .get_sdk()
+            .await?;
         sdk.get_host_tool(name)
     }
 }

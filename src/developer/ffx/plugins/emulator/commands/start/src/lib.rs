@@ -4,7 +4,7 @@
 
 use crate::editor::edit_configuration;
 use crate::pbm::{list_virtual_devices, make_configs};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use errors::ffx_bail;
 use ffx_core::ffx_plugin;
 use ffx_emulator_config::EngineType;
@@ -18,9 +18,13 @@ mod pbm;
 
 #[ffx_plugin(TargetCollectionProxy = "daemon::protocol")]
 pub async fn start(cmd: StartCommand, proxy: TargetCollectionProxy) -> Result<()> {
+    let sdk = ffx_config::global_env_context()
+        .context("loading global environment context")?
+        .get_sdk()
+        .await?;
     // If device name is list, list the available virtual devices and return.
     if cmd.device_list {
-        match list_virtual_devices(&cmd).await {
+        match list_virtual_devices(&cmd, &sdk).await {
             Ok(devices) => {
                 println!("Valid virtual device specifications are: {:?}", devices);
                 return Ok(());

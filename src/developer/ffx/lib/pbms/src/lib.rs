@@ -107,6 +107,7 @@ pub enum ListingMode {
 /// Load a product bundle by name, uri, or local path.
 /// This is capable of loading both v1 and v2 ProductBundles.
 pub async fn load_product_bundle(
+    sdk: &ffx_config::Sdk,
     product_bundle: &Option<String>,
     mode: ListingMode,
 ) -> Result<ProductBundle> {
@@ -119,12 +120,13 @@ pub async fn load_product_bundle(
 
     // Otherwise, use the `fms` crate to fetch and parse the product bundle by name or uri.
     let should_print = true;
-    let product_url = select_product_bundle(product_bundle, mode, should_print)
+    let product_url = select_product_bundle(sdk, product_bundle, mode, should_print)
         .await
         .context("Selecting product bundle")?;
     let name = product_url.fragment().expect("Product name is required.");
 
-    let fms_entries = fms_entries_from(&product_url).await.context("get fms entries")?;
+    let fms_entries =
+        fms_entries_from(&product_url, &sdk.get_path_prefix()).await.context("get fms entries")?;
     let product = fms::find_product_bundle(&fms_entries, &Some(name.to_string()))
         .context("problem with product_bundle")?
         .to_owned();
@@ -133,6 +135,7 @@ pub async fn load_product_bundle(
 
 /// For each non-local URL in ffx CONFIG_METADATA, fetch updated info.
 pub async fn update_metadata_all<I>(
+    sdk: &ffx_config::Sdk,
     output_dir: &Path,
     auth_flow: &AuthFlowChoice,
     ui: &mut I,
@@ -141,7 +144,7 @@ where
     I: structured_ui::Interface + Sync,
 {
     tracing::debug!("update_metadata_all");
-    let repos = pbm_repo_list().await.context("getting repo list")?;
+    let repos = pbm_repo_list(sdk).await.context("getting repo list")?;
     async_fs::create_dir_all(&output_dir).await.context("create directory")?;
     for repo_url in repos {
         if repo_url.scheme() != GS_SCHEME {
@@ -188,15 +191,14 @@ where
 ///
 /// Tip: Call `update_metadata()` to update the info (or not, if the intent is
 ///      to peek at what's there without updating).
-pub async fn product_bundle_urls() -> Result<Vec<url::Url>> {
+pub async fn product_bundle_urls(sdk: &ffx_config::Sdk) -> Result<Vec<url::Url>> {
     tracing::debug!("product_bundle_urls");
     let mut result = Vec::new();
 
     // Collect product bundle URLs from the file paths in ffx config.
-    for repo in pbm_repo_list().await.context("getting repo list")? {
-        if let Some(path) = &path_from_file_url(&repo) {
-            let names =
-                pb_names_from_path(&Path::new(&path)).context("loading product bundle names")?;
+    for repo in pbm_repo_list(&sdk).await.context("getting repo list")? {
+        if let Some(path) = path_from_file_url(&repo) {
+            let names = pb_names_from_path(&path).context("loading product bundle names")?;
             for name in names {
                 let mut product_url = repo.to_owned();
                 product_url.set_fragment(Some(&name));
@@ -237,9 +239,9 @@ pub async fn product_bundle_urls() -> Result<Vec<url::Url>> {
 ///
 /// If `product_url` is None or not a URL, then an attempt will be made to find
 /// default entries.
-pub async fn fms_entries_from(product_url: &url::Url) -> Result<Entries> {
+pub async fn fms_entries_from(product_url: &url::Url, sdk_root: &Path) -> Result<Entries> {
     tracing::debug!("fms_entries_from");
-    let path = get_metadata_glob(product_url).await.context("getting metadata")?;
+    let path = get_metadata_glob(product_url, sdk_root).await.context("getting metadata")?;
     let mut entries = Entries::new();
     entries.add_from_path(&path).context("adding entries")?;
     Ok(entries)
@@ -341,16 +343,17 @@ pub fn is_locally_built(product_url: &url::Url) -> bool {
 /// Tip: Call `update_metadata()` to get up to date choices (or not, if the
 ///      intent is to select from what's already there).
 pub async fn select_product_bundle(
+    sdk: &ffx_config::Sdk,
     looking_for: &Option<String>,
     mode: ListingMode,
     should_print: bool,
 ) -> Result<url::Url> {
     tracing::debug!("select_product_bundle");
-    let mut urls = product_bundle_urls().await.context("getting product bundle URLs")?;
+    let sdk_version = sdk.get_version();
+    let sdk_root = sdk.get_path_prefix();
+    let mut urls = product_bundle_urls(sdk).await.context("getting product bundle URLs")?;
     // Sort the URLs lexigraphically, then reverse them so the most recent
     // version strings will be first.
-    let sdk = ffx_config::get_sdk().await?;
-    let sdk_version = sdk.get_version();
     urls.sort();
     urls.reverse();
     let mut iter = urls.into_iter();
@@ -358,7 +361,7 @@ pub async fn select_product_bundle(
         // Unfortunately this can't be a filter() because is_pb_ready is async.
         let mut ready = Vec::new();
         for url in iter {
-            if is_pb_ready(&url).await? {
+            if is_pb_ready(&url, sdk_root).await? {
                 ready.push(url);
             }
         }
@@ -393,9 +396,9 @@ pub async fn select_product_bundle(
 
 /// Determine whether the data for `product_url` is downloaded and ready to be
 /// used.
-pub async fn is_pb_ready(product_url: &url::Url) -> Result<bool> {
+pub async fn is_pb_ready(product_url: &url::Url, sdk_root: &Path) -> Result<bool> {
     assert!(product_url.as_str().contains("#"));
-    Ok(get_images_dir(product_url).await.context("getting images dir")?.is_dir())
+    Ok(get_images_dir(product_url, sdk_root).await.context("getting images dir")?.is_dir())
 }
 
 /// Download data related to the product.
@@ -437,28 +440,28 @@ where
 }
 
 /// Determine the path to the product images data.
-pub async fn get_images_dir(product_url: &url::Url) -> Result<PathBuf> {
+pub async fn get_images_dir(product_url: &url::Url, sdk_root: &Path) -> Result<PathBuf> {
     assert!(!product_url.as_str().is_empty());
     let name = product_url.fragment().expect("a URI fragment is required");
     assert!(!name.is_empty());
     assert!(!name.contains("/"));
-    local_path_helper(product_url, &format!("{}/images", name), /*dir=*/ true).await
+    local_path_helper(product_url, &format!("{}/images", name), /*dir=*/ true, sdk_root).await
 }
 
 /// Determine the path to the product packages data.
-pub async fn get_packages_dir(product_url: &url::Url) -> Result<PathBuf> {
+pub async fn get_packages_dir(product_url: &url::Url, sdk_root: &Path) -> Result<PathBuf> {
     assert!(!product_url.as_str().is_empty());
     let name = product_url.fragment().expect("a URI fragment is required");
     assert!(!name.is_empty());
     assert!(!name.contains("/"));
-    local_path_helper(product_url, &format!("{}/packages", name), /*dir=*/ true).await
+    local_path_helper(product_url, &format!("{}/packages", name), /*dir=*/ true, sdk_root).await
 }
 
 /// Determine the path to the local product metadata directory.
-pub async fn get_metadata_dir(product_url: &url::Url) -> Result<PathBuf> {
+pub async fn get_metadata_dir(product_url: &url::Url, sdk_root: &Path) -> Result<PathBuf> {
     assert!(!product_url.as_str().is_empty());
     assert!(!product_url.fragment().is_none());
-    Ok(get_metadata_glob(product_url)
+    Ok(get_metadata_glob(product_url, sdk_root)
         .await
         .context("getting metadata")?
         .parent()
@@ -469,10 +472,10 @@ pub async fn get_metadata_dir(product_url: &url::Url) -> Result<PathBuf> {
 /// Determine the glob path to the product metadata.
 ///
 /// A glob path may have wildcards, such as "file://foo/*.json".
-pub async fn get_metadata_glob(product_url: &url::Url) -> Result<PathBuf> {
+pub async fn get_metadata_glob(product_url: &url::Url, sdk_root: &Path) -> Result<PathBuf> {
     assert!(!product_url.as_str().is_empty());
     assert!(!product_url.fragment().is_none());
-    local_path_helper(product_url, "product_bundles.json", /*dir=*/ false).await
+    local_path_helper(product_url, "product_bundles.json", /*dir=*/ false, sdk_root).await
 }
 
 /// Remove prior output directory, if necessary.
@@ -536,12 +539,7 @@ mod tests {
     const IMAGES_JSON: &str = include_str!("../test_data/test_images.json");
     const PRODUCT_BUNDLE_JSON: &str = include_str!("../test_data/test_product_bundle.json");
 
-    // Disabling this test until a test config can be modified without altering
-    // the local user's config.
-    #[ignore]
-    #[fuchsia_async::run_singlethreaded(test)]
-    async fn test_get_pbms() {
-        let _env = ffx_config::test_init().await.expect("create test config");
+    fn create_test_intree_sdk() -> TempDir {
         let temp_dir = TempDir::new().expect("temp dir");
         let temp_path = temp_dir.path();
 
@@ -549,19 +547,24 @@ mod tests {
         std::fs::create_dir_all(&manifest_path).expect("create dir");
         let mut core_file = File::create(manifest_path.join("core")).expect("create core");
         core_file.write_all(CORE_JSON.as_bytes()).expect("write core file");
-        drop(core_file);
 
         let mut images_file =
             File::create(temp_path.join("images.json")).expect("create images file");
         images_file.write_all(IMAGES_JSON.as_bytes()).expect("write images file");
-        drop(images_file);
 
         let mut pbm_file =
             File::create(temp_path.join("product_bundle.json")).expect("create images file");
         pbm_file.write_all(PRODUCT_BUNDLE_JSON.as_bytes()).expect("write pbm file");
-        drop(pbm_file);
 
-        let sdk_root = temp_path.to_str().expect("path to str");
+        temp_dir
+    }
+
+    #[fuchsia_async::run_singlethreaded(test)]
+    async fn test_get_pbms() {
+        let env = ffx_config::test_init().await.expect("create test config");
+
+        let sdk_root_dir = create_test_intree_sdk();
+        let sdk_root = sdk_root_dir.path().to_str().expect("path to str");
         ffx_config::query("sdk.root")
             .level(Some(ConfigLevel::User))
             .set(sdk_root.into())
@@ -574,18 +577,21 @@ mod tests {
             .expect("set sdk type");
         ffx_config::query(CONFIG_METADATA)
             .level(Some(ConfigLevel::User))
-            .set(serde_json::json!([""]))
+            .set(serde_json::json!(["{sdk.root}/*.json"]))
             .await
             .expect("set pbms metadata");
-        let output_dir = temp_dir.path().join("output_dir");
+
+        let output_dir = TempDir::new().expect("output directory");
         let mut input = Box::new(std::io::stdin());
         let mut output = Vec::new();
         let mut err_out = Vec::new();
         let mut ui = structured_ui::TextUi::new(&mut input, &mut output, &mut err_out);
-        update_metadata_all(&output_dir, &AuthFlowChoice::Default, &mut ui)
+
+        let sdk = env.context.get_sdk().await.expect("Loading configured sdk");
+        update_metadata_all(&sdk, output_dir.path(), &AuthFlowChoice::Default, &mut ui)
             .await
-            .expect("get pbms");
-        let urls = product_bundle_urls().await.expect("get pbms");
+            .expect("updating metadata");
+        let urls = product_bundle_urls(&sdk).await.expect("get pb urls");
         assert!(!urls.is_empty());
     }
 

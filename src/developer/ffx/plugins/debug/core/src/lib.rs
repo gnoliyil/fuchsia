@@ -22,7 +22,11 @@ pub async fn ffx_plugin_impl(
     injector: &dyn ffx_core::Injector,
     cmd: ffx_debug_core_args::CoreCommand,
 ) -> Result<()> {
-    if let Err(e) = symbol_index::ensure_symbol_index_registered().await {
+    let sdk = ffx_config::global_env_context()
+        .context("loading global environment context")?
+        .get_sdk()
+        .await?;
+    if let Err(e) = symbol_index::ensure_symbol_index_registered(&sdk).await {
         eprintln!("ensure_symbol_index_registered failed, error was: {:#?}", e);
     }
 
@@ -36,7 +40,7 @@ pub async fn ffx_plugin_impl(
         }
     };
 
-    let zxdb_path = ffx_config::get_sdk().await?.get_host_tool("zxdb")?;
+    let zxdb_path = sdk.get_host_tool("zxdb")?;
     let mut args = vec!["--core=".to_owned() + &minidump];
     args.extend(cmd.zxdb_args);
 

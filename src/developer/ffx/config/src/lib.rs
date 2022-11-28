@@ -10,7 +10,7 @@ use crate::api::{
 use crate::cache::load_config;
 use analytics::{is_opted_in, set_opt_in_status};
 use anyhow::{Context, Result};
-use std::{convert::From, io::Write, path::PathBuf};
+use std::{convert::From, io::Write};
 
 pub mod api;
 pub mod environment;
@@ -31,17 +31,10 @@ pub use config_macros::FfxConfigBacked;
 
 pub use cache::{global_env, global_env_context, init, test_init, TestEnv};
 pub use environment::{Environment, EnvironmentContext};
+pub use sdk::{Sdk, SdkRoot};
 pub use storage::ConfigMap;
 
 pub use ssh_key::SshKeyFiles;
-
-const SDK_TYPE_IN_TREE: &str = "in-tree";
-const SDK_NOT_FOUND_HELP: &str = "\
-SDK directory could not be found. Please set with
-`ffx sdk set root <PATH_TO_SDK_DIR>`\n
-If you are developing in the fuchsia tree, ensure \
-that you are running the `ffx` command (in $FUCHSIA_DIR/.jiri_root) or `fx ffx`, not a built binary.
-Running the binary directly is not supported in the fuchsia tree.\n\n";
 
 /// The levels of configuration possible
 // If you edit this enum, make sure to also change the enum counter below to match.
@@ -168,74 +161,6 @@ pub async fn print_log_hint<W: std::io::Write>(writer: &mut W) {
     }
 }
 
-/// Gets the basic information about the sdk as configured, without diving deeper into the sdk's own configuration.
-async fn get_sdk_root() -> (Result<PathBuf, ConfigError>, String) {
-    // All gets in this function should declare that they don't want the build directory searched, because
-    // if there is a build directory it *is* generally the sdk.
-    let sdk_root = query("sdk.root").build(Some(BuildOverride::NoBuild)).get().await;
-    let sdk_type = query("sdk.type")
-        .build(Some(BuildOverride::NoBuild))
-        .get()
-        .await
-        .unwrap_or_else(|_| "".to_string());
-    (sdk_root, sdk_type)
-}
-
-/// Does a full load of the sdk configuration.
-pub async fn get_sdk() -> Result<sdk::Sdk> {
-    match get_sdk_root().await {
-        (Ok(manifest), sdk_type) => {
-            if sdk_type == SDK_TYPE_IN_TREE {
-                let module_manifest: Option<String> =
-                    query("sdk.module").build(Some(BuildOverride::NoBuild)).get().await.ok();
-                sdk::Sdk::from_build_dir(manifest, module_manifest)
-            } else {
-                sdk::Sdk::from_sdk_dir(manifest)
-            }
-        }
-        (Err(e), sdk_type) => {
-            if sdk_type != SDK_TYPE_IN_TREE {
-                let path = std::env::current_exe().map_err(|e| {
-                    errors::ffx_error!(
-                        "{}Error was: failed to get current ffx exe path for SDK root: {:?}",
-                        SDK_NOT_FOUND_HELP,
-                        e
-                    )
-                })?;
-
-                match find_sdk_root(path) {
-                    Ok(Some(root)) => return sdk::Sdk::from_sdk_dir(root),
-                    Ok(None) => {
-                        errors::ffx_bail!(
-                            "{}Could not find an SDK manifest in any parent of ffx's directory.",
-                            SDK_NOT_FOUND_HELP,
-                        );
-                    }
-                    Err(e) => {
-                        errors::ffx_bail!("{}Error was: {:?}", SDK_NOT_FOUND_HELP, e);
-                    }
-                }
-            }
-
-            errors::ffx_bail!("{}Error was: {:?}", SDK_NOT_FOUND_HELP, e);
-        }
-    }
-}
-
-fn find_sdk_root(start_path: PathBuf) -> Result<Option<PathBuf>> {
-    let mut path = std::fs::canonicalize(start_path.clone())
-        .context(format!("canonicalizing ffx path {:?}", start_path))?;
-
-    loop {
-        path =
-            if let Some(parent) = path.parent() { parent.to_path_buf() } else { return Ok(None) };
-
-        if path.join("meta").join("manifest.json").exists() {
-            return Ok(Some(path));
-        }
-    }
-}
-
 pub async fn set_metrics_status(value: bool) -> Result<()> {
     set_opt_in_status(value).await
 }
@@ -260,7 +185,6 @@ mod test {
     use serde_json::{json, Value};
     use std::collections::{HashMap, HashSet};
     use std::path::PathBuf;
-    use tempfile::tempdir;
 
     #[test]
     fn test_config_levels_make_sense_from_first() {
@@ -392,34 +316,5 @@ mod test {
 
         // This should just compile and drop without panicking is all.
         let _ignore = TestEmptyBackedStruct {};
-    }
-
-    #[fuchsia_async::run_singlethreaded(test)]
-    async fn test_find_sdk_root_finds_root() {
-        let temp = tempdir().unwrap();
-        let temp_path = std::fs::canonicalize(temp.path()).expect("canonical temp path");
-
-        let start_path = temp_path.join("test1").join("test2");
-        std::fs::create_dir_all(start_path.clone()).unwrap();
-
-        let meta_path = temp_path.join("meta");
-        std::fs::create_dir(meta_path.clone()).unwrap();
-
-        std::fs::write(meta_path.join("manifest.json"), "").unwrap();
-
-        assert_eq!(find_sdk_root(start_path).unwrap().unwrap(), temp_path);
-    }
-
-    #[fuchsia_async::run_singlethreaded(test)]
-    async fn test_find_sdk_root_no_manifest() {
-        let temp = tempdir().unwrap();
-
-        let start_path = temp.path().to_path_buf().join("test1").join("test2");
-        std::fs::create_dir_all(start_path.clone()).unwrap();
-
-        let meta_path = temp.path().to_path_buf().join("meta");
-        std::fs::create_dir(meta_path).unwrap();
-
-        assert!(find_sdk_root(start_path).unwrap().is_none());
     }
 }

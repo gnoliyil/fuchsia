@@ -17,7 +17,10 @@ use {
 #[ffx_plugin()]
 pub async fn exec_sdk(command: SdkCommand) -> Result<()> {
     let writer = Box::new(stdout());
-    let sdk = ffx_config::get_sdk().await;
+    let sdk = ffx_config::global_env_context()
+        .context("loading global environment context")?
+        .get_sdk()
+        .await;
 
     match &command.sub {
         SubCommand::Version(_) => exec_version(sdk?, writer).await,

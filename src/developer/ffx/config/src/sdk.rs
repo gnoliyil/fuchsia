@@ -2,19 +2,26 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use {
-    anyhow::{anyhow, bail, Context, Result},
-    serde::Deserialize,
-    serde_json::Value,
-    std::{
-        collections::HashMap,
-        convert::Into,
-        fs,
-        io::{self, BufReader},
-        path::PathBuf,
-    },
-    tracing::warn,
+use crate::{query, BuildOverride};
+use anyhow::{anyhow, bail, Context, Result};
+use serde::Deserialize;
+use serde_json::Value;
+use std::{
+    collections::HashMap,
+    convert::Into,
+    fs,
+    io::{self, BufReader},
+    path::{Path, PathBuf},
 };
+use tracing::warn;
+
+pub(crate) const SDK_TYPE_IN_TREE: &str = "in-tree";
+pub(crate) const SDK_NOT_FOUND_HELP: &str = "\
+SDK directory could not be found. Please set with
+`ffx sdk set root <PATH_TO_SDK_DIR>`\n
+If you are developing in the fuchsia tree, ensure \
+that you are running the `ffx` command (in $FUCHSIA_DIR/.jiri_root) or `fx ffx`, not a built binary.
+Running the binary directly is not supported in the fuchsia tree.\n\n";
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum SdkVersion {
@@ -23,6 +30,7 @@ pub enum SdkVersion {
     Unknown,
 }
 
+#[derive(Debug)]
 pub struct Sdk {
     path_prefix: PathBuf,
     metas: Vec<Value>,
@@ -79,8 +87,80 @@ struct Part {
     ty: String,
 }
 
+pub enum SdkRoot {
+    InTree { manifest: PathBuf, module: Option<String> },
+    Packaged(PathBuf),
+}
+
+impl SdkRoot {
+    /// Gets the basic information about the sdk as configured, without diving deeper into the sdk's own configuration.
+    pub(crate) async fn from_config(sdk_root: Option<&Path>) -> Result<Self> {
+        // All gets in this function should declare that they don't want the build directory searched, because
+        // if there is a build directory it *is* generally the sdk.
+        let manifest = match sdk_root {
+            Some(root) => root.to_owned(),
+            _ => {
+                let path = std::env::current_exe().map_err(|e| {
+                    errors::ffx_error!(
+                        "{}Error was: failed to get current ffx exe path for SDK root: {:?}",
+                        SDK_NOT_FOUND_HELP,
+                        e
+                    )
+                })?;
+
+                match find_sdk_root(&path) {
+                    Ok(Some(root)) => root,
+                    Ok(None) => {
+                        errors::ffx_bail!(
+                            "{}Could not find an SDK manifest in any parent of ffx's directory.",
+                            SDK_NOT_FOUND_HELP,
+                        );
+                    }
+                    Err(e) => {
+                        errors::ffx_bail!("{}Error was: {:?}", SDK_NOT_FOUND_HELP, e);
+                    }
+                }
+            }
+        };
+        let sdk_type: Option<String> =
+            query("sdk.type").build(Some(BuildOverride::NoBuild)).get().await.ok();
+        match sdk_type.as_deref() {
+            Some(SDK_TYPE_IN_TREE) => {
+                let module =
+                    query("sdk.module").build(Some(BuildOverride::NoBuild)).get().await.ok();
+                Ok(Self::InTree { manifest, module })
+            }
+            _ => Ok(Self::Packaged(manifest)),
+        }
+    }
+
+    /// Does a full load of the sdk configuration.
+    pub fn get_sdk(&self) -> Result<Sdk> {
+        match self {
+            Self::InTree { manifest, module } => Sdk::from_build_dir(&manifest, module.as_ref()),
+            Self::Packaged(manifest) => Sdk::from_sdk_dir(&manifest),
+        }
+    }
+}
+
+fn find_sdk_root(start_path: &Path) -> Result<Option<PathBuf>> {
+    let mut path = std::fs::canonicalize(start_path)
+        .context(format!("canonicalizing ffx path {:?}", start_path))?;
+
+    loop {
+        path =
+            if let Some(parent) = path.parent() { parent.to_path_buf() } else { return Ok(None) };
+
+        if path.join("meta").join("manifest.json").exists() {
+            return Ok(Some(path));
+        }
+    }
+}
+
 impl Sdk {
-    pub fn from_build_dir(path: PathBuf, module_manifest: Option<impl AsRef<str>>) -> Result<Self> {
+    fn from_build_dir(path: &Path, module_manifest: Option<impl AsRef<str>>) -> Result<Self> {
+        let path = std::fs::canonicalize(path)
+            .context(format!("canonicalizing sdk path prefix {}", path.display()))?;
         let manifest_path = match module_manifest {
             None => path.join("sdk/manifest/core"),
             Some(module) => if cfg!(target_arch = "x86_64") {
@@ -99,14 +179,14 @@ impl Sdk {
 
         // If we are able to parse the json file into atoms, creates a Sdk object from the atoms.
         Self::from_sdk_atoms(
-            path,
-            Self::atoms_from_core_manifest(manifest_path, BufReader::new(file))?,
+            path.to_owned(),
+            Self::atoms_from_core_manifest(&manifest_path, BufReader::new(file))?,
             Self::open_meta,
             SdkVersion::InTree,
         )
     }
 
-    fn atoms_from_core_manifest<T>(manifest_path: PathBuf, reader: BufReader<T>) -> Result<SdkAtoms>
+    fn atoms_from_core_manifest<T>(manifest_path: &Path, reader: BufReader<T>) -> Result<SdkAtoms>
     where
         T: io::Read,
     {
@@ -118,7 +198,9 @@ impl Sdk {
         }
     }
 
-    pub fn from_sdk_dir(path_prefix: PathBuf) -> Result<Self> {
+    pub fn from_sdk_dir(path_prefix: &Path) -> Result<Self> {
+        let path_prefix = std::fs::canonicalize(path_prefix)
+            .context(format!("canonicalizing sdk path prefix {}", path_prefix.display()))?;
         let manifest_path = path_prefix.join("meta/manifest.json");
         let mut version = SdkVersion::Unknown;
 
@@ -267,7 +349,7 @@ impl Sdk {
         }
     }
 
-    pub fn get_path_prefix(&self) -> &PathBuf {
+    pub fn get_path_prefix(&self) -> &Path {
         &self.path_prefix
     }
 
@@ -282,8 +364,8 @@ impl Sdk {
     }
 
     /// Opens a meta file with the given path. Returns a buffered reader.
-    fn open_meta(file_path: &PathBuf) -> Result<BufReader<fs::File>> {
-        let file = fs::File::open(&file_path);
+    fn open_meta(file_path: &Path) -> Result<BufReader<fs::File>> {
+        let file = fs::File::open(file_path);
         match file {
             Ok(file) => Ok(BufReader::new(file)),
             Err(error) => return Err(anyhow!("Can't open {:?}: {:?}", file_path, error)),
@@ -301,7 +383,7 @@ impl Sdk {
         version: SdkVersion,
     ) -> Result<Self>
     where
-        T: Fn(&PathBuf) -> Result<BufReader<U>>,
+        T: Fn(&Path) -> Result<BufReader<U>>,
         U: io::Read,
     {
         let mut metas = Vec::new();
@@ -338,6 +420,7 @@ impl Sdk {
 #[cfg(test)]
 mod test {
     use super::*;
+    use tempfile::tempdir;
 
     const CORE_MANIFEST: &str = r#"{
       "atoms": [
@@ -413,7 +496,7 @@ mod test {
       "ids": []
     }"#;
 
-    fn get_core_manifest_meta(file_path: &PathBuf) -> Result<BufReader<&'static [u8]>> {
+    fn get_core_manifest_meta(file_path: &Path) -> Result<BufReader<&'static [u8]>> {
         let name = file_path.to_str().unwrap();
         if name == "/fuchsia/out/default/gen/sdk/devices/generic-arm64.meta.json" {
             const META: &str = r#"{
@@ -538,7 +621,7 @@ mod test {
     async fn test_core_manifest() {
         let manifest_path: PathBuf = PathBuf::from("/fuchsia/out/default");
         let atoms =
-            Sdk::atoms_from_core_manifest(manifest_path, BufReader::new(CORE_MANIFEST.as_bytes()))
+            Sdk::atoms_from_core_manifest(&manifest_path, BufReader::new(CORE_MANIFEST.as_bytes()))
                 .unwrap();
 
         assert!(atoms.ids.is_empty());
@@ -562,15 +645,17 @@ mod test {
     #[fuchsia_async::run_singlethreaded(test)]
     async fn test_core_manifest_to_sdk() {
         let manifest_path: PathBuf = PathBuf::from("/fuchsia/out/default");
-        let atoms = Sdk::atoms_from_core_manifest(
-            manifest_path.clone(),
-            BufReader::new(CORE_MANIFEST.as_bytes()),
+        let atoms =
+            Sdk::atoms_from_core_manifest(&manifest_path, BufReader::new(CORE_MANIFEST.as_bytes()))
+                .unwrap();
+
+        let sdk = Sdk::from_sdk_atoms(
+            manifest_path.to_owned(),
+            atoms,
+            get_core_manifest_meta,
+            SdkVersion::Unknown,
         )
         .unwrap();
-
-        let sdk =
-            Sdk::from_sdk_atoms(manifest_path, atoms, get_core_manifest_meta, SdkVersion::Unknown)
-                .unwrap();
 
         assert_eq!(4, sdk.metas.len());
         assert_eq!(
@@ -583,15 +668,17 @@ mod test {
     #[fuchsia_async::run_singlethreaded(test)]
     async fn test_core_manifest_host_tool() {
         let manifest_path: PathBuf = PathBuf::from("/fuchsia/out/default");
-        let atoms = Sdk::atoms_from_core_manifest(
-            manifest_path.clone(),
-            BufReader::new(CORE_MANIFEST.as_bytes()),
+        let atoms =
+            Sdk::atoms_from_core_manifest(&manifest_path, BufReader::new(CORE_MANIFEST.as_bytes()))
+                .unwrap();
+
+        let sdk = Sdk::from_sdk_atoms(
+            manifest_path.to_owned(),
+            atoms,
+            get_core_manifest_meta,
+            SdkVersion::Unknown,
         )
         .unwrap();
-
-        let sdk =
-            Sdk::from_sdk_atoms(manifest_path, atoms, get_core_manifest_meta, SdkVersion::Unknown)
-                .unwrap();
         let zxdb = sdk.get_host_tool("zxdb").unwrap();
 
         assert_eq!(PathBuf::from("/fuchsia/out/default/host_x64/zxdb"), zxdb);
@@ -600,15 +687,17 @@ mod test {
     #[fuchsia_async::run_singlethreaded(test)]
     async fn test_core_manifest_host_tool_multi_arch() {
         let manifest_path: PathBuf = PathBuf::from("/fuchsia/out/default");
-        let atoms = Sdk::atoms_from_core_manifest(
-            manifest_path.clone(),
-            BufReader::new(CORE_MANIFEST.as_bytes()),
+        let atoms =
+            Sdk::atoms_from_core_manifest(&manifest_path, BufReader::new(CORE_MANIFEST.as_bytes()))
+                .unwrap();
+
+        let sdk = Sdk::from_sdk_atoms(
+            manifest_path.to_owned(),
+            atoms,
+            get_core_manifest_meta,
+            SdkVersion::Unknown,
         )
         .unwrap();
-
-        let sdk =
-            Sdk::from_sdk_atoms(manifest_path, atoms, get_core_manifest_meta, SdkVersion::Unknown)
-                .unwrap();
         let symbol_index = sdk.get_host_tool("symbol-index").unwrap();
 
         assert_eq!(PathBuf::from("/fuchsia/out/default/host_x64/symbol-index"), symbol_index);
@@ -649,5 +738,34 @@ mod test {
         let zxdb = sdk.get_host_tool("zxdb").unwrap();
 
         assert_eq!(PathBuf::from("/foo/bar/tools/zxdb"), zxdb);
+    }
+
+    #[fuchsia_async::run_singlethreaded(test)]
+    async fn test_find_sdk_root_finds_root() {
+        let temp = tempdir().unwrap();
+        let temp_path = std::fs::canonicalize(temp.path()).expect("canonical temp path");
+
+        let start_path = temp_path.join("test1").join("test2");
+        std::fs::create_dir_all(start_path.clone()).unwrap();
+
+        let meta_path = temp_path.join("meta");
+        std::fs::create_dir(meta_path.clone()).unwrap();
+
+        std::fs::write(meta_path.join("manifest.json"), "").unwrap();
+
+        assert_eq!(find_sdk_root(&start_path).unwrap().unwrap(), temp_path);
+    }
+
+    #[fuchsia_async::run_singlethreaded(test)]
+    async fn test_find_sdk_root_no_manifest() {
+        let temp = tempdir().unwrap();
+
+        let start_path = temp.path().to_path_buf().join("test1").join("test2");
+        std::fs::create_dir_all(start_path.clone()).unwrap();
+
+        let meta_path = temp.path().to_path_buf().join("meta");
+        std::fs::create_dir(meta_path).unwrap();
+
+        assert!(find_sdk_root(&start_path).unwrap().is_none());
     }
 }

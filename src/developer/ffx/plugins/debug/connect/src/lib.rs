@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 use {
-    anyhow::Result,
+    anyhow::{Context, Result},
     async_io::Async,
     errors::{ffx_bail, ffx_error},
     fuchsia_async::unblock,
@@ -66,11 +66,13 @@ pub async fn connect(
         return Ok(());
     }
 
-    if let Err(e) = symbol_index::ensure_symbol_index_registered().await {
+    let sdk = ffx_config::global_env_context()
+        .context("loading global environment context")?
+        .get_sdk()
+        .await?;
+    if let Err(e) = symbol_index::ensure_symbol_index_registered(&sdk).await {
         eprintln!("ensure_symbol_index_registered failed, error was: {:#?}", e);
     }
-
-    let sdk = ffx_config::get_sdk().await?;
 
     let zxdb_path = sdk.get_host_tool("zxdb")?;
 

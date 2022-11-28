@@ -7,7 +7,7 @@ use {
     async_channel::{Receiver, Sender},
     async_io::Async,
     async_lock::Mutex,
-    ffx_config::get_sdk,
+    ffx_config::global_env_context,
     fuchsia_async::Task,
     futures::{AsyncBufReadExt, AsyncWriteExt, FutureExt, StreamExt},
     futures_lite::io::BufReader,
@@ -57,14 +57,13 @@ impl<'a> Symbolizer for LogSymbolizer {
         tx: Sender<String>,
         extra_args: Vec<String>,
     ) -> Result<()> {
-        if let Err(e) = ensure_symbol_index_registered().await {
+        let sdk =
+            global_env_context().context("Loading global environment context")?.get_sdk().await?;
+        if let Err(e) = ensure_symbol_index_registered(&sdk).await {
             tracing::warn!("ensure_symbol_index_registered failed, error was: {:#?}", e);
         }
 
-        let path = get_sdk()
-            .await?
-            .get_host_tool("symbolizer")
-            .context("getting symbolizer binary path")?;
+        let path = sdk.get_host_tool("symbolizer").context("getting symbolizer binary path")?;
         let mut c = Command::new(path)
             .args(vec![
                 "--symbol-server",

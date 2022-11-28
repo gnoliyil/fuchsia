@@ -143,7 +143,7 @@ pub fn get_sdk_data_dir() -> Result<PathBuf> {
 /// This method assumes that user is invoking the binary from GN SDK, not in fuchsia repo.
 /// TODO(fxb/69689) Use ffx::config to obtain host_tools location.
 pub fn get_sdk_version_from_manifest() -> Result<String> {
-    let sdk = Sdk::from_sdk_dir(get_fuchsia_sdk_dir()?)?;
+    let sdk = Sdk::from_sdk_dir(&get_fuchsia_sdk_dir()?)?;
     match sdk.get_version() {
         SdkVersion::Version(v) => Ok(v.to_string()),
         SdkVersion::InTree => ffx_bail!("This should only be used in SDK"),

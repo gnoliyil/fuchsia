@@ -4,7 +4,7 @@
 
 use {
     crate::test::*,
-    anyhow::{ensure, Result},
+    anyhow::{ensure, Context, Result},
     errors::ffx_bail,
     fuchsia_async::{unblock, TimeoutExt, Timer},
     regex::Regex,
@@ -56,7 +56,10 @@ pub mod include_target {
         }
 
         let target = get_target_nodename().await?;
-        let sdk = ffx_config::get_sdk().await?;
+        let sdk = ffx_config::global_env_context()
+            .context("loading global environment context")?
+            .get_sdk()
+            .await?;
         let isolate = new_isolate("target-debug-run-crasher").await?;
         let mut config = "sdk.root=".to_owned();
         config.push_str(sdk.get_path_prefix().to_str().unwrap());

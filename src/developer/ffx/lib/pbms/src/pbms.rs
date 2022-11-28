@@ -82,8 +82,7 @@ fn expand_placeholders(uri: &str, version: &str, sdk_root: &str) -> Result<url::
 /// expanded.
 ///
 /// I.e. run expand_placeholders() on each element in CONFIG_METADATA.
-pub(crate) async fn pbm_repo_list() -> Result<Vec<url::Url>> {
-    let sdk = ffx_config::get_sdk().await.context("PBMS ffx config get sdk")?;
+pub(crate) async fn pbm_repo_list(sdk: &ffx_config::Sdk) -> Result<Vec<url::Url>> {
     let version = match sdk.get_version() {
         SdkVersion::Version(version) => version,
         SdkVersion::InTree => "",
@@ -141,15 +140,14 @@ pub(crate) async fn local_path_helper(
     product_url: &url::Url,
     add_dir: &str,
     dir: bool,
+    sdk_root: &Path,
 ) -> Result<PathBuf> {
     assert!(!product_url.fragment().is_none());
     if let Some(path) = &path_from_file_url(product_url) {
         if dir {
             // TODO(fxbug.dev/98009): Unify the file layout between local and remote
             // product bundles to avoid this hack.
-            let sdk = ffx_config::get_sdk().await.context("getting ffx config sdk")?;
-            let sdk_root = sdk.get_path_prefix();
-            if path.starts_with(&sdk_root) {
+            if path.starts_with(sdk_root) {
                 Ok(sdk_root.to_path_buf())
             } else {
                 Ok(path.parent().expect("parent of file path").to_path_buf())
@@ -563,26 +561,32 @@ mod tests {
     #[ignore]
     #[fuchsia_async::run_singlethreaded(test)]
     async fn test_local_path_helper() {
+        let sdk_prefix = PathBuf::from("/"); // this is only used for file paths
         let url = url::Url::parse("fake://foo#bar").expect("url");
-        let path = local_path_helper(&url, "foo", /*dir=*/ true).await.expect("dir helper");
+        let path =
+            local_path_helper(&url, "foo", /*dir=*/ true, &sdk_prefix).await.expect("dir helper");
         assert!(path.to_string_lossy().ends_with("ffx/pbms/951333825719265977/foo"));
 
         // Note that the hash will be the same even though the fragment is
         // different.
         let url = url::Url::parse("fake://foo#blah").expect("url");
-        let path = local_path_helper(&url, "foo", /*dir=*/ true).await.expect("dir helper");
+        let path =
+            local_path_helper(&url, "foo", /*dir=*/ true, &sdk_prefix).await.expect("dir helper");
         assert!(path.to_string_lossy().ends_with("ffx/pbms/951333825719265977/foo"));
 
         let url = url::Url::parse("gs://foo/blah/*.json#bar").expect("url");
-        let path = local_path_helper(&url, "foo", /*dir=*/ true).await.expect("dir helper");
+        let path =
+            local_path_helper(&url, "foo", /*dir=*/ true, &sdk_prefix).await.expect("dir helper");
         assert!(path.to_string_lossy().ends_with("ffx/pbms/16042545670964745983/foo"));
 
         let url = url::Url::parse("file:///foo/blah/*.json#bar").expect("url");
-        let path = local_path_helper(&url, "foo", /*dir=*/ true).await.expect("dir helper");
+        let path =
+            local_path_helper(&url, "foo", /*dir=*/ true, &sdk_prefix).await.expect("dir helper");
         assert_eq!(path.to_string_lossy(), "/foo/blah");
 
         let url = url::Url::parse("file:///foo/blah/*.json#bar").expect("url");
-        let path = local_path_helper(&url, "foo", /*dir=*/ false).await.expect("dir helper");
+        let path =
+            local_path_helper(&url, "foo", /*dir=*/ false, &sdk_prefix).await.expect("dir helper");
         assert_eq!(path.to_string_lossy(), "/foo/blah/*.json");
     }
 

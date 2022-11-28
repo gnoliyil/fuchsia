@@ -640,13 +640,16 @@ where
             from_path(writer, manifest.to_path_buf(), fastboot_proxy, cmd).await
         }
         None => {
-            let sdk = ffx_config::get_sdk().await?;
+            let sdk = ffx_config::global_env_context()
+                .context("loading global environment context")?
+                .get_sdk()
+                .await?;
             let mut path = sdk.get_path_prefix().to_path_buf();
             writeln!(writer, "No manifest path was given, using SDK from {}.", path.display())?;
             path.push("flash.json"); // Not actually used, placeholder value needed.
             match sdk.get_version() {
                 SdkVersion::InTree => from_in_tree(writer, path, fastboot_proxy, cmd).await,
-                SdkVersion::Version(_) => from_sdk(writer, fastboot_proxy, cmd).await,
+                SdkVersion::Version(_) => from_sdk(&sdk, writer, fastboot_proxy, cmd).await,
                 _ => ffx_bail!("Unknown SDK type"),
             }
         }

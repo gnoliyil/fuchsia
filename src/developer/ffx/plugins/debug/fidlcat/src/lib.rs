@@ -3,8 +3,12 @@
 // found in the LICENSE file.
 
 use {
-    anyhow::Result, errors::ffx_error, ffx_config::sdk::SdkVersion,
-    ffx_debug_connect::DebugAgentSocket, fuchsia_async::unblock, std::process::Command,
+    anyhow::{Context, Result},
+    errors::ffx_error,
+    ffx_config::sdk::SdkVersion,
+    ffx_debug_connect::DebugAgentSocket,
+    fuchsia_async::unblock,
+    std::process::Command,
 };
 
 struct ProcessArguments {
@@ -49,11 +53,14 @@ pub async fn fidlcat(
     debugger_proxy: fidl_fuchsia_debugger::DebugAgentProxy,
     cmd: ffx_debug_fidlcat_args::FidlcatCommand,
 ) -> Result<()> {
-    if let Err(e) = symbol_index::ensure_symbol_index_registered().await {
+    let sdk = ffx_config::global_env_context()
+        .context("loading global environment context")?
+        .get_sdk()
+        .await?;
+    if let Err(e) = symbol_index::ensure_symbol_index_registered(&sdk).await {
         tracing::warn!("ensure_symbol_index_registered failed, error was: {:#?}", e);
     }
 
-    let sdk = ffx_config::get_sdk().await?;
     let fidlcat_path = sdk.get_host_tool("fidlcat")?;
     let mut arguments = ProcessArguments::new();
     let mut debug_agent_socket: Option<DebugAgentSocket> = None;

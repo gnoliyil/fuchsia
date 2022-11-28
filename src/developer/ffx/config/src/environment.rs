@@ -3,7 +3,8 @@
 // found in the LICENSE file.
 
 use crate::lockfile::{Lockfile, LockfileCreateError};
-use crate::BuildOverride;
+use crate::sdk::{Sdk, SdkRoot};
+use crate::{query, sdk, BuildOverride};
 use crate::{ConfigLevel, ConfigMap};
 use anyhow::{bail, Context, Result};
 use errors::ffx_error;
@@ -145,26 +146,27 @@ impl EnvironmentContext {
     /// an isolated environment, that has to be chosen explicitly.
     pub fn detect(
         runtime_args: ConfigMap,
-        current_dir: PathBuf,
+        current_dir: &Path,
         env_file_path: Option<PathBuf>,
     ) -> Result<Self, EnvironmentDetectError> {
         // strong signals that we're running...
-        // - in-tree, run by fx: runtime_args was given an argument of sdk.type=in-tree (`fx ffx` does this)
-        let tree_root = Self::find_jiri_root(&std::env::current_dir()?)?;
-        if runtime_args.get("sdk.type").and_then(Value::as_str) == Some("in-tree") {
-            let tree_root = tree_root.ok_or(EnvironmentDetectError::NoTreeRoot(current_dir))?;
-            let build_dir = Self::load_build_dir(&runtime_args, &tree_root)?;
+        // - in-tree: we found a jiri root, and...
+        if let Some(tree_root) = Self::find_jiri_root(current_dir)? {
+            let runtime_sdk = runtime_args.get("sdk").and_then(Value::as_object);
+            let runtime_type = runtime_sdk.and_then(|sdk| sdk.get("type")).and_then(Value::as_str);
 
-            return Ok(Self::in_tree(tree_root, build_dir, runtime_args, env_file_path));
+            let build_dir = if runtime_type == Some(sdk::SDK_TYPE_IN_TREE) {
+                // if we were told a location of an "in-tree" sdk, that's our build directory.
+                Self::load_build_dir(&runtime_args, &tree_root)?
+            } else {
+                // otherwise, look for a .fx-build-dir file and use that instead.
+                Self::load_fx_build_dir(&tree_root)?
+            };
+            Ok(Self::in_tree(tree_root, build_dir, runtime_args, env_file_path))
+        } else {
+            // - no particular context: any other situation
+            Ok(Self::no_context(runtime_args, env_file_path))
         }
-        // - in-tree, without fx wrapper: walking up the tree we find a .jiri_root and maybe a .fx-build-dir
-        if let Some(tree_root) = tree_root {
-            let build_dir = Self::load_fx_build_dir(&tree_root)?;
-
-            return Ok(Self::in_tree(tree_root, build_dir, runtime_args, env_file_path));
-        }
-        // - anywhere else: any other situation
-        Ok(Self::no_context(runtime_args, env_file_path))
     }
 
     pub fn env_file_path(&self) -> Result<PathBuf> {
@@ -218,6 +220,35 @@ impl EnvironmentContext {
             Some(env_vars) => env_vars.get(name).cloned().ok_or(std::env::VarError::NotPresent),
             _ => std::env::var(name),
         }
+    }
+
+    /// Find the appropriate sdk root for this invocation of ffx, looking at configuration
+    /// values and the current environment context to determine the correct place to find it.
+    pub async fn get_sdk_root(&self) -> Result<SdkRoot> {
+        // some in-tree tooling directly overrides sdk.root. But if that's not done, the 'root' is just the
+        // build directory.
+        // Out of tree, we will always want to pull the config from the normal config path, which
+        // we can defer to the SdkRoot's mechanisms for.
+        let runtime_root: Option<PathBuf> =
+            query("sdk.root").build(Some(BuildOverride::NoBuild)).get().await.ok();
+
+        match (&self.kind, runtime_root) {
+            (EnvironmentKind::InTree { .. }, Some(manifest)) => {
+                let module = query("sdk.module").get().await.ok();
+                Ok(SdkRoot::InTree { manifest, module })
+            }
+            (EnvironmentKind::InTree { build_dir: Some(build_dir), .. }, _) => {
+                let manifest = build_dir.clone();
+                let module = query("sdk.module").get().await.ok();
+                Ok(SdkRoot::InTree { manifest, module })
+            }
+            (_, runtime_root) => SdkRoot::from_config(runtime_root.as_deref()).await,
+        }
+    }
+
+    /// Load the sdk configured for this environment context
+    pub async fn get_sdk(&self) -> Result<Sdk> {
+        self.get_sdk_root().await?.get_sdk()
     }
 
     pub const FFX_BIN_ENV: &str = "FFX_BIN";

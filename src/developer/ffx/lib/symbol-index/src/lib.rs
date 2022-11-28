@@ -20,9 +20,7 @@ pub fn global_symbol_index_path() -> Result<String> {
 }
 
 // Ensures that symbols in sdk.root are registered in the global symbol index.
-pub async fn ensure_symbol_index_registered() -> Result<()> {
-    let sdk = ffx_config::get_sdk().await?;
-
+pub async fn ensure_symbol_index_registered(sdk: &ffx_config::Sdk) -> Result<()> {
     let mut symbol_index_path_str: Option<String> = None;
     let mut default_symbol_server: Option<&'static str> = None;
     let mut build_id_dir_str: Option<String> = None;

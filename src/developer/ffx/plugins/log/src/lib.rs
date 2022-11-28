@@ -9,7 +9,7 @@ use {
     chrono::{Local, TimeZone, Utc},
     diagnostics_data::{LogsData, Severity, Timestamp},
     errors::{ffx_bail, ffx_error},
-    ffx_config::{get, get_sdk},
+    ffx_config::get,
     ffx_core::ffx_plugin,
     ffx_log_args::{DumpCommand, LogCommand, LogSubCommand, TimeFormat, WatchCommand},
     ffx_log_data::{EventType, LogData, LogEntry},
@@ -575,7 +575,11 @@ pub async fn log_impl<W: std::io::Write>(
     );
 
     if get(SYMBOLIZE_ENABLED_CONFIG).await.unwrap_or(true) {
-        match get_sdk().await {
+        let sdk = ffx_config::global_env_context()
+            .context("loading global environment context")?
+            .get_sdk()
+            .await;
+        match sdk {
             Ok(s) => match s.get_host_tool("symbolizer") {
                 Err(e) => {
                     print_symbolizer_warning(e).await;

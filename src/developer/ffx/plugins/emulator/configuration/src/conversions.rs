@@ -19,26 +19,34 @@ pub async fn convert_bundle_to_configs(
     device_name: Option<String>,
     verbose: bool,
 ) -> Result<EmulatorConfiguration> {
+    let sdk = ffx_config::global_env_context()
+        .context("loading global environment context")?
+        .get_sdk()
+        .await?;
     let product_bundle =
-        load_product_bundle(&product_bundle_name, ListingMode::ReadyBundlesOnly).await?;
+        load_product_bundle(&sdk, &product_bundle_name, ListingMode::ReadyBundlesOnly).await?;
     match &product_bundle {
         ProductBundle::V1(product_bundle) => {
             // Get the virtual devices.
             let should_print = false;
             let product_url = select_product_bundle(
+                &sdk,
                 &Some(product_bundle.name.clone()),
                 ListingMode::ReadyBundlesOnly,
                 should_print,
             )
             .await
             .context("Selecting product bundle")?;
-            let fms_entries = fms_entries_from(&product_url).await.context("get fms entries")?;
+            let fms_entries = fms_entries_from(&product_url, sdk.get_path_prefix())
+                .await
+                .context("get fms entries")?;
             let virtual_devices =
                 fms::find_virtual_devices(&fms_entries, &product_bundle.device_refs)
                     .context("problem with virtual device")?;
 
             // Find the data root, which is used to find the images and template file.
-            let data_root = get_images_dir(&product_url).await.context("images dir")?;
+            let data_root =
+                get_images_dir(&product_url, sdk.get_path_prefix()).await.context("images dir")?;
 
             // Determine the correct device name from the user, or default to the first one listed
             // in the product bundle.

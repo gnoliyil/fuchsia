@@ -208,7 +208,7 @@ impl Ffx {
                 runtime_args,
                 env_path,
             )),
-            _ => EnvironmentContext::detect(runtime_args, std::env::current_dir()?, env_path)
+            _ => EnvironmentContext::detect(runtime_args, &std::env::current_dir()?, env_path)
                 .map_err(|e| ffx_error!(e).into()),
         }
     }

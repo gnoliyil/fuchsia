@@ -28,7 +28,10 @@ pub struct FemuEngine {
 #[async_trait]
 impl EmulatorEngine for FemuEngine {
     async fn stage(&mut self) -> Result<()> {
-        let sdk = ffx_config::get_sdk().await?;
+        let sdk = ffx_config::global_env_context()
+            .context("loading global environment context")?
+            .get_sdk()
+            .await?;
         self.emulator_binary = match sdk.get_host_tool(config::FEMU_TOOL) {
             Ok(aemu_path) => aemu_path.canonicalize().context(format!(
                 "Failed to canonicalize the path to the emulator binary: {:?}",

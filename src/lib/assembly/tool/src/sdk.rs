@@ -6,7 +6,7 @@ use crate::{Tool, ToolCommand, ToolCommandLog, ToolProvider};
 
 use anyhow::{anyhow, Context, Result};
 use assembly_util::PathToStringExt;
-use ffx_config::{get_sdk, sdk::Sdk};
+use ffx_config::{global_env_context, sdk::Sdk};
 use futures::executor::block_on;
 use std::path::PathBuf;
 use std::process::Command;
@@ -24,8 +24,9 @@ impl SdkToolProvider {
     /// Attempt to create a new SdkToolProvider. This will return an Err if the manifest cannot be
     /// found, parsed, or is invalid.
     pub fn try_new() -> Result<Self> {
+        let ctx = global_env_context().context("loading global environment context")?;
         Ok(Self {
-            sdk: block_on(get_sdk()).context("Reading the SDK")?,
+            sdk: block_on(ctx.get_sdk()).context("Reading the SDK")?,
             log: ToolCommandLog::default(),
         })
     }
