@@ -140,7 +140,8 @@ impl CobaltDiagnostics {
                 .with_event_codes(
                     (Into::<CobaltTrack>::into(track), self.experiment).as_event_codes(),
                 )
-                // This metric is configured to be microseconds, which does not follow the standard of nanoseconds everywhere.
+                // This metric is configured to be microseconds, which does not follow the
+                // standard of nanoseconds everywhere.
                 .as_integer(sqrt_covariance.into_micros()),
         );
     }
@@ -218,7 +219,8 @@ impl CobaltDiagnostics {
                 locked_sender.send(
                     MetricEvent::builder(TIMEKEEPER_MONITOR_DIFFERENCE_MIGRATED_METRIC_ID)
                         .with_event_codes((direction, self.experiment).as_event_codes())
-                        // This metric is configured to be microseconds, which does not follow the standard of nanoseconds everywhere.
+                        // This metric is configured to be microseconds, which does not follow
+                        // the standard of nanoseconds everywhere.
                         .as_integer((monitor - primary).into_micros().abs()),
                 );
             }
@@ -602,8 +604,8 @@ mod test {
         assert_eq!(event.event_codes, vec![Direction::Positive as u32, TEST_EXPERIMENT as u32]);
         match event.payload {
             MetricEventPayload::IntegerValue(value) => {
-                assert_geq!(value, MONITOR_OFFSET.into_micros() - 5000);
-                assert_leq!(value, MONITOR_OFFSET.into_micros() + 5000);
+                assert_geq!(value, MONITOR_OFFSET.into_micros() - 10000);
+                assert_leq!(value, MONITOR_OFFSET.into_micros() + 10000);
             }
             _ => panic!("monitor clock update did not produce event count payload"),
         }
