@@ -1613,6 +1613,14 @@ struct Thread {
   // Buffering for Debuglog output.
   Linebuffer linebuffer_;
 
+#if LOCK_TRACING_ENABLED
+  // The flow id allocated before blocking on the last lock.
+  RelaxedAtomic<uint64_t> lock_flow_id_{0};
+
+  // Generates unique flow ids for tracing lock contention.
+  inline static RelaxedAtomic<uint64_t> lock_flow_id_generator_{0};
+#endif
+
   // Indicates whether user register state (debug, vector, fp regs, etc.) has been saved to the
   // arch_thread_t as part of thread suspension / exception handling.
   //
@@ -1623,14 +1631,6 @@ struct Thread {
   //
   // See also |IsUserStateSavedLocked()| and |ScopedThreadExceptionContext|.
   bool user_state_saved_{};
-
-#if LOCK_TRACING_ENABLED
-  // The flow id allocated before blocking on the last lock.
-  RelaxedAtomic<uint64_t> lock_flow_id_{0};
-
-  // Generates unique flow ids for tracing lock contention.
-  inline static RelaxedAtomic<uint64_t> lock_flow_id_generator_{0};
-#endif
 
   // For threads with migration functions, indicates whether a migration is in progress. When true,
   // the migrate function has been called with Before but not yet with After.
