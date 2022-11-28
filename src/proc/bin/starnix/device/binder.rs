@@ -399,8 +399,31 @@ impl BinderProcess {
         }
     }
 
-    /// Enqueues `command` for the process and wakes up any thread that is waiting for commands.
+    /// Enqueues `command` on the first available thread. If none are available, enqueues it on the
+    /// process queue where it will be handled once a thread is available.
     pub fn enqueue_command(&self, command: Command) {
+        self.enqueue_command_filtered(|_| true, command)
+    }
+
+    /// Enqueues `command` on the first available thread that satisfied `filter`. If none are
+    /// available, enqueues it on the process queue where it will be handled once a thread is
+    /// available.
+    pub fn enqueue_command_filtered<F>(&self, filter: F, command: Command)
+    where
+        F: Fn(&BinderThreadState) -> bool,
+    {
+        {
+            let thread_pool = self.thread_pool.read();
+            if let Some(mut thread) = thread_pool.find_available_thread(filter) {
+                thread.enqueue_command(command);
+                return;
+            };
+        };
+        self.enqueue_process_command(command);
+    }
+
+    /// Enqueues `command` for the process and wakes up any thread that is waiting for commands.
+    fn enqueue_process_command(&self, command: Command) {
         self.command_queue.lock().push_back(command);
         self.waiters.lock().notify_events(FdEvents::POLLIN);
     }
@@ -438,12 +461,7 @@ impl Drop for BinderProcess {
             let death_subscribers = self.death_subscribers.lock();
             for (proc, cookie) in &*death_subscribers {
                 if let Some(target_proc) = proc.upgrade() {
-                    let thread_pool = target_proc.thread_pool.read();
-                    if let Some(target_thread) = thread_pool.find_available_thread() {
-                        target_thread.write().enqueue_command(Command::DeadBinder(*cookie));
-                    } else {
-                        target_proc.enqueue_command(Command::DeadBinder(*cookie));
-                    }
+                    target_proc.enqueue_command(Command::DeadBinder(*cookie));
                 }
             }
         }
@@ -688,39 +706,24 @@ impl ThreadPool {
 
     /// Finds the first available binder thread that is registered with the driver, is not in the
     /// middle of a transaction, and has no work to do.
-    fn find_available_thread(&self) -> Option<Arc<BinderThread>> {
-        self.0
-            .values()
-            .find(|thread| {
-                let thread_state = thread.read();
-                if !thread_state
-                    .registration
-                    .intersects(RegistrationState::MAIN | RegistrationState::REGISTERED)
-                {
-                    log_trace!(
-                        "thread {:?} not registered {:?}",
-                        thread.tid,
-                        thread_state.registration
-                    );
-                    false
-                } else if !thread_state.command_queue.is_empty() {
-                    log_trace!("thread {:?} has non empty queue", thread.tid);
-                    false
-                } else if !thread_state.waiter.is_valid() {
-                    log_trace!("thread {:?} is not waiting", thread.tid);
-                    false
-                } else if !thread_state.transactions.is_empty() {
-                    log_trace!(
-                        "thread {:?} is in a transaction {:?}",
-                        thread.tid,
-                        thread_state.transactions
-                    );
-                    false
-                } else {
-                    true
-                }
-            })
-            .cloned()
+    fn find_available_thread<'a, F>(
+        &'a self,
+        filter: F,
+    ) -> Option<RwLockWriteGuard<'a, BinderThreadState>>
+    where
+        F: Fn(&BinderThreadState) -> bool,
+    {
+        for thread in self.0.values() {
+            let thread_state = thread.write();
+            if !filter(&thread_state) {
+                log_trace!("thread {:?} is filtered out", thread_state.tid);
+                continue;
+            }
+            if thread_state.is_available() {
+                return Some(thread_state);
+            }
+        }
+        None
     }
 }
 
@@ -904,7 +907,7 @@ struct BinderThread {
 
 impl BinderThread {
     fn new(binder_proc: &Arc<BinderProcess>, tid: pid_t) -> Self {
-        Self { tid, state: RwLock::new(BinderThreadState::new(binder_proc)) }
+        Self { tid, state: RwLock::new(BinderThreadState::new(tid, binder_proc)) }
     }
 
     /// Acquire a reader lock to the binder thread's mutable state.
@@ -921,6 +924,7 @@ impl BinderThread {
 /// The mutable state of a binder thread.
 #[derive(Debug)]
 struct BinderThreadState {
+    tid: pid_t,
     /// The process this thread belongs to.
     process: Weak<BinderProcess>,
     /// The registered state of the thread.
@@ -936,14 +940,35 @@ struct BinderThreadState {
 }
 
 impl BinderThreadState {
-    fn new(binder_proc: &Arc<BinderProcess>) -> Self {
+    fn new(tid: pid_t, binder_proc: &Arc<BinderProcess>) -> Self {
         Self {
+            tid,
             process: Arc::downgrade(binder_proc),
             registration: RegistrationState::empty(),
             transactions: Vec::new(),
             command_queue: VecDeque::new(),
             waiter: WaiterRef::empty(),
         }
+    }
+
+    pub fn is_available(&self) -> bool {
+        if !self.registration.intersects(RegistrationState::MAIN | RegistrationState::REGISTERED) {
+            log_trace!("thread {:?} not registered {:?}", self.tid, self.registration);
+            return false;
+        }
+        if !self.command_queue.is_empty() {
+            log_trace!("thread {:?} has non empty queue", self.tid);
+            return false;
+        }
+        if !self.waiter.is_valid() {
+            log_trace!("thread {:?} is not waiting", self.tid);
+            return false;
+        }
+        if !self.transactions.is_empty() {
+            log_trace!("thread {:?} is in a transaction {:?}", self.tid, self.transactions);
+            return false;
+        }
+        true
     }
 
     /// Enqueues `command` for the thread and wakes it up if necessary.
@@ -1227,12 +1252,7 @@ impl Drop for BinderObject {
         if let Some(owner) = self.owner.upgrade() {
             // The owner process is not dead, so tell it that the last remote reference has been
             // released.
-            let thread_pool = owner.thread_pool.read();
-            if let Some(binder_thread) = thread_pool.find_available_thread() {
-                binder_thread.write().enqueue_command(Command::ReleaseRef(self.local));
-            } else {
-                owner.enqueue_command(Command::ReleaseRef(self.local));
-            }
+            owner.enqueue_command(Command::ReleaseRef(self.local));
         }
     }
 }
@@ -2007,17 +2027,7 @@ impl BinderDriver {
                     drop(object_state);
 
                     // Schedule the transaction
-                    // Acquire an exclusive lock to prevent a thread from being scheduled twice.
-                    let target_thread_pool = binder_proc.thread_pool.write();
-
-                    // Find a thread to handle the transaction, or use the process' command queue.
-                    if let Some(target_thread) = target_thread_pool.find_available_thread() {
-                        target_thread
-                            .write()
-                            .enqueue_command(Command::OnewayTransaction(transaction));
-                    } else {
-                        binder_proc.enqueue_command(Command::OnewayTransaction(transaction));
-                    }
+                    binder_proc.enqueue_command(Command::OnewayTransaction(transaction));
                 } else {
                     // No more oneway transactions queued, mark the queue handling as done.
                     object_state.handling_oneway_transaction = false;
@@ -2055,14 +2065,10 @@ impl BinderDriver {
             // The object is already dead. Notify immediately. However, the requesting thread
             // cannot handle the notification, in case it is holding some mutex while processing a
             // oneway transaction (where its transaction stack will be empty).
-            let thread_pool = binder_proc.thread_pool.write();
-            if let Some(target_thread) =
-                thread_pool.find_available_thread().filter(|th| th.tid != binder_thread.tid)
-            {
-                target_thread.write().enqueue_command(Command::DeadBinder(cookie));
-            } else {
-                binder_proc.enqueue_command(Command::DeadBinder(cookie));
-            }
+            binder_proc.enqueue_command_filtered(
+                |th| th.tid != binder_thread.tid,
+                Command::DeadBinder(cookie),
+            );
         }
         Ok(())
     }
@@ -2224,13 +2230,8 @@ impl BinderDriver {
             }
         };
 
-        // Acquire an exclusive lock to prevent a thread from being scheduled twice.
-        let target_thread_pool = target_proc.thread_pool.write();
-
         // Find a thread to handle the transaction, or use the process' command queue.
         if let Some(target_thread) = caller_thread {
-            target_thread.write().enqueue_command(command);
-        } else if let Some(target_thread) = target_thread_pool.find_available_thread() {
             target_thread.write().enqueue_command(command);
         } else {
             target_proc.enqueue_command(command);
