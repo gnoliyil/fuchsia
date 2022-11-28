@@ -127,8 +127,7 @@ impl FileOps for BinderConnection {
     ) -> WaitKey {
         match self.proc(current_task) {
             Ok(proc) => {
-                let binder_thread =
-                    proc.thread_pool.write().find_or_register_thread(&proc, current_task.get_tid());
+                let binder_thread = proc.find_or_register_thread(current_task.get_tid());
                 self.driver.wait_async(&proc, &binder_thread, waiter, events, handler, options)
             }
             Err(_) => {
@@ -152,8 +151,7 @@ impl FileOps for BinderConnection {
         user_addr: UserAddress,
     ) -> Result<SyscallResult, Errno> {
         let proc = self.proc(current_task)?;
-        let binder_thread =
-            proc.thread_pool.write().find_or_register_thread(&proc, current_task.get_tid());
+        let binder_thread = proc.find_or_register_thread(current_task.get_tid());
         self.driver.ioctl(
             &CurrentBinderTask { task: current_task },
             &proc,
@@ -471,6 +469,11 @@ impl BinderProcess {
                 binder_object
             }
         }
+    }
+
+    /// Return the `BinderThread` with the given `tid`, creating it if it doesn't exist.
+    fn find_or_register_thread(self: &Arc<Self>, tid: pid_t) -> Arc<BinderThread> {
+        self.thread_pool.write().find_or_register_thread(self, tid)
     }
 }
 
@@ -1633,8 +1636,7 @@ impl BinderDriver {
             self.procs.write().insert(pid, binder_process.clone()).is_none(),
             "process with same pid created"
         );
-        let binder_thread =
-            binder_process.thread_pool.write().find_or_register_thread(&binder_process, pid);
+        let binder_thread = binder_process.find_or_register_thread(pid);
         (binder_process, binder_thread)
     }
 
@@ -1698,10 +1700,7 @@ impl BinderDriver {
                             let tid = *tid_to_pid
                                 .entry(tid)
                                 .or_insert_with(|| kernel.pids.write().allocate_pid());
-                            let binder_thread = binder_process
-                                .thread_pool
-                                .write()
-                                .find_or_register_thread(&binder_process, tid);
+                            let binder_thread = binder_process.find_or_register_thread(tid);
 
                             let cloned_driver = driver.clone();
                             let cloned_remote_binder_task = remote_binder_task.clone();
@@ -5324,11 +5323,7 @@ mod tests {
 
         // Create a thread for the receiver, and make it look eligible for transactions.
         // Pretend the client thread is waiting for commands, so that it can be scheduled commands.
-        let receiver_thread = test
-            .receiver_proc
-            .thread_pool
-            .write()
-            .find_or_register_thread(&test.receiver_proc, test.receiver_proc.pid);
+        let receiver_thread = test.receiver_proc.find_or_register_thread(test.receiver_proc.pid);
         let fake_waiter = Waiter::new();
         {
             let mut thread_state = receiver_thread.write();
@@ -5387,11 +5382,7 @@ mod tests {
 
         // Create a thread for the receiver, and make it look eligible for transactions.
         // Pretend the client thread is waiting for commands, so that it can be scheduled commands.
-        let receiver_thread = test
-            .receiver_proc
-            .thread_pool
-            .write()
-            .find_or_register_thread(&test.receiver_proc, test.receiver_proc.pid);
+        let receiver_thread = test.receiver_proc.find_or_register_thread(test.receiver_proc.pid);
         let fake_waiter = Waiter::new();
         {
             let mut thread_state = receiver_thread.write();
