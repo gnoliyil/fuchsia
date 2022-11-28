@@ -15,28 +15,61 @@
 const char* capabilities[3] = {"Brightness", "Rgb", "Simple"};
 
 zx_status_t LightsCli::PrintValue(uint32_t idx) {
-  auto result1 = client_->GetInfo(idx);
-  if ((result1.status() != ZX_OK) || result1.value().is_error()) {
-    printf("Could not get info\n");
-    return std::min(result1.status(), ZX_ERR_INTERNAL);
-  }
-  auto result2 = client_->GetCurrentBrightnessValue(idx);
-  if ((result2.status() != ZX_OK) || result2.value().is_error()) {
-    printf("Could not get value\n");
-    return std::min(result2.status(), ZX_ERR_INTERNAL);
-  }
-
-  printf("Value of %s: %f\n", result1->value()->info.name.begin(), result2->value()->value);
-  return ZX_OK;
-}
-
-int LightsCli::SetValue(uint32_t idx, double value) {
-  auto result = client_->SetBrightnessValue(idx, value);
+  auto result = client_->GetInfo(idx);
   if ((result.status() != ZX_OK) || result.value().is_error()) {
-    printf("Could not set value\n");
+    printf("Could not get info\n");
     return std::min(result.status(), ZX_ERR_INTERNAL);
   }
 
+  const char* const name = result->value()->info.name.begin();
+
+  std::optional<double> brightness;
+  if (const auto result = client_->GetCurrentBrightnessValue(idx); result.ok() && result->is_ok()) {
+    brightness.emplace(result->value()->value);
+  }
+
+  std::optional<fuchsia_hardware_light::wire::Rgb> rgb;
+  if (const auto result = client_->GetCurrentRgbValue(idx); result.ok() && result->is_ok()) {
+    rgb.emplace(result->value()->value);
+  }
+
+  if (brightness && rgb) {
+    printf("Value of %s: Brightness %f RGB %f %f %f\n", name, *brightness, rgb->red, rgb->green,
+           rgb->blue);
+  } else if (brightness) {
+    printf("Value of %s: Brightness %f\n", name, *brightness);
+  } else if (rgb) {
+    printf("Value of %s: RGB %f %f %f\n", name, rgb->red, rgb->green, rgb->blue);
+  } else {
+    printf("Could not get brightness or RGB for light number %u\n", idx);
+    return ZX_ERR_INTERNAL;
+  }
+
+  return ZX_OK;
+}
+
+int LightsCli::SetBrightness(uint32_t idx, double brightness) {
+  auto result = client_->SetBrightnessValue(idx, brightness);
+  if ((result.status() != ZX_OK) || result.value().is_error()) {
+    printf("Could not set brightness\n");
+    return std::min(result.status(), ZX_ERR_INTERNAL);
+  }
+
+  return ZX_OK;
+}
+
+zx_status_t LightsCli::SetRgb(uint32_t idx, double red, double green, double blue) {
+  const fuchsia_hardware_light::wire::Rgb rgb{
+      .red = red,
+      .green = green,
+      .blue = blue,
+  };
+
+  auto result = client_->SetRgbValue(idx, rgb);
+  if ((result.status() != ZX_OK) || result.value().is_error()) {
+    printf("Could not set RGB\n");
+    return std::min(result.status(), ZX_ERR_INTERNAL);
+  }
   return ZX_OK;
 }
 
@@ -55,15 +88,10 @@ zx_status_t LightsCli::Summary() {
       continue;
     }
 
-    zx_status_t status = ZX_OK;
     switch (result2->value()->info.capability) {
       case fuchsia_hardware_light::wire::Capability::kBrightness:
-        if ((status = PrintValue(i)) != ZX_OK) {
-          printf("Print Value failed for light number %u.\n", i);
-          continue;
-        }
-        break;
       case fuchsia_hardware_light::wire::Capability::kRgb:
+        PrintValue(i);
         break;
       case fuchsia_hardware_light::wire::Capability::kSimple:
         break;

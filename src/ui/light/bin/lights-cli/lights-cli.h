@@ -15,7 +15,8 @@ class LightsCli {
   explicit LightsCli(zx::channel channel)
       : client_(fidl::ClientEnd<fuchsia_hardware_light::Light>(std::move(channel))) {}
   zx_status_t PrintValue(uint32_t idx);
-  zx_status_t SetValue(uint32_t idx, double value);
+  zx_status_t SetBrightness(uint32_t idx, double brightness);
+  zx_status_t SetRgb(uint32_t idx, double red, double green, double blue);
   zx_status_t Summary();
 
  private:

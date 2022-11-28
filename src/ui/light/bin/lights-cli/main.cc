@@ -20,19 +20,21 @@ constexpr char kLightsDevicePath[] = "/dev/class/light/000";
 constexpr char kUsageMessage[] = R"""(Usage:
   lights-cli print <id>
   lights-cli set <id> <brightness>
+  lights-cli set <id> <red> <green> <blue>
   lights-cli summary
 
 Get information about lights and control their brightness.
 
 Commands:
-  print             View the brightness of a light. The reported brightness
-                    value is a floating point number between `0.0`
+  print             View the brightness and color (if applicable) of a light.
+                    The reported values are floating point numbers between `0.0`
                     (completely off) and `1.0` (completely on).
-  set               Set the brightness of a light. For lights that support
-                    pulse-width modulation <brightness> can be any number between
-                    `0.0` (completely off) and `1.0` (completely on). For lights
-                    that only support simple on and off states <brightness>
-                    should only be `0.0` (off) or `1.0` (on).
+  set               Set the brightness or color of a light. For lights that
+                    support pulse-width modulation the brightness or color
+                    values can be any number between `0.0` (completely off) and
+                    `1.0` (completely on). For lights that only support simple
+                    on and off states <brightness> should only be `0.0` (off) or
+                    `1.0` (on).
   summary           View the total light count as well as the brightness and
                     capabilities of each light. Currently supported capabilities
                     are `Brightness`, `Rgb`, and `Simple`. `Brightness` is a
@@ -44,16 +46,24 @@ Commands:
 Examples:
   View the brightness of a light:
   $ lights-cli print AMBER_LED
-  Value of AMBER_LED: 1.000000
+  Value of AMBER_LED: Brightness 1.000000
+
+  View the brightness and color of a light:
+  $ lights-cli print 1
+  Value of lp50xx-led-1: Brightness 0.745098 RGB 0.235294 0.176471 0.164706
 
   Set the brightness of a light:
   $ lights-cli set AMBER_LED 0.5
   # This command exits silently.
 
+  Set a light to display the color purple:
+  $ lights-cli set 5 0.5 0 0.5
+  # This command exits silently.
+
   View the total light count and each light's brightness and capabilities:
   $ lights-cli summary
   Total 1 lights
-  Value of AMBER_LED: 0.500000
+  Value of AMBER_LED: Brightness 0.500000
       Capabilities: Brightness
 
 Notes:
@@ -94,7 +104,9 @@ int main(int argc, char** argv) {
   if (strcmp(argv[1], "print") == 0 && argc == 3) {
     status = lights_cli.PrintValue(atoi(argv[2]));
   } else if (strcmp(argv[1], "set") == 0 && argc == 4) {
-    status = lights_cli.SetValue(atoi(argv[2]), atof(argv[3]));
+    status = lights_cli.SetBrightness(atoi(argv[2]), atof(argv[3]));
+  } else if (strcmp(argv[1], "set") == 0 && argc == 6) {
+    status = lights_cli.SetRgb(atoi(argv[2]), atof(argv[3]), atof(argv[4]), atof(argv[5]));
   } else if (strcmp(argv[1], "summary") == 0 && argc == 2) {
     status = lights_cli.Summary();
   } else {
