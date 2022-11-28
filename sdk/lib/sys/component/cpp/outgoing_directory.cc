@@ -30,6 +30,10 @@ constexpr const char kOutgoingDirectoryThreadSafetyDescription[] =
 namespace component {
 
 OutgoingDirectory OutgoingDirectory::Create(async_dispatcher_t* dispatcher) {
+  return OutgoingDirectory(dispatcher);
+}
+
+OutgoingDirectory::OutgoingDirectory(async_dispatcher_t* dispatcher) {
   ZX_ASSERT_MSG(dispatcher != nullptr, "OutgoingDirectory::Create received nullptr |dispatcher|.");
 
   svc_dir_t* root = nullptr;
@@ -41,11 +45,8 @@ OutgoingDirectory OutgoingDirectory::Create(async_dispatcher_t* dispatcher) {
   (void)svc_dir_create_without_serve(&root);
 #endif
 
-  return OutgoingDirectory(dispatcher, root);
+  inner_ = std::make_unique<Inner>(dispatcher, root);
 }
-
-OutgoingDirectory::OutgoingDirectory(async_dispatcher_t* dispatcher, svc_dir_t* root)
-    : inner_(std::make_unique<Inner>(dispatcher, root)) {}
 
 OutgoingDirectory::Inner::Inner(async_dispatcher_t* dispatcher, svc_dir_t* root)
     : dispatcher_(dispatcher),

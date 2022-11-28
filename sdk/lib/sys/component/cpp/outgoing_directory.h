@@ -50,11 +50,15 @@ namespace component {
 // are migrated to the new C++ bindings, that library will be removed.
 class OutgoingDirectory final {
  public:
+  // This method is deprecated.
+  // TODO(htpp://fxbug.dev/114272): Delete once all clients are migrated.
+  static OutgoingDirectory Create(async_dispatcher_t* dispatcher);
+
   // Creates an OutgoingDirectory which will serve requests when
   // |Serve| or |ServeFromStartupInfo()| is called.
   //
   // |dispatcher| must not be nullptr. If it is, this method will panic.
-  static OutgoingDirectory Create(async_dispatcher_t* dispatcher);
+  explicit OutgoingDirectory(async_dispatcher_t* dispatcher);
 
   OutgoingDirectory() = delete;
 
@@ -379,8 +383,6 @@ class OutgoingDirectory final {
   zx::result<> RemoveDirectoryAt(cpp17::string_view path, cpp17::string_view directory_name);
 
  private:
-  OutgoingDirectory(async_dispatcher_t* dispatcher, svc_dir_t* root);
-
   // |svc_dir_add_service_by_path| takes in a void* |context| that is passed to
   // the |handler| callback passed as the last argument to the function call.
   // This library will pass in a casted void* pointer to this object, and when
