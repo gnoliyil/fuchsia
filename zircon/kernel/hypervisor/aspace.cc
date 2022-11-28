@@ -8,7 +8,6 @@
 
 #include <fbl/alloc_checker.h>
 #include <hypervisor/aspace.h>
-#include <hypervisor/kernel_aspace.h>
 #include <kernel/range_check.h>
 #include <ktl/move.h>
 #include <vm/fault.h>

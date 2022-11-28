@@ -12,7 +12,6 @@
 #include <hypervisor/aspace.h>
 #include <hypervisor/id_allocator.h>
 #include <hypervisor/interrupt_tracker.h>
-#include <hypervisor/kernel_aspace.h>
 #include <hypervisor/trap_map.h>
 #include <vm/pmm.h>
 #include <vm/scanner.h>
