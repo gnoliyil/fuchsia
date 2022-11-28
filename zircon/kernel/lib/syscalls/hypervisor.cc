@@ -33,7 +33,6 @@ zx_status_t sys_guest_create(zx_handle_t resource, uint32_t options, user_out_ha
   if (status != ZX_OK) {
     return status;
   }
-
   status = guest_handle->make(ktl::move(new_guest_handle), guest_rights);
   if (status != ZX_OK) {
     return status;
@@ -71,8 +70,8 @@ zx_status_t sys_vcpu_create(zx_handle_t guest_handle, uint32_t options, zx_vaddr
 
   auto up = ProcessDispatcher::GetCurrent();
   fbl::RefPtr<GuestDispatcher> guest;
-  zx_status_t status = up->handle_table().GetDispatcherWithRights(*up, guest_handle,
-                                                                  ZX_RIGHT_MANAGE_PROCESS, &guest);
+  zx_status_t status =
+      up->handle_table().GetDispatcherWithRights(*up, guest_handle, ZX_RIGHT_MANAGE_THREAD, &guest);
   if (status != ZX_OK) {
     return status;
   }
