@@ -35,24 +35,28 @@ class StringRef;
 template <>
 class StringRef<RefType::kInline> {
  public:
-  explicit StringRef(const char* string) : string_{string} {}
+  explicit StringRef(const char* string, size_t size = FXT_MAX_STR_LEN)
+      : string_{string}, size_{strnlen(string, size < FXT_MAX_STR_LEN ? size : FXT_MAX_STR_LEN)} {}
 
-  WordSize PayloadSize() const { return WordSize::FromBytes(strnlen(string_, FXT_MAX_STR_LEN)); }
+  WordSize PayloadSize() const { return WordSize::FromBytes(size_); }
 
-  uint64_t HeaderEntry() const { return 0x8000 | strnlen(string_, FXT_MAX_STR_LEN); }
+  uint64_t HeaderEntry() const { return 0x8000 | size_; }
 
   template <typename Reservation>
   void Write(Reservation& res) const {
-    size_t num_bytes = strnlen(string_, FXT_MAX_STR_LEN);
-    res.WriteBytes(string_, num_bytes);
+    res.WriteBytes(string_, size_);
   }
+
+  size_t size() const { return size_; }
 
  private:
   static const size_t FXT_MAX_STR_LEN = 32000;
   const char* string_;
+  size_t size_;
 };
 #if __cplusplus >= 201703L
 StringRef(const char*)->StringRef<RefType::kInline>;
+StringRef(const char*, size_t)->StringRef<RefType::kInline>;
 #endif
 
 template <>
@@ -600,12 +604,13 @@ inline WordSize TotalPayloadSize(const First& first, const Rest&... rest) {
 }
 
 template <typename Writer, internal::EnableIfWriter<Writer> = 0, RefType thread_type,
-          RefType name_type, RefType category_type, ArgumentType... arg_types, RefType... ref_types>
+          RefType name_type, RefType category_type, ArgumentType... arg_types,
+          RefType... arg_name_types, RefType... arg_val_types>
 void WriteEventRecord(typename internal::WriterTraits<Writer>::Reservation& res,
                       uint64_t event_time, const ThreadRef<thread_type>& thread_ref,
                       const StringRef<category_type>& category_ref,
                       const StringRef<name_type>& name_ref,
-                      const Argument<arg_types, ref_types>&... args) {
+                      const Argument<arg_types, arg_name_types, arg_val_types>&... args) {
   res.WriteWord(event_time);
   thread_ref.Write(res);
   category_ref.Write(res);
@@ -615,11 +620,11 @@ void WriteEventRecord(typename internal::WriterTraits<Writer>::Reservation& res,
 }
 
 template <RefType thread_type, RefType name_type, RefType category_type, ArgumentType... arg_types,
-          RefType... ref_types>
+          RefType... arg_name_types, RefType... arg_val_types>
 uint64_t MakeEventHeader(fxt::EventType eventType, const ThreadRef<thread_type>& thread_ref,
                          const StringRef<category_type>& category_ref,
                          const StringRef<name_type>& name_ref,
-                         const Argument<arg_types, ref_types>&... args) {
+                         const Argument<arg_types, arg_name_types, arg_val_types>&... args) {
   const WordSize content_size = fxt::internal::EventContentWords(eventType);
   WordSize record_size = WordSize::FromBytes(sizeof(RecordHeader)) + WordSize(1) +
                          TotalPayloadSize(thread_ref, category_ref, name_ref) + content_size +
@@ -635,12 +640,12 @@ uint64_t MakeEventHeader(fxt::EventType eventType, const ThreadRef<thread_type>&
 // Write an event with no event specific data such as an Instant Event or
 // Duration Begin Event
 template <typename Writer, internal::EnableIfWriter<Writer> = 0, RefType thread_type,
-          RefType name_type, RefType category_type, ArgumentType... arg_types, RefType... ref_types>
-zx_status_t WriteZeroWordEventRecord(Writer* writer, uint64_t event_time,
-                                     const ThreadRef<thread_type>& thread_ref,
-                                     const StringRef<category_type>& category_ref,
-                                     const StringRef<name_type>& name_ref, fxt::EventType eventType,
-                                     const Argument<arg_types, ref_types>&... args) {
+          RefType name_type, RefType category_type, ArgumentType... arg_types,
+          RefType... arg_name_types, RefType... arg_val_types>
+zx_status_t WriteZeroWordEventRecord(
+    Writer* writer, uint64_t event_time, const ThreadRef<thread_type>& thread_ref,
+    const StringRef<category_type>& category_ref, const StringRef<name_type>& name_ref,
+    fxt::EventType eventType, const Argument<arg_types, arg_name_types, arg_val_types>&... args) {
   uint64_t header =
       internal::MakeEventHeader(eventType, thread_ref, category_ref, name_ref, args...);
   zx::result<typename internal::WriterTraits<Writer>::Reservation> res = writer->Reserve(header);
@@ -655,13 +660,13 @@ zx_status_t WriteZeroWordEventRecord(Writer* writer, uint64_t event_time,
 // Write an event with one word of event specific data such as a Counter Event
 // or Async Begin Event
 template <typename Writer, internal::EnableIfWriter<Writer> = 0, RefType thread_type,
-          RefType name_type, RefType category_type, ArgumentType... arg_types, RefType... ref_types>
-zx_status_t WriteOneWordEventRecord(Writer* writer, uint64_t event_time,
-                                    const ThreadRef<thread_type>& thread_ref,
-                                    const StringRef<category_type>& category_ref,
-                                    const StringRef<name_type>& name_ref, fxt::EventType eventType,
-                                    uint64_t content,
-                                    const Argument<arg_types, ref_types>&... args) {
+          RefType name_type, RefType category_type, ArgumentType... arg_types,
+          RefType... arg_name_types, RefType... arg_val_types>
+zx_status_t WriteOneWordEventRecord(
+    Writer* writer, uint64_t event_time, const ThreadRef<thread_type>& thread_ref,
+    const StringRef<category_type>& category_ref, const StringRef<name_type>& name_ref,
+    fxt::EventType eventType, uint64_t content,
+    const Argument<arg_types, arg_name_types, arg_val_types>&... args) {
   uint64_t header =
       internal::MakeEventHeader(eventType, thread_ref, category_ref, name_ref, args...);
   zx::result<typename internal::WriterTraits<Writer>::Reservation> res = writer->Reserve(header);
@@ -682,12 +687,12 @@ zx_status_t WriteOneWordEventRecord(Writer* writer, uint64_t event_time,
 //
 // See also: https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format#instant-event
 template <typename Writer, internal::EnableIfWriter<Writer> = 0, RefType thread_type,
-          RefType name_type, RefType category_type, ArgumentType... arg_types, RefType... ref_types>
-zx_status_t WriteInstantEventRecord(Writer* writer, uint64_t event_time,
-                                    const ThreadRef<thread_type>& thread_ref,
-                                    const StringRef<category_type>& category_ref,
-                                    const StringRef<name_type>& name_ref,
-                                    const Argument<arg_types, ref_types>&... args) {
+          RefType name_type, RefType category_type, ArgumentType... arg_types,
+          RefType... arg_name_types, RefType... arg_val_types>
+zx_status_t WriteInstantEventRecord(
+    Writer* writer, uint64_t event_time, const ThreadRef<thread_type>& thread_ref,
+    const StringRef<category_type>& category_ref, const StringRef<name_type>& name_ref,
+    const Argument<arg_types, arg_name_types, arg_val_types>&... args) {
   return internal::WriteZeroWordEventRecord(writer, event_time, thread_ref, category_ref, name_ref,
                                             fxt::EventType::kInstant, args...);
 }
@@ -699,12 +704,12 @@ zx_status_t WriteInstantEventRecord(Writer* writer, uint64_t event_time,
 //
 // See also: https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format#instant-event
 template <typename Writer, internal::EnableIfWriter<Writer> = 0, RefType thread_type,
-          RefType name_type, RefType category_type, ArgumentType... arg_types, RefType... ref_types>
-zx_status_t WriteCounterEventRecord(Writer* writer, uint64_t event_time,
-                                    const ThreadRef<thread_type>& thread_ref,
-                                    const StringRef<category_type>& category_ref,
-                                    const StringRef<name_type>& name_ref, uint64_t counter_id,
-                                    const Argument<arg_types, ref_types>&... args) {
+          RefType name_type, RefType category_type, ArgumentType... arg_types,
+          RefType... arg_name_types, RefType... arg_val_types>
+zx_status_t WriteCounterEventRecord(
+    Writer* writer, uint64_t event_time, const ThreadRef<thread_type>& thread_ref,
+    const StringRef<category_type>& category_ref, const StringRef<name_type>& name_ref,
+    uint64_t counter_id, const Argument<arg_types, arg_name_types, arg_val_types>&... args) {
   return internal::WriteOneWordEventRecord(writer, event_time, thread_ref, category_ref, name_ref,
                                            fxt::EventType::kCounter, counter_id, args...);
 }
@@ -716,12 +721,12 @@ zx_status_t WriteCounterEventRecord(Writer* writer, uint64_t event_time,
 //
 // See also: https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format#duration-begin-event
 template <typename Writer, internal::EnableIfWriter<Writer> = 0, RefType thread_type,
-          RefType name_type, RefType category_type, ArgumentType... arg_types, RefType... ref_types>
-zx_status_t WriteDurationBeginEventRecord(Writer* writer, uint64_t event_time,
-                                          const ThreadRef<thread_type>& thread_ref,
-                                          const StringRef<category_type>& category_ref,
-                                          const StringRef<name_type>& name_ref,
-                                          Argument<arg_types, ref_types>... args) {
+          RefType name_type, RefType category_type, ArgumentType... arg_types,
+          RefType... arg_name_types, RefType... arg_val_types>
+zx_status_t WriteDurationBeginEventRecord(
+    Writer* writer, uint64_t event_time, const ThreadRef<thread_type>& thread_ref,
+    const StringRef<category_type>& category_ref, const StringRef<name_type>& name_ref,
+    Argument<arg_types, arg_name_types, arg_val_types>... args) {
   return internal::WriteZeroWordEventRecord(writer, event_time, thread_ref, category_ref, name_ref,
                                             fxt::EventType::kDurationBegin, args...);
 }
@@ -733,12 +738,12 @@ zx_status_t WriteDurationBeginEventRecord(Writer* writer, uint64_t event_time,
 //
 // See also: https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format#duration-end-event
 template <typename Writer, internal::EnableIfWriter<Writer> = 0, RefType thread_type,
-          RefType name_type, RefType category_type, ArgumentType... arg_types, RefType... ref_types>
-zx_status_t WriteDurationEndEventRecord(Writer* writer, uint64_t event_time,
-                                        const ThreadRef<thread_type>& thread_ref,
-                                        const StringRef<category_type>& category_ref,
-                                        const StringRef<name_type>& name_ref,
-                                        Argument<arg_types, ref_types>... args) {
+          RefType name_type, RefType category_type, ArgumentType... arg_types,
+          RefType... arg_name_types, RefType... arg_val_types>
+zx_status_t WriteDurationEndEventRecord(
+    Writer* writer, uint64_t event_time, const ThreadRef<thread_type>& thread_ref,
+    const StringRef<category_type>& category_ref, const StringRef<name_type>& name_ref,
+    Argument<arg_types, arg_name_types, arg_val_types>... args) {
   return internal::WriteZeroWordEventRecord(writer, event_time, thread_ref, category_ref, name_ref,
                                             fxt::EventType::kDurationEnd, args...);
 }
@@ -749,13 +754,12 @@ zx_status_t WriteDurationEndEventRecord(Writer* writer, uint64_t event_time,
 //
 // See also: https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format#duration-complete-event
 template <typename Writer, internal::EnableIfWriter<Writer> = 0, RefType thread_type,
-          RefType name_type, RefType category_type, ArgumentType... arg_types, RefType... ref_types>
-zx_status_t WriteDurationCompleteEventRecord(Writer* writer, uint64_t start_time,
-                                             const ThreadRef<thread_type>& thread_ref,
-                                             const StringRef<category_type>& category_ref,
-                                             const StringRef<name_type>& name_ref,
-                                             uint64_t end_time,
-                                             Argument<arg_types, ref_types>... args) {
+          RefType name_type, RefType category_type, ArgumentType... arg_types,
+          RefType... arg_name_types, RefType... arg_val_types, RefType... ref_types2>
+zx_status_t WriteDurationCompleteEventRecord(
+    Writer* writer, uint64_t start_time, const ThreadRef<thread_type>& thread_ref,
+    const StringRef<category_type>& category_ref, const StringRef<name_type>& name_ref,
+    uint64_t end_time, Argument<arg_types, arg_name_types, arg_val_types>... args) {
   return internal::WriteOneWordEventRecord(writer, start_time, thread_ref, category_ref, name_ref,
                                            fxt::EventType::kDurationComplete, end_time, args...);
 }
@@ -768,12 +772,13 @@ zx_status_t WriteDurationCompleteEventRecord(Writer* writer, uint64_t start_time
 //
 // See also: https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format#async-begin-event
 template <typename Writer, internal::EnableIfWriter<Writer> = 0, RefType thread_type,
-          RefType name_type, RefType category_type, ArgumentType... arg_types, RefType... ref_types>
+          RefType name_type, RefType category_type, ArgumentType... arg_types,
+          RefType... arg_name_types, RefType... arg_val_types>
 zx_status_t WriteAsyncBeginEventRecord(Writer* writer, uint64_t event_time,
                                        const ThreadRef<thread_type>& thread_ref,
                                        const StringRef<category_type>& category_ref,
                                        const StringRef<name_type>& name_ref, uint64_t async_id,
-                                       Argument<arg_types, ref_types>... args) {
+                                       Argument<arg_types, arg_name_types, arg_val_types>... args) {
   return internal::WriteOneWordEventRecord(writer, event_time, thread_ref, category_ref, name_ref,
                                            fxt::EventType::kAsyncBegin, async_id, args...);
 }
@@ -786,12 +791,12 @@ zx_status_t WriteAsyncBeginEventRecord(Writer* writer, uint64_t event_time,
 //
 // See also: https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format#async-instant-event
 template <typename Writer, internal::EnableIfWriter<Writer> = 0, RefType thread_type,
-          RefType name_type, RefType category_type, ArgumentType... arg_types, RefType... ref_types>
-zx_status_t WriteAsyncInstantEventRecord(Writer* writer, uint64_t event_time,
-                                         const ThreadRef<thread_type>& thread_ref,
-                                         const StringRef<category_type>& category_ref,
-                                         const StringRef<name_type>& name_ref, uint64_t async_id,
-                                         Argument<arg_types, ref_types>... args) {
+          RefType name_type, RefType category_type, ArgumentType... arg_types,
+          RefType... arg_name_types, RefType... arg_val_types>
+zx_status_t WriteAsyncInstantEventRecord(
+    Writer* writer, uint64_t event_time, const ThreadRef<thread_type>& thread_ref,
+    const StringRef<category_type>& category_ref, const StringRef<name_type>& name_ref,
+    uint64_t async_id, Argument<arg_types, arg_name_types, arg_val_types>... args) {
   return internal::WriteOneWordEventRecord(writer, event_time, thread_ref, category_ref, name_ref,
                                            fxt::EventType::kAsyncInstant, async_id, args...);
 }
@@ -803,12 +808,13 @@ zx_status_t WriteAsyncInstantEventRecord(Writer* writer, uint64_t event_time,
 //
 // See also: https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format#async-end-event
 template <typename Writer, internal::EnableIfWriter<Writer> = 0, RefType thread_type,
-          RefType name_type, RefType category_type, ArgumentType... arg_types, RefType... ref_types>
+          RefType name_type, RefType category_type, ArgumentType... arg_types,
+          RefType... arg_name_types, RefType... arg_val_types>
 zx_status_t WriteAsyncEndEventRecord(Writer* writer, uint64_t event_time,
                                      const ThreadRef<thread_type>& thread_ref,
                                      const StringRef<category_type>& category_ref,
                                      const StringRef<name_type>& name_ref, uint64_t async_id,
-                                     Argument<arg_types, ref_types>... args) {
+                                     Argument<arg_types, arg_name_types, arg_val_types>... args) {
   return internal::WriteOneWordEventRecord(writer, event_time, thread_ref, category_ref, name_ref,
                                            fxt::EventType::kAsyncEnd, async_id, args...);
 }
@@ -824,12 +830,13 @@ zx_status_t WriteAsyncEndEventRecord(Writer* writer, uint64_t event_time,
 //
 // See also: https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format#flow-begin-event
 template <typename Writer, internal::EnableIfWriter<Writer> = 0, RefType thread_type,
-          RefType name_type, RefType category_type, ArgumentType... arg_types, RefType... ref_types>
+          RefType name_type, RefType category_type, ArgumentType... arg_types,
+          RefType... arg_name_types, RefType... arg_val_types>
 zx_status_t WriteFlowBeginEventRecord(Writer* writer, uint64_t event_time,
                                       const ThreadRef<thread_type>& thread_ref,
                                       const StringRef<category_type>& category_ref,
                                       const StringRef<name_type>& name_ref, uint64_t flow_id,
-                                      Argument<arg_types, ref_types>... args) {
+                                      Argument<arg_types, arg_name_types, arg_val_types>... args) {
   return internal::WriteOneWordEventRecord(writer, event_time, thread_ref, category_ref, name_ref,
                                            fxt::EventType::kFlowBegin, flow_id, args...);
 }
@@ -843,12 +850,13 @@ zx_status_t WriteFlowBeginEventRecord(Writer* writer, uint64_t event_time,
 //
 // See also: https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format#flow-step-event
 template <typename Writer, internal::EnableIfWriter<Writer> = 0, RefType thread_type,
-          RefType name_type, RefType category_type, ArgumentType... arg_types, RefType... ref_types>
+          RefType name_type, RefType category_type, ArgumentType... arg_types,
+          RefType... arg_name_types, RefType... arg_val_types>
 zx_status_t WriteFlowStepEventRecord(Writer* writer, uint64_t event_time,
                                      const ThreadRef<thread_type>& thread_ref,
                                      const StringRef<category_type>& category_ref,
                                      const StringRef<name_type>& name_ref, uint64_t flow_id,
-                                     Argument<arg_types, ref_types>... args) {
+                                     Argument<arg_types, arg_name_types, arg_val_types>... args) {
   return internal::WriteOneWordEventRecord(writer, event_time, thread_ref, category_ref, name_ref,
                                            fxt::EventType::kFlowStep, flow_id, args...);
 }
@@ -861,12 +869,13 @@ zx_status_t WriteFlowStepEventRecord(Writer* writer, uint64_t event_time,
 //
 // See also: https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format#flow-end-event
 template <typename Writer, internal::EnableIfWriter<Writer> = 0, RefType thread_type,
-          RefType name_type, RefType category_type, ArgumentType... arg_types, RefType... ref_types>
+          RefType name_type, RefType category_type, ArgumentType... arg_types,
+          RefType... arg_name_types, RefType... arg_val_types>
 zx_status_t WriteFlowEndEventRecord(Writer* writer, uint64_t event_time,
                                     const ThreadRef<thread_type>& thread_ref,
                                     const StringRef<category_type>& category_ref,
                                     const StringRef<name_type>& name_ref, uint64_t flow_id,
-                                    Argument<arg_types, ref_types>... args) {
+                                    Argument<arg_types, arg_name_types, arg_val_types>... args) {
   return internal::WriteOneWordEventRecord(writer, event_time, thread_ref, category_ref, name_ref,
                                            fxt::EventType::kFlowEnd, flow_id, args...);
 }
@@ -904,11 +913,12 @@ zx_status_t WriteBlobRecord(Writer* writer, const StringRef<name_type>& blob_nam
 //
 // See also: https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format#userspace-object-record
 template <typename Writer, internal::EnableIfWriter<Writer> = 0, RefType thread_type,
-          RefType name_type, ArgumentType... arg_types, RefType... ref_types>
-zx_status_t WriteUserspaceObjectRecord(Writer* writer, uintptr_t pointer,
-                                       const ThreadRef<thread_type>& thread_arg,
-                                       const StringRef<name_type>& name_arg,
-                                       const Argument<arg_types, ref_types>&... args) {
+          RefType name_type, ArgumentType... arg_types, RefType... arg_name_types,
+          RefType... arg_val_types>
+zx_status_t WriteUserspaceObjectRecord(
+    Writer* writer, uintptr_t pointer, const ThreadRef<thread_type>& thread_arg,
+    const StringRef<name_type>& name_arg,
+    const Argument<arg_types, arg_name_types, arg_val_types>&... args) {
   WordSize record_size = WordSize(1) /*header*/ + WordSize(1) /*pointer*/ +
                          internal::TotalPayloadSize(thread_arg, name_arg, args...);
 
@@ -938,10 +948,10 @@ zx_status_t WriteUserspaceObjectRecord(Writer* writer, uintptr_t pointer,
 //
 // See also: https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format#kernel-object-record
 template <typename Writer, internal::EnableIfWriter<Writer> = 0, RefType name_type,
-          ArgumentType... arg_types, RefType... ref_types>
-zx_status_t WriteKernelObjectRecord(Writer* writer, zx_koid_t koid, zx_obj_type_t obj_type,
-                                    const StringRef<name_type>& name_arg,
-                                    const Argument<arg_types, ref_types>&... args) {
+          ArgumentType... arg_types, RefType... arg_name_types, RefType... arg_val_types>
+zx_status_t WriteKernelObjectRecord(
+    Writer* writer, zx_koid_t koid, zx_obj_type_t obj_type, const StringRef<name_type>& name_arg,
+    const Argument<arg_types, arg_name_types, arg_val_types>&... args) {
   WordSize record_size =
       WordSize(1) /*header*/ + WordSize(1) /*koid*/ + internal::TotalPayloadSize(name_arg, args...);
   uint64_t header = MakeHeader(RecordType::kKernelObject, record_size) |
@@ -1029,13 +1039,13 @@ zx_status_t WriteLogRecord(Writer* writer, uint64_t event_time,
 //
 // https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format#in_band_large_blob_record_with_metadata_blob_format_0
 template <typename Writer, internal::EnableIfWriter<Writer> = 0, RefType category_type,
-          RefType name_type, RefType thread_type, ArgumentType... arg_types, RefType... ref_types>
-zx_status_t WriteLargeBlobRecordWithMetadata(Writer* writer, uint64_t timestamp,
-                                             const StringRef<category_type>& category_ref,
-                                             const StringRef<name_type>& name_ref,
-                                             const ThreadRef<thread_type>& thread_ref,
-                                             const void* data, size_t num_bytes,
-                                             const Argument<arg_types, ref_types>&... args) {
+          RefType name_type, RefType thread_type, ArgumentType... arg_types,
+          RefType... arg_name_types, RefType... arg_val_types>
+zx_status_t WriteLargeBlobRecordWithMetadata(
+    Writer* writer, uint64_t timestamp, const StringRef<category_type>& category_ref,
+    const StringRef<name_type>& name_ref, const ThreadRef<thread_type>& thread_ref,
+    const void* data, size_t num_bytes,
+    const Argument<arg_types, arg_name_types, arg_val_types>&... args) {
   WordSize record_size = WordSize(1) /*header*/ + WordSize(1) /*metadata word*/ +
                          WordSize(1) /*timestamp*/ +
                          internal::TotalPayloadSize(category_ref, name_ref, thread_ref) +
@@ -1074,7 +1084,7 @@ zx_status_t WriteLargeBlobRecordWithMetadata(Writer* writer, uint64_t timestamp,
 //
 // https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format#in_band_large_blob_record_no_metadata_blob_format_1
 template <typename Writer, internal::EnableIfWriter<Writer> = 0, RefType category_type,
-          RefType name_type, ArgumentType... arg_types, RefType... ref_types>
+          RefType name_type>
 zx_status_t WriteLargeBlobRecordWithNoMetadata(Writer* writer,
                                                const StringRef<category_type>& category_ref,
                                                const StringRef<name_type>& name_ref,

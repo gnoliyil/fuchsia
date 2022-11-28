@@ -243,6 +243,15 @@ TEST(Serializer, InlineStringReferences) {
   EXPECT_EQ(std::memcmp(category_stream, "category", 8), 0);
   char* name_stream1 = reinterpret_cast<char*>(inline_bytes + 3);
   EXPECT_EQ(std::memcmp(name_stream1, "name longer than eight bytes\0\0\0\0", 32), 0);
+
+  const size_t sized_string_length = 5;
+  fxt::StringRef sized_string("01234567890123456789", sized_string_length);
+  EXPECT_EQ(sized_string_length, sized_string.size());
+
+  const size_t oversized_string_length = 10;
+  const size_t actual_string_length = 5;
+  fxt::StringRef oversized_string("01234", oversized_string_length);
+  EXPECT_EQ(actual_string_length, oversized_string.size());
 }
 
 TEST(Serializer, IndexThreadReferences) {
@@ -343,31 +352,36 @@ TEST(Serializer, Arguments) {
   fxt::StringRef name(3);
 
   fxt::StringRef arg_name(0x7FFF);
+  fxt::StringRef inline_string("inline");
 
   FakeWriter writer;
-  EXPECT_EQ(ZX_OK, fxt::WriteInstantEventRecord(
-                       &writer, event_time, thread_ref, category, name, fxt::Argument(arg_name),
-                       fxt::Argument(arg_name, true), fxt::Argument(arg_name, int32_t{0x12345678}),
-                       fxt::Argument(arg_name, uint32_t{0x567890AB}),
-                       fxt::Argument(arg_name, int64_t{0x1234'5678'90AB'CDEF}),
-                       fxt::Argument<fxt::ArgumentType::kUint64, fxt::RefType::kId>(
-                           arg_name, uint64_t{0xFEDC'BA09'8765'4321}),
-                       fxt::Argument(arg_name, double{1234.5678}),
-                       fxt::Argument<fxt::ArgumentType::kPointer, fxt::RefType::kId>(
-                           arg_name, uintptr_t{0xDEADBEEF}),
-                       fxt::Argument<fxt::ArgumentType::kKoid, fxt::RefType::kId>(
-                           arg_name, zx_koid_t{0x12345678}),
-                       fxt::Argument(arg_name, fxt::StringRef(11))));
+  EXPECT_EQ(ZX_OK,
+            fxt::WriteInstantEventRecord(
+                &writer, event_time, thread_ref, category, name, fxt::Argument(arg_name),
+                fxt::Argument(arg_name, true), fxt::Argument(arg_name, int32_t{0x12345678}),
+                fxt::Argument(arg_name, uint32_t{0x567890AB}),
+                fxt::Argument(arg_name, int64_t{0x1234'5678'90AB'CDEF}),
+                fxt::Argument<fxt::ArgumentType::kUint64, fxt::RefType::kId>(
+                    arg_name, uint64_t{0xFEDC'BA09'8765'4321}),
+                fxt::Argument(arg_name, double{1234.5678}),
+                fxt::Argument<fxt::ArgumentType::kPointer, fxt::RefType::kId>(
+                    arg_name, uintptr_t{0xDEADBEEF}),
+                fxt::Argument<fxt::ArgumentType::kKoid, fxt::RefType::kId>(arg_name,
+                                                                           zx_koid_t{0x12345678}),
+                fxt::Argument(arg_name, fxt::StringRef(11)), fxt::Argument(arg_name, inline_string),
+                fxt::Argument(inline_string, inline_string)));
   uint64_t* bytes = reinterpret_cast<uint64_t*>(writer.bytes.data());
-  // We should have 10 arguments
+  // We should have 12 arguments
   uint64_t header = bytes[0];
-  EXPECT_EQ(header & 0x0000'0000'00F0'0000, uint64_t{0x0000'0000'00A0'0000});
+  EXPECT_EQ(header & 0x0000'0000'00F0'0000, uint64_t{0x0000'0000'00C0'0000});
 
   const size_t num_words =
       1    // header
       + 1  // time stamp
       + 5  // 1 word for args that fit in the header (null, bool, int32, uint32, string arg (ref)
-      + (2 * 5);  // 2 words for args that don't fit (int64, uint64, double, pointer, koid)
+      + 2 * 6  // 2 words for args that don't fit (int64, uint64, double, pointer, koid, inline
+               // string value)
+      + 3;     // 3 words for the string arg with inline name and value.
   EXPECT_EQ(writer.bytes.size(), fxt::WordSize(num_words).SizeInBytes());
   uint64_t null_arg_header = bytes[2];
   EXPECT_EQ(null_arg_header, uint64_t{0x0000'0000'7FFF'0010});
@@ -404,6 +418,15 @@ TEST(Serializer, Arguments) {
 
   uint64_t string_arg_header = bytes[16];
   EXPECT_EQ(string_arg_header, uint64_t{0x0000'000B'7FFF'0016});
+
+  uint64_t inline_string_arg_header = bytes[17];
+  EXPECT_EQ(inline_string_arg_header, uint64_t{0x0000'8006'7FFF'0026});
+  EXPECT_EQ(bytes[18], uint64_t{0x0000'656E'696C'6E69});
+
+  uint64_t double_inline_string_arg_header = bytes[19];
+  EXPECT_EQ(double_inline_string_arg_header, uint64_t{0x0000'8006'8006'0036});
+  EXPECT_EQ(bytes[20], uint64_t{0x0000'656E'696C'6E69});
+  EXPECT_EQ(bytes[21], uint64_t{0x0000'656E'696C'6E69});
 }
 
 TEST(Serializer, InstantEventRecord) {
