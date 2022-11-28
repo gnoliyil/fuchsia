@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 #include <errno.h>
-#include <fuchsia/hardware/pty/c/fidl.h>
 #include <lib/fdio/spawn.h>
 #include <lib/fdio/unsafe.h>
 #include <poll.h>
@@ -216,7 +215,7 @@ int process_await_termination(zx_handle_t process, zx_handle_t job, bool blockin
             // interrupted - kill process
             uint32_t events = 0;
             pty_read_events(fdio_unsafe_borrow_channel(tty), &events); // ignore any error
-            if (events & fuchsia_hardware_pty_EVENT_INTERRUPT) {
+            if (pty_event_is_interrupt(events)) {
                 // process belongs to job, so killing the job kills the process
                 status = zx_task_kill(job);
                 // If the kill failed status is going to be ZX_ERR_ACCESS_DENIED

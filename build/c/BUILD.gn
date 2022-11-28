@@ -158,7 +158,6 @@ config("fidl-deprecated-c-bindings") {
     "//zircon/system/utest/fidl-utils",
     "//zircon/system/utest/runtests-utils",
     "//zircon/system/utest/svchost",
-    "//zircon/third_party/uapp/dash",
   ]
 }
 

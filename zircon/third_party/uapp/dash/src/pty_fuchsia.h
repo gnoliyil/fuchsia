@@ -16,4 +16,7 @@ __BEGIN_CDECLS
 // function.
 zx_status_t pty_read_events(zx_handle_t handle, uint32_t* out_events);
 
+// Returns whether the provided events contain a interrupt.
+bool pty_event_is_interrupt(uint32_t events);
+
 __END_CDECLS

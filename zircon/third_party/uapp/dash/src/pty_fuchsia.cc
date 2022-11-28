@@ -19,3 +19,7 @@ zx_status_t pty_read_events(zx_handle_t handle, uint32_t* out_events) {
   *out_events = result.value().events;
   return ZX_OK;
 }
+
+bool pty_event_is_interrupt(uint32_t events) {
+  return events & fuchsia_hardware_pty::wire::kEventInterrupt;
+}
