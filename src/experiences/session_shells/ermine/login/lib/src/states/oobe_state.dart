@@ -40,7 +40,6 @@ abstract class OobeState {
   SshImport get importMethod;
   List<String> get sshKeys;
   abstract int sshKeyIndex;
-  bool get launchOobe;
   bool get ready;
   bool get hasAccount;
   bool get loginDone;

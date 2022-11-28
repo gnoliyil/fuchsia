@@ -26,8 +26,6 @@ const kCacheSubdirectory = 'cache/';
 const kIncomingTmpDirectory = '/tmp/';
 const kTmpSubdirectory = 'account/';
 
-enum AuthMode { automatic, manual }
-
 enum AuthOp { enrollment, authentication }
 
 /// Defines a service that performs authentication tasks like:
@@ -60,7 +58,7 @@ class AuthService {
   }
 
   /// Load existing accounts from [AccountManager].
-  void loadAccounts(AuthMode currentAuthMode) async {
+  void loadAccounts() async {
     try {
       final ids = (await _accountManager.getAccountIds()).toList();
 
@@ -72,7 +70,7 @@ class AuthService {
         final metadata = await _accountManager.getAccountMetadata(id);
 
         if (metadata.name != null &&
-            _shouldRemoveAccountWithName(metadata.name!, currentAuthMode)) {
+            _shouldRemoveAccountWithName(metadata.name!)) {
           try {
             await _accountManager.removeAccount(id);
             ids.remove(id);
@@ -96,17 +94,8 @@ class AuthService {
     }
   }
 
-  bool _shouldRemoveAccountWithName(String name, AuthMode currentAuthMode) {
-    if (name == kDeprecatedAccountName) {
-      return true;
-    }
-    if (currentAuthMode == AuthMode.automatic) {
-      // Current auth is automatic, remove account with user picked name.
-      return name == kUserPickedAccountName;
-    } else {
-      // Current auth is manual, remove account with system picked name.
-      return name == kSystemPickedAccountName;
-    }
+  bool _shouldRemoveAccountWithName(String name) {
+    return name == kDeprecatedAccountName || name == kSystemPickedAccountName;
   }
 
   /// Calls [FactoryReset] service to factory data reset the device.

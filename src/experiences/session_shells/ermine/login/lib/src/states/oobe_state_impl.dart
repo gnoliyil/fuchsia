@@ -73,7 +73,7 @@ class OobeStateImpl with Disposable implements OobeState {
 
     authService
       ..hostedDirectories = hostedDirectories
-      ..loadAccounts(launchOobe ? AuthMode.manual : AuthMode.automatic);
+      ..loadAccounts();
     componentContext.outgoing.serveFromStartupInfo();
 
     channelService.onConnected = (connected) => runInAction(() async {
@@ -108,19 +108,6 @@ class OobeStateImpl with Disposable implements OobeState {
     sshKeysService.dispose();
     shellService.dispose();
   }
-
-  @override
-  bool get launchOobe => _launchOobe.value;
-  late final _launchOobe = Observable<bool>(() {
-    File config = File(kDefaultConfigJson);
-    // If default config is missing, log error and return defaults.
-    if (!config.existsSync()) {
-      log.severe('Missing startup and default configs. Skipping OOBE.');
-      return false;
-    }
-    final data = json.decode(config.readAsStringSync()) ?? {};
-    return data['launch_oobe'] == true;
-  }());
 
   @override
   bool get ready => _ready.value;
@@ -398,13 +385,11 @@ class OobeStateImpl with Disposable implements OobeState {
 
     // Define a local method to run after logout below.
     void postLogout() {
-      if (launchOobe) {
-        // Display login screen again.
-        runInAction(() {
-          shellService.disposeErmineShell();
-          _ermineViewConnection.value = null;
-        });
-      }
+      // Display login screen again.
+      runInAction(() {
+        shellService.disposeErmineShell();
+        _ermineViewConnection.value = null;
+      });
     }
 
     // Logout and call [postLogout] on both success and error case.
@@ -416,7 +401,7 @@ class OobeStateImpl with Disposable implements OobeState {
 
   void _onInspect(Node node) {
     node.boolProperty('ready')!.setValue(ready);
-    node.boolProperty('launchOOBE')!.setValue(launchOobe);
+    node.boolProperty('launchOOBE')!.setValue(true);
     node.boolProperty('ermineReady')!.setValue(_ermineReady);
     node.boolProperty('authenticated')!.setValue(loginDone);
     if (hasAccount) {
