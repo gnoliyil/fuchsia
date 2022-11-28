@@ -15,10 +15,8 @@
 #include <lib/sys/cpp/component_context.h>
 
 #include "lib/fidl/cpp/synchronous_interface_ptr.h"
-#include "src/lib/fxl/strings/string_printf.h"
 #include "src/lib/testing/loop_fixture/test_loop_fixture.h"
 
-const std::string kDevPrefix = "/dev/";
 const std::string kDriverUrl = "fuchsia-boot:///#driver/bind-test-v2-driver.so";
 const std::string kDriverLibname = "bind-test-v2-driver.so";
 const std::string kChildDeviceName = "child";
@@ -64,10 +62,7 @@ class BindCompilerV2Test : public gtest::TestLoopFixture {
     ASSERT_EQ(result.status(), ZX_OK);
     ASSERT_EQ(result.value().status, ZX_OK);
 
-    ASSERT_GE(result.value().path.size(), kDevPrefix.size());
-    ASSERT_EQ(strncmp(result.value().path.data(), kDevPrefix.c_str(), kDevPrefix.size()), 0);
-    relative_device_path_ = std::string(result.value().path.data() + kDevPrefix.size(),
-                                        result.value().path.size() - kDevPrefix.size());
+    device_path_ = std::string(result.value().path.get());
 
     // Bind the test driver to the new device.
     auto response =
@@ -87,7 +82,7 @@ class BindCompilerV2Test : public gtest::TestLoopFixture {
 
   fuchsia::driver::development::DriverDevelopmentSyncPtr driver_dev_;
   std::unique_ptr<component_testing::RealmRoot> realm_;
-  std::string relative_device_path_;
+  std::string device_path_;
 };
 
 // Check that calling GetDriverInfo with an invalid driver path returns ZX_ERR_NOT_FOUND.
@@ -145,7 +140,7 @@ TEST_F(BindCompilerV2Test, InvalidDevice) {
 
 // Get the properties of the test driver's child device and check that they are as expected.
 TEST_F(BindCompilerV2Test, ValidDevice) {
-  std::string child_device_path(relative_device_path_ + "/" + kChildDeviceName);
+  std::string child_device_path(device_path_ + "/" + kChildDeviceName);
 
   fuchsia::driver::development::DeviceInfoIteratorSyncPtr iterator;
   ASSERT_EQ(driver_dev_->GetDeviceInfo({child_device_path}, iterator.NewRequest(),

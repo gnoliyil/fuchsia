@@ -354,7 +354,7 @@ async fn test_get_device_info_no_filter_dfv1() -> Result<()> {
 
 #[fasync::run_singlethreaded(test)]
 async fn test_get_device_info_with_filter_dfv1() -> Result<()> {
-    const DEVICE_FILTER: [&str; 1] = ["sys/test"];
+    const DEVICE_FILTER: [&str; 1] = ["/dev/sys/test"];
 
     let (_instance, driver_dev) = set_up_test_driver_realm(false).await?;
     let device_infos =
@@ -385,7 +385,7 @@ async fn test_get_device_info_with_filter_dfv1() -> Result<()> {
 
 #[fasync::run_singlethreaded(test)]
 async fn test_get_device_info_with_duplicate_filter_dfv1() -> Result<()> {
-    const DEVICE_FILTER: [&str; 2] = ["sys/test/sample_driver", "sys/test/sample_driver"];
+    const DEVICE_FILTER: [&str; 2] = ["/dev/sys/test/sample_driver", "/dev/sys/test/sample_driver"];
 
     let (_instance, driver_dev) = set_up_test_driver_realm(false).await?;
     let device_infos =
@@ -433,7 +433,7 @@ async fn test_get_device_info_with_duplicate_filter_dfv1() -> Result<()> {
 
 #[fasync::run_singlethreaded(test)]
 async fn test_get_device_info_with_partial_filter_dfv1() -> Result<()> {
-    const DEVICE_FILTER: [&str; 1] = ["sys/test/sample"];
+    const DEVICE_FILTER: [&str; 1] = ["/dev/sys/test/sample"];
 
     let (_instance, driver_dev) = set_up_test_driver_realm(false).await?;
     let device_infos =

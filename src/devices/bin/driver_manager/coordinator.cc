@@ -978,12 +978,7 @@ void Coordinator::GetDeviceInfo(GetDeviceInfoRequestView request,
       for (auto& device : device_manager_->devices()) {
         char path[fdm::wire::kDevicePathMax] = {};
         GetTopologicalPath(fbl::RefPtr(&device), path, fdm::wire::kDevicePathMax);
-        // Remove the devfs prefix from the topological path.
         std::string_view topo_path = path;
-        constexpr std::string_view devfs_prefix("dev/");
-        if (topo_path.length() > devfs_prefix.length()) {
-          topo_path = topo_path.substr(devfs_prefix.length() + 1);
-        }
         bool matches = false;
         // TODO(fxbug.dev/115717): Matches should also check the /dev/class/ path.
         if (request->exact_match) {

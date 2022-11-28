@@ -86,8 +86,10 @@ TEST_F(FidlProtocolTest, ColocateFlagIsRespected) {
   ASSERT_EQ(status, ZX_OK);
 
   // Get the child device's driver host.
+  std::string device_path_full = "/dev/" + device_path;
   fuchsia::driver::development::DeviceInfoIteratorSyncPtr iterator;
-  status = driver_dev->GetDeviceInfo({device_path}, iterator.NewRequest(), /* exact_match= */ true);
+  status =
+      driver_dev->GetDeviceInfo({device_path_full}, iterator.NewRequest(), /* exact_match= */ true);
   ASSERT_EQ(status, ZX_OK);
 
   std::vector<fuchsia::driver::development::DeviceInfo> child_device_result;
@@ -99,7 +101,8 @@ TEST_F(FidlProtocolTest, ColocateFlagIsRespected) {
   uint64_t child_driver_host_koid = device_info.driver_host_koid();
 
   // Get the parent device's driver host.
-  status = driver_dev->GetDeviceInfo({parent_device_path}, iterator.NewRequest(),
+  std::string parent_device_path_full = "/dev/" + parent_device_path;
+  status = driver_dev->GetDeviceInfo({parent_device_path_full}, iterator.NewRequest(),
                                      /* exact_match= */ true);
   ASSERT_EQ(status, ZX_OK);
 
@@ -151,7 +154,9 @@ TEST_F(FidlProtocolTest, MustIsolateFlagIsPassed) {
   ASSERT_EQ(status, ZX_OK);
 
   fuchsia::driver::development::DeviceInfoIteratorSyncPtr iterator;
-  status = driver_dev->GetDeviceInfo({device_path}, iterator.NewRequest(), /* exact_match= */ true);
+  std::string device_path_full = "/dev/" + device_path;
+  status =
+      driver_dev->GetDeviceInfo({device_path_full}, iterator.NewRequest(), /* exact_match= */ true);
   ASSERT_EQ(status, ZX_OK);
 
   std::vector<fuchsia::driver::development::DeviceInfo> devices;

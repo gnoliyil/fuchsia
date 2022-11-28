@@ -13,11 +13,9 @@
 
 #include <gtest/gtest.h>
 
-#include "src/lib/fxl/strings/string_printf.h"
-
 const std::string kDriverBaseUrl = "fuchsia-boot:///#driver";
 const std::string kStringBindDriverLibPath = kDriverBaseUrl + "/string-bind-child.so";
-const std::string kChildDevicePath = "sys/test/parent";
+const std::string kChildDevicePath = "/dev/sys/test/parent";
 
 class StringBindTest : public testing::Test {
  protected:

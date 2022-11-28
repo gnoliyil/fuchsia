@@ -15,13 +15,10 @@
 #include <bind/fuchsia/cpp/bind.h>
 #include <gtest/gtest.h>
 
-#include "lib/ddk/binding_priv.h"
-#include "src/lib/fxl/strings/string_printf.h"
-
 namespace lib = bind_bindlib_codegen_testlib;
 namespace parent = bind_bindlibparent_codegen_testlib;
 
-const std::string kChildDevicePath = "sys/test/parent";
+const std::string kChildDevicePath = "/dev/sys/test/parent";
 
 class BindLibToFidlCodeGenTest : public testing::Test {
  protected:
