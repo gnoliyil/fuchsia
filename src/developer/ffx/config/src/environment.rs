@@ -251,22 +251,36 @@ impl EnvironmentContext {
         self.get_sdk_root().await?.get_sdk()
     }
 
+    /// The environment variable we search for
     pub const FFX_BIN_ENV: &str = "FFX_BIN";
-    /// Gets the path to the top level binary for used when re-running ffx, either from the environment
-    /// variable in [`Self::FFX_BIN_ENV`], which should be set by a top level ffx invocation,
-    /// or from the current exe if not set.
-    pub fn rerun_bin(&self) -> Result<PathBuf, anyhow::Error> {
-        Ok(self
-            .env_var(Self::FFX_BIN_ENV)
-            .map(PathBuf::from)
-            .or_else(|_| std::env::current_exe())?)
+    /// Gets the path to the top level binary for use when re-running ffx.
+    ///
+    /// - This will first check the environment variable in [`Self::FFX_BIN_ENV`], which should be set by a
+    /// top level ffx invocation if we were run by one.
+    /// - If that isn't set, it will look at the 'name' of the currently running executable, and
+    /// if that doesn't appear to be a subtool (ie. has no hyphens in the filename), it will use that.
+    /// - If neither of those are found, and an sdk is configured, search the sdk manifest for the
+    /// ffx host-tool entry and use that.
+    pub async fn rerun_bin(&self) -> Result<PathBuf, anyhow::Error> {
+        if let Some(bin_from_env) = self.env_var(Self::FFX_BIN_ENV).ok() {
+            return Ok(bin_from_env.into());
+        }
+
+        let current_exe = std::env::current_exe()?;
+        let current_exe_name = current_exe.file_name().and_then(|name| name.to_str());
+        if current_exe_name.map_or(false, |name| !name.contains("-")) {
+            return Ok(current_exe);
+        }
+
+        let sdk = self.get_sdk_root().await?.get_sdk()?;
+        sdk.get_host_tool("ffx")
     }
 
     /// Creates a command builder that starts with everything necessary to re-run ffx within the same context,
     /// without any subcommands.
-    pub fn rerun_prefix(&self) -> Result<Command, anyhow::Error> {
+    pub async fn rerun_prefix(&self) -> Result<Command, anyhow::Error> {
         // we may have been run by a wrapper script, so we want to make sure we're using the 'real' executable.
-        let mut ffx_path = self.rerun_bin()?;
+        let mut ffx_path = self.rerun_bin().await?;
         // if we daemonize, our path will change to /, so get the canonical path before that occurs.
         ffx_path = std::fs::canonicalize(ffx_path)?;
 

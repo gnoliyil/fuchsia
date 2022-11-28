@@ -77,7 +77,8 @@ pub mod include_target {
                 "--",
                 "--run",
                 "/boot/bin/crasher",
-            ])?
+            ])
+            .await?
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

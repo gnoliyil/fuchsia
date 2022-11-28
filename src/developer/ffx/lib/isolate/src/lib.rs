@@ -123,20 +123,20 @@ impl Isolate {
         self.tmpdir.path().join("daemon.sock")
     }
 
-    pub fn ffx_cmd(&self, args: &[&str]) -> Result<std::process::Command> {
-        let mut cmd = self.env_ctx.rerun_prefix()?;
+    pub async fn ffx_cmd(&self, args: &[&str]) -> Result<std::process::Command> {
+        let mut cmd = self.env_ctx.rerun_prefix().await?;
         cmd.args(args);
         Ok(cmd)
     }
 
-    pub fn ffx_spawn(&self, args: &[&str]) -> Result<Child> {
-        let mut cmd = self.ffx_cmd(args)?;
+    pub async fn ffx_spawn(&self, args: &[&str]) -> Result<Child> {
+        let mut cmd = self.ffx_cmd(args).await?;
         let child = cmd.stdout(Stdio::null()).stderr(Stdio::null()).spawn()?;
         Ok(child)
     }
 
     pub async fn ffx(&self, args: &[&str]) -> Result<CommandOutput> {
-        let mut cmd = self.ffx_cmd(args)?;
+        let mut cmd = self.ffx_cmd(args).await?;
 
         fuchsia_async::unblock(move || {
             let out = cmd.output().context("failed to execute")?;
@@ -145,23 +145,6 @@ impl Isolate {
             Ok::<_, anyhow::Error>(CommandOutput { status: out.status, stdout, stderr })
         })
         .await
-    }
-}
-
-impl Drop for Isolate {
-    fn drop(&mut self) {
-        match self.ffx_cmd(&["daemon", "stop"]) {
-            Ok(mut cmd) => {
-                cmd.stdin(Stdio::null());
-                cmd.stdout(Stdio::null());
-                cmd.stderr(Stdio::null());
-                match cmd.spawn().map(|mut child| child.wait()) {
-                    Ok(_) => {}
-                    Err(e) => tracing::info!("Failure calling daemon stop: {:#?}", e),
-                }
-            }
-            Err(e) => tracing::info!("Failure forming daemon stop command: {:#?}", e),
-        }
     }
 }
 

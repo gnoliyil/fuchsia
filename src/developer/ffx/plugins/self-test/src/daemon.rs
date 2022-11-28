@@ -18,7 +18,7 @@ pub(crate) async fn test_echo() -> Result<()> {
 
 pub(crate) async fn test_config_flag() -> Result<()> {
     let isolate = new_isolate("daemon-config-flag").await?;
-    let mut daemon = isolate.ffx_spawn(&["daemon", "start"])?;
+    let mut daemon = isolate.ffx_spawn(&["daemon", "start"]).await?;
 
     // wait a bit to make sure the daemon has had a chance to start up, then check that it's
     // still running

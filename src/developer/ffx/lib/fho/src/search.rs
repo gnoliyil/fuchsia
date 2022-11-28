@@ -50,7 +50,7 @@ impl ToolRunner for ExternalSubTool {
         // fho v0: Run the exact same command, just with the first argument replaced with the 'real' tool
         // location.
         std::process::Command::new(&self.path)
-            .env(EnvironmentContext::FFX_BIN_ENV, self.context.rerun_bin()?)
+            .env(EnvironmentContext::FFX_BIN_ENV, self.context.rerun_bin().await?)
             .args(self.cmd_line.cmd_iter().skip(1).chain(self.cmd_line.args_iter()))
             .spawn()
             .and_then(|mut child| child.wait())

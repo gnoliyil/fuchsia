@@ -114,7 +114,7 @@ pub async fn find_and_connect(hoist: &Hoist, socket_path: PathBuf) -> Result<Dae
 pub async fn spawn_daemon(context: &EnvironmentContext) -> Result<()> {
     use std::process::Stdio;
 
-    let mut cmd = context.rerun_prefix()?;
+    let mut cmd = context.rerun_prefix().await?;
     let socket_path = context
         .load()
         .await
