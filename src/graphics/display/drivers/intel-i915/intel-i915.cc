@@ -2009,37 +2009,35 @@ zx_status_t Controller::Transact(uint32_t bus_id, const i2c_impl_op_t* ops, size
 // Ddk methods
 
 void Controller::DdkInit(ddk::InitTxn txn) {
-  auto f = std::async(std::launch::async, [this, txn = std::move(txn)]() mutable {
-    zxlogf(TRACE, "i915: initializing displays");
+  zxlogf(TRACE, "i915: initializing displays");
 
-    {
-      fbl::AutoLock lock(&display_lock_);
-      for (auto& pipe : pipes_) {
-        interrupts()->EnablePipeVsync(pipe.pipe(), true);
+  {
+    fbl::AutoLock lock(&display_lock_);
+    for (auto& pipe : pipes_) {
+      interrupts()->EnablePipeVsync(pipe.pipe(), true);
+    }
+  }
+
+  InitDisplays();
+
+  {
+    fbl::AutoLock lock(&display_lock_);
+    uint32_t size = static_cast<uint32_t>(display_devices_.size());
+    if (size && dc_intf_.is_valid()) {
+      DisplayDevice* added_displays[size + 1];
+      for (unsigned i = 0; i < size; i++) {
+        added_displays[i] = display_devices_[i].get();
       }
+      CallOnDisplaysChanged(added_displays, size, NULL, 0);
     }
 
-    InitDisplays();
+    ready_for_callback_ = true;
+  }
 
-    {
-      fbl::AutoLock lock(&display_lock_);
-      uint32_t size = static_cast<uint32_t>(display_devices_.size());
-      if (size && dc_intf_.is_valid()) {
-        DisplayDevice* added_displays[size + 1];
-        for (unsigned i = 0; i < size; i++) {
-          added_displays[i] = display_devices_[i].get();
-        }
-        CallOnDisplaysChanged(added_displays, size, NULL, 0);
-      }
+  interrupts_.FinishInit();
 
-      ready_for_callback_ = true;
-    }
-
-    interrupts_.FinishInit();
-
-    zxlogf(TRACE, "i915: display initialization done");
-    txn.Reply(ZX_OK);
-  });
+  zxlogf(TRACE, "i915: display initialization done");
+  txn.Reply(ZX_OK);
 }
 
 void Controller::DdkUnbind(ddk::UnbindTxn txn) {

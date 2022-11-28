@@ -693,18 +693,25 @@ zx_status_t IntelHDAController::InitInternal(zx_device_t* pci_dev) {
   }
   REG_WR(&regs()->intctl, interesting_irqs);
 
-  // Probe for the Audio DSP. This is done after adding the HDA controller
-  // device because the Audio DSP will be added a child to the HDA
-  // controller and ddktl requires the parent device node to be initialized
-  // at construction time.
-  zx_status_t dsp_probe_result = ProbeAudioDSP(dev_node_);
-  if (dsp_probe_result != ZX_OK) {
-    LOG(WARNING, "Error probing DSP: %s", zx_status_get_string(dsp_probe_result));
-    // We continue despite the failure because the absence of the Audio
-    // DSP is not (always) a failure.
-    // TODO(yky) Come up with a way to warn for the absence of Audio DSP
-    // on platforms that require it.
-  }
+  // Run ProbeAudioDSP on a separate thread. This function blocks the thread and waits for
+  // an irq to unblock. In DFv2 this deadlocks because the thread that is handling irqs
+  // is blocked waiting to add a child node which can only happen after the driver's bind
+  // (which is happening here) completes. Store the future in the class so that it doesn't get
+  // destroyed when we return from the scope.
+  probe_future_ = std::async(std::launch::async, [this]() {
+    // Probe for the Audio DSP. This is done after adding the HDA controller
+    // device because the Audio DSP will be added a child to the HDA
+    // controller and ddktl requires the parent device node to be initialized
+    // at construction time.
+    zx_status_t dsp_probe_result = ProbeAudioDSP(dev_node_);
+    if (dsp_probe_result != ZX_OK) {
+      LOG(WARNING, "Error probing DSP: %s", zx_status_get_string(dsp_probe_result));
+      // We continue despite the failure because the absence of the Audio
+      // DSP is not (always) a failure.
+      // TODO(yky) Come up with a way to warn for the absence of Audio DSP
+      // on platforms that require it.
+    }
+  });
 
   return ZX_OK;
 }

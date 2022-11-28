@@ -21,6 +21,7 @@
 #include <zircon/types.h>
 
 #include <atomic>
+#include <future>
 #include <memory>
 #include <optional>
 
@@ -240,6 +241,8 @@ class IntelHDAController : public fbl::RefCounted<IntelHDAController> {
   fbl::RefPtr<Channel> channel_ TA_GUARDED(channel_lock_);
   std::optional<async::Loop> loop_;
   acpi::Client acpi_;
+
+  std::future<void> probe_future_;
 };
 
 }  // namespace intel_hda
