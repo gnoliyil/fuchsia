@@ -52,11 +52,6 @@ int main() {
     return EXIT_FAILURE;
   }
 
-  // TODO(fxbug.dev/102479): Remove check once enabled outside of unit tests.
-  FX_CHECK(!product_config->snapshot_persistence_max_tmp_size.has_value() &&
-           !product_config->snapshot_persistence_max_cache_size.has_value())
-      << "Snapshot persistence not supposed to be enabled yet";
-
   // TODO(fxbug.dev/100847): stop deleting migration file once all devices are running F8+.
   files::DeletePath("/data/migration_log.json", /*recursive=*/false);
 

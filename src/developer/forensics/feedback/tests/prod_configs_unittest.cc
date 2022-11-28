@@ -41,8 +41,8 @@ TEST_F(ProdConfigTest, WorkstationProduct) {
 
   EXPECT_EQ(config->persisted_logs_num_files, 8u);
   EXPECT_EQ(config->persisted_logs_total_size, StorageSize::Kilobytes(512));
-  EXPECT_FALSE(config->snapshot_persistence_max_tmp_size.has_value());
-  EXPECT_FALSE(config->snapshot_persistence_max_cache_size.has_value());
+  EXPECT_EQ(config->snapshot_persistence_max_tmp_size, StorageSize::Megabytes(10));
+  EXPECT_EQ(config->snapshot_persistence_max_cache_size, StorageSize::Megabytes(10));
 }
 
 TEST_F(ProdConfigTest, Default) {
