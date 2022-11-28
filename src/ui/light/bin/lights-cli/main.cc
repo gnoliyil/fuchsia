@@ -59,7 +59,7 @@ Examples:
 Notes:
   Source code for `lights-cli`: https://cs.opensource.google/fuchsia/fuchsia/+/main:src/ui/light/bin/lights-cli/
 )""";
-// LINT.ThenChange(//src/ui/light/bin/lights-cli/main.cc)
+// LINT.ThenChange(//docs/reference/tools/hardware/lights-cli.md)
 
 zx_status_t GetDeviceHandle(const char* path, zx::channel* handle) {
   fbl::unique_fd fd(open(path, O_RDWR));
