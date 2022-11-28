@@ -2,7 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <fuchsia/boot/c/fidl.h>
+#include <fidl/fuchsia.boot/cpp/fidl.h>
+#include <lib/component/incoming/cpp/service_client.h>
 #include <lib/fdio/directory.h>
 #include <lib/zx/channel.h>
 #include <lib/zx/debuglog.h>
@@ -28,6 +29,7 @@
 
 #include "src/lib/fostr/zx_types.h"
 #include "src/lib/fsl/handles/object_info.h"
+#include "src/lib/testing/predicates/status.h"
 
 namespace fostr {
 namespace {
@@ -216,13 +218,12 @@ TEST(ZxTypes, InvalidLog) {
 TEST(ZxTypes, Log) {
   std::ostringstream os;
 
-  zx::channel local, remote;
-  ASSERT_EQ(ZX_OK, zx::channel::create(0, &local, &remote));
-  constexpr char kWriteOnlyLogPath[] = "/svc/" fuchsia_boot_WriteOnlyLog_Name;
-  ASSERT_EQ(ZX_OK, fdio_service_connect(kWriteOnlyLogPath, remote.release()));
+  auto client_end = component::Connect<fuchsia_boot::WriteOnlyLog>();
+  ASSERT_OK(client_end.status_value());
 
-  zx::debuglog log;
-  ASSERT_EQ(ZX_OK, fuchsia_boot_WriteOnlyLogGet(local.get(), log.reset_and_get_address()));
+  auto result = fidl::WireSyncClient(std::move(*client_end))->Get();
+  ASSERT_OK(result.status());
+  zx::debuglog log = std::move(result->log);
 
   os << log;
 

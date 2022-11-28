@@ -59,24 +59,22 @@ test("fostr-test-bin") {
 
   deps = [
     ":fostr",
+    "//sdk/fidl/fuchsia.boot:fuchsia.boot_cpp",
+    "//sdk/lib/component/incoming/cpp",
     "//src/lib/fostr/fidl/fuchsia.example.fostr",
     "//src/lib/fostr/fidl/fuchsia.example.fostr2",
     "//src/lib/fsl",
+    "//src/lib/testing/predicates",
 
     # TODO(fxbug.dev/7945): Remove dependency on fuchsia.sys. We should instead be
     # using the fuchsia.example.fostr library to avoid changes in unrelated code
     # to break tests here.
-    "//sdk/fidl/fuchsia.boot:fuchsia.boot_c",
     "//sdk/fidl/fuchsia.sys:fuchsia.sys_hlcpp",
     "//sdk/lib/fidl/cpp",
     "//src/lib/fxl/test:gtest_main",
     "//zircon/system/ulib/async-loop:async-loop-cpp",
     "//zircon/system/ulib/async-loop:async-loop-default",
   ]
-
-  # TODO(fxbug.dev/95833): This target uses the deprecated C bindings.
-  # Consider switching to the C++ bindings. See linked bug for details.
-  configs += [ "//build/c:fidl-deprecated-c-bindings" ]
 }
 
 fuchsia_unittest_package("fostr-tests") {

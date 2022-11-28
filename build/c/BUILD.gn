@@ -131,7 +131,6 @@ config("fidl-deprecated-c-bindings") {
     "//src/graphics/drivers/virtio:gpu_lib",
     "//src/graphics/lib/magma/src/magma_util/platform/zircon:sysmem_connection",
     "//src/lib/fidl/c/simple_tests:bin",
-    "//src/lib/fostr:fostr-test-bin",
     "//src/media/audio/bin/ihda",
     "//src/media/audio/drivers/intel-hda/controller:controller_test",
     "//src/media/audio/drivers/intel-hda/controller:src",
