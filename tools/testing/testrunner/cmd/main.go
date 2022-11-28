@@ -57,7 +57,7 @@ func main() {
 
 	const logFlags = log.Ltime | log.Lmicroseconds | log.Lshortfile
 
-	log := logger.NewLogger(flags.LogLevel, color.NewColor(color.ColorAuto), os.Stdout, os.Stderr, "testrunner ")
+	log := logger.NewLogger(flags.LogLevel, color.NewColor(color.ColorAuto), os.Stdout, os.Stderr, "botanist ")
 	log.SetFlags(logFlags)
 	ctx := logger.WithLogger(context.Background(), log)
 	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGTERM, syscall.SIGINT)
