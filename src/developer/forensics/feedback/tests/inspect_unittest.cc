@@ -19,6 +19,7 @@
 
 #include "src/developer/forensics/feedback/attachments/types.h"
 #include "src/developer/forensics/feedback_data/constants.h"
+#include "src/developer/forensics/testing/gmatchers.h"
 #include "src/developer/forensics/testing/gpretty_printers.h"
 #include "src/developer/forensics/testing/stubs/diagnostics_archive.h"
 #include "src/developer/forensics/testing/stubs/diagnostics_batch_iterator.h"
@@ -133,14 +134,11 @@ TEST_F(InspectTest, Get) {
   Inspect inspect(dispatcher(), services(), MonotonicBackoff::Make(), DataBudget());
   const auto attachment = Run(inspect.Get(1234));
 
-  EXPECT_FALSE(attachment.HasError());
-
-  ASSERT_TRUE(attachment.HasValue());
-  EXPECT_EQ(attachment.Value(), R"([
+  EXPECT_THAT(attachment, AttachmentValueIs(R"([
 foo1,
 foo2,
 bar1
-])");
+])"));
 }
 
 TEST_F(InspectTest, GetTerminatesDueToForceCompletion) {
@@ -160,14 +158,11 @@ TEST_F(InspectTest, GetTerminatesDueToForceCompletion) {
 
   RunLoopUntilIdle();
 
-  ASSERT_TRUE(attachment.HasError());
-  EXPECT_EQ(attachment.Error(), Error::kDefault);
-
-  ASSERT_TRUE(attachment.HasValue());
-  EXPECT_EQ(attachment.Value(), R"([
+  EXPECT_THAT(attachment, AttachmentValueIs(R"([
 foo1,
 foo2
-])");
+])",
+                                            Error::kDefault));
 }
 
 TEST_F(InspectTest, ForceCompletionCalledAfterTermination) {
@@ -184,14 +179,11 @@ TEST_F(InspectTest, ForceCompletionCalledAfterTermination) {
 
   inspect.ForceCompletion(kTicket, Error::kDefault);
 
-  ASSERT_FALSE(attachment.HasError());
-
-  ASSERT_TRUE(attachment.HasValue());
-  EXPECT_EQ(attachment.Value(), R"([
+  EXPECT_THAT(attachment, AttachmentValueIs(R"([
 foo1,
 foo2,
 bar1
-])");
+])"));
 }
 
 TEST_F(InspectTest, GetCalledWithSameTicket) {
@@ -214,10 +206,7 @@ TEST_F(InspectTest, GetConnectionError) {
   Inspect inspect(dispatcher(), services(), MonotonicBackoff::Make(), DataBudget());
   const auto attachment = Run(inspect.Get(kTicket));
 
-  ASSERT_TRUE(attachment.HasError());
-  EXPECT_EQ(attachment.Error(), Error::kConnectionError);
-
-  EXPECT_FALSE(attachment.HasValue());
+  EXPECT_THAT(attachment.Error(), AttachmentValueIs(Error::kConnectionError));
 }
 
 TEST_F(InspectTest, GetIteratorReturnsError) {
@@ -228,10 +217,7 @@ TEST_F(InspectTest, GetIteratorReturnsError) {
   Inspect inspect(dispatcher(), services(), MonotonicBackoff::Make(), DataBudget());
   const auto attachment = Run(inspect.Get(kTicket));
 
-  ASSERT_TRUE(attachment.HasError());
-  EXPECT_EQ(attachment.Error(), Error::kMissingValue);
-
-  EXPECT_FALSE(attachment.HasValue());
+  EXPECT_THAT(attachment.Error(), AttachmentValueIs(Error::kMissingValue));
 }
 
 TEST_F(InspectTest, Reconnects) {

@@ -7,6 +7,7 @@
 #include <lib/async/cpp/executor.h>
 
 #include "src/developer/forensics/feedback/attachments/types.h"
+#include "src/developer/forensics/testing/gmatchers.h"
 #include "src/developer/forensics/testing/unit_test_fixture.h"
 #include "src/developer/forensics/utils/errors.h"
 #include "src/lib/files/directory.h"
@@ -76,8 +77,7 @@ TEST_F(PreviousBootLogTest, MalformedFilePath) {
 
   RunLoopUntilIdle();
 
-  ASSERT_TRUE(attachment.HasError());
-  EXPECT_EQ(attachment.Error(), Error::kFileReadFailure);
+  EXPECT_THAT(attachment, AttachmentValueIs(Error::kFileReadFailure));
 }
 
 TEST_F(PreviousBootLogTest, EmptyFile) {
@@ -94,8 +94,7 @@ TEST_F(PreviousBootLogTest, EmptyFile) {
 
   RunLoopUntilIdle();
 
-  ASSERT_TRUE(attachment.HasError());
-  EXPECT_EQ(attachment.Error(), Error::kMissingValue);
+  EXPECT_THAT(attachment, AttachmentValueIs(Error::kMissingValue));
 }
 
 TEST_F(PreviousBootLogTest, NonEmptyFile) {
@@ -113,10 +112,7 @@ TEST_F(PreviousBootLogTest, NonEmptyFile) {
 
   RunLoopUntilIdle();
 
-  EXPECT_FALSE(attachment.HasError());
-
-  ASSERT_TRUE(attachment.HasValue());
-  EXPECT_EQ(attachment.Value(), data);
+  EXPECT_THAT(attachment, AttachmentValueIs(data));
 }
 
 TEST_F(PreviousBootLogTest, ForceCompletionCalledWhenPromiseIsIncomplete) {

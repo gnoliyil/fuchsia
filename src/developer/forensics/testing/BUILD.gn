@@ -47,6 +47,9 @@ source_set("gmatchers") {
   sources = [ "gmatchers.h" ]
 
   public_deps = [
+    "//sdk/fidl/fuchsia.feedback:fuchsia.feedback_hlcpp",
+    "//src/developer/forensics/feedback/attachments",
+    "//src/developer/forensics/utils:errors",
     "//src/lib/fsl",
     "//third_party/googletest:gmock",
     "//third_party/googletest:gtest",

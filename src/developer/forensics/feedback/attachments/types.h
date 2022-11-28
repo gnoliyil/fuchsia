@@ -8,8 +8,10 @@
 #include <lib/syslog/cpp/macros.h>
 
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
+#include <string_view>
 
 #include "src/developer/forensics/utils/errors.h"
 
@@ -26,18 +28,21 @@ class AttachmentValue {
     kMissing,
   };
 
-  explicit AttachmentValue(const std::string& value)
-      : state_(State::kComplete), value_(value), error_(std::nullopt) {}
-  AttachmentValue(const std::string& value, enum Error error)
-      : state_(State::kPartial), value_(value), error_(error) {}
-  AttachmentValue(enum Error error)
-      : state_(State::kMissing), value_(std::nullopt), error_(error) {}
+  explicit AttachmentValue(std::string value)
+      : state_(State::kComplete),
+        value_(std::make_unique<std::string>(std::move(value))),
+        error_(std::nullopt) {}
+  AttachmentValue(std::string value, enum Error error)
+      : state_(State::kPartial),
+        value_(std::make_unique<std::string>(std::move(value))),
+        error_(error) {}
+  AttachmentValue(enum Error error) : state_(State::kMissing), value_(nullptr), error_(error) {}
 
-  bool HasValue() const { return value_.has_value(); }
+  bool HasValue() const { return value_ != nullptr; }
 
-  const std::string& Value() const {
+  std::string_view Value() const {
     FX_CHECK(HasValue());
-    return value_.value();
+    return *value_;
   }
 
   bool HasError() const { return error_.has_value(); }
@@ -49,13 +54,22 @@ class AttachmentValue {
 
   enum State State() const { return state_; }
 
-  bool operator==(const AttachmentValue& other) const {
-    return (state_ == other.state_) && (value_ == other.value_) && (error_ == other.error_);
+  // Allow callers to explicitly copy an attachment.
+  AttachmentValue Clone() const {
+    if (HasValue() && HasError()) {
+      return AttachmentValue(*value_, *error_);
+    }
+
+    if (HasValue()) {
+      return AttachmentValue(*value_);
+    }
+
+    return AttachmentValue(*error_);
   }
 
  private:
   enum State state_;
-  std::optional<std::string> value_;
+  std::unique_ptr<std::string> value_;
   std::optional<enum Error> error_;
 };
 

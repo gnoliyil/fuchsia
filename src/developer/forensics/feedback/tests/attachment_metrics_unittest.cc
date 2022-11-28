@@ -44,6 +44,16 @@ class AttachmentMetricsTest : public UnitTestFixture,
   cobalt::Logger cobalt_;
 };
 
+// Converts maps of error to maps of AttachmentValues to get around the fact AttachmentValues can't
+// be copied.
+Attachments ToAttachments(const std::map<std::string, Error>& errors) {
+  Attachments attachments;
+  for (const auto& [k, v] : errors) {
+    attachments.insert({k, AttachmentValue(v)});
+  }
+  return attachments;
+}
+
 INSTANTIATE_TEST_SUITE_P(
     VariousKeys, AttachmentMetricsTest,
     ::testing::ValuesIn(std::vector<ExpectedMetric>({
@@ -57,9 +67,9 @@ TEST_P(AttachmentMetricsTest, IndividualKeysTimeout) {
   const auto param = GetParam();
 
   AttachmentMetrics metrics(Cobalt());
-  metrics.LogMetrics({
+  metrics.LogMetrics(ToAttachments({
       {param.key, Error::kTimeout},
-  });
+  }));
 
   RunLoopUntilIdle();
   EXPECT_THAT(ReceivedCobaltEvents(), UnorderedElementsAreArray({cobalt::Event(param.metric)}));
@@ -69,9 +79,9 @@ TEST_P(AttachmentMetricsTest, IndividualKeysNonTimeout) {
   const auto param = GetParam();
 
   AttachmentMetrics metrics(Cobalt());
-  metrics.LogMetrics({
+  metrics.LogMetrics(ToAttachments({
       {param.key, Error::kMissingValue},
-  });
+  }));
 
   RunLoopUntilIdle();
   EXPECT_THAT(ReceivedCobaltEvents(), IsEmpty());
@@ -79,9 +89,9 @@ TEST_P(AttachmentMetricsTest, IndividualKeysNonTimeout) {
 
 TEST_F(AttachmentMetricsTest, UnknownKey) {
   AttachmentMetrics metrics(Cobalt());
-  metrics.LogMetrics({
+  metrics.LogMetrics(ToAttachments({
       {"unknown", Error::kTimeout},
-  });
+  }));
 
   RunLoopUntilIdle();
   EXPECT_THAT(ReceivedCobaltEvents(), IsEmpty());
@@ -89,9 +99,9 @@ TEST_F(AttachmentMetricsTest, UnknownKey) {
 
 TEST_F(AttachmentMetricsTest, NonTimeout) {
   AttachmentMetrics metrics(Cobalt());
-  metrics.LogMetrics({
+  metrics.LogMetrics(ToAttachments({
       {"unknown", Error::kTimeout},
-  });
+  }));
 
   RunLoopUntilIdle();
   EXPECT_THAT(ReceivedCobaltEvents(), IsEmpty());
@@ -100,11 +110,11 @@ TEST_F(AttachmentMetricsTest, NonTimeout) {
 TEST_F(AttachmentMetricsTest, AllAttachments) {
   AttachmentMetrics metrics(Cobalt());
 
-  metrics.LogMetrics({
+  metrics.LogMetrics(ToAttachments({
       {feedback_data::kAttachmentLogKernel, Error::kTimeout},
       {feedback_data::kAttachmentLogSystem, Error::kTimeout},
       {feedback_data::kAttachmentInspect, Error::kTimeout},
-  });
+  }));
 
   RunLoopUntilIdle();
   EXPECT_THAT(ReceivedCobaltEvents(), UnorderedElementsAreArray({

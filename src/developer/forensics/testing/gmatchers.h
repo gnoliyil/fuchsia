@@ -7,15 +7,73 @@
 
 #include <fuchsia/feedback/cpp/fidl.h>
 
+#include <sstream>
 #include <string>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include "src/developer/forensics/feedback/attachments/types.h"
+#include "src/developer/forensics/utils/errors.h"
 #include "src/lib/fsl/vmo/strings.h"
 
 namespace forensics {
 namespace internal {
+
+// Allows expectations to be set on AttachmentValue. Needed because values can't easily be compared
+// for equality due to the move-only nature of AttachmentValue.
+class AttachmentValueMatcher
+    : public ::testing::MatcherInterface<const feedback::AttachmentValue&> {
+ public:
+  using is_gtest_matcher = void;
+
+  AttachmentValueMatcher(std::string value) : value_(std::move(value)), error_(std::nullopt) {}
+  AttachmentValueMatcher(const Error error) : value_(std::nullopt), error_(error) {}
+  AttachmentValueMatcher(std::string value, const Error error)
+      : value_(std::move(value)), error_(error) {}
+
+  bool MatchAndExplain(const feedback::AttachmentValue& val,
+                       ::testing::MatchResultListener* listener) const override {
+    const bool value_matches =
+        val.HasValue() == value_.has_value() && (!val.HasValue() || val.Value() == *value_);
+    const bool error_matches =
+        val.HasError() == error_.has_value() && (!val.HasError() || val.Error() == *error_);
+
+    if (value_matches && error_matches) {
+      return true;
+    }
+
+    *listener << "expected attachment value " << Describe();
+    return false;
+  }
+
+  void DescribeTo(::std::ostream* os) const override { *os << Describe(); }
+
+  void DescribeNegationTo(::std::ostream* os) const override { *os << " not " << Describe(); }
+
+ private:
+  std::string Describe() const {
+    std::stringstream ss;
+    if (value_.has_value()) {
+      ss << "has a value \"" << *value_ << "\"";
+    } else {
+      ss << "does not have a value";
+    }
+
+    ss << " and ";
+
+    if (error_.has_value()) {
+      ss << "has an error \"" << ToString(*error_) << "\"";
+    } else {
+      ss << "does not have an error";
+    }
+
+    return ss.str();
+  }
+
+  std::optional<std::string> value_;
+  std::optional<Error> error_;
+};
 
 // Compares two Attachment objects.
 template <typename ResultListenerT>
@@ -108,6 +166,19 @@ MATCHER(HasValue, negation ? "is error" : "has value") {
   }
 
   return false;
+}
+
+inline testing::Matcher<feedback::AttachmentValue> AttachmentValueIs(std::string data) {
+  return internal::AttachmentValueMatcher(std::move(data));
+}
+
+inline testing::Matcher<feedback::AttachmentValue> AttachmentValueIs(const Error error) {
+  return internal::AttachmentValueMatcher(error);
+}
+
+inline testing::Matcher<feedback::AttachmentValue> AttachmentValueIs(std::string data,
+                                                                     const Error error) {
+  return internal::AttachmentValueMatcher(std::move(data), error);
 }
 
 }  // namespace forensics

@@ -233,7 +233,7 @@ auto CompletesAndConsume() {
           return;
         }
 
-        FX_LOGS(WARNING) << "System log collection error" << ToString(error);
+        FX_LOGS(WARNING) << "System log collection error " << ToString(error);
         completer->complete_error(error);
       },
       std::move(bridge.consumer).promise_or(::fpromise::error(Error::kLogicError)));

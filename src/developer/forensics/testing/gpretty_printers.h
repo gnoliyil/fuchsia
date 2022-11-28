@@ -11,6 +11,7 @@
 #include <lib/syslog/cpp/macros.h>
 
 #include <ostream>
+#include <string_view>
 
 #include <src/lib/fostr/fidl/fuchsia/mem/formatting.h>
 #include <src/lib/fostr/indent.h>
@@ -94,8 +95,7 @@ inline void Format(const char ch, std::stringstream* output) {
 
 // Removes exception "FormatException: Unexpected extension byte" when calling PrintTo() with
 // ostream = std::cout by converting all non-ascii character to "{hex_value}".
-inline std::string Format(const std::string& input) {
-  return input;
+inline std::string Format(const std::string_view input) {
   std::stringstream output;
   // Display HEX code for integer-cast non-ascii characters.
   output << std::hex;

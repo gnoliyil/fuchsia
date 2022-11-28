@@ -21,6 +21,7 @@
 
 #include "src/developer/forensics/feedback/attachments/types.h"
 #include "src/developer/forensics/feedback_data/constants.h"
+#include "src/developer/forensics/testing/gmatchers.h"
 #include "src/developer/forensics/testing/gpretty_printers.h"
 #include "src/developer/forensics/testing/stubs/diagnostics_archive.h"
 #include "src/developer/forensics/testing/stubs/diagnostics_batch_iterator.h"
@@ -124,13 +125,10 @@ TEST_F(SystemLogTest, GetTerminatesDueToLogTimestamp) {
   SetUpLogServer(Messages());
 
   const auto log = CollectSystemLog();
-  EXPECT_FALSE(log.HasError());
-
-  ASSERT_TRUE(log.HasValue());
-  EXPECT_EQ(log.Value(), R"([01234.000][00200][00300][tag_1] INFO: Message 1
+  EXPECT_THAT(log, AttachmentValueIs(R"([01234.000][00200][00300][tag_1] INFO: Message 1
 [01234.000][00200][00300][tag_2] INFO: Message 2
 [01234.000][00200][00300][tag_3] INFO: Message 3
-)");
+)"));
 }
 
 TEST_F(SystemLogTest, GetTerminatesDueToForceCompletionWithEmptyLog) {
@@ -148,10 +146,7 @@ TEST_F(SystemLogTest, GetTerminatesDueToForceCompletionWithEmptyLog) {
   GetSystemLog().ForceCompletion(kTicket, Error::kDefault);
 
   RunLoopUntilIdle();
-  ASSERT_TRUE(log.HasError());
-  EXPECT_EQ(log.Error(), Error::kDefault);
-
-  EXPECT_FALSE(log.HasValue());
+  EXPECT_THAT(log, AttachmentValueIs(Error::kDefault));
 }
 
 TEST_F(SystemLogTest, GetTerminatesDueToForceCompletion) {
@@ -172,12 +167,12 @@ TEST_F(SystemLogTest, GetTerminatesDueToForceCompletion) {
   GetSystemLog().ForceCompletion(kTicket, Error::kDefault);
 
   RunLoopUntilIdle();
-  ASSERT_TRUE(log.HasError());
-  EXPECT_EQ(log.Error(), Error::kDefault);
-  EXPECT_EQ(log.Value(), R"([01234.000][00200][00300][tag_1] INFO: Message 1
+  EXPECT_THAT(log, AttachmentValueIs(
+                       R"([01234.000][00200][00300][tag_1] INFO: Message 1
 [01234.000][00200][00300][tag_2] INFO: Message 2
 [01234.000][00200][00300][tag_3] INFO: Message 3
-)");
+)",
+                       Error::kDefault));
 }
 
 TEST_F(SystemLogTest, ForceCompletionCalledAfterTermination) {
@@ -191,13 +186,10 @@ TEST_F(SystemLogTest, ForceCompletionCalledAfterTermination) {
   RunLoopFor(zx::sec(1));
 
   GetSystemLog().ForceCompletion(kTicket, Error::kDefault);
-  ASSERT_FALSE(log.HasError());
-
-  ASSERT_TRUE(log.HasValue());
-  EXPECT_EQ(log.Value(), R"([01234.000][00200][00300][tag_1] INFO: Message 1
+  EXPECT_THAT(log, AttachmentValueIs(R"([01234.000][00200][00300][tag_1] INFO: Message 1
 [01234.000][00200][00300][tag_2] INFO: Message 2
 [01234.000][00200][00300][tag_3] INFO: Message 3
-)");
+)"));
 }
 
 TEST_F(SystemLogTest, ActivePeriodExpires) {
@@ -205,13 +197,10 @@ TEST_F(SystemLogTest, ActivePeriodExpires) {
   SetUpLogServer(Messages());
 
   AttachmentValue log = CollectSystemLog();
-  ASSERT_FALSE(log.HasError());
-
-  ASSERT_TRUE(log.HasValue());
-  EXPECT_EQ(log.Value(), R"([01234.000][00200][00300][tag_1] INFO: Message 1
+  EXPECT_THAT(log, AttachmentValueIs(R"([01234.000][00200][00300][tag_1] INFO: Message 1
 [01234.000][00200][00300][tag_2] INFO: Message 2
 [01234.000][00200][00300][tag_3] INFO: Message 3
-)");
+)"));
 
   // Become disconnected from the server after |kActivePeriod| expires.
   RunLoopFor(kActivePeriod);
@@ -228,8 +217,7 @@ TEST_F(SystemLogTest, ActivePeriodExpires) {
 
   RunLoopUntilIdle();
 
-  ASSERT_TRUE(log.HasError());
-  EXPECT_EQ(log.Error(), Error::kDefault);
+  EXPECT_THAT(log, AttachmentValueIs(Error::kDefault));
 
   ASSERT_TRUE(LogServer().IsBound());
 }
@@ -239,13 +227,11 @@ TEST_F(SystemLogTest, ActivePeriodResets) {
   SetUpLogServer(Messages());
 
   AttachmentValue log = CollectSystemLog(zx::min(1));
-  ASSERT_FALSE(log.HasError());
-
-  ASSERT_TRUE(log.HasValue());
-  EXPECT_EQ(log.Value(), R"([01234.000][00200][00300][tag_1] INFO: Message 1
+  EXPECT_THAT(log, AttachmentValueIs(
+                       R"([01234.000][00200][00300][tag_1] INFO: Message 1
 [01234.000][00200][00300][tag_2] INFO: Message 2
 [01234.000][00200][00300][tag_3] INFO: Message 3
-)");
+)"));
 
   RunLoopFor(kActivePeriod / 2);
   ASSERT_TRUE(LogServer().IsBound());
@@ -260,9 +246,12 @@ TEST_F(SystemLogTest, ActivePeriodResets) {
   GetSystemLog().ForceCompletion(kTicket, Error::kDefault);
 
   RunLoopUntilIdle();
-
-  ASSERT_TRUE(log.HasError());
-  EXPECT_EQ(log.Error(), Error::kDefault);
+  EXPECT_THAT(log, AttachmentValueIs(
+                       R"([01234.000][00200][00300][tag_1] INFO: Message 1
+[01234.000][00200][00300][tag_2] INFO: Message 2
+[01234.000][00200][00300][tag_3] INFO: Message 3
+)",
+                       Error::kDefault));
 
   // Connection is still open because active period was reset with the last call to Get
   ASSERT_TRUE(LogServer().IsBound());

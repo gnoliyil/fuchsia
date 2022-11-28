@@ -24,7 +24,7 @@ AttachmentMetrics::AttachmentMetrics(cobalt::Logger* cobalt) : cobalt_(cobalt) {
 void AttachmentMetrics::LogMetrics(const Attachments& annotations) {
   std::set<cobalt::TimedOutData> to_log;
   for (const auto& [k, v] : annotations) {
-    if (v == Error::kTimeout && kTimedOutMetrics->count(k) != 0) {
+    if (v.HasError() && v.Error() == Error::kTimeout && kTimedOutMetrics->count(k) != 0) {
       to_log.insert(kTimedOutMetrics->at(k));
     }
   }

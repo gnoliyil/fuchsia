@@ -11,6 +11,7 @@
 #include <optional>
 #include <set>
 
+#include "src/developer/forensics/feedback/attachments/types.h"
 #include "src/developer/forensics/feedback_data/constants.h"
 #include "src/developer/forensics/feedback_data/errors.h"
 #include "src/developer/forensics/utils/cobalt/metrics.h"
@@ -80,7 +81,7 @@ feedback::Attachments AllAttachments(const feedback::AttachmentKeys& allowlist,
         all_attachments.insert({k, feedback::AttachmentValue("", v.Error())});
         break;
       case feedback::AttachmentValue::State::kMissing:
-        all_attachments.insert({k, v});
+        all_attachments.insert({k, feedback::AttachmentValue(v.Error())});
         break;
     }
   }

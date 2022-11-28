@@ -38,7 +38,7 @@ using ::testing::UnorderedElementsAreArray;
 
 class SimpleAttachmentProvider : public AttachmentProvider {
  public:
-  SimpleAttachmentProvider(async_dispatcher_t* dispatcher, zx::duration delay, AttachmentValue data)
+  SimpleAttachmentProvider(async_dispatcher_t* dispatcher, zx::duration delay, std::string data)
       : dispatcher_(dispatcher), delay_(delay), data_(std::move(data)) {}
 
   ::fpromise::promise<AttachmentValue> Get(const uint64_t ticket) override {
@@ -50,7 +50,7 @@ class SimpleAttachmentProvider : public AttachmentProvider {
         dispatcher_,
         [this, ticket]() mutable {
           if (completers_[ticket]) {
-            completers_[ticket].complete_ok(data_);
+            completers_[ticket].complete_ok(AttachmentValue(data_));
           }
         },
         delay_);
@@ -68,7 +68,7 @@ class SimpleAttachmentProvider : public AttachmentProvider {
   async_dispatcher_t* dispatcher_;
 
   zx::duration delay_;
-  AttachmentValue data_;
+  std::string data_;
   std::map<uint64_t, ::fpromise::completer<AttachmentValue>> completers_;
 };
 
@@ -76,7 +76,11 @@ using AttachmentManagerTest = UnitTestFixture;
 
 TEST_F(AttachmentManagerTest, Static) {
   async::Executor executor(dispatcher());
-  AttachmentManager manager(dispatcher(), {"static"}, {{"static", AttachmentValue("value")}});
+
+  Attachments static_attachments;
+  static_attachments.insert({"static", AttachmentValue("value")});
+
+  AttachmentManager manager(dispatcher(), {"static"}, std::move(static_attachments));
 
   Attachments attachments;
   executor.schedule_task(
@@ -85,14 +89,14 @@ TEST_F(AttachmentManagerTest, Static) {
           .or_else([] { FX_LOGS(FATAL) << "Unreachable branch"; }));
 
   RunLoopUntilIdle();
-  EXPECT_THAT(attachments, ElementsAreArray({Pair("static", AttachmentValue("value"))}));
+  EXPECT_THAT(attachments, ElementsAreArray({Pair("static", AttachmentValueIs("value"))}));
 }
 
 TEST_F(AttachmentManagerTest, Dynamic) {
   async::Executor executor(dispatcher());
 
-  SimpleAttachmentProvider provider1(dispatcher(), zx::sec(1), AttachmentValue("value1"));
-  SimpleAttachmentProvider provider2(dispatcher(), zx::sec(3), AttachmentValue("value2"));
+  SimpleAttachmentProvider provider1(dispatcher(), zx::sec(1), "value1");
+  SimpleAttachmentProvider provider2(dispatcher(), zx::sec(3), "value2");
 
   AttachmentManager manager(dispatcher(), {"dynamic1", "dynamic2"}, {},
                             {
@@ -108,8 +112,8 @@ TEST_F(AttachmentManagerTest, Dynamic) {
 
   RunLoopFor(zx::sec(1));
   EXPECT_THAT(attachments, ElementsAreArray({
-                               Pair("dynamic1", AttachmentValue("value1")),
-                               Pair("dynamic2", AttachmentValue(Error::kTimeout)),
+                               Pair("dynamic1", AttachmentValueIs("value1")),
+                               Pair("dynamic2", AttachmentValueIs(Error::kTimeout)),
                            }));
 
   attachments.clear();
@@ -121,8 +125,8 @@ TEST_F(AttachmentManagerTest, Dynamic) {
 
   RunLoopFor(zx::sec(3));
   EXPECT_THAT(attachments, ElementsAreArray({
-                               Pair("dynamic1", AttachmentValue("value1")),
-                               Pair("dynamic2", AttachmentValue("value2")),
+                               Pair("dynamic1", AttachmentValueIs("value1")),
+                               Pair("dynamic2", AttachmentValueIs("value2")),
                            }));
 }
 

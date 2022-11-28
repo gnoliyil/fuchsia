@@ -21,6 +21,7 @@
 
 #include "src/developer/forensics/feedback/attachments/kernel_log.h"
 #include "src/developer/forensics/feedback/attachments/types.h"
+#include "src/developer/forensics/testing/gmatchers.h"
 #include "src/lib/fxl/strings/string_printf.h"
 #include "src/lib/testing/loop_fixture/real_loop_fixture.h"
 #include "src/lib/testing/predicates/status.h"
@@ -102,9 +103,7 @@ TEST_F(CollectKernelLogTest, GetTerminatesDueToForceCompletion) {
   RunLoopUntil([&attachment] { return attachment.is_ok(); });
   log = attachment.take_value();
 
-  EXPECT_FALSE(log.HasValue());
-  ASSERT_TRUE(log.HasError());
-  EXPECT_EQ(log.Error(), Error::kDefault);
+  EXPECT_THAT(log, AttachmentValueIs(Error::kDefault));
 }
 
 TEST_F(CollectKernelLogTest, ForceCompletionCalledAfterTermination) {

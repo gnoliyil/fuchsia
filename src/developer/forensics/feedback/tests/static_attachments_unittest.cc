@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include "src/developer/forensics/feedback_data/constants.h"
+#include "src/developer/forensics/testing/gmatchers.h"
 #include "src/developer/forensics/testing/scoped_memfs_manager.h"
 #include "src/lib/files/file.h"
 
@@ -44,7 +45,7 @@ TEST_F(StaticAttachmentsTest, FilesPresent) {
 
   EXPECT_THAT(GetStaticAttachments(),
               UnorderedElementsAreArray({
-                  Pair(feedback_data::kAttachmentBuildSnapshot, AttachmentValue("build-info")),
+                  Pair(feedback_data::kAttachmentBuildSnapshot, AttachmentValueIs("build-info")),
               }));
 }
 
@@ -64,7 +65,7 @@ TEST_F(StaticAttachmentsTest, FilesEmpty) {
   EXPECT_THAT(
       GetStaticAttachments(),
       UnorderedElementsAreArray({
-          Pair(feedback_data::kAttachmentBuildSnapshot, AttachmentValue(Error::kMissingValue)),
+          Pair(feedback_data::kAttachmentBuildSnapshot, AttachmentValueIs(Error::kMissingValue)),
       }));
 }
 
@@ -72,7 +73,7 @@ TEST_F(StaticAttachmentsTest, FilesMissing) {
   EXPECT_THAT(
       GetStaticAttachments(),
       UnorderedElementsAreArray({
-          Pair(feedback_data::kAttachmentBuildSnapshot, AttachmentValue(Error::kFileReadFailure)),
+          Pair(feedback_data::kAttachmentBuildSnapshot, AttachmentValueIs(Error::kFileReadFailure)),
       }));
 }
 

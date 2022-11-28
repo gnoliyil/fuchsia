@@ -29,17 +29,13 @@ AttachmentValue FromFile(const std::string& filepath) {
 }  // namespace
 
 Attachments GetStaticAttachments() {
-  const std::map<std::string, AttachmentValue> kAttachments({
-      {feedback_data::kAttachmentBuildSnapshot, FromFile("/config/build-info/snapshot")},
-  });
+  AttachmentValue build_snapshot = FromFile("/config/build-info/snapshot");
+  if (!build_snapshot.HasValue()) {
+    FX_LOGS(WARNING) << "Failed to build attachment " << feedback_data::kAttachmentBuildSnapshot;
+  }
 
   Attachments attachments;
-  for (const auto& [k, v] : kAttachments) {
-    attachments.insert({k, v});
-    if (!attachments.at(k).HasValue()) {
-      FX_LOGS(WARNING) << "Failed to build attachment " << k;
-    }
-  }
+  attachments.insert({feedback_data::kAttachmentBuildSnapshot, std::move(build_snapshot)});
 
   return attachments;
 }

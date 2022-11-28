@@ -77,20 +77,26 @@ AttachmentManager::AttachmentManager(async_dispatcher_t* dispatcher,
   auto join = ::fpromise::join_promise_vector(std::move(promises));
   using result_t = decltype(join)::value_type;
 
+  Attachments static_attachments;
+  for (const auto& [k, v] : static_attachments_) {
+    static_attachments.insert({k, v.Clone()});
+  }
+
   // Start with the static attachments and the add the dynamically collected values to them.
-  return join.and_then([keys, attachments = static_attachments_](result_t& results) mutable {
-    for (size_t i = 0; i < results.size(); ++i) {
-      attachments.insert({keys[i], results[i].take_value()});
+  return join.and_then(
+      [keys, attachments = std::move(static_attachments)](result_t& results) mutable {
+        for (size_t i = 0; i < results.size(); ++i) {
+          attachments.insert({keys[i], results[i].take_value()});
 
-      // Consider any attachments without content as missing attachments.
-      if (auto& attachment = attachments.at(keys[i]);
-          attachment.HasValue() && attachment.Value().empty()) {
-        attachment = attachment.HasError() ? attachment.Error() : Error::kMissingValue;
-      }
-    }
+          // Consider any attachments without content as missing attachments.
+          if (auto& attachment = attachments.at(keys[i]);
+              attachment.HasValue() && attachment.Value().empty()) {
+            attachment = attachment.HasError() ? attachment.Error() : Error::kMissingValue;
+          }
+        }
 
-    return ::fpromise::ok(std::move(attachments));
-  });
+        return ::fpromise::ok(std::move(attachments));
+      });
 }
 
 }  // namespace forensics::feedback

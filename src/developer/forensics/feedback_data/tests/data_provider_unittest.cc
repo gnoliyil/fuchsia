@@ -155,7 +155,7 @@ class DataProviderTest : public UnitTestFixture {
       const std::set<std::string>& annotation_allowlist = kDefaultAnnotations,
       const feedback::AttachmentKeys& attachment_allowlist = {},
       const std::map<std::string, ErrorOr<std::string>>& startup_annotations = {},
-      const std::map<std::string, feedback::AttachmentValue>& static_attachments = {}) {
+      std::map<std::string, feedback::AttachmentValue> static_attachments = {}) {
     std::set<std::string> allowlist;
     for (const auto& [k, v] : startup_annotations) {
       allowlist.insert(k);
@@ -163,7 +163,7 @@ class DataProviderTest : public UnitTestFixture {
     annotation_manager_ =
         std::make_unique<feedback::AnnotationManager>(dispatcher(), allowlist, startup_annotations);
     attachment_manager_ = std::make_unique<feedback::AttachmentManager>(
-        dispatcher(), attachment_allowlist, static_attachments);
+        dispatcher(), attachment_allowlist, std::move(static_attachments));
     data_provider_ = std::make_unique<DataProvider>(
         dispatcher(), services(), &clock_, &redactor_, /*is_first_instance=*/true,
         annotation_allowlist, attachment_allowlist, cobalt_.get(), annotation_manager_.get(),

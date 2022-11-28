@@ -275,14 +275,14 @@ TEST_F(MetadataTest, Check_FormatAttachmentsProperly) {
       "partial attachment 2",  "missing attachment 1",  "missing attachment 2",
   };
 
-  const feedback::Attachments attachments = {
-      {"complete attachment 1", feedback::AttachmentValue("")},
-      {"complete attachment 2", feedback::AttachmentValue("")},
-      {"partial attachment 1", feedback::AttachmentValue("", Error::kTimeout)},
-      {"partial attachment 2", feedback::AttachmentValue("", Error::kAsyncTaskPostFailure)},
-      {"missing attachment 1", feedback::AttachmentValue(Error::kBadValue)},
-      {"missing attachment 2", feedback::AttachmentValue(Error::kFileReadFailure)},
-  };
+  feedback::Attachments attachments;
+  attachments.insert({"complete attachment 1", feedback::AttachmentValue("")});
+  attachments.insert({"complete attachment 2", feedback::AttachmentValue("")});
+  attachments.insert({"partial attachment 1", feedback::AttachmentValue("", Error::kTimeout)});
+  attachments.insert(
+      {"partial attachment 2", feedback::AttachmentValue("", Error::kAsyncTaskPostFailure)});
+  attachments.insert({"missing attachment 1", feedback::AttachmentValue(Error::kBadValue)});
+  attachments.insert({"missing attachment 2", feedback::AttachmentValue(Error::kFileReadFailure)});
 
   SetUpMetadata(/*annotation_allowlist=*/{}, attachment_allowlist);
 
@@ -353,14 +353,14 @@ TEST_F(MetadataTest, Check_SmokeTest) {
       "partial attachment 2",  "missing attachment 1",  "missing attachment 2",
       "missing attachment 3",
   };
-  const feedback::Attachments attachments = {
-      {"complete attachment 1", feedback::AttachmentValue("")},
-      {"complete attachment 2", feedback::AttachmentValue("")},
-      {"partial attachment 1", feedback::AttachmentValue("", Error::kTimeout)},
-      {"partial attachment 2", feedback::AttachmentValue("", Error::kAsyncTaskPostFailure)},
-      {"missing attachment 1", feedback::AttachmentValue(Error::kBadValue)},
-      {"missing attachment 2", feedback::AttachmentValue(Error::kFileReadFailure)},
-  };
+  feedback::Attachments attachments;
+  attachments.insert({"complete attachment 1", feedback::AttachmentValue("")});
+  attachments.insert({"complete attachment 2", feedback::AttachmentValue("")});
+  attachments.insert({"partial attachment 1", feedback::AttachmentValue("", Error::kTimeout)});
+  attachments.insert(
+      {"partial attachment 2", feedback::AttachmentValue("", Error::kAsyncTaskPostFailure)});
+  attachments.insert({"missing attachment 1", feedback::AttachmentValue(Error::kBadValue)});
+  attachments.insert({"missing attachment 2", feedback::AttachmentValue(Error::kFileReadFailure)});
 
   SetUpMetadata(annotation_allowlist, attachment_allowlist);
 
@@ -433,12 +433,11 @@ TEST_F(MetadataTest, Check_UtcMonotonicDifference) {
       {"annotation 1", "annotation"},
   };
 
-  const feedback::Attachments attachments = {
-      {kAttachmentInspect, feedback::AttachmentValue("")},
-      {kAttachmentLogKernel, feedback::AttachmentValue("")},
-      {kAttachmentLogSystem, feedback::AttachmentValue("")},
-      {kAttachmentLogSystemPrevious, feedback::AttachmentValue("")},
-  };
+  feedback::Attachments attachments;
+  attachments.insert({kAttachmentInspect, feedback::AttachmentValue("")});
+  attachments.insert({kAttachmentLogKernel, feedback::AttachmentValue("")});
+  attachments.insert({kAttachmentLogSystem, feedback::AttachmentValue("")});
+  attachments.insert({kAttachmentLogSystemPrevious, feedback::AttachmentValue("")});
 
   SetUpMetadata(annotation_allowlist, attachment_allowlist);
   RunLoopUntilIdle();
@@ -479,9 +478,8 @@ TEST_F(MetadataTest, Check_NoUtcMontonicDifferenceAvailable) {
       {"annotation 1", ""},
   };
 
-  const feedback::Attachments attachments = {
-      {"attachment 1", feedback::AttachmentValue("")},
-  };
+  feedback::Attachments attachments;
+  attachments.insert({"attachment 1", feedback::AttachmentValue("")});
 
   SetUpMetadata(annotation_allowlist, attachment_allowlist);
 
@@ -511,12 +509,11 @@ TEST_F(MetadataTest, Check_NoUtcMonotonicDifferenceMissingFile) {
       {"annotation 1", "annotation"},
   };
 
-  const feedback::Attachments attachments = {
-      {kAttachmentInspect, feedback::AttachmentValue("")},
-      {kAttachmentLogKernel, feedback::AttachmentValue("")},
-      {kAttachmentLogSystem, feedback::AttachmentValue("")},
-      {kAttachmentLogSystemPrevious, feedback::AttachmentValue(Error::kCustom)},
-  };
+  feedback::Attachments attachments;
+  attachments.insert({kAttachmentInspect, feedback::AttachmentValue("")});
+  attachments.insert({kAttachmentLogKernel, feedback::AttachmentValue("")});
+  attachments.insert({kAttachmentLogSystem, feedback::AttachmentValue("")});
+  attachments.insert({kAttachmentLogSystemPrevious, feedback::AttachmentValue(Error::kCustom)});
 
   SetUpMetadata(annotation_allowlist, attachment_allowlist);
   RunLoopUntilIdle();
