@@ -475,6 +475,151 @@ impl BinderProcess {
     fn find_or_register_thread(self: &Arc<Self>, tid: pid_t) -> Arc<BinderThread> {
         self.thread_pool.write().find_or_register_thread(self, tid)
     }
+
+    /// Handle a binder thread's request to increment/decrement a strong/weak reference to a remote
+    /// binder object.
+    fn handle_refcount_operation(
+        &self,
+        current_task: &dyn RunningBinderTask,
+        command: binder_driver_command_protocol,
+        handle: Handle,
+    ) -> Result<(), Errno> {
+        let idx = match handle {
+            Handle::SpecialServiceManager => {
+                // TODO: Figure out how to acquire/release refs for the context manager
+                // object.
+                not_implemented!(current_task, "acquire/release refs for context manager object");
+                return Ok(());
+            }
+            Handle::Object { index } => index,
+        };
+
+        let mut handles = self.handles.lock();
+        match command {
+            binder_driver_command_protocol_BC_ACQUIRE => handles.inc_strong(idx),
+            binder_driver_command_protocol_BC_RELEASE => handles.dec_strong(idx),
+            binder_driver_command_protocol_BC_INCREFS => handles.inc_weak(idx),
+            binder_driver_command_protocol_BC_DECREFS => handles.dec_weak(idx),
+            _ => unreachable!(),
+        }
+    }
+
+    /// Handle a binder thread's notification that it successfully incremented a strong/weak
+    /// reference to a local (in-process) binder object. This is in response to a
+    /// `BR_ACQUIRE`/`BR_INCREFS` command.
+    fn handle_refcount_operation_done(
+        &self,
+        current_task: &dyn RunningBinderTask,
+        command: binder_driver_command_protocol,
+        object: LocalBinderObject,
+    ) -> Result<(), Errno> {
+        // TODO: When the binder driver keeps track of references internally, this should
+        // reduce the temporary refcount that is held while the binder thread performs the
+        // refcount.
+        let msg = match command {
+            binder_driver_command_protocol_BC_INCREFS_DONE => "BC_INCREFS_DONE",
+            binder_driver_command_protocol_BC_ACQUIRE_DONE => "BC_ACQUIRE_DONE",
+            _ => unreachable!(),
+        };
+        not_implemented_log_once!(current_task, "{} {:?}", msg, &object);
+        Ok(())
+    }
+
+    /// A binder thread is done reading a buffer allocated to a transaction. The binder
+    /// driver can reclaim this buffer.
+    fn handle_free_buffer(&self, buffer_ptr: UserAddress) -> Result<(), Errno> {
+        // Drop the state associated with the now completed transaction.
+        let active_transaction = self.active_transactions.lock().remove(&buffer_ptr);
+
+        // Check if this was a oneway transaction and schedule the next oneway if this is the case.
+        if let Some(ActiveTransaction { request_type: RequestType::Oneway { object }, .. }) =
+            active_transaction
+        {
+            if let Some(object) = object.upgrade() {
+                let mut object_state = object.lock();
+                assert!(
+                    object_state.handling_oneway_transaction,
+                    "freeing a oneway buffer implies that a oneway transaction was being handled"
+                );
+                if let Some(transaction) = object_state.oneway_transactions.pop_front() {
+                    // Drop the lock, as we've completed all mutations and don't want to hold this
+                    // lock while acquiring any others.
+                    drop(object_state);
+
+                    // Schedule the transaction
+                    self.enqueue_command(Command::OnewayTransaction(transaction));
+                } else {
+                    // No more oneway transactions queued, mark the queue handling as done.
+                    object_state.handling_oneway_transaction = false;
+                }
+            }
+        }
+
+        // Reclaim the memory.
+        let mut shared_memory_lock = self.shared_memory.lock();
+        let shared_memory = shared_memory_lock.as_mut().ok_or_else(|| errno!(ENOMEM))?;
+        shared_memory.free_buffer(buffer_ptr)
+    }
+
+    /// Subscribe a process to the death of the owner of `handle`.
+    fn handle_request_death_notification(
+        self: &Arc<Self>,
+        current_task: &dyn RunningBinderTask,
+        binder_thread: &Arc<BinderThread>,
+        handle: Handle,
+        cookie: binder_uintptr_t,
+    ) -> Result<(), Errno> {
+        let proxy = match handle {
+            Handle::SpecialServiceManager => {
+                not_implemented!(current_task, "death notification for service manager");
+                return Ok(());
+            }
+            Handle::Object { index } => {
+                self.handles.lock().get(index).ok_or_else(|| errno!(ENOENT))?
+            }
+        };
+        if let Some(owner) = proxy.owner.upgrade() {
+            owner.death_subscribers.lock().push((Arc::downgrade(self), cookie));
+        } else {
+            // The object is already dead. Notify immediately. However, the requesting thread
+            // cannot handle the notification, in case it is holding some mutex while processing a
+            // oneway transaction (where its transaction stack will be empty).
+            self.enqueue_command_filtered(
+                |th| th.tid != binder_thread.tid,
+                Command::DeadBinder(cookie),
+            );
+        }
+        Ok(())
+    }
+
+    /// Remove a previously subscribed death notification.
+    fn handle_clear_death_notification(
+        self: &Arc<Self>,
+        current_task: &dyn RunningBinderTask,
+        handle: Handle,
+        cookie: binder_uintptr_t,
+    ) -> Result<(), Errno> {
+        let proxy = match handle {
+            Handle::SpecialServiceManager => {
+                not_implemented!(current_task, "clear death notification for service manager");
+                return Ok(());
+            }
+            Handle::Object { index } => {
+                self.handles.lock().get(index).ok_or_else(|| errno!(ENOENT))?
+            }
+        };
+        if let Some(owner) = proxy.owner.upgrade() {
+            let mut death_subscribers = owner.death_subscribers.lock();
+            if let Some((idx, _)) =
+                death_subscribers.iter().enumerate().find(|(_idx, (proc, c))| {
+                    std::ptr::eq(proc.as_ptr(), Arc::as_ptr(self)) && *c == cookie
+                })
+            {
+                death_subscribers.swap_remove(idx);
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Drop for BinderProcess {
@@ -1000,6 +1145,21 @@ impl BinderThreadState {
             return false;
         }
         true
+    }
+
+    /// Handle a binder thread's request to register itself with the binder driver.
+    /// This makes the binder thread eligible for receiving commands from the driver.
+    pub fn handle_looper_registration(
+        &mut self,
+        registration: RegistrationState,
+    ) -> Result<(), Errno> {
+        if self.registration.intersects(RegistrationState::MAIN | RegistrationState::REGISTERED) {
+            // This thread is already registered.
+            error!(EINVAL)
+        } else {
+            self.registration |= registration;
+            Ok(())
+        }
     }
 
     /// Enqueues `command` for the thread and wakes it up if necessary.
@@ -1870,17 +2030,17 @@ impl BinderDriver {
         let command = cursor.read_object::<binder_driver_command_protocol>()?;
         match command {
             binder_driver_command_protocol_BC_ENTER_LOOPER => {
-                self.handle_looper_registration(binder_thread, RegistrationState::MAIN)
+                binder_thread.write().handle_looper_registration(RegistrationState::MAIN)
             }
             binder_driver_command_protocol_BC_REGISTER_LOOPER => {
-                self.handle_looper_registration(binder_thread, RegistrationState::REGISTERED)
+                binder_thread.write().handle_looper_registration(RegistrationState::REGISTERED)
             }
             binder_driver_command_protocol_BC_INCREFS
             | binder_driver_command_protocol_BC_ACQUIRE
             | binder_driver_command_protocol_BC_DECREFS
             | binder_driver_command_protocol_BC_RELEASE => {
                 let handle = cursor.read_object::<u32>()?.into();
-                self.handle_refcount_operation(current_task, command, binder_proc, handle)
+                binder_proc.handle_refcount_operation(current_task, command, handle)
             }
             binder_driver_command_protocol_BC_INCREFS_DONE
             | binder_driver_command_protocol_BC_ACQUIRE_DONE => {
@@ -1888,18 +2048,17 @@ impl BinderDriver {
                     weak_ref_addr: UserAddress::from(cursor.read_object::<binder_uintptr_t>()?),
                     strong_ref_addr: UserAddress::from(cursor.read_object::<binder_uintptr_t>()?),
                 };
-                self.handle_refcount_operation_done(current_task, command, binder_thread, object)
+                binder_proc.handle_refcount_operation_done(current_task, command, object)
             }
             binder_driver_command_protocol_BC_FREE_BUFFER => {
                 let buffer_ptr = UserAddress::from(cursor.read_object::<binder_uintptr_t>()?);
-                self.handle_free_buffer(binder_proc, buffer_ptr)
+                binder_proc.handle_free_buffer(buffer_ptr)
             }
             binder_driver_command_protocol_BC_REQUEST_DEATH_NOTIFICATION => {
                 let handle = cursor.read_object::<u32>()?.into();
                 let cookie = cursor.read_object::<binder_uintptr_t>()?;
-                self.handle_request_death_notification(
+                binder_proc.handle_request_death_notification(
                     current_task,
-                    binder_proc,
                     binder_thread,
                     handle,
                     cookie,
@@ -1908,7 +2067,7 @@ impl BinderDriver {
             binder_driver_command_protocol_BC_CLEAR_DEATH_NOTIFICATION => {
                 let handle = cursor.read_object::<u32>()?.into();
                 let cookie = cursor.read_object::<binder_uintptr_t>()?;
-                self.handle_clear_death_notification(current_task, binder_proc, handle, cookie)
+                binder_proc.handle_clear_death_notification(current_task, handle, cookie)
             }
             binder_driver_command_protocol_BC_DEAD_BINDER_DONE => {
                 let _cookie = cursor.read_object::<binder_uintptr_t>()?;
@@ -1949,185 +2108,6 @@ impl BinderDriver {
                 error!(EINVAL)
             }
         }
-    }
-
-    /// Handle a binder thread's request to register itself with the binder driver.
-    /// This makes the binder thread eligible for receiving commands from the driver.
-    fn handle_looper_registration(
-        &self,
-        binder_thread: &Arc<BinderThread>,
-        registration: RegistrationState,
-    ) -> Result<(), Errno> {
-        let mut thread_state = binder_thread.write();
-        if thread_state
-            .registration
-            .intersects(RegistrationState::MAIN | RegistrationState::REGISTERED)
-        {
-            // This thread is already registered.
-            error!(EINVAL)
-        } else {
-            thread_state.registration |= registration;
-            Ok(())
-        }
-    }
-
-    /// Handle a binder thread's request to increment/decrement a strong/weak reference to a remote
-    /// binder object.
-    fn handle_refcount_operation(
-        &self,
-        current_task: &dyn RunningBinderTask,
-        command: binder_driver_command_protocol,
-        binder_proc: &Arc<BinderProcess>,
-        handle: Handle,
-    ) -> Result<(), Errno> {
-        let idx = match handle {
-            Handle::SpecialServiceManager => {
-                // TODO: Figure out how to acquire/release refs for the context manager
-                // object.
-                not_implemented!(current_task, "acquire/release refs for context manager object");
-                return Ok(());
-            }
-            Handle::Object { index } => index,
-        };
-
-        let mut handles = binder_proc.handles.lock();
-        match command {
-            binder_driver_command_protocol_BC_ACQUIRE => handles.inc_strong(idx),
-            binder_driver_command_protocol_BC_RELEASE => handles.dec_strong(idx),
-            binder_driver_command_protocol_BC_INCREFS => handles.inc_weak(idx),
-            binder_driver_command_protocol_BC_DECREFS => handles.dec_weak(idx),
-            _ => unreachable!(),
-        }
-    }
-
-    /// Handle a binder thread's notification that it successfully incremented a strong/weak
-    /// reference to a local (in-process) binder object. This is in response to a
-    /// `BR_ACQUIRE`/`BR_INCREFS` command.
-    fn handle_refcount_operation_done(
-        &self,
-        current_task: &dyn RunningBinderTask,
-        command: binder_driver_command_protocol,
-        binder_thread: &Arc<BinderThread>,
-        object: LocalBinderObject,
-    ) -> Result<(), Errno> {
-        // TODO: When the binder driver keeps track of references internally, this should
-        // reduce the temporary refcount that is held while the binder thread performs the
-        // refcount.
-        let msg = match command {
-            binder_driver_command_protocol_BC_INCREFS_DONE => "BC_INCREFS_DONE",
-            binder_driver_command_protocol_BC_ACQUIRE_DONE => "BC_ACQUIRE_DONE",
-            _ => unreachable!(),
-        };
-        not_implemented_log_once!(
-            current_task,
-            "binder thread {} {} {:?}",
-            binder_thread.tid,
-            msg,
-            &object
-        );
-        Ok(())
-    }
-
-    /// A binder thread is done reading a buffer allocated to a transaction. The binder
-    /// driver can reclaim this buffer.
-    fn handle_free_buffer(
-        &self,
-        binder_proc: &Arc<BinderProcess>,
-        buffer_ptr: UserAddress,
-    ) -> Result<(), Errno> {
-        // Drop the state associated with the now completed transaction.
-        let active_transaction = binder_proc.active_transactions.lock().remove(&buffer_ptr);
-
-        // Check if this was a oneway transaction and schedule the next oneway if this is the case.
-        if let Some(ActiveTransaction { request_type: RequestType::Oneway { object }, .. }) =
-            active_transaction
-        {
-            if let Some(object) = object.upgrade() {
-                let mut object_state = object.lock();
-                assert!(
-                    object_state.handling_oneway_transaction,
-                    "freeing a oneway buffer implies that a oneway transaction was being handled"
-                );
-                if let Some(transaction) = object_state.oneway_transactions.pop_front() {
-                    // Drop the lock, as we've completed all mutations and don't want to hold this
-                    // lock while acquiring any others.
-                    drop(object_state);
-
-                    // Schedule the transaction
-                    binder_proc.enqueue_command(Command::OnewayTransaction(transaction));
-                } else {
-                    // No more oneway transactions queued, mark the queue handling as done.
-                    object_state.handling_oneway_transaction = false;
-                }
-            }
-        }
-
-        // Reclaim the memory.
-        let mut shared_memory_lock = binder_proc.shared_memory.lock();
-        let shared_memory = shared_memory_lock.as_mut().ok_or_else(|| errno!(ENOMEM))?;
-        shared_memory.free_buffer(buffer_ptr)
-    }
-
-    /// Subscribe a process to the death of the owner of `handle`.
-    fn handle_request_death_notification(
-        &self,
-        current_task: &dyn RunningBinderTask,
-        binder_proc: &Arc<BinderProcess>,
-        binder_thread: &Arc<BinderThread>,
-        handle: Handle,
-        cookie: binder_uintptr_t,
-    ) -> Result<(), Errno> {
-        let proxy = match handle {
-            Handle::SpecialServiceManager => {
-                not_implemented!(current_task, "death notification for service manager");
-                return Ok(());
-            }
-            Handle::Object { index } => {
-                binder_proc.handles.lock().get(index).ok_or_else(|| errno!(ENOENT))?
-            }
-        };
-        if let Some(owner) = proxy.owner.upgrade() {
-            owner.death_subscribers.lock().push((Arc::downgrade(binder_proc), cookie));
-        } else {
-            // The object is already dead. Notify immediately. However, the requesting thread
-            // cannot handle the notification, in case it is holding some mutex while processing a
-            // oneway transaction (where its transaction stack will be empty).
-            binder_proc.enqueue_command_filtered(
-                |th| th.tid != binder_thread.tid,
-                Command::DeadBinder(cookie),
-            );
-        }
-        Ok(())
-    }
-
-    /// Remove a previously subscribed death notification.
-    fn handle_clear_death_notification(
-        &self,
-        current_task: &dyn RunningBinderTask,
-        binder_proc: &Arc<BinderProcess>,
-        handle: Handle,
-        cookie: binder_uintptr_t,
-    ) -> Result<(), Errno> {
-        let proxy = match handle {
-            Handle::SpecialServiceManager => {
-                not_implemented!(current_task, "clear death notification for service manager");
-                return Ok(());
-            }
-            Handle::Object { index } => {
-                binder_proc.handles.lock().get(index).ok_or_else(|| errno!(ENOENT))?
-            }
-        };
-        if let Some(owner) = proxy.owner.upgrade() {
-            let mut death_subscribers = owner.death_subscribers.lock();
-            if let Some((idx, _)) =
-                death_subscribers.iter().enumerate().find(|(_idx, (proc, c))| {
-                    std::ptr::eq(proc.as_ptr(), Arc::as_ptr(binder_proc)) && *c == cookie
-                })
-            {
-                death_subscribers.swap_remove(idx);
-            }
-        }
-        Ok(())
     }
 
     fn get_binder_task(
@@ -4753,10 +4733,9 @@ mod tests {
         const DEATH_NOTIFICATION_COOKIE: binder_uintptr_t = 0xDEADBEEF;
 
         // Register a death notification handler.
-        driver
+        client_proc
             .handle_request_death_notification(
                 &CurrentBinderTask { task: &current_task },
-                &client_proc,
                 &client_thread,
                 handle,
                 DEATH_NOTIFICATION_COOKIE,
@@ -4806,10 +4785,9 @@ mod tests {
         const DEATH_NOTIFICATION_COOKIE: binder_uintptr_t = 0xDEADBEEF;
 
         // Register a death notification handler.
-        driver
+        client_proc
             .handle_request_death_notification(
                 &CurrentBinderTask { task: &current_task },
-                &client_proc,
                 &client_thread,
                 handle,
                 DEATH_NOTIFICATION_COOKIE,
@@ -4845,10 +4823,9 @@ mod tests {
         let death_notification_cookie = 0xDEADBEEF;
 
         // Register a death notification handler.
-        driver
+        client_proc
             .handle_request_death_notification(
                 &CurrentBinderTask { task: &current_task },
-                &client_proc,
                 &client_thread,
                 handle,
                 death_notification_cookie,
@@ -4856,10 +4833,9 @@ mod tests {
             .expect("request death notification");
 
         // Now clear the death notification handler.
-        driver
+        client_proc
             .handle_clear_death_notification(
                 &CurrentBinderTask { task: &current_task },
-                &client_proc,
                 handle,
                 death_notification_cookie,
             )
@@ -5120,7 +5096,7 @@ mod tests {
 
         // Now the receiver issues the `BC_FREE_BUFFER` command, which should queue up the next
         // oneway transaction, guaranteeing sequential execution.
-        driver.handle_free_buffer(&receiver_proc, buffer_addr).expect("failed to free buffer");
+        receiver_proc.handle_free_buffer(buffer_addr).expect("failed to free buffer");
 
         assert!(object.lock().oneway_transactions.is_empty(), "oneway queue should now be empty");
         assert!(
@@ -5144,7 +5120,7 @@ mod tests {
         };
 
         // Now the receiver issues the `BC_FREE_BUFFER` command, which should end oneway handling.
-        driver.handle_free_buffer(&receiver_proc, buffer_addr).expect("failed to free buffer");
+        receiver_proc.handle_free_buffer(buffer_addr).expect("failed to free buffer");
 
         assert!(object.lock().oneway_transactions.is_empty(), "oneway queue should still be empty");
         assert!(
