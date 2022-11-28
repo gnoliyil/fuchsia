@@ -40,7 +40,8 @@ libmagma_linux = static_library(
   c_args: c_args,
   include_directories : [inc_top, inc_configuration, inc_magma,
                          inc_platform, inc_magma_util],
-  dependencies: thread_dep
+  dependencies: thread_dep,
+  install : true
 )
 
 dep_magma = declare_dependency(
