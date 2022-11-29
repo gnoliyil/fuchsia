@@ -2290,7 +2290,6 @@ async fn send_to_remote_with_zone<N: Netstack, E: netemul::Endpoint>(name: &str)
     let host_sock = &host_sock;
 
     const NUM_BYTES: usize = 10;
-    const RECEIVE_TIMEOUT: fasync::Duration = fasync::Duration::from_seconds(5);
     let _: Vec<()> = join_all(
         [(&host_interface_a, &peer_a_socket), (&host_interface_b, &peer_b_socket)].into_iter().map(
             |(interface, peer_socket)| async move {
@@ -2307,16 +2306,8 @@ async fn send_to_remote_with_zone<N: Netstack, E: netemul::Endpoint>(name: &str)
                 );
 
                 let mut buf = [0; NUM_BYTES + 1];
-                let (bytes, _sender) = peer_socket
-                    .recv_from(&mut buf)
-                    .on_timeout(RECEIVE_TIMEOUT, || {
-                        Err(std::io::Error::new(
-                            std::io::ErrorKind::TimedOut,
-                            format!("timeout receiving on host interface {}", id),
-                        ))
-                    })
-                    .await
-                    .expect("recv succeeds");
+                let (bytes, _sender) =
+                    peer_socket.recv_from(&mut buf).await.expect("recv succeeds");
                 assert_eq!(bytes, NUM_BYTES);
                 assert_eq!(&buf[..NUM_BYTES], &[id; NUM_BYTES]);
             },
