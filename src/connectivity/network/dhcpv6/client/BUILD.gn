@@ -25,6 +25,7 @@ rustc_binary("dhcpv6_client") {
     "//src/lib/network/packet",
     "//src/lib/zircon/rust:fuchsia-zircon",
     "//third_party/rust_crates:anyhow",
+    "//third_party/rust_crates:assert_matches",
     "//third_party/rust_crates:futures",
     "//third_party/rust_crates:rand",
     "//third_party/rust_crates:socket2",
@@ -34,7 +35,6 @@ rustc_binary("dhcpv6_client") {
   test_deps = [
     "//sdk/fidl/fuchsia.net.interfaces.admin:fuchsia.net.interfaces.admin_rust",
     "//src/connectivity/lib/net-declare",
-    "//third_party/rust_crates:assert_matches",
     "//third_party/rust_crates:test-case",
   ]
 

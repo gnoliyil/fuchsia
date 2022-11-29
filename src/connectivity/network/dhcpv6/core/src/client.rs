@@ -650,8 +650,8 @@ enum LifetimesError {
 /// The valid and preferred lifetimes.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Lifetimes {
-    preferred_lifetime: v6::TimeValue,
-    valid_lifetime: v6::NonZeroTimeValue,
+    pub preferred_lifetime: v6::TimeValue,
+    pub valid_lifetime: v6::NonZeroTimeValue,
 }
 
 #[derive(Debug)]

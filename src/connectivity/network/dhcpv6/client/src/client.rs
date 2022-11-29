@@ -17,7 +17,7 @@ use fidl_fuchsia_net as fnet;
 use fidl_fuchsia_net_dhcpv6::{
     AddressConfig, ClientConfig, ClientMarker, ClientRequest, ClientRequestStream,
     ClientWatchAddressResponder, ClientWatchPrefixesResponder, ClientWatchServersResponder, Empty,
-    InformationConfig, NewClientParams, PrefixDelegationConfig,
+    InformationConfig, Lifetimes, NewClientParams, Prefix, PrefixDelegationConfig,
     RELAY_AGENT_AND_SERVER_LINK_LOCAL_MULTICAST_ADDRESS, RELAY_AGENT_AND_SERVER_PORT,
 };
 use fidl_fuchsia_net_ext as fnet_ext;
@@ -32,6 +32,7 @@ use futures::{
 };
 
 use anyhow::{Context as _, Result};
+use assert_matches::assert_matches;
 use async_utils::futures::{FutureExt as _, ReplaceValue};
 use dns_server_watcher::DEFAULT_DNS_PORT;
 use net_types::{
@@ -79,6 +80,10 @@ pub(crate) struct Client<S: for<'a> AsyncSocket<'a>> {
     dns_responder: Option<ClientWatchServersResponder>,
     /// Stores a responder to send acquired addresses.
     address_responder: Option<ClientWatchAddressResponder>,
+    /// Holds the discovered prefixes and their lifetimes.
+    prefixes: HashMap<fnet::Ipv6AddressWithPrefix, Lifetimes>,
+    /// Indicates whether or not the prefixes has changed since last yielded.
+    prefixes_changed: bool,
     /// Stores a responder to send acquired prefixes.
     prefixes_responder: Option<ClientWatchPrefixesResponder>,
     /// Maintains the state for the client.
@@ -239,6 +244,13 @@ fn hash<H: Hash>(h: &H) -> u64 {
     dh.finish()
 }
 
+fn subnet_to_address_with_prefix(prefix: Subnet<Ipv6Addr>) -> fnet::Ipv6AddressWithPrefix {
+    fnet::Ipv6AddressWithPrefix {
+        addr: fnet::Ipv6Address { addr: prefix.network().ipv6_bytes() },
+        prefix_len: prefix.prefix(),
+    }
+}
+
 impl<S: for<'a> AsyncSocket<'a>> Client<S> {
     /// Starts the client in `config`.
     ///
@@ -265,6 +277,8 @@ impl<S: for<'a> AsyncSocket<'a>> Client<S> {
             last_observed_dns_hash: hash(&Vec::<Ipv6Addr>::new()),
             dns_responder: None,
             address_responder: None,
+            prefixes: Default::default(),
+            prefixes_changed: false,
             prefixes_responder: None,
         };
         let () = client.run_actions(actions).await?;
@@ -306,11 +320,80 @@ impl<S: for<'a> AsyncSocket<'a>> Client<S> {
                         // TODO(https://fxbug.dev/95265): Add action to add
                         // the new address and cancel timers for old address.
                     }
-                    dhcpv6_core::client::Action::IaPdUpdates(_) => {
-                        // TODO(https://fxbug.dev/113079): Add actions to
-                        // schedule timers for delegated prefix.
-                        // TODO(https://fxbug.dev/113080) Add actions to add the
-                        // new prefix.
+                    dhcpv6_core::client::Action::IaPdUpdates(mut updates) => {
+                        let updates = {
+                            let ret =
+                                updates.remove(&IA_PD_IAID).expect("Update missing for IAID");
+                            debug_assert_eq!(updates, HashMap::new());
+                            ret
+                        };
+
+                        let Self { prefixes, prefixes_changed, .. } = client;
+
+                        let now = zx::Time::get_monotonic();
+                        let nonzero_timevalue_to_zx_time = |tv| match tv {
+                            v6::NonZeroTimeValue::Finite(tv) => {
+                                now + zx::Duration::from_seconds(tv.get().into())
+                            }
+                            v6::NonZeroTimeValue::Infinity => zx::Time::INFINITE,
+                        };
+
+                        let calculate_lifetimes = |dhcpv6_core::client::Lifetimes {
+                            preferred_lifetime,
+                            valid_lifetime,
+                        }| {
+                            Lifetimes {
+                                preferred_until: match preferred_lifetime {
+                                    v6::TimeValue::Zero => zx::Time::ZERO,
+                                    v6::TimeValue::NonZero(preferred_lifetime) => {
+                                        nonzero_timevalue_to_zx_time(preferred_lifetime)
+                                    },
+                                }.into_nanos(),
+                                valid_until: nonzero_timevalue_to_zx_time(valid_lifetime)
+                                    .into_nanos(),
+                            }
+                        };
+
+                        for (prefix, update) in updates.into_iter() {
+                            let fidl_prefix = subnet_to_address_with_prefix(prefix);
+
+                            match update {
+                                dhcpv6_core::client::IaValueUpdateKind::Added(lifetimes) => {
+                                    assert_matches!(
+                                        prefixes.insert(
+                                            fidl_prefix,
+                                            calculate_lifetimes(lifetimes)
+                                        ),
+                                        None,
+                                        "must not know about prefix {} to add it with lifetimes {:?}",
+                                        prefix, lifetimes,
+                                    );
+                                }
+                                dhcpv6_core::client::IaValueUpdateKind::UpdatedLifetimes(updated_lifetimes) => {
+                                    assert_matches!(
+                                        prefixes.get_mut(&fidl_prefix),
+                                        Some(lifetimes) => {
+                                            *lifetimes = calculate_lifetimes(updated_lifetimes);
+                                        },
+                                        "must know about prefix {} to update lifetimes with {:?}",
+                                        prefix, updated_lifetimes,
+                                    );
+                                }
+                                dhcpv6_core::client::IaValueUpdateKind::Removed => {
+                                    assert_matches!(
+                                        prefixes.remove(&fidl_prefix),
+                                        Some(_),
+                                        "must know about prefix {} to remove it",
+                                        prefix
+                                    );
+                                }
+                            }
+                        }
+
+                        // Mark the client has having updated prefixes so that
+                        // callers of `WatchPrefixes` receive the update.
+                        *prefixes_changed = true;
+                        client.maybe_send_prefixes()?;
                     }
                 };
                 Ok(client)
@@ -333,6 +416,29 @@ impl<S: for<'a> AsyncSocket<'a>> Client<S> {
                 None => (),
             })
         }
+    }
+
+    fn maybe_send_prefixes(&mut self) -> Result<(), ClientError> {
+        let Self { prefixes, prefixes_changed, prefixes_responder, .. } = self;
+
+        if !*prefixes_changed {
+            return Ok(());
+        }
+
+        let responder = if let Some(responder) = prefixes_responder.take() {
+            responder
+        } else {
+            return Ok(());
+        };
+
+        let mut prefixes = prefixes
+            .iter()
+            .map(|(prefix, lifetimes)| Prefix { prefix: *prefix, lifetimes: *lifetimes })
+            .collect::<Vec<_>>();
+
+        responder.send(&mut prefixes.iter_mut()).map_err(ClientError::Fidl)?;
+        *prefixes_changed = false;
+        Ok(())
     }
 
     /// Sends a list of DNS servers to a watcher through the input responder and updates the last
@@ -469,10 +575,8 @@ impl<S: for<'a> AsyncSocket<'a>> Client<S> {
                 // The responder will be dropped and cause the channel to be closed.
                 Some(ClientWatchPrefixesResponder { .. }) => Err(ClientError::DoubleWatch),
                 None => {
-                    // TODO(https://fxbug.dev/113371): Implement the prefix watcher.
-                    warn!("WatchPrefix call will block forever as it is unimplemented");
                     self.prefixes_responder = Some(responder);
-                    Ok(())
+                    self.maybe_send_prefixes()
                 }
             },
             // TODO(https://fxbug.dev/72702): Implement Shutdown.
@@ -606,12 +710,12 @@ mod tests {
     };
     use fidl_fuchsia_net_dhcpv6::{ClientMarker, DEFAULT_CLIENT_PORT};
     use fuchsia_async as fasync;
-    use futures::{channel::mpsc, join, TryFutureExt as _};
+    use futures::{channel::mpsc, join, poll, TryFutureExt as _};
 
     use assert_matches::assert_matches;
     use net_declare::{
         fidl_ip_v6, fidl_ip_v6_with_prefix, fidl_socket_addr, fidl_socket_addr_v6, net_ip_v6,
-        std_socket_addr,
+        net_subnet_v6, std_socket_addr,
     };
     use net_types::ip::IpAddress as _;
     use packet::serialize::InnerPacketBuilder;
@@ -627,19 +731,52 @@ mod tests {
         (fasync::net::UdpSocket::from_socket(socket).expect("failed to create test socket"), addr)
     }
 
+    struct ReceivedMessage {
+        transaction_id: [u8; 3],
+        // Client IDs are optional in Information Request messages.
+        //
+        // Per RFC 8415 section 18.2.6,
+        //
+        //   The client SHOULD include a Client Identifier option (see
+        //   Section 21.2) to identify itself to the server (however, see
+        //   Section 4.3.1 of [RFC7844] for reasons why a client may not want to
+        //   include this option).
+        //
+        // Per RFC 7844 section 4.3.1,
+        //
+        //   According to [RFC3315], a DHCPv6 client includes its client
+        //   identifier in most of the messages it sends. There is one exception,
+        //   however: the client is allowed to omit its client identifier when
+        //   sending Information-request messages.
+        client_id: Option<Vec<u8>>,
+    }
+
     /// Asserts `socket` receives a message of `msg_type` from
     /// `want_from_addr`.
     async fn assert_received_message(
         socket: &fasync::net::UdpSocket,
         want_from_addr: SocketAddr,
         msg_type: v6::MessageType,
-    ) {
+    ) -> ReceivedMessage {
         let mut buf = vec![0u8; MAX_UDP_DATAGRAM_SIZE];
         let (size, from_addr) =
             socket.recv_from(&mut buf).await.expect("failed to receive on test server socket");
         assert_eq!(from_addr, want_from_addr);
         let buf = &mut &buf[..size]; // Implements BufferView.
-        assert_eq!(v6::Message::parse(buf, ()).map(|x| x.msg_type()), Ok(msg_type))
+        let msg = v6::Message::parse(buf, ()).expect("failed to parse message");
+        assert_eq!(msg.msg_type(), msg_type);
+
+        let mut client_id = None;
+        for opt in msg.options() {
+            match opt {
+                v6::ParsedDhcpOption::ClientId(id) => {
+                    assert_eq!(core::mem::replace(&mut client_id, Some(id.to_vec())), None)
+                }
+                _ => {}
+            }
+        }
+
+        ReceivedMessage { transaction_id: *msg.transaction_id(), client_id: client_id }
     }
 
     #[test]
@@ -913,7 +1050,8 @@ mod tests {
                             e, information_config, non_temporary_address_config, prefix_delegation_config
                         ));
 
-                    assert_received_message(&server_socket, client_addr, want_msg_type).await;
+                    let _: ReceivedMessage =
+                        assert_received_message(&server_socket, client_addr, want_msg_type).await;
                 }
             }
         }
@@ -1002,13 +1140,14 @@ mod tests {
         }
     }
 
-    async fn send_reply_with_options(
+    async fn send_msg_with_options(
         socket: &fasync::net::UdpSocket,
         to_addr: SocketAddr,
         transaction_id: [u8; 3],
+        msg_type: v6::MessageType,
         options: &[v6::DhcpOption<'_>],
     ) -> Result<()> {
-        let builder = v6::MessageBuilder::new(v6::MessageType::Reply, transaction_id, options);
+        let builder = v6::MessageBuilder::new(msg_type, transaction_id, options);
         let mut buf = vec![0u8; builder.bytes_len()];
         let () = builder.serialize(&mut buf);
         let size = socket.send_to(&buf, to_addr).await?;
@@ -1091,10 +1230,11 @@ mod tests {
 
             // Send an empty list to the client, should not update watcher.
             let () = exec
-                .run_singlethreaded(send_reply_with_options(
+                .run_singlethreaded(send_msg_with_options(
                     &server_socket,
                     client_addr,
                     transaction_id,
+                    v6::MessageType::Reply,
                     &[v6::DhcpOption::ServerId(&[1, 2, 3]), v6::DhcpOption::DnsServers(&[])],
                 ))
                 .expect("failed to send test reply");
@@ -1106,10 +1246,11 @@ mod tests {
                 .expect("failed to signal test client to refresh");
             let dns_servers = [net_ip_v6!("fe80::1:2")];
             let () = exec
-                .run_singlethreaded(send_reply_with_options(
+                .run_singlethreaded(send_msg_with_options(
                     &server_socket,
                     client_addr,
                     transaction_id,
+                    v6::MessageType::Reply,
                     &[
                         v6::DhcpOption::ServerId(&[1, 2, 3]),
                         v6::DhcpOption::DnsServers(&dns_servers),
@@ -1138,10 +1279,11 @@ mod tests {
                 .expect("failed to signal test client to refresh");
             let dns_servers = [net_ip_v6!("fe80::1:2")];
             let () = exec
-                .run_singlethreaded(send_reply_with_options(
+                .run_singlethreaded(send_msg_with_options(
                     &server_socket,
                     client_addr,
                     transaction_id,
+                    v6::MessageType::Reply,
                     &[
                         v6::DhcpOption::ServerId(&[1, 2, 3]),
                         v6::DhcpOption::DnsServers(&dns_servers),
@@ -1156,10 +1298,11 @@ mod tests {
                 .expect("failed to signal test client to refresh");
             let dns_servers = [net_ip_v6!("fe80::1:2"), net_ip_v6!("1234::5:6")];
             let () = exec
-                .run_singlethreaded(send_reply_with_options(
+                .run_singlethreaded(send_msg_with_options(
                     &server_socket,
                     client_addr,
                     transaction_id,
+                    v6::MessageType::Reply,
                     &[
                         v6::DhcpOption::ServerId(&[1, 2, 3]),
                         v6::DhcpOption::DnsServers(&dns_servers),
@@ -1193,10 +1336,11 @@ mod tests {
                 .try_send(())
                 .expect("failed to signal test client to refresh");
             let () = exec
-                .run_singlethreaded(send_reply_with_options(
+                .run_singlethreaded(send_msg_with_options(
                     &server_socket,
                     client_addr,
                     transaction_id,
+                    v6::MessageType::Reply,
                     &[v6::DhcpOption::ServerId(&[1, 2, 3]), v6::DhcpOption::DnsServers(&[])],
                 ))
                 .expect("failed to send test reply");
@@ -1233,10 +1377,11 @@ mod tests {
         .expect("failed to create test client");
 
         let dns_servers = [net_ip_v6!("fe80::1:2"), net_ip_v6!("1234::5:6")];
-        let () = send_reply_with_options(
+        let () = send_msg_with_options(
             &server_socket,
             client_addr,
             transaction_id,
+            v6::MessageType::Reply,
             &[v6::DhcpOption::ServerId(&[4, 5, 6]), v6::DhcpOption::DnsServers(&dns_servers)],
         )
         .await
@@ -1264,6 +1409,259 @@ mod tests {
             join!(client.handle_next_event(&mut buf), client_proxy.watch_servers()),
             (Ok(Some(())), Ok(servers)) if servers == want_servers
         );
+    }
+
+    #[fasync::run_singlethreaded(test)]
+    async fn watch_prefixes() {
+        const SERVER_ID: [u8; 3] = [3, 4, 5];
+        const PREFERRED_LIFETIME_SECS: u32 = 2;
+        const VALID_LIFETIME_SECS: u32 = 200;
+
+        let (client_proxy, client_stream) = create_proxy_and_stream::<ClientMarker>()
+            .expect("failed to create test proxy and stream");
+
+        let (client_socket, client_addr) = create_test_socket();
+        let (server_socket, server_addr) = create_test_socket();
+        let mut client = Client::<fasync::net::UdpSocket>::start(
+            [1, 2, 3],
+            ClientConfig {
+                prefix_delegation_config: Some(PrefixDelegationConfig::Empty(Empty {})),
+                ..ClientConfig::EMPTY
+            },
+            1, /* interface ID */
+            client_socket,
+            server_addr,
+            client_stream,
+        )
+        .await
+        .expect("failed to create test client");
+
+        let client_fut = async {
+            let mut buf = vec![0u8; MAX_UDP_DATAGRAM_SIZE];
+            loop {
+                select! {
+                    res = client.handle_next_event(&mut buf).fuse() => {
+                        match res.expect("test client failed to handle next event") {
+                            Some(()) => (),
+                            None => break (),
+                        };
+                    }
+                }
+            }
+        }
+        .fuse();
+        futures::pin_mut!(client_fut);
+
+        let update_prefix = net_subnet_v6!("a::/64");
+        let remove_prefix = net_subnet_v6!("b::/64");
+        let add_prefix = net_subnet_v6!("c::/64");
+
+        // Go through the motions to assign a prefix.
+        let client_id = {
+            let ReceivedMessage { client_id, transaction_id } =
+                assert_received_message(&server_socket, client_addr, v6::MessageType::Solicit)
+                    .await;
+            // Client IDs are mandatory in stateful DHCPv6.
+            let client_id = client_id.unwrap();
+
+            let ia_prefix = [
+                v6::DhcpOption::IaPrefix(v6::IaPrefixSerializer::new(
+                    PREFERRED_LIFETIME_SECS,
+                    VALID_LIFETIME_SECS,
+                    update_prefix,
+                    &[],
+                )),
+                v6::DhcpOption::IaPrefix(v6::IaPrefixSerializer::new(
+                    PREFERRED_LIFETIME_SECS,
+                    VALID_LIFETIME_SECS,
+                    remove_prefix,
+                    &[],
+                )),
+            ];
+            let () = send_msg_with_options(
+                &server_socket,
+                client_addr,
+                transaction_id,
+                v6::MessageType::Advertise,
+                &[
+                    v6::DhcpOption::ServerId(&SERVER_ID),
+                    v6::DhcpOption::ClientId(&client_id),
+                    v6::DhcpOption::Preference(u8::MAX),
+                    v6::DhcpOption::IaPd(v6::IaPdSerializer::new(IA_PD_IAID, 0, 0, &ia_prefix)),
+                ],
+            )
+            .await
+            .expect("failed to send adv message");
+
+            // Wait for the client to send a Request and send Reply so a prefix
+            // is assigned.
+            let transaction_id = select! {
+                () = client_fut => panic!("should never return"),
+                res = assert_received_message(
+                    &server_socket,
+                    client_addr,
+                    v6::MessageType::Request,
+                ).fuse() => {
+                    let ReceivedMessage { client_id: req_client_id, transaction_id } = res;
+                    assert_eq!(Some(&client_id), req_client_id.as_ref());
+                    transaction_id
+                },
+            };
+            let () = send_msg_with_options(
+                &server_socket,
+                client_addr,
+                transaction_id,
+                v6::MessageType::Reply,
+                &[
+                    v6::DhcpOption::ServerId(&SERVER_ID),
+                    v6::DhcpOption::ClientId(&client_id),
+                    v6::DhcpOption::IaPd(v6::IaPdSerializer::new(IA_PD_IAID, 0, 0, &ia_prefix)),
+                ],
+            )
+            .await
+            .expect("failed to send reply message");
+
+            client_id
+        };
+
+        let check_watch_prefixes_result =
+            |res: Result<Vec<Prefix>, _>,
+             before_handling_reply,
+             preferred_lifetime_secs: u32,
+             valid_lifetime_secs: u32,
+             expected_prefixes| {
+                assert_matches!(
+                    res.unwrap()[..],
+                    [
+                        Prefix {
+                            prefix: got_prefix1,
+                            lifetimes: Lifetimes {
+                                preferred_until: preferred_until1,
+                                valid_until: valid_until1,
+                            },
+                        },
+                        Prefix {
+                            prefix: got_prefix2,
+                            lifetimes: Lifetimes {
+                                preferred_until: preferred_until2,
+                                valid_until: valid_until2,
+                            },
+                        },
+                    ] => {
+                        let now = zx::Time::get_monotonic();
+                        let preferred_until = zx::Time::from_nanos(preferred_until1);
+                        let valid_until = zx::Time::from_nanos(valid_until1);
+
+                        let preferred_for = zx::Duration::from_seconds(
+                            preferred_lifetime_secs.into(),
+                        );
+                        let valid_for = zx::Duration::from_seconds(valid_lifetime_secs.into());
+
+                        assert_eq!(
+                            HashSet::from([got_prefix1, got_prefix2]),
+                            HashSet::from(expected_prefixes),
+                        );
+                        assert!(preferred_until >= before_handling_reply + preferred_for);
+                        assert!(preferred_until <= now + preferred_for);
+                        assert!(valid_until >= before_handling_reply + valid_for);
+                        assert!(valid_until <= now + valid_for);
+
+                        assert_eq!(preferred_until1, preferred_until2);
+                        assert_eq!(valid_until1, valid_until2);
+                    }
+                )
+            };
+
+        // Wait for a prefix to become assigned from the perspective of the DHCPv6
+        // FIDL client.
+        {
+            // watch_prefixes should not return before a lease is negotiated. Note
+            // that the client has not yet handled the Reply message.
+            let mut watch_prefixes = client_proxy.watch_prefixes().fuse();
+            assert_matches!(poll!(&mut watch_prefixes), Poll::Pending);
+            let before_handling_reply = zx::Time::get_monotonic();
+            select! {
+                () = client_fut => panic!("should never return"),
+                res = watch_prefixes => check_watch_prefixes_result(
+                    res,
+                    before_handling_reply,
+                    PREFERRED_LIFETIME_SECS,
+                    VALID_LIFETIME_SECS,
+                    [
+                        subnet_to_address_with_prefix(update_prefix),
+                        subnet_to_address_with_prefix(remove_prefix),
+                    ],
+                ),
+            }
+        }
+
+        // Wait for the client to attempt to renew the lease and go through the
+        // motions to update the lease.
+        {
+            let transaction_id = select! {
+                () = client_fut => panic!("should never return"),
+                res = assert_received_message(
+                    &server_socket,
+                    client_addr,
+                    v6::MessageType::Renew,
+                ).fuse() => {
+                    let ReceivedMessage { client_id: ren_client_id, transaction_id } = res;
+                    assert_eq!(ren_client_id.as_ref(), Some(&client_id));
+                    transaction_id
+                },
+            };
+            const NEW_PREFERRED_LIFETIME_SECS: u32 = 2 * PREFERRED_LIFETIME_SECS;
+            const NEW_VALID_LIFETIME_SECS: u32 = 2 * VALID_LIFETIME_SECS;
+            let ia_prefix = [
+                v6::DhcpOption::IaPrefix(v6::IaPrefixSerializer::new(
+                    NEW_PREFERRED_LIFETIME_SECS,
+                    NEW_VALID_LIFETIME_SECS,
+                    update_prefix,
+                    &[],
+                )),
+                v6::DhcpOption::IaPrefix(v6::IaPrefixSerializer::new(
+                    NEW_PREFERRED_LIFETIME_SECS,
+                    NEW_VALID_LIFETIME_SECS,
+                    add_prefix,
+                    &[],
+                )),
+                v6::DhcpOption::IaPrefix(v6::IaPrefixSerializer::new(0, 0, remove_prefix, &[])),
+            ];
+
+            let () = send_msg_with_options(
+                &server_socket,
+                client_addr,
+                transaction_id,
+                v6::MessageType::Reply,
+                &[
+                    v6::DhcpOption::ServerId(&SERVER_ID),
+                    v6::DhcpOption::ClientId(&client_id),
+                    v6::DhcpOption::IaPd(v6::IaPdSerializer::new(
+                        v6::IAID::new(0),
+                        0,
+                        0,
+                        &ia_prefix,
+                    )),
+                ],
+            )
+            .await
+            .expect("failed to send reply message");
+
+            let before_handling_reply = zx::Time::get_monotonic();
+            select! {
+                () = client_fut => panic!("should never return"),
+                res = client_proxy.watch_prefixes().fuse() => check_watch_prefixes_result(
+                    res,
+                    before_handling_reply,
+                    NEW_PREFERRED_LIFETIME_SECS,
+                    NEW_VALID_LIFETIME_SECS,
+                    [
+                        subnet_to_address_with_prefix(update_prefix),
+                        subnet_to_address_with_prefix(add_prefix),
+                    ],
+                ),
+            }
+        }
     }
 
     #[fasync::run_singlethreaded(test)]
@@ -1367,8 +1765,12 @@ mod tests {
         .expect("failed to create test client");
 
         // Starting the client in stateless should send an information request out.
-        assert_received_message(&server_socket, client_addr, v6::MessageType::InformationRequest)
-            .await;
+        let ReceivedMessage { client_id, transaction_id: _ } = assert_received_message(
+            &server_socket,
+            client_addr,
+            v6::MessageType::InformationRequest,
+        )
+        .await;
         assert_eq!(
             client.timer_abort_handles.keys().collect::<Vec<_>>(),
             vec![&dhcpv6_core::client::ClientTimerType::Retransmission]
@@ -1377,17 +1779,29 @@ mod tests {
         let mut buf = vec![0u8; MAX_UDP_DATAGRAM_SIZE];
         // Trigger a retransmission.
         assert_matches!(client.handle_next_event(&mut buf).await, Ok(Some(())));
-        assert_received_message(&server_socket, client_addr, v6::MessageType::InformationRequest)
+        let ReceivedMessage { client_id: got_client_id, transaction_id: _ } =
+            assert_received_message(
+                &server_socket,
+                client_addr,
+                v6::MessageType::InformationRequest,
+            )
             .await;
+        assert_eq!(got_client_id, client_id);
         assert_eq!(
             client.timer_abort_handles.keys().collect::<Vec<_>>(),
             vec![&dhcpv6_core::client::ClientTimerType::Retransmission]
         );
 
         // Message targeting another transaction ID should be ignored.
-        let () = send_reply_with_options(&server_socket, client_addr, [5, 6, 7], &[])
-            .await
-            .expect("failed to send test message");
+        let () = send_msg_with_options(
+            &server_socket,
+            client_addr,
+            [5, 6, 7],
+            v6::MessageType::Reply,
+            &[],
+        )
+        .await
+        .expect("failed to send test message");
         assert_matches!(client.handle_next_event(&mut buf).await, Ok(Some(())));
         assert_eq!(
             client.timer_abort_handles.keys().collect::<Vec<_>>(),
@@ -1405,10 +1819,11 @@ mod tests {
         );
 
         // Message targeting this client should cause the client to transition state.
-        let () = send_reply_with_options(
+        let () = send_msg_with_options(
             &server_socket,
             client_addr,
             [1, 2, 3],
+            v6::MessageType::Reply,
             &[v6::DhcpOption::ServerId(&[4, 5, 6])],
         )
         .await
@@ -1430,8 +1845,13 @@ mod tests {
 
         // Trigger a refresh.
         assert_matches!(client.handle_next_event(&mut buf).await, Ok(Some(())));
-        assert_received_message(&server_socket, client_addr, v6::MessageType::InformationRequest)
-            .await;
+        let ReceivedMessage { client_id, transaction_id: _ } = assert_received_message(
+            &server_socket,
+            client_addr,
+            v6::MessageType::InformationRequest,
+        )
+        .await;
+        assert_eq!(got_client_id, client_id,);
         assert_eq!(
             client.timer_abort_handles.keys().collect::<Vec<_>>(),
             vec![&dhcpv6_core::client::ClientTimerType::Retransmission]
@@ -1502,7 +1922,8 @@ mod tests {
         .expect("failed to create test client");
 
         // Starting the client in stateful should send out a solicit.
-        assert_received_message(&server_socket, client_addr, v6::MessageType::Solicit).await;
+        let _: ReceivedMessage =
+            assert_received_message(&server_socket, client_addr, v6::MessageType::Solicit).await;
         assert_eq!(
             client.timer_abort_handles.keys().collect::<Vec<_>>(),
             vec![&dhcpv6_core::client::ClientTimerType::Retransmission]
@@ -1553,9 +1974,15 @@ mod tests {
 
         // Trigger a message receive, the message is later discarded because transaction ID doesn't
         // match.
-        let () = send_reply_with_options(&server_socket, client_addr, [5, 6, 7], &[])
-            .await
-            .expect("failed to send test message");
+        let () = send_msg_with_options(
+            &server_socket,
+            client_addr,
+            [5, 6, 7],
+            v6::MessageType::Reply,
+            &[],
+        )
+        .await
+        .expect("failed to send test message");
         // There are now two pending events, the message receive is handled first because the timer
         // is far into the future.
         assert_matches!(client.handle_next_event(&mut buf).await, Ok(Some(())));
