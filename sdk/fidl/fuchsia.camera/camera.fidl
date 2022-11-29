@@ -50,6 +50,8 @@ type FrameStatus = strict enum {
 
 type Metadata = struct {
     timestamp int64;
+    @available(added=11)
+    data_size uint32;
 };
 
 /// Sent by the driver to the client when a frame is available for processing,
