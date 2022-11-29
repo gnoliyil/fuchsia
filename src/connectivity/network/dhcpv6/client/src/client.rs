@@ -9,7 +9,7 @@ use std::{
     net::{IpAddr, SocketAddr},
     num::NonZeroU8,
     str::FromStr as _,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use fidl::endpoints::ServerEnd;
@@ -45,6 +45,31 @@ use rand::{rngs::StdRng, SeedableRng};
 use tracing::{error, warn};
 
 use dhcpv6_core;
+
+/// A thin wrapper around `zx::Time` that implements `dhcpv6_core::Instant`.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug)]
+pub(crate) struct MonotonicTime(zx::Time);
+
+impl MonotonicTime {
+    fn now() -> MonotonicTime {
+        MonotonicTime(zx::Time::get_monotonic())
+    }
+}
+
+impl dhcpv6_core::Instant for MonotonicTime {
+    fn duration_since(&self, MonotonicTime(earlier): MonotonicTime) -> Duration {
+        let Self(this) = *self;
+
+        let diff: zx::Duration = this - earlier;
+
+        Duration::from_nanos(diff.into_nanos().try_into().unwrap_or_else(|e| {
+            panic!(
+                "failed to calculate duration since {:?} with instant {:?}: {}",
+                earlier, this, e,
+            )
+        }))
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ClientError {
@@ -87,7 +112,7 @@ pub(crate) struct Client<S: for<'a> AsyncSocket<'a>> {
     /// Stores a responder to send acquired prefixes.
     prefixes_responder: Option<ClientWatchPrefixesResponder>,
     /// Maintains the state for the client.
-    state_machine: dhcpv6_core::client::ClientStateMachine<Instant, StdRng>,
+    state_machine: dhcpv6_core::client::ClientStateMachine<MonotonicTime, StdRng>,
     /// The socket used to communicate with DHCPv6 servers.
     socket: S,
     /// The address to send outgoing messages to.
@@ -167,7 +192,7 @@ fn create_state_machine(
     transaction_id: [u8; 3],
     config: ClientConfig,
 ) -> Result<
-    (dhcpv6_core::client::ClientStateMachine<Instant, StdRng>, dhcpv6_core::client::Actions),
+    (dhcpv6_core::client::ClientStateMachine<MonotonicTime, StdRng>, dhcpv6_core::client::Actions),
     ClientError,
 > {
     let ClientConfig {
@@ -231,7 +256,7 @@ fn create_state_machine(
                 configured_delegated_prefixes.unwrap_or_else(Default::default),
                 information_config.unwrap_or_else(Default::default),
                 StdRng::from_entropy(),
-                Instant::now(),
+                MonotonicTime::now(),
             ))
         }
     }
@@ -517,7 +542,7 @@ impl<S: for<'a> AsyncSocket<'a>> Client<S> {
         // This timer just fired.
         self.cancel_timer(timer_type);
 
-        let actions = self.state_machine.handle_timeout(timer_type, Instant::now());
+        let actions = self.state_machine.handle_timeout(timer_type, MonotonicTime::now());
         self.run_actions(actions).await
     }
 
@@ -533,7 +558,7 @@ impl<S: for<'a> AsyncSocket<'a>> Client<S> {
                 return Ok(());
             }
         };
-        let actions = self.state_machine.handle_message_receive(msg, Instant::now());
+        let actions = self.state_machine.handle_message_receive(msg, MonotonicTime::now());
         self.run_actions(actions).await
     }
 
