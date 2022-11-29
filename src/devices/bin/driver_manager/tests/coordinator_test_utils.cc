@@ -35,8 +35,5 @@ CoordinatorConfig DefaultConfig(async_dispatcher_t* bootargs_dispatcher,
 
 void InitializeCoordinator(Coordinator* coordinator) {
   coordinator->InitCoreDevices(kSystemDriverPath);
-
-  // Initialize devfs.
-  ASSERT_OK(coordinator->sys_device()->InitializeToDevfs());
   coordinator->set_running(true);
 }

@@ -291,11 +291,7 @@ Coordinator::Coordinator(CoordinatorConfig config, InspectManager* inspect_manag
       dispatcher_(dispatcher),
       base_resolver_(config_.boot_args),
       inspect_manager_(inspect_manager),
-      root_device_(fbl::MakeRefCounted<Device>(
-          this, "root", fbl::String(), "root,", nullptr, ZX_PROTOCOL_ROOT, zx::vmo(),
-          fidl::ClientEnd<fuchsia_device_manager::DeviceController>(),
-          fidl::ClientEnd<fio::Directory>())),
-      devfs_(root_device_->devfs.topological_node(),
+      devfs_(root_devnode_,
              [this]() {
                zx::result diagnostics_client = inspect_manager_->Connect();
                ZX_ASSERT_MSG(diagnostics_client.is_ok(), "%s", diagnostics_client.status_string());
@@ -306,8 +302,6 @@ Coordinator::Coordinator(CoordinatorConfig config, InspectManager* inspect_manag
       driver_loader_(config_.boot_args, std::move(config_.driver_index), &base_resolver_,
                      dispatcher, config_.require_system, &package_resolver_) {
   shutdown_system_state_ = config_.default_shutdown_system_state;
-
-  root_device_->flags = DEV_CTX_IMMORTAL | DEV_CTX_MUST_ISOLATE;
 
   bind_driver_manager_ = std::make_unique<BindDriverManager>(this);
 
@@ -325,7 +319,6 @@ Coordinator::~Coordinator() {
   // do this ahead of the normal destructor order to avoid reaching into devfs_
   // after it has been dropped.
   sys_device_ = nullptr;
-  root_device_ = nullptr;
 }
 
 void Coordinator::LoadV1Drivers(std::string_view sys_device_driver) {
@@ -347,9 +340,6 @@ void Coordinator::LoadV1Drivers(std::string_view sys_device_driver) {
     config.only_return_base_and_fallback_drivers = true;
     bind_driver_manager_->BindAllDevices(config);
   });
-
-  const zx_status_t status = sys_device_->InitializeToDevfs();
-  ZX_ASSERT_MSG(status == ZX_OK, "%s", zx_status_get_string(status));
 }
 
 void Coordinator::InitCoreDevices(std::string_view sys_device_driver) {
@@ -359,11 +349,22 @@ void Coordinator::InitCoreDevices(std::string_view sys_device_driver) {
     driver_loader_.LoadDriverUrl(string);
   }
 
-  sys_device_ = fbl::MakeRefCounted<Device>(
-      this, "sys", sys_device_driver, "sys,", root_device_, 0, zx::vmo(),
-      fidl::ClientEnd<fuchsia_device_manager::DeviceController>(),
-      fidl::ClientEnd<fio::Directory>());
+  sys_device_ =
+      fbl::MakeRefCounted<Device>(this, "sys", sys_device_driver, "sys,", nullptr, 0, zx::vmo(),
+                                  fidl::ClientEnd<fuchsia_device_manager::DeviceController>(),
+                                  fidl::ClientEnd<fio::Directory>());
   sys_device_->flags = DEV_CTX_IMMORTAL | DEV_CTX_MUST_ISOLATE;
+
+  // Add sys_device_ to devfs manually since it's the first device.
+  zx_status_t status =
+      root_devnode_->add_child(sys_device_->name(), sys_device_->protocol_id(),
+                               Devnode::Remote{
+                                   .connector = sys_device_->device_controller().Clone(),
+                               },
+                               sys_device_->devfs);
+  ZX_ASSERT_MSG(status == ZX_OK, "Failed to initialize sys_device to devfs: %s",
+                zx_status_get_string(status));
+  sys_device_->devfs.publish();
 }
 
 void Coordinator::RegisterWithPowerManager(fidl::ClientEnd<fio::Directory> devfs,
@@ -450,34 +451,39 @@ zx_status_t Coordinator::GetTopologicalPath(const fbl::RefPtr<const Device>& dev
   char tmp[max];
   char* path = tmp + max - 1;
   *path = 0;
-  size_t total = 1;
+  size_t chars_written = 1;
 
+  // Build the topological path by walking backwards up the tree.
   fbl::RefPtr<const Device> itr = dev;
   while (itr != nullptr) {
     if (itr->flags & DEV_CTX_PROXY) {
       itr = itr->parent();
     }
 
-    const char* name;
-    if (itr == itr->coordinator->root_device()) {
-      name = "dev";
-    } else {
-      name = itr->name().data();
-    }
+    const char* name = itr->name().data();
 
     size_t len = strlen(name) + 1;
-    if (len > (max - total)) {
+    if ((len + chars_written) > max) {
       return ZX_ERR_BUFFER_TOO_SMALL;
     }
 
     memcpy(path - len + 1, name, len - 1);
     path -= len;
     *path = '/';
-    total += len;
+    chars_written += len;
     itr = itr->parent();
   }
 
-  memcpy(out, path, total);
+  // Add the "/dev" prefix to the front of the path.
+  constexpr std::string_view devfs_prefix = "/dev";
+  if ((devfs_prefix.size() + chars_written) > max) {
+    return ZX_ERR_BUFFER_TOO_SMALL;
+  }
+  memcpy(path - devfs_prefix.size(), devfs_prefix.data(), devfs_prefix.size());
+  path -= devfs_prefix.size();
+  chars_written += devfs_prefix.size();
+
+  memcpy(out, path, chars_written);
   return ZX_OK;
 }
 

@@ -920,7 +920,7 @@ TEST_F(CompositeTestCase, Topology) {
   fbl::RefPtr<Device> comp_device = GetCompositeDevice(kCompositeDevName);
   ASSERT_NOT_NULL(comp_device);
 
-  std::optional<Devnode>& dn = coordinator().root_device()->devfs.topological_node();
+  std::optional<Devnode>& dn = coordinator().root_devnode();
   ASSERT_TRUE(dn.has_value());
   Devnode& root = dn.value();
 

@@ -221,7 +221,6 @@ class Coordinator : public CompositeManagerBridge,
     return config_.default_shutdown_system_state;
   }
   SystemStateManager& system_state_manager() { return system_state_manager_; }
-  const fbl::RefPtr<Device>& root_device() { return root_device_; }
   const fbl::RefPtr<Device>& sys_device() { return sys_device_; }
   Devfs& devfs() { return devfs_; }
   SuspendResumeManager& suspend_resume_manager() { return *suspend_resume_manager_; }
@@ -234,6 +233,7 @@ class Coordinator : public CompositeManagerBridge,
   zx::vmo& mexec_kernel_zbi() { return mexec_kernel_zbi_; }
   zx::vmo& mexec_data_zbi() { return mexec_data_zbi_; }
   component::OutgoingDirectory& outgoing() { return *outgoing_; }
+  std::optional<Devnode>& root_devnode() { return root_devnode_; }
 
  private:
   // CompositeManagerBridge interface
@@ -279,9 +279,9 @@ class Coordinator : public CompositeManagerBridge,
 
   InspectManager* const inspect_manager_;
 
-  fbl::RefPtr<Device> root_device_;
   fbl::RefPtr<Device> sys_device_;
 
+  std::optional<Devnode> root_devnode_;
   Devfs devfs_;
 
   SystemStateManager system_state_manager_;
