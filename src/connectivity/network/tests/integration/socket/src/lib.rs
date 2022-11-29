@@ -27,7 +27,7 @@ use futures::{
     future::{self, join_all},
     io::AsyncReadExt as _,
     io::AsyncWriteExt as _,
-    Future, FutureExt as _, StreamExt as _, TryFutureExt as _, TryStreamExt as _,
+    join, Future, FutureExt as _, StreamExt as _, TryFutureExt as _, TryStreamExt as _,
 };
 use net_declare::{
     fidl_ip_v4, fidl_ip_v6, fidl_mac, fidl_subnet, std_ip_v4, std_ip_v6, std_socket_addr,
@@ -2279,28 +2279,21 @@ async fn send_to_remote_with_zone<N: Netstack, E: netemul::Endpoint>(name: &str)
     let _peer_a_interface = make_interface::<N, E>(&peer_a, 3, &net_a, peer_subnet.clone()).await;
     let _peer_b_interface = make_interface::<N, E>(&peer_b, 4, &net_b, peer_subnet).await;
 
-    let peer_a_socket = fasync::net::UdpSocket::bind_in_realm(
-        &peer_a,
-        (std::net::Ipv6Addr::UNSPECIFIED, PORT).into(),
-    )
-    .await
-    .expect("failed to create peer socket");
-    let peer_b_socket = fasync::net::UdpSocket::bind_in_realm(
-        &peer_b,
-        (std::net::Ipv6Addr::UNSPECIFIED, PORT).into(),
-    )
-    .await
-    .expect("failed to create peer socket");
-
-    let host_sock =
-        fasync::net::UdpSocket::bind_in_realm(&host, (std::net::Ipv6Addr::UNSPECIFIED, 0).into())
+    let make_socket = |realm| async move {
+        fasync::net::UdpSocket::bind_in_realm(realm, (std::net::Ipv6Addr::UNSPECIFIED, PORT).into())
             .await
-            .expect("failed to create host socket");
+            .expect("failed to create socket")
+    };
+
+    let (peer_a_socket, peer_b_socket, host_sock) =
+        join!(make_socket(&peer_a), make_socket(&peer_b), make_socket(&host));
+    let host_sock = &host_sock;
 
     const NUM_BYTES: usize = 10;
+    const RECEIVE_TIMEOUT: fasync::Duration = fasync::Duration::from_seconds(5);
     let _: Vec<()> = join_all(
         [(&host_interface_a, &peer_a_socket), (&host_interface_b, &peer_b_socket)].into_iter().map(
-            |(interface, peer_socket)| async {
+            |(interface, peer_socket)| async move {
                 let id: u8 = interface.id().try_into().unwrap();
                 assert_eq!(
                     host_sock
@@ -2316,8 +2309,11 @@ async fn send_to_remote_with_zone<N: Netstack, E: netemul::Endpoint>(name: &str)
                 let mut buf = [0; NUM_BYTES + 1];
                 let (bytes, _sender) = peer_socket
                     .recv_from(&mut buf)
-                    .on_timeout(fasync::Duration::from_seconds(2), || {
-                        Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "timeout"))
+                    .on_timeout(RECEIVE_TIMEOUT, || {
+                        Err(std::io::Error::new(
+                            std::io::ErrorKind::TimedOut,
+                            format!("timeout receiving on host interface {}", id),
+                        ))
                     })
                     .await
                     .expect("recv succeeds");
