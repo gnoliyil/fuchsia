@@ -21,7 +21,6 @@ rustc_library("fshost_test_fixture") {
   ]
   deps = [
     "//sdk/fidl/fuchsia.boot:fuchsia.boot_rust",
-    "//sdk/fidl/fuchsia.device:fuchsia.device_rust",
     "//sdk/fidl/fuchsia.fshost:fuchsia.fshost_rust",
     "//sdk/fidl/fuchsia.io:fuchsia.io_rust",
     "//sdk/fidl/fuchsia.logger:fuchsia.logger_rust",
@@ -30,7 +29,6 @@ rustc_library("fshost_test_fixture") {
     "//src/lib/fdio/rust:fdio",
     "//src/lib/fidl/rust/fidl",
     "//src/lib/fuchsia-component-test",
-    "//src/lib/fuchsia-runtime",
     "//src/lib/storage/fs_management/rust:fs_management",
     "//src/lib/storage/key-bag",
     "//src/lib/storage/ramdevice_client/rust",
@@ -44,7 +42,6 @@ rustc_library("fshost_test_fixture") {
     "//src/storage/testing/rust:storage-isolated-driver-manager",
     "//third_party/rust_crates:anyhow",
     "//third_party/rust_crates:futures",
-    "//third_party/rust_crates:gpt",
     "//third_party/rust_crates:uuid",
     "//third_party/rust_crates:zerocopy",
     "//third_party/rust_crates:zstd",
