@@ -146,13 +146,13 @@ async fn maintain(
 
                         let _ = responder.send();
                     }
-                    Some(Err(e)) => log::error!("Error polling listener_stream: {}", e),
+                    Some(Err(err)) => error!(%err, "Error polling listener_stream"),
                     None => {
-                        log::error!("Listener stream closed. Reconnecting...");
+                        error!("Listener stream closed. Reconnecting...");
                         match connect_activity_service(&activity_provider) {
                             Ok(stream) => listener_stream = stream,
-                            Err(e) => {
-                                log::error!("{}", e);
+                            Err(err) => {
+                                error!(%err);
                             }
                         }
                     }
