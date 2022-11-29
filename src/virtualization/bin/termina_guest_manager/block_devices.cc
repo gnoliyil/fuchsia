@@ -21,6 +21,7 @@
 
 #include <fbl/unique_fd.h>
 
+#include "src/lib/fxl/strings/string_printf.h"
 #include "src/lib/storage/block_client/cpp/remote_block_device.h"
 
 namespace {
@@ -328,7 +329,9 @@ fit::result<std::string, std::vector<fuchsia::virtualization::BlockSpec>> GetBlo
     // Use a file opened with MODE_TYPE_BLOCK_DEVICE
     auto handle = GetFxfsPartition(kBlockFileStatefulImage, stateful_image_size_bytes);
     if (handle.is_error()) {
-      return fit::error("Failed to open or create stateful Fxfs file / block device");
+      return fit::error(
+          fxl::StringPrintf("Failed to open or create stateful Fxfs file / block device: %s",
+                            zx_status_get_string(handle.error_value())));
     }
     stateful_spec.mode = fuchsia::virtualization::BlockMode::READ_WRITE;
     stateful_spec.format.set_block(std::move(handle.value()));
@@ -336,7 +339,8 @@ fit::result<std::string, std::vector<fuchsia::virtualization::BlockSpec>> GetBlo
     // FVM
     auto handle = FindOrAllocatePartition(kBlockPath, stateful_image_size_bytes, min_size);
     if (handle.is_error()) {
-      return fit::error("Failed to find or allocate a partition");
+      return fit::error(fxl::StringPrintf("Failed to find or allocate a partition: %s",
+                                          zx_status_get_string(handle.error_value())));
     }
     stateful_spec.mode = fuchsia::virtualization::BlockMode::READ_WRITE;
     stateful_spec.format.set_block(
@@ -345,14 +349,17 @@ fit::result<std::string, std::vector<fuchsia::virtualization::BlockSpec>> GetBlo
     // Simple files.
     auto handle = GetPartition(kFileStatefulImage);
     if (handle.is_error()) {
-      return fit::error("Failed to open or create stateful file");
+      return fit::error(fxl::StringPrintf("Failed to open or create stateful file: %s",
+                                          zx_status_get_string(handle.error_value())));
     }
 
     auto ptr = handle->BindSync();
     fuchsia::io::File_Resize_Result resize_result;
     zx_status_t status = ptr->Resize(stateful_image_size_bytes, &resize_result);
     if (status != ZX_OK || resize_result.is_err()) {
-      return fit::error("Failed resize stateful file");
+      return fit::error(fxl::StringPrintf("Failed resize stateful file: %s/%s",
+                                          zx_status_get_string(status),
+                                          zx_status_get_string(resize_result.err())));
     }
 
     stateful_spec.mode = fuchsia::virtualization::BlockMode::READ_WRITE;
