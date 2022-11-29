@@ -76,6 +76,10 @@ impl SocketDomain {
             Self::Netlink => AF_NETLINK,
         }
     }
+
+    pub fn is_inet(self) -> bool {
+        matches!(self, SocketDomain::Inet | SocketDomain::Inet6)
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

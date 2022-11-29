@@ -232,6 +232,7 @@ if (target_cpu == "x64" && !is_asan) {
       "syscalls/table.rs",
       "syscalls/time.rs",
       "task/abstract_socket_namespace.rs",
+      "task/iptables.rs",
       "task/kernel.rs",
       "task/mod.rs",
       "task/pid_table.rs",

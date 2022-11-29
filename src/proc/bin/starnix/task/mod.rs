@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 mod abstract_socket_namespace;
+mod iptables;
 mod kernel;
 mod pid_table;
 mod process_group;
@@ -13,6 +14,7 @@ mod thread_group;
 mod waiter;
 
 pub use abstract_socket_namespace::*;
+pub use iptables::*;
 pub use kernel::*;
 pub use pid_table::*;
 pub use process_group::*;

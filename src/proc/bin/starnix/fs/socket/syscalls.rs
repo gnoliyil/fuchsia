@@ -681,7 +681,14 @@ pub fn sys_getsockopt(
     let socket = file.node().socket().ok_or_else(|| errno!(ENOTSOCK))?;
 
     let optlen = current_task.mm.read_object(user_optlen)?;
-    let opt_value = socket.getsockopt(level, optname, optlen)?;
+    let mut optval = vec![0u8; optlen as usize];
+    current_task.mm.read_memory(user_optval, &mut optval)?;
+
+    let opt_value = if socket.domain.is_inet() && IpTables::can_handle_getsockopt(level, optname) {
+        current_task.kernel().iptables.read().getsockopt(socket, optname, optval)?
+    } else {
+        socket.getsockopt(level, optname, optlen)?
+    };
 
     let actual_optlen = opt_value.len() as socklen_t;
     if optlen < actual_optlen {
@@ -704,13 +711,12 @@ pub fn sys_setsockopt(
     let file = current_task.files.get(fd)?;
     let socket = file.node().socket().ok_or_else(|| errno!(ENOTSOCK))?;
 
-    socket.setsockopt(
-        current_task,
-        level,
-        optname,
-        UserBuffer { address: user_optval, length: optlen as usize },
-    )?;
-    Ok(())
+    let user_opt = UserBuffer { address: user_optval, length: optlen as usize };
+    if socket.domain.is_inet() && IpTables::can_handle_setsockopt(level, optname) {
+        current_task.kernel().iptables.write().setsockopt(current_task, socket, optname, user_opt)
+    } else {
+        socket.setsockopt(current_task, level, optname, user_opt)
+    }
 }
 
 pub fn sys_shutdown(current_task: &CurrentTask, fd: FdNumber, how: u32) -> Result<(), Errno> {

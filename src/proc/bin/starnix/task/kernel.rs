@@ -74,6 +74,9 @@ pub struct Kernel {
 
     /// The binder driver registered for this galaxy, indexed by their device type.
     pub binders: RwLock<BTreeMap<DeviceType, Arc<BinderDriver>>>,
+
+    /// The iptables used for filtering network packets.
+    pub iptables: RwLock<IpTables>,
 }
 
 impl Kernel {
@@ -106,6 +109,7 @@ impl Kernel {
             features: HashSet::from_iter(features.iter().cloned()),
             framebuffer: Framebuffer::new().expect("Failed to create framebuffer"),
             binders: Default::default(),
+            iptables: RwLock::new(IpTables::new()),
         })
     }
 
