@@ -78,6 +78,7 @@ class Clover : public CloverType {
   zx_status_t DmcInit();
   zx_status_t I2cInit();
   zx_status_t SpiInit();
+  zx_status_t RegistersInit();
 
   fdf::WireSyncClient<fuchsia_hardware_platform_bus::PlatformBus> pbus_;
   std::optional<ddk::InitTxn> init_txn_;

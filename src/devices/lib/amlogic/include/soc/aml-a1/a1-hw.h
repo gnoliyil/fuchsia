@@ -67,6 +67,21 @@
 // Memory Power Domain
 
 // Reset
+#define A1_RESET_BASE 0xfe000000
+#define A1_RESET_LENGTH 0x400
+
+#define A1_RESET0_REGISTER 0x0
+#define A1_RESET1_REGISTER 0x4
+#define A1_RESET2_REGISTER 0x8
+#define A1_SEC_RESET0_REGISTER 0x140
+#define A1_RESET0_LEVEL 0x40
+#define A1_RESET1_LEVEL 0x44
+#define A1_RESET2_LEVEL 0x48
+#define A1_SEC_RESET0_LEVEL 0x144
+#define A1_RESET0_MASK 0x80
+#define A1_RESET1_MASK 0x84
+#define A1_RESET2_MASK 0x88
+#define A1_SEC_RESET0__MASK 0x148
 
 // IRQs
 #define A1_I2C_A_IRQ 64    // 32+32
