@@ -20,6 +20,8 @@ type ResultConfig struct {
 	BuildInfoBoard    string      `json:"buildInfoBoard"`
 
 	DiffNotice string `json:"diffnotice"`
+
+	Checks []*Check `json:"checks"`
 }
 
 type Template struct {
@@ -38,6 +40,7 @@ func NewConfig() *ResultConfig {
 	return &ResultConfig{
 		Outputs:           make([]string, 0),
 		Templates:         make([]*Template, 0),
+		Checks:            make([]*Check, 0),
 		OutputLicenseFile: true,
 	}
 }
@@ -75,4 +78,5 @@ func (c *ResultConfig) Merge(other *ResultConfig) {
 	if c.BuildInfoBoard == "" {
 		c.BuildInfoBoard = other.BuildInfoBoard
 	}
+	c.Checks = append(c.Checks, other.Checks...)
 }

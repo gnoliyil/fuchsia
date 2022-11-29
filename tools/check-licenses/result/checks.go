@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -15,6 +16,11 @@ import (
 	"go.fuchsia.dev/fuchsia/tools/check-licenses/license"
 	"go.fuchsia.dev/fuchsia/tools/check-licenses/project"
 )
+
+type Check struct {
+	Name      string          `json: "name"`
+	Allowlist map[string]bool `json:"allowlist"`
+}
 
 func RunChecks() error {
 	if err := AllFuchsiaAuthorSourceFilesMustHaveCopyrightHeaders(); err != nil {
@@ -31,8 +37,7 @@ func RunChecks() error {
 	//	return err
 	//}
 	if err := AllProjectsMustHaveALicense(); err != nil {
-		// TODO: Enable this check after all projects have been addressed.
-		return nil
+		return err
 	}
 	if err := AllFilesAndFoldersMustBeIncludedInAProject(); err != nil {
 		// TODO: Enable this check after all projects have been addressed.
@@ -163,18 +168,41 @@ func AllComplianceWorksheetLinksAreGood() error {
 }
 
 func AllProjectsMustHaveALicense() error {
+	name := "AllProjectsMustHaveALicense"
+
 	var b strings.Builder
 	b.WriteString("All projects should include relevant license information, and a README.fuchsia file pointing to the file.\n")
 	b.WriteString("The following projects were found without any license information:\n\n")
-	count := 0
+
+	// Retrieve allowlists from config files
+	allowlist := make(map[string]bool, 0)
+	for _, c := range Config.Checks {
+		if c.Name == name {
+			for k, v := range c.Allowlist {
+				allowlist[k] = v
+			}
+		}
+	}
+
+	badReadmes := make([]string, 0)
 	for _, p := range project.FilteredProjects {
+		if _, ok := allowlist[p.Root]; ok {
+			continue
+		}
+
 		if len(p.LicenseFile) == 0 {
-			count = count + 1
-			b.WriteString(fmt.Sprintf("-> %v (README.fuchsia file: %v)\n", p.Root, p.ReadmePath))
+			badReadmes = append(badReadmes, fmt.Sprintf("-> %v (README.fuchsia file: %v)\n", p.Root, p.ReadmePath))
+		}
+	}
+	sort.Strings(badReadmes)
+
+	if len(badReadmes) > 0 {
+		for _, s := range badReadmes {
+			b.WriteString(s)
 		}
 	}
 	b.WriteString("\nPlease add a LICENSE file to the above projects, and point to them in the associated README.fuchsia file.\n")
-	if count > 0 {
+	if len(badReadmes) > 0 {
 		return fmt.Errorf(b.String())
 	}
 	return nil

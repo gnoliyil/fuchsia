@@ -8,6 +8,12 @@
             "projects": [
               "prebuilt/third_party/flutter"
             ]
+          },
+          {
+            "bug": "",
+            "projects": [
+              "src/security/bin/root_ssl_certificates/third_party/cert"
+            ]
           }
         ],
         "example": "http://shortn/_ktdTnnQaTH",

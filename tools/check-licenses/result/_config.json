@@ -1,34 +1,54 @@
 {
-    "result": {
-        "fuchsiaDir": "{FUCHSIA_DIR}",
-        "rootOutDir": "{ROOT_OUT_DIR}",
-        "outDir": "{OUT_DIR}",
-        "licenseOutDir": "{LICENSES_OUT_DIR}",
-        "buildInfoVersion": "{BUILD_INFO_VERSION}",
-        "buildInfoProduct": "{BUILD_INFO_PRODUCT}",
-        "buildInfoBoard": "{BUILD_INFO_BOARD}",
-        "outputs": [
-            "compliance.csv",
-            "summary.csv",
-            "summary_diff.csv",
-            "license_texts_grouped_by_project.txt",
-            "license_texts_grouped_by_project_deduped.txt",
-            "license_all_grouped_by_license_pattern_deduped.txt",
-            "license_meta_grouped_by_license_pattern_deduped.txt",
-            "license_texts_grouped_by_license_pattern_deduped.txt",
-            "license_texts_grouped_by_license_pattern_deduped.html",
-            "compliance_merged.csv"
+  "result": {
+    "fuchsiaDir": "{FUCHSIA_DIR}",
+    "rootOutDir": "{ROOT_OUT_DIR}",
+    "outDir": "{OUT_DIR}",
+    "licenseOutDir": "{LICENSES_OUT_DIR}",
+    "buildInfoVersion": "{BUILD_INFO_VERSION}",
+    "buildInfoProduct": "{BUILD_INFO_PRODUCT}",
+    "buildInfoBoard": "{BUILD_INFO_BOARD}",
+    "outputs": [
+      "compliance.csv",
+      "summary.csv",
+      "summary_diff.csv",
+      "license_texts_grouped_by_project.txt",
+      "license_texts_grouped_by_project_deduped.txt",
+      "license_all_grouped_by_license_pattern_deduped.txt",
+      "license_meta_grouped_by_license_pattern_deduped.txt",
+      "license_texts_grouped_by_license_pattern_deduped.txt",
+      "license_texts_grouped_by_license_pattern_deduped.html",
+      "compliance_merged.csv"
+    ],
+    "templates": [
+      {
+        "paths": [
+          "tools/check-licenses/result/templates"
         ],
-        "templates": [
-            {
-                "paths": [
-                    "tools/check-licenses/result/templates"
-                ],
-                "notes": []
-            }
-        ],
-        "diffNotice": "{DIFF_TARGET}",
-        "exitOnError": true,
-        "zip": true
-    }
+        "notes": []
+      }
+    ],
+    "diffNotice": "{DIFF_TARGET}",
+    "exitOnError": true,
+    "zip": true,
+    "checks": [
+      {
+        "name": "AllProjectsMustHaveALicense",
+        "allowlist": {
+          "prebuilt/audio/config": true,
+          "prebuilt/audio/config/tas2770": true,
+          "prebuilt/camera/arm/gdc/configs": true,
+          "prebuilt/camera/watermark": true,
+          "prebuilt/touch/ft3427-astro": true,
+          "prebuilt/touch/gt6853": true,
+          "prebuilt/touch/gt9293-astro": true,
+          "prebuilt/connectivity/bluetooth/firmware/broadcom": true,
+          "prebuilt/connectivity/openthread/radio-firmware": true,
+          "prebuilt/touch/ft5726-sherlock": true,
+          "src/connectivity/wlan/drivers/third_party/broadcom/brcmfmac/firmware": true,
+          "src/connectivity/wlan/drivers/third_party/mediatek/mt7668-wifi-mod/firmware": true,
+          "src/connectivity/wlan/drivers/third_party/nxp/nxpfmac/firmware": true
+        }
+      }
+    ]
+  }
 }

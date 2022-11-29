@@ -1,6 +1,7 @@
 Name: chromium
 URL: https://www.chromium.org/
 License: 3-Clause BSD
+License File: LICENSE
 Description:
 
 This path contains Chromium VAAPI media code. It was forked from
