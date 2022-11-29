@@ -357,8 +357,8 @@ constexpr ErrorDef<150> ErrLibraryAvailabilityMissingAdded(
 constexpr UndocumentedErrorDef<151, std::vector<std::string_view>> ErrMissingLibraryAvailability(
     "to use the @available attribute here, you must also annotate the "
     "`library {};` declaration in one of the library's files");
-constexpr UndocumentedErrorDef<152, std::string_view> ErrInvalidPlatform(
-    "invalid platform '{}'; must match the regex [a-z][a-z0-9_]*");
+constexpr ErrorDef<152, std::string_view> ErrInvalidPlatform(
+    "invalid platform '{}'; must match the regex [a-z][a-z0-9]*");
 constexpr UndocumentedErrorDef<153, uint64_t> ErrInvalidVersion(
     "invalid version '{}'; must be an integer from 1 to 2^63-1 inclusive, or "
     "the special constant `HEAD`");

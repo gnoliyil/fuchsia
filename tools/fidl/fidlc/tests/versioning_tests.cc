@@ -51,10 +51,8 @@ library example;
 }
 
 TEST(VersioningTests, BadInvalidPlatform) {
-  TestLibrary library(R"FIDL(
-@available(platform="spaces not allowed", added=HEAD)
-library example;
-)FIDL");
+  TestLibrary library;
+  library.AddFile("bad/fi-0152.test.fidl");
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrInvalidPlatform);
 }
 
