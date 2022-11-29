@@ -363,6 +363,10 @@ void DumpHandlesForKoid(zx_koid_t id) {
 }  // namespace
 
 void ktrace_report_live_processes() {
+  // PID 0 refers to the kernel.
+  fxt_kernel_object(TAG_PROC_NAME, /*always*/ true, /* koid */ 0, ZX_OBJ_TYPE_PROCESS,
+                    fxt::StringRef("kernel"));
+
   auto walker = MakeProcessWalker([](ProcessDispatcher* process) {
     char name[ZX_MAX_NAME_LEN];
     process->get_name(name);
