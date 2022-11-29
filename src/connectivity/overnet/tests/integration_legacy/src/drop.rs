@@ -28,7 +28,6 @@ async fn drop_connection_2node(run: usize) -> Result<(), Error> {
     run_drop_test(a, b).await
 }
 
-#[fuchsia::test]
 #[ignore = "TODO(https://fxbug.dev/110501): Re-enable after CSO lands"]
 #[fuchsia::test]
 async fn drop_connection_3node(run: usize) -> Result<(), Error> {
