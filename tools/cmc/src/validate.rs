@@ -280,15 +280,16 @@ impl<'a> ValidationContext<'a> {
                 .iter()
                 .filter(|o| matches!(o.to, cml::OneOrMany::One(cml::OfferToRef::All)))
                 .filter(|o| o.protocol.is_some())
-                .map(cml::CapabilityId::from_offer_expose)
-                .collect::<Result<Vec<Vec<cml::CapabilityId>>, _>>()?
-                .into_iter()
-                .flatten()
-                .collect::<Vec<cml::CapabilityId>>();
+                .map(cml::Offer::clone)
+                .collect::<Vec<cml::Offer>>();
 
             let mut duplicate_check: HashSet<cml::CapabilityId> = HashSet::new();
             let problem_protocols = offered_to_all
                 .iter()
+                .map(cml::CapabilityId::from_offer_expose)
+                .collect::<Result<Vec<Vec<cml::CapabilityId>>, _>>()?
+                .into_iter()
+                .flatten()
                 .filter(|cap_id| !duplicate_check.insert((*cap_id).clone()))
                 .collect::<Vec<_>>();
             if !problem_protocols.is_empty() {
@@ -815,7 +816,7 @@ impl<'a> ValidationContext<'a> {
         offer: &'a cml::Offer,
         used_ids: &mut HashMap<&'a cml::Name, HashMap<String, cml::CapabilityId>>,
         strong_dependencies: &mut DirectedGraph<DependencyNode<'a>>,
-        protocols_offered_to_all: &[cml::CapabilityId],
+        protocols_offered_to_all: &[cml::Offer],
     ) -> Result<(), Error> {
         // TODO: Many of these checks are repititious, see if we can unify them
 
@@ -996,18 +997,10 @@ impl<'a> ValidationContext<'a> {
                 cml::OfferToRef::All => continue,
             };
 
-            // Ensure that no protocol is offered to "all" and a specific component.
-            // This is an aspect of multi-target-offer checking.
-            if let Some(bad_protocol_name) = target_cap_ids.iter().find(|proto_to_check| {
-                protocols_offered_to_all
-                    .iter()
-                    .any(|offered_to_all| proto_to_check == &offered_to_all)
-            }) {
-                return Err(Error::validate(format!(
-                    r#"Protocol "{}" is offered to both "all" and "{}""#,
-                    bad_protocol_name,
-                    to_target.as_str()
-                )));
+            // Verify that only a legal set of offers-to-all are made, including that any
+            // offer to all duplicated as an offer to a specific component are exactly the same
+            for offer_to_all in protocols_offered_to_all {
+                cml::offer_to_all_would_duplicate(offer_to_all, offer, to_target)?;
             }
 
             // Check that any referenced child actually exists.
@@ -1705,6 +1698,10 @@ mod tests {
     use super::*;
     use crate::error::Location;
     use assert_matches::assert_matches;
+    use cml::{
+        offer_to_all_and_component_diff_protocols_message,
+        offer_to_all_and_component_diff_sources_message,
+    };
     use lazy_static::lazy_static;
     use serde_json::json;
     use std::io::Write;
@@ -2045,11 +2042,6 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    fn offer_to_all_and_component_message(protocol: &str, component: &str) -> String {
-        format!(r#"Protocol "{}" is offered to both "all" and "{}""#, protocol, component)
-    }
-
-    // Test should fail because fuchsia.logger.LogSink is offered to #something twice
     #[test]
     fn offer_to_all_and_manual() {
         let input = r##"{
@@ -2085,11 +2077,49 @@ mod tests {
             &Vec::new(),
         );
 
+        // exact duplication is allowed
+        assert!(result.is_ok(), "{:#?}", result);
+
+        let input = r##"{
+            children: [
+                {
+                    name: "logger",
+                    url: "fuchsia-pkg://fuchsia.com/logger/stable#meta/logger.cm",
+                },
+                {
+                    name: "something",
+                    url: "fuchsia-pkg://fuchsia.com/something#meta/something.cm",
+                },
+            ],
+            offer: [
+                {
+                    protocol: "fuchsia.logger.LogSink",
+                    from: "parent",
+                    to: "all"
+                },
+                {
+                    protocol: "fuchsia.logger.FakLog",
+                    from: "parent",
+                    as: "fuchsia.logger.LogSink",
+                    to: "#something"
+                },
+            ]
+        }"##;
+
+        let result = write_and_validate_with_features(
+            "test.cml",
+            input.as_bytes(),
+            &FeatureSet::empty(),
+            &vec!["fuchsia.logger.LogSink".into()],
+            &Vec::new(),
+        );
+
+        // aliased duplications are forbidden
         assert_matches!(result,
             Err(Error::Validate { schema_name, err, filename }) => {
                 assert_eq!(
                     err,
-                    offer_to_all_and_component_message("fuchsia.logger.LogSink", "something"),
+                    offer_to_all_and_component_diff_protocols_message(&["fuchsia.logger.LogSink"], "something"),
                 );
                 assert!(schema_name.is_none());
                 assert!(filename.is_some(), "Expected there to be a filename in error message");
@@ -2129,11 +2159,12 @@ mod tests {
             &Vec::new(),
         );
 
+        // offering the same protocol without an alias from different sources is forbidden
         assert_matches!(result,
             Err(Error::Validate { schema_name, err, filename }) => {
                 assert_eq!(
                     err,
-                    offer_to_all_and_component_message("fuchsia.logger.LogSink", "something"),
+                    offer_to_all_and_component_diff_sources_message(&["fuchsia.logger.LogSink"], "something"),
                 );
                 assert!(schema_name.is_none());
                 assert!(filename.is_some(), "Expected there to be a filename in error message");
@@ -2223,6 +2254,12 @@ mod tests {
                     to: "#something",
                     as: "OtherOtherLogSink",
                 },
+                {
+                    protocol: "fuchsia.logger.LogSink",
+                    from: "parent",
+                    to: "#something",
+                    as: "fuchsia.logger.LogSink",
+                },
             ]
         }"##;
 
@@ -2266,6 +2303,11 @@ mod tests {
                     protocol: "fuchsia.logger.LogSink",
                     from: "parent",
                     to: "#logger"
+                },
+                {
+                    protocol: "fuchsia.logger.LegacyLog",
+                    from: "parent",
+                    to: "#something"
                 },
             ]
         }"##;

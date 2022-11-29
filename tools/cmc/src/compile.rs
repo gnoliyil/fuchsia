@@ -105,6 +105,7 @@ mod tests {
     use super::*;
     use crate::features::Feature;
     use assert_matches::assert_matches;
+    use difference::Changeset;
     use fidl::encoding::unpersist;
     use fidl_fuchsia_component_decl as fdecl;
     use fidl_fuchsia_data as fdata;
@@ -114,7 +115,7 @@ mod tests {
     use tempfile::TempDir;
 
     #[track_caller]
-    fn compile_test_with_forced_runner(
+    fn compile_test_all_options(
         in_path: PathBuf,
         out_path: PathBuf,
         includepath: Option<PathBuf>,
@@ -122,6 +123,8 @@ mod tests {
         expected_output: fdecl::Component,
         features: &FeatureSet,
         experimental_force_runner: &Option<String>,
+        must_offer: &[String],
+        must_use: &[String],
     ) -> Result<(), Error> {
         File::create(&in_path).unwrap().write_all(format!("{}", input).as_bytes()).unwrap();
         let includepath = includepath.unwrap_or(PathBuf::new());
@@ -135,20 +138,66 @@ mod tests {
             Some("test.cvf"),
             features,
             experimental_force_runner,
-            validate::ProtocolRequirements { must_offer: &[], must_use: &[] },
+            validate::ProtocolRequirements { must_offer, must_use },
         )?;
         let mut buffer = Vec::new();
         fs::File::open(&out_path).unwrap().read_to_end(&mut buffer).unwrap();
 
         let output: fdecl::Component = unpersist(&buffer).unwrap();
         if output != expected_output {
-            panic!(
-                "compiled output did not match expected\nactual: {:#?}\nexpected: {:#?}",
-                output, expected_output
-            );
+            let e = format!("{:#?}", expected_output);
+            let a = format!("{:#?}", output);
+            panic!("compiled output did not match expected\n{}", Changeset::new(&a, &e, "\n"));
         }
 
         Ok(())
+    }
+
+    #[track_caller]
+    fn compile_test_with_forced_runner(
+        in_path: PathBuf,
+        out_path: PathBuf,
+        includepath: Option<PathBuf>,
+        input: serde_json::value::Value,
+        expected_output: fdecl::Component,
+        features: &FeatureSet,
+        experimental_force_runner: &Option<String>,
+    ) -> Result<(), Error> {
+        compile_test_all_options(
+            in_path,
+            out_path,
+            includepath,
+            input,
+            expected_output,
+            features,
+            experimental_force_runner,
+            &[],
+            &[],
+        )
+    }
+
+    #[track_caller]
+    fn compile_test_with_required_protocols(
+        in_path: PathBuf,
+        out_path: PathBuf,
+        includepath: Option<PathBuf>,
+        input: serde_json::value::Value,
+        expected_output: fdecl::Component,
+        features: &FeatureSet,
+        must_offer: &[String],
+        must_use: &[String],
+    ) -> Result<(), Error> {
+        compile_test_all_options(
+            in_path,
+            out_path,
+            includepath,
+            input,
+            expected_output,
+            features,
+            &None,
+            must_offer,
+            must_use,
+        )
     }
 
     #[track_caller]
@@ -900,6 +949,104 @@ mod tests {
                 ..default_component_decl()
             },
             &FeatureSet::empty(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_offer_to_all_with_shards() {
+        let tmp_dir = TempDir::new().unwrap();
+        let offer_path = tmp_dir.path().join("offer.shard.cml");
+        let shard_input = json!({
+            "offer": [
+                {
+                    "protocol": "fuchsia.logger.LogSink",
+                    "from": "parent",
+                    "to": "all",
+                },
+                {
+                    "protocol": "fuchsia.inspect.InspectSink",
+                    "from": "parent",
+                    "to": "all",
+                },
+            ],
+        });
+        fs::File::create(&offer_path)
+            .unwrap()
+            .write_all(format!("{}", shard_input).as_bytes())
+            .unwrap();
+
+        let foo_path = tmp_dir.path().join("foo.shard.cml");
+        let foo_input = json!({
+            "include": ["offer.shard.cml"],
+            "children": [
+                {
+                    "name": "foo",
+                    "url": "fuchsia-pkg://fuchsia.com/foo/stable#meta/foo.cm",
+                },
+            ],
+        });
+        fs::File::create(&foo_path)
+            .unwrap()
+            .write_all(format!("{}", foo_input).as_bytes())
+            .unwrap();
+
+        let main_input = json!({
+            "include": [
+                "offer.shard.cml",
+                "foo.shard.cml",
+            ],
+        });
+
+        let expected_output = fdecl::Component {
+            offers: Some(vec![
+                fdecl::Offer::Protocol(fdecl::OfferProtocol {
+                    source: Some(fdecl::Ref::Parent(fdecl::ParentRef {})),
+                    source_name: Some("fuchsia.logger.LogSink".into()),
+                    target: Some(fdecl::Ref::Child(fdecl::ChildRef {
+                        name: "foo".into(),
+                        collection: None,
+                    })),
+                    target_name: Some("fuchsia.logger.LogSink".into()),
+                    dependency_type: Some(fdecl::DependencyType::Strong),
+                    availability: Some(fdecl::Availability::Required),
+                    unknown_data: None,
+                    ..fdecl::OfferProtocol::EMPTY
+                }),
+                fdecl::Offer::Protocol(fdecl::OfferProtocol {
+                    source: Some(fdecl::Ref::Parent(fdecl::ParentRef {})),
+                    source_name: Some("fuchsia.inspect.InspectSink".into()),
+                    target: Some(fdecl::Ref::Child(fdecl::ChildRef {
+                        name: "foo".into(),
+                        collection: None,
+                    })),
+                    target_name: Some("fuchsia.inspect.InspectSink".into()),
+                    dependency_type: Some(fdecl::DependencyType::Strong),
+                    availability: Some(fdecl::Availability::Required),
+                    unknown_data: None,
+                    ..fdecl::OfferProtocol::EMPTY
+                }),
+            ]),
+            children: Some(vec![fdecl::Child {
+                name: Some("foo".into()),
+                url: Some("fuchsia-pkg://fuchsia.com/foo/stable#meta/foo.cm".into()),
+                startup: Some(fdecl::StartupMode::Lazy),
+                ..fdecl::Child::EMPTY
+            }]),
+            ..default_component_decl()
+        };
+
+        let in_path = tmp_dir.path().join("test.cml");
+        let out_path = tmp_dir.path().join("test.cm");
+        compile_test_with_required_protocols(
+            in_path,
+            out_path,
+            Some(tmp_dir.into_path()),
+            main_input,
+            expected_output,
+            &FeatureSet::empty(),
+            &["fuchsia.logger.LogSink".into()],
+            &[],
         )
         .unwrap();
     }

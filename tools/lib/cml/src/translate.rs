@@ -4,12 +4,12 @@
 
 use {
     crate::{
-        error::Error, AnyRef, AsClause, Availability, Capability, CapabilityClause, Child,
-        Collection, ConfigKey, ConfigNestedValueType, ConfigValueType, DebugRegistration, Document,
-        Environment, EnvironmentExtends, EnvironmentRef, EventScope, EventSubscriptionsClause,
-        Expose, ExposeFromRef, ExposeToRef, FromClause, Offer, OfferToRef, OneOrMany, Path,
-        PathClause, Program, ResolverRegistration, RightsClause, RunnerRegistration,
-        SourceAvailability, Use, UseFromRef,
+        error::Error, offer_to_all_would_duplicate, AnyRef, AsClause, Availability, Capability,
+        CapabilityClause, Child, Collection, ConfigKey, ConfigNestedValueType, ConfigValueType,
+        DebugRegistration, Document, Environment, EnvironmentExtends, EnvironmentRef, EventScope,
+        EventSubscriptionsClause, Expose, ExposeFromRef, ExposeToRef, FromClause, Offer,
+        OfferToRef, OneOrMany, Path, PathClause, Program, ResolverRegistration, RightsClause,
+        RunnerRegistration, SourceAvailability, Use, UseFromRef,
     },
     cm_types::{self as cm, Name},
     fidl_fuchsia_component_decl as fdecl, fidl_fuchsia_data as fdata, fidl_fuchsia_io as fio,
@@ -566,37 +566,59 @@ fn derive_source_and_availability(
     }
 }
 
+/// Emit a specialized offer from `offer_to_all` for `target`, unless it
+/// overlaps with an offer in `specialized_offers`.
+fn maybe_generate_specialization_from_all(
+    offer_to_all: &Offer,
+    specialized_offers: &[Offer],
+    target: &cm_types::Name,
+) -> Option<Offer> {
+    if specialized_offers.iter().all(|specialized| {
+        // Assume that the cml being parsed is valid, which is the only
+        // way that this function errors
+        !offer_to_all_would_duplicate(offer_to_all, specialized, target).unwrap()
+    }) {
+        let mut local_offer = Offer::clone(offer_to_all);
+        local_offer.to = OneOrMany::One(OfferToRef::Named((*target).clone()));
+        Some(local_offer)
+    } else {
+        None
+    }
+}
+
 fn expand_offer_to_all(
     offers_in: &Vec<Offer>,
     children: &BTreeSet<&Name>,
     collections: &BTreeSet<&Name>,
 ) -> Result<Vec<Offer>, Error> {
-    let offers_to_all = offers_in
-        .iter()
-        .filter(|o| matches!(o.to, OneOrMany::One(OfferToRef::All)))
-        .collect::<Vec<_>>();
+    let offers_to_all =
+        offers_in.iter().filter(|offer| matches!(offer.to, OneOrMany::One(OfferToRef::All)));
 
-    let mut final_offers = offers_in
+    let mut specialized_offers = offers_in
         .iter()
         .filter(|o| !matches!(o.to, OneOrMany::One(OfferToRef::All)))
         .map(Offer::clone)
         .collect::<Vec<Offer>>();
 
-    offers_to_all.iter().for_each(|o| {
+    for offer in offers_to_all {
         for child in children {
-            let mut local_offer = Offer::clone(o);
-            local_offer.to = OneOrMany::One(OfferToRef::Named((**child).clone()));
-            final_offers.push(local_offer);
+            if let Some(offer) =
+                maybe_generate_specialization_from_all(offer, &specialized_offers, child)
+            {
+                specialized_offers.push(offer);
+            }
         }
 
         for collection in collections {
-            let mut local_offer = Offer::clone(o);
-            local_offer.to = OneOrMany::One(OfferToRef::Named((**collection).clone()));
-            final_offers.push(local_offer);
+            if let Some(offer) =
+                maybe_generate_specialization_from_all(offer, &specialized_offers, collection)
+            {
+                specialized_offers.push(offer);
+            }
         }
-    });
+    }
 
-    Ok(final_offers)
+    Ok(specialized_offers)
 }
 
 /// `offer` rules route multiple capabilities from multiple sources to multiple targets.
@@ -1695,18 +1717,20 @@ mod tests {
     use {
         super::*,
         crate::{
-            error::Error, AnyRef, AsClause, Capability, CapabilityClause, Child, Collection,
-            DebugRegistration, Document, Environment, EnvironmentExtends, EnvironmentRef,
-            EventSubscriptionsClause, Expose, ExposeFromRef, ExposeToRef, FromClause, Offer,
-            OneOrMany, Path, PathClause, Program, ResolverRegistration, RightsClause,
-            RunnerRegistration, Use, UseFromRef,
+            create_offer, error::Error, AnyRef, AsClause, Capability, CapabilityClause, Child,
+            Collection, DebugRegistration, Document, Environment, EnvironmentExtends,
+            EnvironmentRef, EventSubscriptionsClause, Expose, ExposeFromRef, ExposeToRef,
+            FromClause, Offer, OfferFromRef, OneOrMany, Path, PathClause, Program,
+            ResolverRegistration, RightsClause, RunnerRegistration, Use, UseFromRef,
         },
+        assert_matches::assert_matches,
         cm_types::{self as cm, Name},
         difference::Changeset,
         fidl_fuchsia_component_decl as fdecl, fidl_fuchsia_data as fdata, fidl_fuchsia_io as fio,
         serde_json::{json, Map, Value},
         std::collections::BTreeSet,
         std::convert::Into,
+        std::str::FromStr,
     };
 
     macro_rules! test_compile {
@@ -1728,7 +1752,7 @@ mod tests {
                 if actual != $expected {
                     let e = format!("{:#?}", $expected);
                     let a = format!("{:#?}", actual);
-                    panic!("{}", Changeset::new(&e, &a, "\n"));
+                    panic!("{}", Changeset::new(&a, &e, "\n"));
                 }
             }
         )+
@@ -1858,10 +1882,33 @@ mod tests {
                         "from": "parent",
                         "to": "all",
                     },
+                    {
+                        "protocol": "fuchsia.inspect.InspectSink",
+                        "from": "parent",
+                        "to": "all",
+                    },
+                    {
+                        "protocol": "fuchsia.logger.LegacyLog",
+                        "from": "parent",
+                        "to": "#logger",
+                    },
                 ],
             }),
             output = fdecl::Component {
                 offers: Some(vec![
+                    fdecl::Offer::Protocol(fdecl::OfferProtocol {
+                        source: Some(fdecl::Ref::Parent(fdecl::ParentRef {})),
+                        source_name: Some("fuchsia.logger.LegacyLog".into()),
+                        target: Some(fdecl::Ref::Child(fdecl::ChildRef {
+                            name: "logger".into(),
+                            collection: None,
+                        })),
+                        target_name: Some("fuchsia.logger.LegacyLog".into()),
+                        dependency_type: Some(fdecl::DependencyType::Strong),
+                        availability: Some(fdecl::Availability::Required),
+                        unknown_data: None,
+                        ..fdecl::OfferProtocol::EMPTY
+                    }),
                     fdecl::Offer::Protocol(fdecl::OfferProtocol {
                         source: Some(fdecl::Ref::Parent(fdecl::ParentRef {})),
                         source_name: Some("fuchsia.logger.LogSink".into()),
@@ -1900,6 +1947,44 @@ mod tests {
                         unknown_data: None,
                         ..fdecl::OfferProtocol::EMPTY
                     }),
+                    fdecl::Offer::Protocol(fdecl::OfferProtocol {
+                        source: Some(fdecl::Ref::Parent(fdecl::ParentRef {})),
+                        source_name: Some("fuchsia.inspect.InspectSink".into()),
+                        target: Some(fdecl::Ref::Child(fdecl::ChildRef {
+                            name: "logger".into(),
+                            collection: None,
+                        })),
+                        target_name: Some("fuchsia.inspect.InspectSink".into()),
+                        dependency_type: Some(fdecl::DependencyType::Strong),
+                        availability: Some(fdecl::Availability::Required),
+                        unknown_data: None,
+                        ..fdecl::OfferProtocol::EMPTY
+                    }),
+                    fdecl::Offer::Protocol(fdecl::OfferProtocol {
+                        source: Some(fdecl::Ref::Parent(fdecl::ParentRef {})),
+                        source_name: Some("fuchsia.inspect.InspectSink".into()),
+                        target: Some(fdecl::Ref::Child(fdecl::ChildRef {
+                            name: "something".into(),
+                            collection: None,
+                        })),
+                        target_name: Some("fuchsia.inspect.InspectSink".into()),
+                        dependency_type: Some(fdecl::DependencyType::Strong),
+                        availability: Some(fdecl::Availability::Required),
+                        unknown_data: None,
+                        ..fdecl::OfferProtocol::EMPTY
+                    }),
+                    fdecl::Offer::Protocol(fdecl::OfferProtocol {
+                        source: Some(fdecl::Ref::Parent(fdecl::ParentRef {})),
+                        source_name: Some("fuchsia.inspect.InspectSink".into()),
+                        target: Some(fdecl::Ref::Collection(fdecl::CollectionRef {
+                            name: "coll".into(),
+                        })),
+                        target_name: Some("fuchsia.inspect.InspectSink".into()),
+                        dependency_type: Some(fdecl::DependencyType::Strong),
+                        availability: Some(fdecl::Availability::Required),
+                        unknown_data: None,
+                        ..fdecl::OfferProtocol::EMPTY
+                    }),
                 ]),
                 children: Some(vec![
                     fdecl::Child {
@@ -1922,6 +2007,217 @@ mod tests {
                     durability: Some(fdecl::Durability::Transient),
                     ..fdecl::Collection::EMPTY
                 }]),
+                ..default_component_decl()
+            },
+        },
+
+        test_compile_offer_to_all_exact_duplicate => {
+            input = json!({
+                "children": [
+                    {
+                        "name": "logger",
+                        "url": "fuchsia-pkg://fuchsia.com/logger/stable#meta/logger.cm",
+                    },
+                    {
+                        "name": "something",
+                        "url": "fuchsia-pkg://fuchsia.com/something/stable#meta/something.cm",
+                    },
+                    {
+                        "name": "something-v2",
+                        "url": "fuchsia-pkg://fuchsia.com/something/stable#meta/something-v2.cm",
+                    },
+                ],
+                "collections": [
+                    {
+                        "name": "coll",
+                        "durability": "transient",
+                    },
+                    {
+                        "name": "coll2",
+                        "durability": "transient",
+                    },
+                ],
+                "offer": [
+                    {
+                        "protocol": "fuchsia.logger.LogSink",
+                        "from": "parent",
+                        "to": "all",
+                    },
+                    {
+                        "protocol": "fuchsia.logger.LogSink",
+                        "from": "parent",
+                        "to": "all",
+                    },
+                    {
+                        "protocol": "fuchsia.logger.LogSink",
+                        "from": "parent",
+                        "to": [ "#something", "#something-v2", "#coll2"],
+                    },
+                    {
+                        "protocol": "fuchsia.logger.LogSink",
+                        "from": "parent",
+                        "to": "#coll",
+                    },
+                ],
+            }),
+            output = fdecl::Component {
+                offers: Some(vec![
+                    fdecl::Offer::Protocol(fdecl::OfferProtocol {
+                        source: Some(fdecl::Ref::Parent(fdecl::ParentRef {})),
+                        source_name: Some("fuchsia.logger.LogSink".into()),
+                        target: Some(fdecl::Ref::Child(fdecl::ChildRef {
+                            name: "something".into(),
+                            collection: None,
+                        })),
+                        target_name: Some("fuchsia.logger.LogSink".into()),
+                        dependency_type: Some(fdecl::DependencyType::Strong),
+                        availability: Some(fdecl::Availability::Required),
+                        unknown_data: None,
+                        ..fdecl::OfferProtocol::EMPTY
+                    }),
+                    fdecl::Offer::Protocol(fdecl::OfferProtocol {
+                        source: Some(fdecl::Ref::Parent(fdecl::ParentRef {})),
+                        source_name: Some("fuchsia.logger.LogSink".into()),
+                        target: Some(fdecl::Ref::Child(fdecl::ChildRef {
+                            name: "something-v2".into(),
+                            collection: None,
+                        })),
+                        target_name: Some("fuchsia.logger.LogSink".into()),
+                        dependency_type: Some(fdecl::DependencyType::Strong),
+                        availability: Some(fdecl::Availability::Required),
+                        unknown_data: None,
+                        ..fdecl::OfferProtocol::EMPTY
+                    }),
+                    fdecl::Offer::Protocol(fdecl::OfferProtocol {
+                        source: Some(fdecl::Ref::Parent(fdecl::ParentRef {})),
+                        source_name: Some("fuchsia.logger.LogSink".into()),
+                        target: Some(fdecl::Ref::Collection(fdecl::CollectionRef {
+                            name: "coll2".into(),
+                        })),
+                        target_name: Some("fuchsia.logger.LogSink".into()),
+                        dependency_type: Some(fdecl::DependencyType::Strong),
+                        availability: Some(fdecl::Availability::Required),
+                        unknown_data: None,
+                        ..fdecl::OfferProtocol::EMPTY
+                    }),
+                    fdecl::Offer::Protocol(fdecl::OfferProtocol {
+                        source: Some(fdecl::Ref::Parent(fdecl::ParentRef {})),
+                        source_name: Some("fuchsia.logger.LogSink".into()),
+                        target: Some(fdecl::Ref::Collection(fdecl::CollectionRef {
+                            name: "coll".into(),
+                        })),
+                        target_name: Some("fuchsia.logger.LogSink".into()),
+                        dependency_type: Some(fdecl::DependencyType::Strong),
+                        availability: Some(fdecl::Availability::Required),
+                        unknown_data: None,
+                        ..fdecl::OfferProtocol::EMPTY
+                    }),
+                    fdecl::Offer::Protocol(fdecl::OfferProtocol {
+                        source: Some(fdecl::Ref::Parent(fdecl::ParentRef {})),
+                        source_name: Some("fuchsia.logger.LogSink".into()),
+                        target: Some(fdecl::Ref::Child(fdecl::ChildRef {
+                            name: "logger".into(),
+                            collection: None,
+                        })),
+                        target_name: Some("fuchsia.logger.LogSink".into()),
+                        dependency_type: Some(fdecl::DependencyType::Strong),
+                        availability: Some(fdecl::Availability::Required),
+                        unknown_data: None,
+                        ..fdecl::OfferProtocol::EMPTY
+                    }),
+                ]),
+                children: Some(vec![
+                    fdecl::Child {
+                        name: Some("logger".into()),
+                        url: Some("fuchsia-pkg://fuchsia.com/logger/stable#meta/logger.cm".into()),
+                        startup: Some(fdecl::StartupMode::Lazy),
+                        ..fdecl::Child::EMPTY
+                    },
+                    fdecl::Child {
+                        name: Some("something".into()),
+                        url: Some(
+                            "fuchsia-pkg://fuchsia.com/something/stable#meta/something.cm".into(),
+                        ),
+                        startup: Some(fdecl::StartupMode::Lazy),
+                        ..fdecl::Child::EMPTY
+                    },
+                    fdecl::Child {
+                        name: Some("something-v2".into()),
+                        url: Some(
+                            "fuchsia-pkg://fuchsia.com/something/stable#meta/something-v2.cm".into(),
+                        ),
+                        startup: Some(fdecl::StartupMode::Lazy),
+                        ..fdecl::Child::EMPTY
+                    },
+                ]),
+                collections: Some(vec![fdecl::Collection {
+                    name: Some("coll".into()),
+                    durability: Some(fdecl::Durability::Transient),
+                    ..fdecl::Collection::EMPTY
+                }, fdecl::Collection {
+                    name: Some("coll2".into()),
+                    durability: Some(fdecl::Durability::Transient),
+                    ..fdecl::Collection::EMPTY
+                }]),
+                ..default_component_decl()
+            },
+        },
+
+        test_compile_offer_multiple_protocols_to_all_array_syntax => {
+            input = json!({
+                "children": [
+                    {
+                        "name": "something",
+                        "url": "fuchsia-pkg://fuchsia.com/something/stable#meta/something.cm",
+                    },
+                ],
+                "offer": [
+                    {
+                        "protocol": ["fuchsia.logger.LogSink", "fuchsia.inspect.InspectSink",],
+                        "from": "parent",
+                        "to": "all",
+                    },
+                ],
+            }),
+            output = fdecl::Component {
+                offers: Some(vec![
+                    fdecl::Offer::Protocol(fdecl::OfferProtocol {
+                        source: Some(fdecl::Ref::Parent(fdecl::ParentRef {})),
+                        source_name: Some("fuchsia.logger.LogSink".into()),
+                        target: Some(fdecl::Ref::Child(fdecl::ChildRef {
+                            name: "something".into(),
+                            collection: None,
+                        })),
+                        target_name: Some("fuchsia.logger.LogSink".into()),
+                        dependency_type: Some(fdecl::DependencyType::Strong),
+                        availability: Some(fdecl::Availability::Required),
+                        unknown_data: None,
+                        ..fdecl::OfferProtocol::EMPTY
+                    }),
+                    fdecl::Offer::Protocol(fdecl::OfferProtocol {
+                        source: Some(fdecl::Ref::Parent(fdecl::ParentRef {})),
+                        source_name: Some("fuchsia.inspect.InspectSink".into()),
+                        target: Some(fdecl::Ref::Child(fdecl::ChildRef {
+                            name: "something".into(),
+                            collection: None,
+                        })),
+                        target_name: Some("fuchsia.inspect.InspectSink".into()),
+                        dependency_type: Some(fdecl::DependencyType::Strong),
+                        availability: Some(fdecl::Availability::Required),
+                        unknown_data: None,
+                        ..fdecl::OfferProtocol::EMPTY
+                    }),
+                ]),
+                children: Some(vec![
+                    fdecl::Child {
+                        name: Some("something".into()),
+                        url: Some(
+                            "fuchsia-pkg://fuchsia.com/something/stable#meta/something.cm".into(),
+                        ),
+                        startup: Some(fdecl::StartupMode::Lazy),
+                        ..fdecl::Child::EMPTY
+                    },
+                ]),
                 ..default_component_decl()
             },
         },
@@ -4101,5 +4397,65 @@ mod tests {
                 ..fdecl::Component::EMPTY
             },
         },
+    }
+
+    #[test]
+    fn test_maybe_generate_specialization_from_all() {
+        let offer = create_offer(
+            "fuchsia.logger.LegacyLog",
+            OneOrMany::One(OfferFromRef::Parent {}),
+            OneOrMany::One(OfferToRef::All),
+        );
+
+        let mut offer_set = vec![create_offer(
+            "fuchsia.logger.LogSink",
+            OneOrMany::One(OfferFromRef::Parent {}),
+            OneOrMany::One(OfferToRef::All),
+        )];
+
+        let result = maybe_generate_specialization_from_all(
+            &offer,
+            &offer_set,
+            &Name::from_str("something").unwrap(),
+        )
+        .unwrap();
+
+        assert_matches!(result, Offer {protocol, from, to, ..} => {
+            assert_eq!(protocol, Some(OneOrMany::One(Name::from_str("fuchsia.logger.LegacyLog").unwrap())));
+            assert_eq!(from, OneOrMany::One(OfferFromRef::Parent {}));
+            assert_eq!(to, OneOrMany::One(OfferToRef::Named(Name::from_str("something").unwrap())));
+        });
+
+        offer_set.push(create_offer(
+            "fuchsia.inspect.InspectSink",
+            OneOrMany::One(OfferFromRef::Parent {}),
+            OneOrMany::One(OfferToRef::Named(Name::from_str("something").unwrap())),
+        ));
+
+        let result = maybe_generate_specialization_from_all(
+            &offer,
+            &offer_set,
+            &Name::from_str("something").unwrap(),
+        )
+        .unwrap();
+
+        assert_matches!(result, Offer {protocol, from, to, ..} => {
+            assert_eq!(protocol, Some(OneOrMany::One(Name::from_str("fuchsia.logger.LegacyLog").unwrap())));
+            assert_eq!(from, OneOrMany::One(OfferFromRef::Parent {}));
+            assert_eq!(to, OneOrMany::One(OfferToRef::Named(Name::from_str("something").unwrap())));
+        });
+
+        offer_set.push(create_offer(
+            "fuchsia.logger.LegacyLog",
+            OneOrMany::One(OfferFromRef::Parent {}),
+            OneOrMany::One(OfferToRef::Named(Name::from_str("something").unwrap())),
+        ));
+
+        assert!(maybe_generate_specialization_from_all(
+            &offer,
+            &offer_set,
+            &Name::from_str("something").unwrap()
+        )
+        .is_none());
     }
 }

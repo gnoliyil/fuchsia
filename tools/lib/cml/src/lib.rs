@@ -54,7 +54,7 @@ lazy_static! {
 /// names, however, are in different conceptual namespaces, and can't
 /// collide with each other.
 ///
-/// This enum allows such names to be specified disambuating what
+/// This enum allows such names to be specified disambiguating what
 /// namespace they are in.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum CapabilityId {
@@ -3039,6 +3039,117 @@ pub fn format_cml(buffer: &str, file: &std::path::Path) -> Result<Vec<u8>, Error
         .map_err(|e| Error::json5(e, file))
 }
 
+pub fn offer_to_all_and_component_diff_sources_message(
+    protocol: &[&str],
+    component: &str,
+) -> String {
+    format!(
+        r#"Protocol {:?} is offered to both "all" and "{}" with different sources"#,
+        protocol, component
+    )
+}
+
+pub fn offer_to_all_and_component_diff_protocols_message(
+    protocol: &[&str],
+    component: &str,
+) -> String {
+    format!(
+        r#"Protocol {:?} is aliased to "{}" with the same name as an offer to "all", but from different source protocols"#,
+        protocol, component
+    )
+}
+
+/// Returns `Ok(true)` if desugaring the `offer_to_all` using `name` duplicates
+/// `specific_offer`. Returns `Ok(false)` if not a duplicate.
+///
+/// Returns Err if there is a validation error.
+pub fn offer_to_all_would_duplicate(
+    offer_to_all: &Offer,
+    specific_offer: &Offer,
+    target: &cm_types::Name,
+) -> Result<bool, Error> {
+    // Only protocols may be offered to all
+    assert!(offer_to_all.protocol.is_some());
+
+    for specific_offer_cap_id in CapabilityId::from_offer_expose(specific_offer).iter().flatten() {
+        let matching_capability_found = CapabilityId::from_offer_expose(offer_to_all)
+            .iter()
+            .flatten()
+            .any(|offer_to_all_cap_id| offer_to_all_cap_id == specific_offer_cap_id);
+
+        if !matching_capability_found {
+            return Ok(false);
+        }
+    }
+
+    let to_field_matches = specific_offer
+        .to
+        .iter()
+        .any(|specific_offer_to| matches!(specific_offer_to, OfferToRef::Named(c) if c == target));
+
+    if !to_field_matches {
+        return Ok(false);
+    }
+
+    if offer_to_all.from != specific_offer.from {
+        return Err(Error::validate(offer_to_all_and_component_diff_sources_message(
+            offer_to_all
+                .protocol
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(Name::as_str)
+                .collect::<Vec<_>>()
+                .as_ref(),
+            target.as_str(),
+        )));
+    }
+
+    if offer_to_all.protocol != specific_offer.protocol {
+        return Err(Error::validate(offer_to_all_and_component_diff_protocols_message(
+            offer_to_all
+                .protocol
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(Name::as_str)
+                .collect::<Vec<_>>()
+                .as_ref(),
+            target.as_str(),
+        )));
+    }
+
+    Ok(true)
+}
+
+#[cfg(test)]
+pub fn create_offer(
+    protocol_name: &str,
+    from: OneOrMany<OfferFromRef>,
+    to: OneOrMany<OfferToRef>,
+) -> Offer {
+    Offer {
+        protocol: Some(OneOrMany::One(Name::from_str(protocol_name).unwrap())),
+        from,
+        to,
+        r#as: None,
+        service: None,
+        directory: None,
+        runner: None,
+        resolver: None,
+        storage: None,
+        event: None,
+        dependency: None,
+        rights: None,
+        subdir: None,
+        filter: None,
+        event_stream: None,
+        scope: None,
+        availability: None,
+        source_availability: None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3556,6 +3667,85 @@ mod tests {
         let expected =
             document(json!({ "program": { "binary": "bin/hello_world", "runner": "elf" } }));
         assert_eq!(some.program, expected.program);
+    }
+
+    #[test]
+    fn test_offer_would_duplicate() {
+        let offer = create_offer(
+            "fuchsia.logger.LegacyLog",
+            OneOrMany::One(OfferFromRef::Parent {}),
+            OneOrMany::One(OfferToRef::Named(Name::from_str("something").unwrap())),
+        );
+
+        let offer_to_all = create_offer(
+            "fuchsia.logger.LogSink",
+            OneOrMany::One(OfferFromRef::Parent {}),
+            OneOrMany::One(OfferToRef::All),
+        );
+
+        // different protocols
+        assert!(!offer_to_all_would_duplicate(
+            &offer_to_all,
+            &offer,
+            &Name::from_str("something").unwrap()
+        )
+        .unwrap());
+
+        let offer = create_offer(
+            "fuchsia.logger.LogSink",
+            OneOrMany::One(OfferFromRef::Parent {}),
+            OneOrMany::One(OfferToRef::Named(Name::from_str("not-something").unwrap())),
+        );
+
+        // different targets
+        assert!(!offer_to_all_would_duplicate(
+            &offer_to_all,
+            &offer,
+            &Name::from_str("something").unwrap()
+        )
+        .unwrap());
+
+        let mut offer = create_offer(
+            "fuchsia.logger.LogSink",
+            OneOrMany::One(OfferFromRef::Parent {}),
+            OneOrMany::One(OfferToRef::Named(Name::from_str("something").unwrap())),
+        );
+
+        offer.r#as = Some(Name::from_str("FakeLog").unwrap());
+
+        // target has alias
+        assert!(!offer_to_all_would_duplicate(
+            &offer_to_all,
+            &offer,
+            &Name::from_str("something").unwrap()
+        )
+        .unwrap());
+
+        let offer = create_offer(
+            "fuchsia.logger.LogSink",
+            OneOrMany::One(OfferFromRef::Parent {}),
+            OneOrMany::One(OfferToRef::Named(Name::from_str("something").unwrap())),
+        );
+
+        assert!(offer_to_all_would_duplicate(
+            &offer_to_all,
+            &offer,
+            &Name::from_str("something").unwrap()
+        )
+        .unwrap());
+
+        let offer = create_offer(
+            "fuchsia.logger.LogSink",
+            OneOrMany::One(OfferFromRef::Named(Name::from_str("other").unwrap())),
+            OneOrMany::One(OfferToRef::Named(Name::from_str("something").unwrap())),
+        );
+
+        assert!(offer_to_all_would_duplicate(
+            &offer_to_all,
+            &offer,
+            &Name::from_str("something").unwrap()
+        )
+        .is_err());
     }
 
     #[test_case(
