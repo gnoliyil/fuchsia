@@ -17,10 +17,13 @@ use std::{
     default::Default,
     fmt::Debug,
     hash::Hash,
-    time::{Duration, Instant},
+    marker::PhantomData,
+    time::Duration,
 };
 use tracing::{info, warn};
 use zerocopy::ByteSlice;
+
+use crate::Instant;
 
 /// Initial Information-request timeout `INF_TIMEOUT` from [RFC 8415, Section 7.6].
 ///
@@ -275,11 +278,12 @@ pub type Actions = Vec<Action>;
 /// Holds data and provides methods for handling state transitions from information requesting
 /// state.
 #[derive(Debug)]
-struct InformationRequesting {
+struct InformationRequesting<I> {
     retrans_timeout: Duration,
+    _marker: PhantomData<I>,
 }
 
-impl InformationRequesting {
+impl<I> InformationRequesting<I> {
     /// Starts in information requesting state following [RFC 8415, Section 18.2.6].
     ///
     /// [RFC 8415, Section 18.2.6]: https://tools.ietf.org/html/rfc8415#section-18.2.6
@@ -287,8 +291,8 @@ impl InformationRequesting {
         transaction_id: [u8; 3],
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
-    ) -> Transition {
-        let info_req = Self { retrans_timeout: Default::default() };
+    ) -> Transition<I> {
+        let info_req = Self { retrans_timeout: Default::default(), _marker: Default::default() };
         info_req.send_and_schedule_retransmission(transaction_id, options_to_request, rng)
     }
 
@@ -297,7 +301,7 @@ impl InformationRequesting {
     ///
     /// [RFC 8415, Section 18.2.6]: https://tools.ietf.org/html/rfc8415#section-18.2.6
     fn retransmission_timeout<R: Rng>(&self, rng: &mut R) -> Duration {
-        let Self { retrans_timeout } = self;
+        let Self { retrans_timeout, _marker } = self;
         retransmission_timeout(
             *retrans_timeout,
             INITIAL_INFO_REQ_TIMEOUT,
@@ -313,7 +317,7 @@ impl InformationRequesting {
         transaction_id: [u8; 3],
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
-    ) -> Transition {
+    ) -> Transition<I> {
         let options_array = [v6::DhcpOption::Oro(options_to_request)];
         let options = if options_to_request.is_empty() { &[][..] } else { &options_array[..] };
 
@@ -325,7 +329,10 @@ impl InformationRequesting {
         let retrans_timeout = self.retransmission_timeout(rng);
 
         Transition {
-            state: ClientState::InformationRequesting(InformationRequesting { retrans_timeout }),
+            state: ClientState::InformationRequesting(InformationRequesting {
+                retrans_timeout,
+                _marker: Default::default(),
+            }),
             actions: vec![
                 Action::SendMessage(buf),
                 Action::ScheduleTimer(ClientTimerType::Retransmission, retrans_timeout),
@@ -340,14 +347,14 @@ impl InformationRequesting {
         transaction_id: [u8; 3],
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
-    ) -> Transition {
+    ) -> Transition<I> {
         self.send_and_schedule_retransmission(transaction_id, options_to_request, rng)
     }
 
     /// Handles reply to information requests based on [RFC 8415, Section 18.2.10.4].
     ///
     /// [RFC 8415, Section 18.2.10.4]: https://tools.ietf.org/html/rfc8415#section-18.2.10.4
-    fn reply_message_received<B: ByteSlice>(self, msg: v6::Message<'_, B>) -> Transition {
+    fn reply_message_received<B: ByteSlice>(self, msg: v6::Message<'_, B>) -> Transition<I> {
         // Note that although RFC 8415 states that SOL_MAX_RT must be handled,
         // we never send Solicit messages when running in stateless mode, so
         // there is no point in storing or doing anything with it.
@@ -424,6 +431,7 @@ impl InformationRequesting {
         Transition {
             state: ClientState::InformationReceived(InformationReceived {
                 dns_servers: dns_servers.unwrap_or(Vec::new()),
+                _marker: Default::default(),
             }),
             actions,
             transaction_id: None,
@@ -433,19 +441,20 @@ impl InformationRequesting {
 
 /// Provides methods for handling state transitions from information received state.
 #[derive(Debug)]
-struct InformationReceived {
+struct InformationReceived<I> {
     /// Stores the DNS servers received from the reply.
     dns_servers: Vec<Ipv6Addr>,
+    _marker: PhantomData<I>,
 }
 
-impl InformationReceived {
+impl<I> InformationReceived<I> {
     /// Refreshes information by starting another round of information request.
     fn refresh_timer_expired<R: Rng>(
         self,
         transaction_id: [u8; 3],
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
-    ) -> Transition {
+    ) -> Transition<I> {
         InformationRequesting::start(transaction_id, options_to_request, rng)
     }
 }
@@ -469,7 +478,7 @@ impl IaValue for Subnet<Ipv6Addr> {
 
 // Holds the information received in an Advertise message.
 #[derive(Debug, Clone)]
-struct AdvertiseMessage {
+struct AdvertiseMessage<I> {
     server_id: Vec<u8>,
     /// The advertised non-temporary addresses.
     ///
@@ -481,12 +490,12 @@ struct AdvertiseMessage {
     delegated_prefixes: HashMap<v6::IAID, HashSet<Subnet<Ipv6Addr>>>,
     dns_servers: Vec<Ipv6Addr>,
     preference: u8,
-    receive_time: Instant,
+    receive_time: I,
     preferred_non_temporary_addresses_count: usize,
     preferred_delegated_prefixes_count: usize,
 }
 
-impl AdvertiseMessage {
+impl<I> AdvertiseMessage<I> {
     fn has_ias(&self) -> bool {
         let Self {
             server_id: _,
@@ -517,10 +526,10 @@ impl AdvertiseMessage {
 //    be preferred over all other Advertise messages. The client MAY choose a
 //    less preferred server if that server has a better set of advertised
 //    parameters, such as the available set of IAs.
-impl Ord for AdvertiseMessage {
+impl<I: Instant> Ord for AdvertiseMessage<I> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         #[derive(PartialEq, Eq, PartialOrd, Ord)]
-        struct Candidate {
+        struct Candidate<I> {
             // First prefer the advertisement with at least one IA_NA.
             has_ia_na: bool,
             // Then prefer the advertisement with at least one IA_PD.
@@ -541,13 +550,13 @@ impl Ord for AdvertiseMessage {
             // servers.
             dns_server_count: usize,
             // Then prefer the advertisement received first.
-            other_candidate_rcv_time: Instant,
+            other_candidate_rcv_time: I,
         }
 
-        impl Candidate {
+        impl<I: Instant> Candidate<I> {
             fn from_advertisements(
-                candidate: &AdvertiseMessage,
-                other_candidate: &AdvertiseMessage,
+                candidate: &AdvertiseMessage<I>,
+                other_candidate: &AdvertiseMessage<I>,
             ) -> Self {
                 let AdvertiseMessage {
                     server_id: _,
@@ -589,19 +598,19 @@ impl Ord for AdvertiseMessage {
     }
 }
 
-impl PartialOrd for AdvertiseMessage {
+impl<I: Instant> PartialOrd for AdvertiseMessage<I> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl PartialEq for AdvertiseMessage {
+impl<I: Instant> PartialEq for AdvertiseMessage<I> {
     fn eq(&self, other: &Self) -> bool {
         self.cmp(other) == std::cmp::Ordering::Equal
     }
 }
 
-impl Eq for AdvertiseMessage {}
+impl<I: Instant> Eq for AdvertiseMessage<I> {}
 
 // Returns a count of entries in where the value matches the configured value
 // with the same IAID.
@@ -619,7 +628,7 @@ fn compute_preferred_ia_count<V: IaValue>(
 }
 
 // Calculates the elapsed time since `start_time`, in centiseconds.
-fn elapsed_time_in_centisecs(start_time: Instant, now: Instant) -> u16 {
+fn elapsed_time_in_centisecs<I: Instant>(start_time: I, now: I) -> u16 {
     u16::try_from(
         now.duration_since(start_time)
             .as_millis()
@@ -1635,7 +1644,7 @@ impl<
 /// Provides methods for handling state transitions from server discovery
 /// state.
 #[derive(Debug)]
-struct ServerDiscovery {
+struct ServerDiscovery<I> {
     /// [Client Identifier] used for uniquely identifying the client in
     /// communication with servers.
     ///
@@ -1648,7 +1657,7 @@ struct ServerDiscovery {
     /// The time of the first solicit. Used in calculating the [elapsed time].
     ///
     /// [elapsed time]:https://datatracker.ietf.org/doc/html/rfc8415#section-21.9
-    first_solicit_time: Instant,
+    first_solicit_time: I,
     /// The solicit retransmission timeout.
     retrans_timeout: Duration,
     /// The [SOL_MAX_RT] used by the client.
@@ -1659,12 +1668,12 @@ struct ServerDiscovery {
     /// the best advertise at the top of the heap.
     ///
     /// [server discovery]: https://datatracker.ietf.org/doc/html/rfc8415#section-18
-    collected_advertise: BinaryHeap<AdvertiseMessage>,
+    collected_advertise: BinaryHeap<AdvertiseMessage<I>>,
     /// The valid SOL_MAX_RT options received from servers.
     collected_sol_max_rt: Vec<u32>,
 }
 
-impl ServerDiscovery {
+impl<I: Instant> ServerDiscovery<I> {
     /// Starts server discovery by sending a solicit message, as described in
     /// [RFC 8415, Section 18.2.1].
     ///
@@ -1677,8 +1686,8 @@ impl ServerDiscovery {
         options_to_request: &[v6::OptionCode],
         solicit_max_rt: Duration,
         rng: &mut R,
-        now: Instant,
-    ) -> Transition {
+        now: I,
+    ) -> Transition<I> {
         Self {
             client_id,
             configured_non_temporary_addresses,
@@ -1716,8 +1725,8 @@ impl ServerDiscovery {
         transaction_id: [u8; 3],
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
-        now: Instant,
-    ) -> Transition {
+        now: I,
+    ) -> Transition<I> {
         let Self {
             client_id,
             configured_non_temporary_addresses,
@@ -1793,8 +1802,7 @@ impl ServerDiscovery {
         }
         .build();
 
-        let retrans_timeout =
-            ServerDiscovery::retransmission_timeout(retrans_timeout, solicit_max_rt, rng);
+        let retrans_timeout = Self::retransmission_timeout(retrans_timeout, solicit_max_rt, rng);
 
         Transition {
             state: ClientState::ServerDiscovery(ServerDiscovery {
@@ -1822,8 +1830,8 @@ impl ServerDiscovery {
         transaction_id: [u8; 3],
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
-        now: Instant,
-    ) -> Transition {
+        now: I,
+    ) -> Transition<I> {
         let Self {
             client_id,
             configured_non_temporary_addresses,
@@ -1889,8 +1897,8 @@ impl ServerDiscovery {
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
         msg: v6::Message<'_, B>,
-        now: Instant,
-    ) -> Transition {
+        now: I,
+    ) -> Transition<I> {
         let Self {
             client_id,
             configured_non_temporary_addresses,
@@ -2234,7 +2242,7 @@ fn get_nonzero_min(
 
 /// Provides methods for handling state transitions from requesting state.
 #[derive(Debug)]
-struct Requesting {
+struct Requesting<I> {
     /// [Client Identifier] used for uniquely identifying the client in
     /// communication with servers.
     ///
@@ -2255,11 +2263,11 @@ struct Requesting {
     ///
     /// [server discovery]:
     /// https://datatracker.ietf.org/doc/html/rfc8415#section-18
-    collected_advertise: BinaryHeap<AdvertiseMessage>,
+    collected_advertise: BinaryHeap<AdvertiseMessage<I>>,
     /// The time of the first request. Used in calculating the [elapsed time].
     ///
     /// [elapsed time]: https://datatracker.ietf.org/doc/html/rfc8415#section-21.9
-    first_request_time: Instant,
+    first_request_time: I,
     /// The request retransmission timeout.
     retrans_timeout: Duration,
     /// The number of request messages transmitted.
@@ -2282,16 +2290,16 @@ struct Requesting {
 ///    SHOULD stop using all the addresses and delegated prefixes for which
 ///    it has bindings and try to obtain all required leases from the new
 ///    server.
-fn request_from_alternate_server_or_restart_server_discovery<R: Rng>(
+fn request_from_alternate_server_or_restart_server_discovery<I: Instant, R: Rng>(
     client_id: [u8; CLIENT_ID_LEN],
     non_temporary_addresses: HashMap<v6::IAID, AddressEntry>,
     delegated_prefixes: HashMap<v6::IAID, PrefixEntry>,
     options_to_request: &[v6::OptionCode],
-    mut collected_advertise: BinaryHeap<AdvertiseMessage>,
+    mut collected_advertise: BinaryHeap<AdvertiseMessage<I>>,
     solicit_max_rt: Duration,
     rng: &mut R,
-    now: Instant,
-) -> Transition {
+    now: I,
+) -> Transition<I> {
     let configured_non_temporary_addresses = to_configured_values(non_temporary_addresses);
     let configured_delegated_prefixes = to_configured_values(delegated_prefixes);
     if let Some(advertise) = collected_advertise.pop() {
@@ -3182,7 +3190,7 @@ fn advertise_to_ia_entries<V: IaValue>(
         .collect()
 }
 
-impl Requesting {
+impl<I: Instant> Requesting<I> {
     /// Starts in requesting state following [RFC 8415, Section 18.2.2].
     ///
     /// [RFC 8415, Section 18.2.2]: https://tools.ietf.org/html/rfc8415#section-18.2.2
@@ -3192,11 +3200,11 @@ impl Requesting {
         non_temporary_addresses: HashMap<v6::IAID, AddressEntry>,
         delegated_prefixes: HashMap<v6::IAID, PrefixEntry>,
         options_to_request: &[v6::OptionCode],
-        collected_advertise: BinaryHeap<AdvertiseMessage>,
+        collected_advertise: BinaryHeap<AdvertiseMessage<I>>,
         solicit_max_rt: Duration,
         rng: &mut R,
-        now: Instant,
-    ) -> Transition {
+        now: I,
+    ) -> Transition<I> {
         Self {
             client_id,
             non_temporary_addresses,
@@ -3238,9 +3246,9 @@ impl Requesting {
         transaction_id: [u8; 3],
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
-        now: Instant,
+        now: I,
         initial_actions: impl Iterator<Item = Action>,
-    ) -> Transition {
+    ) -> Transition<I> {
         let Transition { state, actions: request_actions, transaction_id } = self
             .send_and_schedule_retransmission(
                 transaction_id,
@@ -3266,9 +3274,9 @@ impl Requesting {
         transaction_id: [u8; 3],
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
-        now: Instant,
+        now: I,
         initial_actions: impl Iterator<Item = Action>,
-    ) -> Transition {
+    ) -> Transition<I> {
         let Self {
             client_id,
             server_id,
@@ -3383,8 +3391,8 @@ impl Requesting {
         request_transaction_id: [u8; 3],
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
-        now: Instant,
-    ) -> Transition {
+        now: I,
+    ) -> Transition<I> {
         let Self {
             client_id,
             non_temporary_addresses,
@@ -3434,8 +3442,8 @@ impl Requesting {
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
         msg: v6::Message<'_, B>,
-        now: Instant,
-    ) -> Transition {
+        now: I,
+    ) -> Transition<I> {
         let Self {
             client_id,
             non_temporary_addresses: mut current_non_temporary_addresses,
@@ -3677,6 +3685,7 @@ impl Requesting {
                         server_id,
                         dns_servers: dns_servers.unwrap_or(Vec::new()),
                         solicit_max_rt,
+                        _marker: Default::default(),
                     }),
                     actions,
                     transaction_id: None,
@@ -3720,7 +3729,7 @@ type PrefixEntry = IaEntry<Subnet<Ipv6Addr>>;
 
 /// Provides methods for handling state transitions from Assigned state.
 #[derive(Debug)]
-struct Assigned {
+struct Assigned<I> {
     /// [Client Identifier] used for uniquely identifying the client in
     /// communication with servers.
     ///
@@ -3742,9 +3751,10 @@ struct Assigned {
     /// The [SOL_MAX_RT](https://datatracker.ietf.org/doc/html/rfc8415#section-21.24)
     /// used by the client.
     solicit_max_rt: Duration,
+    _marker: PhantomData<I>,
 }
 
-impl Assigned {
+impl<I: Instant> Assigned<I> {
     /// Handles renew timer, following [RFC 8415, Section 18.2.4].
     ///
     /// [RFC 8415, Section 18.2.4]: https://tools.ietf.org/html/rfc8415#section-18.2.4
@@ -3752,8 +3762,8 @@ impl Assigned {
         self,
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
-        now: Instant,
-    ) -> Transition {
+        now: I,
+    ) -> Transition<I> {
         let Self {
             client_id,
             non_temporary_addresses,
@@ -3761,6 +3771,7 @@ impl Assigned {
             server_id,
             dns_servers,
             solicit_max_rt,
+            _marker,
         } = self;
         // Start renewing bindings, per RFC 8415, section 18.2.4:
         //
@@ -3781,10 +3792,10 @@ impl Assigned {
     }
 }
 
-type Renewing = RenewingOrRebinding<false /* IS_REBINDING */>;
-type Rebinding = RenewingOrRebinding<true /* IS_REBINDING */>;
+type Renewing<I> = RenewingOrRebinding<I, false /* IS_REBINDING */>;
+type Rebinding<I> = RenewingOrRebinding<I, true /* IS_REBINDING */>;
 
-impl Renewing {
+impl<I: Instant> Renewing<I> {
     /// Handles rebind timer, following [RFC 8415, Section 18.2.5].
     ///
     /// [RFC 8415, Section 18.2.5]: https://tools.ietf.org/html/rfc8415#section-18.2.4
@@ -3792,8 +3803,8 @@ impl Renewing {
         self,
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
-        now: Instant,
-    ) -> Transition {
+        now: I,
+    ) -> Transition<I> {
         let Self(RenewingOrRebindingInner {
             client_id,
             non_temporary_addresses,
@@ -3828,7 +3839,7 @@ impl Renewing {
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(Clone))]
-struct RenewingOrRebindingInner {
+struct RenewingOrRebindingInner<I> {
     /// [Client Identifier](https://datatracker.ietf.org/doc/html/rfc8415#section-21.2)
     /// used for uniquely identifying the client in communication with servers.
     client_id: [u8; CLIENT_ID_LEN],
@@ -3845,7 +3856,7 @@ struct RenewingOrRebindingInner {
     /// [elapsed time].
     ///
     /// [elapsed time](https://datatracker.ietf.org/doc/html/rfc8415#section-21.9).
-    start_time: Instant,
+    start_time: I,
     /// The renew/rebind message retransmission timeout.
     retrans_timeout: Duration,
     /// The [SOL_MAX_RT](https://datatracker.ietf.org/doc/html/rfc8415#section-21.24)
@@ -3853,10 +3864,10 @@ struct RenewingOrRebindingInner {
     solicit_max_rt: Duration,
 }
 
-impl<const IS_REBINDING: bool> From<RenewingOrRebindingInner>
-    for RenewingOrRebinding<IS_REBINDING>
+impl<I, const IS_REBINDING: bool> From<RenewingOrRebindingInner<I>>
+    for RenewingOrRebinding<I, IS_REBINDING>
 {
-    fn from(inner: RenewingOrRebindingInner) -> Self {
+    fn from(inner: RenewingOrRebindingInner<I>) -> Self {
         Self(inner)
     }
 }
@@ -3864,9 +3875,9 @@ impl<const IS_REBINDING: bool> From<RenewingOrRebindingInner>
 // TODO(https://github.com/rust-lang/rust/issues/76560): Use an enum for the
 // constant generic instead of a boolean for readability.
 #[derive(Debug)]
-struct RenewingOrRebinding<const IS_REBINDING: bool>(RenewingOrRebindingInner);
+struct RenewingOrRebinding<I, const IS_REBINDING: bool>(RenewingOrRebindingInner<I>);
 
-impl<const IS_REBINDING: bool> RenewingOrRebinding<IS_REBINDING> {
+impl<I: Instant, const IS_REBINDING: bool> RenewingOrRebinding<I, IS_REBINDING> {
     /// Starts renewing or rebinding, following [RFC 8415, Section 18.2.4] or
     /// [RFC 8415, Section 18.2.5], respectively.
     ///
@@ -3882,8 +3893,8 @@ impl<const IS_REBINDING: bool> RenewingOrRebinding<IS_REBINDING> {
         dns_servers: Vec<Ipv6Addr>,
         solicit_max_rt: Duration,
         rng: &mut R,
-        now: Instant,
-    ) -> Transition {
+        now: I,
+    ) -> Transition<I> {
         Self(RenewingOrRebindingInner {
             client_id,
             non_temporary_addresses,
@@ -3919,8 +3930,8 @@ impl<const IS_REBINDING: bool> RenewingOrRebinding<IS_REBINDING> {
         transaction_id: [u8; 3],
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
-        now: Instant,
-    ) -> Transition {
+        now: I,
+    ) -> Transition<I> {
         let Self(RenewingOrRebindingInner {
             client_id,
             non_temporary_addresses,
@@ -4038,8 +4049,8 @@ impl<const IS_REBINDING: bool> RenewingOrRebinding<IS_REBINDING> {
         transaction_id: [u8; 3],
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
-        now: Instant,
-    ) -> Transition {
+        now: I,
+    ) -> Transition<I> {
         self.send_and_schedule_retransmission(transaction_id, options_to_request, rng, now)
     }
 
@@ -4048,8 +4059,8 @@ impl<const IS_REBINDING: bool> RenewingOrRebinding<IS_REBINDING> {
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
         msg: v6::Message<'_, B>,
-        now: Instant,
-    ) -> Transition {
+        now: I,
+    ) -> Transition<I> {
         let Self(RenewingOrRebindingInner {
             client_id,
             non_temporary_addresses: current_non_temporary_addresses,
@@ -4229,6 +4240,7 @@ impl<const IS_REBINDING: bool> RenewingOrRebinding<IS_REBINDING> {
                         server_id,
                         dns_servers: dns_servers.unwrap_or_else(|| Vec::new()),
                         solicit_max_rt,
+                        _marker: Default::default(),
                     }),
                     actions,
                     transaction_id: None,
@@ -4253,46 +4265,46 @@ impl<const IS_REBINDING: bool> RenewingOrRebinding<IS_REBINDING> {
 ///
 /// States not found in this enum are not supported yet.
 #[derive(Debug)]
-enum ClientState {
+enum ClientState<I> {
     /// Creating and (re)transmitting an information request, and waiting for
     /// a reply.
-    InformationRequesting(InformationRequesting),
+    InformationRequesting(InformationRequesting<I>),
     /// Client is waiting to refresh, after receiving a valid reply to a
     /// previous information request.
-    InformationReceived(InformationReceived),
+    InformationReceived(InformationReceived<I>),
     /// Sending solicit messages, collecting advertise messages, and selecting
     /// a server from which to obtain addresses and other optional
     /// configuration information.
-    ServerDiscovery(ServerDiscovery),
+    ServerDiscovery(ServerDiscovery<I>),
     /// Creating and (re)transmitting a request message, and waiting for a
     /// reply.
-    Requesting(Requesting),
+    Requesting(Requesting<I>),
     /// Client is waiting to renew, after receiving a valid reply to a previous request.
-    Assigned(Assigned),
+    Assigned(Assigned<I>),
     /// Creating and (re)transmitting a renew message, and awaiting reply.
-    Renewing(Renewing),
+    Renewing(Renewing<I>),
     /// Creating and (re)transmitting a rebind message, and awaiting reply.
-    Rebinding(Rebinding),
+    Rebinding(Rebinding<I>),
 }
 
 /// State transition, containing the next state, and the actions the client
 /// should take to transition to that state, and the new transaction ID if it
 /// has been updated.
-struct Transition {
-    state: ClientState,
+struct Transition<I> {
+    state: ClientState<I>,
     actions: Actions,
     transaction_id: Option<[u8; 3]>,
 }
 
-impl ClientState {
+impl<I: Instant> ClientState<I> {
     /// Handles a received advertise message.
     fn advertise_message_received<R: Rng, B: ByteSlice>(
         self,
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
         msg: v6::Message<'_, B>,
-        now: Instant,
-    ) -> Transition {
+        now: I,
+    ) -> Transition<I> {
         match self {
             ClientState::ServerDiscovery(s) => {
                 s.advertise_message_received(options_to_request, rng, msg, now)
@@ -4314,8 +4326,8 @@ impl ClientState {
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
         msg: v6::Message<'_, B>,
-        now: Instant,
-    ) -> Transition {
+        now: I,
+    ) -> Transition<I> {
         match self {
             ClientState::InformationRequesting(s) => s.reply_message_received(msg),
             ClientState::Requesting(s) => {
@@ -4339,8 +4351,8 @@ impl ClientState {
         transaction_id: [u8; 3],
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
-        now: Instant,
-    ) -> Transition {
+        now: I,
+    ) -> Transition<I> {
         match self {
             ClientState::InformationRequesting(s) => {
                 s.retransmission_timer_expired(transaction_id, options_to_request, rng)
@@ -4369,7 +4381,7 @@ impl ClientState {
         transaction_id: [u8; 3],
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
-    ) -> Transition {
+    ) -> Transition<I> {
         match self {
             ClientState::InformationReceived(s) => {
                 s.refresh_timer_expired(transaction_id, options_to_request, rng)
@@ -4390,8 +4402,8 @@ impl ClientState {
         self,
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
-        now: Instant,
-    ) -> Transition {
+        now: I,
+    ) -> Transition<I> {
         match self {
             ClientState::Assigned(s) => s.renew_timer_expired(options_to_request, rng, now),
             ClientState::InformationRequesting(_)
@@ -4410,8 +4422,8 @@ impl ClientState {
         self,
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
-        now: Instant,
-    ) -> Transition {
+        now: I,
+    ) -> Transition<I> {
         match self {
             ClientState::Renewing(s) => s.rebind_timer_expired(options_to_request, rng, now),
             ClientState::InformationRequesting(_)
@@ -4428,7 +4440,7 @@ impl ClientState {
     /// Returns the DNS servers advertised by the server.
     fn get_dns_servers(&self) -> Vec<Ipv6Addr> {
         match self {
-            ClientState::InformationReceived(InformationReceived { dns_servers }) => {
+            ClientState::InformationReceived(InformationReceived { dns_servers, _marker }) => {
                 dns_servers.clone()
             }
             ClientState::Assigned(Assigned {
@@ -4438,6 +4450,7 @@ impl ClientState {
                 server_id: _,
                 dns_servers,
                 solicit_max_rt: _,
+                _marker: _,
             })
             | ClientState::Renewing(RenewingOrRebinding(RenewingOrRebindingInner {
                 client_id: _,
@@ -4459,7 +4472,10 @@ impl ClientState {
                 retrans_timeout: _,
                 solicit_max_rt: _,
             })) => dns_servers.clone(),
-            ClientState::InformationRequesting(InformationRequesting { retrans_timeout: _ })
+            ClientState::InformationRequesting(InformationRequesting {
+                retrans_timeout: _,
+                _marker: _,
+            })
             | ClientState::ServerDiscovery(ServerDiscovery {
                 client_id: _,
                 configured_non_temporary_addresses: _,
@@ -4493,7 +4509,7 @@ impl ClientState {
 /// are pure-functional. All state transition functions return a list of actions that the
 /// imperative shell should take to complete the transition.
 #[derive(Debug)]
-pub struct ClientStateMachine<R: Rng> {
+pub struct ClientStateMachine<I, R: Rng> {
     /// [Transaction ID] the client is using to communicate with servers.
     ///
     /// [Transaction ID]: https://tools.ietf.org/html/rfc8415#section-16.1
@@ -4505,12 +4521,12 @@ pub struct ClientStateMachine<R: Rng> {
     ///
     /// Using an `Option` here allows the client to consume and replace the state during
     /// transitions.
-    state: Option<ClientState>,
+    state: Option<ClientState<I>>,
     /// Used by the client to generate random numbers.
     rng: R,
 }
 
-impl<R: Rng> ClientStateMachine<R> {
+impl<I: Instant, R: Rng> ClientStateMachine<I, R> {
     /// Starts the client in Stateless mode, as defined in [RFC 8415, Section 6.1].
     /// The client exchanges messages with servers to obtain the configuration
     /// information specified in `options_to_request`.
@@ -4551,7 +4567,7 @@ impl<R: Rng> ClientStateMachine<R> {
         configured_delegated_prefixes: HashMap<v6::IAID, HashSet<Subnet<Ipv6Addr>>>,
         options_to_request: Vec<v6::OptionCode>,
         mut rng: R,
-        now: Instant,
+        now: I,
     ) -> (Self, Actions) {
         let Transition { state, actions, transaction_id: new_transaction_id } =
             ServerDiscovery::start(
@@ -4585,7 +4601,7 @@ impl<R: Rng> ClientStateMachine<R> {
     /// # Panics
     ///
     /// `handle_timeout` panics if current state is None.
-    pub fn handle_timeout(&mut self, timeout_type: ClientTimerType, now: Instant) -> Actions {
+    pub fn handle_timeout(&mut self, timeout_type: ClientTimerType, now: I) -> Actions {
         let ClientStateMachine { transaction_id, options_to_request, state, rng } = self;
         let old_state = state.take().expect("state should not be empty");
         let Transition { state: new_state, actions, transaction_id: new_transaction_id } =
@@ -4619,7 +4635,7 @@ impl<R: Rng> ClientStateMachine<R> {
     pub fn handle_message_receive<B: ByteSlice>(
         &mut self,
         msg: v6::Message<'_, B>,
-        now: Instant,
+        now: I,
     ) -> Actions {
         let ClientStateMachine { transaction_id, options_to_request, state, rng } = self;
         if msg.transaction_id() != transaction_id {
@@ -4737,6 +4753,8 @@ pub(crate) mod testconsts {
 
 #[cfg(test)]
 pub(crate) mod testutil {
+    use std::time::Instant;
+
     use super::*;
     use packet::ParsablePacket;
     use testconsts::*;
@@ -4787,7 +4805,7 @@ pub(crate) mod testutil {
         options_to_request: Vec<v6::OptionCode>,
         rng: R,
         now: Instant,
-    ) -> ClientStateMachine<R> {
+    ) -> ClientStateMachine<Instant, R> {
         let (client, actions) = ClientStateMachine::start_stateful(
             transaction_id.clone(),
             client_id.clone(),
@@ -4902,7 +4920,7 @@ pub(crate) mod testutil {
         }
     }
 
-    impl AdvertiseMessage {
+    impl AdvertiseMessage<Instant> {
         pub(crate) fn new_default(
             server_id: [u8; TEST_SERVER_ID_LEN],
             non_temporary_addresses: &[Ipv6Addr],
@@ -4910,7 +4928,7 @@ pub(crate) mod testutil {
             dns_servers: &[Ipv6Addr],
             configured_non_temporary_addresses: &HashMap<v6::IAID, HashSet<Ipv6Addr>>,
             configured_delegated_prefixes: &HashMap<v6::IAID, HashSet<Subnet<Ipv6Addr>>>,
-        ) -> AdvertiseMessage {
+        ) -> AdvertiseMessage<Instant> {
             let non_temporary_addresses = (0..)
                 .map(v6::IAID::new)
                 .zip(non_temporary_addresses.iter().map(|address| HashSet::from([*address])))
@@ -5120,7 +5138,7 @@ pub(crate) mod testutil {
         expected_dns_servers: &[Ipv6Addr],
         rng: R,
         now: Instant,
-    ) -> (ClientStateMachine<R>, [u8; 3]) {
+    ) -> (ClientStateMachine<Instant, R>, [u8; 3]) {
         // Generate a transaction_id for the Solicit - Advertise message
         // exchange.
         let transaction_id = [1, 2, 3];
@@ -5228,7 +5246,7 @@ pub(crate) mod testutil {
         expected_dns_servers: &[Ipv6Addr],
         rng: R,
         now: Instant,
-    ) -> (ClientStateMachine<R>, Actions) {
+    ) -> (ClientStateMachine<Instant, R>, Actions) {
         let (mut client, transaction_id) = testutil::request_and_assert(
             client_id.clone(),
             server_id.clone(),
@@ -5281,6 +5299,7 @@ pub(crate) mod testutil {
             server_id: got_server_id,
             dns_servers,
             solicit_max_rt,
+            _marker,
         } = assert_matches!(
             &state,
             Some(ClientState::Assigned(assigned)) => assigned
@@ -5436,7 +5455,7 @@ pub(crate) mod testutil {
         expected_t2_secs: v6::NonZeroOrMaxU32,
         rng: R,
         now: Instant,
-    ) -> ClientStateMachine<R> {
+    ) -> ClientStateMachine<Instant, R> {
         let expected_dns_servers_as_slice = expected_dns_servers.unwrap_or(&[]);
         let (mut client, actions) = testutil::assign_and_assert(
             client_id.clone(),
@@ -5457,6 +5476,7 @@ pub(crate) mod testutil {
                 server_id: _,
                 dns_servers: _,
                 solicit_max_rt: _,
+                _marker,
             } = assert_matches!(
                 state,
                 Some(ClientState::Assigned(assigned)) => assigned
@@ -5592,7 +5612,7 @@ pub(crate) mod testutil {
         expected_t2_secs: v6::NonZeroOrMaxU32,
         rng: R,
         now: Instant,
-    ) -> ClientStateMachine<R> {
+    ) -> ClientStateMachine<Instant, R> {
         let mut client = testutil::send_renew_and_assert(
             client_id,
             server_id,
@@ -5672,7 +5692,7 @@ pub(crate) mod testutil {
 
 #[cfg(test)]
 mod tests {
-    use std::cmp::Ordering;
+    use std::{cmp::Ordering, time::Instant};
 
     use super::*;
     use packet::ParsablePacket;
@@ -5701,6 +5721,7 @@ mod tests {
                 *state,
                 Some(ClientState::InformationRequesting(InformationRequesting {
                     retrans_timeout: INITIAL_INFO_REQ_TIMEOUT,
+                    _marker,
                 }))
             );
 
@@ -5748,7 +5769,7 @@ mod tests {
             {
                 assert_matches!(
                     state,
-                    Some(ClientState::InformationReceived(InformationReceived {dns_servers }))
+                    Some(ClientState::InformationReceived(InformationReceived { dns_servers, _marker }))
                         if dns_servers == DNS_SERVERS.to_vec()
                 );
             }
@@ -7160,7 +7181,7 @@ mod tests {
                 ClientState::Requesting(requesting) => requesting
             );
             assert_eq!(server_id[..], SERVER_ID[1]);
-            let _: Option<AdvertiseMessage> = want_collected_advertise.pop();
+            let _: Option<AdvertiseMessage<_>> = want_collected_advertise.pop();
             assert_eq!(
                 collected_advertise.clone().into_sorted_vec(),
                 want_collected_advertise.clone().into_sorted_vec(),
@@ -7261,6 +7282,7 @@ mod tests {
                 server_id,
                 dns_servers: _,
                 solicit_max_rt: _,
+                _marker,
             } = assert_matches!(
                 state,
                 ClientState::Assigned(assigned) => assigned
@@ -7361,6 +7383,7 @@ mod tests {
                     server_id: _,
                     dns_servers: _,
                     solicit_max_rt: _,
+                    _marker,
                 } = assert_matches!(
                     state,
                     ClientState::Assigned(assigned) => assigned
@@ -7504,6 +7527,7 @@ mod tests {
                 server_id: _,
                 dns_servers: _,
                 solicit_max_rt: _,
+                _marker,
             } = assert_matches!(
                 state,
                 ClientState::Assigned(assigned) => assigned
@@ -7773,7 +7797,7 @@ mod tests {
             Some(ClientState::ServerDiscovery(server_discovery)) => server_discovery
         );
         let mut want_collected_advertise = want_collected_advertise.clone();
-        let _: Option<AdvertiseMessage> = want_collected_advertise.pop();
+        let _: Option<AdvertiseMessage<_>> = want_collected_advertise.pop();
 
         // The client should transition to Requesting and select the server that
         // sent the best advertise.
@@ -7948,6 +7972,7 @@ mod tests {
             server_id: _,
             dns_servers: _,
             solicit_max_rt: _,
+            _marker,
         } = assert_matches!(
             state,
             Some(ClientState::Assigned(assigned)) => assigned
@@ -8173,6 +8198,7 @@ mod tests {
                 delegated_prefixes: _,
                 server_id: _,
                 dns_servers: _,
+                _marker,
             } = assert_matches!(&state, ClientState::Assigned(assigned) => assigned);
             assert_eq!(*solicit_max_rt, Duration::from_secs(received_sol_max_rt.into()));
         }
@@ -8189,10 +8215,10 @@ mod tests {
             v6::NonZeroOrMaxU32,
             StepRng,
             Instant,
-        ) -> ClientStateMachine<StepRng>,
+        ) -> ClientStateMachine<Instant, StepRng>,
         message_type: v6::MessageType,
         expect_server_id: bool,
-        with_state: fn(&Option<ClientState>) -> &RenewingOrRebindingInner,
+        with_state: fn(&Option<ClientState<Instant>>) -> &RenewingOrRebindingInner<Instant>,
         allow_response_from_any_server: bool,
     }
 
@@ -8446,6 +8472,7 @@ mod tests {
             server_id: _,
             dns_servers: _,
             solicit_max_rt: _,
+            _marker,
         } = assert_matches!(
             state,
             Some(ClientState::Assigned(assigned)) => assigned
@@ -8725,6 +8752,7 @@ mod tests {
                 server_id,
                 dns_servers,
                 solicit_max_rt,
+                _marker,
             })) => {
                 assert_eq!(client_id, &CLIENT_ID);
                 assert_eq!(non_temporary_addresses, &expected_non_temporary_addresses);
@@ -9150,13 +9178,14 @@ mod tests {
         // the lifetime for one IA.
         assert_matches!(
             &state,
-            Some(ClientState::Assigned(Assigned{
+            Some(ClientState::Assigned(Assigned {
                 client_id,
                 non_temporary_addresses,
                 delegated_prefixes,
                 server_id,
                 dns_servers,
                 solicit_max_rt,
+                _marker,
             })) => {
                 assert_eq!(client_id, &CLIENT_ID);
                 assert_eq!(non_temporary_addresses, &expected_non_temporary_addresses);
@@ -9324,13 +9353,14 @@ mod tests {
         // the lifetime for one IA.
         assert_matches!(
             &state,
-            Some(ClientState::Assigned(Assigned{
+            Some(ClientState::Assigned(Assigned {
                 client_id,
                 non_temporary_addresses,
                 delegated_prefixes,
                 server_id,
                 dns_servers,
                 solicit_max_rt,
+                _marker,
             })) => {
                 assert_eq!(client_id, &CLIENT_ID);
                 assert_eq!(non_temporary_addresses, &expected_non_temporary_addresses);
@@ -9438,13 +9468,14 @@ mod tests {
         // not send an IA Address/Prefix option with the zero valid lifetime.
         assert_matches!(
             &state,
-            Some(ClientState::Assigned(Assigned{
+            Some(ClientState::Assigned(Assigned {
                 client_id,
                 non_temporary_addresses,
                 delegated_prefixes,
                 server_id,
                 dns_servers,
                 solicit_max_rt,
+                _marker,
             })) => {
                 assert_eq!(client_id, &CLIENT_ID);
                 fn calc_expected<V: IaValue>(
@@ -10157,7 +10188,8 @@ mod tests {
         assert_matches!(
             *state,
             Some(ClientState::InformationRequesting(InformationRequesting {
-                retrans_timeout: INITIAL_INFO_REQ_TIMEOUT
+                retrans_timeout: INITIAL_INFO_REQ_TIMEOUT,
+                _marker,
             }))
         );
 
@@ -10174,7 +10206,7 @@ mod tests {
             &client;
         assert_matches!(
             state,
-            Some(ClientState::InformationReceived(InformationReceived { dns_servers}))
+            Some(ClientState::InformationReceived(InformationReceived { dns_servers, _marker }))
                 if dns_servers.is_empty()
         );
         assert_eq!(

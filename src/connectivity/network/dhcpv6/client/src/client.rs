@@ -87,7 +87,7 @@ pub(crate) struct Client<S: for<'a> AsyncSocket<'a>> {
     /// Stores a responder to send acquired prefixes.
     prefixes_responder: Option<ClientWatchPrefixesResponder>,
     /// Maintains the state for the client.
-    state_machine: dhcpv6_core::client::ClientStateMachine<StdRng>,
+    state_machine: dhcpv6_core::client::ClientStateMachine<Instant, StdRng>,
     /// The socket used to communicate with DHCPv6 servers.
     socket: S,
     /// The address to send outgoing messages to.
@@ -167,7 +167,7 @@ fn create_state_machine(
     transaction_id: [u8; 3],
     config: ClientConfig,
 ) -> Result<
-    (dhcpv6_core::client::ClientStateMachine<StdRng>, dhcpv6_core::client::Actions),
+    (dhcpv6_core::client::ClientStateMachine<Instant, StdRng>, dhcpv6_core::client::Actions),
     ClientError,
 > {
     let ClientConfig {
