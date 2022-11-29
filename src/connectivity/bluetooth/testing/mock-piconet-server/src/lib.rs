@@ -1000,7 +1000,6 @@ mod tests {
         // will cause component resolving to fail.
     }
 
-    #[track_caller]
     async fn validate_profile_routes_for_member_with_rfcomm<'a>(
         builder: &RealmBuilder,
         member_spec: &'a PiconetMemberSpec,
@@ -1038,7 +1037,6 @@ mod tests {
         }
     }
 
-    #[track_caller]
     async fn validate_profile_routes_for_member<'a>(
         builder: &RealmBuilder,
         member_spec: &'a PiconetMemberSpec,
@@ -1069,7 +1067,6 @@ mod tests {
         }
     }
 
-    #[track_caller]
     async fn validate_mock_piconet_member<'a>(
         builder: &RealmBuilder,
         member_spec: &'a PiconetMemberSpec,

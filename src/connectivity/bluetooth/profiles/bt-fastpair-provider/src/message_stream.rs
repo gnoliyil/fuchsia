@@ -168,7 +168,6 @@ mod tests {
     use futures::FutureExt;
     use std::convert::TryFrom;
 
-    #[track_caller]
     async fn expect_data(remote: &mut Channel, expected_data: Vec<u8>) {
         let mut vec = Vec::new();
         let read_result = remote.read_datagram(&mut vec).await;

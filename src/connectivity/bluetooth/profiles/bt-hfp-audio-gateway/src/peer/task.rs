@@ -1232,7 +1232,6 @@ mod tests {
     }
 
     /// Transform `stream` into a Stream of WatchNextCall responders.
-    #[track_caller]
     async fn wait_for_call_stream(
         stream: PeerHandlerRequestStream,
     ) -> impl Stream<Item = PeerHandlerWatchNextCallResponder> {
@@ -1256,7 +1255,6 @@ mod tests {
     /// `filtered_stream`. Err return values from `f` are not returned from the `filtered_stream`.
     /// Instead they are stored within `filtered_stream` until `filtered_stream` is dropped
     /// so that they do not cause the underlying fidl channel to be closed.
-    #[track_caller]
     async fn filtered_stream<T>(
         mut stream: PeerHandlerRequestStream,
         f: impl Fn(PeerHandlerRequest) -> Result<T, PeerHandlerRequest>,

@@ -411,7 +411,6 @@ mod tests {
         test((rfcomm_mgr, profile_server, rfcomm_test_server)).await
     }
 
-    #[track_caller]
     async fn expect_data(remote: &mut Channel, expected_data: Vec<u8>) {
         let mut vec = Vec::new();
         let read_result = remote.read_datagram(&mut vec).await;
@@ -419,7 +418,6 @@ mod tests {
         assert_eq!(vec, expected_data);
     }
 
-    #[track_caller]
     async fn expect_advertisement_and_search(
         profile: &mut ProfileRequestStream,
     ) -> (

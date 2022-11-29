@@ -266,7 +266,6 @@ mod tests {
         (_server_task, c, test_events)
     }
 
-    #[track_caller]
     async fn expect_fidl_event_for_client(client: &StreamSuspenderProxy) {
         let mut event_stream = client.take_event_stream();
         match event_stream.next().await {
@@ -275,7 +274,6 @@ mod tests {
         }
     }
 
-    #[track_caller]
     async fn expect_event(listener: &mut mpsc::Receiver<Event>, expected: Event) {
         match listener.next().await {
             Some(event) => assert_eq!(event, expected),
@@ -283,7 +281,6 @@ mod tests {
         }
     }
 
-    #[track_caller]
     async fn expect_pending(listener: &mut mpsc::Receiver<Event>) {
         assert!(futures::poll!(listener.next()).is_pending());
     }
@@ -422,7 +419,6 @@ mod tests {
         fidl_request1.await.expect("FIDL suspend request should resolve");
     }
 
-    #[track_caller]
     async fn expect_fidl_error_for_client(client: &StreamSuspenderProxy) {
         let mut event_stream = client.take_event_stream();
         match event_stream.next().await {

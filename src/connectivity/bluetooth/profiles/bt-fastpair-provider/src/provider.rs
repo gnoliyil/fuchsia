@@ -854,7 +854,6 @@ mod tests {
 
     const PEER_ID: PeerId = PeerId(123);
 
-    #[track_caller]
     async fn gatt_write_results_in_expected_notification(
         gatt: &LocalServiceProxy,
         handle: Handle,
@@ -1388,7 +1387,6 @@ mod tests {
 
     /// Makes a key-based pairing request with the notify personalized name flag set.
     /// Returns the name that was received on the additional data characteristic.
-    #[track_caller]
     async fn make_personalized_name_request(
         gatt: &LocalServiceProxy,
         id: PeerId,

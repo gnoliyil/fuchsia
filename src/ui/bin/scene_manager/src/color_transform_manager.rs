@@ -289,7 +289,6 @@ mod tests {
         }
 
         /// Assert that no new requests have gone out.
-        #[track_caller]
         async fn expect_no_requests(&self) {
             assert!(self.state.lock().await.requests.is_empty());
         }
@@ -305,7 +304,6 @@ mod tests {
         }
 
         /// Assert that a SetMinimumRgb request went out.
-        #[track_caller]
         async fn expect_minimum_rgb(&mut self) -> u8 {
             match self.state.lock().await.requests.pop_front().expect("No more requests") {
                 MockConverterRequest::SetValues(_) => {
@@ -316,7 +314,6 @@ mod tests {
         }
 
         /// Assert that a SetValues request went out.
-        #[track_caller]
         async fn expect_set_values(&mut self) -> ConversionProperties {
             match self.state.lock().await.requests.pop_front().expect("No more requests") {
                 MockConverterRequest::SetMinimumRgb(_) => {
