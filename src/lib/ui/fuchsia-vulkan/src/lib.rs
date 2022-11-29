@@ -46,9 +46,18 @@ macro_rules! ptrs {(
                 }
             }
             $(
+                /// # Safety
+                ///
+                #[doc = concat!("This wraps a direct call to `vk", stringify!($name), "`.")]
+                /// The safety requirements of that function must be upheld when calling this one.
+                #[doc = concat!(
+                    "See the [extension function documentation](",
+                    "https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/vk",
+                    stringify!($name),
+                    ".html) for more details."
+                )]
                 #[inline]
                 #[allow(non_snake_case)]
-                #[allow(clippy::missing_safety_doc)] // TODO(fxbug.dev/99063)
                 pub unsafe fn $name(&self $(, $param_n: $param_ty)*) -> $ret {
                     let ptr = self.$name;
                     ptr($($param_n),*)
