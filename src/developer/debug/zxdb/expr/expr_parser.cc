@@ -635,6 +635,14 @@ ExprParser::ParseNameResult ExprParser::ParseName(bool expand_types) {
               break;
             case FoundName::kType:
               mode = kType;
+              FX_DCHECK(lookup.type());  // Should be set for "kType" results.
+
+              // Expand typedefs and remove const/volatile. This is needed to expand things like:
+              //    static_cast<Foo::Bar>(...)
+              // where "Foo" is a typedef for something else. This implementation throws away the
+              // user input name and replaces it with the typedef-ed name.
+              result.type = eval_context_->GetConcreteType(lookup.type().get());
+              result.ident = ToParsedIdentifier(result.type->GetIdentifier());
               result.type = std::move(lookup.type());
               break;
             case FoundName::kVariable:

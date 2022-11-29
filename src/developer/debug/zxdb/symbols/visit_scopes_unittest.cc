@@ -95,6 +95,8 @@ TEST(VisitScopes, ComplexHierarchy) {
   auto base1 = MakeCollectionType(DwarfTag::kClassType, "Base1",
                                   {{"base_member1", int32_type}, {"base_member2", int32_type}});
   auto mid1 = MakeCollectionType(DwarfTag::kClassType, "Mid1", {});
+  // Express "mid1" as a typedef to ensure these are handled.
+  auto mid1_typedef = fxl::MakeRefCounted<ModifiedType>(DwarfTag::kTypedef, mid1);
   auto mid2 = MakeCollectionType(DwarfTag::kClassType, "Mid2", {});
   auto derived = MakeCollectionType(DwarfTag::kClassType, "Derived", {{"member", int32_type}});
 
@@ -108,7 +110,7 @@ TEST(VisitScopes, ComplexHierarchy) {
   constexpr uint64_t mid1_offset = 8;
   constexpr uint64_t mid2_offset = 0;
   constexpr uint64_t base1_offset = 32;
-  auto mid1_inh = fxl::MakeRefCounted<InheritedFrom>(mid1, mid1_offset);
+  auto mid1_inh = fxl::MakeRefCounted<InheritedFrom>(mid1_typedef, mid1_offset);
   auto mid2_inh = fxl::MakeRefCounted<InheritedFrom>(mid2, mid2_offset);
   auto base1_inh = fxl::MakeRefCounted<InheritedFrom>(base1, base1_offset);
   derived->set_inherited_from({LazySymbol(mid1_inh), LazySymbol(mid2_inh)});

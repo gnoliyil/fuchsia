@@ -61,7 +61,7 @@ enum class DwarfTag : int {
   // Type for a C/C++ pointer to member function. See kPtrToMemberType.
   kSubroutineType = 0x15,
 
-  // Typedef that provides a different name for an underlying type. Converted into a TypeModifier
+  // Typedef that provides a different name for an underlying type. Converted into a ModifiedType
   // class.
   kTypedef = 0x16,
 

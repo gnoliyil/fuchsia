@@ -24,6 +24,7 @@
 #include "src/developer/debug/zxdb/symbols/process_symbols_test_setup.h"
 #include "src/developer/debug/zxdb/symbols/symbol_context.h"
 #include "src/developer/debug/zxdb/symbols/symbol_test_parent_setter.h"
+#include "src/developer/debug/zxdb/symbols/template_parameter.h"
 #include "src/developer/debug/zxdb/symbols/type_test_support.h"
 #include "src/developer/debug/zxdb/symbols/variable_test_support.h"
 
@@ -210,7 +211,7 @@ TEST(FindName, FindMember) {
 }
 
 // Tests that we implicitly search the object pointer ("this" in C++) for variables without
-// qualification.
+// qualification as well as template parameter types.
 TEST(FindName, FindMemberOnThis) {
   const char kMemberName[] = "member";
 
@@ -247,6 +248,16 @@ TEST(FindName, FindMemberOnThis) {
   ASSERT_EQ(FoundName::kMemberVariable, found.kind());
   EXPECT_EQ(const_ptr_const_class_type.get(), found.object_ptr()->type().Get()->As<Type>());
   EXPECT_EQ(class_type->data_members()[0].Get()->As<DataMember>(), found.member().data_member());
+
+  // Part 2: Test template parameter type lookups (we don't support template value types yet).
+  auto template_type_param = fxl::MakeRefCounted<TemplateParameter>("T", int_type, false);
+  class_type->set_template_params(std::vector<LazySymbol>{template_type_param});
+  options.find_types = true;
+
+  found = FindName(context, options, ParsedIdentifier("T"));
+  ASSERT_TRUE(found.is_found());
+  ASSERT_EQ(FoundName::kType, found.kind());
+  EXPECT_EQ(int_type.get(), found.type().get());
 }
 
 TEST(FindName, FindAnonUnion) {

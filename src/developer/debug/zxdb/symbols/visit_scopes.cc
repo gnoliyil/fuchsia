@@ -25,7 +25,13 @@ VisitResult DoVisitClassHierarchy(InheritancePath* path,
     if (!inherited_from)
       continue;
 
-    const Collection* from_coll = inherited_from->from().Get()->As<Collection>();
+    // The inherited value may be a collection or a typedef of a collection. StripCVT() is enough
+    // (we don't need GetConcreteType) because base classes can't be forward declared so the
+    // compiler will reference the real value.
+    const Type* from_type = inherited_from->from().Get()->As<Type>();
+    if (!from_type)
+      continue;
+    const Collection* from_coll = from_type->StripCVT()->As<Collection>();
     if (!from_coll)
       continue;
 

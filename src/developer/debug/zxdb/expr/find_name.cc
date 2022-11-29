@@ -6,6 +6,7 @@
 
 #include <lib/syslog/cpp/macros.h>
 
+#include "src/developer/debug/zxdb/common/ref_ptr_to.h"
 #include "src/developer/debug/zxdb/common/string_util.h"
 #include "src/developer/debug/zxdb/expr/builtin_types.h"
 #include "src/developer/debug/zxdb/expr/expr_parser.h"
@@ -26,6 +27,7 @@
 #include "src/developer/debug/zxdb/symbols/namespace.h"
 #include "src/developer/debug/zxdb/symbols/process_symbols.h"
 #include "src/developer/debug/zxdb/symbols/target_symbols.h"
+#include "src/developer/debug/zxdb/symbols/template_parameter.h"
 
 namespace zxdb {
 
@@ -407,9 +409,11 @@ VisitResult FindMemberOn(const FindNameContext& context, const FindNameOptions& 
   if (!base_coll)
     return VisitResult::kContinue;  // Nothing to do at this level.
 
+  // Possibly null.
+  const std::string* looking_for_name = GetSingleComponentIdentifierName(looking_for);
+
   // Data member iteration.
-  if (const std::string* looking_for_name = GetSingleComponentIdentifierName(looking_for);
-      looking_for_name && options.find_vars) {
+  if (looking_for_name && options.find_vars) {
     for (const auto& lazy : base_coll->data_members()) {
       if (const DataMember* data = lazy.Get()->As<DataMember>()) {
         // TODO(brettw) allow "BaseClass::foo" syntax for specifically naming a member of a base
@@ -441,6 +445,27 @@ VisitResult FindMemberOn(const FindNameContext& context, const FindNameOptions& 
         }
       }
     }  // for (data_members)
+  }
+
+  // Template parameter types.
+  //
+  // This does not handle non-type template parameters since we currently have no need for those.
+  // It could be expanded as needed to check for that (need to put behind an options.find_values
+  // check).
+  if (looking_for_name && options.find_types) {
+    for (const auto& lazy : base_coll->template_params()) {
+      const TemplateParameter* param = lazy.Get()->As<TemplateParameter>();
+      if (!param)
+        continue;
+      if (!NameMatches(options, param->GetAssignedName(), *looking_for_name))
+        continue;
+
+      if (const Type* param_type = param->type().Get()->As<Type>()) {
+        result->emplace_back(RefPtrTo(param_type));
+        if (result->size() >= options.max_results)
+          return VisitResult::kDone;
+      }
+    }
   }
 
   // Index node iteration for this class' scope.

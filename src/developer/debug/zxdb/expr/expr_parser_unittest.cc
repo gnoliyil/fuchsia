@@ -528,8 +528,10 @@ TEST_F(ExprParserTest, CppOperators) {
       GetParseString("Class::operator>>>operator<<", false));
 
   // Type conversion operator. To parse this correctly both the class name and the destination
-  // type name must be known as types to the parser.
-  EXPECT_EQ("IDENTIFIER(\"Type\"; ::\"operator const Type*\")\n",
+  // type name must be known as types to the parser. In this case, the parser looks up the type
+  // and uses its fully qualified name which is why "::" gets prepended (this isn't critical either
+  // way).
+  EXPECT_EQ("IDENTIFIER(::\"Type\"; ::\"operator const Type*\")\n",
             GetParseString("Type::operator   const  Type *"));
 
   // We allow invalid operator names and just treat them as a literal "operator" identifier to allow

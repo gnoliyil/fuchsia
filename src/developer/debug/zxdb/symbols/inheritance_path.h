@@ -68,7 +68,7 @@ class InheritancePath {
   // no virtual inheritance. If there is virtual inheritance, this will return nullopt.
   std::optional<uint32_t> BaseOffsetInDerived() const;
 
-  // The inheritance path. The derived class will be at path().front() and the derived class will be
+  // The inheritance path. The derived class will be at path().front() and the base class will be
   // at path().back(). The intermediate classes to get from one to the other will be sequenced
   // in-between:
   //
