@@ -31,7 +31,7 @@ class MockStackDelegate : public Stack::Delegate {
 
   void set_stack(Stack* s) { stack_ = s; }
 
-  // Adds the given location to the list of things returned by GetSymbolizedLocationForStackFrame().
+  // Adds the given location to the list of things returned by GetSymbolizedLocationForAddress().
   void AddLocation(const Location& loc) { locations_[loc.address()] = loc; }
 
   // Sets the asynchronous resource to SyncFramesForStack(). Since this transfers ownership, it will
@@ -52,10 +52,10 @@ class MockStackDelegate : public Stack::Delegate {
     return std::make_unique<MockFrame>(session_, nullptr, location, input.sp);
   }
 
-  Location GetSymbolizedLocationForStackFrame(const debug_ipc::StackFrame& input) override {
-    auto found = locations_.find(input.ip);
+  Location GetSymbolizedLocationForAddress(uint64_t address) override {
+    auto found = locations_.find(address);
     if (found == locations_.end())
-      return Location(Location::State::kSymbolized, input.ip);
+      return Location(Location::State::kSymbolized, address);
     return found->second;
   }
 
