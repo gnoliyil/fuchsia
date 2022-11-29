@@ -37,7 +37,7 @@ fuchsia_unittest_package("rust_url_unittests") {
   deps = [ ":rust_url_unittests_bin" ]
 }
 
-fuzzer_package("rust_url_fuzzers") {
+fuzzer_package("rust-url-fuzzers") {
   cpp_fuzzers = [ ":rust_url_fuzzer" ]
 }
 
@@ -49,7 +49,7 @@ fuzzer("rust_url_fuzzer") {
 group("tests") {
   testonly = true
   deps = [
-    ":rust_url_fuzzers",
+    ":rust-url-fuzzers",
     ":rust_url_unittests",
   ]
 }

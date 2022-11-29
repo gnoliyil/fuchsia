@@ -8,7 +8,7 @@ import("//build/fuzz.gni")
 group("test") {
   testonly = true
   deps = [
-    ":vaapi_fuzzers",
+    ":vaapi-fuzzers",
     ":vaapi_tests_package",
   ]
 }
@@ -105,7 +105,7 @@ fuchsia_fuzzer_component("vaapi_vp9_decode_fuzzer_component") {
   deps = [ ":vaapi_vp9_decode_fuzzer" ]
 }
 
-fuchsia_fuzzer_package("vaapi_fuzzers") {
+fuchsia_fuzzer_package("vaapi-fuzzers") {
   cpp_fuzzer_components = [
     ":vaapi_h264_decode_fuzzer_component",
     ":vaapi_vp9_decode_fuzzer_component",

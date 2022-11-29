@@ -34,7 +34,7 @@ test("utf_conversion_test") {
 group("tests") {
   testonly = true
   deps = [
-    ":utf_conversion_fuzzers",
+    ":utf-conversion-fuzzers",
     ":utf_conversion_test($host_toolchain)",
     ":utf_conversion_test_pkg",
   ]
@@ -45,7 +45,7 @@ fuzzer("utf_conversion_fuzzer") {
   deps = [ ":utf_conversion" ]
 }
 
-fuzzer_package("utf_conversion_fuzzers") {
+fuzzer_package("utf-conversion-fuzzers") {
   fuzz_host = true
   cpp_fuzzers = [ ":utf_conversion_fuzzer" ]
 }

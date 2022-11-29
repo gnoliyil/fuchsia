@@ -18,14 +18,14 @@ group("audio") {
   ]
 }
 
-fuzzer_package("audio_fuzzers") {
+fuzzer_package("audio-fuzzers") {
   cpp_fuzzers = [ "audio_core/shared:audio_core_config_fuzzer" ]
 }
 
 group("tests") {
   testonly = true
   deps = [
-    ":audio_fuzzers",
+    ":audio-fuzzers",
     "audio_core:tests",
     "drivers:tests",
     "examples:tests",

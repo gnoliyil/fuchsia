@@ -14,7 +14,7 @@ group("tests") {
   testonly = true
 
   deps = [
-    "//src/cobalt/bin:cobalt_fuzzers",
+    "//src/cobalt/bin:cobalt-fuzzers",
     "//src/cobalt/bin:cobalt_tests",
     "//src/cobalt/bin/testing/mock_cobalt:mock-cobalt-tests",
     "//third_party/cobalt:cobalt_core_tests",

@@ -89,7 +89,7 @@ group("tests") {
   testonly = true
 
   deps = [
-    ":elflib_fuzzers",
+    ":elflib-fuzzers",
     ":elflib_tests",
     "//sdk/lib/syslog/cpp",
   ]
@@ -103,6 +103,6 @@ fuzzer("elflib_fuzzer") {
   configs += [ "//build/config:Wno-conversion" ]
 }
 
-fuzzer_package("elflib_fuzzers") {
+fuzzer_package("elflib-fuzzers") {
   cpp_fuzzers = [ ":elflib_fuzzer" ]
 }
