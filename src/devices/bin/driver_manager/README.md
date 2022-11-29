@@ -11,22 +11,6 @@ Driver Manager is built and run in every product. It is launched on startup.
 If you're looking for running an isolated Driver Manager for testing, please see
 [isolated_devmgr](/src/lib/isolated_devmgr/README.md).
 
-
-## Commandline Options
-
-When running Driver Manager there are some commandline options that can change Driver Manager's
-behavior. Normally these are set in the CML file when Driver Manager is run as a component, or
-through isolated Driver Manager for testing.
-
-### --load_driver=\<string\>
-
-Load a driver with this path. If this is set then DriverManager will not search
-/boot/drivers/ for drivers.
-
-### --sys-device-driver=\<bool\>
-
-Use this driver as the sys_device driver.  If nullptr, the default will be used.
-
 ## Kernel Commandline Options
 
 The behavior of Driver Manager can also be changed by several kernel commandline options.
