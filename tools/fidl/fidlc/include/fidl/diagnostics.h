@@ -350,7 +350,7 @@ constexpr ErrorDef<147> ErrAvailableMissingArguments(
     "at least one argument is required: 'added', 'deprecated', or 'removed'");
 constexpr ErrorDef<148> ErrNoteWithoutDeprecation(
     "the argument 'note' cannot be used without 'deprecated'");
-constexpr UndocumentedErrorDef<149> ErrPlatformNotOnLibrary(
+constexpr ErrorDef<149> ErrPlatformNotOnLibrary(
     "the argument 'platform' can only be used on the library's @available attribute");
 constexpr ErrorDef<150> ErrLibraryAvailabilityMissingAdded(
     "missing 'added' argument on the library's @available attribute");
