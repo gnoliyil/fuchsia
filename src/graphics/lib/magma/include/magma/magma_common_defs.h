@@ -205,13 +205,8 @@ typedef uint64_t magma_perf_count_pool_t;
 
 typedef uint64_t magma_connection_t;
 
+// An opaque handle that corresponds to a fuchsia.sysmem.Allocator connection to sysmem.
 typedef uint64_t magma_sysmem_connection_t;
-
-typedef uint64_t magma_buffer_collection_t;
-
-typedef uint64_t magma_sysmem_buffer_constraints_t;
-
-typedef uint64_t magma_buffer_format_description_t;
 
 // Corresponds to a zx_handle_t on Fuchsia.
 typedef uint32_t magma_handle_t;
@@ -313,40 +308,6 @@ enum MAGMA_GPU_MAP_FLAGS {
   MAGMA_GPU_MAP_FLAG_GROWABLE = MAGMA_MAP_FLAG_GROWABLE,
   MAGMA_GPU_MAP_FLAG_VENDOR_0 = MAGMA_MAP_FLAG_VENDOR_0,
 };
-
-typedef struct magma_image_plane {
-  uint32_t bytes_per_row;
-  uint32_t byte_offset;
-} magma_image_plane_t;
-
-typedef struct {
-  uint32_t image_format;
-  magma_bool_t has_format_modifier;
-  uint64_t format_modifier;
-  uint32_t width;
-  uint32_t height;
-  uint32_t layers;
-  uint32_t bytes_per_row_divisor;
-  uint32_t min_bytes_per_row;
-} magma_image_format_constraints_t;
-
-typedef struct {
-  // min_buffer_count
-  uint32_t count;
-  uint32_t usage;
-  magma_bool_t secure_permitted;
-  magma_bool_t secure_required;
-  magma_bool_t ram_domain_supported;
-  magma_bool_t cpu_domain_supported;
-  uint32_t min_size_bytes;
-} magma_buffer_format_constraints_t;
-
-typedef struct {
-  uint32_t max_buffer_count;
-  uint32_t min_buffer_count_for_camping;
-  uint32_t min_buffer_count_for_dedicated_slack;
-  uint32_t min_buffer_count_for_shared_slack;
-} magma_buffer_format_additional_constraints_t;
 
 typedef struct {
   uint64_t committed_byte_count;
