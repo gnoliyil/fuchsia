@@ -119,7 +119,6 @@ fuchsia_driver("platform-bus-x86-driver") {
     "//zircon/system/ulib/region-alloc",
     "//zircon/system/ulib/zircon-internal",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
     "//zircon/system/ulib/zxtest",
     "//zircon/third_party/ulib/chromiumos-platform-ec",
   ]

@@ -95,7 +95,7 @@ static_library("blobfs") {
     "//zircon/system/ulib/id_allocator",
     "//zircon/system/ulib/range",
     "//zircon/system/ulib/storage/buffer",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
     "//zircon/third_party/ulib/safemath",
   ]
   deps = [
@@ -114,7 +114,7 @@ static_library("blobfs") {
     "//zircon/system/ulib/range",
     "//zircon/system/ulib/storage/buffer",
     "//zircon/system/ulib/storage/operation",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
     "//zircon/third_party/ulib/cksum",
   ]
   if (is_fuchsia) {
@@ -261,7 +261,7 @@ source_set("decompressor_impl") {
     "//src/lib/storage/vfs/cpp/journal",
     "//zircon/system/ulib/fzl",
     "//zircon/system/ulib/trace",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 }
 
@@ -280,7 +280,7 @@ executable("decompressor") {
     "//zircon/system/ulib/fzl",
     "//zircon/system/ulib/trace",
     "//zircon/system/ulib/trace-provider",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 }
 

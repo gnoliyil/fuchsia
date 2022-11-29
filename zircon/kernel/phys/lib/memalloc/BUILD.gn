@@ -29,7 +29,7 @@ zx_library("memalloc") {
     "//sdk/lib/stdcompat",
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/pretty",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
   if (is_kernel) {
     deps += [ "//zircon/kernel/lib/libc" ]
@@ -48,7 +48,7 @@ zx_library("memalloc") {
     "//zircon/system/ulib/fbl:headers",
 
     # <lib/memalloc/pool.h> has #include <lib/fit/result.h>.
-    "//zircon/system/ulib/zxc:headers",
+    "//zircon/system/ulib/zx:headers",
   ]
 }
 

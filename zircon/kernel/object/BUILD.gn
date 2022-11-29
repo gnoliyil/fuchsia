@@ -82,7 +82,7 @@ zx_library("object") {
     "//zircon/kernel/lib/root_resource_filter",
     "//zircon/system/ulib/pretty",
     "//zircon/system/ulib/region-alloc",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
   if (current_cpu == "x64") {
     deps += [ "//zircon/kernel/dev/iommu/intel" ]

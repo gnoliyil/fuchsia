@@ -29,7 +29,7 @@ test("bin") {
     "//zircon/system/ulib/async-default",
     "//zircon/system/ulib/async-loop:async-loop-cpp",
     "//zircon/system/ulib/async-loop:async-loop-default",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 
   sources = [ "my_component_test_cpp.cc" ]

@@ -138,7 +138,7 @@ source_set("legacy-mem-config") {
     "//src/lib/zbitl",
 
     # legacy-mem-config.h has #include <lib/fit/result.h>
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
 
     # mem-config.h has #include <lib/zircon-internal/e820.h>
     "//zircon/system/ulib/zircon-internal",

@@ -37,7 +37,7 @@ fuchsia_driver("ramdisk-driver") {
     "//zircon/system/ulib/fzl",
     "//zircon/system/ulib/sync",
     "//zircon/system/ulib/zircon-internal",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 }
 

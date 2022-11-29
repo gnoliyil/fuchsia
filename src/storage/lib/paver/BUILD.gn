@@ -64,7 +64,6 @@ source_set("paver-core") {
     "//src/storage/fvm",
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
 
   defines = [ "PRODUCT_FVM_SLICE_SIZE=${fvm_slice_size}" ]

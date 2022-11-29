@@ -21,7 +21,6 @@ test("watchdog_unittest") {
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/syslog",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
     "//zircon/system/ulib/zxtest",
   ]
 
@@ -47,7 +46,7 @@ zx_library("watchdog") {
     "//sdk/lib/fit",
     "//src/lib/storage/vfs/cpp",
     "//zircon/system/ulib/fbl",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 
   if (is_fuchsia) {

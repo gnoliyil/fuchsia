@@ -51,7 +51,7 @@ source_set("storage_driver_test_support") {
   ]
   public_deps = [
     "//src/lib/storage/ramdevice_client/cpp",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 }
 

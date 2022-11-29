@@ -48,7 +48,6 @@ fuchsia_driver("qemu-arm64-driver") {
     "//src/lib/ddktl",
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
 
   if (platform_enable_user_pci) {

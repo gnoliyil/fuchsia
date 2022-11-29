@@ -37,7 +37,7 @@ static_library("fvm") {
   public_deps = [
     "//src/lib/digest",
     "//src/storage/gpt",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
     "//zircon/third_party/ulib/lz4",
   ]
 

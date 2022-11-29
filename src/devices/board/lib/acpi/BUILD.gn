@@ -35,7 +35,7 @@ shared_fuchsia_public_deps = [
 shared_deps = [
   "//sdk/banjo/fuchsia.hardware.pciroot:fuchsia.hardware.pciroot_banjo_cpp",
   "//zircon/system/ulib/fbl",
-  "//zircon/system/ulib/zxc",
+  "//zircon/system/ulib/zx",
 ]
 
 shared_fuchsia_deps = [

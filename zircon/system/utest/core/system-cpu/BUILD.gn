@@ -8,7 +8,6 @@ source_set("system-cpu") {
   deps = [
     "//src/zircon/testing/standalone-test",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
     "//zircon/system/ulib/zxtest",
   ]
 }

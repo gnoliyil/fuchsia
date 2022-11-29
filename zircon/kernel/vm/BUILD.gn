@@ -76,7 +76,7 @@ zx_library("vm") {
     "//zircon/kernel/lib/page_cache:headers",
 
     # "pmm_arena.h" has #include <lib/zx/result.h>.
-    "//zircon/system/ulib/zxc:headers",
+    "//zircon/system/ulib/zx:headers",
   ]
 
   # GCC figures out some cases where we have a global variable that's used as a

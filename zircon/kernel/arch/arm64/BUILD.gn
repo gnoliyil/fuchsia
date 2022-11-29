@@ -162,7 +162,7 @@ if (toolchain_environment == "physmem" ||
       "//zircon/system/ulib/bitmap",
       "//zircon/system/ulib/fbl",
       "//zircon/system/ulib/pretty",
-      "//zircon/system/ulib/zxc",
+      "//zircon/system/ulib/zx",
     ]
   }
 

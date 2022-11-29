@@ -21,7 +21,7 @@ zx_library("zxdump") {
     "//zircon/system/public",
 
     # <lib/zxdump/fd-writer.h> has #include <lib/fit/result.h>.
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
 
     # <lib/zxdump/dump.h> has #include <lib/fit/function.h>.
     "//sdk/lib/fit",
@@ -98,7 +98,7 @@ source_set("piped-command") {
   public = [ "piped-command.h" ]
   public_deps = [
     "//zircon/system/ulib/fbl",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 
   sources = [ "piped-command.cc" ]
@@ -210,7 +210,7 @@ test("zxdump-unittests") {
     deps += [
       "//sdk/lib/fdio",
       "//zircon/system/ulib/zx",
-      "//zircon/system/ulib/zxc",
+      "//zircon/system/ulib/zx",
     ]
     data_deps += [
       ":gcore(${toolchain_variant.base})",

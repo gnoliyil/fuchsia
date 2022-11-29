@@ -65,7 +65,6 @@ fuchsia_driver("xhci-driver") {
     "//zircon/system/ulib/sync",
     "//zircon/system/ulib/xdc-server-utils",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
 }
 
@@ -111,7 +110,6 @@ source_set("test-libs") {
     "//zircon/system/ulib/mock-function",
     "//zircon/system/ulib/zircon-internal",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
     "//zircon/system/ulib/zxtest",
   ]
 }

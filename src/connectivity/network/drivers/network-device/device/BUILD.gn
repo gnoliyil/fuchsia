@@ -50,7 +50,7 @@ ddk_source_split("device") {
     "//zircon/system/ulib/fidl-utils",
     "//zircon/system/ulib/fzl",
     "//zircon/system/ulib/sync",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 
   ddk_deps = [ "//src/connectivity/network/drivers/network-device/mac:mac_ddk" ]

@@ -61,7 +61,6 @@ fuchsia_driver("sdmmc-driver") {
     "//zircon/system/ulib/trace",
     "//zircon/system/ulib/zircon-internal",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
 
   # TODO(fxbug.dev/69585): This target uses raw zx::channel with LLCPP which is deprecated.
@@ -124,7 +123,6 @@ test("sdmmc-test-bin") {
     "//zircon/system/ulib/trace",
     "//zircon/system/ulib/zircon-internal",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
     "//zircon/system/ulib/zxtest",
   ]
 

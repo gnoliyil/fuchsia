@@ -19,7 +19,7 @@ executable("minfs") {
     "//zircon/system/ulib/bitmap",
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/fs-host",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 
   if (!is_fuchsia) {

@@ -16,7 +16,7 @@ executable("gpioutil") {
     "//sdk/lib/fdio",
     "//src/lib/ddk",
     "//zircon/system/ulib/fbl",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 }
 
@@ -38,7 +38,7 @@ test("gpioutil-test-bin") {
     "//zircon/system/ulib/fidl-async:fidl-async-cpp",
     "//zircon/system/ulib/fidl-utils",
     "//zircon/system/ulib/mock-function",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
     "//zircon/system/ulib/zxtest",
   ]
 }

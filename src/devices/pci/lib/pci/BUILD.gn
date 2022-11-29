@@ -24,7 +24,6 @@ zx_library("pci") {
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/hwreg",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
 
   public_deps = [

@@ -39,7 +39,6 @@ fuchsia_driver("ams-light-driver") {
     "//zircon/system/ulib/sync",
     "//zircon/system/ulib/zircon-internal",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
 }
 
@@ -84,7 +83,6 @@ test("ams-light-test-bin") {
     "//zircon/system/ulib/sync",
     "//zircon/system/ulib/zircon-internal",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
     "//zircon/system/ulib/zxtest",
   ]
 }

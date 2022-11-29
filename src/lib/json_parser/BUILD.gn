@@ -24,7 +24,7 @@ source_set("json_parser") {
     "//src/lib/fxl",
     "//third_party/rapidjson",
     "//zircon/system/ulib/fbl",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 }
 

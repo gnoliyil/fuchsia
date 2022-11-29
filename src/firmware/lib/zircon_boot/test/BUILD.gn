@@ -24,7 +24,7 @@ source_set("mock_zircon_boot_lib") {
     "//src/firmware/lib/zbi:in_tree",
     "//src/firmware/lib/zircon_boot:in_tree",
     "//src/lib/digest",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
     "//zircon/third_party/ulib/cksum",
   ]
 }
@@ -41,7 +41,7 @@ test("firmware_zircon_boot_test") {
     "//src/firmware/lib/zircon_boot:in_tree",
     "//third_party/android/platform/external/avb:sysdeps-posix",
     "//zircon/system/ulib/fbl",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
     "//zircon/system/ulib/zxtest",
   ]
 }
@@ -60,7 +60,7 @@ test("factory-bootfs-test") {
   deps = [
     "rust/factory_bootfs_util:factory-bootfs-util",
     "//src/firmware/lib/zircon_boot:in_tree",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
     "//zircon/system/ulib/zxtest",
   ]
 }

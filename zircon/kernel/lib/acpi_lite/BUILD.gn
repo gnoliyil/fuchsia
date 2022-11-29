@@ -33,7 +33,7 @@ zx_library("acpi_lite") {
   public_deps = [
     "//sdk/lib/stdcompat",
     "//zircon/system/ulib/fbl",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 
   # Zircon-specific parts of acpi_lite.

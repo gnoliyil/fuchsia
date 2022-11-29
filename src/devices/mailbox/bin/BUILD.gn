@@ -9,7 +9,7 @@ executable("hifi4rpctest") {
     "//sdk/lib/fdio",
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/fbl",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 
   configs += [ "//build/cpp:fidl-llcpp-deprecated-raw-channels" ]

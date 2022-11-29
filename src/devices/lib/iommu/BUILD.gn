@@ -19,7 +19,6 @@ source_set("iommu-x86") {
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/syslog:syslog-headers",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
 }
 
@@ -35,10 +34,7 @@ source_set("iommu-arm") {
 source_set("iommu") {
   sources = [ "iommu.h" ]
 
-  public_deps = [
-    "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
-  ]
+  public_deps = [ "//zircon/system/ulib/zx" ]
 }
 
 test("iommu-test") {
@@ -48,7 +44,7 @@ test("iommu-test") {
     "//src/devices/testing/no_ddk",
     "//src/lib/ddk",
     "//third_party/acpica",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
     "//zircon/system/ulib/zxtest",
   ]
 }

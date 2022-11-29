@@ -19,7 +19,6 @@ sdk_source_set("cpp") {
     "//sdk/fidl/fuchsia.io:fuchsia.io_cpp_wire",
     "//sdk/lib/fdio",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
 
   public_configs = [ "//sdk/config" ]

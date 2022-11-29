@@ -25,7 +25,7 @@ source_set("guest_config") {
 
   public_deps = [
     "//sdk/fidl/fuchsia.virtualization:fuchsia.virtualization_hlcpp",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 }
 

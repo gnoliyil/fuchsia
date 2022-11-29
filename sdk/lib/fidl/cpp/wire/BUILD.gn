@@ -159,7 +159,7 @@ sdk_source_set("wire") {
     "//src/zircon/lib/zircon",
 
     # Various result-returning API uses #include <lib/zx/result.h>.
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
 
     # <lib/fidl/cpp/wire/message.h> has #include <lib/fidl/cpp/transaction_header.h>
     "//sdk/lib/fidl_base",

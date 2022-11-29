@@ -23,7 +23,6 @@ sdk_source_set("cpp") {
     # TODO(fxbug.dev/89042): Move fbl to private deps or remove.
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
   deps = [ "//sdk/lib/fdio" ]
 }

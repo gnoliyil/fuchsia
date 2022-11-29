@@ -14,7 +14,7 @@ source_set("utils") {
   public = [ "../include/lib/fastboot/test/test-transport" ]
   sources = [ "test-transport.cc" ]
   public_configs = [ "..:include" ]
-  deps = [ "//zircon/system/ulib/zxc" ]
+  deps = [ "//zircon/system/ulib/zx" ]
 }
 
 test("fastboot-test") {

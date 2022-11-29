@@ -267,7 +267,7 @@ test("copier_test") {
     "//src/lib/uuid:uuid",
     "//src/sys/test_runners:tmp_storage",
     "//zircon/system/ulib/fbl",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 }
 

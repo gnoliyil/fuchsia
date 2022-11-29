@@ -19,7 +19,7 @@ library_headers("headers") {
   public_deps = [
     # <fxt/writer.h> has #include <lib/zx/result.h>
     # <fxt/serializer.h> has #include <lib/zx/result.h>
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 }
 

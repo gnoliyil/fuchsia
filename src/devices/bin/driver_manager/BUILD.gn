@@ -48,7 +48,7 @@ source_set("manifest_parser") {
     "//src/devices/lib/log",
     "//src/lib/json_parser",
     "//src/lib/pkg_url",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 }
 
@@ -169,7 +169,6 @@ source_set("lib") {
     "//zircon/system/ulib/inspector",
     "//zircon/system/ulib/zircon-internal",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
 
   deps = [

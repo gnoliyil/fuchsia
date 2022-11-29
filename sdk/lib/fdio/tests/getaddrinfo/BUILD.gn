@@ -13,7 +13,7 @@ executable("getaddrinfo_test") {
   deps = [
     "//src/lib/fxl/test:gtest_main",
     "//zircon/system/ulib/fbl",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 }
 

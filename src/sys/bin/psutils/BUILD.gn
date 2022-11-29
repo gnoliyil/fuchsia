@@ -156,7 +156,6 @@ executable("threads") {
     "//zircon/system/ulib/sync",
     "//zircon/system/ulib/task-utils",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
 }
 

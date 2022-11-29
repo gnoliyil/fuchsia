@@ -42,7 +42,6 @@ source_set("lib") {
     "//zircon/system/ulib/cmdline",
     "//zircon/system/ulib/fdio-caller",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
 
   # We want to optimize as much as possible for speed, under the assumption
@@ -130,7 +129,6 @@ executable("hwstress_v2_test") {
     "//src/storage/testing:storage_driver_test_support",  # requires CFv2.
     "//third_party/googletest:gmock",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
 }
 

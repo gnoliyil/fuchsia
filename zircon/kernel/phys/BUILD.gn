@@ -271,7 +271,7 @@ if (toolchain_environment == "kernel.phys" ||
       "//zircon/kernel/lib/acpi_lite",
       "//zircon/kernel/lib/ktl",
       "//zircon/kernel/lib/libc",
-      "//zircon/system/ulib/zxc",
+      "//zircon/system/ulib/zx",
     ]
     public_configs = [ ":includes" ]
 
@@ -332,7 +332,7 @@ if (toolchain_environment == "kernel.phys" ||
       "//zircon/system/ulib/fbl",
 
       # allocation.h has #include <lib/fit/result.h>.
-      "//zircon/system/ulib/zxc",
+      "//zircon/system/ulib/zx",
 
       # allocation.h has #include <lib/memalloc/range.h>
       # allocation.h has #include <lib/memalloc/pool.h>
@@ -370,7 +370,7 @@ if (toolchain_environment == "kernel.phys" ||
       "//src/lib/zbitl",
 
       # zbitl-allocation.h has #include <lib/fit/result.h>.
-      "//zircon/system/ulib/zxc",
+      "//zircon/system/ulib/zx",
     ]
     public_configs = [ ":includes" ]
   }
@@ -416,7 +416,7 @@ if (toolchain_environment == "kernel.phys" ||
       "//zircon/kernel/lib/ktl",
       "//zircon/kernel/lib/libc",
       "//zircon/system/ulib/pretty",
-      "//zircon/system/ulib/zxc",
+      "//zircon/system/ulib/zx",
     ]
   }
 
@@ -479,7 +479,7 @@ if (toolchain_environment == "kernel.phys" ||
       "//zircon/kernel/lib/code-patching",
       "//zircon/kernel/lib/ktl",
       "//zircon/kernel/lib/libc",
-      "//zircon/system/ulib/zxc",
+      "//zircon/system/ulib/zx",
     ]
     deps = [ ":allocation" ]
   }

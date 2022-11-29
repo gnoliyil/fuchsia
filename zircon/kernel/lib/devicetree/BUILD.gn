@@ -17,7 +17,7 @@ zx_library("devicetree") {
   public_deps = [
     "//sdk/lib/stdcompat",
     "//zircon/system/ulib/zircon-internal:headers",
-    "//zircon/system/ulib/zxc:headers",
+    "//zircon/system/ulib/zx:headers",
   ]
 
   if (is_kernel) {

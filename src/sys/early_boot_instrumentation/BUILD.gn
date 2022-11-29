@@ -17,7 +17,6 @@ source_set("coverage-source") {
     "//sdk/lib/vfs/cpp",
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
   configs += [ "//build/c:fidl-deprecated-c-bindings" ]
   deps = [

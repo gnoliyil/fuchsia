@@ -63,7 +63,7 @@ if (is_fuchsia) {
       "//zircon/system/ulib/fzl",
       "//zircon/system/ulib/pretty",
       "//zircon/system/ulib/zx",
-      "//zircon/system/ulib/zxc",
+      "//zircon/system/ulib/zx",
     ]
   }
 } else {

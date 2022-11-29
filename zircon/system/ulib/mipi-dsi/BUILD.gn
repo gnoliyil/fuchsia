@@ -14,7 +14,6 @@ zx_library("mipi-dsi") {
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/zircon-internal",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
   deps = [
     "//sdk/banjo/fuchsia.hardware.dsiimpl:fuchsia.hardware.dsiimpl_banjo_cpp",
@@ -23,7 +22,6 @@ zx_library("mipi-dsi") {
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/zircon-internal",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
 
   # TODO(fxbug.dev/94768): This target uses mutable tables which are deprecated,

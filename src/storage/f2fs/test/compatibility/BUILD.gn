@@ -23,7 +23,7 @@ if (is_linux) {
       "//src/lib/fxl/test:gtest_main",
       "//src/storage/f2fs",
       "//third_party/googletest:gtest",
-      "//zircon/system/ulib/zxc",
+      "//zircon/system/ulib/zx",
     ]
   }
 }

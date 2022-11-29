@@ -15,7 +15,6 @@ source_set("cpp") {
     "//zircon/system/ulib/sync",
     "//zircon/system/ulib/zircon-internal",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
   sources = [ "cpp/timer.cc" ]
 }

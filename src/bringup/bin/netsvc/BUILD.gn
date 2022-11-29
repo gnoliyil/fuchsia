@@ -231,7 +231,6 @@ source_set("inet6") {
     "//zircon/system/ulib/fzl",
     "//zircon/system/ulib/zircon-internal",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
   public_deps = [ "//src/connectivity/lib/network-device/cpp" ]
   visibility = [ ":*" ]

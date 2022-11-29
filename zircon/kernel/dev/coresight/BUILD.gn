@@ -18,7 +18,7 @@ zx_library("coresight") {
     "//zircon/system/ulib/hwreg:headers",
 
     # <dev/coresight/rom_table.h> has #include <lib/fit/result.h>.
-    "//zircon/system/ulib/zxc:headers",
+    "//zircon/system/ulib/zx:headers",
   ]
   include_dirs = [ "include/dev/coresight" ]
 

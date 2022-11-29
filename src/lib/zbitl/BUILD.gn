@@ -22,7 +22,7 @@ zx_library("zbitl") {
     ":internal.decompress-zstd",
     "//src/zircon/lib/zircon",
     "//zircon/system/ulib/fbl",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
     "//zircon/third_party/ulib/cksum",
   ]
   public_deps = [
@@ -35,7 +35,7 @@ zx_library("zbitl") {
     "//zircon/system/ulib/fbl:headers",
 
     # <lib/zbitl/view.h> has #include <lib/fit/result.h>.
-    "//zircon/system/ulib/zxc:headers",
+    "//zircon/system/ulib/zx:headers",
 
     # <lib/zbitl/efi.h> has #include <efi/protocol/file.h>.
     "//zircon/kernel/lib/efi:headers",
@@ -83,7 +83,7 @@ source_set("internal.decompress-zstd") {
     "//sdk/lib/stdcompat",
 
     # <lib/zbitl/decompress.h> has #include <lib/fit/result.h>.
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
   include_dirs = [ "include" ]
 

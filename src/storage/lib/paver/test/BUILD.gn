@@ -65,7 +65,7 @@ test("test") {
     "//zircon/system/ulib/mock-boot-arguments",
     "//zircon/system/ulib/svc",
     "//zircon/system/ulib/sysconfig-client:sysconfig-sync-client",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
     "//zircon/system/ulib/zxtest",
     "//zircon/third_party/ulib/cksum",
   ]
@@ -113,7 +113,7 @@ fuzzer("paver-validation-fuzzer") {
     "//zircon/system/ulib/fdio-caller",
     "//zircon/system/ulib/svc",
     "//zircon/system/ulib/sysconfig-client:sysconfig-sync-client",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 
   include_dirs = [

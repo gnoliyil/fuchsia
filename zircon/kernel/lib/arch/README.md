@@ -134,7 +134,7 @@ code.
 Other libraries can be used as long as they are compatible with the kernel's
 constraints.  This is a non-exhaustive list:
 
-* [`zxc`](../../../system/ulib/zxc)
+* [`zx`](../../../system/ulib/zx)
 * [`fbl`](../../../system/ulib/fbl)
 * [`hwreg`]
 * [`pretty`](../../../system/ulib/pretty)

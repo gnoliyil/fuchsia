@@ -125,7 +125,7 @@ executable("ftl-volume-extractor") {
     "//src/devices/block/drivers/ftl/tests:shared",
     "//src/storage/lib/ftl:ftl",
     "//zircon/system/ulib/fbl",
-    "//zircon/system/ulib/zxc:zxc",
+    "//zircon/system/ulib/zx:zx",
     "//zircon/third_party/ulib/safemath",
   ]
 }

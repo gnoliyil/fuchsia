@@ -18,7 +18,7 @@ library_headers("virtual_alloc_headers") {
   public_deps = [
     "//zircon/system/ulib/bitmap",
     "//zircon/system/ulib/zircon-internal",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 }
 

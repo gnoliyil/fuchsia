@@ -24,7 +24,7 @@ source_set("fasync-source-set") {
   public_deps = [
     "//sdk/lib/fit",
     "//sdk/lib/stdcompat",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 }
 
@@ -58,7 +58,7 @@ zx_library("fasync") {
     ":fasync-source-set",
     "//sdk/lib/fit",
     "//sdk/lib/stdcompat",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 }
 

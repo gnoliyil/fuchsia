@@ -30,7 +30,6 @@ executable("hypervisor_integration_tests") {
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/page_tables",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
 }
 

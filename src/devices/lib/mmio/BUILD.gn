@@ -30,7 +30,7 @@ zx_library("mmio") {
     "//zircon/system/ulib/zx",
 
     # <lib/mmio/mmio-buffer.h> has #include <lib/zx/result.h>.
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 }
 

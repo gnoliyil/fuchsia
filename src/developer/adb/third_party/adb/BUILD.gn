@@ -21,7 +21,6 @@ source_set("adb") {
     "//sdk/fidl/fuchsia.hardware.adb:fuchsia.hardware.adb_cpp",
     "//sdk/lib/syslog/cpp",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
   public_configs = [ ":adb-headers" ]
 }

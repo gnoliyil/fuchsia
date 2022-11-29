@@ -25,7 +25,6 @@ zx_library("profile") {
     "//zircon/system/ulib/svc",
     "//zircon/system/ulib/syslog",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
 
   # TODO(fxbug.dev/95833): This target uses the deprecated C bindings.
@@ -45,6 +44,5 @@ source_set("config-test") {
     "//third_party/re2",
     "//zircon/system/ulib/syslog",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
 }

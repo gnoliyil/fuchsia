@@ -36,7 +36,6 @@ zx_library("buffer") {
       "//zircon/system/ulib/fzl",
       "//zircon/system/ulib/storage/operation",
       "//zircon/system/ulib/zx",
-      "//zircon/system/ulib/zxc",
     ]
     deps += [
       "//sdk/lib/fdio",

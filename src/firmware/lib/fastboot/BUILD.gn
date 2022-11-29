@@ -13,7 +13,7 @@ config("include") {
 source_set("fastboot-base") {
   sources = [ "fastboot_base.cc" ]
   public_configs = [ ":include" ]
-  public_deps = [ "//zircon/system/ulib/zxc" ]
+  public_deps = [ "//zircon/system/ulib/zx" ]
 
   if (is_kernel) {
     public_deps += [ "//zircon/kernel/lib/libc" ]
@@ -36,7 +36,7 @@ source_set("lib") {
     "//src/developer/sshd-host:sshd_constants",
     "//src/storage/lib/paver:gpt",
     "//zircon/system/ulib/fzl",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
   deps = [
     "//sdk/lib/component/incoming/cpp",

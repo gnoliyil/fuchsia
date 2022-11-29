@@ -50,7 +50,6 @@ sdk_source_set("driver_runtime_cpp") {
     "//sdk/lib/fidl/cpp/wire",
     "//sdk/lib/fit",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
   sources = [
     "arena.cc",
@@ -88,7 +87,6 @@ sdk_source_set("driver_runtime_env_cpp") {
     ":driver_runtime_env",
     "//sdk/lib/fit",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
   sources = [ "env.cc" ]
 }

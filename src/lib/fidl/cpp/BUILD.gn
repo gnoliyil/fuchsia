@@ -37,7 +37,7 @@ sdk_source_set("cpp_base") {
   public_deps = [
     "//sdk/lib/fidl/cpp/wire",
     "//sdk/lib/stdcompat",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
   deps = [ "//sdk/lib/fidl_base" ]
   public_configs = [ ":cpp_base.headers" ]

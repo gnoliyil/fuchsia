@@ -24,7 +24,7 @@ sdk_source_set("fuchsia-mem-ext") {
   public_deps = [
     "//sdk/fidl/fuchsia.mem:fuchsia.mem_hlcpp",
     "//sdk/lib/stdcompat",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 
   sources = [ "fuchsia-mem-ext.cc" ]

@@ -189,7 +189,7 @@ source_set("lib") {
     "//src/lib/testing/loop_fixture",
     "//src/virtualization/lib/guest_config",
     "//third_party/googletest:gmock",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
   public_deps = [
     ":fake_memory_pressure_provider",
@@ -202,7 +202,7 @@ source_set("lib") {
     "//zircon/system/ulib/async:async-cpp",
     "//zircon/system/ulib/async-loop:async-loop-cpp",
     "//zircon/system/ulib/async-loop:async-loop-default",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
   data_deps = [ "//src/ui/testing/test_graphical_presenter" ]
 }

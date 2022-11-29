@@ -82,7 +82,7 @@ executable("svchost") {
     "//zircon/system/ulib/profile",
     "//zircon/system/ulib/svc",
     "//zircon/system/ulib/sysmem-connector",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
   output_dir = "$root_out_dir/zircon-migrated"
 }

@@ -73,7 +73,7 @@ static_library("f2fs") {
   deps = [
     "//sdk/lib/fit-promise",
     "//sdk/lib/syslog/cpp",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 
   if (is_linux) {

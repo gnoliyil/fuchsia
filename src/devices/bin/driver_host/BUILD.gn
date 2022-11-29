@@ -114,7 +114,6 @@ source_set("common") {
     "//zircon/system/ulib/trace-provider",
     "//zircon/system/ulib/zircon-internal",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
 
   configs += [ "//build/config:all_source" ]

@@ -16,7 +16,7 @@ zx_library("gpt") {
     "//sdk/fidl/fuchsia.hardware.block:fuchsia.hardware.block_cpp_wire",
     "//sdk/lib/fit-promise",
     "//src/lib/uuid",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 
   if (is_fuchsia) {

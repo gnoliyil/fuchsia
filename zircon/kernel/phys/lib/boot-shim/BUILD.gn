@@ -34,7 +34,7 @@ zx_library("boot-shim") {
     "//src/lib/zbitl",
 
     # <lib/boot-shim/item-base.h> has #include <lib/fit/result.h>
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
 
     # <lib/boot-shim/efi.h> #include <efi/system-table.h>
     "//zircon/kernel/lib/efi",

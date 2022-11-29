@@ -45,7 +45,6 @@ static_library("fs_test") {
     "//third_party/googletest:gtest",
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
 }
 
@@ -421,6 +420,6 @@ static_library("crypt_service") {
     "//sdk/lib/fdio",
     "//sdk/lib/syslog/cpp:cpp-macros",
     "//src/storage/fxfs:fuchsia.fxfs_cpp_wire",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 }

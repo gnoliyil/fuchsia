@@ -37,7 +37,7 @@ source_set("platform") {
     "//zircon/kernel/phys:handoff",
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/ram-crashlog",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 
   public_deps = [

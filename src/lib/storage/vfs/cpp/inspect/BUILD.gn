@@ -11,10 +11,7 @@ static_library("inspect") {
     "operation_tracker.h",
   ]
   sources = [ "operation_tracker/operation_tracker_shared.cc" ]
-  public_deps = [
-    "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
-  ]
+  public_deps = [ "//zircon/system/ulib/zx" ]
   deps = [ "//sdk/lib/syslog/cpp" ]
 
   if (is_fuchsia) {

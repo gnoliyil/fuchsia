@@ -54,7 +54,7 @@ zx_library("elfldltl") {
   if (!is_kernel) {
     public_deps += [
       # <lib/elfldltl/mapped-fd-file.h> has #include <lib/fit/result.h>.
-      "//zircon/system/ulib/zxc:headers",
+      "//zircon/system/ulib/zx:headers",
     ]
 
     if (is_fuchsia) {
@@ -75,7 +75,7 @@ zx_library("elfldltl") {
     sources += [ "mapped-fd-file.cc" ]
     deps += [
       "//zircon/system/ulib/fbl",
-      "//zircon/system/ulib/zxc",
+      "//zircon/system/ulib/zx",
     ]
     if (is_fuchsia) {
       sources += [ "mapped-vmo-file.cc" ]

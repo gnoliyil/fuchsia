@@ -55,7 +55,6 @@ source_set("common-dfv1") {
     "//zircon/system/ulib/async-loop:async-loop-cpp",
     "//zircon/system/ulib/hwreg-i2c",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
   ]
 }
 

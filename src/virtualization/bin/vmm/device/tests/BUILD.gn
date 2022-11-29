@@ -202,7 +202,7 @@ device_test("virtio_input_device_tests") {
     "//sdk/fidl/fuchsia.ui.input3:fuchsia.ui.input3_hlcpp",
     "//sdk/lib/sys/component/cpp/testing:cpp",
     "//zircon/system/ulib/virtio",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 
   test_specs = {

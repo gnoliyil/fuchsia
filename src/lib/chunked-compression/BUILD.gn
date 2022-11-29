@@ -26,13 +26,13 @@ source_set("chunked-compression") {
   ]
   public_deps = [
     "//zircon/system/ulib/fbl",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
   deps = [
     "//src/lib/fxl",
     "//third_party/zstd",
     "//zircon/system/ulib/fbl",
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
     "//zircon/third_party/ulib/cksum",
   ]
 

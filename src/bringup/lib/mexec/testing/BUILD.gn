@@ -18,10 +18,7 @@ source_set("zbi-test-entry") {
   testonly = true
 
   public = [ "zbi-test-entry.h" ]
-  public_deps = [
-    "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
-  ]
+  public_deps = [ "//zircon/system/ulib/zx" ]
 
   sources = [ "zbi-test-entry.cc" ]
   deps = [

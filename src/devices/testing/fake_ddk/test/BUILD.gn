@@ -12,7 +12,6 @@ test("fake-ddk-test-bin") {
     "//src/devices/testing/fake_ddk",
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/zxc",
     "//zircon/system/ulib/zxtest",
   ]
 }

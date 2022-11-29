@@ -33,7 +33,7 @@ static_library("cpp") {
     "//zircon/system/ulib/fbl",
 
     # <fs/vnode.h> has #include <lib/zx/result.h>
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
   ]
 
   deps = [ "//zircon/system/ulib/fbl" ]

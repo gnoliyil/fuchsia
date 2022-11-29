@@ -54,7 +54,7 @@ static_library("cpp") {
     "//sdk/fidl/fuchsia.hardware.block.volume:fuchsia.hardware.block.volume_cpp_wire",
 
     # block_device.h has #include <lib/zx/result.h>
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
 
     # reader.h has #include <lib/fzl/owned-vmo-mapper.h>
     "//zircon/system/ulib/fzl",

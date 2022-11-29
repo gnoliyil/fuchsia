@@ -21,7 +21,7 @@ test("zxc_unittests") {
   output_name = "zxc_unittests"
   sources = [ "result_tests.cc" ]
   deps = [
-    "//zircon/system/ulib/zxc",
+    "//zircon/system/ulib/zx",
     "//zircon/system/ulib/zxtest",
   ]
 
