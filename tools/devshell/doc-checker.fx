@@ -6,7 +6,7 @@
 #### EXECUTABLE=${HOST_TOOLS_DIR}/doc-checker-new
 ### Check the markdown documentation using a variety of checks.
 ## USAGE:
-##     fx doc-checker-new [--root <root>] [--project <project>] [--docs-folder <docs-folder>] [--local-links-only]
+##     fx doc-checker [--root <root>] [--project <project>] [--docs-folder <docs-folder>] [--local-links-only]
 ## Options:
 ##  --root            path to the root of the checkout of the project.
 ##  --project         name of project to check, defaults to fuchsia.

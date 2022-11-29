@@ -5,22 +5,20 @@ source. Checks that do not need to access external links are performed as
 presubmit checks when submitting changes to the //docs directory.
 
 The primary goal of doc-checker is to make sure all the documents in the `//docs`
-directory are part of the interconnected graph made up of `_toc.yaml` files and in-page
-links are reachable when the documentation is published on
+directory are part of the interconnected graph made up of `_toc.yaml` files and
+in-page links are reachable when the documentation is published on
 fuchsia.dev. Other checks inspect the links themselves to enforce documentation
 standards and consistency.
 
 ## Running doc-checker
 
-Note: We're in the middle of replacing the "old" doc-checker with a new version.
-
 ```sh
-fx doc-checker-new
+fx doc-checker
 ```
 
 The external link check can be skipped by adding `--local-links-only`.
 
-For more options, see the [full command line reference](https://fuchsia.dev/reference/tools/fx/cmd/doc-checker-new.md).
+For more options, see the [full command line reference](https://fuchsia.dev/reference/tools/fx/cmd/doc-checker.md).
 
 If it is not part of the current build configuration for some reason,
 re-run `fx set` including the option to build doc_checker:
@@ -179,7 +177,6 @@ TBD: _What is the use of ___problems.yaml___?_
 
 This file defines redirections to another page for a given URL.
 
-
 ### Structure of _supported_cpu_architecture.yaml
 
 TBD: _What is the use of ___supported_cpu_architecture.yaml___?_
@@ -207,7 +204,6 @@ See: [Redirect the pages to the deprecation notice](/docs/contribute/docs/deprec
 This file defines the glossary of Fuchsia terminology.
 
 See: [Adding a glossary term](/docs/contribute/docs/glossary-entries.md#add_a_glossary_entry)
-
 
 ## External link checks
 
