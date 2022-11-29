@@ -24,6 +24,13 @@ class FakeGraphServer
     return BaseFidlServer::Create(std::move(fidl_thread), std::move(server_end));
   }
 
+  void set_start_response(fuchsia_audio_mixer::GraphStartResponse resp) {
+    start_response_ = std::move(resp);
+  }
+  void set_stop_response(fuchsia_audio_mixer::GraphStopResponse resp) {
+    stop_response_ = std::move(resp);
+  }
+
   // Log of all calls to this server.
   using CallType = std::variant<CreateProducerRequest,              //
                                 CreateConsumerRequest,              //
@@ -42,7 +49,8 @@ class FakeGraphServer
                                 BindProducerLeadTimeWatcherRequest  //
                                 >;
 
-  const std::vector<CallType>& calls() const { return calls_; }
+  // This is mutable so handles can be moved out.
+  std::vector<CallType>& calls() { return calls_; }
 
   // Implementation of fidl::Server<fuchsia_audio_mixer::Graph>.
   void CreateProducer(CreateProducerRequest& request,
@@ -112,11 +120,11 @@ class FakeGraphServer
   }
   void Start(StartRequest& request, StartCompleter::Sync& completer) final {
     calls_.push_back(std::move(request));
-    completer.Reply(fit::ok(fuchsia_audio_mixer::GraphStartResponse()));
+    completer.Reply(fit::ok(start_response_));
   }
   void Stop(StopRequest& request, StopCompleter::Sync& completer) final {
     calls_.push_back(std::move(request));
-    completer.Reply(fit::ok(fuchsia_audio_mixer::GraphStopResponse()));
+    completer.Reply(fit::ok(stop_response_));
   }
   void BindProducerLeadTimeWatcher(BindProducerLeadTimeWatcherRequest& request,
                                    BindProducerLeadTimeWatcherCompleter::Sync& completer) final {
@@ -135,6 +143,9 @@ class FakeGraphServer
   uint64_t next_node_id_ = 1;
   uint64_t next_thread_id_ = 1;
   uint64_t next_gain_control_id_ = 1;
+
+  fuchsia_audio_mixer::GraphStartResponse start_response_;
+  fuchsia_audio_mixer::GraphStopResponse stop_response_;
 };
 
 }  // namespace media_audio
