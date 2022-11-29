@@ -100,9 +100,9 @@ SuspendHandler::SuspendHandler(Coordinator* coordinator, zx::duration suspend_ti
     : coordinator_(coordinator), suspend_timeout_(suspend_timeout) {}
 
 void SuspendHandler::Suspend(uint32_t flags, SuspendCallback callback) {
-  // The sys device should have a proxy. If not, the system hasn't fully initialized yet and
+  // The root device should have a proxy. If not, the system hasn't fully initialized yet and
   // cannot go to suspend.
-  if (!coordinator_->sys_device() || !coordinator_->sys_device()->proxy()) {
+  if (!coordinator_->root_device() || !coordinator_->root_device()->proxy()) {
     LOGF(ERROR, "Aborting system-suspend, system is not fully initialized yet");
     if (callback) {
       callback(ZX_ERR_UNAVAILABLE);
@@ -182,10 +182,8 @@ void SuspendHandler::Suspend(uint32_t flags, SuspendCallback callback) {
       suspend_callback_(ZX_OK);
     }
   };
-  // We don't need to suspend anything except sys_device and its children,
-  // since we do not run suspend hooks for children of test or misc
 
-  suspend_task_ = SuspendTask::Create(coordinator_->sys_device(), sflags_, std::move(completion));
+  suspend_task_ = SuspendTask::Create(coordinator_->root_device(), sflags_, std::move(completion));
   LOGF(INFO, "Successfully created suspend task on device 'sys'");
 }
 
@@ -210,7 +208,7 @@ void SuspendHandler::UnregisterSystemStorageForShutdown(SuspendCallback callback
       coordinator_->shutdown_system_state());
 
   unregister_system_storage_task_ = SuspendMatchingTask::Create(
-      coordinator_->sys_device(), sflags, std::move(match),
+      coordinator_->root_device(), sflags, std::move(match),
       [this, callback = std::move(callback)](zx_status_t status) mutable {
         unregister_system_storage_task_ = nullptr;
         callback(status);

@@ -99,7 +99,7 @@ class FakeDev {
  public:
   explicit FakeDev(async_dispatcher_t* dispatcher) {
     auto args = devmgr_integration_test::IsolatedDevmgr::DefaultArgs();
-    args.sys_device_driver = "/boot/driver/platform-bus.so";
+    args.root_device_driver = "/boot/driver/platform-bus.so";
 
     zx::result devmgr =
         devmgr_integration_test::IsolatedDevmgr::Create(std::move(args), dispatcher);

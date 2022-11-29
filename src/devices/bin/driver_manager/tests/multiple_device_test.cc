@@ -123,7 +123,7 @@ TEST_F(MultipleDeviceTestCase, ConcurrentSuspend) {
   coordinator_loop()->RunUntilIdle();
   ASSERT_NO_FATAL_FAILURE(platform_bus()->CheckSuspendReceivedAndReply(flags, ZX_OK));
   coordinator_loop()->RunUntilIdle();
-  ASSERT_NO_FATAL_FAILURE(sys_proxy()->CheckSuspendReceivedAndReply(flags, ZX_OK));
+  ASSERT_NO_FATAL_FAILURE(root_proxy()->CheckSuspendReceivedAndReply(flags, ZX_OK));
   coordinator_loop()->RunUntilIdle();
   ASSERT_EQ(first_suspend_status, ZX_OK);
 }
@@ -137,8 +137,8 @@ TEST_F(MultipleDeviceTestCase, UnbindThenResume) {
   ASSERT_NO_FATAL_FAILURE(AddDevice(device(parent_index)->device, "child-device",
                                     0 /* protocol id */, "", &child_index));
 
-  coordinator().sys_device()->set_state(Device::State::kSuspended);
-  coordinator().sys_device()->proxy()->set_state(Device::State::kSuspended);
+  coordinator().root_device()->set_state(Device::State::kSuspended);
+  coordinator().root_device()->proxy()->set_state(Device::State::kSuspended);
   platform_bus()->device->set_state(Device::State::kSuspended);
   device(parent_index)->device->set_state(Device::State::kSuspended);
   device(child_index)->device->set_state(Device::State::kSuspended);
@@ -152,7 +152,7 @@ TEST_F(MultipleDeviceTestCase, UnbindThenResume) {
   ASSERT_NO_FATAL_FAILURE(DoResume(SystemPowerState::kFullyOn));
 
   ASSERT_NO_FATAL_FAILURE(
-      sys_proxy()->CheckResumeReceivedAndReply(SystemPowerState::kFullyOn, ZX_OK));
+      root_proxy()->CheckResumeReceivedAndReply(SystemPowerState::kFullyOn, ZX_OK));
   coordinator_loop()->RunUntilIdle();
   ASSERT_NO_FATAL_FAILURE(
       platform_bus()->CheckResumeReceivedAndReply(SystemPowerState::kFullyOn, ZX_OK));
@@ -184,8 +184,8 @@ TEST_F(MultipleDeviceTestCase, ResumeThenUnbind) {
   ASSERT_NO_FATAL_FAILURE(AddDevice(device(parent_index)->device, "child-device",
                                     0 /* protocol id */, "", &child_index));
 
-  coordinator().sys_device()->set_state(Device::State::kSuspended);
-  coordinator().sys_device()->proxy()->set_state(Device::State::kSuspended);
+  coordinator().root_device()->set_state(Device::State::kSuspended);
+  coordinator().root_device()->proxy()->set_state(Device::State::kSuspended);
   platform_bus()->device->set_state(Device::State::kSuspended);
   device(parent_index)->device->set_state(Device::State::kSuspended);
   device(child_index)->device->set_state(Device::State::kSuspended);
@@ -193,7 +193,7 @@ TEST_F(MultipleDeviceTestCase, ResumeThenUnbind) {
   ASSERT_NO_FATAL_FAILURE(DoResume(SystemPowerState::kFullyOn));
 
   ASSERT_NO_FATAL_FAILURE(
-      sys_proxy()->CheckResumeReceivedAndReply(SystemPowerState::kFullyOn, ZX_OK));
+      root_proxy()->CheckResumeReceivedAndReply(SystemPowerState::kFullyOn, ZX_OK));
   coordinator_loop()->RunUntilIdle();
   ASSERT_NO_FATAL_FAILURE(
       platform_bus()->CheckResumeReceivedAndReply(SystemPowerState::kFullyOn, ZX_OK));
@@ -269,8 +269,8 @@ TEST_F(MultipleDeviceTestCase, ResumeThenSuspend) {
   ASSERT_NO_FATAL_FAILURE(AddDevice(device(parent_index)->device, "child-device",
                                     0 /* protocol id */, "", &child_index));
 
-  coordinator().sys_device()->set_state(Device::State::kSuspended);
-  coordinator().sys_device()->proxy()->set_state(Device::State::kSuspended);
+  coordinator().root_device()->set_state(Device::State::kSuspended);
+  coordinator().root_device()->proxy()->set_state(Device::State::kSuspended);
   platform_bus()->device->set_state(Device::State::kSuspended);
   device(parent_index)->device->set_state(Device::State::kSuspended);
   device(child_index)->device->set_state(Device::State::kSuspended);
@@ -279,7 +279,7 @@ TEST_F(MultipleDeviceTestCase, ResumeThenSuspend) {
   coordinator_loop()->RunUntilIdle();
 
   ASSERT_NO_FATAL_FAILURE(
-      sys_proxy()->CheckResumeReceivedAndReply(SystemPowerState::kFullyOn, ZX_OK));
+      root_proxy()->CheckResumeReceivedAndReply(SystemPowerState::kFullyOn, ZX_OK));
   coordinator_loop()->RunUntilIdle();
   ASSERT_NO_FATAL_FAILURE(
       platform_bus()->CheckResumeReceivedAndReply(SystemPowerState::kFullyOn, ZX_OK));
@@ -311,8 +311,8 @@ TEST_F(MultipleDeviceTestCase, DISABLED_ResumeTimeout) {
   async::Loop driver_host_loop{&kAsyncLoopConfigNoAttachToCurrentThread};
   ASSERT_OK(driver_host_loop.StartThread("DriverHostLoop"));
 
-  coordinator().sys_device()->set_state(Device::State::kSuspended);
-  coordinator().sys_device()->proxy()->set_state(Device::State::kSuspended);
+  coordinator().root_device()->set_state(Device::State::kSuspended);
+  coordinator().root_device()->proxy()->set_state(Device::State::kSuspended);
   platform_bus()->device->set_state(Device::State::kSuspended);
 
   std::atomic<bool> resume_callback_executed = false;
@@ -330,10 +330,10 @@ TEST_F(MultipleDeviceTestCase, DISABLED_ResumeTimeout) {
 
   // Dont reply for sys proxy resume. we should timeout
   async::Wait resume_task_sys_proxy(
-      sys_proxy()->controller_server.channel().get(), ZX_CHANNEL_READABLE, 0,
+      root_proxy()->controller_server.channel().get(), ZX_CHANNEL_READABLE, 0,
       [this](async_dispatcher_t*, async::Wait*, zx_status_t, const zx_packet_signal_t*) {
         ASSERT_NO_FATAL_FAILURE(
-            sys_proxy()->CheckResumeReceivedAndReply(SystemPowerState::kFullyOn, ZX_OK));
+            root_proxy()->CheckResumeReceivedAndReply(SystemPowerState::kFullyOn, ZX_OK));
       });
   ASSERT_OK(resume_task_sys_proxy.Begin(driver_host_loop.dispatcher()));
 
@@ -358,9 +358,9 @@ TEST_F(MultipleDeviceTestCase, ComponentLifecycleStop) {
   ASSERT_OK(suspend_task_pbus.Begin(devhost_loop.dispatcher()));
 
   async::Wait suspend_task_sys(
-      sys_proxy()->controller_server.channel().get(), ZX_CHANNEL_READABLE, 0,
+      root_proxy()->controller_server.channel().get(), ZX_CHANNEL_READABLE, 0,
       [this](async_dispatcher_t*, async::Wait*, zx_status_t, const zx_packet_signal_t*) {
-        sys_proxy()->CheckSuspendReceivedAndReply(DEVICE_SUSPEND_FLAG_MEXEC, ZX_OK);
+        root_proxy()->CheckSuspendReceivedAndReply(DEVICE_SUSPEND_FLAG_MEXEC, ZX_OK);
       });
   ASSERT_OK(suspend_task_sys.Begin(devhost_loop.dispatcher()));
 

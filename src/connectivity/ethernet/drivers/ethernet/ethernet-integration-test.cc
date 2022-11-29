@@ -874,7 +874,7 @@ TEST(EthernetDataTests, EthernetDataTest_Recv) {
 
 int main(int argc, char** argv) {
   auto args = devmgr_integration_test::IsolatedDevmgr::DefaultArgs();
-  args.sys_device_driver = "/boot/driver/test-parent-sys.so";
+  args.root_device_driver = "/boot/driver/test-parent-sys.so";
 
   // NB: this loop is never run. RealmBuilder::Build is in the call stack, and insists on a non-null
   // dispatcher.

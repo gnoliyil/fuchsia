@@ -229,55 +229,55 @@ void UnbindTestCase::UnbindTest(DeviceDesc devices[], size_t num_devices,
     ASSERT_NULL(device(desc.index)->device->GetActiveRemove());
   }
 }
-TEST_F(UnbindTestCase, UnbindSysDevice) {
-  // Since the sys device is immortal, only its children will be unbound.
+TEST_F(UnbindTestCase, UnbindRootDevice) {
+  // Since the root device is immortal, only its children will be unbound.
   ASSERT_NO_FATAL_FAILURE(
-      coordinator().device_manager()->ScheduleRemove(coordinator().sys_device()));
+      coordinator().device_manager()->ScheduleRemove(coordinator().root_device()));
   coordinator_loop()->RunUntilIdle();
 
-  ASSERT_FALSE(sys_proxy()->HasPendingMessages());
+  ASSERT_FALSE(root_proxy()->HasPendingMessages());
 
   ASSERT_NO_FATAL_FAILURE(platform_bus()->CheckUnbindReceivedAndReply());
   coordinator_loop()->RunUntilIdle();
 
-  ASSERT_FALSE(sys_proxy()->HasPendingMessages());
+  ASSERT_FALSE(root_proxy()->HasPendingMessages());
 
   ASSERT_NO_FATAL_FAILURE(platform_bus()->CheckRemoveReceivedAndReply());
   coordinator_loop()->RunUntilIdle();
 
-  ASSERT_NO_FATAL_FAILURE(sys_proxy()->CheckRemoveReceivedAndReply());
+  ASSERT_NO_FATAL_FAILURE(root_proxy()->CheckRemoveReceivedAndReply());
   coordinator_loop()->RunUntilIdle();
 
-  ASSERT_NULL(coordinator().sys_device()->GetActiveUnbind());
-  ASSERT_NULL(coordinator().sys_device()->GetActiveRemove());
+  ASSERT_NULL(coordinator().root_device()->GetActiveUnbind());
+  ASSERT_NULL(coordinator().root_device()->GetActiveRemove());
 }
 
 TEST_F(UnbindTestCase, UnbindWhileRemovingProxy) {
   // The unbind task should complete immediately.
   // The remove task is blocked on the platform bus remove task completing.
   ASSERT_NO_FATAL_FAILURE(
-      coordinator().device_manager()->ScheduleRemove(coordinator().sys_device()->proxy()));
+      coordinator().device_manager()->ScheduleRemove(coordinator().root_device()->proxy()));
 
-  // Since the sys device is immortal, only its children will be unbound.
+  // Since the root device is immortal, only its children will be unbound.
   ASSERT_NO_FATAL_FAILURE(
-      coordinator().device_manager()->ScheduleRemove(coordinator().sys_device()));
+      coordinator().device_manager()->ScheduleRemove(coordinator().root_device()));
   coordinator_loop()->RunUntilIdle();
 
-  ASSERT_FALSE(sys_proxy()->HasPendingMessages());
+  ASSERT_FALSE(root_proxy()->HasPendingMessages());
 
   ASSERT_NO_FATAL_FAILURE(platform_bus()->CheckUnbindReceivedAndReply());
   coordinator_loop()->RunUntilIdle();
 
-  ASSERT_FALSE(sys_proxy()->HasPendingMessages());
+  ASSERT_FALSE(root_proxy()->HasPendingMessages());
 
   ASSERT_NO_FATAL_FAILURE(platform_bus()->CheckRemoveReceivedAndReply());
   coordinator_loop()->RunUntilIdle();
 
-  ASSERT_NO_FATAL_FAILURE(sys_proxy()->CheckRemoveReceivedAndReply());
+  ASSERT_NO_FATAL_FAILURE(root_proxy()->CheckRemoveReceivedAndReply());
   coordinator_loop()->RunUntilIdle();
 
-  ASSERT_NULL(coordinator().sys_device()->GetActiveUnbind());
-  ASSERT_NULL(coordinator().sys_device()->GetActiveRemove());
+  ASSERT_NULL(coordinator().root_device()->GetActiveUnbind());
+  ASSERT_NULL(coordinator().root_device()->GetActiveRemove());
 }
 
 // If this test fails, you will likely see log errors when removing devices.

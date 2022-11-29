@@ -18,7 +18,7 @@
 namespace devmgr_launcher {
 
 struct Args {
-  const char* sys_device_driver = nullptr;
+  const char* root_device_driver = nullptr;
   bool driver_tests_enable_all = false;
   std::vector<std::string> driver_tests_enable;
   std::vector<std::string> driver_tests_disable;

@@ -32,7 +32,7 @@ void SuspendResumeManager::Suspend(uint32_t flags, SuspendCallback callback) {
 }
 
 void SuspendResumeManager::Resume(SystemPowerState target_state, ResumeCallback callback) {
-  if (!coordinator_->sys_device()->proxy()) {
+  if (!coordinator_->root_device()->proxy()) {
     return;
   }
 
@@ -84,8 +84,8 @@ void SuspendResumeManager::Resume(SystemPowerState target_state, ResumeCallback 
       schedule_resume(dev.proxy());
     }
   }
-  schedule_resume(coordinator_->sys_device());
-  schedule_resume(coordinator_->sys_device()->proxy());
+  schedule_resume(coordinator_->root_device());
+  schedule_resume(coordinator_->root_device()->proxy());
 
   // Post a delayed task in case drivers do not complete the resume.
   auto status = async::PostDelayedTask(

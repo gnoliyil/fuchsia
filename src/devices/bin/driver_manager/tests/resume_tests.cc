@@ -17,14 +17,14 @@ void ResumeTestCase::StateTest(zx_status_t resume_status, Device::State want_dev
       AddDevice(platform_bus()->device, "device", 0 /* protocol id */, "", &index));
 
   // Mark all devices suspended.
-  coordinator().sys_device()->set_state(Device::State::kSuspended);
-  coordinator().sys_device()->proxy()->set_state(Device::State::kSuspended);
+  coordinator().root_device()->set_state(Device::State::kSuspended);
+  coordinator().root_device()->proxy()->set_state(Device::State::kSuspended);
   platform_bus()->device->set_state(Device::State::kSuspended);
   device(index)->device->set_state(Device::State::kSuspended);
   ASSERT_NO_FATAL_FAILURE(DoResume(SystemPowerState::kFullyOn));
 
   ASSERT_NO_FATAL_FAILURE(
-      sys_proxy()->CheckResumeReceivedAndReply(SystemPowerState::kFullyOn, ZX_OK));
+      root_proxy()->CheckResumeReceivedAndReply(SystemPowerState::kFullyOn, ZX_OK));
   coordinator_loop()->RunUntilIdle();
   ASSERT_NO_FATAL_FAILURE(
       platform_bus()->CheckResumeReceivedAndReply(SystemPowerState::kFullyOn, ZX_OK));
@@ -67,8 +67,8 @@ void ResumeTestCase::ResumeTest(SystemPowerState target_state) {
   }
 
   // Mark all devices suspended. Otherwise resume will fail
-  coordinator().sys_device()->set_state(Device::State::kSuspended);
-  coordinator().sys_device()->proxy()->set_state(Device::State::kSuspended);
+  coordinator().root_device()->set_state(Device::State::kSuspended);
+  coordinator().root_device()->proxy()->set_state(Device::State::kSuspended);
   platform_bus()->device->set_state(Device::State::kSuspended);
   for (auto& desc : devices) {
     fbl::RefPtr<Device> dev;
@@ -85,10 +85,10 @@ void ResumeTestCase::ResumeTest(SystemPowerState target_state) {
   ASSERT_NO_FATAL_FAILURE(DoResume(target_state));
   coordinator_loop()->RunUntilIdle();
 
-  ASSERT_TRUE(sys_proxy()->HasPendingMessages());
-  ASSERT_NO_FATAL_FAILURE(sys_proxy()->CheckResumeReceivedAndReply(target_state, ZX_OK));
+  ASSERT_TRUE(root_proxy()->HasPendingMessages());
+  ASSERT_NO_FATAL_FAILURE(root_proxy()->CheckResumeReceivedAndReply(target_state, ZX_OK));
   coordinator_loop()->RunUntilIdle();
-  ASSERT_EQ(coordinator().sys_device()->state(), Device::State::kActive);
+  ASSERT_EQ(coordinator().root_device()->state(), Device::State::kActive);
 
   ASSERT_TRUE(platform_bus()->HasPendingMessages());
   ASSERT_NO_FATAL_FAILURE(platform_bus()->CheckResumeReceivedAndReply(target_state, ZX_OK));

@@ -14,8 +14,7 @@
 enum class DriverHostCrashPolicy;
 class Coordinator;
 
-// In charge of creating, adding, and removing devices. Doesn't include root device
-// or sys device.
+// In charge of creating, adding, and removing devices. Doesn't include the root device.
 class DeviceManager {
  public:
   DeviceManager(Coordinator* coordinator, DriverHostCrashPolicy crash_policy);

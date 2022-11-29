@@ -153,7 +153,7 @@ class MultipleDeviceTestCase : public zxtest::Test {
     return driver_host_server_;
   }
 
-  DeviceState* sys_proxy() { return &sys_proxy_; }
+  DeviceState* root_proxy() { return &root_proxy_; }
   DeviceState* platform_bus() { return &platform_bus_; }
   DeviceState* device(size_t index) { return &devices_[index]; }
 
@@ -219,8 +219,8 @@ class MultipleDeviceTestCase : public zxtest::Test {
   fidl::ServerEnd<fdm::DriverHostController> driver_host_server_;
 
   // The remote end of the channel that the coordinator uses to talk to the
-  // sys device proxy
-  DeviceState sys_proxy_;
+  // root device proxy
+  DeviceState root_proxy_;
 
   // The device object representing the platform bus driver (child of the
   // sys proxy)

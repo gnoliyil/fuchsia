@@ -20,7 +20,7 @@ TEST(BindFailTest, BindFail) {
   const char kDriver[] = "/boot/driver/bind-fail-test-driver.so";
   auto args = IsolatedDevmgr::DefaultArgs();
 
-  args.sys_device_driver = "/boot/driver/test-parent-sys.so";
+  args.root_device_driver = "/boot/driver/test-parent-sys.so";
 
   // NB: this loop is never run. RealmBuilder::Build is in the call stack, and insists on a non-null
   // dispatcher.

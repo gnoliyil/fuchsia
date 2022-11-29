@@ -236,15 +236,15 @@ void MultipleDeviceTestCase::SetUp() {
                                         fidl::ClientEnd<fuchsia_io::Directory>(), zx::process{});
   }
 
-  // Set up the sys device proxy, inside of the driver_host
-  ASSERT_OK(coordinator().PrepareProxy(coordinator().sys_device(), driver_host_));
+  // Set up the root device proxy, inside of the driver_host
+  ASSERT_OK(coordinator().PrepareProxy(coordinator().root_device(), driver_host_));
   coordinator_loop_.RunUntilIdle();
   ASSERT_NO_FATAL_FAILURE(CheckCreateDeviceReceived(driver_host_server_, kSystemDriverPath,
-                                                    &sys_proxy()->coordinator_client,
-                                                    &sys_proxy()->controller_server));
+                                                    &root_proxy()->coordinator_client,
+                                                    &root_proxy()->controller_server));
   coordinator_loop_.RunUntilIdle();
 
-  // Create a child of the sys_device (an equivalent of the platform bus)
+  // Create a child of the root device (an equivalent of the platform bus)
   {
     auto device_controller = fidl::CreateEndpoints(&platform_bus_.controller_server);
     ASSERT_OK(device_controller.status_value());
@@ -253,7 +253,7 @@ void MultipleDeviceTestCase::SetUp() {
     ASSERT_OK(coordinator_request.status_value());
 
     auto status = coordinator().device_manager()->AddDevice(
-        coordinator().sys_device()->proxy(), std::move(*device_controller),
+        coordinator().root_device()->proxy(), std::move(*device_controller),
         std::move(*coordinator_request),
         /* props_data */ nullptr, /* props_count */ 0, /* str_props_data */ nullptr,
         /* str_props_count */ 0, "platform-bus", 0,
@@ -291,13 +291,13 @@ void MultipleDeviceTestCase::TearDown() {
 
   // We need to explicitly remove this proxy device, because it holds a reference to devhost_.
   // Other devices will be removed via the DeviceState dtor.
-  fbl::RefPtr<Device> sys_proxy = coordinator().sys_device()->proxy();
+  fbl::RefPtr<Device> sys_proxy = coordinator().root_device()->proxy();
   if (sys_proxy) {
     coordinator().device_manager()->RemoveDevice(std::move(sys_proxy), /* forced */ false);
     coordinator_loop_.RunUntilIdle();
   }
 
-  coordinator().device_manager()->RemoveDevice(coordinator().sys_device(), /* forced */ false);
+  coordinator().device_manager()->RemoveDevice(coordinator().root_device(), /* forced */ false);
   coordinator_loop_.RunUntilIdle();
 
   // We no longer need the async loop.

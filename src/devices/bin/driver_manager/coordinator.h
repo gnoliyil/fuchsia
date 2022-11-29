@@ -137,8 +137,8 @@ class Coordinator : public CompositeManagerBridge,
   void PublishDriverDevelopmentService(component::OutgoingDirectory& outgoing);
 
   // Initialization functions for DFv1. InitCoreDevices() is public for testing only.
-  void LoadV1Drivers(std::string_view sys_device_driver);
-  void InitCoreDevices(std::string_view sys_device_driver);
+  void LoadV1Drivers(std::string_view root_device_driver);
+  void InitCoreDevices(std::string_view root_device_driver);
 
   zx_status_t BindDriverToNodeGroup(const MatchedDriver& driver, const fbl::RefPtr<Device>& dev);
 
@@ -218,7 +218,7 @@ class Coordinator : public CompositeManagerBridge,
     return config_.default_shutdown_system_state;
   }
   SystemStateManager& system_state_manager() { return system_state_manager_; }
-  const fbl::RefPtr<Device>& sys_device() { return sys_device_; }
+  const fbl::RefPtr<Device>& root_device() { return root_device_; }
   Devfs& devfs() { return devfs_; }
   SuspendResumeManager& suspend_resume_manager() { return *suspend_resume_manager_; }
   InspectManager& inspect_manager() { return *inspect_manager_; }
@@ -276,7 +276,7 @@ class Coordinator : public CompositeManagerBridge,
 
   InspectManager* const inspect_manager_;
 
-  fbl::RefPtr<Device> sys_device_;
+  fbl::RefPtr<Device> root_device_;
 
   std::optional<Devnode> root_devnode_;
   Devfs devfs_;

@@ -779,8 +779,8 @@ TEST_F(CompositeTestCase, ResumeOrder) {
   ASSERT_NOT_NULL(comp_device);
 
   // Put all the devices in suspended state
-  coordinator().sys_device()->set_state(Device::State::kSuspended);
-  coordinator().sys_device()->proxy()->set_state(Device::State::kSuspended);
+  coordinator().root_device()->set_state(Device::State::kSuspended);
+  coordinator().root_device()->proxy()->set_state(Device::State::kSuspended);
   platform_bus()->device->set_state(Device::State::kSuspended);
   for (auto idx : device_indexes) {
     device(idx)->device->set_state(Device::State::kSuspended);
@@ -796,7 +796,7 @@ TEST_F(CompositeTestCase, ResumeOrder) {
 
   // First, the sys proxy driver, which is the parent of all of the devices
   ASSERT_NO_FATAL_FAILURE(
-      sys_proxy()->CheckResumeReceivedAndReply(SystemPowerState::kFullyOn, ZX_OK));
+      root_proxy()->CheckResumeReceivedAndReply(SystemPowerState::kFullyOn, ZX_OK));
   coordinator_loop()->RunUntilIdle();
 
   // Then platform devices

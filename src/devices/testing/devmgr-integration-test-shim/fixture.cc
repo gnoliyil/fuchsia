@@ -56,7 +56,7 @@ zx_status_t IsolatedDevmgr::AddDevfsToOutgoingDir(vfs::PseudoDir* outgoing_root_
 __EXPORT
 devmgr_launcher::Args IsolatedDevmgr::DefaultArgs() {
   devmgr_launcher::Args args;
-  args.sys_device_driver = "/boot/driver/sysdev.so";
+  args.root_device_driver = "/boot/driver/sysdev.so";
   return args;
 }
 
@@ -81,7 +81,7 @@ zx::result<IsolatedDevmgr> IsolatedDevmgr::Create(devmgr_launcher::Args args,
   }
 
   fuchsia::driver::test::RealmArgs realm_args;
-  realm_args.set_root_driver(PathToUrl(args.sys_device_driver));
+  realm_args.set_root_driver(PathToUrl(args.root_device_driver));
   realm_args.set_driver_tests_enable_all(args.driver_tests_enable_all);
   realm_args.set_driver_tests_enable(std::move(args.driver_tests_enable));
   realm_args.set_driver_tests_disable(std::move(args.driver_tests_disable));

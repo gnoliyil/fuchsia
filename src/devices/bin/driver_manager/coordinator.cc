@@ -318,13 +318,13 @@ Coordinator::~Coordinator() {
   // Device::~Device needs to call into Devfs to complete its cleanup; we must
   // do this ahead of the normal destructor order to avoid reaching into devfs_
   // after it has been dropped.
-  sys_device_ = nullptr;
+  root_device_ = nullptr;
 }
 
-void Coordinator::LoadV1Drivers(std::string_view sys_device_driver) {
-  InitCoreDevices(sys_device_driver);
+void Coordinator::LoadV1Drivers(std::string_view root_device_driver) {
+  InitCoreDevices(root_device_driver);
 
-  PrepareProxy(sys_device_, nullptr);
+  PrepareProxy(root_device_, nullptr);
 
   // Bind all the drivers we loaded.
   DriverLoader::MatchDeviceConfig config;
@@ -342,29 +342,29 @@ void Coordinator::LoadV1Drivers(std::string_view sys_device_driver) {
   });
 }
 
-void Coordinator::InitCoreDevices(std::string_view sys_device_driver) {
-  // If the sys device is not a path, then we try to load it like a URL.
-  if (sys_device_driver[0] != '/') {
-    auto string = std::string(sys_device_driver.data());
+void Coordinator::InitCoreDevices(std::string_view root_device_driver) {
+  // If the root device is not a path, then we try to load it like a URL.
+  if (root_device_driver[0] != '/') {
+    auto string = std::string(root_device_driver.data());
     driver_loader_.LoadDriverUrl(string);
   }
 
-  sys_device_ =
-      fbl::MakeRefCounted<Device>(this, "sys", sys_device_driver, "sys,", nullptr, 0, zx::vmo(),
+  root_device_ =
+      fbl::MakeRefCounted<Device>(this, "sys", root_device_driver, "sys,", nullptr, 0, zx::vmo(),
                                   fidl::ClientEnd<fuchsia_device_manager::DeviceController>(),
                                   fidl::ClientEnd<fio::Directory>());
-  sys_device_->flags = DEV_CTX_IMMORTAL | DEV_CTX_MUST_ISOLATE;
+  root_device_->flags = DEV_CTX_IMMORTAL | DEV_CTX_MUST_ISOLATE;
 
-  // Add sys_device_ to devfs manually since it's the first device.
+  // Add root_device_ to devfs manually since it's the first device.
   zx_status_t status =
-      root_devnode_->add_child(sys_device_->name(), sys_device_->protocol_id(),
+      root_devnode_->add_child(root_device_->name(), root_device_->protocol_id(),
                                Devnode::Remote{
-                                   .connector = sys_device_->device_controller().Clone(),
+                                   .connector = root_device_->device_controller().Clone(),
                                },
-                               sys_device_->devfs);
-  ZX_ASSERT_MSG(status == ZX_OK, "Failed to initialize sys_device to devfs: %s",
+                               root_device_->devfs);
+  ZX_ASSERT_MSG(status == ZX_OK, "Failed to initialize the root device to devfs: %s",
                 zx_status_get_string(status));
-  sys_device_->devfs.publish();
+  root_device_->devfs.publish();
 }
 
 void Coordinator::RegisterWithPowerManager(fidl::ClientEnd<fio::Directory> devfs,
@@ -636,7 +636,7 @@ zx_status_t Coordinator::PrepareProxy(const fbl::RefPtr<Device>& dev,
   // the immortal root devices do not provide proxy rpc
   bool need_proxy_rpc = !(dev->flags & DEV_CTX_IMMORTAL);
 
-  if (need_proxy_rpc || dev == sys_device_) {
+  if (need_proxy_rpc || dev == root_device_) {
     // create rpc channel for proxy device to talk to the busdev it proxies
     const zx_status_t status = zx::channel::create(0, &child_channel, &parent_channel);
     if (status != ZX_OK) {
@@ -669,7 +669,7 @@ zx_status_t Coordinator::PrepareProxy(const fbl::RefPtr<Device>& dev,
            dev->name().data(), driver_hostname, result.status_string());
     }
   }
-  if (dev == sys_device_) {
+  if (dev == root_device_) {
     if (const zx_status_t status = fdio_service_connect(kItemsPath, parent_channel.release());
         status != ZX_OK) {
       LOGF(ERROR, "Failed to connect to %s: %s", kItemsPath, zx_status_get_string(status));
