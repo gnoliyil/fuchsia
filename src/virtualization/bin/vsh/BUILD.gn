@@ -7,27 +7,7 @@ import("//build/components.gni")
 executable("bin") {
   output_name = "vsh"
 
-  sources = [
-    "main.cc",
-    "vshc.cc",
-    "vshc.h",
-  ]
-
-  deps = [
-    "//sdk/fidl/fuchsia.virtualization:fuchsia.virtualization_hlcpp",
-    "//sdk/lib/fit",
-    "//sdk/lib/sys/cpp",
-    "//src/lib/fsl",
-    "//src/virtualization/lib/vsh:util",
-    "//src/virtualization/third_party/vm_tools:vsh_cc_proto",
-    "//third_party/protobuf:protobuf_lite",
-    "//zircon/system/ulib/async-loop:async-loop-cpp",
-    "//zircon/system/ulib/async-loop:async-loop-default",
-    "//zircon/system/ulib/fdio-caller",
-  ]
-
-  public_deps =
-      [ "//sdk/fidl/fuchsia.hardware.pty:fuchsia.hardware.pty_cpp_wire" ]
+  sources = [ "main.cc" ]
 }
 
 fuchsia_shell_package("vsh") {
