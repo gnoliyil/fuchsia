@@ -192,6 +192,13 @@ pub(crate) async fn send_kernel_debug_data(mut event_sender: mpsc::Sender<RunEve
     .await;
 
     if !files.is_empty() {
+        tracing::info!(
+            "Found early boot profile files: {:?}",
+            files
+                .iter()
+                .map(|file| format!("file: {}, content_len: {:?}", file.name, file.contents.len()))
+                .collect::<Vec<_>>()
+        );
         // We copy the files to a well known directory in /tmp. This supports exporting the
         // files off device via SCP. Once this flow is no longer needed, we can use something
         // like an ephemeral directory which is torn down once we're done instead.
