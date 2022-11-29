@@ -7,6 +7,8 @@
 #include <sdk/lib/inspect/testing/cpp/zxtest/inspect.h>
 #include <zxtest/zxtest.h>
 
+#include "lib/inspect/cpp/hierarchy.h"
+
 namespace inspect {
 
 void InspectTestHelper::ReadInspect(const zx::vmo& vmo) {
@@ -64,13 +66,26 @@ void InspectTestHelper::PrintAllProperties(const inspect::NodeValue& node, unsig
         }
         log_sink->Write("}\n");
         break;
+      case inspect::PropertyFormat::kStringArray: {
+        log_sink->Write("{ ");
+        size_t size = p.Get<inspect::StringArrayValue>().value().size();
+        for (size_t i = 0; i < size; i++) {
+          auto s = p.Get<inspect::StringArrayValue>().value()[i];
+          log_sink->Write("\"%s\"", s.c_str());
+          if (i < size - 1) {
+            log_sink->Write(", ");
+          }
+        }
+        log_sink->Write(" }\n");
+        break;
+      }
       case inspect::PropertyFormat::kString:
         log_sink->Write("%s\n", p.Get<inspect::StringPropertyValue>().value().c_str());
         break;
       case inspect::PropertyFormat::kBytes:
         log_sink->Write("{ ");
         for (auto i : p.Get<inspect::ByteVectorPropertyValue>().value()) {
-          log_sink->Write("%02x ", i);
+          log_sink->Write("0x%02x ", i);
         }
         log_sink->Write("}\n");
         break;
