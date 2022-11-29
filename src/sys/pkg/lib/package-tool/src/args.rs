@@ -98,6 +98,9 @@ pub struct RepoPublishCommand {
     #[argh(option, long = "package-list", description = "path to a packages list manifest")]
     pub package_list_manifests: Vec<Utf8PathBuf>,
 
+    #[argh(option, long = "package-archive", description = "path to a package archive")]
+    pub package_archives: Vec<Utf8PathBuf>,
+
     #[argh(
         switch,
         description = "set repository version based on time rather than monotonically increasing version"

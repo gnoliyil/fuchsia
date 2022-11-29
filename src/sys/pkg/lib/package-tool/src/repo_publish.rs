@@ -109,6 +109,8 @@ pub async fn cmd_repo_publish(cmd: RepoPublishCommand) -> Result<()> {
             .await?
             .add_package_lists(cmd.package_list_manifests.into_iter())
             .await?
+            .add_package_archives(cmd.package_archives.into_iter())
+            .await?
             .commit()
             .await?,
     );
@@ -155,6 +157,7 @@ mod tests {
             signing_keys: None,
             trusted_keys: None,
             trusted_root: None,
+            package_archives: vec![],
             package_manifests: vec![],
             package_list_manifests: vec![],
             metadata_current_time: Utc::now(),
@@ -183,6 +186,7 @@ mod tests {
             signing_keys: None,
             trusted_keys: Some(repo_keys_path),
             trusted_root: None,
+            package_archives: vec![],
             package_manifests: vec![],
             package_list_manifests: vec![],
             metadata_current_time: Utc::now(),
@@ -233,6 +237,7 @@ mod tests {
             signing_keys: None,
             trusted_keys: None,
             trusted_root: None,
+            package_archives: vec![],
             package_manifests: vec![],
             package_list_manifests: vec![],
             metadata_current_time: Utc::now(),
@@ -277,6 +282,7 @@ mod tests {
             signing_keys: None,
             trusted_keys: None,
             trusted_root: None,
+            package_archives: vec![],
             package_manifests: vec![],
             package_list_manifests: vec![],
             metadata_current_time: Utc::now(),
@@ -319,6 +325,7 @@ mod tests {
             signing_keys: None,
             trusted_keys: None,
             trusted_root: None,
+            package_archives: vec![],
             package_manifests: vec![],
             package_list_manifests: vec![],
             metadata_current_time: Utc::now(),
@@ -357,6 +364,7 @@ mod tests {
             signing_keys: None,
             trusted_keys: None,
             trusted_root: None,
+            package_archives: vec![],
             package_manifests: vec![],
             package_list_manifests: vec![],
             metadata_current_time: Utc::now(),
@@ -375,6 +383,7 @@ mod tests {
             signing_keys: None,
             trusted_keys: Some(keys_path),
             trusted_root: None,
+            package_archives: vec![],
             package_manifests: vec![],
             package_list_manifests: vec![],
             metadata_current_time: Utc::now(),
@@ -406,6 +415,7 @@ mod tests {
             signing_keys: None,
             trusted_keys: None,
             trusted_root: None,
+            package_archives: vec![],
             package_manifests: vec![],
             package_list_manifests: vec![],
             metadata_current_time: now,
@@ -437,6 +447,71 @@ mod tests {
             repo_client.database().trusted_timestamp().map(|m| m.version()).unwrap(),
             time_version,
         );
+    }
+
+    #[fuchsia::test]
+    async fn test_publish_archives() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = Utf8Path::from_path(tempdir.path()).unwrap();
+
+        let repo_path = root.join("repo");
+        test_utils::make_empty_pm_repo_dir(&repo_path);
+
+        // Build some packages to publish.
+        let mut archives = vec![];
+        for name in ["package1", "package2", "package3", "package4", "package5"] {
+            let pkg_build_path = root.join(name);
+            std::fs::create_dir(pkg_build_path.clone()).expect("create package directory");
+
+            let archive_path =
+                test_utils::make_package_archive(name, pkg_build_path.as_std_path()).await;
+
+            archives.push(archive_path);
+        }
+        let depfile_path = root.join("deps");
+
+        // Publish the packages.
+        let cmd = RepoPublishCommand {
+            signing_keys: None,
+            trusted_keys: None,
+            trusted_root: None,
+            package_archives: archives,
+            package_manifests: vec![],
+            package_list_manifests: vec![],
+            metadata_current_time: Utc::now(),
+            time_versioning: false,
+            refresh_root: false,
+            clean: false,
+            depfile: Some(depfile_path.clone()),
+            copy_mode: CopyMode::Copy,
+            repo_path: repo_path.to_path_buf(),
+        };
+
+        assert_matches!(cmd_repo_publish(cmd).await, Ok(()));
+
+        let repo = PmRepository::new(repo_path.to_path_buf());
+        let mut repo_client = RepoClient::from_trusted_remote(repo).await.unwrap();
+
+        assert_matches!(repo_client.update().await, Ok(true));
+
+        let pkg1_archive_path = root.join("package1").join("package1.far");
+        let pkg2_archive_path = root.join("package2").join("package2.far");
+        let pkg3_archive_path = root.join("package3").join("package3.far");
+        let pkg4_archive_path = root.join("package4").join("package4.far");
+        let pkg5_archive_path = root.join("package5").join("package5.far");
+
+        let expected_deps = BTreeSet::from([
+            pkg1_archive_path,
+            pkg2_archive_path,
+            pkg3_archive_path,
+            pkg4_archive_path,
+            pkg5_archive_path,
+        ]);
+
+        let depfile_str = std::fs::read_to_string(&depfile_path).unwrap();
+        for arch_path in expected_deps {
+            assert!(depfile_str.contains(&arch_path.to_string()))
+        }
     }
 
     #[fuchsia::test]
@@ -484,6 +559,7 @@ mod tests {
             signing_keys: None,
             trusted_keys: None,
             trusted_root: None,
+            package_archives: vec![],
             package_manifests: vec![pkg1_manifest_path.clone(), pkg2_manifest_path.clone()],
             package_list_manifests: vec![
                 pkg_list1_manifest_path.clone(),
@@ -566,6 +642,7 @@ mod tests {
             signing_keys: None,
             trusted_keys: None,
             trusted_root: None,
+            package_archives: vec![],
             package_manifests: vec![pkg3_manifest_path],
             package_list_manifests: vec![],
             metadata_current_time: Utc::now(),
@@ -600,6 +677,7 @@ mod tests {
             signing_keys: None,
             trusted_keys: None,
             trusted_root: None,
+            package_archives: vec![],
             package_manifests: vec![pkg4_manifest_path],
             package_list_manifests: vec![],
             metadata_current_time: Utc::now(),
@@ -636,6 +714,7 @@ mod tests {
             signing_keys: None,
             trusted_keys: None,
             trusted_root: Some(root.join("repository").join("1.root.json")),
+            package_archives: vec![],
             package_manifests: vec![],
             package_list_manifests: vec![],
             metadata_current_time: Utc::now(),

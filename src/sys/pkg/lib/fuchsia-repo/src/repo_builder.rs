@@ -11,6 +11,7 @@ use {
     fuchsia_merkle::Hash,
     fuchsia_pkg::{BlobInfo, PackageManifest, PackageManifestList, PackagePath, SubpackageInfo},
     std::collections::{hash_map, BTreeMap, HashMap, HashSet, VecDeque},
+    tempfile::TempDir,
     tuf::{
         crypto::HashAlgorithm, metadata::TargetPath, pouf::Pouf1,
         repo_builder::RepoBuilder as TufRepoBuilder, Database,
@@ -29,6 +30,25 @@ const DEFAULT_SNAPSHOT_EXPIRATION: i64 = 30;
 /// Number of days from now before the timestamp metadata is expired.
 const DEFAULT_TIMESTAMP_EXPIRATION: i64 = 30;
 
+pub struct ToBeStagedPackage {
+    path: Option<Utf8PathBuf>,
+    kind: ToBeStagedPackageKind,
+}
+
+enum ToBeStagedPackageKind {
+    Manifest { manifest: PackageManifest },
+    Archive { _archive_out: TempDir, manifest: PackageManifest },
+}
+
+impl ToBeStagedPackage {
+    fn manifest(&self) -> &PackageManifest {
+        match &self.kind {
+            ToBeStagedPackageKind::Manifest { manifest } => manifest,
+            ToBeStagedPackageKind::Archive { manifest, .. } => manifest,
+        }
+    }
+}
+
 /// RepoBuilder can create and manipulate package repositories.
 pub struct RepoBuilder<'a, R: RepoStorageProvider> {
     signing_repo_keys: Option<&'a RepoKeys>,
@@ -40,7 +60,7 @@ pub struct RepoBuilder<'a, R: RepoStorageProvider> {
     refresh_metadata: bool,
     refresh_non_root_metadata: bool,
     inherit_from_trusted_targets: bool,
-    named_packages: HashMap<PackagePath, (Option<Utf8PathBuf>, PackageManifest)>,
+    named_packages: HashMap<PackagePath, ToBeStagedPackage>,
     additional_subpackages: HashMap<Hash, (Utf8PathBuf, PackageManifest)>,
     deps: HashSet<Utf8PathBuf>,
 }
@@ -143,6 +163,18 @@ where
         self.add_package_manifest(Some(path), package).await
     }
 
+    pub async fn add_package_manifest(
+        self,
+        path: Option<Utf8PathBuf>,
+        manifest: PackageManifest,
+    ) -> Result<RepoBuilder<'a, R>> {
+        self.stage_package(ToBeStagedPackage {
+            path,
+            kind: ToBeStagedPackageKind::Manifest { manifest },
+        })
+        .await
+    }
+
     /// Stage the package manifests from the iterator of paths to be published.
     pub async fn add_packages(
         mut self,
@@ -154,49 +186,63 @@ where
         Ok(self)
     }
 
+    /// Stage a package archive from the `path` to be published.
+    pub async fn add_package_archive(self, path: Utf8PathBuf) -> Result<RepoBuilder<'a, R>> {
+        let archive_out = TempDir::new().unwrap();
+        let manifest = PackageManifest::from_archive(path.as_std_path(), archive_out.path())
+            .with_context(|| format!("reading package archive {}", path))
+            .expect("archive to manifest");
+
+        self.stage_package(ToBeStagedPackage {
+            path: Some(path),
+            kind: ToBeStagedPackageKind::Archive { _archive_out: archive_out, manifest },
+        })
+        .await
+    }
+
+    /// Stage the package archives from the iterator of paths to be published.
+    pub async fn add_package_archives(
+        mut self,
+        paths: impl Iterator<Item = Utf8PathBuf>,
+    ) -> Result<RepoBuilder<'a, R>> {
+        for path in paths {
+            self = self.add_package_archive(path).await?;
+        }
+        Ok(self)
+    }
+
     /// Stage a top-level package manifest described by `package` from the
     /// `path` to be published. Duplicates are ignored unless registering two
     /// packages with the same package path and different package hashes.
-    pub async fn add_package_manifest(
-        mut self,
-        path: Option<Utf8PathBuf>,
-        package: PackageManifest,
-    ) -> Result<RepoBuilder<'a, R>> {
+    pub async fn stage_package(mut self, package: ToBeStagedPackage) -> Result<RepoBuilder<'a, R>> {
         // If the package was already included, by subpackage reference from
         // another package, then its blobs and subpackages were already added.
         // The package is being added as a named_package, so it can be removed
         // from additional_subpackages (if present).
-        if self.additional_subpackages.remove(&package.hash()).is_none() {
+        if self.additional_subpackages.remove(&package.manifest().hash()).is_none() {
             // The package was _not_ among the known additional_subpackages, so
             // add its blobs and subpackages.
-            for blob in package.blobs() {
+            for blob in package.manifest().blobs() {
                 self.deps.insert(blob.source_path.clone().into());
             }
-
-            for subpackage in package.subpackages() {
+            for subpackage in package.manifest().subpackages() {
                 self = self.add_subpackage(Utf8PathBuf::from(&subpackage.manifest_path)).await?;
             }
         }
 
-        match self.named_packages.entry(package.package_path()) {
-            hash_map::Entry::Vacant(entry) => {
-                entry.insert((path.clone(), package));
-            }
-            hash_map::Entry::Occupied(entry) => {
-                let (old_manifest_path, old_manifest) = entry.get();
-
-                check_manifests_are_equivalent(
-                    entry.key(),
-                    old_manifest_path,
-                    old_manifest,
-                    &path,
-                    &package,
-                )?;
-            }
+        if let Some(path) = package.path.clone() {
+            self.deps.insert(path);
         }
 
-        if let Some(path) = path {
-            self.deps.insert(path);
+        match self.named_packages.entry(package.manifest().package_path()) {
+            hash_map::Entry::Vacant(entry) => {
+                entry.insert(package);
+            }
+            hash_map::Entry::Occupied(entry) => {
+                let old_package = entry.get();
+
+                check_manifests_are_equivalent(entry.key(), old_package, &package)?;
+            }
         }
 
         Ok(self)
@@ -376,9 +422,9 @@ where
         let mut staged_blobs = HashMap::new();
         let mut package_meta_fars = HashMap::new();
 
-        for (package_path, (_, package)) in self.named_packages {
+        for (package_path, package) in &self.named_packages {
             let mut meta_far_blob = None;
-            for blob in package.into_blobs() {
+            for blob in package.manifest().blobs() {
                 if blob.path == PackageManifest::META_FAR_BLOB_PATH {
                     if meta_far_blob.is_none() {
                         meta_far_blob = Some(blob.clone());
@@ -387,7 +433,7 @@ where
                     }
                 }
 
-                staged_blobs.insert(blob.merkle, blob);
+                staged_blobs.insert(blob.merkle, blob.clone());
             }
 
             let meta_far_blob = meta_far_blob
@@ -466,21 +512,19 @@ where
 
 fn check_manifests_are_equivalent(
     package_path: &PackagePath,
-    old_manifest_path: &Option<Utf8PathBuf>,
-    old_manifest: &PackageManifest,
-    new_manifest_path: &Option<Utf8PathBuf>,
-    new_manifest: &PackageManifest,
+    old_package: &ToBeStagedPackage,
+    new_package: &ToBeStagedPackage,
 ) -> Result<()> {
     // Check if the packages conflict.
-    if old_manifest.hash() == new_manifest.hash() {
+    if old_package.manifest().hash() == new_package.manifest().hash() {
         return Ok(());
     }
 
     // Create a message that tries to explain why we have a conflict.
     let old_manifest_path =
-        old_manifest_path.as_ref().map(|path| path.as_str()).unwrap_or("<generated>");
+        old_package.path.as_ref().map(|path| path.as_str()).unwrap_or("<generated>");
     let new_manifest_path =
-        new_manifest_path.as_ref().map(|path| path.as_str()).unwrap_or("<generated>");
+        new_package.path.as_ref().map(|path| path.as_str()).unwrap_or("<generated>");
 
     let mut msg = vec![format!(
         "conflict for repository path '{}'\n  manifest paths:\n  - {}\n  - {}\n  differences:",
@@ -519,7 +563,7 @@ fn check_manifests_are_equivalent(
 
     // Compare the contents and report any differences.
     if let (Ok(old_contents), Ok(mut new_contents)) =
-        (manifest_contents(old_manifest), manifest_contents(new_manifest))
+        (manifest_contents(old_package.manifest()), manifest_contents(new_package.manifest()))
     {
         for (path, old_entry) in old_contents {
             if let Some(new_entry) = new_contents.remove(&path) {
@@ -561,7 +605,7 @@ fn check_manifests_are_equivalent(
 
     // Compare the subpackages and report any differences.
     if let (Ok(old_subpackages), Ok(mut new_subpackages)) =
-        (manifest_subpackages(old_manifest), manifest_subpackages(new_manifest))
+        (manifest_subpackages(old_package.manifest()), manifest_subpackages(new_package.manifest()))
     {
         for (name, old_subpackage) in old_subpackages {
             if let Some(new_subpackage) = new_subpackages.remove(&name) {
@@ -603,7 +647,10 @@ mod tests {
         camino::Utf8Path,
         fuchsia_pkg::PackageBuilder,
         pretty_assertions::{assert_eq, assert_ne},
-        std::collections::{BTreeMap, BTreeSet, HashMap},
+        std::{
+            collections::{BTreeMap, BTreeSet, HashMap},
+            fs,
+        },
         tuf::{
             crypto::Ed25519PrivateKey,
             metadata::{Metadata as _, MetadataPath},
@@ -695,8 +742,14 @@ mod tests {
             .unwrap();
         let pkg2_meta_far_contents = std::fs::read(&pkg2_meta_far_path).unwrap();
 
+        let archive_outdir = TempDir::new().unwrap();
+
+        let archive_path = archive_outdir.path().join("p2.far");
+        let archive_file = fs::File::create(archive_path.clone()).unwrap();
+        pkg2_manifest.archive(&pkg2_dir, &archive_file).await.unwrap();
+
         RepoBuilder::from_client(&repo_client, &repo_keys)
-            .add_package(pkg2_manifest_path)
+            .add_package_archive(Utf8PathBuf::from_path_buf(archive_path).unwrap())
             .await
             .unwrap()
             .commit()
@@ -1261,6 +1314,92 @@ mod tests {
 
         assert!(RepoBuilder::create(&repo, &repo_keys)
             .add_package(pkg1_manifest_path)
+            .await
+            .unwrap()
+            .add_package(pkg2_manifest_path)
+            .await
+            .is_err());
+    }
+
+    #[fuchsia_async::run_singlethreaded(test)]
+    async fn test_conflicting_package_archives_errors_out() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = Utf8Path::from_path(tmp.path()).unwrap();
+
+        let metadata_repo_path = dir.join("metadata");
+        let blob_repo_path = dir.join("blobs");
+        let repo = FileSystemRepository::new(metadata_repo_path, blob_repo_path);
+        let repo_keys = test_utils::make_repo_keys();
+
+        let pkg1_dir = dir.join("package1");
+        let (_, pkg1_manifest) =
+            test_utils::make_package_manifest("package1", pkg1_dir.as_std_path(), Vec::new());
+        let pkg1_manifest_path = pkg1_dir.join("package1.manifest");
+        serde_json::to_writer(std::fs::File::create(&pkg1_manifest_path).unwrap(), &pkg1_manifest)
+            .unwrap();
+
+        // Whoops, we created a package with the same package name but with different contents.
+        let pkg2_dir = dir.join("package2");
+        let pkg2_meta_far_path = pkg2_dir.join("meta.far");
+        let pkg2_manifest =
+            PackageBuilder::new("package1").build(&pkg2_dir, &pkg2_meta_far_path).unwrap();
+        let pkg2_manifest_path = pkg2_dir.join("package2.manifest");
+        serde_json::to_writer(std::fs::File::create(&pkg2_manifest_path).unwrap(), &pkg2_manifest)
+            .unwrap();
+
+        let archive_outdir = TempDir::new().unwrap();
+
+        let archive_path1 = archive_outdir.path().join("p1.far");
+        let archive_file1 = fs::File::create(archive_path1.clone()).unwrap();
+        pkg1_manifest.archive(&pkg1_dir, &archive_file1).await.unwrap();
+
+        let archive_path2 = archive_outdir.path().join("p2.far");
+        let archive_file2 = fs::File::create(archive_path2.clone()).unwrap();
+        pkg2_manifest.archive(&pkg2_dir, &archive_file2).await.unwrap();
+
+        assert!(RepoBuilder::create(&repo, &repo_keys)
+            .add_package_archive(Utf8PathBuf::from_path_buf(archive_path1).unwrap())
+            .await
+            .unwrap()
+            .add_package_archive(Utf8PathBuf::from_path_buf(archive_path2).unwrap())
+            .await
+            .is_err());
+    }
+
+    #[fuchsia_async::run_singlethreaded(test)]
+    async fn test_conflicting_package_archive_and_manifest_errors_out() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = Utf8Path::from_path(tmp.path()).unwrap();
+
+        let metadata_repo_path = dir.join("metadata");
+        let blob_repo_path = dir.join("blobs");
+        let repo = FileSystemRepository::new(metadata_repo_path, blob_repo_path);
+        let repo_keys = test_utils::make_repo_keys();
+
+        let pkg1_dir = dir.join("package1");
+        let (_, pkg1_manifest) =
+            test_utils::make_package_manifest("package1", pkg1_dir.as_std_path(), Vec::new());
+        let pkg1_manifest_path = pkg1_dir.join("package1.manifest");
+        serde_json::to_writer(std::fs::File::create(&pkg1_manifest_path).unwrap(), &pkg1_manifest)
+            .unwrap();
+
+        // Whoops, we created a package with the same package name but with different contents.
+        let pkg2_dir = dir.join("package2");
+        let pkg2_meta_far_path = pkg2_dir.join("meta.far");
+        let pkg2_manifest =
+            PackageBuilder::new("package1").build(&pkg2_dir, &pkg2_meta_far_path).unwrap();
+        let pkg2_manifest_path = pkg2_dir.join("package2.manifest");
+        serde_json::to_writer(std::fs::File::create(&pkg2_manifest_path).unwrap(), &pkg2_manifest)
+            .unwrap();
+
+        let archive_outdir = TempDir::new().unwrap();
+
+        let archive_path1 = archive_outdir.path().join("p1.far");
+        let archive_file1 = fs::File::create(archive_path1.clone()).unwrap();
+        pkg1_manifest.archive(&pkg1_dir, &archive_file1).await.unwrap();
+
+        assert!(RepoBuilder::create(&repo, &repo_keys)
+            .add_package_archive(Utf8PathBuf::from_path_buf(archive_path1).unwrap())
             .await
             .unwrap()
             .add_package(pkg2_manifest_path)

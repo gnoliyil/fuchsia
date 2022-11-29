@@ -21,6 +21,7 @@ use {
         fs::{copy, create_dir, create_dir_all, File},
         path::{Path, PathBuf},
     },
+    tempfile::TempDir,
     tuf::{
         crypto::{Ed25519PrivateKey, HashAlgorithm},
         metadata::{Delegation, Delegations, MetadataDescription, MetadataPath, TargetPath},
@@ -221,6 +222,18 @@ pub fn make_package_manifest(
     let manifest = builder.build(&package_path, &meta_far_path).unwrap();
 
     (meta_far_path, manifest)
+}
+
+pub async fn make_package_archive(archive_name: &str, outdir: &Path) -> Utf8PathBuf {
+    let build_path = TempDir::new().unwrap();
+    let package_path = build_path.path().join(archive_name);
+    let (_, manifest) = make_package_manifest(archive_name, build_path.path(), Vec::new());
+    let far_file = format!("{}.far", archive_name);
+
+    let archive_path = outdir.join(&far_file);
+    let archive_file = File::create(archive_path.clone()).unwrap();
+    manifest.archive(&package_path, &archive_file).await.unwrap();
+    Utf8PathBuf::from_path_buf(archive_path).expect("convert archive pathbuf to utf8pathbuf")
 }
 
 pub async fn make_pm_repo_dir(repo_dir: &Path) {
