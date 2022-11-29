@@ -14,7 +14,6 @@ use {
     },
     anyhow::{format_err, Error},
     async_trait::async_trait,
-    fidl::prelude::*,
     fidl_fuchsia_location_sensor as fidl_location_sensor, fidl_fuchsia_wlan_policy as fidl_policy,
     fidl_fuchsia_wlan_sme as fidl_sme,
     fuchsia_async::{self as fasync, DurationExt, TimeoutExt},
@@ -28,16 +27,17 @@ use {
         stream::FuturesUnordered,
     },
     log::{debug, error, info, warn},
-    measure_tape_for_scan_result::Measurable as _,
     std::{collections::HashMap, convert::TryFrom, sync::Arc},
     wlan_common,
 };
 
+mod fidl_conversion;
 mod queue;
 
-// TODO(fxbug.dev/80422): Remove this.
-// Size of FIDL message header and FIDL error-wrapped vector header
-const FIDL_HEADER_AND_ERR_WRAPPED_VEC_HEADER_SIZE: usize = 56;
+pub use fidl_conversion::{
+    scan_result_to_policy_scan_result, send_scan_error_over_fidl, send_scan_results_over_fidl,
+};
+
 // Delay between scanning retries when the firmware returns "ShouldWait" error code
 const SCAN_RETRY_DELAY_MS: i64 = 100;
 // Max time allowed for consumers of scan results to retrieve results
@@ -431,10 +431,11 @@ impl ScanResultUpdate for LocationSensorUpdater {
                 .map_err(|err| format_err!("failed to call location sensor service: {:?}", err))?;
 
             // Send results to the iterator
-            send_scan_results_over_fidl(server, scan_results).await
+            fidl_conversion::send_scan_results_over_fidl(server, scan_results).await
         }
 
-        let scan_results = scan_result_to_policy_scan_result(scan_results, self.wpa3_supported);
+        let scan_results =
+            fidl_conversion::scan_result_to_policy_scan_result(scan_results, self.wpa3_supported);
         // Filter out any errors and just log a message.
         // No error recovery, we'll just try again next time a scan result comes in.
         if let Err(e) = send_results(&scan_results).await {
@@ -504,167 +505,6 @@ fn network_bss_map_to_scan_result(
     return scan_results;
 }
 
-/// Convert the protection type we receive from the SME in scan results to the Policy layer
-/// security type. This function should only be used when converting to results for the public
-/// FIDL API, and not for internal use within Policy, where we should prefer the detailed SME
-/// security types.
-fn fidl_security_from_sme_protection(
-    protection: fidl_sme::Protection,
-    wpa3_supported: bool,
-) -> Option<fidl_policy::SecurityType> {
-    use fidl_policy::SecurityType;
-    use fidl_sme::Protection::*;
-    match protection {
-        Wpa3Enterprise | Wpa3Personal | Wpa2Wpa3Personal => {
-            Some(if wpa3_supported { SecurityType::Wpa3 } else { SecurityType::Wpa2 })
-        }
-        Wpa2Enterprise
-        | Wpa2Personal
-        | Wpa1Wpa2Personal
-        | Wpa2PersonalTkipOnly
-        | Wpa1Wpa2PersonalTkipOnly => Some(SecurityType::Wpa2),
-        Wpa1 => Some(SecurityType::Wpa),
-        Wep => Some(SecurityType::Wep),
-        Open => Some(SecurityType::None),
-        Unknown => None,
-    }
-}
-
-pub fn scan_result_to_policy_scan_result(
-    internal_results: &Vec<types::ScanResult>,
-    wpa3_supported: bool,
-) -> Vec<fidl_policy::ScanResult> {
-    let scan_results: Vec<fidl_policy::ScanResult> = internal_results
-        .iter()
-        .filter_map(|internal| {
-            if let Some(security) =
-                fidl_security_from_sme_protection(internal.security_type_detailed, wpa3_supported)
-            {
-                Some(fidl_policy::ScanResult {
-                    id: Some(fidl_policy::NetworkIdentifier {
-                        ssid: internal.ssid.to_vec(),
-                        type_: security,
-                    }),
-                    entries: Some(
-                        internal
-                            .entries
-                            .iter()
-                            .map(|input| {
-                                // Get the frequency. On error, default to Some(0) rather than None
-                                // to protect against consumer code that expects this field to
-                                // always be set.
-                                let frequency = input.channel.get_center_freq().unwrap_or(0);
-                                fidl_policy::Bss {
-                                    bssid: Some(input.bssid.0),
-                                    rssi: Some(input.rssi),
-                                    frequency: Some(frequency.into()), // u16.into() -> u32
-                                    timestamp_nanos: Some(input.timestamp.into_nanos()),
-                                    ..fidl_policy::Bss::EMPTY
-                                }
-                            })
-                            .collect(),
-                    ),
-                    compatibility: if internal.entries.iter().any(|bss| bss.is_compatible()) {
-                        Some(fidl_policy::Compatibility::Supported)
-                    } else {
-                        Some(fidl_policy::Compatibility::DisallowedNotSupported)
-                    },
-                    ..fidl_policy::ScanResult::EMPTY
-                })
-            } else {
-                debug!(
-                    "Unknown security type present in scan results: {:?}",
-                    internal.security_type_detailed
-                );
-                None
-            }
-        })
-        .collect();
-
-    return scan_results;
-}
-
-/// Send batches of results to the output iterator when getNext() is called on it.
-/// Send empty batch and close the channel when no results are remaining.
-pub async fn send_scan_results_over_fidl(
-    output_iterator: fidl::endpoints::ServerEnd<fidl_policy::ScanResultIteratorMarker>,
-    scan_results: &Vec<fidl_policy::ScanResult>,
-) -> Result<(), Error> {
-    // Wait to get a request for a chunk of scan results
-    let (mut stream, ctrl) = output_iterator.into_stream_and_control_handle()?;
-    let max_batch_size = zx::sys::ZX_CHANNEL_MAX_MSG_BYTES as usize;
-    let mut sent_some_results = false;
-    let mut remaining_results = scan_results.iter().peekable();
-    let mut batch_size: usize;
-
-    // Verify consumer is expecting results before each batch
-    loop {
-        if let Some(fidl_policy::ScanResultIteratorRequest::GetNext { responder }) =
-            stream.try_next().await?
-        {
-            sent_some_results = true;
-            let mut batch = vec![];
-            batch_size = FIDL_HEADER_AND_ERR_WRAPPED_VEC_HEADER_SIZE;
-            // Peek if next element exists and will fit in current batch
-            while let Some(peeked_result) = remaining_results.peek() {
-                let result_size = peeked_result.measure().num_bytes;
-                if result_size + FIDL_HEADER_AND_ERR_WRAPPED_VEC_HEADER_SIZE > max_batch_size {
-                    return Err(format_err!("Single scan result too large to send via FIDL"));
-                }
-                // Peeked result will not fit. Send batch and continue.
-                if result_size + batch_size > max_batch_size {
-                    break;
-                }
-                // Actually remove result and push to batch
-                if let Some(result) = remaining_results.next() {
-                    batch.push(result.clone());
-                    batch_size += result_size;
-                }
-            }
-            let close_channel = batch.is_empty();
-            responder.send(&mut Ok(batch))?;
-
-            // Guarantees empty batch is sent before channel is closed.
-            if close_channel {
-                ctrl.shutdown();
-                return Ok(());
-            }
-        } else {
-            // This will happen if the iterator request stream was closed and we expected to send
-            // another response.
-            if sent_some_results {
-                // Some consumers may not care about all scan results, e.g. if they find the
-                // particular network they were looking for. This is not an error.
-                debug!("Scan result consumer closed channel before consuming all scan results");
-                return Ok(());
-            } else {
-                return Err(format_err!("Peer closed channel before receiving any scan results"));
-            }
-        }
-    }
-}
-
-/// On the next request for results, send an error to the output iterator and
-/// shut it down.
-pub async fn send_scan_error_over_fidl(
-    output_iterator: fidl::endpoints::ServerEnd<fidl_policy::ScanResultIteratorMarker>,
-    error_code: types::ScanError,
-) -> Result<(), fidl::Error> {
-    // Wait to get a request for a chunk of scan results
-    let (mut stream, ctrl) = output_iterator.into_stream_and_control_handle()?;
-    if let Some(req) = stream.try_next().await? {
-        let fidl_policy::ScanResultIteratorRequest::GetNext { responder } = req;
-        let mut err: fidl_policy::ScanResultIteratorGetNextResult = Err(error_code);
-        responder.send(&mut err)?;
-        ctrl.shutdown();
-    } else {
-        // This will happen if the iterator request stream was closed and we expected to send
-        // another response.
-        info!("Peer closed channel for getting scan results unexpectedly");
-    }
-    Ok(())
-}
-
 fn log_metric_for_scan_error(reason: &fidl_sme::ScanErrorCode, telemetry_sender: TelemetrySender) {
     let metric_type = match *reason {
         fidl_sme::ScanErrorCode::NotSupported
@@ -708,7 +548,7 @@ mod tests {
             },
         },
         anyhow::Error,
-        fidl::endpoints::create_proxy,
+        fidl::endpoints::{create_proxy, ControlHandle, Responder},
         fidl_fuchsia_wlan_common_security as fidl_security, fuchsia_async as fasync,
         fuchsia_zircon as zx,
         futures::{
@@ -724,10 +564,6 @@ mod tests {
             security::SecurityDescriptor,
         },
     };
-
-    const CENTER_FREQ_CHAN_1: u32 = 2412;
-    const CENTER_FREQ_CHAN_8: u32 = 2447;
-    const CENTER_FREQ_CHAN_11: u32 = 2462;
 
     struct FakeIfaceManager {
         pub sme_proxy: fidl_fuchsia_wlan_sme::ClientSmeProxy,
@@ -858,10 +694,8 @@ mod tests {
     struct MockScanData {
         passive_input_aps: Vec<fidl_sme::ScanResult>,
         passive_internal_aps: Vec<types::ScanResult>,
-        passive_fidl_aps: Vec<fidl_policy::ScanResult>,
         active_input_aps: Vec<fidl_sme::ScanResult>,
         combined_internal_aps: Vec<types::ScanResult>,
-        combined_fidl_aps: Vec<fidl_policy::ScanResult>,
     }
     fn create_scan_ap_data() -> MockScanData {
         let passive_result_1 = fidl_sme::ScanResult {
@@ -953,47 +787,6 @@ mod tests {
                     bss_description: passive_result_2.bss_description.clone(),
                 }],
                 compatibility: types::Compatibility::Supported,
-            },
-        ];
-        let passive_fidl_aps = vec![
-            fidl_policy::ScanResult {
-                id: Some(fidl_policy::NetworkIdentifier {
-                    ssid: types::Ssid::try_from("duplicated ssid").unwrap().into(),
-                    type_: fidl_policy::SecurityType::Wpa2,
-                }),
-                entries: Some(vec![
-                    fidl_policy::Bss {
-                        bssid: Some([0, 0, 0, 0, 0, 0]),
-                        rssi: Some(0),
-                        frequency: Some(CENTER_FREQ_CHAN_1),
-                        timestamp_nanos: Some(passive_result_1.timestamp_nanos),
-                        ..fidl_policy::Bss::EMPTY
-                    },
-                    fidl_policy::Bss {
-                        bssid: Some([7, 8, 9, 10, 11, 12]),
-                        rssi: Some(13),
-                        frequency: Some(CENTER_FREQ_CHAN_11),
-                        timestamp_nanos: Some(passive_result_3.timestamp_nanos),
-                        ..fidl_policy::Bss::EMPTY
-                    },
-                ]),
-                compatibility: Some(fidl_policy::Compatibility::Supported),
-                ..fidl_policy::ScanResult::EMPTY
-            },
-            fidl_policy::ScanResult {
-                id: Some(fidl_policy::NetworkIdentifier {
-                    ssid: types::Ssid::try_from("unique ssid").unwrap().into(),
-                    type_: fidl_policy::SecurityType::Wpa2,
-                }),
-                entries: Some(vec![fidl_policy::Bss {
-                    bssid: Some([1, 2, 3, 4, 5, 6]),
-                    rssi: Some(7),
-                    frequency: Some(CENTER_FREQ_CHAN_8),
-                    timestamp_nanos: Some(passive_result_2.timestamp_nanos),
-                    ..fidl_policy::Bss::EMPTY
-                }]),
-                compatibility: Some(fidl_policy::Compatibility::Supported),
-                ..fidl_policy::ScanResult::EMPTY
             },
         ];
 
@@ -1102,139 +895,13 @@ mod tests {
                 compatibility: types::Compatibility::Supported,
             },
         ];
-        let combined_fidl_aps = vec![
-            fidl_policy::ScanResult {
-                id: Some(fidl_policy::NetworkIdentifier {
-                    ssid: types::Ssid::try_from("duplicated ssid").unwrap().into(),
-                    type_: fidl_policy::SecurityType::Wpa2,
-                }),
-                entries: Some(vec![
-                    fidl_policy::Bss {
-                        bssid: Some([0, 0, 0, 0, 0, 0]),
-                        rssi: Some(0),
-                        frequency: Some(CENTER_FREQ_CHAN_1),
-                        timestamp_nanos: Some(passive_result_1.timestamp_nanos),
-                        ..fidl_policy::Bss::EMPTY
-                    },
-                    fidl_policy::Bss {
-                        bssid: Some([7, 8, 9, 10, 11, 12]),
-                        rssi: Some(13),
-                        frequency: Some(CENTER_FREQ_CHAN_11),
-                        timestamp_nanos: Some(passive_result_3.timestamp_nanos),
-                        ..fidl_policy::Bss::EMPTY
-                    },
-                ]),
-                compatibility: Some(fidl_policy::Compatibility::Supported),
-                ..fidl_policy::ScanResult::EMPTY
-            },
-            fidl_policy::ScanResult {
-                id: Some(fidl_policy::NetworkIdentifier {
-                    ssid: types::Ssid::try_from("foo active ssid").unwrap().into(),
-                    type_: fidl_policy::SecurityType::Wpa2,
-                }),
-                entries: Some(vec![fidl_policy::Bss {
-                    bssid: Some([9, 9, 9, 9, 9, 9]),
-                    rssi: Some(0),
-                    frequency: Some(CENTER_FREQ_CHAN_1),
-                    timestamp_nanos: Some(active_result_1.timestamp_nanos),
-                    ..fidl_policy::Bss::EMPTY
-                }]),
-                compatibility: Some(fidl_policy::Compatibility::Supported),
-                ..fidl_policy::ScanResult::EMPTY
-            },
-            fidl_policy::ScanResult {
-                id: Some(fidl_policy::NetworkIdentifier {
-                    ssid: types::Ssid::try_from("misc ssid").unwrap().into(),
-                    type_: fidl_policy::SecurityType::Wpa2,
-                }),
-                entries: Some(vec![fidl_policy::Bss {
-                    bssid: Some([8, 8, 8, 8, 8, 8]),
-                    rssi: Some(7),
-                    frequency: Some(CENTER_FREQ_CHAN_8),
-                    timestamp_nanos: Some(active_result_2.timestamp_nanos),
-                    ..fidl_policy::Bss::EMPTY
-                }]),
-                compatibility: Some(fidl_policy::Compatibility::Supported),
-                ..fidl_policy::ScanResult::EMPTY
-            },
-            fidl_policy::ScanResult {
-                id: Some(fidl_policy::NetworkIdentifier {
-                    ssid: types::Ssid::try_from("unique ssid").unwrap().into(),
-                    type_: fidl_policy::SecurityType::Wpa2,
-                }),
-                entries: Some(vec![fidl_policy::Bss {
-                    bssid: Some([1, 2, 3, 4, 5, 6]),
-                    rssi: Some(7),
-                    frequency: Some(CENTER_FREQ_CHAN_8),
-                    timestamp_nanos: Some(passive_result_2.timestamp_nanos),
-                    ..fidl_policy::Bss::EMPTY
-                }]),
-                compatibility: Some(fidl_policy::Compatibility::Supported),
-                ..fidl_policy::ScanResult::EMPTY
-            },
-        ];
 
         MockScanData {
             passive_input_aps,
             passive_internal_aps,
-            passive_fidl_aps,
             active_input_aps,
             combined_internal_aps,
-            combined_fidl_aps,
         }
-    }
-
-    /// Generate a vector of FIDL scan results, each sized based on the input
-    /// vector parameter. Size, in bytes, must be greater than the baseline scan
-    /// result's size, measure below, and divisible into octets (by 8).
-    fn create_fidl_scan_results_from_size(
-        result_sizes: Vec<usize>,
-    ) -> Vec<fidl_policy::ScanResult> {
-        // Create a baseline result
-        let minimal_scan_result = fidl_policy::ScanResult {
-            id: Some(fidl_policy::NetworkIdentifier {
-                ssid: types::Ssid::empty().into(),
-                type_: fidl_policy::SecurityType::None,
-            }),
-            entries: Some(vec![]),
-            ..fidl_policy::ScanResult::EMPTY
-        };
-        let minimal_result_size: usize = minimal_scan_result.measure().num_bytes;
-
-        // Create result with single entry
-        let mut scan_result_with_one_bss = minimal_scan_result.clone();
-        scan_result_with_one_bss.entries = Some(vec![fidl_policy::Bss::EMPTY]);
-
-        // Size of each additional BSS entry to FIDL ScanResult
-        let empty_bss_entry_size: usize =
-            scan_result_with_one_bss.measure().num_bytes - minimal_result_size;
-
-        // Validate size is possible
-        if result_sizes.iter().any(|size| size < &minimal_result_size || size % 8 != 0) {
-            panic!("Invalid size. Requested size must be larger than {} minimum bytes and divisible into octets (by 8)", minimal_result_size);
-        }
-
-        let mut fidl_scan_results = vec![];
-        for size in result_sizes {
-            let mut scan_result = minimal_scan_result.clone();
-
-            let num_bss_for_ap = (size - minimal_result_size) / empty_bss_entry_size;
-            // Every 8 characters for SSID adds 8 bytes (1 octet).
-            let ssid_length =
-                (size - minimal_result_size) - (num_bss_for_ap * empty_bss_entry_size);
-
-            scan_result.id = Some(fidl_policy::NetworkIdentifier {
-                ssid: (0..ssid_length).map(|_| rand::random::<u8>()).collect(),
-                type_: fidl_policy::SecurityType::None,
-            });
-            scan_result.entries = Some(vec![fidl_policy::Bss::EMPTY; num_bss_for_ap]);
-
-            // Validate result measures to expected size.
-            assert_eq!(scan_result.measure().num_bytes, size);
-
-            fidl_scan_results.push(scan_result);
-        }
-        fidl_scan_results
     }
 
     fn create_telemetry_sender_and_receiver() -> (TelemetrySender, mpsc::Receiver<TelemetryEvent>) {
@@ -1280,10 +947,8 @@ mod tests {
         let MockScanData {
             passive_input_aps: input_aps,
             passive_internal_aps: _,
-            passive_fidl_aps: _,
             active_input_aps: _,
             combined_internal_aps: _,
-            combined_fidl_aps: _,
         } = create_scan_ap_data();
         // Validate the SME received the scan_request and send back mock data
         assert_variant!(
@@ -1336,10 +1001,8 @@ mod tests {
         let MockScanData {
             passive_input_aps: input_aps,
             passive_internal_aps: _,
-            passive_fidl_aps: _,
             active_input_aps: _,
             combined_internal_aps: _,
-            combined_fidl_aps: _,
         } = create_scan_ap_data();
         // Validate the SME received the scan_request and send back mock data
         assert_variant!(
@@ -1430,10 +1093,8 @@ mod tests {
         let MockScanData {
             passive_input_aps: input_aps,
             passive_internal_aps: internal_aps,
-            passive_fidl_aps: _,
             active_input_aps: _,
             combined_internal_aps: _,
-            combined_fidl_aps: _,
         } = create_scan_ap_data();
         assert_variant!(
             exec.run_until_stalled(&mut sme_stream.next()),
@@ -1531,10 +1192,8 @@ mod tests {
         let MockScanData {
             passive_input_aps: input_aps,
             passive_internal_aps: internal_aps,
-            passive_fidl_aps: _,
             active_input_aps: _,
             combined_internal_aps: _,
-            combined_fidl_aps: _,
         } = create_scan_ap_data();
 
         // Save a network and set its hidden probability to 0
@@ -1598,20 +1257,26 @@ mod tests {
         let MockScanData {
             passive_input_aps: input_aps,
             passive_internal_aps: _,
-            passive_fidl_aps,
             active_input_aps: _,
             combined_internal_aps: _,
-            combined_fidl_aps: _,
         } = create_scan_ap_data();
 
         // Save a network that WILL be seen in the passive scan.
-        let seen_in_passive_network =
-            passive_fidl_aps[0].id.as_ref().expect("failed to get net id");
+        let first_ap = wlan_common::scan::ScanResult::try_from(input_aps[0].clone()).unwrap();
+        // If this changes, also change the `security_type` for `seen_in_passive_network` below
+        assert_eq!(
+            first_ap.bss_description.protection(),
+            wlan_common::bss::Protection::Wpa3Personal
+        );
+        let seen_in_passive_network = types::NetworkIdentifier {
+            ssid: first_ap.bss_description.ssid.clone(),
+            security_type: types::SecurityType::Wpa3,
+        };
         assert!(exec
-            .run_singlethreaded(saved_networks_manager.store(
-                seen_in_passive_network.clone().into(),
-                Credential::Password(b"randompass".to_vec())
-            ))
+            .run_singlethreaded(
+                saved_networks_manager
+                    .store(seen_in_passive_network, Credential::Password(b"randompass".to_vec()))
+            )
             .expect("failed to store network")
             .is_none());
 
@@ -1680,10 +1345,8 @@ mod tests {
         let MockScanData {
             passive_input_aps,
             passive_internal_aps,
-            passive_fidl_aps: _,
             active_input_aps: _,
             combined_internal_aps: _,
-            combined_fidl_aps: _,
         } = create_scan_ap_data();
 
         // Save a network that will NOT be seen in the either scan and set
@@ -1921,10 +1584,8 @@ mod tests {
         let MockScanData {
             passive_input_aps,
             passive_internal_aps,
-            passive_fidl_aps: _,
             active_input_aps: _,
             combined_internal_aps: _,
-            combined_fidl_aps: _,
         } = create_scan_ap_data();
 
         // Save a network with hidden probability 1.0, which will guarantee an
@@ -2114,10 +1775,8 @@ mod tests {
             let MockScanData {
                 passive_input_aps: input_aps,
                 passive_internal_aps: internal_aps,
-                passive_fidl_aps: _,
                 active_input_aps: _,
                 combined_internal_aps: _,
-                combined_fidl_aps: _,
             } = create_scan_ap_data();
             assert_variant!(
                 exec.run_until_stalled(&mut sme_stream.next()),
@@ -2198,10 +1857,8 @@ mod tests {
         let MockScanData {
             passive_input_aps,
             passive_internal_aps,
-            passive_fidl_aps: _,
             active_input_aps,
             combined_internal_aps,
-            combined_fidl_aps: _,
         } = create_scan_ap_data();
 
         // Issue request to scan on both iterator.
@@ -2290,75 +1947,6 @@ mod tests {
         );
     }
 
-    // TODO(fxbug.dev/54255): Separate test case for "empty final vector not consumed" vs "partial ap list"
-    // consumed.
-    #[fuchsia::test]
-    fn partial_scan_result_consumption_has_no_error() {
-        let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
-        let MockScanData {
-            passive_input_aps: _,
-            passive_internal_aps: _,
-            passive_fidl_aps: _,
-            active_input_aps: _,
-            combined_internal_aps: _,
-            combined_fidl_aps,
-        } = create_scan_ap_data();
-
-        // Create an iterator and send scan results
-        let (iter, iter_server) =
-            fidl::endpoints::create_proxy().expect("failed to create iterator");
-        let send_fut = send_scan_results_over_fidl(iter_server, &combined_fidl_aps);
-        pin_mut!(send_fut);
-
-        // Request a chunk of scan results.
-        let mut output_iter_fut = iter.get_next();
-
-        // Send first chunk of scan results
-        assert_variant!(exec.run_until_stalled(&mut send_fut), Poll::Pending);
-
-        // Make sure the first chunk of results were delivered
-        assert_variant!(exec.run_until_stalled(&mut output_iter_fut), Poll::Ready(result) => {
-            let results = result.expect("Failed to get next scan results").unwrap();
-            assert_eq!(results, combined_fidl_aps);
-        });
-
-        // Close the channel without getting remaining results
-        // Note: as of the writing of this test, the "remaining results" are just the final message
-        // with an empty vector of networks that signify the end of results. That final empty vector
-        // is still considered part of the results, so this test successfully exercises the
-        // "partial results read" path.
-        drop(output_iter_fut);
-        drop(iter);
-
-        // This should not result in error, since some results were consumed
-        assert_variant!(exec.run_until_stalled(&mut send_fut), Poll::Ready(Ok(())));
-    }
-
-    #[fuchsia::test]
-    fn no_scan_result_consumption_has_error() {
-        let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
-        let MockScanData {
-            passive_input_aps: _,
-            passive_internal_aps: _,
-            passive_fidl_aps: _,
-            active_input_aps: _,
-            combined_internal_aps: _,
-            combined_fidl_aps,
-        } = create_scan_ap_data();
-
-        // Create an iterator and send scan results
-        let (iter, iter_server) =
-            fidl::endpoints::create_proxy().expect("failed to create iterator");
-        let send_fut = send_scan_results_over_fidl(iter_server, &combined_fidl_aps);
-        pin_mut!(send_fut);
-
-        // Close the channel without getting results
-        drop(iter);
-
-        // This should result in error, since no results were consumed
-        assert_variant!(exec.run_until_stalled(&mut send_fut), Poll::Ready(Err(_)));
-    }
-
     #[fuchsia::test]
     fn directed_active_scan_filters_desired_network() {
         let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
@@ -2434,126 +2022,6 @@ mod tests {
     }
 
     #[fuchsia::test]
-    fn sme_protection_converts_to_policy_security() {
-        use {super::fidl_policy::SecurityType, super::fidl_sme::Protection};
-        let wpa3_supported = true;
-        let wpa3_not_supported = false;
-        let test_pairs = vec![
-            // Below are pairs when WPA3 is supported.
-            (Protection::Wpa3Enterprise, wpa3_supported, Some(SecurityType::Wpa3)),
-            (Protection::Wpa3Personal, wpa3_supported, Some(SecurityType::Wpa3)),
-            (Protection::Wpa2Wpa3Personal, wpa3_supported, Some(SecurityType::Wpa3)),
-            (Protection::Wpa2Enterprise, wpa3_supported, Some(SecurityType::Wpa2)),
-            (Protection::Wpa2Personal, wpa3_supported, Some(SecurityType::Wpa2)),
-            (Protection::Wpa1Wpa2Personal, wpa3_supported, Some(SecurityType::Wpa2)),
-            (Protection::Wpa2PersonalTkipOnly, wpa3_supported, Some(SecurityType::Wpa2)),
-            (Protection::Wpa1Wpa2PersonalTkipOnly, wpa3_supported, Some(SecurityType::Wpa2)),
-            (Protection::Wpa1, wpa3_supported, Some(SecurityType::Wpa)),
-            (Protection::Wep, wpa3_supported, Some(SecurityType::Wep)),
-            (Protection::Open, wpa3_supported, Some(SecurityType::None)),
-            (Protection::Unknown, wpa3_supported, None),
-            // Below are pairs when WPA3 is not supported.
-            (Protection::Wpa3Enterprise, wpa3_not_supported, Some(SecurityType::Wpa2)),
-            (Protection::Wpa3Personal, wpa3_not_supported, Some(SecurityType::Wpa2)),
-            (Protection::Wpa2Wpa3Personal, wpa3_not_supported, Some(SecurityType::Wpa2)),
-            (Protection::Wpa2Enterprise, wpa3_not_supported, Some(SecurityType::Wpa2)),
-            (Protection::Wpa2Personal, wpa3_not_supported, Some(SecurityType::Wpa2)),
-            (Protection::Wpa1Wpa2Personal, wpa3_not_supported, Some(SecurityType::Wpa2)),
-            (Protection::Wpa2PersonalTkipOnly, wpa3_not_supported, Some(SecurityType::Wpa2)),
-            (Protection::Wpa1Wpa2PersonalTkipOnly, wpa3_not_supported, Some(SecurityType::Wpa2)),
-            (Protection::Wpa1, wpa3_not_supported, Some(SecurityType::Wpa)),
-            (Protection::Wep, wpa3_not_supported, Some(SecurityType::Wep)),
-            (Protection::Open, wpa3_not_supported, Some(SecurityType::None)),
-            (Protection::Unknown, wpa3_not_supported, None),
-        ];
-        for (input, wpa3_capable, output) in test_pairs {
-            assert_eq!(fidl_security_from_sme_protection(input, wpa3_capable), output);
-        }
-    }
-
-    #[fuchsia::test]
-    fn scan_result_generate_from_size() {
-        let scan_results = create_fidl_scan_results_from_size(vec![112; 4]);
-        assert_eq!(scan_results.len(), 4);
-        assert!(scan_results.iter().all(|scan_result| scan_result.measure().num_bytes == 112));
-    }
-
-    #[fuchsia::test]
-    fn scan_result_sends_max_message_size() {
-        let mut exec = fasync::TestExecutor::new().expect("failed to create and executor");
-        let (iter, iter_server) =
-            fidl::endpoints::create_proxy().expect("failed to create iterator");
-
-        // Create a single scan result at the max allowed size to send in single
-        // FIDL message.
-        let fidl_scan_results = create_fidl_scan_results_from_size(vec![
-            zx::sys::ZX_CHANNEL_MAX_MSG_BYTES as usize
-                - FIDL_HEADER_AND_ERR_WRAPPED_VEC_HEADER_SIZE,
-        ]);
-
-        let send_fut = send_scan_results_over_fidl(iter_server, &fidl_scan_results);
-        pin_mut!(send_fut);
-
-        let mut output_iter_fut = iter.get_next();
-
-        assert_variant!(exec.run_until_stalled(&mut send_fut), Poll::Pending);
-
-        assert_variant!(exec.run_until_stalled(&mut output_iter_fut), Poll::Ready(result) => {
-            let results = result.expect("Failed to get next scan results").unwrap();
-            assert_eq!(results, fidl_scan_results);
-        })
-    }
-
-    #[fuchsia::test]
-    fn scan_result_exceeding_max_size_throws_error() {
-        let mut exec = fasync::TestExecutor::new().expect("failed to create and executor");
-        let (iter, iter_server) =
-            fidl::endpoints::create_proxy().expect("failed to create iterator");
-
-        // Create a single scan result exceeding the  max allowed size to send in single
-        // FIDL message.
-        let fidl_scan_results = create_fidl_scan_results_from_size(vec![
-            (zx::sys::ZX_CHANNEL_MAX_MSG_BYTES as usize
-                - FIDL_HEADER_AND_ERR_WRAPPED_VEC_HEADER_SIZE)
-                + 8,
-        ]);
-
-        let send_fut = send_scan_results_over_fidl(iter_server, &fidl_scan_results);
-        pin_mut!(send_fut);
-
-        let _ = iter.get_next();
-
-        assert_variant!(exec.run_until_stalled(&mut send_fut), Poll::Ready(Err(_)));
-    }
-
-    #[fuchsia::test]
-    fn scan_result_sends_single_batch() {
-        let mut exec = fasync::TestExecutor::new().expect("failed to create and executor");
-        let (iter, iter_server) =
-            fidl::endpoints::create_proxy().expect("failed to create iterator");
-
-        // Create a set of scan results that does not exceed the the max message
-        // size, so it should be sent in a single batch.
-        let fidl_scan_results =
-            create_fidl_scan_results_from_size(vec![
-                zx::sys::ZX_CHANNEL_MAX_MSG_BYTES as usize / 4;
-                3
-            ]);
-
-        let send_fut = send_scan_results_over_fidl(iter_server, &fidl_scan_results);
-        pin_mut!(send_fut);
-
-        let mut output_iter_fut = iter.get_next();
-
-        assert_variant!(exec.run_until_stalled(&mut send_fut), Poll::Pending);
-
-        assert_variant!(exec.run_until_stalled(&mut output_iter_fut), Poll::Ready(result) => {
-            let results = result.expect("Failed to get next scan results").unwrap();
-            assert_eq!(results, fidl_scan_results);
-        });
-    }
-
-    #[fuchsia::test]
     fn scan_returns_error_on_timeout() {
         let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
         let (client, _sme_stream) = exec.run_singlethreaded(create_iface_manager());
@@ -2582,44 +2050,6 @@ mod tests {
             assert_eq!(results, Err(types::ScanError::GeneralError));
         });
         assert_eq!(*exec.run_singlethreaded(location_sensor_results.lock()), None);
-    }
-
-    #[fuchsia::test]
-    fn scan_result_sends_multiple_batches() {
-        let mut exec = fasync::TestExecutor::new().expect("failed to create and executor");
-        let (iter, iter_server) =
-            fidl::endpoints::create_proxy().expect("failed to create iterator");
-
-        // Create a set of scan results that exceed the max FIDL message size, so
-        // they should be split into batches.
-        let fidl_scan_results =
-            create_fidl_scan_results_from_size(vec![
-                zx::sys::ZX_CHANNEL_MAX_MSG_BYTES as usize / 8;
-                8
-            ]);
-
-        let send_fut = send_scan_results_over_fidl(iter_server, &fidl_scan_results);
-        pin_mut!(send_fut);
-
-        let mut output_iter_fut = iter.get_next();
-
-        assert_variant!(exec.run_until_stalled(&mut send_fut), Poll::Pending);
-
-        let mut aggregate_results = vec![];
-        assert_variant!(exec.run_until_stalled(&mut output_iter_fut), Poll::Ready(result) => {
-            let results = result.expect("Failed to get next scan results").unwrap();
-            assert_eq!(results.len(), 7);
-            aggregate_results.extend(results);
-        });
-
-        let mut output_iter_fut = iter.get_next();
-        assert_variant!(exec.run_until_stalled(&mut send_fut), Poll::Pending);
-        assert_variant!(exec.run_until_stalled(&mut output_iter_fut), Poll::Ready(result) => {
-            let results = result.expect("Failed to get next scan results").unwrap();
-            assert_eq!(results.len(), 1);
-            aggregate_results.extend(results);
-        });
-        assert_eq!(aggregate_results, fidl_scan_results);
     }
 
     #[test_case(fidl_sme::ScanErrorCode::NotSupported, ScanIssue::ScanFailure)]
