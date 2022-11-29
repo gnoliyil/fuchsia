@@ -20,9 +20,7 @@ namespace zxdb {
 dap::ResponseOrError<dap::AttachResponse> OnRequestAttach(DebugAdapterContext* context,
                                                           const dap::AttachRequestZxdb& req) {
   dap::AttachResponse response;
-  Filter* filter = context->session()->system().CreateNewFilter();
-  filter->SetType(debug_ipc::Filter::Type::kProcessNameSubstr);
-  filter->SetPattern(req.process);
+  context->console()->ProcessInputLine("attach " + req.process);
   return response;
 }
 

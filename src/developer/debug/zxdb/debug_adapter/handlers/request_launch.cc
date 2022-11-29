@@ -44,9 +44,7 @@ dap::ResponseOrError<dap::LaunchResponse> OnRequestLaunch(DebugAdapterContext* c
         "instead of launch to connect to zxdb.");
   }
 
-  Filter* filter = context->session()->system().CreateNewFilter();
-  filter->SetType(debug_ipc::Filter::Type::kProcessNameSubstr);
-  filter->SetPattern(req.process);
+  context->console()->ProcessInputLine("attach " + req.process);
 
   dap::RunInTerminalRequest run_request;
   run_request.title = "zxdb launch";
