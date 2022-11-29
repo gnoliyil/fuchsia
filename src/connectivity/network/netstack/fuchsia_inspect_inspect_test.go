@@ -822,11 +822,11 @@ func TestEthInfoInspectImpl(t *testing.T) {
 				Mac:      ethernet.MacAddress{Octets: [6]uint8{0, 1, 2, 3, 4, 5}},
 			}, nil
 		},
-		GetFifosImpl: func() (int32, *ethernet.Fifos, error) {
-			return int32(zx.ErrOk), &ethernet.Fifos{
+		GetFifosImpl: func() (ethernet.DeviceGetFifosResult, error) {
+			return ethernet.DeviceGetFifosResultWithResponse(ethernet.DeviceGetFifosResponse{Fifos: ethernet.Fifos{
 				RxDepth: 1,
 				TxDepth: 1,
-			}, nil
+			}}), nil
 		},
 		SetIoBufferImpl: func(zx.VMO) (int32, error) {
 			return int32(zx.ErrOk), nil

@@ -20,7 +20,7 @@ type Device struct {
 	testing.TB
 
 	GetInfoImpl                           func() (ethernet.Info, error)
-	GetFifosImpl                          func() (int32, *ethernet.Fifos, error)
+	GetFifosImpl                          func() (ethernet.DeviceGetFifosResult, error)
 	SetIoBufferImpl                       func(zx.VMO) (int32, error)
 	StartImpl                             func() (int32, error)
 	StopImpl                              func() error
@@ -45,7 +45,7 @@ func (d *Device) GetInfo(fidl.Context) (ethernet.Info, error) {
 	return fn()
 }
 
-func (d *Device) GetFifos(fidl.Context) (int32, *ethernet.Fifos, error) {
+func (d *Device) GetFifos(fidl.Context) (ethernet.DeviceGetFifosResult, error) {
 	fn := d.GetFifosImpl
 	if fn == nil {
 		d.Helper()

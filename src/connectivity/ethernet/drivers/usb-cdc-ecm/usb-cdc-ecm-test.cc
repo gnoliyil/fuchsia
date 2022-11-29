@@ -111,15 +111,19 @@ class EthernetInterface {
     ASSERT_OK(client_end.status_value());
     ethernet_client_.Bind(std::move(*client_end));
     // Get device information
-    auto get_info_result = ethernet_client_->GetInfo();
-    ASSERT_OK(get_info_result.status());
-    auto info = get_info_result->info;
-    auto get_fifos_result = ethernet_client_->GetFifos();
-    ASSERT_OK(get_fifos_result.status());
-    auto fifos = get_fifos_result->info.get();
-    mtu_ = info.mtu;
+    {
+      const fidl::WireResult result = ethernet_client_->GetInfo();
+      ASSERT_OK(result);
+      const fuchsia_hardware_ethernet::wire::Info& info = result.value().info;
+      mtu_ = info.mtu;
+    }
+    const fidl::WireResult result = ethernet_client_->GetFifos();
+    ASSERT_OK(result);
+    const fit::result response = result.value();
+    ASSERT_TRUE(response.is_ok(), "%s", zx_status_get_string(response.error_value()));
+    fuchsia_hardware_ethernet::wire::Fifos& fifos = response.value()->fifos;
     // Calculate optimal size of VMO, and set up RX and TX buffers.
-    size_t optimal_vmo_size = (fifos->rx_depth * mtu_) + (fifos->tx_depth * mtu_);
+    size_t optimal_vmo_size = (fifos.rx_depth * mtu_) + (fifos.tx_depth * mtu_);
     zx::vmo vmo;
     ASSERT_OK(mapper_.CreateAndMap(optimal_vmo_size, ZX_VM_FLAG_PERM_READ | ZX_VM_FLAG_PERM_WRITE,
                                    nullptr, &vmo));
@@ -129,10 +133,10 @@ class EthernetInterface {
     ASSERT_OK(set_io_buffer_result.status());
     auto start_result = ethernet_client_->Start();
     ASSERT_OK(start_result.status());
-    tx_fifo_ = std::move(fifos->tx);
-    rx_fifo_ = std::move(fifos->rx);
-    tx_depth_ = fifos->tx_depth;
-    rx_depth_ = fifos->rx_depth;
+    tx_fifo_ = std::move(fifos.tx);
+    rx_fifo_ = std::move(fifos.rx);
+    tx_depth_ = fifos.tx_depth;
+    rx_depth_ = fifos.rx_depth;
     io_buffer_offset_ = rx_depth_ * mtu_;
 
     // Give all RX entries to the Ethernet driver

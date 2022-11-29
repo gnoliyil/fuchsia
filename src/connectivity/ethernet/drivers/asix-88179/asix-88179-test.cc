@@ -93,14 +93,16 @@ class UsbAx88179Test : public zxtest::Test {
     ethernet_client_.Bind(std::move(*ethernet_client_end));
 
     // Get device information
-    auto get_info_result = ethernet_client_->GetInfo();
-    ASSERT_OK(get_info_result.status());
-    auto info = get_info_result->info;
-    auto get_fifos_result = ethernet_client_->GetFifos();
-    ASSERT_OK(get_fifos_result.status());
-    auto fifos = get_fifos_result->info.get();
+    const fidl::WireResult info_result = ethernet_client_->GetInfo();
+    ASSERT_OK(info_result);
+    const fuchsia_hardware_ethernet::wire::Info& info = info_result.value().info;
+    const fidl::WireResult fifos_result = ethernet_client_->GetFifos();
+    ASSERT_OK(fifos_result);
+    const fit::result fifos_response = fifos_result.value();
+    ASSERT_TRUE(fifos_response.is_ok(), "%s", zx_status_get_string(fifos_response.error_value()));
+    fuchsia_hardware_ethernet::wire::Fifos& fifos = fifos_response.value()->fifos;
     // Calculate optimal size of VMO, and set up RX and TX buffers.
-    size_t optimal_vmo_size = (fifos->rx_depth * info.mtu) + (fifos->tx_depth * info.mtu);
+    size_t optimal_vmo_size = (fifos.rx_depth * info.mtu) + (fifos.tx_depth * info.mtu);
     zx::vmo vmo;
     fzl::VmoMapper mapper;
     ASSERT_OK(mapper.CreateAndMap(optimal_vmo_size, ZX_VM_FLAG_PERM_READ | ZX_VM_FLAG_PERM_WRITE,
@@ -108,8 +110,8 @@ class UsbAx88179Test : public zxtest::Test {
     auto set_io_buffer_result = ethernet_client_->SetIoBuffer(std::move(vmo));
     ASSERT_OK(set_io_buffer_result.status());
 
-    rx_fifo_ = std::move(fifos->rx);
-    tx_fifo_ = std::move(fifos->tx);
+    rx_fifo_ = std::move(fifos.rx);
+    tx_fifo_ = std::move(fifos.tx);
   }
 
   void StartDevice() {

@@ -214,7 +214,7 @@ class EthDev : public EthDevType,
       __TA_REQUIRES(edev0_->ethdev_lock_);
   zx_status_t StartLocked() __TA_REQUIRES(edev0_->ethdev_lock_);
   zx_status_t TransmitListenLocked(bool yes) __TA_REQUIRES(edev0_->ethdev_lock_);
-  zx_status_t GetFifosLocked(fuchsia_hardware_ethernet::wire::Fifos* fifos)
+  zx::result<fuchsia_hardware_ethernet::wire::Fifos> GetFifosLocked()
       __TA_REQUIRES(edev0_->ethdev_lock_);
   zx_status_t SetIObufLocked(zx::vmo vmo) __TA_REQUIRES(edev0_->ethdev_lock_);
 

@@ -58,13 +58,13 @@ func MakeEthernetDevice(t *testing.T, info ethernet.Info, depth uint32) (etherne
 				err := deviceRxFifo.SignalPeer(zx.Signals(ethernet.SignalStatus), 0)
 				return status, err
 			},
-			GetFifosImpl: func() (int32, *ethernet.Fifos, error) {
-				return int32(zx.ErrOk), &ethernet.Fifos{
+			GetFifosImpl: func() (ethernet.DeviceGetFifosResult, error) {
+				return ethernet.DeviceGetFifosResultWithResponse(ethernet.DeviceGetFifosResponse{Fifos: ethernet.Fifos{
 					Rx:      clientRxFifo,
 					Tx:      clientTxFifo,
 					RxDepth: depth,
 					TxDepth: depth,
-				}, nil
+				}}), nil
 			},
 			SetIoBufferImpl: func(h zx.VMO) (int32, error) {
 				return int32(zx.ErrOk), h.Close()

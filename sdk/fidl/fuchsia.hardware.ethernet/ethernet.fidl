@@ -5,36 +5,10 @@ library fuchsia.hardware.ethernet;
 
 using zx;
 
-@for_deprecated_c_bindings
 type MacAddress = struct {
     octets array<uint8, 6>;
 };
 
-/// Features distinguishes between NICs with different features.
-type Features = strict bits : uint32 {
-    WLAN = 0x01;
-    SYNTHETIC = 0x02;
-    LOOPBACK = 0x04;
-    WLAN_AP = 0x08;
-};
-
-@for_deprecated_c_bindings
-type Info = struct {
-    features Features;
-    mtu uint32;
-    mac MacAddress;
-};
-
-@for_deprecated_c_bindings
-type Fifos = resource struct {
-    // handles for the rx and tx fifo
-    rx zx.handle:FIFO;
-    tx zx.handle:FIFO;
-
-    // maximum number of items in rx and tx fifo
-    rx_depth uint32;
-    tx_depth uint32;
-};
 
 /// Signal that is asserted on the RX fifo whenever the Device has a status
 /// change.  This is ZX_USER_SIGNAL_0.
@@ -74,18 +48,38 @@ const SET_CLIENT_NAME_MAX_LEN uint32 = 16;
 ///
 /// See //zircon/system/public/zircon/device/ethernet.h for fifo entry layout
 /// and request / response message bits.
-@for_deprecated_c_bindings
 protocol Device {
     /// Obtain information about device
     GetInfo() -> (struct {
-        info Info;
+        // TODO(https://fxbug.dev/103484): consider removing the outer struct
+        // when the issue is resolved.
+        info @generated_name("Info") struct {
+            /// Features distinguishes between NICs with different features.
+            features @generated_name("Features") strict bits : uint32 {
+                WLAN = 0x01;
+                SYNTHETIC = 0x02;
+                LOOPBACK = 0x04;
+                WLAN_AP = 0x08;
+            };
+            mtu uint32;
+            mac MacAddress;
+        };
     });
 
     /// Obtain a pair of fifos for queueing tx and rx operations
     GetFifos() -> (resource struct {
-        status zx.status;
-        info box<Fifos>;
-    });
+        // TODO(https://fxbug.dev/103484): consider removing the outer struct
+        // when the issue is resolved.
+        fifos @generated_name("Fifos") resource struct {
+            // handles for the rx and tx fifo
+            rx zx.handle:FIFO;
+            tx zx.handle:FIFO;
+
+            // maximum number of items in rx and tx fifo
+            rx_depth uint32;
+            tx_depth uint32;
+        };
+    }) error zx.status;
 
     /// Set the IO Buffer that will provide the data buffers for tx and rx operations
     SetIoBuffer(resource struct {

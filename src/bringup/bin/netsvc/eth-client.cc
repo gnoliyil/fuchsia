@@ -22,16 +22,18 @@ zx::result<std::unique_ptr<EthClient>> EthClient::Create(
     fit::closure on_closed) {
   fidl::WireSyncClient eth{std::move(client_end)};
 
-  fidl::WireResult r = eth->GetFifos();
-  if (!r.ok()) {
-    fprintf(stderr, "%s: failed to get fifos: %s\n", __FUNCTION__, r.status_string());
-    return zx::error(r.status());
+  const fidl::WireResult result = eth->GetFifos();
+  if (!result.ok()) {
+    fprintf(stderr, "%s: failed to get fifos: %s\n", __FUNCTION__, result.status_string());
+    return zx::error(result.status());
   }
-  if (zx_status_t status = r.value().status; status != ZX_OK) {
-    fprintf(stderr, "%s: GetFifos error: %s\n", __FUNCTION__, zx_status_get_string(status));
-    return zx::error(status);
+  fit::result response = result.value();
+  if (response.is_error()) {
+    fprintf(stderr, "%s: GetFifos error: %s\n", __FUNCTION__,
+            zx_status_get_string(response.error_value()));
+    return response.take_error();
   }
-  fuchsia_hardware_ethernet::wire::Fifos& fifos = *r.value().info;
+  fuchsia_hardware_ethernet::wire::Fifos& fifos = response.value()->fifos;
 
   {
     fidl::WireResult result = eth->SetIoBuffer(std::move(io_vmo));

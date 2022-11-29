@@ -255,9 +255,9 @@ class EthernetClient {
     {
       const fidl::WireResult result = fidl::WireCall(ethernet_device_)->GetFifos();
       ASSERT_OK(result);
-      const fidl::WireResponse response = result.value();
-      ASSERT_OK(response.status);
-      fuchsia_hardware_ethernet::wire::Fifos& fifos = *response.info;
+      const fit::result response = result.value();
+      ASSERT_TRUE(response.is_ok(), "%s", zx_status_get_string(response.error_value()));
+      fuchsia_hardware_ethernet::wire::Fifos& fifos = response.value()->fifos;
       tx_.get() = std::move(fifos.tx);
       rx_.get() = std::move(fifos.rx);
       tx_depth_ = fifos.tx_depth;

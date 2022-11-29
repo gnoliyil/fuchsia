@@ -72,10 +72,7 @@ impl Client {
         name: &str,
     ) -> Result<Self, anyhow::Error> {
         let () = zx::Status::ok(dev.set_client_name(name).await?)?;
-        let (status, fifos) = dev.get_fifos().await?;
-        let () = zx::Status::ok(status)?;
-        // Safe because we checked the return status above.
-        let fifos = *fifos.unwrap();
+        let fifos = dev.get_fifos().await?.map_err(zx::Status::from_raw)?;
         {
             let buf = zx::Vmo::from(buf.as_handle_ref().duplicate(zx::Rights::SAME_RIGHTS)?);
             let () = zx::Status::ok(dev.set_io_buffer(buf).await?)?;

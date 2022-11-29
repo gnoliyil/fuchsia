@@ -398,31 +398,32 @@ int EthDev::TransmitThread() {
   return 0;
 }
 
-zx_status_t EthDev::GetFifosLocked(fuchsia_hardware_ethernet::wire::Fifos* fifos) {
-  zx_status_t status;
-  fuchsia_hardware_ethernet::wire::Fifos temp_fifo;
+zx::result<fuchsia_hardware_ethernet::wire::Fifos> EthDev::GetFifosLocked() {
+  fuchsia_hardware_ethernet::wire::Fifos fifos = {
+      .rx_depth = kFifoDepth,
+      .tx_depth = kFifoDepth,
+  };
   zx::fifo transmit_fifo;
   zx::fifo receive_fifo;
-  if ((status = zx::fifo::create(kFifoDepth, kFifoEntrySize, 0, &temp_fifo.tx, &transmit_fifo)) !=
-      ZX_OK) {
+  if (zx_status_t status =
+          zx::fifo::create(kFifoDepth, kFifoEntrySize, 0, &fifos.tx, &transmit_fifo);
+      status != ZX_OK) {
     zxlogf(ERROR, "eth_create  [%s]: failed to create tx fifo: %d", name_, status);
-    return status;
+    return zx::error(status);
   }
-  if ((status = zx::fifo::create(kFifoDepth, kFifoEntrySize, 0, &temp_fifo.rx, &receive_fifo)) !=
-      ZX_OK) {
+  if (zx_status_t status =
+          zx::fifo::create(kFifoDepth, kFifoEntrySize, 0, &fifos.rx, &receive_fifo);
+      status != ZX_OK) {
     zxlogf(ERROR, "eth_create  [%s]: failed to create rx fifo: %d", name_, status);
-    return status;
+    return zx::error(status);
   }
 
-  *fifos = std::move(temp_fifo);
   transmit_fifo_ = std::move(transmit_fifo);
   receive_fifo_ = std::move(receive_fifo);
   transmit_fifo_depth_ = kFifoDepth;
   receive_fifo_depth_ = kFifoDepth;
-  fifos->tx_depth = kFifoDepth;
-  fifos->rx_depth = kFifoDepth;
 
-  return ZX_OK;
+  return zx::ok(std::move(fifos));
 }
 
 zx_status_t EthDev::SetIObufLocked(zx::vmo io_vmo) {
@@ -601,9 +602,12 @@ void EthDev::GetInfo(GetInfoCompleter::Sync& completer) {
 void EthDev::GetFifos(GetFifosCompleter::Sync& completer) {
   fbl::AutoLock lock(&edev0_->ethdev_lock_);
   STATE_CHECK();
-  fidl::Arena allocator;
-  fidl::ObjectView<fuchsia_hardware_ethernet::wire::Fifos> fifos(allocator);
-  completer.Reply(GetFifosLocked(fifos.get()), fifos);
+  zx::result fifos = GetFifosLocked();
+  if (fifos.is_error()) {
+    completer.ReplyError(fifos.error_value());
+  } else {
+    completer.ReplySuccess(std::move(fifos.value()));
+  }
 }
 
 void EthDev::SetIoBuffer(SetIoBufferRequestView request, SetIoBufferCompleter::Sync& completer) {

@@ -66,14 +66,16 @@ class EthernetDeviceTest {
 
   void Start() {
     {
-      auto result = FidlClient()->GetFifos();
-      ASSERT_OK(result.status());
-      ASSERT_OK(result->status);
-      tx_fifo_ = std::move(result->info->tx);
+      const fidl::WireResult result = FidlClient()->GetFifos();
+      ASSERT_OK(result);
+      const fit::result response = result.value();
+      ASSERT_TRUE(response.is_ok(), "%s", zx_status_get_string(response.error_value()));
+      fuchsia_hardware_ethernet::wire::Fifos& fifos = response.value()->fifos;
+      tx_fifo_ = std::move(fifos.tx);
       EXPECT_TRUE(tx_fifo_.is_valid());
-      rx_fifo_ = std::move(result->info->rx);
-      rx_fifo_depth_ = result->info->rx_depth;
-      tx_fifo_depth_ = result->info->tx_depth;
+      rx_fifo_ = std::move(fifos.rx);
+      rx_fifo_depth_ = fifos.rx_depth;
+      tx_fifo_depth_ = fifos.tx_depth;
       EXPECT_TRUE(rx_fifo_.is_valid());
     }
     {
@@ -153,11 +155,13 @@ TEST(EthernetTest, GetInfoTest) {
 
 TEST(EthernetTest, GetFifosTest) {
   EthernetDeviceTest test;
-  auto result = test.FidlClient()->GetFifos();
-  ASSERT_OK(result.status());
-  ASSERT_OK(result->status);
-  EXPECT_TRUE(result->info->rx != ZX_HANDLE_INVALID);
-  EXPECT_TRUE(result->info->tx != ZX_HANDLE_INVALID);
+  const fidl::WireResult result = test.FidlClient()->GetFifos();
+  ASSERT_OK(result);
+  const fit::result response = result.value();
+  ASSERT_TRUE(response.is_ok(), "%s", zx_status_get_string(response.error_value()));
+  fuchsia_hardware_ethernet::wire::Fifos& fifos = response.value()->fifos;
+  EXPECT_TRUE(fifos.rx != ZX_HANDLE_INVALID);
+  EXPECT_TRUE(fifos.tx != ZX_HANDLE_INVALID);
 }
 
 TEST(EthernetTest, AddDeviceAsNotPromiscuous) {

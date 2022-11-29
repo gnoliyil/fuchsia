@@ -111,13 +111,18 @@ func NewClient(clientName string, topopath, filepath string, device ethernet.Dev
 		return nil, fmt.Errorf("MAC address is not unicast: %s", mac)
 
 	}
-	status, fifos, err := device.GetFifos(context.Background())
+	result, err := device.GetFifos(context.Background())
 	if err != nil {
 		return nil, err
-	} else if err := checkStatus(status, "GetFifos"); err != nil {
-		return nil, err
 	}
-
+	switch w := result.Which(); w {
+	case ethernet.DeviceGetFifosResultResponse:
+	case ethernet.DeviceGetFifosResultErr:
+		return nil, &zx.Error{Status: zx.Status(result.Err), Text: "GetFifos"}
+	default:
+		panic(fmt.Sprintf("unexpected result %d", w))
+	}
+	fifos := result.Response.Fifos
 	c := &Client{
 		Info:     info,
 		device:   device,

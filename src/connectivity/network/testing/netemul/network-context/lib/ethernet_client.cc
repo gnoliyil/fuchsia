@@ -44,11 +44,10 @@ class FifoHolder {
     ZFifoEntry e;
   };
 
-  explicit FifoHolder(async_dispatcher_t* dispatcher, std::unique_ptr<ZFifos> fifos,
-                      const EthernetConfig& config)
+  explicit FifoHolder(async_dispatcher_t* dispatcher, ZFifos fifos, const EthernetConfig& config)
       : dispatcher_(dispatcher), buf_config_(config) {
-    tx_.reset(fifos->tx.release());
-    rx_.reset(fifos->rx.release());
+    tx_.reset(fifos.tx.release());
+    rx_.reset(fifos.rx.release());
   }
 
   ~FifoHolder() {
@@ -321,13 +320,13 @@ static zx_status_t WatchCb(int dirfd, int event, const char* fn, void* cookie) {
 void EthernetClient::Setup(const EthernetConfig& config,
                            fit::function<void(zx_status_t)> callback) {
   device_->SetClientName("EthernetClient", [](zx_status_t stat) {});
-  device_->GetFifos([this, callback = std::move(callback), config](
-                        zx_status_t status, std::unique_ptr<ZFifos> fifos) mutable {
-    if (status != ZX_OK) {
-      callback(status);
+  device_->GetFifos([this, callback = std::move(callback),
+                     config](fuchsia::hardware::ethernet::Device_GetFifos_Result result) mutable {
+    if (result.is_err()) {
+      callback(result.err());
       return;
     }
-    fifos_ = std::make_unique<FifoHolder>(dispatcher_, std::move(fifos), config);
+    fifos_ = std::make_unique<FifoHolder>(dispatcher_, std::move(result.response().fifos), config);
 
     fifos_->SetPeerClosedCallback([this]() {
       if (peer_closed_callback_) {
