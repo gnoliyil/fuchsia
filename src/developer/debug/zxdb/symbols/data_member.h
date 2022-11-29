@@ -5,6 +5,7 @@
 #ifndef SRC_DEVELOPER_DEBUG_ZXDB_SYMBOLS_DATA_MEMBER_H_
 #define SRC_DEVELOPER_DEBUG_ZXDB_SYMBOLS_DATA_MEMBER_H_
 
+#include "src/developer/debug/zxdb/symbols/file_line.h"
 #include "src/developer/debug/zxdb/symbols/value.h"
 
 namespace zxdb {
@@ -97,6 +98,10 @@ class DataMember final : public Value {
   uint32_t bit_size() const { return bit_size_; }
   void set_bit_size(uint32_t bs) { bit_size_ = bs; }
 
+  // The location of the declaration, used by Rust generators.
+  const FileLine& decl_line() const { return decl_line_; }
+  void set_decl_line(FileLine decl) { decl_line_ = std::move(decl); }
+
  protected:
   // Symbol protected overrides.
   const DataMember* AsDataMember() const override;
@@ -114,6 +119,7 @@ class DataMember final : public Value {
   uint32_t byte_size_ = 0;
   int32_t bit_offset_ = 0;
   uint32_t bit_size_ = 0;
+  FileLine decl_line_;
 };
 
 }  // namespace zxdb

@@ -15,6 +15,7 @@ class Collection;
 class EvalContext;
 class Variant;
 class VariantPart;
+class DataMember;
 
 // Given the VariantPart stored in the given ExprValue, this computes the currently active Variant
 // inside the given collection and places it into *result.
@@ -34,8 +35,11 @@ ErrOr<std::string> GetActiveRustVariantName(const fxl::RefPtr<EvalContext>& cont
 // only have a single value (it will be a tuple or a struct if the user wants more than one thing
 // stored in the enum). This function will fail if there is more than one data member in the
 // variant.
+//
+// The current active data member can be returned optionally.
 ErrOrValue ResolveSingleVariantValue(const fxl::RefPtr<EvalContext>& context,
-                                     const ExprValue& value);
+                                     const ExprValue& value,
+                                     fxl::RefPtr<DataMember>* member = nullptr);
 
 }  // namespace zxdb
 

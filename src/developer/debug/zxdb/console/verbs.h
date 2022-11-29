@@ -37,6 +37,7 @@ enum class Verb {
   kNone = 0,
 
   kAspace,
+  kAsyncBacktrace,
   kAttach,
   kAuth,
   kBacktrace,

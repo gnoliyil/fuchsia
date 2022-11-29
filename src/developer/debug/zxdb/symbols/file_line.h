@@ -19,8 +19,6 @@ class FileLine {
   // Constructor with a compilation directory. comp_dir may be empty if not known.
   FileLine(std::string file, std::string comp_dir, int line);
 
-  ~FileLine();
-
   bool is_valid() const { return !file_.empty() && line_ > 0; }
 
   // In our system the file name is always the string that comes out of DWARF which is relative to

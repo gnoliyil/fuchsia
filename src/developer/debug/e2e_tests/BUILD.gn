@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/config/compiler.gni")
 import("//build/host.gni")
 import("//build/test.gni")
 import("//build/testing/environments.gni")
@@ -20,6 +21,8 @@ if (is_host) {
       "e2e_test.h",
       "ffx_debug_agent_bridge.cc",
       "ffx_debug_agent_bridge.h",
+      "fuzzy_matcher.cc",
+      "fuzzy_matcher.h",
       "main_e2e_test.cc",
       "main_e2e_test.h",
       "test_break_dl_start.cc",
@@ -29,6 +32,13 @@ if (is_host) {
       "test_status.cc",
       "test_step_plt.cc",
     ]
+
+    if (optimize == "none") {
+      sources += [
+        # async-backtrace is only supported when optimization is off.
+        "test_async_backtrace.cc",
+      ]
+    }
 
     deps = [
       # In variant builds the variant version of the test executable will be run. However, the test

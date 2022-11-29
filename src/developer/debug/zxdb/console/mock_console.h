@@ -72,6 +72,9 @@ class MockConsole : public Console {
   void ProcessInputLine(const std::string& line, fxl::RefPtr<CommandContext> cmd_context = nullptr,
                         bool add_to_history = true) override;
 
+  // Overrider that uses an OfflineCommandContext by default.
+  void ProcessInputLine(const std::string& line, OfflineCommandContext::CompletionCallback cb);
+
  private:
   Session* session_;
   std::vector<OutputEvent> output_queue_;
