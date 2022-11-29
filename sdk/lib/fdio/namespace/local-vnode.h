@@ -142,12 +142,14 @@ class LocalVnode : public fbl::RefCounted<LocalVnode> {
 
   class Local {
    public:
-    Local(fdio_open_local_func_t on_open, void* context) : on_open_(on_open), context_(context) {}
+    Local(fdio_open_local_func_t on_open, void* context);
     zx::result<fdio_ptr> Open();
+    void Unlink();
 
    private:
-    const fdio_open_local_func_t on_open_;
-    void* context_;
+    fbl::Mutex lock_;
+    fdio_open_local_func_t on_open_ __TA_GUARDED(lock_);
+    void* context_ __TA_GUARDED(lock_);
   };
 
   class Remote {
@@ -170,8 +172,10 @@ class LocalVnode : public fbl::RefCounted<LocalVnode> {
   zx_status_t EnumerateInternal(fbl::StringBuffer<PATH_MAX>* path,
                                 const EnumerateCallback& func) const;
 
-  LocalVnode(fbl::RefPtr<LocalVnode> parent, std::variant<Local, Intermediate, Remote> node_type,
+  LocalVnode(fbl::RefPtr<LocalVnode> parent, zxio_storage_t storage, fbl::String name);
+  LocalVnode(fbl::RefPtr<LocalVnode> parent, fdio_open_local_func_t on_open, void* context,
              fbl::String name);
+  LocalVnode(fbl::RefPtr<LocalVnode> parent, fbl::String name);
   ~LocalVnode();
 
   std::variant<Local, Intermediate, Remote> node_type_;

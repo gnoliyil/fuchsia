@@ -30,10 +30,8 @@ zx::result<fbl::RefPtr<LocalVnode>> LocalVnode::Create(
   zxio_storage_t remote_storage;
   ::zxio::CreateDirectory(const_cast<zxio_storage_t*>(&remote_storage), std::move(remote));
 
-  Remote storage(remote_storage);
-
   fbl::RefPtr vn =
-      fbl::AdoptRef(new LocalVnode(std::move(parent), std::move(storage), std::move(name)));
+      fbl::AdoptRef(new LocalVnode(std::move(parent), remote_storage, std::move(name)));
 
   if (vn->parent_ != nullptr) {
     zx_status_t status = vn->parent_->AddChild(vn);
@@ -48,10 +46,8 @@ zx::result<fbl::RefPtr<LocalVnode>> LocalVnode::Create(
 zx::result<fbl::RefPtr<LocalVnode>> LocalVnode::Create(fbl::RefPtr<LocalVnode> parent,
                                                        fdio_open_local_func_t on_open,
                                                        void* context, fbl::String name) {
-  Local children(on_open, context);
-
   fbl::RefPtr vn =
-      fbl::AdoptRef(new LocalVnode(std::move(parent), std::move(children), std::move(name)));
+      fbl::AdoptRef(new LocalVnode(std::move(parent), on_open, context, std::move(name)));
 
   if (vn->parent_ != nullptr) {
     zx_status_t status = vn->parent_->AddChild(vn);
@@ -65,10 +61,7 @@ zx::result<fbl::RefPtr<LocalVnode>> LocalVnode::Create(fbl::RefPtr<LocalVnode> p
 
 zx::result<fbl::RefPtr<LocalVnode>> LocalVnode::Create(fbl::RefPtr<LocalVnode> parent,
                                                        fbl::String name) {
-  Intermediate children;
-
-  fbl::RefPtr vn =
-      fbl::AdoptRef(new LocalVnode(std::move(parent), std::move(children), std::move(name)));
+  fbl::RefPtr vn = fbl::AdoptRef(new LocalVnode(std::move(parent), std::move(name)));
 
   if (vn->parent_ != nullptr) {
     zx_status_t status = vn->parent_->AddChild(vn);
@@ -139,7 +132,7 @@ void LocalVnode::Intermediate::RemoveEntry(LocalVnode* vn) {
 
 void LocalVnode::Unlink() {
   std::visit(fdio::overloaded{
-                 [](LocalVnode::Local& c) {},
+                 [](LocalVnode::Local& c) { c.Unlink(); },
                  [](LocalVnode::Intermediate& c) { c.UnlinkEntries(); },
                  [](LocalVnode::Remote& s) {},
              },
@@ -155,9 +148,21 @@ fbl::RefPtr<LocalVnode> LocalVnode::Intermediate::Lookup(std::string_view name) 
   return nullptr;
 }
 
-LocalVnode::LocalVnode(fbl::RefPtr<LocalVnode> parent,
-                       std::variant<Local, Intermediate, Remote> node_type, fbl::String name)
-    : node_type_(std::move(node_type)), parent_(std::move(parent)), name_(std::move(name)) {}
+LocalVnode::LocalVnode(fbl::RefPtr<LocalVnode> parent, zxio_storage_t storage, fbl::String name)
+    : node_type_(std::in_place_type_t<Remote>(), storage),
+      parent_(std::move(parent)),
+      name_(std::move(name)) {}
+
+LocalVnode::LocalVnode(fbl::RefPtr<LocalVnode> parent, fdio_open_local_func_t on_open,
+                       void* context, fbl::String name)
+    : node_type_(std::in_place_type_t<Local>(), on_open, context),
+      parent_(std::move(parent)),
+      name_(std::move(name)) {}
+
+LocalVnode::LocalVnode(fbl::RefPtr<LocalVnode> parent, fbl::String name)
+    : node_type_(std::in_place_type_t<Intermediate>()),
+      parent_(std::move(parent)),
+      name_(std::move(name)) {}
 
 LocalVnode::~LocalVnode() {
   std::visit(fdio::overloaded{
@@ -187,7 +192,15 @@ void LocalVnode::Intermediate::UnlinkEntries() {
   entries_by_id_.clear();
 }
 
+LocalVnode::Local::Local(fdio_open_local_func_t on_open, void* context)
+    : on_open_(on_open), context_(context) {}
+
 zx::result<fdio_ptr> LocalVnode::Local::Open() {
+  fbl::AutoLock lock(&lock_);
+  if (on_open_ == nullptr) {
+    return zx::error(ZX_ERR_BAD_HANDLE);
+  }
+
   fdio_ptr io = fbl::MakeRefCounted<zxio>();
   if (io == nullptr) {
     return zx::error(ZX_ERR_NO_MEMORY);
@@ -199,6 +212,12 @@ zx::result<fdio_ptr> LocalVnode::Local::Open() {
   }
   zxio_init(&io->zxio_storage().io, ops);
   return zx::ok(io);
+}
+
+void LocalVnode::Local::Unlink() {
+  fbl::AutoLock lock(&lock_);
+  on_open_ = nullptr;
+  context_ = nullptr;
 }
 
 void LocalVnode::UnlinkFromParent() {
