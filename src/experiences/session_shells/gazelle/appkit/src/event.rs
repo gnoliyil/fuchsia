@@ -114,7 +114,7 @@ impl EventSender {
 
     pub fn send(&self, event: Event) {
         if let Err(e) = self.0.unbounded_send(event) {
-            error!("Failed to send event: {:?}", e);
+            error!("Failed to send event {:?}", e.into_inner());
         }
     }
 }

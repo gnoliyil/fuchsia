@@ -6,53 +6,55 @@ use std::sync::Arc;
 
 use anyhow::Error;
 use appkit::*;
-use fidl::endpoints::{
-    create_proxy, create_proxy_and_stream, create_request_stream, DiscoverableProtocolMarker,
-    ServerEnd,
-};
+use either::Either;
+use fidl::endpoints::{create_proxy, create_proxy_and_stream, DiscoverableProtocolMarker};
 use fidl_fuchsia_element as felement;
 use fidl_fuchsia_sysmem as sysmem;
-use fidl_fuchsia_ui_app as ui_app;
 use fidl_fuchsia_ui_composition as ui_comp;
 use fidl_fuchsia_ui_input3 as ui_input3;
-use fidl_fuchsia_ui_observation_geometry as ui_geometry;
 use fidl_fuchsia_ui_shortcut2 as ui_shortcut2;
 use fidl_fuchsia_ui_test_scene as ui_test_scene;
 use fuchsia_async as fasync;
 use fuchsia_component::client::connect_to_protocol;
 use fuchsia_component_test::{Capability, ChildOptions, RealmBuilder, RealmInstance, Ref, Route};
 use fuchsia_scenic::flatland::ViewCreationTokenPair;
-use futures::{channel::mpsc::UnboundedReceiver, future, FutureExt, Stream, StreamExt};
+use futures::{
+    channel::mpsc::{unbounded, UnboundedReceiver},
+    future, FutureExt, Stream, StreamExt,
+};
 use tracing::{error, info};
 
 use crate::{
     shortcuts::ShortcutAction,
-    wm::{get_first_view_creation_token, WindowManager},
+    wm::{
+        get_first_view_creation_token, shell_view_name_annotation, Notification, ShellViewKind,
+        WindowManager, WM_SHELLVIEW_APP_LAUNCHER,
+    },
 };
 
 async fn set_up(
     sender: EventSender,
     receiver: &mut UnboundedReceiver<Event>,
-) -> Result<(WindowManager, TestProtocolConnector, ui_geometry::ViewTreeWatcherProxy), Error> {
+) -> Result<(WindowManager, TestProtocolConnector, UnboundedReceiver<Notification>), Error> {
     let test_protocol_connector = TestProtocolConnector::new(build_realm().await?);
 
-    let (view_tree_watcher, view_tree_watcher_request) =
-        create_proxy::<ui_geometry::ViewTreeWatcherMarker>()?;
-
-    let _services_task = fasync::Task::spawn(start_view_provider(
+    attach_to_scene_manager(
         sender.clone(),
         test_protocol_connector.connect_to_test_scene_controller()?,
-        view_tree_watcher_request,
-    ));
+    );
 
     let (view_creation_token, view_spec_holders) = get_first_view_creation_token(receiver).await;
+
+    let (notification_sender, notification_receiver) = unbounded::<Notification>();
+
     let wm = WindowManager::new(
         sender.clone(),
+        notification_sender,
         view_creation_token,
         view_spec_holders,
         Box::new(test_protocol_connector.clone()),
     )?;
-    Ok((wm, test_protocol_connector, view_tree_watcher))
+    Ok((wm, test_protocol_connector, notification_receiver))
 }
 
 fn loggable_event_receiver(receiver: UnboundedReceiver<Event>) -> impl Stream<Item = Event> {
@@ -62,7 +64,8 @@ fn loggable_event_receiver(receiver: UnboundedReceiver<Event>) -> impl Stream<It
 #[fuchsia::test]
 async fn test_wm() -> Result<(), Error> {
     let (sender, mut receiver) = EventSender::new();
-    let (mut wm, test_protocol_connector, _) = set_up(sender.clone(), &mut receiver).await?;
+    let (mut wm, test_protocol_connector, mut notification_receiver) =
+        set_up(sender.clone(), &mut receiver).await?;
     let receiver = loggable_event_receiver(receiver);
 
     let loop_fut = wm.run(receiver);
@@ -72,75 +75,115 @@ async fn test_wm() -> Result<(), Error> {
         let test_protocol_connector = cloned_test_protocol_connector;
         // Add child view 1. [ChildView1 (Focus)]
         info!("Add child_view1");
-        let (child_window1, mut child_receiver1, _) =
-            create_child_view(sender.clone(), Box::new(test_protocol_connector.clone())).await;
-        let resize_event = wait_for_resize_event(&mut child_receiver1).await;
-        assert!(window_has_size(resize_event));
-        let focus_event = wait_for_focus_event(&mut child_receiver1).await;
-        assert!(window_has_focus(focus_event));
-        info!("Focused on child_view1: {:?}", child_window1.id());
+        let (child_view_id1, _, _child_task1) =
+            create_child_view(sender.clone(), Box::new(test_protocol_connector.clone()));
+        wait_for_notifications(
+            &mut notification_receiver,
+            vec![
+                Notification::AddedChildView { id: child_view_id1 },
+                Notification::FocusChanged { target: Either::Right(child_view_id1) },
+            ],
+        )
+        .await;
+        info!("Focused on child_view1: {:?}", child_view_id1);
 
         // Add child view 2. [ChildView1, ChildView2 (Focus)]
         info!("Add child_view2");
-        let (child_window2, mut child_receiver2, _) =
-            create_child_view(sender.clone(), Box::new(test_protocol_connector.clone())).await;
-        let resize_event = wait_for_resize_event(&mut child_receiver2).await;
-        assert!(window_has_size(resize_event));
-        // ChildView2 should gain focus.
-        let focus_event = wait_for_focus_event(&mut child_receiver2).await;
-        assert!(window_has_focus(focus_event));
-        // ChildView1 should lose focus.
-        let focus_event = wait_for_focus_event(&mut child_receiver1).await;
-        assert!(!window_has_focus(focus_event));
-        info!("Focused on child_view2: {:?}", child_window2.id());
+        let (child_view_id2, _, _child_task2) =
+            create_child_view(sender.clone(), Box::new(test_protocol_connector.clone()));
+        wait_for_notifications(
+            &mut notification_receiver,
+            vec![
+                Notification::AddedChildView { id: child_view_id2 },
+                Notification::FocusChanged { target: Either::Right(child_view_id2) },
+            ],
+        )
+        .await;
+        info!("Focused on child_view2: {:?}", child_view_id2);
 
         // Add child view 3. [ChildView1, ChildView2, ChildView3 (Focus)]
         info!("Add child_view3");
-        let (child_window3, mut child_receiver3, _) =
-            create_child_view(sender.clone(), Box::new(test_protocol_connector.clone())).await;
-        let resize_event = wait_for_resize_event(&mut child_receiver3).await;
-        assert!(window_has_size(resize_event));
-        // ChildView3 should gain focus.
-        let focus_event = wait_for_focus_event(&mut child_receiver3).await;
-        assert!(window_has_focus(focus_event));
-        // ChildView2 should lose focus.
-        let focus_event = wait_for_focus_event(&mut child_receiver2).await;
-        assert!(!window_has_focus(focus_event));
-        info!("Focused on child_view3: {:?}", child_window3.id());
+        let (child_view_id3, _, _child_task3) =
+            create_child_view(sender.clone(), Box::new(test_protocol_connector.clone()));
+        wait_for_notifications(
+            &mut notification_receiver,
+            vec![
+                Notification::AddedChildView { id: child_view_id3 },
+                Notification::FocusChanged { target: Either::Right(child_view_id3) },
+            ],
+        )
+        .await;
+        info!("Focused on child_view3: {:?}", child_view_id3);
 
         // Shortcut to focus on next view. Child view 1 should receive focus.
         // [ChildView2, ChildView3, ChildView1 (Focus)]
         info!("Switch focus next to  child_view1");
         let handled = invoke_shortcut(ShortcutAction::FocusNext, sender.clone()).await;
         assert!(matches!(handled, ui_shortcut2::Handled::Handled));
-        // ChildView1 should gain focus.
-        let focus_event = wait_for_focus_event(&mut child_receiver1).await;
-        assert!(window_has_focus(focus_event));
-        // ChildView3 should lose focus.
-        let focus_event = wait_for_focus_event(&mut child_receiver3).await;
-        assert!(!window_has_focus(focus_event));
-        info!("Focused on child_view1: {:?}", child_window1.id());
+        wait_for_notification(
+            &mut notification_receiver,
+            Notification::FocusChanged { target: Either::Right(child_view_id1) },
+        )
+        .await;
+        info!("Focused on child_view1: {:?}", child_view_id1);
 
         // Shortcut to focus on previous view. Child view 2 should receive focus.
         // [ChildView1, ChildView2, ChildView3 (Focus)]
         info!("Switch focus previous to  child_view2");
         let handled = invoke_shortcut(ShortcutAction::FocusPrev, sender.clone()).await;
         assert!(matches!(handled, ui_shortcut2::Handled::Handled));
-        // ChildView3 should gain focus.
-        let focus_event = wait_for_focus_event(&mut child_receiver3).await;
-        assert!(window_has_focus(focus_event));
-        // ChildView1 should lose focus.
-        let focus_event = wait_for_focus_event(&mut child_receiver1).await;
-        assert!(!window_has_focus(focus_event));
-        info!("Focused on child_view3: {:?}", child_window3.id());
+        wait_for_notification(
+            &mut notification_receiver,
+            Notification::FocusChanged { target: Either::Right(child_view_id3) },
+        )
+        .await;
+        info!("Focused on child_view3: {:?}", child_view_id3);
 
         // Shortcut to close active, top-most (ChildView3) view.  [ChildView1, ChildView2 (Focus)].
         info!("Close child_view3");
         let handled = invoke_shortcut(ShortcutAction::Close, sender.clone()).await;
         assert!(matches!(handled, ui_shortcut2::Handled::Handled));
-        let focus_event = wait_for_focus_event(&mut child_receiver2).await;
-        assert!(window_has_focus(focus_event));
-        info!("Focused on child_view2: {:?}", child_window2.id());
+        wait_for_notifications(
+            &mut notification_receiver,
+            vec![
+                Notification::RemovedChildView { id: child_view_id3 },
+                Notification::FocusChanged { target: Either::Right(child_view_id2) },
+            ],
+        )
+        .await;
+        info!("Focused on child_view2: {:?}", child_view_id2);
+
+        sender.send(Event::Exit);
+
+        futures::join!(_child_task1, _child_task2, _child_task3);
+    }
+    .boxed();
+
+    let _ = future::join(loop_fut, test_fut).await;
+    std::mem::drop(wm);
+    test_protocol_connector.release().await?;
+    Ok(())
+}
+
+#[fuchsia::test]
+async fn test_no_windows() -> Result<(), Error> {
+    let (sender, mut receiver) = EventSender::new();
+    let (mut wm, test_protocol_connector, mut notification_receiver) =
+        set_up(sender.clone(), &mut receiver).await?;
+    let receiver = loggable_event_receiver(receiver);
+
+    let loop_fut = wm.run(receiver);
+
+    let test_fut = async move {
+        wait_for_notification_callback(
+            move |notification| match notification {
+                Notification::FocusChanged { target: Either::Left(..) } => true,
+                _ => false,
+            },
+            &mut notification_receiver,
+        )
+        .await;
+        info!("Focused on self");
 
         sender.send(Event::Exit);
     }
@@ -152,32 +195,123 @@ async fn test_wm() -> Result<(), Error> {
     Ok(())
 }
 
-// TODO(https://fxbug.dev/114716): Enable after test scene controller stops reporting FATAL error.
-// #[fuchsia::test]
-// async fn test_no_windows() -> Result<(), Error> {
-//     let realm = build_realm().await?;
-//     let test_protocol_connector = TestProtocolConnector::new(realm);
-
-//     let (sender, mut receiver) = EventSender::new();
-
-//     let scene_provider = test_protocol_connector.connect_to_test_scene_controller()?;
-//     let (_view_tree_watcher, view_tree_watcher_request) =
-//         create_proxy::<ui_geometry::ViewTreeWatcherMarker>()?;
-//     let view_provider_fut =
-//         start_view_provider(sender.clone(), scene_provider, view_tree_watcher_request);
-//     let _services_task = fasync::Task::spawn(view_provider_fut);
-
-//     let (_view_creation_token, _view_spec_holders) =
-//         get_first_view_creation_token(&mut receiver).await;
-
-//     sender.send(Event::Exit);
-
-//     test_protocol_connector.release().await?;
-//     Ok(())
-// }
-
 #[fuchsia::test]
 async fn test_dismiss_window_in_background() -> Result<(), Error> {
+    let (sender, mut receiver) = EventSender::new();
+    let (mut wm, test_protocol_connector, mut notification_receiver) =
+        set_up(sender.clone(), &mut receiver).await?;
+    let receiver = loggable_event_receiver(receiver);
+
+    let loop_fut = wm.run(receiver);
+
+    let cloned_test_protocol_connector = test_protocol_connector.clone();
+    let test_fut = async move {
+        let test_protocol_connector = cloned_test_protocol_connector;
+
+        // Add child view 1. [ChildView1 (Focus)]
+        info!("Add child_view1");
+        let (child_view_id1, child_view_controller1, _child_task1) =
+            create_child_view(sender.clone(), Box::new(test_protocol_connector.clone()));
+        wait_for_notifications(
+            &mut notification_receiver,
+            vec![
+                Notification::AddedChildView { id: child_view_id1 },
+                Notification::FocusChanged { target: Either::Right(child_view_id1) },
+            ],
+        )
+        .await;
+        info!("Focused on child_view1: {:?}", child_view_id1);
+
+        // Add child view 2. [ChildView1, ChildView2 (Focus)]
+        info!("Add child_view2");
+        let (child_view_id2, _, _child_task2) =
+            create_child_view(sender.clone(), Box::new(test_protocol_connector.clone()));
+        wait_for_notifications(
+            &mut notification_receiver,
+            vec![
+                Notification::AddedChildView { id: child_view_id2 },
+                Notification::FocusChanged { target: Either::Right(child_view_id2) },
+            ],
+        )
+        .await;
+        info!("Focused on child_view2: {:?}", child_view_id2);
+
+        // Add child view 3. [ChildView1, ChildView2, ChildView3 (Focus)]
+        info!("Add child_view3");
+        let (child_view_id3, _, _child_task3) =
+            create_child_view(sender.clone(), Box::new(test_protocol_connector.clone()));
+        wait_for_notifications(
+            &mut notification_receiver,
+            vec![
+                Notification::AddedChildView { id: child_view_id3 },
+                Notification::FocusChanged { target: Either::Right(child_view_id3) },
+            ],
+        )
+        .await;
+        info!("Focused on child_view3: {:?}", child_view_id3);
+
+        // Dismiss the background ChildView1. [ChildView2, ChildView3 (Focus)].
+        info!("Dismissing ChildView1");
+        child_view_controller1.dismiss().expect("Failed to dismiss ChildView1");
+        wait_for_notification(
+            &mut notification_receiver,
+            Notification::RemovedChildView { id: child_view_id1 },
+        )
+        .await;
+
+        // Nothing should crash.
+        sender.send(Event::Exit);
+
+        futures::join!(_child_task1, _child_task2, _child_task3);
+    }
+    .boxed();
+
+    let _ = future::join(loop_fut, test_fut).await;
+    std::mem::drop(wm);
+    test_protocol_connector.release().await?;
+    Ok(())
+}
+
+#[fuchsia::test]
+async fn test_add_shell_view() -> Result<(), Error> {
+    let (sender, mut receiver) = EventSender::new();
+    let (mut wm, test_protocol_connector, mut notification_receiver) =
+        set_up(sender.clone(), &mut receiver).await?;
+    let receiver = loggable_event_receiver(receiver);
+
+    let loop_fut = wm.run(receiver);
+
+    let cloned_test_protocol_connector = test_protocol_connector.clone();
+    let test_fut = async move {
+        let test_protocol_connector = cloned_test_protocol_connector;
+
+        let name_annotation = shell_view_name_annotation(WM_SHELLVIEW_APP_LAUNCHER);
+        let (shell_view_id, _, shell_view_task) = add_child_view(
+            sender.clone(),
+            Box::new(test_protocol_connector.clone()),
+            Some(name_annotation),
+        );
+        wait_for_notification(
+            &mut notification_receiver,
+            Notification::AddedShellView { id: shell_view_id, kind: ShellViewKind::AppLauncher },
+        )
+        .await;
+        info!("Added shell view: {:?}", WM_SHELLVIEW_APP_LAUNCHER);
+
+        sender.send(Event::Exit);
+
+        futures::join!(shell_view_task);
+    }
+    .boxed();
+
+    let _ = future::join(loop_fut, test_fut).await;
+    std::mem::drop(wm);
+    test_protocol_connector.release().await?;
+    Ok(())
+}
+
+#[fuchsia::test]
+async fn test_immediately_close() -> Result<(), Error> {
     let (sender, mut receiver) = EventSender::new();
     let (mut wm, test_protocol_connector, _) = set_up(sender.clone(), &mut receiver).await?;
     let receiver = loggable_event_receiver(receiver);
@@ -187,51 +321,13 @@ async fn test_dismiss_window_in_background() -> Result<(), Error> {
     let cloned_test_protocol_connector = test_protocol_connector.clone();
     let test_fut = async move {
         let test_protocol_connector = cloned_test_protocol_connector;
-
-        // Add child view 1. [ChildView1 (Focus)]
         info!("Add child_view1");
-        let (child_window1, mut child_receiver1, child_view_controller1) =
-            create_child_view(sender.clone(), Box::new(test_protocol_connector.clone())).await;
-        let resize_event = wait_for_resize_event(&mut child_receiver1).await;
-        assert!(window_has_size(resize_event));
-        let focus_event = wait_for_focus_event(&mut child_receiver1).await;
-        assert!(window_has_focus(focus_event));
-        info!("Focused on child_view1: {:?}", child_window1.id());
+        let (_, _, child_view_task) =
+            create_child_view(sender.clone(), Box::new(test_protocol_connector.clone()));
 
-        // Add child view 2. [ChildView1, ChildView2 (Focus)]
-        info!("Add child_view2");
-        let (child_window2, mut child_receiver2, _) =
-            create_child_view(sender.clone(), Box::new(test_protocol_connector.clone())).await;
-        let resize_event = wait_for_resize_event(&mut child_receiver2).await;
-        assert!(window_has_size(resize_event));
-        // ChildView2 should gain focus.
-        let focus_event = wait_for_focus_event(&mut child_receiver2).await;
-        assert!(window_has_focus(focus_event));
-        // ChildView1 should lose focus.
-        let focus_event = wait_for_focus_event(&mut child_receiver1).await;
-        assert!(!window_has_focus(focus_event));
-        info!("Focused on child_view2: {:?}", child_window2.id());
-
-        // Add child view 3. [ChildView1, ChildView2, ChildView3 (Focus)]
-        info!("Add child_view3");
-        let (child_window3, mut child_receiver3, _) =
-            create_child_view(sender.clone(), Box::new(test_protocol_connector.clone())).await;
-        let resize_event = wait_for_resize_event(&mut child_receiver3).await;
-        assert!(window_has_size(resize_event));
-        // ChildView3 should gain focus.
-        let focus_event = wait_for_focus_event(&mut child_receiver3).await;
-        assert!(window_has_focus(focus_event));
-        // ChildView2 should lose focus.
-        let focus_event = wait_for_focus_event(&mut child_receiver2).await;
-        assert!(!window_has_focus(focus_event));
-        info!("Focused on child_view3: {:?}", child_window3.id());
-
-        // Dismiss the background ChildView1. [ChildView2, ChildView3 (Focus)].
-        info!("Dismissing ChildView1");
-        child_view_controller1.dismiss().expect("Failed to dismiss ChildView1");
-
-        // Nothing should crash.
         sender.send(Event::Exit);
+
+        futures::join!(child_view_task);
     }
     .boxed();
 
@@ -241,110 +337,76 @@ async fn test_dismiss_window_in_background() -> Result<(), Error> {
     Ok(())
 }
 
-// TODO(https://fxbug.dev/114716): Enable after test scene controller stops reporting FATAL error.
-// #[fuchsia::test]
-// async fn test_immediately_close() -> Result<(), Error> {
-//     let (sender, mut receiver) = EventSender::new();
-//     let (mut wm, test_protocol_connector, _) = set_up(sender.clone(), &mut receiver).await?;
-//     let receiver = loggable_event_receiver(receiver);
+#[fuchsia::test]
+async fn test_dismiss_before_attach() -> Result<(), Error> {
+    let (sender, mut receiver) = EventSender::new();
+    let (mut wm, test_protocol_connector, _) = set_up(sender.clone(), &mut receiver).await?;
+    let receiver = loggable_event_receiver(receiver);
 
-//     let loop_fut = wm.run(receiver);
+    let loop_fut = wm.run(receiver);
 
-//     let cloned_test_protocol_connector = test_protocol_connector.clone();
-//     let test_fut = async move {
-//         let test_protocol_connector = cloned_test_protocol_connector;
-//         info!("Add child_view1");
-//         create_child_view(sender.clone(), Box::new(test_protocol_connector.clone())).await;
+    let cloned_test_protocol_connector = test_protocol_connector.clone();
+    let test_fut = async move {
+        let test_protocol_connector = cloned_test_protocol_connector;
+        info!("Add child_view1");
+        let (_, child_view_controller, child_view_task) =
+            create_child_view(sender.clone(), Box::new(test_protocol_connector.clone()));
+        child_view_controller.dismiss().expect("Failed to dismiss childview1");
 
-//         sender.send(Event::Exit);
-//     }
-//     .boxed();
+        sender.send(Event::Exit);
 
-//     let _ = future::join(loop_fut, test_fut).await;
-//     test_protocol_connector.release().await?;
-//     Ok(())
-// }
+        futures::join!(child_view_task);
+    }
+    .boxed();
 
-// TODO(https://fxbug.dev/114716): Enable after test scene controller stops reporting FATAL error.
-// #[fuchsia::test]
-// async fn test_dismiss_before_attach() -> Result<(), Error> {
-//     let (sender, mut receiver) = EventSender::new();
-//     let (mut wm, test_protocol_connector, _) = set_up(sender.clone(), &mut receiver).await?;
-//     let receiver = loggable_event_receiver(receiver);
-
-//     let loop_fut = wm.run(receiver);
-
-//     let cloned_test_protocol_connector = test_protocol_connector.clone();
-//     let test_fut = async move {
-//         let test_protocol_connector = cloned_test_protocol_connector;
-//         info!("Add child_view1");
-//         let (_, _, child_view_controller1) =
-//             create_child_view(sender.clone(), Box::new(test_protocol_connector.clone())).await;
-//         child_view_controller1.dismiss().expect("Failed to dismiss childview1");
-
-//         sender.send(Event::Exit);
-//     }
-//     .boxed();
-
-//     let _ = future::join(loop_fut, test_fut).await;
-//     test_protocol_connector.release().await?;
-//     Ok(())
-// }
-
-async fn start_view_provider(
-    event_sender: EventSender,
-    scene_provider: ui_test_scene::ControllerProxy,
-    _view_tree_watcher_request: ServerEnd<ui_geometry::ViewTreeWatcherMarker>,
-) {
-    let (view_provider, mut view_provider_request_stream) =
-        create_request_stream::<ui_app::ViewProviderMarker>()
-            .expect("failed to create ViewProvider request stream");
-
-    let scene_provider_fut = async move {
-        if let Err(e) = scene_provider
-            .attach_client_view(ui_test_scene::ControllerAttachClientViewRequest {
-                view_provider: Some(view_provider),
-                ..ui_test_scene::ControllerAttachClientViewRequest::EMPTY
-            })
-            .await
-        {
-            error!("Failed to attach client view to test SceneProvider: {:?}", e);
-        }
-    };
-
-    let view_provider_fut = async move {
-        match view_provider_request_stream
-            .next()
-            .await
-            .expect("Failed to read ViewProvider request stream")
-        {
-            Ok(ui_app::ViewProviderRequest::CreateView2 { args, .. }) => {
-                event_sender.send(Event::SystemEvent {
-                    event: SystemEvent::ViewCreationToken {
-                        token: args.view_creation_token.expect(
-                            "ViewCreationToken missing in ViewProvider.CreateView2 request",
-                        ),
-                    },
-                });
-            }
-            // Panic for all other CreateView requests and errors to fail the test.
-            _ => panic!("ViewProvider impl only handles CreateView2()"),
-        }
-    };
-
-    futures::join!(scene_provider_fut, view_provider_fut);
+    let _ = future::join(loop_fut, test_fut).await;
+    std::mem::drop(wm);
+    test_protocol_connector.release().await?;
+    Ok(())
 }
 
-async fn create_child_view(
+fn attach_to_scene_manager(
+    event_sender: EventSender,
+    scene_provider: ui_test_scene::ControllerProxy,
+) {
+    let ViewCreationTokenPair { view_creation_token, viewport_creation_token } =
+        ViewCreationTokenPair::new().expect("Failed to create ViewCreationTokenPair");
+
+    event_sender.send(Event::SystemEvent {
+        event: SystemEvent::ViewCreationToken { token: view_creation_token },
+    });
+
+    if let Err(e) =
+        scene_provider.present_client_view(ui_test_scene::ControllerPresentClientViewRequest {
+            viewport_creation_token: Some(viewport_creation_token),
+            ..ui_test_scene::ControllerPresentClientViewRequest::EMPTY
+        })
+    {
+        error!("Failed to present viewport_creation_token to test SceneProvider: {:?}", e);
+    }
+}
+
+fn create_child_view(
     parent_sender: EventSender,
     protocol_connector: Box<dyn ProtocolConnector>,
-) -> (Window, futures::channel::mpsc::UnboundedReceiver<Event>, felement::ViewControllerProxy) {
+) -> (ChildViewId, felement::ViewControllerProxy, fasync::Task<()>) {
+    add_child_view(parent_sender, protocol_connector, None)
+}
+
+fn add_child_view(
+    parent_sender: EventSender,
+    protocol_connector: Box<dyn ProtocolConnector>,
+    annotation: Option<felement::Annotation>,
+) -> (ChildViewId, felement::ViewControllerProxy, fasync::Task<()>) {
     let ViewCreationTokenPair { view_creation_token, viewport_creation_token } =
         ViewCreationTokenPair::new().expect("Fidl error");
+    let child_view_id = ChildViewId::from_viewport_creation_token(&viewport_creation_token);
+
     let (view_controller_proxy, view_controller_request) =
         create_proxy::<felement::ViewControllerMarker>().expect("Fidl error");
     let view_spec = felement::ViewSpec {
         viewport_creation_token: Some(viewport_creation_token),
+        annotations: annotation.map(|a| vec![a]),
         ..felement::ViewSpec::EMPTY
     };
     parent_sender.send(Event::SystemEvent {
@@ -358,78 +420,52 @@ async fn create_child_view(
         },
     });
 
-    let (child_sender, child_receiver) = EventSender::new();
-    let mut window = Window::new(child_sender)
-        .with_view_creation_token(view_creation_token)
-        .with_protocol_connector(protocol_connector);
-    window.create_view().expect("Failed to create window for child view");
-    (window, child_receiver, view_controller_proxy)
-}
+    let task = fasync::Task::spawn(async move {
+        let (sender, mut receiver) = EventSender::new();
 
-async fn wait_for_resize_event(
-    receiver: &mut futures::channel::mpsc::UnboundedReceiver<Event>,
-) -> Event {
-    wait_for_event(
-        move |event| match event {
-            Event::WindowEvent { event: WindowEvent::Resized { .. }, .. } => true,
-            _ => false,
-        },
-        receiver,
-    )
-    .await
-}
+        let mut window = Window::new(sender)
+            .with_view_creation_token(view_creation_token)
+            .with_protocol_connector(protocol_connector);
+        window.create_view().expect("Failed to create window for child view");
 
-async fn wait_for_focus_event(
-    receiver: &mut futures::channel::mpsc::UnboundedReceiver<Event>,
-) -> Event {
-    wait_for_event(
-        move |event| match event {
-            Event::WindowEvent { event: WindowEvent::Focused { .. }, .. } => true,
-            _ => false,
-        },
-        receiver,
-    )
-    .await
-}
-
-async fn wait_for_event(
-    mut callback: impl FnMut(&Event) -> bool,
-    receiver: &mut futures::channel::mpsc::UnboundedReceiver<Event>,
-) -> Event {
-    while let Some(child_event) = receiver.next().await {
-        info!("Child event: {:?}", child_event);
-        if callback(&child_event) {
-            return child_event;
+        while let Some(child_event) = receiver.next().await {
+            info!("Child event: {:?}", child_event);
+            if matches!(child_event, Event::WindowEvent { event: WindowEvent::Closed, .. }) {
+                break;
+            }
         }
-    }
-    return Event::Exit;
+    });
+
+    (child_view_id, view_controller_proxy, task)
 }
 
-/// Removes events that may have accumulated since last checked and test does not care about.
-fn _drain_events(receiver: &mut futures::channel::mpsc::UnboundedReceiver<Event>) {
-    while let Ok(Some(_)) = receiver.try_next() {}
-}
-
-async fn _drain_events_until_closed(
-    receiver: &mut futures::channel::mpsc::UnboundedReceiver<Event>,
+async fn wait_for_notifications(
+    receiver: &mut UnboundedReceiver<Notification>,
+    mut notifications: Vec<Notification>,
 ) {
-    while let Some(_) = receiver.next().await {}
+    for notification in notifications.drain(..) {
+        wait_for_notification(receiver, notification).await;
+    }
 }
 
-fn window_has_size(event: Event) -> bool {
-    match event {
-        Event::WindowEvent { event: WindowEvent::Resized { width, height, .. }, .. } => {
-            width > 0 && height > 0
+async fn wait_for_notification(
+    receiver: &mut UnboundedReceiver<Notification>,
+    notification: Notification,
+) {
+    wait_for_notification_callback(move |notif| &notification == notif, receiver).await;
+}
+
+async fn wait_for_notification_callback(
+    mut callback: impl FnMut(&Notification) -> bool,
+    receiver: &mut UnboundedReceiver<Notification>,
+) {
+    while let Some(notification) = receiver.next().await {
+        info!("Notification: {:?}", notification);
+        if callback(&notification) {
+            return;
         }
-        _ => false,
     }
-}
-
-fn window_has_focus(event: Event) -> bool {
-    match event {
-        Event::WindowEvent { event: WindowEvent::Focused { focused }, .. } => focused,
-        _ => false,
-    }
+    unreachable!()
 }
 
 async fn invoke_shortcut(action: ShortcutAction, sender: EventSender) -> ui_shortcut2::Handled {
@@ -499,10 +535,11 @@ impl TestProtocolConnector {
     }
 
     async fn release(self) -> Result<(), Error> {
+        let ref_count = Arc::strong_count(&self.0);
         let realm = if let Ok(realm) = Arc::try_unwrap(self.0) {
             realm
         } else {
-            panic!("Failed to release realm instance. Someone still has a reference to it.")
+            panic!("Failed to release test realm instance. {:?} references still exist", ref_count)
         };
         realm.destroy().await?;
         Ok(())

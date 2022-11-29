@@ -64,7 +64,7 @@ void SceneProvider::AttachClientView(
 
 void SceneProvider::PresentClientView(
     fuchsia::ui::test::scene::ControllerPresentClientViewRequest request) {
-  FX_CHECK(use_flatland_)
+  FX_CHECK(use_scene_manager_)
       << "Client attempted to present a view using a flatland token when GFX is enabled";
   FX_CHECK(request.has_viewport_creation_token()) << "Missing viewport creation token";
 

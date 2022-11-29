@@ -3,7 +3,10 @@
 // found in the LICENSE file.
 
 use anyhow::{format_err, Error};
-use fidl::endpoints::{create_proxy, Proxy};
+use fidl::{
+    endpoints::{create_proxy, Proxy},
+    AsHandleRef,
+};
 use fidl_fuchsia_element as felement;
 use fidl_fuchsia_math as fmath;
 use fidl_fuchsia_ui_composition as ui_comp;
@@ -23,20 +26,29 @@ use crate::{
 pub struct ChildViewId(u64);
 
 impl ChildViewId {
-    pub fn from_viewport_content_id(viewport: ui_comp::ContentId) -> Self {
-        ChildViewId(viewport.value)
+    pub fn from_viewport_creation_token(token: &ui_views::ViewportCreationToken) -> Self {
+        ChildViewId(token.value.raw_handle().into())
     }
 }
 
 /// Defines a struct to hold state for ChildView.
 #[derive(Debug)]
 pub struct ChildView {
+    id: ChildViewId,
     flatland: ui_comp::FlatlandProxy,
     viewport_content_id: ui_comp::ContentId,
     view_ref: Option<ui_views::ViewRef>,
     _window_id: WindowId,
     _event_sender: EventSender,
+    _annotations: Option<Vec<felement::Annotation>>,
     _running_tasks: Vec<fasync::Task<()>>,
+}
+
+impl Drop for ChildView {
+    fn drop(&mut self) {
+        // Release the childview's viewport.
+        let _fut = self.flatland.release_viewport(&mut self.viewport_content_id);
+    }
 }
 
 impl ChildView {
@@ -56,6 +68,8 @@ impl ChildView {
             }
         };
 
+        let child_view_id = ChildViewId::from_viewport_creation_token(&viewport_creation_token);
+
         let (child_view_watcher_proxy, child_view_watcher_request) =
             create_proxy::<ui_comp::ChildViewWatcherMarker>()?;
 
@@ -73,7 +87,6 @@ impl ChildView {
             responder.send(&mut Ok(())).expect("Failed to respond to GraphicalPresent.present")
         }
 
-        let child_view_id = ChildViewId::from_viewport_content_id(viewport_content_id);
         let child_view_watcher_fut = Self::start_child_view_watcher(
             child_view_watcher_proxy,
             child_view_id,
@@ -98,11 +111,13 @@ impl ChildView {
         };
 
         Ok(ChildView {
+            id: child_view_id,
             flatland: flatland.clone(),
             viewport_content_id,
             view_ref: None,
             _window_id: window_id,
             _event_sender: event_sender,
+            _annotations: view_spec_holder.view_spec.annotations.take(),
             _running_tasks: running_tasks,
         })
     }
@@ -112,7 +127,7 @@ impl ChildView {
     }
 
     pub fn id(&self) -> ChildViewId {
-        ChildViewId::from_viewport_content_id(self.viewport_content_id)
+        self.id
     }
 
     pub fn set_view_ref(&mut self, view_ref: ui_views::ViewRef) {

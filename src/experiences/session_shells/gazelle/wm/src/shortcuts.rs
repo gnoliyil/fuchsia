@@ -9,7 +9,7 @@ use num_derive::{FromPrimitive, ToPrimitive};
 
 /// List of all shortcut actions used by Gazelle window manager.
 /// These are used as a shortcut id in [ui_shortcut2::Shortcut::id].
-#[derive(FromPrimitive, ToPrimitive)]
+#[derive(Debug, Eq, FromPrimitive, ToPrimitive, PartialEq)]
 pub(crate) enum ShortcutAction {
     FocusNext = 1,
     FocusPrev = 2,

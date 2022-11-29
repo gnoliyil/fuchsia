@@ -205,6 +205,11 @@ impl Window {
             view_controller_proxy.dismiss()?;
         }
 
+        // Release the view, which disconnects this Flatland instance from its parent Flatland
+        // instance.
+        self.get_flatland().release_view()?;
+        self.redraw();
+
         Ok(())
     }
 
