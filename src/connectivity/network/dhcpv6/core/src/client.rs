@@ -23,7 +23,7 @@ use std::{
 use tracing::{info, warn};
 use zerocopy::ByteSlice;
 
-use crate::Instant;
+use crate::{Instant, InstantExt as _};
 
 /// Initial Information-request timeout `INF_TIMEOUT` from [RFC 8415, Section 7.6].
 ///
@@ -236,13 +236,13 @@ pub enum ClientTimerType {
 
 /// Possible actions that need to be taken for a state transition to happen successfully.
 #[derive(Debug, PartialEq, Clone)]
-pub enum Action {
+pub enum Action<I> {
     SendMessage(Vec<u8>),
-    /// Schedules a timer.
+    /// Schedules a timer to fire at a specified time instant.
     ///
     /// If the timer is already scheduled to fire at some time, this action
     /// will result in the timer being rescheduled to the new time.
-    ScheduleTimer(ClientTimerType, Duration),
+    ScheduleTimer(ClientTimerType, I),
     /// Cancels a timer.
     ///
     /// If the timer is not scheduled, this action should effectively be a
@@ -273,7 +273,7 @@ pub enum Action {
     IaPdUpdates(HashMap<v6::IAID, HashMap<Subnet<Ipv6Addr>, IaValueUpdateKind>>),
 }
 
-pub type Actions = Vec<Action>;
+pub type Actions<I> = Vec<Action<I>>;
 
 /// Holds data and provides methods for handling state transitions from information requesting
 /// state.
@@ -283,7 +283,7 @@ struct InformationRequesting<I> {
     _marker: PhantomData<I>,
 }
 
-impl<I> InformationRequesting<I> {
+impl<I: Instant> InformationRequesting<I> {
     /// Starts in information requesting state following [RFC 8415, Section 18.2.6].
     ///
     /// [RFC 8415, Section 18.2.6]: https://tools.ietf.org/html/rfc8415#section-18.2.6
@@ -291,9 +291,10 @@ impl<I> InformationRequesting<I> {
         transaction_id: [u8; 3],
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
+        now: I,
     ) -> Transition<I> {
         let info_req = Self { retrans_timeout: Default::default(), _marker: Default::default() };
-        info_req.send_and_schedule_retransmission(transaction_id, options_to_request, rng)
+        info_req.send_and_schedule_retransmission(transaction_id, options_to_request, rng, now)
     }
 
     /// Calculates timeout for retransmitting information requests using parameters specified in
@@ -317,6 +318,7 @@ impl<I> InformationRequesting<I> {
         transaction_id: [u8; 3],
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
+        now: I,
     ) -> Transition<I> {
         let options_array = [v6::DhcpOption::Oro(options_to_request)];
         let options = if options_to_request.is_empty() { &[][..] } else { &options_array[..] };
@@ -335,7 +337,7 @@ impl<I> InformationRequesting<I> {
             }),
             actions: vec![
                 Action::SendMessage(buf),
-                Action::ScheduleTimer(ClientTimerType::Retransmission, retrans_timeout),
+                Action::ScheduleTimer(ClientTimerType::Retransmission, now.add(retrans_timeout)),
             ],
             transaction_id: None,
         }
@@ -347,14 +349,19 @@ impl<I> InformationRequesting<I> {
         transaction_id: [u8; 3],
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
+        now: I,
     ) -> Transition<I> {
-        self.send_and_schedule_retransmission(transaction_id, options_to_request, rng)
+        self.send_and_schedule_retransmission(transaction_id, options_to_request, rng, now)
     }
 
     /// Handles reply to information requests based on [RFC 8415, Section 18.2.10.4].
     ///
     /// [RFC 8415, Section 18.2.10.4]: https://tools.ietf.org/html/rfc8415#section-18.2.10.4
-    fn reply_message_received<B: ByteSlice>(self, msg: v6::Message<'_, B>) -> Transition<I> {
+    fn reply_message_received<B: ByteSlice>(
+        self,
+        msg: v6::Message<'_, B>,
+        now: I,
+    ) -> Transition<I> {
         // Note that although RFC 8415 states that SOL_MAX_RT must be handled,
         // we never send Solicit messages when running in stateless mode, so
         // there is no point in storing or doing anything with it.
@@ -422,7 +429,7 @@ impl<I> InformationRequesting<I> {
 
         let actions = [
             Action::CancelTimer(ClientTimerType::Retransmission),
-            Action::ScheduleTimer(ClientTimerType::Refresh, information_refresh_time),
+            Action::ScheduleTimer(ClientTimerType::Refresh, now.add(information_refresh_time)),
         ]
         .into_iter()
         .chain(dns_servers.clone().map(|server_addrs| Action::UpdateDnsServers(server_addrs)))
@@ -447,15 +454,16 @@ struct InformationReceived<I> {
     _marker: PhantomData<I>,
 }
 
-impl<I> InformationReceived<I> {
+impl<I: Instant> InformationReceived<I> {
     /// Refreshes information by starting another round of information request.
     fn refresh_timer_expired<R: Rng>(
         self,
         transaction_id: [u8; 3],
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
+        now: I,
     ) -> Transition<I> {
-        InformationRequesting::start(transaction_id, options_to_request, rng)
+        InformationRequesting::start(transaction_id, options_to_request, rng, now)
     }
 }
 
@@ -1817,7 +1825,7 @@ impl<I: Instant> ServerDiscovery<I> {
             }),
             actions: vec![
                 Action::SendMessage(buf),
-                Action::ScheduleTimer(ClientTimerType::Retransmission, retrans_timeout),
+                Action::ScheduleTimer(ClientTimerType::Retransmission, now.add(retrans_timeout)),
             ],
             transaction_id: None,
         }
@@ -2613,7 +2621,7 @@ struct ProcessedReplyWithLeases<I> {
     non_temporary_addresses: HashMap<v6::IAID, AddressEntry<I>>,
     delegated_prefixes: HashMap<v6::IAID, PrefixEntry<I>>,
     dns_servers: Option<Vec<Ipv6Addr>>,
-    actions: Vec<Action>,
+    actions: Vec<Action<I>>,
     next_state: StateAfterReplyWithLeases,
 }
 
@@ -3150,7 +3158,7 @@ fn process_reply_with_leases<B: ByteSlice, I: Instant>(
                         t1,
                         v6::NonZeroTimeValue::Finite(t1_val) => Action::ScheduleTimer(
                             ClientTimerType::Renew,
-                            Duration::from_secs(t1_val.get().into()),
+                            now.add(Duration::from_secs(t1_val.get().into())),
                         ),
                         "must be Finite since Infinity is the largest possible value so if T1 \
                          is Infinity, T2 must also be Infinity as T1 must always be less than \
@@ -3175,7 +3183,7 @@ fn process_reply_with_leases<B: ByteSlice, I: Instant>(
                 match t2 {
                     v6::NonZeroTimeValue::Finite(t2_val) => Action::ScheduleTimer(
                         ClientTimerType::Rebind,
-                        Duration::from_secs(t2_val.get().into()),
+                        now.add(Duration::from_secs(t2_val.get().into())),
                     ),
                     v6::NonZeroTimeValue::Infinity => Action::CancelTimer(ClientTimerType::Rebind),
                 },
@@ -3289,7 +3297,7 @@ impl<I: Instant> Requesting<I> {
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
         now: I,
-        initial_actions: impl Iterator<Item = Action>,
+        initial_actions: impl Iterator<Item = Action<I>>,
     ) -> Transition<I> {
         let Transition { state, actions: request_actions, transaction_id } = self
             .send_and_schedule_retransmission(
@@ -3317,7 +3325,7 @@ impl<I: Instant> Requesting<I> {
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
         now: I,
-        initial_actions: impl Iterator<Item = Action>,
+        initial_actions: impl Iterator<Item = Action<I>>,
     ) -> Transition<I> {
         let Self {
             client_id,
@@ -3391,7 +3399,10 @@ impl<I: Instant> Requesting<I> {
             actions: initial_actions
                 .chain([
                     Action::SendMessage(buf),
-                    Action::ScheduleTimer(ClientTimerType::Retransmission, retrans_timeout),
+                    Action::ScheduleTimer(
+                        ClientTimerType::Retransmission,
+                        now.add(retrans_timeout),
+                    ),
                 ])
                 .collect(),
             transaction_id: Some(transaction_id),
@@ -4118,7 +4129,7 @@ impl<I: Instant, const IS_REBINDING: bool> RenewingOrRebinding<I, IS_REBINDING> 
             },
             actions: vec![
                 Action::SendMessage(buf),
-                Action::ScheduleTimer(ClientTimerType::Retransmission, retrans_timeout),
+                Action::ScheduleTimer(ClientTimerType::Retransmission, now.add(retrans_timeout)),
             ],
             transaction_id: Some(transaction_id),
         }
@@ -4374,7 +4385,7 @@ enum ClientState<I> {
 /// has been updated.
 struct Transition<I> {
     state: ClientState<I>,
-    actions: Actions,
+    actions: Actions<I>,
     transaction_id: Option<[u8; 3]>,
 }
 
@@ -4411,7 +4422,7 @@ impl<I: Instant> ClientState<I> {
         now: I,
     ) -> Transition<I> {
         match self {
-            ClientState::InformationRequesting(s) => s.reply_message_received(msg),
+            ClientState::InformationRequesting(s) => s.reply_message_received(msg, now),
             ClientState::Requesting(s) => {
                 s.reply_message_received(options_to_request, rng, msg, now)
             }
@@ -4437,7 +4448,7 @@ impl<I: Instant> ClientState<I> {
     ) -> Transition<I> {
         match self {
             ClientState::InformationRequesting(s) => {
-                s.retransmission_timer_expired(transaction_id, options_to_request, rng)
+                s.retransmission_timer_expired(transaction_id, options_to_request, rng, now)
             }
             ClientState::ServerDiscovery(s) => {
                 s.retransmission_timer_expired(transaction_id, options_to_request, rng, now)
@@ -4463,10 +4474,11 @@ impl<I: Instant> ClientState<I> {
         transaction_id: [u8; 3],
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
+        now: I,
     ) -> Transition<I> {
         match self {
             ClientState::InformationReceived(s) => {
-                s.refresh_timer_expired(transaction_id, options_to_request, rng)
+                s.refresh_timer_expired(transaction_id, options_to_request, rng, now)
             }
             ClientState::InformationRequesting(_)
             | ClientState::ServerDiscovery(_)
@@ -4618,9 +4630,10 @@ impl<I: Instant, R: Rng> ClientStateMachine<I, R> {
         transaction_id: [u8; 3],
         options_to_request: Vec<v6::OptionCode>,
         mut rng: R,
-    ) -> (Self, Actions) {
+        now: I,
+    ) -> (Self, Actions<I>) {
         let Transition { state, actions, transaction_id: new_transaction_id } =
-            InformationRequesting::start(transaction_id, &options_to_request, &mut rng);
+            InformationRequesting::start(transaction_id, &options_to_request, &mut rng, now);
         (
             Self {
                 state: Some(state),
@@ -4650,7 +4663,7 @@ impl<I: Instant, R: Rng> ClientStateMachine<I, R> {
         options_to_request: Vec<v6::OptionCode>,
         mut rng: R,
         now: I,
-    ) -> (Self, Actions) {
+    ) -> (Self, Actions<I>) {
         let Transition { state, actions, transaction_id: new_transaction_id } =
             ServerDiscovery::start(
                 transaction_id,
@@ -4683,7 +4696,7 @@ impl<I: Instant, R: Rng> ClientStateMachine<I, R> {
     /// # Panics
     ///
     /// `handle_timeout` panics if current state is None.
-    pub fn handle_timeout(&mut self, timeout_type: ClientTimerType, now: I) -> Actions {
+    pub fn handle_timeout(&mut self, timeout_type: ClientTimerType, now: I) -> Actions<I> {
         let ClientStateMachine { transaction_id, options_to_request, state, rng } = self;
         let old_state = state.take().expect("state should not be empty");
         let Transition { state: new_state, actions, transaction_id: new_transaction_id } =
@@ -4695,7 +4708,7 @@ impl<I: Instant, R: Rng> ClientStateMachine<I, R> {
                     now,
                 ),
                 ClientTimerType::Refresh => {
-                    old_state.refresh_timer_expired(*transaction_id, &options_to_request, rng)
+                    old_state.refresh_timer_expired(*transaction_id, &options_to_request, rng, now)
                 }
                 ClientTimerType::Renew => {
                     old_state.renew_timer_expired(&options_to_request, rng, now)
@@ -4718,7 +4731,7 @@ impl<I: Instant, R: Rng> ClientStateMachine<I, R> {
         &mut self,
         msg: v6::Message<'_, B>,
         now: I,
-    ) -> Actions {
+    ) -> Actions<I> {
         let ClientStateMachine { transaction_id, options_to_request, state, rng } = self;
         if msg.transaction_id() != transaction_id {
             Vec::new() // Ignore messages for other clients.
@@ -4944,8 +4957,11 @@ pub(crate) mod testutil {
         let mut buf = assert_matches!( &actions[..],
             [
                 Action::SendMessage(buf),
-                Action::ScheduleTimer(ClientTimerType::Retransmission, INITIAL_SOLICIT_TIMEOUT)
-            ] => buf
+                Action::ScheduleTimer(ClientTimerType::Retransmission, instant)
+            ] => {
+                assert_eq!(*instant, now.add(INITIAL_SOLICIT_TIMEOUT));
+                buf
+            }
         );
 
         assert_outgoing_stateful_message(
@@ -5290,8 +5306,11 @@ pub(crate) mod testutil {
            [
                 Action::CancelTimer(ClientTimerType::Retransmission),
                 Action::SendMessage(buf),
-                Action::ScheduleTimer(ClientTimerType::Retransmission, INITIAL_REQUEST_TIMEOUT)
-           ] => buf
+                Action::ScheduleTimer(ClientTimerType::Retransmission, instant)
+           ] => {
+               assert_eq!(*instant, now.add(INITIAL_REQUEST_TIMEOUT));
+               buf
+           }
         );
         testutil::assert_outgoing_stateful_message(
             &mut buf,
@@ -5346,7 +5365,7 @@ pub(crate) mod testutil {
         expected_dns_servers: &[Ipv6Addr],
         rng: R,
         now: Instant,
-    ) -> (ClientStateMachine<Instant, R>, Actions) {
+    ) -> (ClientStateMachine<Instant, R>, Actions<Instant>) {
         let (mut client, transaction_id) = testutil::request_and_assert(
             client_id.clone(),
             server_id.clone(),
@@ -5641,11 +5660,11 @@ pub(crate) mod testutil {
             Action::CancelTimer(ClientTimerType::Retransmission),
             Action::ScheduleTimer(
                 ClientTimerType::Renew,
-                Duration::from_secs(expected_t1_secs.get().into()),
+                now.add(Duration::from_secs(expected_t1_secs.get().into())),
             ),
             Action::ScheduleTimer(
                 ClientTimerType::Rebind,
-                Duration::from_secs(expected_t2_secs.get().into()),
+                now.add(Duration::from_secs(expected_t2_secs.get().into())),
             ),
         ]
         .into_iter()
@@ -5728,7 +5747,7 @@ pub(crate) mod testutil {
                 Action::SendMessage(buf),
                 Action::ScheduleTimer(ClientTimerType::Retransmission, got_time)
             ] => {
-                assert_eq!(*got_time, initial_timeout);
+                assert_eq!(*got_time, now.add(initial_timeout));
                 buf
             }
         );
@@ -5853,10 +5872,12 @@ mod tests {
             vec![v6::OptionCode::DnsServers],
             vec![v6::OptionCode::DnsServers, v6::OptionCode::DomainList],
         ] {
+            let now = Instant::now();
             let (mut client, actions) = ClientStateMachine::start_stateless(
                 [0, 1, 2],
                 options.clone(),
                 StepRng::new(std::u64::MAX / 2, 0),
+                now,
             );
 
             let ClientStateMachine { transaction_id: _, options_to_request: _, state, rng: _ } =
@@ -5888,7 +5909,7 @@ mod tests {
                     Action::SendMessage(want_buf),
                     Action::ScheduleTimer(
                         ClientTimerType::Retransmission,
-                        INITIAL_INFO_REQ_TIMEOUT
+                        now.add(INITIAL_INFO_REQ_TIMEOUT),
                     )
                 ]
             );
@@ -5906,7 +5927,8 @@ mod tests {
             let mut buf = &buf[..]; // Implements BufferView.
             let msg = v6::Message::parse(&mut buf, ()).expect("failed to parse test buffer");
 
-            let actions = client.handle_message_receive(msg, Instant::now());
+            let now = Instant::now();
+            let actions = client.handle_message_receive(msg, now);
             let ClientStateMachine { transaction_id: _, options_to_request: _, state, rng: _ } =
                 client;
 
@@ -5924,9 +5946,9 @@ mod tests {
                     Action::CancelTimer(ClientTimerType::Retransmission),
                     Action::ScheduleTimer(
                         ClientTimerType::Refresh,
-                        Duration::from_secs(u64::from(test_dhcp_refresh_time)),
+                        now.add(Duration::from_secs(u64::from(test_dhcp_refresh_time))),
                     ),
-                    Action::UpdateDnsServers(DNS_SERVERS.to_vec())
+                    Action::UpdateDnsServers(DNS_SERVERS.to_vec()),
                 ]
             );
         }
@@ -5934,24 +5956,28 @@ mod tests {
 
     #[test]
     fn send_information_request_on_retransmission_timeout() {
+        let now = Instant::now();
         let (mut client, actions) = ClientStateMachine::start_stateless(
             [0, 1, 2],
             Vec::new(),
             StepRng::new(std::u64::MAX / 2, 0),
+            now,
         );
         assert_matches!(
             actions[..],
-            [_, Action::ScheduleTimer(ClientTimerType::Retransmission, INITIAL_INFO_REQ_TIMEOUT)]
+            [_, Action::ScheduleTimer(ClientTimerType::Retransmission, instant)] => {
+                assert_eq!(instant, now.add(INITIAL_INFO_REQ_TIMEOUT));
+            }
         );
 
-        let actions = client.handle_timeout(ClientTimerType::Retransmission, Instant::now());
+        let actions = client.handle_timeout(ClientTimerType::Retransmission, now);
         // Following exponential backoff defined in https://tools.ietf.org/html/rfc8415#section-15.
         assert_matches!(
             actions[..],
             [
                 _,
-                Action::ScheduleTimer(ClientTimerType::Retransmission, timeout)
-            ] if timeout == 2 * INITIAL_INFO_REQ_TIMEOUT
+                Action::ScheduleTimer(ClientTimerType::Retransmission, instant)
+            ] => assert_eq!(instant, now.add(2 * INITIAL_INFO_REQ_TIMEOUT))
         );
     }
 
@@ -5961,6 +5987,7 @@ mod tests {
             [0, 1, 2],
             Vec::new(),
             StepRng::new(std::u64::MAX / 2, 0),
+            Instant::now(),
         );
 
         let ClientStateMachine { transaction_id, options_to_request: _, state: _, rng: _ } =
@@ -5978,7 +6005,7 @@ mod tests {
             client.handle_message_receive(msg, time)[..],
             [
                 Action::CancelTimer(ClientTimerType::Retransmission),
-                Action::ScheduleTimer(ClientTimerType::Refresh, IRT_DEFAULT)
+                Action::ScheduleTimer(ClientTimerType::Refresh, time.add(IRT_DEFAULT))
             ]
         );
 
@@ -5994,7 +6021,10 @@ mod tests {
             actions[..],
             [
                 Action::SendMessage(want_buf),
-                Action::ScheduleTimer(ClientTimerType::Retransmission, INITIAL_INFO_REQ_TIMEOUT)
+                Action::ScheduleTimer(
+                    ClientTimerType::Retransmission,
+                    time.add(INITIAL_INFO_REQ_TIMEOUT)
+                )
             ]
         );
     }
@@ -6897,8 +6927,11 @@ mod tests {
             [
                 Action::CancelTimer(ClientTimerType::Retransmission),
                 Action::SendMessage(buf),
-                Action::ScheduleTimer(ClientTimerType::Retransmission, INITIAL_REQUEST_TIMEOUT)
-            ] => buf
+                Action::ScheduleTimer(ClientTimerType::Retransmission, instant)
+            ] => {
+                assert_eq!(*instant, time.add(INITIAL_REQUEST_TIMEOUT));
+                buf
+            }
         );
         assert_eq!(testutil::msg_type(buf), v6::MessageType::Request);
     }
@@ -7014,9 +7047,12 @@ mod tests {
             &actions[..],
             [
                 Action::SendMessage(buf),
-                Action::ScheduleTimer(ClientTimerType::Retransmission, timeout)
-            ] if testutil::msg_type(buf) == v6::MessageType::Solicit &&
-                 *timeout == 2 * INITIAL_SOLICIT_TIMEOUT => buf
+                Action::ScheduleTimer(ClientTimerType::Retransmission, instant)
+            ] => {
+                assert_eq!(testutil::msg_type(buf), v6::MessageType::Solicit);
+                assert_eq!(*instant, time.add(2 * INITIAL_SOLICIT_TIMEOUT));
+                buf
+            }
         );
         let ClientStateMachine { transaction_id, options_to_request: _, state, rng: _ } = &client;
         {
@@ -7067,8 +7103,11 @@ mod tests {
             [
                 Action::CancelTimer(ClientTimerType::Retransmission),
                 Action::SendMessage(buf),
-                Action::ScheduleTimer(ClientTimerType::Retransmission, INITIAL_REQUEST_TIMEOUT)
-            ] if testutil::msg_type(buf) == v6::MessageType::Request
+                Action::ScheduleTimer(ClientTimerType::Retransmission, instant)
+            ] => {
+                assert_eq!(*instant, time.add(INITIAL_REQUEST_TIMEOUT));
+                assert_eq!(testutil::msg_type(buf), v6::MessageType::Request);
+        }
         );
         let ClientStateMachine { transaction_id: _, options_to_request: _, state, rng: _ } = client;
         let Requesting {
@@ -7316,8 +7355,10 @@ mod tests {
             [
                 Action::CancelTimer(ClientTimerType::Retransmission),
                 Action::SendMessage(_buf),
-                Action::ScheduleTimer(ClientTimerType::Retransmission, INITIAL_REQUEST_TIMEOUT)
-            ]
+                Action::ScheduleTimer(ClientTimerType::Retransmission, instant)
+            ] => {
+                assert_eq!(*instant, time.add(INITIAL_REQUEST_TIMEOUT));
+            }
         );
         assert!(transaction_id.is_some());
     }
@@ -7426,8 +7467,8 @@ mod tests {
                 Action::ScheduleTimer(ClientTimerType::Rebind, t2),
                 Action::IaNaUpdates(iana_updates),
             ] => {
-                assert_eq!(*t1, Duration::from_secs(T1.get().into()));
-                assert_eq!(*t2, Duration::from_secs(T2.get().into()));
+                assert_eq!(*t1, time.add(Duration::from_secs(T1.get().into())));
+                assert_eq!(*t2, time.add(Duration::from_secs(T2.get().into())));
                 assert_eq!(
                     iana_updates,
                     &HashMap::from([(
@@ -7685,7 +7726,7 @@ mod tests {
 
             let timer_action = |timer, tv| match tv {
                 v6::NonZeroTimeValue::Finite(tv) => {
-                    Action::ScheduleTimer(timer, Duration::from_secs(tv.get().into()))
+                    Action::ScheduleTimer(timer, time.add(Duration::from_secs(tv.get().into())))
                 }
                 v6::NonZeroTimeValue::Infinity => Action::CancelTimer(timer),
             };
@@ -7828,10 +7869,10 @@ mod tests {
             [
                 Action::CancelTimer(ClientTimerType::Retransmission),
                 Action::SendMessage(buf),
-                Action::ScheduleTimer(ClientTimerType::Retransmission, timeout),
+                Action::ScheduleTimer(ClientTimerType::Retransmission, instant),
             ] => {
                 assert_eq!(testutil::msg_type(buf), v6::MessageType::Request);
-                assert_eq!(*timeout, INITIAL_REQUEST_TIMEOUT);
+                assert_eq!(*instant, time.add(INITIAL_REQUEST_TIMEOUT));
             }
         );
         let ClientStateMachine { transaction_id: _, options_to_request: _, state, rng: _ } = client;
@@ -7933,8 +7974,11 @@ mod tests {
            [
                 Action::CancelTimer(ClientTimerType::Retransmission),
                 Action::SendMessage(buf),
-                Action::ScheduleTimer(ClientTimerType::Retransmission, INITIAL_REQUEST_TIMEOUT)
-           ] if testutil::msg_type(buf) == v6::MessageType::Request
+                Action::ScheduleTimer(ClientTimerType::Retransmission, instant)
+           ] => {
+               assert_eq!(testutil::msg_type(buf), v6::MessageType::Request);
+               assert_eq!(*instant, time.add(INITIAL_REQUEST_TIMEOUT));
+           }
         );
         let ClientStateMachine { transaction_id: _, options_to_request: _, state, rng: _ } =
             &client;
@@ -7996,8 +8040,11 @@ mod tests {
            [
                 Action::CancelTimer(ClientTimerType::Retransmission),
                 Action::SendMessage(buf),
-                Action::ScheduleTimer(ClientTimerType::Retransmission, INITIAL_REQUEST_TIMEOUT)
-           ] if testutil::msg_type(buf) == v6::MessageType::Request
+                Action::ScheduleTimer(ClientTimerType::Retransmission, instant)
+           ] => {
+               assert_eq!(testutil::msg_type(buf), v6::MessageType::Request);
+               assert_eq!(*instant, time.add(INITIAL_REQUEST_TIMEOUT));
+           }
         );
         let ClientStateMachine { transaction_id: _, options_to_request: _, state, rng: _ } =
             &client;
@@ -8049,10 +8096,13 @@ mod tests {
         // restart server discovery.
         assert_matches!(
             &client.handle_timeout(ClientTimerType::Retransmission, time)[..],
-           [
-                Action::SendMessage(buf),
-                Action::ScheduleTimer(ClientTimerType::Retransmission, INITIAL_SOLICIT_TIMEOUT)
-           ] if testutil::msg_type(buf) == v6::MessageType::Solicit
+            [
+               Action::SendMessage(buf),
+                Action::ScheduleTimer(ClientTimerType::Retransmission, instant)
+            ] => {
+                assert_eq!(testutil::msg_type(buf), v6::MessageType::Solicit);
+                assert_eq!(*instant, time.add(INITIAL_SOLICIT_TIMEOUT));
+            }
         );
         let ClientStateMachine { transaction_id: _, options_to_request: _, state, rng: _ } = client;
         assert_matches!(state,
@@ -8072,6 +8122,7 @@ mod tests {
     // Test 4-msg exchange for assignment.
     #[test]
     fn assignment() {
+        let now = Instant::now();
         let (client, actions) = testutil::assign_and_assert(
             CLIENT_ID,
             SERVER_ID[0],
@@ -8087,7 +8138,7 @@ mod tests {
                 .collect(),
             &[],
             StepRng::new(std::u64::MAX / 2, 0),
-            Instant::now(),
+            now,
         );
 
         let ClientStateMachine { transaction_id: _, options_to_request: _, state, rng: _ } =
@@ -8113,8 +8164,8 @@ mod tests {
                 Action::IaNaUpdates(iana_updates),
                 Action::IaPdUpdates(iapd_updates),
             ] => {
-                assert_eq!(*t1, Duration::from_secs(T1.get().into()));
-                assert_eq!(*t2, Duration::from_secs(T2.get().into()));
+                assert_eq!(*t1, now.add(Duration::from_secs(T1.get().into())));
+                assert_eq!(*t2, now.add(Duration::from_secs(T2.get().into())));
                 assert_eq!(
                     iana_updates,
                     &(0..).map(v6::IAID::new)
@@ -8141,6 +8192,7 @@ mod tests {
 
     #[test]
     fn assigned_get_dns_servers() {
+        let now = Instant::now();
         let (client, actions) = testutil::assign_and_assert(
             CLIENT_ID,
             SERVER_ID[0],
@@ -8148,7 +8200,7 @@ mod tests {
             Default::default(), /* delegated_prefixes_to_assign */
             &DNS_SERVERS,
             StepRng::new(std::u64::MAX / 2, 0),
-            Instant::now(),
+            now,
         );
         assert_matches!(
             &actions[..],
@@ -8160,8 +8212,8 @@ mod tests {
                 Action::IaNaUpdates(iana_updates),
             ] => {
                 assert_eq!(dns_servers[..], DNS_SERVERS);
-                assert_eq!(*t1, Duration::from_secs(T1.get().into()));
-                assert_eq!(*t2, Duration::from_secs(T2.get().into()));
+                assert_eq!(*t1, now.add(Duration::from_secs(T1.get().into())));
+                assert_eq!(*t2, now.add(Duration::from_secs(T2.get().into())));
                 assert_eq!(
                     iana_updates,
                     &HashMap::from([
@@ -8480,7 +8532,7 @@ mod tests {
         ia_na_t2: v6::TimeValue,
         ia_pd_t1: v6::TimeValue,
         ia_pd_t2: v6::TimeValue,
-        expected_timer_actions: [Action; 2],
+        expected_timer_actions: fn(Instant) -> [Action<Instant>; 2],
         next_timer: Option<RenewRebindTestState>,
     }
 
@@ -8491,7 +8543,7 @@ mod tests {
         ia_na_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
         ia_pd_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
         ia_pd_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
-        expected_timer_actions: [
+        expected_timer_actions: |_| [
             Action::CancelTimer(ClientTimerType::Renew),
             Action::CancelTimer(ClientTimerType::Rebind),
         ],
@@ -8502,14 +8554,14 @@ mod tests {
         ia_na_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T2)),
         ia_pd_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T1)),
         ia_pd_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T2)),
-        expected_timer_actions: [
+        expected_timer_actions: |time| [
             Action::ScheduleTimer(
                 ClientTimerType::Renew,
-                Duration::from_secs(T1.get().into()),
+                time.add(Duration::from_secs(T1.get().into())),
             ),
             Action::ScheduleTimer(
                 ClientTimerType::Rebind,
-                Duration::from_secs(T2.get().into()),
+                time.add(Duration::from_secs(T2.get().into())),
             ),
         ],
         next_timer: Some(RENEW_TEST_STATE),
@@ -8519,12 +8571,12 @@ mod tests {
         ia_na_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T2)),
         ia_pd_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T2)),
         ia_pd_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T2)),
-        expected_timer_actions: [
+        expected_timer_actions: |time| [
             // Skip Renew and just go to Rebind when T2 == T1.
             Action::CancelTimer(ClientTimerType::Renew),
             Action::ScheduleTimer(
                 ClientTimerType::Rebind,
-                Duration::from_secs(T2.get().into()),
+                time.add(Duration::from_secs(T2.get().into())),
             ),
         ],
         next_timer: Some(REBIND_TEST_STATE),
@@ -8534,10 +8586,10 @@ mod tests {
         ia_na_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
         ia_pd_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
         ia_pd_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
-        expected_timer_actions: [
+        expected_timer_actions: |time| [
             Action::ScheduleTimer(
                 ClientTimerType::Renew,
-                Duration::from_secs(T1.get().into()),
+                time.add(Duration::from_secs(T1.get().into())),
             ),
             Action::CancelTimer(ClientTimerType::Rebind),
         ],
@@ -8548,14 +8600,14 @@ mod tests {
         ia_na_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T2)),
         ia_pd_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
         ia_pd_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
-        expected_timer_actions: [
+        expected_timer_actions: |time| [
             Action::ScheduleTimer(
                 ClientTimerType::Renew,
-                Duration::from_secs(T1.get().into()),
+                time.add(Duration::from_secs(T1.get().into())),
             ),
             Action::ScheduleTimer(
                 ClientTimerType::Rebind,
-                Duration::from_secs(T2.get().into()),
+                time.add(Duration::from_secs(T2.get().into())),
             ),
         ],
         next_timer: Some(RENEW_TEST_STATE),
@@ -8565,10 +8617,10 @@ mod tests {
         ia_na_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
         ia_pd_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T1)),
         ia_pd_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
-        expected_timer_actions: [
+        expected_timer_actions: |time| [
             Action::ScheduleTimer(
                 ClientTimerType::Renew,
-                Duration::from_secs(T1.get().into()),
+                time.add(Duration::from_secs(T1.get().into())),
             ),
             Action::CancelTimer(ClientTimerType::Rebind),
         ],
@@ -8579,14 +8631,14 @@ mod tests {
         ia_na_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
         ia_pd_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T1)),
         ia_pd_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T2)),
-        expected_timer_actions: [
+        expected_timer_actions: |time| [
             Action::ScheduleTimer(
                 ClientTimerType::Renew,
-                Duration::from_secs(T1.get().into()),
+                time.add(Duration::from_secs(T1.get().into())),
             ),
             Action::ScheduleTimer(
                 ClientTimerType::Rebind,
-                Duration::from_secs(T2.get().into()),
+                time.add(Duration::from_secs(T2.get().into())),
             ),
         ],
         next_timer: Some(RENEW_TEST_STATE),
@@ -8621,6 +8673,7 @@ mod tests {
             get_ia_and_updates(ia_pd_t1, ia_pd_t2, CONFIGURED_DELEGATED_PREFIXES[0]);
         let iana = vec![iana];
         let iapd = vec![iapd];
+        let now = Instant::now();
         let (client, actions) = testutil::assign_and_assert(
             CLIENT_ID,
             SERVER_ID[0],
@@ -8628,7 +8681,7 @@ mod tests {
             iapd.clone(),
             &[],
             StepRng::new(std::u64::MAX / 2, 0),
-            Instant::now(),
+            now,
         );
         let ClientStateMachine {
             transaction_id: old_transaction_id,
@@ -8654,7 +8707,7 @@ mod tests {
             actions,
             [Action::CancelTimer(ClientTimerType::Retransmission)]
                 .into_iter()
-                .chain(expected_timer_actions)
+                .chain(expected_timer_actions(now))
                 .chain((!iana_updates.is_empty()).then(|| Action::IaNaUpdates(iana_updates)))
                 .chain((!iapd_updates.is_empty()).then(|| Action::IaPdUpdates(iapd_updates)))
                 .collect::<Vec<_>>()
@@ -8729,7 +8782,10 @@ mod tests {
             [
                 Action::SendMessage(buf),
                 Action::ScheduleTimer(ClientTimerType::Retransmission, timeout)
-            ] if *timeout == 2 * INITIAL_RENEW_TIMEOUT => buf
+            ] => {
+                assert_eq!(*timeout, time.add(2 * INITIAL_RENEW_TIMEOUT));
+                buf
+            }
         );
         let ClientStateMachine { transaction_id, options_to_request: _, state, rng: _ } = &client;
         // Check that the retransmitted renew is part of the same transaction.
@@ -8984,8 +9040,8 @@ mod tests {
                 Action::IaNaUpdates(iana_updates),
                 Action::IaPdUpdates(iapd_updates),
             ] => {
-                assert_eq!(*t1, Duration::from_secs(RENEWED_T1.get().into()));
-                assert_eq!(*t2, Duration::from_secs(RENEWED_T2.get().into()));
+                assert_eq!(*t1, time.add(Duration::from_secs(RENEWED_T1.get().into())));
+                assert_eq!(*t2, time.add(Duration::from_secs(RENEWED_T2.get().into())));
 
 
                 fn get_updates<V: IaValue>(ias: Vec<TestIa<V>>) -> HashMap<v6::IAID, HashMap<V, IaValueUpdateKind>> {
@@ -9423,8 +9479,8 @@ mod tests {
                 Action::IaNaUpdates(iana_updates),
                 Action::IaPdUpdates(iapd_updates),
             ] => {
-                assert_eq!(*t1, Duration::from_secs(RENEWED_T1.get().into()));
-                assert_eq!(*t2, Duration::from_secs(RENEWED_T2.get().into()));
+                assert_eq!(*t1, time.add(Duration::from_secs(RENEWED_T1.get().into())));
+                assert_eq!(*t2, time.add(Duration::from_secs(RENEWED_T2.get().into())));
 
                 fn get_updates<V: IaValue>(
                     values: &[V],
@@ -9598,8 +9654,8 @@ mod tests {
                 Action::IaNaUpdates(iana_updates),
                 Action::IaPdUpdates(iapd_updates),
             ] => {
-                assert_eq!(*t1, Duration::from_secs(RENEWED_T1.get().into()));
-                assert_eq!(*t2, Duration::from_secs(RENEWED_T2.get().into()));
+                assert_eq!(*t1, time.add(Duration::from_secs(RENEWED_T1.get().into())));
+                assert_eq!(*t2, time.add(Duration::from_secs(RENEWED_T2.get().into())));
 
                 fn get_updates<V: IaValue>(
                     values: &[V],
@@ -9770,8 +9826,8 @@ mod tests {
                 Action::IaNaUpdates(iana_updates),
                 Action::IaPdUpdates(iapd_updates),
             ] => {
-                assert_eq!(*t1, Duration::from_secs(RENEWED_T1.get().into()));
-                assert_eq!(*t2, Duration::from_secs(RENEWED_T2.get().into()));
+                assert_eq!(*t1, time.add(Duration::from_secs(RENEWED_T1.get().into())));
+                assert_eq!(*t2, time.add(Duration::from_secs(RENEWED_T2.get().into())));
 
                 fn get_updates<V: IaValue>(
                     iaid: v6::IAID,
@@ -10026,8 +10082,11 @@ mod tests {
                 // remove the address of IA with NoBinding status.
                 Action::CancelTimer(ClientTimerType::Retransmission),
                 Action::SendMessage(buf),
-                Action::ScheduleTimer(ClientTimerType::Retransmission, INITIAL_REQUEST_TIMEOUT)
-            ] => buf
+                Action::ScheduleTimer(ClientTimerType::Retransmission, instant)
+            ] => {
+                assert_eq!(*instant, time.add(INITIAL_REQUEST_TIMEOUT));
+                buf
+            }
         );
         // Expect that the Request message contains both the assigned address
         // and the address to request.
@@ -10304,12 +10363,12 @@ mod tests {
                 } else {
                     Action::ScheduleTimer(
                         ClientTimerType::Renew,
-                        Duration::from_secs(expected_t1.get().into()),
+                        time.add(Duration::from_secs(expected_t1.get().into())),
                     )
                 },
                 Action::ScheduleTimer(
                     ClientTimerType::Rebind,
-                    Duration::from_secs(expected_t2.get().into()),
+                    time.add(Duration::from_secs(expected_t2.get().into())),
                 ),
                 Action::IaNaUpdates(get_updates(
                     ok_iaid,
@@ -10333,6 +10392,7 @@ mod tests {
             [0, 1, 2],
             Vec::new(),
             StepRng::new(std::u64::MAX / 2, 0),
+            Instant::now(),
         );
 
         let builder = v6::MessageBuilder::new(
@@ -10382,6 +10442,7 @@ mod tests {
             [0, 1, 2],
             Vec::new(),
             StepRng::new(std::u64::MAX / 2, 0),
+            Instant::now(),
         );
 
         // Should panic if Refresh timeout is received while in
@@ -10396,6 +10457,7 @@ mod tests {
             [0, 1, 2],
             Vec::new(),
             StepRng::new(std::u64::MAX / 2, 0),
+            Instant::now(),
         );
         let ClientStateMachine { transaction_id, options_to_request: _, state, rng: _ } = &client;
         assert_matches!(
@@ -10426,7 +10488,7 @@ mod tests {
             actions[..],
             [
                 Action::CancelTimer(ClientTimerType::Retransmission),
-                Action::ScheduleTimer(ClientTimerType::Refresh, IRT_DEFAULT)
+                Action::ScheduleTimer(ClientTimerType::Refresh, time.add(IRT_DEFAULT)),
             ]
         );
 

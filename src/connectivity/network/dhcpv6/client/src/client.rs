@@ -8,6 +8,7 @@ use std::{
     hash::{Hash, Hasher},
     net::{IpAddr, SocketAddr},
     num::NonZeroU8,
+    ops::Add,
     str::FromStr as _,
     time::Duration,
 };
@@ -68,6 +69,19 @@ impl dhcpv6_core::Instant for MonotonicTime {
                 earlier, this, e,
             )
         }))
+    }
+
+    fn checked_add(&self, duration: Duration) -> Option<MonotonicTime> {
+        Some(self.add(duration))
+    }
+}
+
+impl Add<Duration> for MonotonicTime {
+    type Output = MonotonicTime;
+
+    fn add(self, duration: Duration) -> MonotonicTime {
+        let MonotonicTime(this) = self;
+        MonotonicTime(this + duration.into())
     }
 }
 
@@ -192,7 +206,10 @@ fn create_state_machine(
     transaction_id: [u8; 3],
     config: ClientConfig,
 ) -> Result<
-    (dhcpv6_core::client::ClientStateMachine<MonotonicTime, StdRng>, dhcpv6_core::client::Actions),
+    (
+        dhcpv6_core::client::ClientStateMachine<MonotonicTime, StdRng>,
+        dhcpv6_core::client::Actions<MonotonicTime>,
+    ),
     ClientError,
 > {
     let ClientConfig {
@@ -239,6 +256,7 @@ fn create_state_machine(
         })
         .transpose()?;
 
+    let now = MonotonicTime::now();
     match (information_config, configured_non_temporary_addresses, configured_delegated_prefixes) {
         (None, None, None) => Err(ClientError::UnsupportedConfigs),
         (Some(information_config), None, None) => {
@@ -246,6 +264,7 @@ fn create_state_machine(
                 transaction_id,
                 information_config,
                 StdRng::from_entropy(),
+                now,
             ))
         }
         (information_config, configured_non_temporary_addresses, configured_delegated_prefixes) => {
@@ -256,7 +275,7 @@ fn create_state_machine(
                 configured_delegated_prefixes.unwrap_or_else(Default::default),
                 information_config.unwrap_or_else(Default::default),
                 StdRng::from_entropy(),
-                MonotonicTime::now(),
+                now,
             ))
         }
     }
@@ -313,7 +332,7 @@ impl<S: for<'a> AsyncSocket<'a>> Client<S> {
     /// Runs a list of actions sequentially.
     async fn run_actions(
         &mut self,
-        actions: dhcpv6_core::client::Actions,
+        actions: dhcpv6_core::client::Actions<MonotonicTime>,
     ) -> Result<(), ClientError> {
         stream::iter(actions)
             .map(Ok)
@@ -501,14 +520,14 @@ impl<S: for<'a> AsyncSocket<'a>> Client<S> {
         Ok(())
     }
 
-    /// Schedules a timer for `timer_type` to fire after `timeout`.
+    /// Schedules a timer for `timer_type` to fire at `instant`.
     ///
     /// If a timer for `timer_type` is already scheduled, the timer is
     /// updated to fire at the new time.
     fn schedule_timer(
         &mut self,
         timer_type: dhcpv6_core::client::ClientTimerType,
-        timeout: Duration,
+        MonotonicTime(instant): MonotonicTime,
     ) {
         let (handle, reg) = AbortHandle::new_pair();
         match self.timer_abort_handles.insert(timer_type, handle) {
@@ -518,7 +537,7 @@ impl<S: for<'a> AsyncSocket<'a>> Client<S> {
         }
 
         self.timer_futs.push(Abortable::new(
-            fasync::Timer::new(fasync::Time::after(timeout.into())).replace_value(timer_type),
+            fasync::Timer::new(fasync::Time::from_zx(instant)).replace_value(timer_type),
             reg,
         ))
     }
@@ -1728,11 +1747,14 @@ mod tests {
             Vec::<&dhcpv6_core::client::ClientTimerType>::new()
         );
 
-        let () = client
-            .schedule_timer(dhcpv6_core::client::ClientTimerType::Refresh, Duration::from_nanos(1));
+        let now = MonotonicTime::now();
+        let () = client.schedule_timer(
+            dhcpv6_core::client::ClientTimerType::Refresh,
+            now + Duration::from_nanos(1),
+        );
         let () = client.schedule_timer(
             dhcpv6_core::client::ClientTimerType::Retransmission,
-            Duration::from_nanos(2),
+            now + Duration::from_nanos(2),
         );
         assert_eq!(
             client.timer_abort_handles.keys().collect::<HashSet<_>>(),
@@ -1745,11 +1767,14 @@ mod tests {
         );
 
         // We are allowed to reschedule a timer to fire at a new time.
-        client
-            .schedule_timer(dhcpv6_core::client::ClientTimerType::Refresh, Duration::from_nanos(1));
+        let now = MonotonicTime::now();
+        client.schedule_timer(
+            dhcpv6_core::client::ClientTimerType::Refresh,
+            now + Duration::from_nanos(1),
+        );
         client.schedule_timer(
             dhcpv6_core::client::ClientTimerType::Retransmission,
-            Duration::from_nanos(2),
+            now + Duration::from_nanos(2),
         );
 
         let () = client.cancel_timer(dhcpv6_core::client::ClientTimerType::Refresh);
@@ -1871,8 +1896,10 @@ mod tests {
         client.cancel_timer(dhcpv6_core::client::ClientTimerType::Refresh);
         // Discard cancelled refresh timer.
         assert_matches!(client.handle_next_event(&mut buf).await, Ok(Some(())));
-        client
-            .schedule_timer(dhcpv6_core::client::ClientTimerType::Refresh, Duration::from_nanos(1));
+        client.schedule_timer(
+            dhcpv6_core::client::ClientTimerType::Refresh,
+            MonotonicTime::now() + Duration::from_nanos(1),
+        );
 
         // Trigger a refresh.
         assert_matches!(client.handle_next_event(&mut buf).await, Ok(Some(())));
@@ -1996,7 +2023,7 @@ mod tests {
         assert_matches!(client.handle_next_event(&mut buf).await, Ok(Some(())));
         let () = client.schedule_timer(
             dhcpv6_core::client::ClientTimerType::Retransmission,
-            Duration::from_secs(1_000_000),
+            MonotonicTime::now() + Duration::from_secs(1_000_000),
         );
         assert_eq!(
             client.timer_abort_handles.keys().collect::<Vec<_>>(),
@@ -2024,8 +2051,10 @@ mod tests {
         );
 
         // Inserts a refresh timer that precedes the retransmission.
-        let () = client
-            .schedule_timer(dhcpv6_core::client::ClientTimerType::Refresh, Duration::from_nanos(1));
+        let () = client.schedule_timer(
+            dhcpv6_core::client::ClientTimerType::Refresh,
+            MonotonicTime::now() + Duration::from_nanos(1),
+        );
         // This timer is scheduled.
         assert_eq!(
             client.timer_abort_handles.keys().collect::<HashSet<_>>(),
