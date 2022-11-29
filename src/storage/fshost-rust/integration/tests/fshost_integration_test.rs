@@ -3,13 +3,13 @@
 // found in the LICENSE file.
 
 use {
+    device_watcher::recursive_wait_and_open_node,
     fidl::endpoints::create_proxy,
     fidl_fuchsia_fshost as fshost,
     fidl_fuchsia_hardware_block_partition::Guid,
     fidl_fuchsia_hardware_block_volume::{VolumeAndNodeMarker, VolumeManagerMarker},
     fidl_fuchsia_io as fio,
-    fshost_test_fixture::TestFixtureBuilder,
-    fshost_test_fixture::FVM_SLICE_SIZE,
+    fshost_test_fixture::{disk_builder::FVM_SLICE_SIZE, TestFixtureBuilder},
     fuchsia_async as fasync,
     fuchsia_component::client::connect_to_named_protocol_at_dir_root,
     fuchsia_zircon as zx,
@@ -336,6 +336,35 @@ async fn fvm_ramdisk_serves_zbi_ramdisk_contents_with_unformatted_data() {
 
     fixture.check_fs_type("blob", VFS_TYPE_BLOBFS).await;
     fixture.check_fs_type("data", data_fs_type()).await;
+
+    fixture.tear_down().await;
+}
+
+// Test that fshost handles the case where the FVM is within a GPT partition.
+#[fuchsia::test]
+async fn fvm_within_gpt() {
+    let mut builder = new_builder();
+    builder.with_disk().with_gpt().format_data(DATA_FILESYSTEM_FORMAT);
+    let fixture = builder.build().await;
+
+    // Ensure we bound the GPT by checking the relevant partitions exist under the ramdisk path.
+    let fvm_partition_path =
+        format!("{}/part-000/block", fixture.ramdisk.as_ref().unwrap().get_path());
+    let blobfs_path = format!("{}/fvm/blobfs-p-1/block", fvm_partition_path);
+    recursive_wait_and_open_node(&fixture.dir("dev-topological"), &blobfs_path).await.unwrap();
+    let data_path = format!("{}/fvm/data-p-2/block", fvm_partition_path);
+    recursive_wait_and_open_node(&fixture.dir("dev-topological"), &data_path).await.unwrap();
+
+    // Make sure we can access the blob/data partitions within the FVM.
+    fixture.check_fs_type("blob", VFS_TYPE_BLOBFS).await;
+    fixture.check_fs_type("data", data_fs_type()).await;
+
+    let (file, server) = create_proxy::<fio::NodeMarker>().unwrap();
+    fixture
+        .dir("data")
+        .open(fio::OpenFlags::RIGHT_READABLE, 0, "foo", server)
+        .expect("open failed");
+    file.get_attr().await.expect("get_attr failed");
 
     fixture.tear_down().await;
 }

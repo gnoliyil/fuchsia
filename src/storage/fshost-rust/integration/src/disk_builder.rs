@@ -5,13 +5,19 @@
 use {
     device_watcher::recursive_wait_and_open_node,
     fidl::endpoints::{create_proxy, Proxy},
+    fidl_fuchsia_device::ControllerProxy,
     fidl_fuchsia_fxfs::{CryptManagementMarker, CryptMarker, KeyPurpose},
     fidl_fuchsia_io as fio, fidl_fuchsia_logger as flogger,
-    fs_management::{Blobfs, Fxfs, BLOBFS_TYPE_GUID, DATA_TYPE_GUID},
+    fs_management::{
+        partition::{open_partition, PartitionMatcher},
+        Blobfs, Fxfs, BLOBFS_TYPE_GUID, DATA_TYPE_GUID, FVM_TYPE_GUID, FVM_TYPE_GUID_STR,
+    },
     fuchsia_component_test::{Capability, ChildOptions, RealmBuilder, RealmInstance, Ref, Route},
-    fuchsia_zircon::{self as zx, HandleBased},
+    fuchsia_runtime::vmar_root_self,
+    fuchsia_zircon::{self as zx, Duration, HandleBased},
+    gpt::{partition_types, GptConfig},
     key_bag::Aes256Key,
-    ramdevice_client::VmoRamdiskClientBuilder,
+    ramdevice_client::{RamdiskClient, VmoRamdiskClientBuilder},
     std::{io::Write, ops::Deref, path::Path},
     storage_isolated_driver_manager::{
         fvm::{create_fvm_volume, set_up_fvm},
@@ -20,6 +26,12 @@ use {
     uuid::Uuid,
     zerocopy::AsBytes,
 };
+
+const GPT_DRIVER_PATH: &str = "gpt.so";
+const OPEN_PARTITION_TIMEOUT: Duration = Duration::from_seconds(30);
+
+const RAMDISK_BLOCK_SIZE: u64 = 512;
+pub const FVM_SLICE_SIZE: u64 = 32 * 1024;
 
 // We set the default disk size to be twice the value of
 // DEFAULT_F2FS_MIN_BYTES (defined in device/constants.rs)
@@ -73,6 +85,60 @@ const LEGACY_METADATA_KEY: Aes256Key = Aes256Key::create([
     0xff, 0xfe, 0xfd, 0xfc, 0xfb, 0xfa, 0xf9, 0xf8, 0xf7, 0xf6, 0xf5, 0xf4, 0xf3, 0xf2, 0xf1, 0xf0,
     0xef, 0xee, 0xed, 0xec, 0xeb, 0xea, 0xe9, 0xe8, 0xe7, 0xe6, 0xe5, 0xe4, 0xe3, 0xe2, 0xe1, 0xe0,
 ]);
+
+fn initialize_gpt(vmo: &zx::Vmo, block_size: u64) {
+    // The GPT library requires a File-like object or a slice of memory to write into. To avoid
+    // unnecessary copies, we temporarily map `vmo` into the test's address space, and pass a
+    // byte slice to the GPT library to use.
+    let flags =
+        zx::VmarFlags::PERM_READ | zx::VmarFlags::PERM_WRITE | zx::VmarFlags::REQUIRE_NON_RESIZABLE;
+    let size: usize = vmo.get_size().expect("Failed to obtain VMO size").try_into().unwrap();
+    let addr = vmar_root_self().map(0, &vmo, 0, size, flags).unwrap();
+    // Safety: The `buffer` slice is valid so long as the mapping exists and it's not resizable.
+    // We **must** ensure `addr` is unmapped before returning so it cannot outlive `vmo`.
+    assert!(flags.contains(zx::VmarFlags::REQUIRE_NON_RESIZABLE));
+    let buffer = unsafe { std::slice::from_raw_parts_mut(addr as *mut u8, size) };
+
+    // Initialize a new GPT with a single FVM partition.
+    let vmo_wrapper = Box::new(std::io::Cursor::new(buffer));
+    let mut disk = GptConfig::new()
+        .initialized(false)
+        .writable(true)
+        .logical_block_size(block_size.try_into().expect("Unsupported logical block size"))
+        .create_from_device(vmo_wrapper, None)
+        .unwrap();
+    disk.update_partitions(std::collections::BTreeMap::new()).expect("Failed to initialize GPT");
+
+    let sectors = disk.find_free_sectors();
+    assert!(sectors.len() == 1);
+    let block_size: u64 = disk.logical_block_size().clone().into();
+    let available_space = block_size * sectors[0].1 as u64;
+    let fvm_type = partition_types::Type {
+        guid: FVM_TYPE_GUID_STR,
+        os: partition_types::OperatingSystem::Custom("Fuchsia".to_owned()),
+    };
+    disk.add_partition("fvm", available_space, fvm_type, 0, None).unwrap();
+    let disk = disk.write().expect("Failed to write GPT");
+
+    // Safety: We have to ensure we drop all objects that own a reference to `buffer`, and ensure
+    // that we unmap the region before returning (so it cannot outlive `vmo`).
+    unsafe {
+        std::mem::drop(disk);
+        vmar_root_self().unmap(addr, size).expect("Failed to unmap VMAR");
+    }
+}
+
+async fn bind_gpt_driver(ramdisk: &RamdiskClient) {
+    let ramdisk_channel =
+        fidl::AsyncChannel::from_channel(ramdisk.open().unwrap().into_channel()).unwrap();
+    let controller_proxy = ControllerProxy::new(ramdisk_channel);
+    controller_proxy
+        .bind(GPT_DRIVER_PATH)
+        .await
+        .expect("FIDL error calling bind()")
+        .map_err(zx::Status::from_raw)
+        .expect("bind() returned non-Ok status");
+}
 
 async fn create_hermetic_crypt_service(
     data_key: Aes256Key,
@@ -153,6 +219,7 @@ pub struct DiskBuilder {
     format: Option<&'static str>,
     legacy_crypto_format: bool,
     zxcrypt: bool,
+    gpt: bool,
 }
 
 impl DiskBuilder {
@@ -163,6 +230,7 @@ impl DiskBuilder {
             format: None,
             legacy_crypto_format: false,
             zxcrypt: true,
+            gpt: false,
         }
     }
 
@@ -191,6 +259,11 @@ impl DiskBuilder {
         self
     }
 
+    pub fn with_gpt(&mut self) -> &mut Self {
+        self.gpt = true;
+        self
+    }
+
     pub(crate) async fn build(self) -> zx::Vmo {
         let (dev, server) = create_proxy::<fio::DirectoryMarker>().unwrap();
         fdio::open(
@@ -205,13 +278,39 @@ impl DiskBuilder {
             .expect("recursive_wait_and_open_node failed");
 
         let vmo = zx::Vmo::create(self.size).unwrap();
-        let vmo_dup = vmo.duplicate_handle(zx::Rights::SAME_RIGHTS).unwrap();
-        let ramdisk = VmoRamdiskClientBuilder::new(vmo).block_size(512).build().unwrap();
-        let ramdisk_path = ramdisk.get_path();
 
+        // Initialize the VMO with GPT headers and an *empty* FVM partition.
+        if self.gpt {
+            initialize_gpt(&vmo, RAMDISK_BLOCK_SIZE);
+        }
+
+        // Create a ramdisk with a duplicate handle of `vmo` so we can keep the data once destroyed.
+        let ramdisk =
+            VmoRamdiskClientBuilder::new(vmo.duplicate_handle(zx::Rights::SAME_RIGHTS).unwrap())
+                .block_size(RAMDISK_BLOCK_SIZE)
+                .build()
+                .unwrap();
+
+        // Path to block device or partition which will back the FVM. Assumed to be empty/zeroed.
+        let base_path = if self.gpt {
+            bind_gpt_driver(&ramdisk).await;
+            let matcher = PartitionMatcher {
+                type_guid: Some(FVM_TYPE_GUID),
+                parent_device: Some(ramdisk.get_path().to_owned()),
+                ..Default::default()
+            };
+            open_partition(matcher, OPEN_PARTITION_TIMEOUT).await.unwrap()
+        } else {
+            ramdisk.get_path().to_owned()
+        };
+
+        // Initialize/provision the FVM headers and bind the FVM driver.
         let volume_manager_proxy =
-            set_up_fvm(Path::new(ramdisk_path), 32 * 1024).await.expect("set_up_fvm failed");
+            set_up_fvm(Path::new(base_path.as_str()), FVM_SLICE_SIZE as usize)
+                .await
+                .expect("set_up_fvm failed");
 
+        // Create and format the blobfs partition.
         create_fvm_volume(
             &volume_manager_proxy,
             "blobfs",
@@ -222,12 +321,14 @@ impl DiskBuilder {
         )
         .await
         .expect("create_fvm_volume failed");
-        let blobfs_path = format!("{}/fvm/blobfs-p-1/block", ramdisk_path);
+        let blobfs_path = format!("{}/fvm/blobfs-p-1/block", base_path);
         recursive_wait_and_open_node(&dev, &blobfs_path.strip_prefix("/dev/").unwrap())
             .await
             .expect("recursive_wait_and_open_node failed");
         let mut blobfs = Blobfs::new(&blobfs_path).expect("new failed");
         blobfs.format().await.expect("format failed");
+
+        // Create and format the data partition.
         create_fvm_volume(
             &volume_manager_proxy,
             "data",
@@ -238,23 +339,22 @@ impl DiskBuilder {
         )
         .await
         .expect("create_fvm_volume failed");
-
         if let Some(format) = self.format {
             match format {
-                "fxfs" => self.init_data_fxfs(ramdisk_path, &dev).await,
-                "minfs" => self.init_data_minfs(ramdisk_path, &dev).await,
-                "f2fs" => self.init_data_f2fs(ramdisk_path, &dev).await,
+                "fxfs" => self.init_data_fxfs(base_path.as_str(), &dev).await,
+                "minfs" => self.init_data_minfs(base_path.as_str(), &dev).await,
+                "f2fs" => self.init_data_f2fs(base_path.as_str(), &dev).await,
                 _ => panic!("unsupported data filesystem format type"),
             }
         }
 
+        // Destroy the ramdisk device and return a VMO containing the partitions/filesystems.
         ramdisk.destroy().expect("destroy failed");
-
-        vmo_dup
+        vmo
     }
 
-    async fn init_data_minfs(&self, ramdisk_path: &str, dev: &fio::DirectoryProxy) {
-        let data_path = format!("{}/fvm/data-p-2/block", ramdisk_path);
+    async fn init_data_minfs(&self, device_path: &str, dev: &fio::DirectoryProxy) {
+        let data_path = format!("{}/fvm/data-p-2/block", device_path);
         let mut data_device =
             recursive_wait_and_open_node(&dev, &data_path.strip_prefix("/dev/").unwrap())
                 .await
@@ -293,8 +393,8 @@ impl DiskBuilder {
         fs.shutdown().await.expect("shutdown failed");
     }
 
-    async fn init_data_f2fs(&self, ramdisk_path: &str, dev: &fio::DirectoryProxy) {
-        let data_path = format!("{}/fvm/data-p-2/block", ramdisk_path);
+    async fn init_data_f2fs(&self, device_path: &str, dev: &fio::DirectoryProxy) {
+        let data_path = format!("{}/fvm/data-p-2/block", device_path);
         let mut data_device =
             recursive_wait_and_open_node(&dev, &data_path.strip_prefix("/dev/").unwrap())
                 .await
@@ -333,14 +433,14 @@ impl DiskBuilder {
         fs.shutdown().await.expect("shutdown failed");
     }
 
-    async fn init_data_fxfs(&self, ramdisk_path: &str, dev: &fio::DirectoryProxy) {
+    async fn init_data_fxfs(&self, device_path: &str, dev: &fio::DirectoryProxy) {
         let (data_key, metadata_key) = if self.legacy_crypto_format {
             (LEGACY_DATA_KEY, LEGACY_METADATA_KEY)
         } else {
             (DATA_KEY, METADATA_KEY)
         };
         let crypt_realm = create_hermetic_crypt_service(data_key, metadata_key).await;
-        let data_path = format!("{}/fvm/data-p-2/block", ramdisk_path);
+        let data_path = format!("{}/fvm/data-p-2/block", device_path);
         let data_device =
             recursive_wait_and_open_node(dev, data_path.strip_prefix("/dev/").unwrap())
                 .await

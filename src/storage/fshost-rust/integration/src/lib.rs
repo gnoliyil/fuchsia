@@ -17,11 +17,8 @@ pub mod disk_builder;
 pub mod fshost_builder;
 mod mocks;
 
-pub const FVM_SLICE_SIZE: u64 = 32 * 1024;
-
 pub struct TestFixtureBuilder {
     netboot: bool,
-
     disk: Option<disk_builder::Disk>,
     fshost: fshost_builder::FshostBuilder,
     zbi_ramdisk: Option<disk_builder::DiskBuilder>,
