@@ -3114,12 +3114,50 @@ fn process_reply_with_leases<B: ByteSlice, I: Instant>(
                 //
                 //    A client will never attempt to extend the lifetimes of any
                 //    addresses in an IA with T1 set to 0xffffffff.
-                match t1 {
-                    v6::NonZeroTimeValue::Finite(t1_val) => Action::ScheduleTimer(
-                        ClientTimerType::Renew,
-                        Duration::from_secs(t1_val.get().into()),
-                    ),
-                    v6::NonZeroTimeValue::Infinity => Action::CancelTimer(ClientTimerType::Renew),
+                //
+                // If the Renew time (T1) is equal to the Rebind time (T2), we
+                // skip setting the Renew timer.
+                //
+                // This is a slight deviation from the RFC which does not
+                // mention any special-case when `T1 == T2`. We do this here
+                // so that we can strictly enforce that when a Rebind timer
+                // fires, no Renew timers exist, preventing a state machine
+                // from transitioning from `Assigned -> Rebind -> Renew`
+                // which is clearly wrong as Rebind is only entered _after_
+                // Renew (when Renewing fails). Per RFC 8415 section 18.2.5,
+                //
+                //   At time T2 (which will only be reached if the server to
+                //   which the Renew message was sent starting at time T1
+                //   has not responded), the client initiates a Rebind/Reply
+                //   message exchange with any available server.
+                //
+                // Note that, the alternative to this is to always schedule
+                // the Renew and Rebind timers at T1 and T2, respectively,
+                // but unconditionally cancel the Renew timer when entering
+                // the Rebind state. This will be _almost_ the same but
+                // allows for a situation where the state-machine may enter
+                // Renewing (and send a Renew message) then immedaitely
+                // transition to Rebinding (and send a Rebind message with a
+                // new transaction ID). In this situation, the server will
+                // handle the Renew message and send a Reply but this client
+                // would be likely to drop that message as the client would
+                // have almost immediately transitioned to the Rebinding state
+                // (at which point the transaction ID would have changed).
+                if t1 == t2 {
+                    Action::CancelTimer(ClientTimerType::Renew)
+                } else if t1 < t2 {
+                    assert_matches!(
+                        t1,
+                        v6::NonZeroTimeValue::Finite(t1_val) => Action::ScheduleTimer(
+                            ClientTimerType::Renew,
+                            Duration::from_secs(t1_val.get().into()),
+                        ),
+                        "must be Finite since Infinity is the largest possible value so if T1 \
+                         is Infinity, T2 must also be Infinity as T1 must always be less than \
+                         or equal to T2 in which case we would have not reached this point"
+                    )
+                } else {
+                    unreachable!("should have rejected T1={:?} > T2={:?}", t1, t2);
                 },
                 // Per RFC 8415 section 18.2.5, set timer to enter rebind state:
                 //
@@ -3787,7 +3825,43 @@ impl<I: Instant> Assigned<I> {
         //    At time T1, the client initiates a Renew/Reply message
         //    exchange to extend the lifetimes on any leases in the IA.
         Renewing::start(
-            transaction_id(),
+            client_id,
+            non_temporary_addresses,
+            delegated_prefixes,
+            server_id,
+            options_to_request,
+            dns_servers,
+            solicit_max_rt,
+            rng,
+            now,
+        )
+    }
+
+    /// Handles rebind timer, following [RFC 8415, Section 18.2.5].
+    ///
+    /// [RFC 8415, Section 18.2.5]: https://tools.ietf.org/html/rfc8415#section-18.2.5
+    fn rebind_timer_expired<R: Rng>(
+        self,
+        options_to_request: &[v6::OptionCode],
+        rng: &mut R,
+        now: I,
+    ) -> Transition<I> {
+        let Self {
+            client_id,
+            non_temporary_addresses,
+            delegated_prefixes,
+            server_id,
+            dns_servers,
+            solicit_max_rt,
+            _marker,
+        } = self;
+        // Start rebinding bindings, per RFC 8415, section 18.2.5:
+        //
+        //   At time T2 (which will only be reached if the server to which the
+        //   Renew message was sent starting at time T1 has not responded), the
+        //   client initiates a Rebind/Reply message exchange with any available
+        //   server.
+        Rebinding::start(
             client_id,
             non_temporary_addresses,
             delegated_prefixes,
@@ -3832,7 +3906,6 @@ impl<I: Instant> Renewing<I> {
         //   client initiates a Rebind/Reply message exchange with any available
         //   server.
         Rebinding::start(
-            transaction_id(),
             client_id,
             non_temporary_addresses,
             delegated_prefixes,
@@ -3893,7 +3966,6 @@ impl<I: Instant, const IS_REBINDING: bool> RenewingOrRebinding<I, IS_REBINDING> 
     /// [RFC 8415, Section 18.2.4]: https://tools.ietf.org/html/rfc8415#section-18.2.4
     /// [RFC 8415, Section 18.2.5]: https://tools.ietf.org/html/rfc8415#section-18.2.5
     fn start<R: Rng>(
-        transaction_id: [u8; 3],
         client_id: [u8; CLIENT_ID_LEN],
         non_temporary_addresses: HashMap<v6::IAID, AddressEntry<I>>,
         delegated_prefixes: HashMap<v6::IAID, PrefixEntry<I>>,
@@ -3914,7 +3986,7 @@ impl<I: Instant, const IS_REBINDING: bool> RenewingOrRebinding<I, IS_REBINDING> 
             retrans_timeout: Duration::default(),
             solicit_max_rt,
         })
-        .send_and_schedule_retransmission(transaction_id, options_to_request, rng, now)
+        .send_and_schedule_retransmission(transaction_id(), options_to_request, rng, now)
     }
 
     /// Calculates timeout for retransmitting Renew/Rebind using parameters
@@ -4435,11 +4507,11 @@ impl<I: Instant> ClientState<I> {
         now: I,
     ) -> Transition<I> {
         match self {
+            ClientState::Assigned(s) => s.rebind_timer_expired(options_to_request, rng, now),
             ClientState::Renewing(s) => s.rebind_timer_expired(options_to_request, rng, now),
             ClientState::InformationRequesting(_)
             | ClientState::InformationReceived(_)
             | ClientState::ServerDiscovery(_)
-            | ClientState::Assigned(_)
             | ClientState::Requesting(_)
             | ClientState::Rebinding(_) => {
                 unreachable!("received unexpected rebind timeout in state {:?}.", self);
@@ -5505,7 +5577,7 @@ pub(crate) mod testutil {
         now: Instant,
     ) -> ClientStateMachine<Instant, R> {
         let expected_dns_servers_as_slice = expected_dns_servers.unwrap_or(&[]);
-        let (mut client, actions) = testutil::assign_and_assert(
+        let (client, actions) = testutil::assign_and_assert(
             client_id.clone(),
             server_id.clone(),
             non_temporary_addresses_to_assign.clone(),
@@ -5583,15 +5655,82 @@ pub(crate) mod testutil {
         .collect::<Vec<_>>();
         assert_eq!(actions, expected_actions);
 
-        // Renew timeout should trigger a transition to Renewing, send a renew
-        // message and schedule retransmission.
-        let actions = client.handle_timeout(ClientTimerType::Renew, now);
+        handle_renew_or_rebind_timer(
+            client,
+            old_transaction_id,
+            client_id,
+            server_id,
+            non_temporary_addresses_to_assign,
+            delegated_prefixes_to_assign,
+            expected_dns_servers_as_slice,
+            expected_oro.as_ref().map_or(&[], |oro| &oro[..]),
+            now,
+            RENEW_TEST_STATE,
+        )
+    }
+
+    pub(super) struct RenewRebindTestState {
+        initial_timeout: Duration,
+        timer_type: ClientTimerType,
+        message_type: v6::MessageType,
+        expect_server_id: bool,
+        with_state: fn(&Option<ClientState<Instant>>) -> &RenewingOrRebindingInner<Instant>,
+    }
+
+    pub(super) const RENEW_TEST_STATE: RenewRebindTestState = RenewRebindTestState {
+        initial_timeout: INITIAL_RENEW_TIMEOUT,
+        timer_type: ClientTimerType::Renew,
+        message_type: v6::MessageType::Renew,
+        expect_server_id: true,
+        with_state: |state| {
+            assert_matches!(
+                state,
+                Some(ClientState::Renewing(RenewingOrRebinding(inner))) => inner
+            )
+        },
+    };
+
+    pub(super) const REBIND_TEST_STATE: RenewRebindTestState = RenewRebindTestState {
+        initial_timeout: INITIAL_REBIND_TIMEOUT,
+        timer_type: ClientTimerType::Rebind,
+        message_type: v6::MessageType::Rebind,
+        expect_server_id: false,
+        with_state: |state| {
+            assert_matches!(
+                state,
+                Some(ClientState::Rebinding(RenewingOrRebinding(inner))) => inner
+            )
+        },
+    };
+
+    pub(super) fn handle_renew_or_rebind_timer<R: Rng>(
+        mut client: ClientStateMachine<Instant, R>,
+        old_transaction_id: [u8; 3],
+        client_id: [u8; CLIENT_ID_LEN],
+        server_id: [u8; TEST_SERVER_ID_LEN],
+        non_temporary_addresses_to_assign: Vec<TestIaNa>,
+        delegated_prefixes_to_assign: Vec<TestIaPd>,
+        expected_dns_servers_as_slice: &[Ipv6Addr],
+        expected_oro: &[v6::OptionCode],
+        now: Instant,
+        RenewRebindTestState {
+            initial_timeout,
+            timer_type,
+            message_type,
+            expect_server_id,
+            with_state,
+        }: RenewRebindTestState,
+    ) -> ClientStateMachine<Instant, R> {
+        let actions = client.handle_timeout(timer_type, now);
         let mut buf = assert_matches!(
             &actions[..],
             [
                 Action::SendMessage(buf),
-                Action::ScheduleTimer(ClientTimerType::Retransmission, INITIAL_RENEW_TIMEOUT)
-            ] => buf
+                Action::ScheduleTimer(ClientTimerType::Retransmission, got_time)
+            ] => {
+                assert_eq!(*got_time, initial_timeout);
+                buf
+            }
         );
         let ClientStateMachine { transaction_id, options_to_request: _, state, rng: _ } = &client;
         // Assert that sending a renew starts a new transaction.
@@ -5605,10 +5744,7 @@ pub(crate) mod testutil {
             delegated_prefixes: _,
             start_time: _,
             retrans_timeout: _,
-        } = assert_matches!(
-            state,
-            Some(ClientState::Renewing(RenewingOrRebinding(inner))) => inner
-        );
+        } = with_state(state);
         assert_eq!(*got_client_id, client_id);
         assert_eq!(*got_server_id, server_id);
         assert_eq!(dns_servers, expected_dns_servers_as_slice);
@@ -5631,10 +5767,10 @@ pub(crate) mod testutil {
             .collect();
         testutil::assert_outgoing_stateful_message(
             &mut buf,
-            v6::MessageType::Renew,
+            message_type,
             &client_id,
-            Some(&server_id),
-            expected_oro.as_ref().map_or(&[], |oro| &oro[..]),
+            expect_server_id.then(|| &server_id),
+            expected_oro,
             &expected_addresses_to_renew,
             &expected_prefixes_to_renew,
         );
@@ -5661,7 +5797,7 @@ pub(crate) mod testutil {
         rng: R,
         now: Instant,
     ) -> ClientStateMachine<Instant, R> {
-        let mut client = testutil::send_renew_and_assert(
+        let client = testutil::send_renew_and_assert(
             client_id,
             server_id,
             non_temporary_addresses_to_assign.clone(),
@@ -5673,68 +5809,25 @@ pub(crate) mod testutil {
             now,
         );
         let old_transaction_id = client.transaction_id;
-
-        let actions = client.handle_timeout(ClientTimerType::Rebind, now);
-        let mut buf = assert_matches!(
-            &actions[..],
-            [
-                Action::SendMessage(buf),
-                Action::ScheduleTimer(ClientTimerType::Retransmission, INITIAL_REBIND_TIMEOUT)
-            ] => buf
-        );
-        let ClientStateMachine { transaction_id, options_to_request: _, state, rng: _ } = &client;
-        // Assert that sending a rebind starts a new transaction.
-        assert_ne!(*transaction_id, old_transaction_id);
-        let RenewingOrRebinding(RenewingOrRebindingInner {
-            client_id: got_client_id,
-            server_id: got_server_id,
-            dns_servers,
-            solicit_max_rt,
-            non_temporary_addresses: _,
-            delegated_prefixes: _,
-            start_time: _,
-            retrans_timeout: _,
-        }) = assert_matches!(
-            state,
-            Some(ClientState::Rebinding(rebinding)) => rebinding
-        );
         let (expected_oro, expected_dns_servers) =
             if let Some(expected_dns_servers) = expected_dns_servers {
                 (Some([v6::OptionCode::DnsServers]), expected_dns_servers)
             } else {
                 (None, &[][..])
             };
-        assert_eq!(*got_client_id, client_id);
-        assert_eq!(*got_server_id, server_id);
-        assert_eq!(dns_servers, expected_dns_servers);
-        assert_eq!(*solicit_max_rt, MAX_SOLICIT_TIMEOUT);
-        let expected_addresses_to_renew: HashMap<v6::IAID, HashSet<Ipv6Addr>> = (0..)
-            .map(v6::IAID::new)
-            .zip(
-                non_temporary_addresses_to_assign
-                    .iter()
-                    .map(|TestIaNa { values, t1: _, t2: _ }| values.keys().cloned().collect()),
-            )
-            .collect();
-        let expected_prefixes_to_renew: HashMap<v6::IAID, HashSet<Subnet<Ipv6Addr>>> = (0..)
-            .map(v6::IAID::new)
-            .zip(
-                delegated_prefixes_to_assign
-                    .iter()
-                    .map(|TestIaPd { values, t1: _, t2: _ }| values.keys().cloned().collect()),
-            )
-            .collect();
-        testutil::assert_outgoing_stateful_message(
-            &mut buf,
-            v6::MessageType::Rebind,
-            &client_id,
-            None, /* expected_server_id */
-            expected_oro.as_ref().map_or(&[], |oro| &oro[..]),
-            &expected_addresses_to_renew,
-            &expected_prefixes_to_renew,
-        );
 
-        client
+        handle_renew_or_rebind_timer(
+            client,
+            old_transaction_id,
+            client_id,
+            server_id,
+            non_temporary_addresses_to_assign,
+            delegated_prefixes_to_assign,
+            expected_dns_servers,
+            expected_oro.as_ref().map_or(&[], |oro| &oro[..]),
+            now,
+            REBIND_TEST_STATE,
+        )
     }
 }
 
@@ -5747,7 +5840,10 @@ mod tests {
     use rand::rngs::mock::StepRng;
     use test_case::test_case;
     use testconsts::*;
-    use testutil::{TestIa, TestIaNa, TestIaPd, TestMessageBuilder};
+    use testutil::{
+        handle_renew_or_rebind_timer, RenewRebindTestState, TestIa, TestIaNa, TestIaPd,
+        TestMessageBuilder, REBIND_TEST_STATE, RENEW_TEST_STATE,
+    };
 
     #[test]
     fn send_information_request_and_receive_reply() {
@@ -8385,6 +8481,7 @@ mod tests {
         ia_pd_t1: v6::TimeValue,
         ia_pd_t2: v6::TimeValue,
         expected_timer_actions: [Action; 2],
+        next_timer: Option<RenewRebindTestState>,
     }
 
     // Make sure that both IA_NA and IA_PD is considered when calculating
@@ -8398,7 +8495,40 @@ mod tests {
             Action::CancelTimer(ClientTimerType::Renew),
             Action::CancelTimer(ClientTimerType::Rebind),
         ],
+        next_timer: None,
     }; "all infinite time values")]
+    #[test_case(ScheduleRenewAndRebindTimersAfterAssignmentTestCase{
+        ia_na_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T1)),
+        ia_na_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T2)),
+        ia_pd_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T1)),
+        ia_pd_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T2)),
+        expected_timer_actions: [
+            Action::ScheduleTimer(
+                ClientTimerType::Renew,
+                Duration::from_secs(T1.get().into()),
+            ),
+            Action::ScheduleTimer(
+                ClientTimerType::Rebind,
+                Duration::from_secs(T2.get().into()),
+            ),
+        ],
+        next_timer: Some(RENEW_TEST_STATE),
+    }; "all finite time values")]
+    #[test_case(ScheduleRenewAndRebindTimersAfterAssignmentTestCase{
+        ia_na_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T2)),
+        ia_na_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T2)),
+        ia_pd_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T2)),
+        ia_pd_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T2)),
+        expected_timer_actions: [
+            // Skip Renew and just go to Rebind when T2 == T1.
+            Action::CancelTimer(ClientTimerType::Renew),
+            Action::ScheduleTimer(
+                ClientTimerType::Rebind,
+                Duration::from_secs(T2.get().into()),
+            ),
+        ],
+        next_timer: Some(REBIND_TEST_STATE),
+    }; "finite T1 equals finite T2")]
     #[test_case(ScheduleRenewAndRebindTimersAfterAssignmentTestCase{
         ia_na_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T1)),
         ia_na_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
@@ -8411,6 +8541,7 @@ mod tests {
             ),
             Action::CancelTimer(ClientTimerType::Rebind),
         ],
+        next_timer: Some(RENEW_TEST_STATE),
     }; "finite IA_NA T1")]
     #[test_case(ScheduleRenewAndRebindTimersAfterAssignmentTestCase{
         ia_na_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T1)),
@@ -8427,6 +8558,7 @@ mod tests {
                 Duration::from_secs(T2.get().into()),
             ),
         ],
+        next_timer: Some(RENEW_TEST_STATE),
     }; "finite IA_NA T1 and T2")]
     #[test_case(ScheduleRenewAndRebindTimersAfterAssignmentTestCase{
         ia_na_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
@@ -8440,6 +8572,7 @@ mod tests {
             ),
             Action::CancelTimer(ClientTimerType::Rebind),
         ],
+        next_timer: Some(RENEW_TEST_STATE),
     }; "finite IA_PD t1")]
     #[test_case(ScheduleRenewAndRebindTimersAfterAssignmentTestCase{
         ia_na_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
@@ -8456,6 +8589,7 @@ mod tests {
                 Duration::from_secs(T2.get().into()),
             ),
         ],
+        next_timer: Some(RENEW_TEST_STATE),
     }; "finite IA_PD T1 and T2")]
     fn schedule_renew_and_rebind_timers_after_assignment(
         ScheduleRenewAndRebindTimersAfterAssignmentTestCase {
@@ -8464,6 +8598,7 @@ mod tests {
             ia_pd_t1,
             ia_pd_t2,
             expected_timer_actions,
+            next_timer,
         }: ScheduleRenewAndRebindTimersAfterAssignmentTestCase,
     ) {
         fn get_ia_and_updates<V: IaValue>(
@@ -8484,18 +8619,24 @@ mod tests {
             get_ia_and_updates(ia_na_t1, ia_na_t2, CONFIGURED_NON_TEMPORARY_ADDRESSES[0]);
         let (iapd, iapd_updates) =
             get_ia_and_updates(ia_pd_t1, ia_pd_t2, CONFIGURED_DELEGATED_PREFIXES[0]);
-
+        let iana = vec![iana];
+        let iapd = vec![iapd];
         let (client, actions) = testutil::assign_and_assert(
             CLIENT_ID,
             SERVER_ID[0],
-            vec![iana],
-            vec![iapd],
+            iana.clone(),
+            iapd.clone(),
             &[],
             StepRng::new(std::u64::MAX / 2, 0),
             Instant::now(),
         );
-        let ClientStateMachine { transaction_id: _, options_to_request: _, state, rng: _ } =
-            &client;
+        let ClientStateMachine {
+            transaction_id: old_transaction_id,
+            options_to_request: _,
+            state,
+            rng: _,
+        } = &client;
+        let old_transaction_id = *old_transaction_id;
         let Assigned {
             client_id: _,
             non_temporary_addresses: _,
@@ -8518,6 +8659,23 @@ mod tests {
                 .chain((!iapd_updates.is_empty()).then(|| Action::IaPdUpdates(iapd_updates)))
                 .collect::<Vec<_>>()
         );
+
+        let _client = if let Some(next_timer) = next_timer {
+            handle_renew_or_rebind_timer(
+                client,
+                old_transaction_id,
+                CLIENT_ID,
+                SERVER_ID[0],
+                iana,
+                iapd,
+                &[],
+                &[],
+                Instant::now(),
+                next_timer,
+            )
+        } else {
+            client
+        };
     }
 
     #[test_case(RENEW_TEST)]
@@ -10113,74 +10271,59 @@ mod tests {
         builder.serialize(&mut buf);
         let mut buf = &buf[..]; // Implements BufferView.
         let msg = v6::Message::parse(&mut buf, ()).expect("failed to parse test buffer");
-        let actions = client.handle_message_receive(msg, time);
-        assert_matches!(
-            &actions[..],
+
+        fn get_updates<V: IaValue>(
+            ok_iaid: v6::IAID,
+            ok_value: V,
+            no_value_avail_iaid: v6::IAID,
+            no_value_avail_value: V,
+        ) -> HashMap<v6::IAID, HashMap<V, IaValueUpdateKind>> {
+            HashMap::from([
+                (
+                    ok_iaid,
+                    HashMap::from([(
+                        ok_value,
+                        IaValueUpdateKind::UpdatedLifetimes(Lifetimes::new_renewed()),
+                    )]),
+                ),
+                (
+                    no_value_avail_iaid,
+                    HashMap::from([(no_value_avail_value, IaValueUpdateKind::Removed)]),
+                ),
+            ])
+        }
+        let expected_t1 = std::cmp::min(ia_na_success_t1, ia_pd_success_t1);
+        let expected_t2 = std::cmp::min(ia_na_success_t2, ia_pd_success_t2);
+        assert_eq!(
+            client.handle_message_receive(msg, time),
             [
                 Action::CancelTimer(ClientTimerType::Retransmission),
-                Action::ScheduleTimer(ClientTimerType::Renew, t1),
-                Action::ScheduleTimer(ClientTimerType::Rebind, t2),
-                Action::IaNaUpdates(iana_updates),
-                Action::IaPdUpdates(iapd_updates),
-
-            ] => {
-                assert_eq!(
-                    *t1,
-                    Duration::from_secs(std::cmp::min(
-                        ia_na_success_t1,
-                        ia_pd_success_t1,
-                    ).get().into()),
-                );
-                assert_eq!(
-                    *t2, Duration::from_secs(std::cmp::min(
-                        ia_na_success_t2,
-                        ia_pd_success_t2,
-                    ).get().into()),
-                );
-
-                fn get_updates<V: IaValue>(
-                    ok_iaid: v6::IAID,
-                    ok_value: V,
-                    no_value_avail_iaid: v6::IAID,
-                    no_value_avail_value: V
-                ) -> HashMap<v6::IAID, HashMap<V, IaValueUpdateKind>> {
-                    HashMap::from([
-                        (
-                            ok_iaid,
-                            HashMap::from([(
-                                ok_value,
-                                IaValueUpdateKind::UpdatedLifetimes(Lifetimes::new_renewed()),
-                            )])
-                        ),
-                        (
-                            no_value_avail_iaid,
-                            HashMap::from([(
-                                no_value_avail_value,
-                                IaValueUpdateKind::Removed,
-                            )])
-                        ),
-                    ])
-                }
-
-                assert_eq!(
-                    iana_updates,
-                    &get_updates(
-                        ok_iaid,
-                        CONFIGURED_NON_TEMPORARY_ADDRESSES[0],
-                        no_value_avail_iaid,
-                        CONFIGURED_NON_TEMPORARY_ADDRESSES[1],
-                    ),
-                );
-                assert_eq!(
-                    iapd_updates,
-                    &get_updates(
-                        ok_iaid,
-                        CONFIGURED_DELEGATED_PREFIXES[0],
-                        no_value_avail_iaid,
-                        CONFIGURED_DELEGATED_PREFIXES[1],
-                    ),
-                );
-            }
+                if expected_t1 == expected_t2 {
+                    // Skip Renew and just go to Rebind when T2 == T1.
+                    Action::CancelTimer(ClientTimerType::Renew)
+                } else {
+                    Action::ScheduleTimer(
+                        ClientTimerType::Renew,
+                        Duration::from_secs(expected_t1.get().into()),
+                    )
+                },
+                Action::ScheduleTimer(
+                    ClientTimerType::Rebind,
+                    Duration::from_secs(expected_t2.get().into()),
+                ),
+                Action::IaNaUpdates(get_updates(
+                    ok_iaid,
+                    CONFIGURED_NON_TEMPORARY_ADDRESSES[0],
+                    no_value_avail_iaid,
+                    CONFIGURED_NON_TEMPORARY_ADDRESSES[1],
+                )),
+                Action::IaPdUpdates(get_updates(
+                    ok_iaid,
+                    CONFIGURED_DELEGATED_PREFIXES[0],
+                    no_value_avail_iaid,
+                    CONFIGURED_DELEGATED_PREFIXES[1],
+                )),
+            ],
         );
     }
 

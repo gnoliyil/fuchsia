@@ -1439,8 +1439,12 @@ mod tests {
     #[fasync::run_singlethreaded(test)]
     async fn watch_prefixes() {
         const SERVER_ID: [u8; 3] = [3, 4, 5];
-        const PREFERRED_LIFETIME_SECS: u32 = 2;
-        const VALID_LIFETIME_SECS: u32 = 200;
+        const PREFERRED_LIFETIME_SECS: u32 = 1000;
+        const VALID_LIFETIME_SECS: u32 = 2000;
+        // Use the smallest possible value to enter the Renewing state
+        // as fast as possible to keep the test's run-time as low as possible.
+        const T1: u32 = 1;
+        const T2: u32 = 2000;
 
         let (client_proxy, client_stream) = create_proxy_and_stream::<ClientMarker>()
             .expect("failed to create test proxy and stream");
@@ -1512,7 +1516,7 @@ mod tests {
                     v6::DhcpOption::ServerId(&SERVER_ID),
                     v6::DhcpOption::ClientId(&client_id),
                     v6::DhcpOption::Preference(u8::MAX),
-                    v6::DhcpOption::IaPd(v6::IaPdSerializer::new(IA_PD_IAID, 0, 0, &ia_prefix)),
+                    v6::DhcpOption::IaPd(v6::IaPdSerializer::new(IA_PD_IAID, T1, T2, &ia_prefix)),
                 ],
             )
             .await
@@ -1532,6 +1536,7 @@ mod tests {
                     transaction_id
                 },
             };
+
             let () = send_msg_with_options(
                 &server_socket,
                 client_addr,
@@ -1540,7 +1545,7 @@ mod tests {
                 &[
                     v6::DhcpOption::ServerId(&SERVER_ID),
                     v6::DhcpOption::ClientId(&client_id),
-                    v6::DhcpOption::IaPd(v6::IaPdSerializer::new(IA_PD_IAID, 0, 0, &ia_prefix)),
+                    v6::DhcpOption::IaPd(v6::IaPdSerializer::new(IA_PD_IAID, T1, T2, &ia_prefix)),
                 ],
             )
             .await
@@ -1635,6 +1640,7 @@ mod tests {
                     transaction_id
                 },
             };
+
             const NEW_PREFERRED_LIFETIME_SECS: u32 = 2 * PREFERRED_LIFETIME_SECS;
             const NEW_VALID_LIFETIME_SECS: u32 = 2 * VALID_LIFETIME_SECS;
             let ia_prefix = [
@@ -1663,8 +1669,8 @@ mod tests {
                     v6::DhcpOption::ClientId(&client_id),
                     v6::DhcpOption::IaPd(v6::IaPdSerializer::new(
                         v6::IAID::new(0),
-                        0,
-                        0,
+                        T1,
+                        T2,
                         &ia_prefix,
                     )),
                 ],
