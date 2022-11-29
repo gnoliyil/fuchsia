@@ -34,12 +34,9 @@ async fn pb_get_impl<I: structured_ui::Interface + Sync>(
     let start = std::time::Instant::now();
     tracing::info!("---------------------- Begin ----------------------------");
     tracing::debug!("transfer_manifest_url Url::parse");
-    let transfer_manifest_url = match url::Url::parse(&cmd.transfer_manifest_url) {
+    let transfer_manifest_url = match url::Url::parse(&cmd.manifest_url) {
         Ok(p) => p,
-        _ => ffx_bail!(
-            "The source location must be a URL, failed to parse {:?}",
-            cmd.transfer_manifest_url
-        ),
+        _ => ffx_bail!("The source location must be a URL, failed to parse {:?}", cmd.manifest_url),
     };
     let local_dir = &cmd.out_dir;
     make_way_for_output(&local_dir, cmd.force).await.context("make_way_for_output")?;
@@ -92,8 +89,7 @@ mod test {
             auth: pbms::AuthFlowChoice::Default,
             force: false,
             out_dir: test_dir.path().to_path_buf(),
-            repository: None,
-            transfer_manifest_url: "gs://example/fake/transfer.json".to_string(),
+            manifest_url: "gs://example/fake/transfer.json".to_string(),
         };
         let mut ui = structured_ui::MockUi::new();
         pb_get_impl(&cmd, &mut ui).await.expect("testing get");
