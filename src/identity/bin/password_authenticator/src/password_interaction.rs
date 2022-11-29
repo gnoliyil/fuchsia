@@ -4,10 +4,7 @@
 
 #![allow(dead_code)]
 use {
-    crate::{
-        scrypt::ScryptError,
-        state::{PasswordError, State, StateMachine},
-    },
+    crate::state::{PasswordError, State, StateMachine},
     async_trait::async_trait,
     async_utils::hanging_get::server::{HangingGet, Publisher},
     fidl::endpoints::ControlHandle,
@@ -30,9 +27,10 @@ pub trait Validator<T: Sized> {
     async fn validate(&self, password: &str) -> Result<T, ValidationError>;
 }
 
+#[derive(Debug)]
 pub enum ValidationError {
-    // An error occured inside the password authentication itself.
-    InternalScryptError(ScryptError),
+    // An error occurred inside the password authentication itself.
+    InternalError(anyhow::Error),
     // A problem occurred with the supplied password.
     PasswordError(PasswordError),
 }
@@ -118,7 +116,7 @@ where
         PasswordInteractionStateHangingGet::new(initial_state, notify_fn)
     }
 
-    async fn handle_password_interaction_request_stream(
+    pub async fn handle_password_interaction_request_stream(
         self,
         mut stream: PasswordInteractionRequestStream,
     ) -> Result<T, ApiError> {
@@ -140,8 +138,8 @@ where
                                     warn!("Password was not valid: {:?}", e);
                                     self.state_machine.set_error(e).await;
                                 }
-                                Err(ValidationError::InternalScryptError(e)) => {
-                                    warn!("Responded with internal error: {:?}", e);
+                                Err(ValidationError::InternalError(err)) => {
+                                    warn!("Responded with internal error: {:?}", err);
                                     control_handle.shutdown_with_epitaph(zx::Status::INTERNAL);
                                     return Err(ApiError::Internal);
                                 }
@@ -170,6 +168,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use anyhow::anyhow;
+
     use {
         super::*,
         assert_matches::assert_matches,
@@ -180,7 +180,6 @@ mod tests {
         },
         fuchsia_async::Timer,
         lazy_static::lazy_static,
-        scrypt::errors::InvalidParams,
         std::time::Duration,
     };
 
@@ -207,12 +206,12 @@ mod tests {
         }
     }
 
-    struct TestValidateInternalScryptError {}
+    struct TestValidateInternalError {}
 
     #[async_trait]
-    impl Validator<()> for TestValidateInternalScryptError {
+    impl Validator<()> for TestValidateInternalError {
         async fn validate(&self, _password: &str) -> Result<(), ValidationError> {
-            Err(ValidationError::InternalScryptError(ScryptError::InvalidParams(InvalidParams)))
+            Err(ValidationError::InternalError(anyhow!("error error")))
         }
     }
 
@@ -299,7 +298,7 @@ mod tests {
 
     #[fuchsia::test]
     async fn interaction_handler_closes_on_internal_error() {
-        let validate = TestValidateInternalScryptError {};
+        let validate = TestValidateInternalError {};
         let password_proxy = make_proxy(validate);
 
         // Send a SetPassword event and verify that an InternalError closes the channel.

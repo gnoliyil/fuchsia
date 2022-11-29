@@ -2,13 +2,20 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+use anyhow::anyhow;
+
 use {
-    crate::keys::{
-        EnrolledKey, Key, KeyEnrollment, KeyEnrollmentError, KeyRetrieval, KeyRetrievalError,
-        KEY_LEN,
+    crate::{
+        account_metadata::AuthenticatorMetadata,
+        keys::{
+            EnrolledKey, Key, KeyEnrollment, KeyEnrollmentError, KeyRetrieval, KeyRetrievalError,
+            KEY_LEN,
+        },
+        password_interaction::{ValidationError, Validator},
     },
     async_trait::async_trait,
     fuchsia_zircon as zx,
+    identity_common::PrekeyMaterial,
     serde::{Deserialize, Serialize},
     thiserror::Error,
     tracing::error,
@@ -104,9 +111,34 @@ impl KeyRetrieval for ScryptKeySource {
     }
 }
 
+/// Implements the scrypt key derivation function for enrolling and
+/// validating a password.
+pub struct EnrollScryptValidator {}
+
+#[async_trait]
+impl Validator<(AuthenticatorMetadata, PrekeyMaterial)> for EnrollScryptValidator {
+    async fn validate(
+        &self,
+        password: &str,
+    ) -> Result<(AuthenticatorMetadata, PrekeyMaterial), ValidationError> {
+        let mut key_source = ScryptKeySource::new();
+        // TODO(fxb/115762): Add policy checks in a different crate/fn.
+        key_source
+            .enroll_key(password)
+            .await
+            .map(|enrolled_key| {
+                (enrolled_key.enrollment_data.into(), PrekeyMaterial(enrolled_key.key.into()))
+            })
+            .map_err(|err| {
+                ValidationError::InternalError(anyhow!("scrypt key enrollment failed: {:?}", err))
+            })
+    }
+}
+
 #[cfg(test)]
 pub mod test {
-    use {super::*, assert_matches::assert_matches};
+
+    use {super::*, anyhow::Result, assert_matches::assert_matches};
 
     // A well-known set of (weak) params & salt, password, and corresponding key for tests, to avoid
     // spending excessive CPU time doing expensive key derivations.
@@ -163,5 +195,26 @@ pub mod test {
         let ks = ScryptKeySource::from(FULL_STRENGTH_SCRYPT_PARAMS);
         let key = ks.retrieve_key(GOLDEN_SCRYPT_PASSWORD).await.expect("retrieve_key");
         assert_eq!(key, GOLDEN_SCRYPT_KEY);
+    }
+
+    #[fuchsia::test]
+    async fn test_enrollment_validator() -> Result<()> {
+        let validator = EnrollScryptValidator {};
+        let result = validator.validate(TEST_SCRYPT_PASSWORD).await;
+        assert!(result.is_ok());
+        let (meta_data, prekey) = result.unwrap();
+        assert_eq!(prekey.0.len(), KEY_LEN);
+
+        let scrypt_meta = if let AuthenticatorMetadata::ScryptOnly(s) = meta_data {
+            s.scrypt_params
+        } else {
+            return Err(anyhow!("wrong authenticator metadata type"));
+        };
+
+        assert_eq!(scrypt_meta.log_n, 15);
+        assert_eq!(scrypt_meta.r, 8);
+        assert_eq!(scrypt_meta.p, 1);
+
+        Ok(())
     }
 }

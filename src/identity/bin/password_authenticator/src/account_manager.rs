@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use crate::Config;
 use crate::{
     account::{Account, AccountError, CheckNewClientResult},
     account_metadata::{
@@ -11,6 +10,7 @@ use crate::{
     keys::{Key, KeyEnrollment, KeyEnrollmentError, KeyRetrieval, KeyRetrievalError},
     pinweaver::{CredManager, PinweaverKeyEnroller, PinweaverKeyRetriever, PinweaverParams},
     scrypt::{ScryptKeySource, ScryptParams},
+    Config,
 };
 use account_common::AccountManagerError;
 use anyhow::{Context, Error};

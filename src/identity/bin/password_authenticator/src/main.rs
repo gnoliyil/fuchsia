@@ -41,7 +41,7 @@ use crate::{
 
 /// PasswordAuthenticator config, populated from a build-time generated
 /// config.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct Config {
     pub allow_scrypt: bool,
     pub allow_pinweaver: bool,
@@ -88,7 +88,7 @@ async fn main() -> Result<(), Error> {
     let cred_manager_provider = EnvCredManagerProvider {};
 
     let account_manager = Arc::new(AccountManager::new(
-        config,
+        config.clone(),
         account_metadata_store,
         cred_manager_provider,
         || {
@@ -102,7 +102,7 @@ async fn main() -> Result<(), Error> {
         },
     ));
 
-    let storage_unlock_mechanism = Arc::new(StorageUnlockMechanism::new());
+    let storage_unlock_mechanism = Arc::new(StorageUnlockMechanism::new(config));
 
     let mut fs = ServiceFs::new();
     fs.dir("svc").add_fidl_service(Services::AccountManager);
