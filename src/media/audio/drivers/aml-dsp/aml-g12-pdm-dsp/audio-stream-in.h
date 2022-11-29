@@ -5,6 +5,8 @@
 #ifndef SRC_MEDIA_AUDIO_DRIVERS_AML_DSP_AML_G12_PDM_DSP_AUDIO_STREAM_IN_H_
 #define SRC_MEDIA_AUDIO_DRIVERS_AML_DSP_AML_G12_PDM_DSP_AUDIO_STREAM_IN_H_
 
+#include <fidl/fuchsia.hardware.dsp/cpp/wire.h>
+#include <fidl/fuchsia.hardware.mailbox/cpp/wire.h>
 #include <fuchsia/hardware/platform/device/cpp/banjo.h>
 #include <lib/device-protocol/pdev.h>
 #include <lib/fzl/pinned-vmo.h>
@@ -19,6 +21,8 @@
 #include <audio-proto/audio-proto.h>
 #include <ddktl/device.h>
 #include <soc/aml-common/aml-pdm-audio.h>
+
+#include "src/media/audio/drivers/lib/aml-dsp/dsp.h"
 
 namespace audio::aml_g12 {
 
@@ -41,26 +45,31 @@ class AudioStreamInDsp : public SimpleAudioStream {
   void RingBufferShutdown() TA_REQ(domain_token()) override;
   void ShutdownHook() __TA_REQUIRES(domain_token()) override;
   explicit AudioStreamInDsp(zx_device_t* parent);
+  std::unique_ptr<AmlMailboxDevice> audio_mailbox_;
+  std::unique_ptr<AmlDspDevice> audio_dsp_;
 
  private:
   friend class fbl::RefPtr<AudioStreamInDsp>;
   friend class SimpleAudioStream;
 
   zx_status_t AddFormats() TA_REQ(domain_token());
-  zx_status_t InitBuffer(size_t size) TA_REQ(domain_token());
   zx_status_t InitPDev() TA_REQ(domain_token());
   void InitHw();
   void ProcessRingNotification();
+  void RingNotificationReport();
   virtual bool AllowNonContiguousRingBuffer() { return false; }
   int Thread();
+  int MailboxBind();
+  int DspBind();
 
   zx::duration notification_rate_ = {};
   uint32_t frames_per_second_ = 0;
   async::TaskClosureMethod<AudioStreamInDsp, &AudioStreamInDsp::ProcessRingNotification>
       notify_timer_ __TA_GUARDED(domain_token()){this};
+  // Inform DSP FW of ring buffer location information regularly
+  async::TaskClosureMethod<AudioStreamInDsp, &AudioStreamInDsp::RingNotificationReport>
+      position_timer_ __TA_GUARDED(domain_token()){this};
 
-  zx::vmo ring_buffer_vmo_;
-  fzl::PinnedVmo pinned_ring_buffer_;
   std::unique_ptr<AmlPdmDevice> lib_;
   zx::bti bti_;
   metadata::AmlPdmConfig metadata_ = {};
@@ -72,6 +81,8 @@ class AudioStreamInDsp : public SimpleAudioStream {
   inspect::UintProperty dma_status_;
   inspect::UintProperty pdm_status_;
   inspect::UintProperty ring_buffer_physical_address_;
+  size_t ring_buffer_size_ = 0;
+  std::optional<fdf::MmioBuffer> dsp_mmio_;
 };
 }  // namespace audio::aml_g12
 

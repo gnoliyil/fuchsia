@@ -80,6 +80,8 @@ zx_status_t AmlDspDevice::DspHwInit(bool use_tdm_dsp_firmware) {
   std::string firmware_name = "";
   if (use_tdm_dsp_firmware == true) {
     memcpy(firmware_name.data(), TDM_DSP_FIRMWARE_NAME, sizeof(TDM_DSP_FIRMWARE_NAME));
+  } else {
+    memcpy(firmware_name.data(), PDM_DSP_FIRMWARE_NAME, sizeof(PDM_DSP_FIRMWARE_NAME));
   }
   auto dsp_load_result =
       client_->LoadFirmware(fidl::StringView::FromExternal(firmware_name.data()));

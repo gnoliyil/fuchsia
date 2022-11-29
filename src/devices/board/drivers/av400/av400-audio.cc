@@ -94,6 +94,12 @@ static const std::vector<fpbus::Mmio> pdm_mmios{
         .base = A5_EE_AUDIO2_BASE,
         .length = A5_EE_AUDIO2_LENGTH,
     }},
+#ifdef PDM_USE_DSP
+    {{
+        .base = A5_DSP_SRAM_BASE,
+        .length = A5_DSP_SRAM_BASE_LENGTH,
+    }},
+#endif
 };
 static const std::vector<fpbus::Bti> pdm_btis{
     {{

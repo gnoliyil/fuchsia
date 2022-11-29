@@ -590,7 +590,6 @@ zx_status_t AmlG12TdmDspStream::GetBuffer(const audio_proto::RingBufGetBufferReq
   zx::nanosleep(zx::deadline_after(zx::usec(1700)));
 
   size_t vmo_size = fbl::round_up<size_t, size_t>(ring_buffer_size, zx_system_get_page_size());
-  // The unit of transfer_interval_.get() is nanoseconds.
   uint32_t transfer_length =
       frame_size_ * frame_rate_ * static_cast<uint32_t>(kTransferInterval.to_msecs()) / 1000;
   AddrInfo addr_info = {.addr_length = vmo_size,
@@ -608,8 +607,20 @@ zx_status_t AmlG12TdmDspStream::GetBuffer(const audio_proto::RingBufGetBufferReq
   const uint32_t dst_addr = static_cast<uint32_t>(addr_info.dst_addr);
   const uint32_t src_addr = static_cast<uint32_t>(addr_info.src_addr);
 
+  zx_paddr_t mmio_vmo_paddr;
+  zx::pmt pmt;
+  status = bti_.pin(ZX_BTI_PERM_READ | ZX_BTI_CONTIGUOUS, *zx::unowned_vmo(dsp_mmio_->get_vmo()), 0,
+                    ZX_PAGE_SIZE, &mmio_vmo_paddr, 1, &pmt);
+  if (status != ZX_OK) {
+    zxlogf(ERROR, "unable to pin memory: %s", zx_status_get_string(status));
+    return status;
+  }
+
+  status = pmt.unpin();
+  ZX_DEBUG_ASSERT(status == ZX_OK);
+
   // HW DSP shares SRAM with ARM for data transmission.
-  constexpr uint32_t sram_addr = 0xf7030000;
+  uint32_t sram_addr = static_cast<uint32_t>(mmio_vmo_paddr);
   ZX_DEBUG_ASSERT(sram_addr <= src_addr);
   ZX_DEBUG_ASSERT(src_addr % zx_system_get_page_size() == 0);
   zx_off_t shared_sram_offset = src_addr - sram_addr;

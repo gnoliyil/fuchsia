@@ -10,6 +10,9 @@ board_description = "ref board for A5"
 # DSP firmware name when using tdm in/out.
 board_tdm_firmware_name = "dspbootA.bin"
 
+# DSP firmware name when using pdm in.
+board_pdm_firmware_name = "dspbootA.bin"
+
 _common_bootfs_deps = [
   "//boards/kernel_cmdline:av400",
   "//src/connectivity/ethernet/drivers/aml-ethernet",

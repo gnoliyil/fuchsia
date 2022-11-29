@@ -5,6 +5,9 @@
 declare_args() {
   # The name of the HW DSP FW that handles Tdm audio data.
   board_tdm_firmware_name = ""
+
+  # The name of the HW DSP FW that handles Pdm audio data.
+  board_pdm_firmware_name = ""
 }
 
 static_library("aml-dsp") {
@@ -19,4 +22,5 @@ static_library("aml-dsp") {
     "//src/lib/ddktl",
   ]
   defines = [ "TDM_DSP_FIRMWARE_NAME=\"${board_tdm_firmware_name}\"" ]
+  defines += [ "PDM_DSP_FIRMWARE_NAME=\"${board_pdm_firmware_name}\"" ]
 }
