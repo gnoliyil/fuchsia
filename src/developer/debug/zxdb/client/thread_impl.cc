@@ -405,8 +405,8 @@ std::unique_ptr<Frame> ThreadImpl::MakeFrameForStack(const debug_ipc::StackFrame
   return std::make_unique<FrameImpl>(this, input, std::move(location));
 }
 
-Location ThreadImpl::GetSymbolizedLocationForAddress(uint64_t address) {
-  auto vect = GetProcess()->GetSymbols()->ResolveInputLocation(InputLocation(address));
+Location ThreadImpl::GetSymbolizedLocationForStackFrame(const debug_ipc::StackFrame& input) {
+  auto vect = GetProcess()->GetSymbols()->ResolveInputLocation(InputLocation(input.ip));
 
   // Symbolizing an address should always give exactly one result.
   FX_DCHECK(vect.size() == 1u);

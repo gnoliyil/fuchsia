@@ -63,7 +63,7 @@ class ThreadImpl final : public Thread, public Stack::Delegate {
   void SyncFramesForStack(fit::callback<void(const Err&)> callback) override;
   std::unique_ptr<Frame> MakeFrameForStack(const debug_ipc::StackFrame& input,
                                            Location location) override;
-  Location GetSymbolizedLocationForAddress(uint64_t address) override;
+  Location GetSymbolizedLocationForStackFrame(const debug_ipc::StackFrame& input) override;
 
   // Invalidates the thread state and cached frames. Used when we know that some operation has
   // invalidated our state but we aren't sure what the new state is yet.

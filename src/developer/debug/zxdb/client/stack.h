@@ -66,7 +66,7 @@ class Stack {
     virtual std::unique_ptr<Frame> MakeFrameForStack(const debug_ipc::StackFrame& input,
                                                      Location location) = 0;
 
-    virtual Location GetSymbolizedLocationForAddress(uint64_t address) = 0;
+    virtual Location GetSymbolizedLocationForStackFrame(const debug_ipc::StackFrame& input) = 0;
   };
 
   // The delegate must outlive this class.
