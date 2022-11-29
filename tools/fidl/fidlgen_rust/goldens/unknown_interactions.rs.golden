@@ -742,6 +742,8 @@ impl UnknownInteractionsAjarDriverProtocolStrictTwoWayUnionResponse {
     }
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsAjarDriverProtocolStrictTwoWayUnionResponse {}
+
 impl fidl::encoding::Persistable
     for UnknownInteractionsAjarDriverProtocolStrictTwoWayUnionResponse
 {
@@ -800,6 +802,11 @@ impl UnknownInteractionsAjarDriverProtocolStrictTwoWayUnionErrResponse {
             _ => false,
         }
     }
+}
+
+impl fidl::encoding::TopLevel
+    for UnknownInteractionsAjarDriverProtocolStrictTwoWayUnionErrResponse
+{
 }
 
 impl fidl::encoding::Persistable
@@ -862,6 +869,8 @@ impl UnknownInteractionsAjarProtocolFlexibleEventUnionRequest {
     }
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsAjarProtocolFlexibleEventUnionRequest {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsAjarProtocolFlexibleEventUnionRequest {}
 
 fidl_union! {
@@ -918,6 +927,8 @@ impl UnknownInteractionsAjarProtocolStrictEventUnionRequest {
         }
     }
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsAjarProtocolStrictEventUnionRequest {}
 
 impl fidl::encoding::Persistable for UnknownInteractionsAjarProtocolStrictEventUnionRequest {}
 
@@ -976,6 +987,8 @@ impl UnknownInteractionsAjarProtocolStrictTwoWayUnionResponse {
     }
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsAjarProtocolStrictTwoWayUnionResponse {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsAjarProtocolStrictTwoWayUnionResponse {}
 
 fidl_union! {
@@ -1032,6 +1045,8 @@ impl UnknownInteractionsAjarProtocolFlexibleEventUnionErrResponse {
         }
     }
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsAjarProtocolFlexibleEventUnionErrResponse {}
 
 impl fidl::encoding::Persistable for UnknownInteractionsAjarProtocolFlexibleEventUnionErrResponse {}
 
@@ -1090,6 +1105,8 @@ impl UnknownInteractionsAjarProtocolStrictEventUnionErrResponse {
     }
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsAjarProtocolStrictEventUnionErrResponse {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsAjarProtocolStrictEventUnionErrResponse {}
 
 fidl_union! {
@@ -1147,6 +1164,8 @@ impl UnknownInteractionsAjarProtocolStrictTwoWayUnionErrResponse {
     }
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsAjarProtocolStrictTwoWayUnionErrResponse {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsAjarProtocolStrictTwoWayUnionErrResponse {}
 
 fidl_union! {
@@ -1203,6 +1222,8 @@ impl UnknownInteractionsClosedDriverProtocolStrictTwoWayUnionResponse {
         }
     }
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsClosedDriverProtocolStrictTwoWayUnionResponse {}
 
 impl fidl::encoding::Persistable
     for UnknownInteractionsClosedDriverProtocolStrictTwoWayUnionResponse
@@ -1262,6 +1283,11 @@ impl UnknownInteractionsClosedDriverProtocolStrictTwoWayUnionErrResponse {
             _ => false,
         }
     }
+}
+
+impl fidl::encoding::TopLevel
+    for UnknownInteractionsClosedDriverProtocolStrictTwoWayUnionErrResponse
+{
 }
 
 impl fidl::encoding::Persistable
@@ -1324,6 +1350,8 @@ impl UnknownInteractionsClosedProtocolStrictEventUnionRequest {
     }
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsClosedProtocolStrictEventUnionRequest {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsClosedProtocolStrictEventUnionRequest {}
 
 fidl_union! {
@@ -1380,6 +1408,8 @@ impl UnknownInteractionsClosedProtocolStrictTwoWayUnionResponse {
         }
     }
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsClosedProtocolStrictTwoWayUnionResponse {}
 
 impl fidl::encoding::Persistable for UnknownInteractionsClosedProtocolStrictTwoWayUnionResponse {}
 
@@ -1438,6 +1468,8 @@ impl UnknownInteractionsClosedProtocolStrictEventUnionErrResponse {
     }
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsClosedProtocolStrictEventUnionErrResponse {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsClosedProtocolStrictEventUnionErrResponse {}
 
 fidl_union! {
@@ -1494,6 +1526,8 @@ impl UnknownInteractionsClosedProtocolStrictTwoWayUnionErrResponse {
         }
     }
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsClosedProtocolStrictTwoWayUnionErrResponse {}
 
 impl fidl::encoding::Persistable for UnknownInteractionsClosedProtocolStrictTwoWayUnionErrResponse {}
 
@@ -1552,6 +1586,8 @@ impl UnknownInteractionsDriverProtocolStrictTwoWayUnionResponse {
     }
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsDriverProtocolStrictTwoWayUnionResponse {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsDriverProtocolStrictTwoWayUnionResponse {}
 
 fidl_union! {
@@ -1608,6 +1644,8 @@ impl UnknownInteractionsDriverProtocolFlexibleTwoWayUnionErrResponse {
         }
     }
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsDriverProtocolFlexibleTwoWayUnionErrResponse {}
 
 impl fidl::encoding::Persistable
     for UnknownInteractionsDriverProtocolFlexibleTwoWayUnionErrResponse
@@ -1669,6 +1707,8 @@ impl UnknownInteractionsDriverProtocolFlexibleTwoWayUnionResponse {
     }
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsDriverProtocolFlexibleTwoWayUnionResponse {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsDriverProtocolFlexibleTwoWayUnionResponse {}
 
 fidl_union! {
@@ -1725,6 +1765,8 @@ impl UnknownInteractionsDriverProtocolStrictTwoWayUnionErrResponse {
         }
     }
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsDriverProtocolStrictTwoWayUnionErrResponse {}
 
 impl fidl::encoding::Persistable for UnknownInteractionsDriverProtocolStrictTwoWayUnionErrResponse {}
 
@@ -1783,6 +1825,8 @@ impl UnknownInteractionsProtocolFlexibleEventUnionRequest {
     }
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsProtocolFlexibleEventUnionRequest {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsProtocolFlexibleEventUnionRequest {}
 
 fidl_union! {
@@ -1839,6 +1883,8 @@ impl UnknownInteractionsProtocolStrictEventUnionRequest {
         }
     }
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsProtocolStrictEventUnionRequest {}
 
 impl fidl::encoding::Persistable for UnknownInteractionsProtocolStrictEventUnionRequest {}
 
@@ -1897,6 +1943,8 @@ impl UnknownInteractionsProtocolStrictTwoWayUnionResponse {
     }
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsProtocolStrictTwoWayUnionResponse {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsProtocolStrictTwoWayUnionResponse {}
 
 fidl_union! {
@@ -1953,6 +2001,8 @@ impl UnknownInteractionsProtocolFlexibleEventUnionErrResponse {
         }
     }
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsProtocolFlexibleEventUnionErrResponse {}
 
 impl fidl::encoding::Persistable for UnknownInteractionsProtocolFlexibleEventUnionErrResponse {}
 
@@ -2011,6 +2061,8 @@ impl UnknownInteractionsProtocolFlexibleTwoWayUnionErrResponse {
     }
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsProtocolFlexibleTwoWayUnionErrResponse {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsProtocolFlexibleTwoWayUnionErrResponse {}
 
 fidl_union! {
@@ -2067,6 +2119,8 @@ impl UnknownInteractionsProtocolFlexibleTwoWayUnionResponse {
         }
     }
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsProtocolFlexibleTwoWayUnionResponse {}
 
 impl fidl::encoding::Persistable for UnknownInteractionsProtocolFlexibleTwoWayUnionResponse {}
 
@@ -2125,6 +2179,8 @@ impl UnknownInteractionsProtocolStrictEventUnionErrResponse {
     }
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsProtocolStrictEventUnionErrResponse {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsProtocolStrictEventUnionErrResponse {}
 
 fidl_union! {
@@ -2182,6 +2238,8 @@ impl UnknownInteractionsProtocolStrictTwoWayUnionErrResponse {
     }
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsProtocolStrictTwoWayUnionErrResponse {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsProtocolStrictTwoWayUnionErrResponse {}
 
 fidl_union! {
@@ -2211,6 +2269,8 @@ impl UnknownInteractionsAjarDriverProtocolStrictTwoWayTableResponse {
     #[allow(deprecated)]
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsAjarDriverProtocolStrictTwoWayTableResponse {}
 
 impl fidl::encoding::Persistable
     for UnknownInteractionsAjarDriverProtocolStrictTwoWayTableResponse
@@ -2243,6 +2303,11 @@ impl UnknownInteractionsAjarDriverProtocolStrictTwoWayTableErrResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+}
+
+impl fidl::encoding::TopLevel
+    for UnknownInteractionsAjarDriverProtocolStrictTwoWayTableErrResponse
+{
 }
 
 impl fidl::encoding::Persistable
@@ -2278,6 +2343,8 @@ impl UnknownInteractionsAjarProtocolFlexibleEventTableRequest {
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsAjarProtocolFlexibleEventTableRequest {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsAjarProtocolFlexibleEventTableRequest {}
 
 fidl_table! {
@@ -2307,6 +2374,8 @@ impl UnknownInteractionsAjarProtocolStrictEventTableRequest {
     #[allow(deprecated)]
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsAjarProtocolStrictEventTableRequest {}
 
 impl fidl::encoding::Persistable for UnknownInteractionsAjarProtocolStrictEventTableRequest {}
 
@@ -2338,6 +2407,8 @@ impl UnknownInteractionsAjarProtocolStrictTwoWayTableResponse {
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsAjarProtocolStrictTwoWayTableResponse {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsAjarProtocolStrictTwoWayTableResponse {}
 
 fidl_table! {
@@ -2367,6 +2438,8 @@ impl UnknownInteractionsAjarProtocolFlexibleEventTableErrResponse {
     #[allow(deprecated)]
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsAjarProtocolFlexibleEventTableErrResponse {}
 
 impl fidl::encoding::Persistable for UnknownInteractionsAjarProtocolFlexibleEventTableErrResponse {}
 
@@ -2398,6 +2471,8 @@ impl UnknownInteractionsAjarProtocolStrictEventTableErrResponse {
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsAjarProtocolStrictEventTableErrResponse {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsAjarProtocolStrictEventTableErrResponse {}
 
 fidl_table! {
@@ -2428,6 +2503,8 @@ impl UnknownInteractionsAjarProtocolStrictTwoWayTableErrResponse {
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsAjarProtocolStrictTwoWayTableErrResponse {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsAjarProtocolStrictTwoWayTableErrResponse {}
 
 fidl_table! {
@@ -2457,6 +2534,8 @@ impl UnknownInteractionsClosedDriverProtocolStrictTwoWayTableResponse {
     #[allow(deprecated)]
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsClosedDriverProtocolStrictTwoWayTableResponse {}
 
 impl fidl::encoding::Persistable
     for UnknownInteractionsClosedDriverProtocolStrictTwoWayTableResponse
@@ -2489,6 +2568,11 @@ impl UnknownInteractionsClosedDriverProtocolStrictTwoWayTableErrResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+}
+
+impl fidl::encoding::TopLevel
+    for UnknownInteractionsClosedDriverProtocolStrictTwoWayTableErrResponse
+{
 }
 
 impl fidl::encoding::Persistable
@@ -2524,6 +2608,8 @@ impl UnknownInteractionsClosedProtocolStrictEventTableRequest {
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsClosedProtocolStrictEventTableRequest {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsClosedProtocolStrictEventTableRequest {}
 
 fidl_table! {
@@ -2553,6 +2639,8 @@ impl UnknownInteractionsClosedProtocolStrictTwoWayTableResponse {
     #[allow(deprecated)]
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsClosedProtocolStrictTwoWayTableResponse {}
 
 impl fidl::encoding::Persistable for UnknownInteractionsClosedProtocolStrictTwoWayTableResponse {}
 
@@ -2584,6 +2672,8 @@ impl UnknownInteractionsClosedProtocolStrictEventTableErrResponse {
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsClosedProtocolStrictEventTableErrResponse {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsClosedProtocolStrictEventTableErrResponse {}
 
 fidl_table! {
@@ -2613,6 +2703,8 @@ impl UnknownInteractionsClosedProtocolStrictTwoWayTableErrResponse {
     #[allow(deprecated)]
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsClosedProtocolStrictTwoWayTableErrResponse {}
 
 impl fidl::encoding::Persistable for UnknownInteractionsClosedProtocolStrictTwoWayTableErrResponse {}
 
@@ -2644,6 +2736,8 @@ impl UnknownInteractionsDriverProtocolStrictTwoWayTableResponse {
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsDriverProtocolStrictTwoWayTableResponse {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsDriverProtocolStrictTwoWayTableResponse {}
 
 fidl_table! {
@@ -2673,6 +2767,8 @@ impl UnknownInteractionsDriverProtocolFlexibleTwoWayTableErrResponse {
     #[allow(deprecated)]
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsDriverProtocolFlexibleTwoWayTableErrResponse {}
 
 impl fidl::encoding::Persistable
     for UnknownInteractionsDriverProtocolFlexibleTwoWayTableErrResponse
@@ -2707,6 +2803,8 @@ impl UnknownInteractionsDriverProtocolFlexibleTwoWayTableResponse {
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsDriverProtocolFlexibleTwoWayTableResponse {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsDriverProtocolFlexibleTwoWayTableResponse {}
 
 fidl_table! {
@@ -2736,6 +2834,8 @@ impl UnknownInteractionsDriverProtocolStrictTwoWayTableErrResponse {
     #[allow(deprecated)]
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsDriverProtocolStrictTwoWayTableErrResponse {}
 
 impl fidl::encoding::Persistable for UnknownInteractionsDriverProtocolStrictTwoWayTableErrResponse {}
 
@@ -2767,6 +2867,8 @@ impl UnknownInteractionsProtocolFlexibleEventTableRequest {
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsProtocolFlexibleEventTableRequest {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsProtocolFlexibleEventTableRequest {}
 
 fidl_table! {
@@ -2796,6 +2898,8 @@ impl UnknownInteractionsProtocolStrictEventTableRequest {
     #[allow(deprecated)]
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsProtocolStrictEventTableRequest {}
 
 impl fidl::encoding::Persistable for UnknownInteractionsProtocolStrictEventTableRequest {}
 
@@ -2827,6 +2931,8 @@ impl UnknownInteractionsProtocolStrictTwoWayTableResponse {
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsProtocolStrictTwoWayTableResponse {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsProtocolStrictTwoWayTableResponse {}
 
 fidl_table! {
@@ -2856,6 +2962,8 @@ impl UnknownInteractionsProtocolFlexibleEventTableErrResponse {
     #[allow(deprecated)]
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsProtocolFlexibleEventTableErrResponse {}
 
 impl fidl::encoding::Persistable for UnknownInteractionsProtocolFlexibleEventTableErrResponse {}
 
@@ -2887,6 +2995,8 @@ impl UnknownInteractionsProtocolFlexibleTwoWayTableErrResponse {
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsProtocolFlexibleTwoWayTableErrResponse {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsProtocolFlexibleTwoWayTableErrResponse {}
 
 fidl_table! {
@@ -2916,6 +3026,8 @@ impl UnknownInteractionsProtocolFlexibleTwoWayTableResponse {
     #[allow(deprecated)]
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsProtocolFlexibleTwoWayTableResponse {}
 
 impl fidl::encoding::Persistable for UnknownInteractionsProtocolFlexibleTwoWayTableResponse {}
 
@@ -2947,6 +3059,8 @@ impl UnknownInteractionsProtocolStrictEventTableErrResponse {
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
 
+impl fidl::encoding::TopLevel for UnknownInteractionsProtocolStrictEventTableErrResponse {}
+
 impl fidl::encoding::Persistable for UnknownInteractionsProtocolStrictEventTableErrResponse {}
 
 fidl_table! {
@@ -2976,6 +3090,8 @@ impl UnknownInteractionsProtocolStrictTwoWayTableErrResponse {
     #[allow(deprecated)]
     pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
 }
+
+impl fidl::encoding::TopLevel for UnknownInteractionsProtocolStrictTwoWayTableErrResponse {}
 
 impl fidl::encoding::Persistable for UnknownInteractionsProtocolStrictTwoWayTableErrResponse {}
 

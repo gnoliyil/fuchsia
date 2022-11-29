@@ -1003,8 +1003,14 @@ pub trait Decodable: Layout + Sized {
     fn decode(&mut self, decoder: &mut Decoder<'_>, offset: usize) -> Result<()>;
 }
 
-/// Marker trait for types that can be encoded/decoded for persistence.
-pub trait Persistable: Encodable + Decodable {}
+/// Marker trait for types that can be used as top level requests/responses, and
+/// support the standalone encoding/decoding API. This is applied to all
+/// structs, tables, and unions.
+pub trait TopLevel: Encodable + Decodable {}
+
+/// Marker trait for types that support the persistence API. This is applied to
+/// non-resource structs, tables, and unions.
+pub trait Persistable: TopLevel {}
 
 macro_rules! impl_layout {
     ($ty:ty, align: $align:expr, size: $size:expr) => {
@@ -4106,7 +4112,6 @@ bitflags! {
         /// This includes the following RFCs:
         /// - Efficient envelopes
         /// - Inlining small values in FIDL envelopes
-        /// - Wire format support for sparser FIDL tables
         const USE_V2_WIRE_FORMAT = 2;
     }
 }
@@ -4270,11 +4275,9 @@ pub fn decode_transaction_header(bytes: &[u8]) -> Result<(TransactionHeader, &[u
     Ok((header, body_bytes))
 }
 
-/// Header for persistently stored FIDL messages.
-// TODO(fxbug.dev/45252): Rename to WireFormatMetadata and complete the
-// implementation of RFC-0120.
+/// Header for RFC-0120 persistent FIDL messages.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct PersistentHeader {
+pub struct WireMetadata {
     /// Must be zero.
     disambiguator: u8,
     /// Magic number indicating the message's wire format. Two sides with
@@ -4287,7 +4290,7 @@ pub struct PersistentHeader {
 }
 
 fidl_struct_copy! {
-    name: PersistentHeader,
+    name: WireMetadata,
     members: [
         disambiguator {
             ty: u8,
@@ -4318,72 +4321,56 @@ fidl_struct_copy! {
     align_v2: 1,
 }
 
-impl PersistentHeader {
-    /// Creates a new `PersistentHeader` with the default encode context and magic number.
-    #[inline]
-    pub fn new() -> Self {
-        PersistentHeader::new_full(&default_persistent_encode_context(), MAGIC_NUMBER_INITIAL)
-    }
+impl WireMetadata {
     /// Creates a new `PersistentHeader` with a specific context and magic number.
     #[inline]
-    pub fn new_full(context: &Context, magic_number: u8) -> Self {
-        PersistentHeader {
+    fn new_full(context: &Context, magic_number: u8) -> Self {
+        WireMetadata {
             disambiguator: 0,
             magic_number,
             at_rest_flags: context.at_rest_flags().into(),
             reserved: [0; 4],
         }
     }
-    /// Returns the magic number.
-    #[inline]
-    pub fn magic_number(&self) -> u8 {
-        self.magic_number
-    }
+
     /// Returns the header's flags as a `HeaderFlags` value.
-    // TODO(fxbug.dev/45252): Once HeaderFlags is refactored this should
-    // return a more precise type, named something like AtRestFlags.
     #[inline]
-    pub fn at_rest_flags(&self) -> AtRestFlags {
+    fn at_rest_flags(&self) -> AtRestFlags {
         AtRestFlags::from_bits_truncate(u16::from_le_bytes(self.at_rest_flags))
     }
+
     /// Returns the context to use for decoding the message body associated with
     /// this header. During migrations, this is dependent on `self.flags()` and
     /// controls dynamic behavior in the read path.
     #[inline]
-    pub fn decoding_context(&self) -> Context {
+    fn decoding_context(&self) -> Context {
         if self.at_rest_flags().contains(AtRestFlags::USE_V2_WIRE_FORMAT) {
             Context { wire_format_version: WireFormatVersion::V2 }
         } else {
             Context { wire_format_version: WireFormatVersion::V1 }
         }
     }
-    /// Returns whether the message containing this `PersistentHeader` is in a
-    /// compatible wire format.
-    #[inline]
-    pub fn is_compatible(&self) -> bool {
-        self.magic_number == MAGIC_NUMBER_INITIAL
-    }
 }
 
 /// Persistently stored FIDL message
-pub struct PersistentMessage<'a, T: Persistable> {
+struct PersistentMessage<'a, T: Persistable> {
     /// Header of the message
-    pub header: PersistentHeader,
+    metadata: WireMetadata,
     /// Body of the message
-    pub body: &'a mut T,
+    body: &'a mut T,
 }
 
 impl<T: Persistable> Layout for PersistentMessage<'_, T> {
     #[inline(always)]
     fn inline_align(context: &Context) -> usize {
         cmp::max(
-            <PersistentHeader as Layout>::inline_align(context),
+            <WireMetadata as Layout>::inline_align(context),
             <T as Layout>::inline_align(context),
         )
     }
     #[inline(always)]
     fn inline_size(context: &Context) -> usize {
-        <PersistentHeader as Layout>::inline_size(context) + <T as Layout>::inline_size(context)
+        <WireMetadata as Layout>::inline_size(context) + <T as Layout>::inline_size(context)
     }
 }
 
@@ -4396,32 +4383,27 @@ impl<T: Persistable> Encodable for PersistentMessage<'_, T> {
         recursion_depth: usize,
     ) -> Result<()> {
         encoder.debug_check_bounds::<Self>(offset);
-        self.header.encode(encoder, offset, recursion_depth)?;
+        self.metadata.encode(encoder, offset, recursion_depth)?;
         (*self.body).encode(
             encoder,
-            offset + encoder.inline_size_of::<PersistentHeader>(),
+            offset + encoder.inline_size_of::<WireMetadata>(),
             recursion_depth,
         )?;
         Ok(())
     }
 }
 
-/// Encode the referred parameter into persistent binary form.
-/// Generates and adds message header to the returned bytes.
-pub fn encode_persistent<T: Persistable>(body: &mut T) -> Result<Vec<u8>> {
-    encode_persistent_with_context(&default_persistent_encode_context(), body)
+/// Encodes a FIDL object to bytes following RFC-0120. This only works on
+/// non-resource structs, tables, and unions. See `unpersist` for the reverse.
+pub fn persist<T: Persistable>(body: &mut T) -> Result<Vec<u8>> {
+    persist_with_context(body, &default_persistent_encode_context())
 }
 
-/// Encode the referred parameter into persistent binary form.
-/// Generates and adds message header to the returned bytes.
-pub fn encode_persistent_with_context<T: Persistable>(
-    context: &Context,
-    body: &mut T,
-) -> Result<Vec<u8>> {
-    let msg = &mut PersistentMessage {
-        header: PersistentHeader::new_full(context, MAGIC_NUMBER_INITIAL),
-        body,
-    };
+// TODO(fxbug.dev/79584): Kept only for overnet, remove when possible.
+#[doc(hidden)]
+pub fn persist_with_context<T: Persistable>(body: &mut T, context: &Context) -> Result<Vec<u8>> {
+    let metadata = WireMetadata::new_full(context, MAGIC_NUMBER_INITIAL);
+    let msg = &mut PersistentMessage { metadata, body };
     let mut combined_bytes = Vec::<u8>::new();
     let mut handles = Vec::<HandleDisposition<'static>>::new();
     Encoder::encode_with_context(context, &mut combined_bytes, &mut handles, msg)?;
@@ -4429,42 +4411,9 @@ pub fn encode_persistent_with_context<T: Persistable>(
     Ok(combined_bytes)
 }
 
-/// Creates persistent header to encode it and the message body separately.
-pub fn create_persistent_header() -> PersistentHeader {
-    PersistentHeader::new()
-}
-
-/// Encode PersistentHeader to persistent binary form.
-pub fn encode_persistent_header(header: &mut PersistentHeader) -> Result<Vec<u8>> {
-    let mut header_bytes = Vec::<u8>::new();
-    Encoder::encode_with_context(
-        &default_persistent_encode_context(),
-        &mut header_bytes,
-        &mut Vec::new(),
-        header,
-    )?;
-    Ok(header_bytes)
-}
-
-/// Encode the message body to to persistent binary form.
-pub fn encode_persistent_body<T: Persistable>(
-    body: &mut T,
-    header: &PersistentHeader,
-) -> Result<Vec<u8>> {
-    let mut combined_bytes = Vec::<u8>::new();
-    let mut handles = Vec::<HandleDisposition<'static>>::new();
-    Encoder::encode_with_context(
-        &header.decoding_context(),
-        &mut combined_bytes,
-        &mut handles,
-        body,
-    )?;
-    debug_assert!(handles.is_empty(), "Persistent message contains handles");
-    Ok(combined_bytes)
-}
-
-/// Decode the type expected from the persistent binary form.
-pub fn decode_persistent<T: Persistable>(bytes: &[u8]) -> Result<T> {
+/// Decode a FIDL object from bytes following RFC-0120. This only works for
+/// non-resource structs, tables, and unions. See `persist` for the reverse.
+pub fn unpersist<T: Persistable>(bytes: &[u8]) -> Result<T> {
     // TODO(fxbug.dev/45252): Only accept the new header format.
     //
     // To soft-transition component manager's use of persistent FIDL, we
@@ -4493,18 +4442,72 @@ pub fn decode_persistent<T: Persistable>(bytes: &[u8]) -> Result<T> {
         return Err(Error::OutOfRange);
     }
     let (header_bytes, body_bytes) = bytes.split_at(header_len);
-    let header = decode_persistent_header(header_bytes)?;
-    decode_persistent_body(body_bytes, &header)
+    let header = decode_wire_metadata(header_bytes)?;
+    let mut output = T::new_empty();
+    Decoder::decode_with_context(&header.decoding_context(), body_bytes, &mut [], &mut output)?;
+    Ok(output)
+}
+
+/// Encodes a FIDL object to bytes, handles, and wire metadata following
+/// RFC-0120. This only works for structs, tables, and unions. See
+/// `standalone_decode` for the reverse.
+pub fn standalone_encode<T: TopLevel>(
+    body: &mut T,
+) -> Result<(Vec<u8>, Vec<HandleDisposition>, WireMetadata)> {
+    let context = &default_persistent_encode_context();
+    let metadata = WireMetadata::new_full(context, MAGIC_NUMBER_INITIAL);
+    let mut bytes = Vec::<u8>::new();
+    let mut handles = Vec::<HandleDisposition<'static>>::new();
+    Encoder::encode_with_context(context, &mut bytes, &mut handles, body)?;
+    Ok((bytes, handles, metadata))
+}
+
+/// Decodes a FIDL object from bytes, handles, and wire metadata following
+/// RFC-0120. This only works for structs, tables, and unions. See
+/// `standalone_encode` for the reverse.
+pub fn standalone_decode<T: TopLevel>(
+    bytes: &[u8],
+    handles: &mut [HandleInfo],
+    metadata: &WireMetadata,
+) -> Result<T> {
+    let mut output = T::new_empty();
+    Decoder::decode_with_context(&metadata.decoding_context(), bytes, handles, &mut output)?;
+    Ok(output)
+}
+
+/// Converts a vector of `HandleDisposition` (handles bundled with their
+/// intended object type and rights) to a vector of `HandleInfo` (handles
+/// bundled with their actual type and rights, guaranteed by the kernel).
+///
+/// # Panics
+///
+/// Panics if any of the handle dispositions uses `HandleOp::Duplicate`. This is
+/// never the case for handle dispositions return by `standalone_encode`.
+pub fn convert_handle_dispositions_to_infos(
+    handle_dispositions: Vec<HandleDisposition>,
+) -> Result<Vec<HandleInfo>> {
+    let mut infos = Vec::new();
+    for hd in handle_dispositions.into_iter() {
+        infos.push(HandleInfo {
+            handle: match hd.handle_op {
+                HandleOp::Move(h) => h.replace(hd.rights).map_err(Error::HandleReplace)?,
+                HandleOp::Duplicate(_) => panic!("unexpected HandleOp::Duplicate"),
+            },
+            object_type: hd.object_type,
+            rights: hd.rights,
+        });
+    }
+    Ok(infos)
 }
 
 /// Decodes the persistently stored header from a message.
 /// Returns the header and a reference to the tail of the message.
-pub fn decode_persistent_header(bytes: &[u8]) -> Result<PersistentHeader> {
+fn decode_wire_metadata(bytes: &[u8]) -> Result<WireMetadata> {
     let context = Context { wire_format_version: WireFormatVersion::V1 };
     match bytes.len() {
         8 => {
             // New 8-byte format.
-            let mut header = PersistentHeader::new_empty();
+            let mut header = WireMetadata::new_empty();
             Decoder::decode_with_context(&context, bytes, &mut [], &mut header)?;
             Ok(header)
         }
@@ -4513,7 +4516,7 @@ pub fn decode_persistent_header(bytes: &[u8]) -> Result<PersistentHeader> {
             // Old 16-byte format that matches TransactionHeader.
             let mut header = TransactionHeader::new_empty();
             Decoder::decode_with_context(&context, bytes, &mut [], &mut header)?;
-            Ok(PersistentHeader {
+            Ok(WireMetadata {
                 disambiguator: 0,
                 magic_number: header.magic_number,
                 at_rest_flags: header.at_rest_flags,
@@ -4522,17 +4525,6 @@ pub fn decode_persistent_header(bytes: &[u8]) -> Result<PersistentHeader> {
         }
         _ => Err(Error::InvalidHeader),
     }
-}
-
-/// Decodes the persistently stored header from a message.
-/// Returns the header and a reference to the tail of the message.
-pub fn decode_persistent_body<T: Persistable>(
-    bytes: &[u8],
-    header: &PersistentHeader,
-) -> Result<T> {
-    let mut output = T::new_empty();
-    Decoder::decode_with_context(&header.decoding_context(), bytes, &mut [], &mut output)?;
-    Ok(output)
 }
 
 /// Creates a type that wraps a value and provides object type and rights information.

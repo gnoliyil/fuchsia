@@ -6,7 +6,7 @@ use {
     anyhow,
     clonable_error::ClonableError,
     component_id_index, fidl,
-    fidl::encoding::decode_persistent,
+    fidl::encoding::unpersist,
     fidl_fuchsia_component_internal as fcomponent_internal,
     moniker::{AbsoluteMoniker, MonikerError},
     std::collections::{HashMap, HashSet},
@@ -84,9 +84,8 @@ impl ComponentIdIndex {
         let raw_content = std::fs::read(index_file_path)
             .map_err(|err| ComponentIdIndexError::index_unreadable(index_file_path, err))?;
 
-        let fidl_index =
-            decode_persistent::<fcomponent_internal::ComponentIdIndex>(&raw_content)
-                .map_err(|err| ComponentIdIndexError::index_unreadable(index_file_path, err))?;
+        let fidl_index = unpersist::<fcomponent_internal::ComponentIdIndex>(&raw_content)
+            .map_err(|err| ComponentIdIndexError::index_unreadable(index_file_path, err))?;
 
         let index = component_id_index::Index::from_fidl(fidl_index)?;
         Self::new_from_index(index)

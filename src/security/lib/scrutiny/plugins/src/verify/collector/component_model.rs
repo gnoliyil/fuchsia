@@ -14,7 +14,7 @@ use {
     cm_fidl_analyzer::{component_model::ModelBuilderForAnalyzer, node_path::NodePath},
     cm_rust::{ComponentDecl, FidlIntoNative, RegistrationSource, RunnerRegistration},
     config_encoder::ConfigFields,
-    fidl::encoding::decode_persistent,
+    fidl::encoding::unpersist,
     fidl_fuchsia_component_config as fconfig, fidl_fuchsia_component_decl as fdecl,
     fidl_fuchsia_component_internal as component_internal,
     fuchsia_url::{boot_url::BootUrl, AbsoluteComponentUrl},
@@ -87,7 +87,7 @@ impl V2ComponentModelDataCollector {
             if let ManifestData::Version2 { cm_base64, cvf_bytes } = &manifest.manifest {
                 match urls.remove(&manifest.component_id) {
                     Some(url) => {
-                        let result: Result<fdecl::Component, fidl::Error> = decode_persistent(
+                        let result: Result<fdecl::Component, fidl::Error> = unpersist(
                             &base64::decode(&cm_base64)
                                 .context("Unable to decode base64 v2 manifest")?,
                         );
@@ -98,10 +98,9 @@ impl V2ComponentModelDataCollector {
                                     let cvf_bytes = cvf_bytes
                                         .as_ref()
                                         .context("getting config values to match schema")?;
-                                    let values_data =
-                                        decode_persistent::<fconfig::ValuesData>(cvf_bytes)
-                                            .context("decoding config values")?
-                                            .fidl_into_native();
+                                    let values_data = unpersist::<fconfig::ValuesData>(cvf_bytes)
+                                        .context("decoding config values")?
+                                        .fidl_into_native();
                                     let resolved = ConfigFields::resolve(schema, values_data)
                                         .context("resolving configuration")?;
                                     Some(resolved)
@@ -135,7 +134,7 @@ impl V2ComponentModelDataCollector {
     fn get_runtime_config(&self, config_path: &str, zbi: &Zbi) -> Result<RuntimeConfig> {
         match zbi.bootfs.get(config_path) {
             Some(config_data) => Ok(RuntimeConfig::try_from(
-                decode_persistent::<component_internal::Config>(&config_data)
+                unpersist::<component_internal::Config>(&config_data)
                     .context("Unable to decode runtime config")?,
             )
             .context("Unable to parse runtime config")?),
@@ -155,10 +154,11 @@ impl V2ComponentModelDataCollector {
                     let remainder = split[2..].join("");
                     match zbi.bootfs.get(&remainder) {
                         Some(index_data) => {
-                            let fidl_index = decode_persistent::<
-                                component_internal::ComponentIdIndex,
-                            >(index_data)
-                            .context("Unable to decode component ID index from persistent FIDL")?;
+                            let fidl_index =
+                                unpersist::<component_internal::ComponentIdIndex>(index_data)
+                                    .context(
+                                        "Unable to decode component ID index from persistent FIDL",
+                                    )?;
                             let index = component_id_index::Index::from_fidl(fidl_index).context(
                                 "Unable to create internal index for component ID index from FIDL",
                             )?;

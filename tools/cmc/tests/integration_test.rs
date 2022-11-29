@@ -4,7 +4,7 @@
 
 use anyhow::Error;
 use fdata::{Dictionary, DictionaryEntry, DictionaryValue};
-use fidl::encoding::decode_persistent;
+use fidl::encoding::unpersist;
 use fidl_fuchsia_component_decl::*;
 use fidl_fuchsia_data as fdata;
 use fidl_fuchsia_io as fio;
@@ -574,5 +574,5 @@ fn read_cm(file: &str) -> Result<Component, Error> {
     let mut buffer = Vec::new();
     let path = PathBuf::from(file);
     File::open(&path)?.read_to_end(&mut buffer)?;
-    Ok(decode_persistent(&buffer)?)
+    Ok(unpersist(&buffer)?)
 }

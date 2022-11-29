@@ -11,7 +11,7 @@ use {
     cobalt_client::traits::AsEventCodes,
     diagnostics_hierarchy::{testing::TreeAssertion, DiagnosticsHierarchy},
     diagnostics_reader::{ArchiveReader, ComponentSelector, Inspect},
-    fidl::encoding::encode_persistent_with_context,
+    fidl::encoding::persist,
     fidl::endpoints::{ClientEnd, DiscoverableProtocolMarker as _},
     fidl_fuchsia_component::{RealmMarker, RealmProxy},
     fidl_fuchsia_io as fio,
@@ -276,13 +276,7 @@ impl Mounts {
                 ..PersistentEagerPackages::EMPTY
             };
 
-            let data = encode_persistent_with_context(
-                &fidl::encoding::Context {
-                    wire_format_version: fidl::encoding::WireFormatVersion::V2,
-                },
-                &mut packages,
-            )
-            .unwrap();
+            let data = persist(&mut packages).unwrap();
             f.write_all(&data).unwrap();
             f.flush().unwrap();
         } else {

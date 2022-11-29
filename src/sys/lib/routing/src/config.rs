@@ -7,7 +7,7 @@ use {
     anyhow::{format_err, Context, Error},
     cm_rust::{CapabilityName, CapabilityTypeName, FidlIntoNative},
     cm_types::{Name, Url},
-    fidl::encoding::decode_persistent,
+    fidl::encoding::unpersist,
     fidl_fuchsia_component_decl as fdecl,
     fidl_fuchsia_component_internal::{
         self as component_internal, BuiltinBootResolver, CapabilityPolicyAllowlists,
@@ -259,11 +259,11 @@ impl RuntimeConfig {
     /// Otherwise, an Error is returned.
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let raw_content = std::fs::read(path)?;
-        Ok(Self::try_from(decode_persistent::<component_internal::Config>(&raw_content)?)?)
+        Ok(Self::try_from(unpersist::<component_internal::Config>(&raw_content)?)?)
     }
 
     pub fn load_from_bytes(bytes: &Vec<u8>) -> Result<Self, Error> {
-        Ok(Self::try_from(decode_persistent::<component_internal::Config>(&bytes)?)?)
+        Ok(Self::try_from(unpersist::<component_internal::Config>(&bytes)?)?)
     }
 
     fn translate_namespace_capabilities(
@@ -1069,10 +1069,7 @@ mod tests {
         mut config: component_internal::Config,
     ) -> Result<PathBuf, Error> {
         let path = tmp_dir.path().join("test_config.fidl");
-        let content = fidl::encoding::encode_persistent_with_context(
-            &fidl::encoding::Context { wire_format_version: fidl::encoding::WireFormatVersion::V2 },
-            &mut config,
-        )?;
+        let content = fidl::encoding::persist(&mut config)?;
         std::fs::write(&path, &content)?;
         Ok(path)
     }

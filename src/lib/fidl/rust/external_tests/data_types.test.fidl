@@ -3,6 +3,8 @@
 // found in the LICENSE file.
 library fidl.rust.test.external;
 
+using zx;
+
 type StrictButtons = strict bits : uint32 {
     PLAY = 0b001;
     PAUSE = 0b010;
@@ -62,4 +64,8 @@ type ValueRecord = table {
 type ResourceRecord = resource table {
     1: name string;
     2: age uint8;
+};
+
+type StructWithHandles = resource struct {
+    v vector<zx.handle:CHANNEL>;
 };

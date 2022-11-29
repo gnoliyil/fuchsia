@@ -4,7 +4,7 @@
 
 use crate::UpdateState;
 use anyhow::{bail, format_err, Context, Error};
-use fidl::encoding::{decode_persistent, encode_persistent, Persistable};
+use fidl::encoding::{persist, unpersist, Persistable};
 use fidl::Status;
 use fidl_fuchsia_io::DirectoryProxy;
 use fuchsia_async::{Task, Time, Timer};
@@ -334,7 +334,7 @@ impl FidlStorage {
     where
         T: FidlStorageConvertible,
     {
-        let new_value = encode_persistent(&mut new_value.to_storable())?;
+        let new_value = persist(&mut new_value.to_storable())?;
         self.inner_write(T::KEY, new_value).await
     }
 
@@ -384,8 +384,7 @@ impl FidlStorage {
             .as_ref()
             .map(|data| {
                 <T as FidlStorageConvertible>::from_storable(
-                    decode_persistent(data)
-                        .expect("Should not be able to save mismatching types in file"),
+                    unpersist(data).expect("Should not be able to save mismatching types in file"),
                 )
             })
             .unwrap_or_else(|| T::default_value())
@@ -397,6 +396,7 @@ mod tests {
     use super::*;
     use assert_matches::assert_matches;
     use fasync::TestExecutor;
+    use fidl::encoding::TopLevel;
     use fidl::endpoints::{create_proxy, ServerEnd};
     use fidl::{fidl_empty_struct, fidl_struct, Vmo};
     use fidl_fuchsia_io::DirectoryMarker;
@@ -436,6 +436,7 @@ mod tests {
         }
     }
 
+    impl TopLevel for TestStruct {}
     impl Persistable for TestStruct {}
     fidl_struct! {
         name: TestStruct,
@@ -477,7 +478,7 @@ mod tests {
     #[fasync::run_until_stalled(test)]
     async fn test_get() {
         let value_to_get = TestStruct { value: VALUE1 };
-        let content = encode_persistent(&mut value_to_get.to_storable()).unwrap();
+        let content = persist(&mut value_to_get.to_storable()).unwrap();
         let content_len = content.len();
         let fs = mut_pseudo_directory! {
             "xyz.pfidl" => read_write(simple_init_vmo_with_capacity(
@@ -766,6 +767,7 @@ mod tests {
             storable
         }
     }
+    impl TopLevel for WrongStruct {}
     impl Persistable for WrongStruct {}
     fidl_empty_struct! { WrongStruct }
 

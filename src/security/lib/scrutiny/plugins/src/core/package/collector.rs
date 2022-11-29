@@ -24,7 +24,7 @@ use {
     anyhow::{anyhow, Context, Result},
     cm_fidl_analyzer::{match_absolute_pkg_urls, PkgUrlMatch},
     cm_fidl_validator,
-    fidl::encoding::decode_persistent,
+    fidl::encoding::unpersist,
     fidl_fuchsia_component_decl as fdecl,
     fuchsia_merkle::Hash,
     fuchsia_pkg_cache_url::{fuchsia_pkg_cache_component_url, pkg_cache_package_name_and_variant},
@@ -458,7 +458,7 @@ impl PackageDataCollector {
                         let cm_base64 = base64::encode(&decl_bytes);
                         let mut cvf_bytes = None;
 
-                        if let Ok(cm_decl) = decode_persistent::<fdecl::Component>(&decl_bytes) {
+                        if let Ok(cm_decl) = unpersist::<fdecl::Component>(&decl_bytes) {
                             if let Err(err) = cm_fidl_validator::validate(&cm_decl) {
                                 warn!(%err, %url, "Invalid cm");
                             } else {
@@ -611,7 +611,7 @@ impl PackageDataCollector {
                     format!("Failed to convert boot URL to standard URL: {}", url)
                 })?;
                 let cm_base64 = base64::encode(&file_data);
-                if let Ok(cm_decl) = decode_persistent::<fdecl::Component>(&file_data) {
+                if let Ok(cm_decl) = unpersist::<fdecl::Component>(&file_data) {
                     if let Err(err) = cm_fidl_validator::validate(&cm_decl) {
                         warn!(%file_name, %err, "Invalid cm");
                     } else {

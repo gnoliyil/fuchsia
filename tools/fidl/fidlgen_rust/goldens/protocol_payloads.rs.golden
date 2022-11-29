@@ -95,6 +95,8 @@ pub struct LocalStructPayload {
     pub b: u32,
 }
 
+impl fidl::encoding::TopLevel for LocalStructPayload {}
+
 impl fidl::encoding::Persistable for LocalStructPayload {}
 
 fidl_struct_copy! {

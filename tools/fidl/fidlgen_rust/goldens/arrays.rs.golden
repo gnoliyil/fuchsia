@@ -49,6 +49,8 @@ impl UnionLargeArray {
     }
 }
 
+impl fidl::encoding::TopLevel for UnionLargeArray {}
+
 impl fidl::encoding::Persistable for UnionLargeArray {}
 
 fidl_union! {
@@ -80,6 +82,8 @@ impl UnionSmallArray {
     }
 }
 
+impl fidl::encoding::TopLevel for UnionSmallArray {}
+
 impl fidl::encoding::Persistable for UnionSmallArray {}
 
 fidl_union! {
@@ -99,6 +103,8 @@ fidl_union! {
 pub struct StructLargeArray {
     pub a: [u32; 100],
 }
+
+impl fidl::encoding::TopLevel for StructLargeArray {}
 
 impl fidl::encoding::Persistable for StructLargeArray {}
 
@@ -126,6 +132,8 @@ fidl_struct_copy! {
 pub struct StructSmallArray {
     pub a: [u32; 2],
 }
+
+impl fidl::encoding::TopLevel for StructSmallArray {}
 
 impl fidl::encoding::Persistable for StructSmallArray {}
 
@@ -163,6 +171,8 @@ impl TableLargeArray {
     pub const EMPTY: Self = Self { a: None, unknown_data: None, __non_exhaustive: () };
 }
 
+impl fidl::encoding::TopLevel for TableLargeArray {}
+
 impl fidl::encoding::Persistable for TableLargeArray {}
 
 fidl_table! {
@@ -192,6 +202,8 @@ impl TableSmallArray {
     #[allow(deprecated)]
     pub const EMPTY: Self = Self { a: None, unknown_data: None, __non_exhaustive: () };
 }
+
+impl fidl::encoding::TopLevel for TableSmallArray {}
 
 impl fidl::encoding::Persistable for TableSmallArray {}
 

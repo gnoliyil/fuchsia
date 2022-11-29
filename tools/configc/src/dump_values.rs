@@ -5,7 +5,7 @@
 use anyhow::{Context, Error};
 use argh::FromArgs;
 use cm_rust::FidlIntoNative;
-use fidl::encoding::decode_persistent;
+use fidl::encoding::unpersist;
 use fidl_fuchsia_component_config as fconfig;
 use std::{collections::BTreeMap, path::PathBuf};
 
@@ -34,8 +34,7 @@ impl DumpValues {
 
         let cvf_bytes =
             std::fs::read(&cvf).with_context(|| format!("reading {}", cvf.display()))?;
-        let values: fconfig::ValuesData =
-            decode_persistent(&cvf_bytes).context("decoding value file")?;
+        let values: fconfig::ValuesData = unpersist(&cvf_bytes).context("decoding value file")?;
         let values = values.fidl_into_native();
 
         let resolved = config_encoder::ConfigFields::resolve(&config_decl, values)

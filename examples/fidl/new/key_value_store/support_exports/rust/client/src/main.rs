@@ -11,7 +11,7 @@ use {
 
 // [START diff_1]
 use {
-    fidl::encoding::decode_persistent,
+    fidl::encoding::unpersist,
     fidl_examples_keyvaluestore_supportexports::{Exportable, Item, StoreMarker},
     fuchsia_zircon::Vmo,
 };
@@ -70,7 +70,7 @@ async fn main() -> Result<(), Error> {
                 output.read(&mut encoded_bytes, 0)?;
 
                 // Decode the persistent FIDL that was just read from the file.
-                let exportable = decode_persistent::<Exportable>(&encoded_bytes).unwrap();
+                let exportable = unpersist::<Exportable>(&encoded_bytes).unwrap();
                 let items = exportable.items.expect("must always be set");
 
                 // Log some information about the exported data.

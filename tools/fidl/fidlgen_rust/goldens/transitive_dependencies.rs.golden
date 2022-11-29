@@ -35,6 +35,8 @@ pub struct Baz {
     pub g: fidl_test_middle::Bar,
 }
 
+impl fidl::encoding::TopLevel for Baz {}
+
 impl fidl::encoding::Persistable for Baz {}
 
 fidl_struct! {

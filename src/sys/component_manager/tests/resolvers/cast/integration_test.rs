@@ -109,13 +109,7 @@ fn new_fresolution_component() -> fresolution::Component {
     fresolution::Component {
         url: Some(CAST_URL.to_string()),
         decl: Some(fmem::Data::Bytes(
-            fidl::encoding::encode_persistent_with_context(
-                &fidl::encoding::Context {
-                    wire_format_version: fidl::encoding::WireFormatVersion::V2,
-                },
-                &mut fdecl::Component::EMPTY.clone(),
-            )
-            .unwrap(),
+            fidl::encoding::persist(&mut fdecl::Component::EMPTY.clone()).unwrap(),
         )),
         ..fresolution::Component::EMPTY
     }

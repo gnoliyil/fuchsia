@@ -24,6 +24,7 @@ pub struct {{ .Name }} {
     {{- end }}
 }
 
+impl fidl::encoding::TopLevel for {{ .Name }} {}
 {{ if .IsValueType }}
 impl fidl::encoding::Persistable for {{ .Name }} {}
 {{- end }}
@@ -100,6 +101,7 @@ fidl_struct! {
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct {{ .Name }};
 
+impl fidl::encoding::TopLevel for {{ .Name }} {}
 {{ if .IsValueType }}
 impl fidl::encoding::Persistable for {{ .Name }} {}
 {{- end }}

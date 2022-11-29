@@ -70,6 +70,8 @@ pub struct Handles {
     pub request_some_protocol: fidl::endpoints::ServerEnd<SomeProtocolMarker>,
 }
 
+impl fidl::encoding::TopLevel for Handles {}
+
 fidl_struct! {
     name: Handles,
     members: [

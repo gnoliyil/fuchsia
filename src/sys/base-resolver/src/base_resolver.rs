@@ -155,8 +155,8 @@ async fn resolve_component_async(
         .await
         .map_err(crate::ResolverError::ComponentNotFound)?;
     let raw_bytes = mem_util::bytes_from_data(&data).map_err(crate::ResolverError::ReadManifest)?;
-    let decl: fdecl::Component = fidl::encoding::decode_persistent(&raw_bytes[..])
-        .map_err(crate::ResolverError::ParsingManifest)?;
+    let decl: fdecl::Component =
+        fidl::encoding::unpersist(&raw_bytes[..]).map_err(crate::ResolverError::ParsingManifest)?;
 
     let config_values = if let Some(config_decl) = decl.config.as_ref() {
         // if we have a config declaration, we need to read the value file from the package dir
@@ -272,7 +272,7 @@ mod tests {
     use {
         super::*,
         assert_matches::assert_matches,
-        fidl::encoding::encode_persistent_with_context,
+        fidl::encoding::persist,
         fidl::endpoints::{create_proxy, ServerEnd},
         fidl::prelude::*,
         fidl_fuchsia_component_config as fconfig, fidl_fuchsia_component_decl as fdecl,
@@ -412,7 +412,7 @@ mod tests {
             )
             .await,
             Ok(fresolution::Component { decl: Some(decl_as_bytes), .. }) => {
-                assert_eq!(very_long_name(), fidl::encoding::decode_persistent::<fdecl::Component>(
+                assert_eq!(very_long_name(), fidl::encoding::unpersist::<fdecl::Component>(
                     &mem_util::bytes_from_data(&decl_as_bytes).unwrap()[..]
                 )
                 .unwrap()
@@ -598,11 +598,8 @@ mod tests {
     }
 
     fn build_fake_package_dir() -> Arc<dyn vfs::directory::entry::DirectoryEntry> {
-        let cm_bytes = encode_persistent_with_context(
-            &fidl::encoding::Context { wire_format_version: fidl::encoding::WireFormatVersion::V2 },
-            &mut fdecl::Component::EMPTY.clone(),
-        )
-        .expect("failed to encode ComponentDecl FIDL");
+        let cm_bytes = persist(&mut fdecl::Component::EMPTY.clone())
+            .expect("failed to encode ComponentDecl FIDL");
 
         let subpackages = MetaSubpackages::from_iter(vec![(
             RelativePackageUrl::parse(SUBPACKAGE_NAME).unwrap(),
@@ -616,10 +613,7 @@ mod tests {
                 },
                 "foo.cm" => vfs::file::vmo::asynchronous::read_only_const(&cm_bytes),
                 "foo-with-config.cm" => vfs::file::vmo::asynchronous::read_only_const(
-                    &encode_persistent_with_context(
-                        &fidl::encoding::Context {
-                            wire_format_version: fidl::encoding::WireFormatVersion::V2
-                        },
+                    &persist(
                         &mut fdecl::Component {
                             config: Some(fdecl::ConfigSchema {
                                 value_source: Some(
@@ -634,20 +628,14 @@ mod tests {
                     ).unwrap()
                 ),
                 "foo-with-config.cvf" => vfs::file::vmo::asynchronous::read_only_const(
-                    &encode_persistent_with_context(
-                        &fidl::encoding::Context {
-                            wire_format_version: fidl::encoding::WireFormatVersion::V2
-                        },
+                    &persist(
                         &mut fconfig::ValuesData {
                             ..fconfig::ValuesData::EMPTY
                         }
                     ).unwrap()
                 ),
                 "foo-with-bad-config.cm" => vfs::file::vmo::asynchronous::read_only_const(
-                    &encode_persistent_with_context(
-                        &fidl::encoding::Context {
-                            wire_format_version: fidl::encoding::WireFormatVersion::V2
-                        },
+                    &persist(
                         &mut fdecl::Component {
                             config: Some(fdecl::ConfigSchema {
                                 ..fdecl::ConfigSchema::EMPTY
@@ -657,10 +645,7 @@ mod tests {
                     ).unwrap()
                 ),
                 "foo-without-config.cm" => vfs::file::vmo::asynchronous::read_only_const(
-                    &encode_persistent_with_context(
-                        &fidl::encoding::Context {
-                            wire_format_version: fidl::encoding::WireFormatVersion::V2
-                        },
+                    &persist(
                         &mut fdecl::Component {
                             config: Some(fdecl::ConfigSchema {
                                 value_source: Some(
@@ -675,10 +660,7 @@ mod tests {
                     ).unwrap()
                 ),
                 "large.cm" => vfs::file::vmo::asynchronous::read_only_const(
-                    &encode_persistent_with_context(
-                        &fidl::encoding::Context {
-                            wire_format_version: fidl::encoding::WireFormatVersion::V2
-                        },
+                    &persist(
                         &mut fdecl::Component {
                             program: Some(fdecl::Program {
                                 runner: Some(very_long_name()),
@@ -699,11 +681,8 @@ mod tests {
     }
 
     fn build_fake_subpackage_dir() -> Arc<dyn vfs::directory::entry::DirectoryEntry> {
-        let cm_bytes = encode_persistent_with_context(
-            &fidl::encoding::Context { wire_format_version: fidl::encoding::WireFormatVersion::V2 },
-            &mut fdecl::Component::EMPTY.clone(),
-        )
-        .expect("failed to encode ComponentDecl FIDL");
+        let cm_bytes = persist(&mut fdecl::Component::EMPTY.clone())
+            .expect("failed to encode ComponentDecl FIDL");
 
         vfs::pseudo_directory! {
             "meta" => vfs::pseudo_directory! {

@@ -37,6 +37,8 @@ pub struct Padding1ByteEnd {
     pub b: u8,
 }
 
+impl fidl::encoding::TopLevel for Padding1ByteEnd {}
+
 impl fidl::encoding::Persistable for Padding1ByteEnd {}
 
 fidl_struct_copy! {
@@ -77,6 +79,8 @@ pub struct Padding1ByteMiddle {
     pub a: u8,
     pub b: u16,
 }
+
+impl fidl::encoding::TopLevel for Padding1ByteMiddle {}
 
 impl fidl::encoding::Persistable for Padding1ByteMiddle {}
 
@@ -119,6 +123,8 @@ pub struct Padding2ByteAlignmentLength6 {
     pub b: u16,
     pub c: u8,
 }
+
+impl fidl::encoding::TopLevel for Padding2ByteAlignmentLength6 {}
 
 impl fidl::encoding::Persistable for Padding2ByteAlignmentLength6 {}
 
@@ -176,6 +182,8 @@ pub struct Padding2ByteEnd {
     pub b: u16,
 }
 
+impl fidl::encoding::TopLevel for Padding2ByteEnd {}
+
 impl fidl::encoding::Persistable for Padding2ByteEnd {}
 
 fidl_struct_copy! {
@@ -216,6 +224,8 @@ pub struct Padding2ByteMiddle {
     pub a: u16,
     pub b: u32,
 }
+
+impl fidl::encoding::TopLevel for Padding2ByteMiddle {}
 
 impl fidl::encoding::Persistable for Padding2ByteMiddle {}
 
@@ -258,6 +268,8 @@ pub struct Padding3ByteEnd {
     pub b: u8,
 }
 
+impl fidl::encoding::TopLevel for Padding3ByteEnd {}
+
 impl fidl::encoding::Persistable for Padding3ByteEnd {}
 
 fidl_struct_copy! {
@@ -298,6 +310,8 @@ pub struct Padding3ByteMiddle {
     pub a: u8,
     pub b: u32,
 }
+
+impl fidl::encoding::TopLevel for Padding3ByteMiddle {}
 
 impl fidl::encoding::Persistable for Padding3ByteMiddle {}
 
@@ -341,6 +355,8 @@ pub struct Padding4ByteAlignmentLength12 {
     pub c: u16,
     pub d: u16,
 }
+
+impl fidl::encoding::TopLevel for Padding4ByteAlignmentLength12 {}
 
 impl fidl::encoding::Persistable for Padding4ByteAlignmentLength12 {}
 
@@ -403,6 +419,8 @@ pub struct Padding4ByteEnd {
     pub b: u32,
 }
 
+impl fidl::encoding::TopLevel for Padding4ByteEnd {}
+
 impl fidl::encoding::Persistable for Padding4ByteEnd {}
 
 fidl_struct_copy! {
@@ -443,6 +461,8 @@ pub struct Padding4ByteMiddle {
     pub a: u32,
     pub b: u64,
 }
+
+impl fidl::encoding::TopLevel for Padding4ByteMiddle {}
 
 impl fidl::encoding::Persistable for Padding4ByteMiddle {}
 
@@ -485,6 +505,8 @@ pub struct Padding5ByteEnd {
     pub b: u16,
     pub c: u8,
 }
+
+impl fidl::encoding::TopLevel for Padding5ByteEnd {}
 
 impl fidl::encoding::Persistable for Padding5ByteEnd {}
 
@@ -533,6 +555,8 @@ pub struct Padding5ByteMiddle {
     pub c: u64,
 }
 
+impl fidl::encoding::TopLevel for Padding5ByteMiddle {}
+
 impl fidl::encoding::Persistable for Padding5ByteMiddle {}
 
 fidl_struct_copy! {
@@ -579,6 +603,8 @@ pub struct Padding6ByteEnd {
     pub b: u16,
 }
 
+impl fidl::encoding::TopLevel for Padding6ByteEnd {}
+
 impl fidl::encoding::Persistable for Padding6ByteEnd {}
 
 fidl_struct_copy! {
@@ -619,6 +645,8 @@ pub struct Padding6ByteMiddle {
     pub a: u16,
     pub b: u64,
 }
+
+impl fidl::encoding::TopLevel for Padding6ByteMiddle {}
 
 impl fidl::encoding::Persistable for Padding6ByteMiddle {}
 
@@ -661,6 +689,8 @@ pub struct Padding7ByteEnd {
     pub b: u8,
 }
 
+impl fidl::encoding::TopLevel for Padding7ByteEnd {}
+
 impl fidl::encoding::Persistable for Padding7ByteEnd {}
 
 fidl_struct_copy! {
@@ -701,6 +731,8 @@ pub struct Padding7ByteMiddle {
     pub a: u8,
     pub b: u64,
 }
+
+impl fidl::encoding::TopLevel for Padding7ByteMiddle {}
 
 impl fidl::encoding::Persistable for Padding7ByteMiddle {}
 

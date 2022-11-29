@@ -183,7 +183,7 @@ pub async fn read_and_validate_manifest(
 ) -> Result<cm_rust::ComponentDecl, ResolverError> {
     let bytes = mem_util::bytes_from_data(data).map_err(ResolverError::manifest_invalid)?;
     let component_decl: fdecl::Component =
-        fidl::encoding::decode_persistent(&bytes).map_err(ResolverError::manifest_invalid)?;
+        fidl::encoding::unpersist(&bytes).map_err(ResolverError::manifest_invalid)?;
     cm_fidl_validator::validate(&component_decl).map_err(ResolverError::manifest_invalid)?;
     Ok(component_decl.fidl_into_native())
 }
@@ -192,7 +192,7 @@ pub fn read_and_validate_config_values(
     data: &fmem::Data,
 ) -> Result<cm_rust::ValuesData, ResolverError> {
     let bytes = mem_util::bytes_from_data(&data).map_err(ResolverError::config_values_invalid)?;
-    let values = fidl::encoding::decode_persistent(&bytes).map_err(ResolverError::fidl_error)?;
+    let values = fidl::encoding::unpersist(&bytes).map_err(ResolverError::fidl_error)?;
     cm_fidl_validator::validate_values_data(&values)
         .map_err(|e| ResolverError::config_values_invalid(e))?;
     Ok(values.fidl_into_native())
@@ -478,7 +478,7 @@ mod tests {
     #[fuchsia::test]
     async fn test_read_and_validate_manifest() {
         let manifest = fmem::Data::Bytes(
-            fidl::encoding::encode_persistent::<fdecl::Component>(
+            fidl::encoding::persist::<fdecl::Component>(
                 &mut (COMPONENT_DECL.clone()).native_into_fidl(),
             )
             .expect("failed to encode manifest"),
@@ -551,7 +551,7 @@ mod tests {
             checksum: cm_rust::ConfigChecksum::Sha256([0; 32]),
         };
         let data = fmem::Data::Bytes(
-            fidl::encoding::encode_persistent(&mut fidl_config_values)
+            fidl::encoding::persist(&mut fidl_config_values)
                 .expect("failed to encode config values"),
         );
         let actual =

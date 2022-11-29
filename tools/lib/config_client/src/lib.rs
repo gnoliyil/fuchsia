@@ -193,7 +193,7 @@ type Config = struct {
 
         let expected_rust_src = quote! {
             use fidl_cf_sc_internal::Config as FidlConfig;
-            use fidl::encoding::decode_persistent;
+            use fidl::encoding::unpersist;
             use fuchsia_inspect::{Node};
             use fuchsia_runtime::{take_startup_handle, HandleInfo, HandleType};
             use fuchsia_zircon as zx;
@@ -235,7 +235,7 @@ type Config = struct {
 
                     assert_eq!(observed_checksum, expected_checksum, "checksum from config VMO does not match expected checksum");
 
-                    let fidl_config: FidlConfig = decode_persistent(&config_bytes[fidl_start..]).expect("must be able to parse bytes as config FIDL");
+                    let fidl_config: FidlConfig = unpersist(&config_bytes[fidl_start..]).expect("must be able to parse bytes as config FIDL");
 
                     Self {
                         snake_case_string: fidl_config.snake_case_string,

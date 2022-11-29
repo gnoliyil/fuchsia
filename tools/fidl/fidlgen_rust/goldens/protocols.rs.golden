@@ -155,6 +155,8 @@ impl TheUnion {
     }
 }
 
+impl fidl::encoding::TopLevel for TheUnion {}
+
 impl fidl::encoding::Persistable for TheUnion {}
 
 fidl_union! {
@@ -175,6 +177,8 @@ pub struct ProtocolEnds {
     pub client_opt: Option<fidl::endpoints::ClientEnd<DiscoverableProtocolMarker>>,
     pub server_opt: Option<fidl::endpoints::ServerEnd<DiscoverableProtocolMarker>>,
 }
+
+impl fidl::encoding::TopLevel for ProtocolEnds {}
 
 fidl_struct! {
     name: ProtocolEnds,

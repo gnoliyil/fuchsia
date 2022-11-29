@@ -36,6 +36,8 @@ pub struct BasicStruct {
     pub y: String,
 }
 
+impl fidl::encoding::TopLevel for BasicStruct {}
+
 impl fidl::encoding::Persistable for BasicStruct {}
 
 fidl_struct! {
@@ -75,6 +77,8 @@ pub struct Simple {
     pub f1: u8,
     pub f2: bool,
 }
+
+impl fidl::encoding::TopLevel for Simple {}
 
 impl fidl::encoding::Persistable for Simple {}
 

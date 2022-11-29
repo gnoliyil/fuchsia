@@ -7,7 +7,7 @@
 use {
     anyhow::Error,
     camino::{Utf8Path, Utf8PathBuf},
-    fidl::encoding::decode_persistent,
+    fidl::encoding::unpersist,
     fidl_fuchsia_component_decl::Component,
     fidl_fuchsia_data as fdata, fuchsia_archive, fuchsia_pkg,
     fuchsia_url::AbsoluteComponentUrl,
@@ -117,7 +117,7 @@ fn cm_decl_from_meta_far(meta_far_path: &Utf8PathBuf, cm_path: &str) -> Result<C
     let mut meta_far = fs::File::open(meta_far_path)?;
     let mut far_reader = fuchsia_archive::Utf8Reader::new(&mut meta_far)?;
     let cm_contents = far_reader.read_file(cm_path)?;
-    let decl: Component = decode_persistent(&cm_contents)?;
+    let decl: Component = unpersist(&cm_contents)?;
     Ok(decl)
 }
 

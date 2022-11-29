@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 use anyhow::Result;
-use fidl::encoding::decode_persistent;
+use fidl::encoding::unpersist;
 use fidl_fuchsia_component_decl::*;
 use std::fs::File;
 use std::io::Read;
@@ -14,5 +14,5 @@ pub fn read_cm(file: &str) -> Result<Component> {
     let mut buffer = Vec::new();
     let path = PathBuf::from(file);
     File::open(&path)?.read_to_end(&mut buffer)?;
-    Ok(decode_persistent(&buffer)?)
+    Ok(unpersist(&buffer)?)
 }

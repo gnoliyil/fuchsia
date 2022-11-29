@@ -84,6 +84,8 @@ pub struct ExampleOfUseOfAliases {
     pub field_of_nullable_client_end: Option<fidl::Channel>,
 }
 
+impl fidl::encoding::TopLevel for ExampleOfUseOfAliases {}
+
 fidl_struct! {
     name: ExampleOfUseOfAliases,
     members: [

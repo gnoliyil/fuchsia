@@ -21,7 +21,7 @@ pub fn decode_fidl_with_context<T: fidl::encoding::Persistable>(
     bytes: &mut [u8],
 ) -> Result<T, Error> {
     if ctx.use_persistent_header {
-        fidl::encoding::decode_persistent(bytes).map_err(Into::into)
+        fidl::encoding::unpersist(bytes).map_err(Into::into)
     } else {
         let mut value = T::new_empty();
         // WARNING: Since we are decoding without a transaction header, we have to
@@ -40,9 +40,11 @@ pub fn encode_fidl_with_context(
     value: &mut impl fidl::encoding::Persistable,
 ) -> Result<Vec<u8>, Error> {
     if ctx.use_persistent_header {
-        fidl::encoding::encode_persistent_with_context(
-            &fidl::encoding::Context { wire_format_version: fidl::encoding::WireFormatVersion::V1 },
+        // TODO(fxbug.dev/79584): Change to use `fidl::encoding::persist`
+        // (which uses V2 wire format).
+        fidl::encoding::persist_with_context(
             value,
+            &fidl::encoding::Context { wire_format_version: fidl::encoding::WireFormatVersion::V1 },
         )
         .map_err(Into::into)
     } else {
@@ -68,6 +70,7 @@ mod test {
         byte: u8,
     }
 
+    impl fidl::encoding::TopLevel for Foo {}
     impl fidl::encoding::Persistable for Foo {}
 
     fidl_struct! {

@@ -77,6 +77,8 @@ impl FlexibleFoo {
     }
 }
 
+impl fidl::encoding::TopLevel for FlexibleFoo {}
+
 impl fidl::encoding::Persistable for FlexibleFoo {}
 
 fidl_union! {
@@ -113,6 +115,8 @@ impl StrictFoo {
         false
     }
 }
+
+impl fidl::encoding::TopLevel for StrictFoo {}
 
 impl fidl::encoding::Persistable for StrictFoo {}
 

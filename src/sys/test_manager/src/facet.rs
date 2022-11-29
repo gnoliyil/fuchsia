@@ -43,7 +43,7 @@ pub(crate) async fn get_suite_facets(
         .map_err(|e| LaunchTestError::ResolveTest(format_err!("{:?}", e)))?;
     let decl = component.decl.unwrap();
     let bytes = mem_util::bytes_from_data(&decl).map_err(LaunchTestError::ManifestIo)?;
-    let component_decl: fdecl::Component = fidl::encoding::decode_persistent(&bytes)
+    let component_decl: fdecl::Component = fidl::encoding::unpersist(&bytes)
         .map_err(|e| LaunchTestError::InvalidManifest(e.into()))?;
 
     parse_facet(&component_decl).map_err(|e| e.into())

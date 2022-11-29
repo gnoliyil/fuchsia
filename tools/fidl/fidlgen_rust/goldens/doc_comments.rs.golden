@@ -292,6 +292,8 @@ impl FlexibleUnion {
     }
 }
 
+impl fidl::encoding::TopLevel for FlexibleUnion {}
+
 impl fidl::encoding::Persistable for FlexibleUnion {}
 
 fidl_union! {
@@ -330,6 +332,8 @@ impl StrictUnion {
     }
 }
 
+impl fidl::encoding::TopLevel for StrictUnion {}
+
 impl fidl::encoding::Persistable for StrictUnion {}
 
 fidl_union! {
@@ -355,6 +359,8 @@ pub struct Struct {
     /// struct member comment #3
     pub field: i32,
 }
+
+impl fidl::encoding::TopLevel for Struct {}
 
 impl fidl::encoding::Persistable for Struct {}
 
@@ -397,6 +403,8 @@ impl Table {
     #[allow(deprecated)]
     pub const EMPTY: Self = Self { field: None, unknown_data: None, __non_exhaustive: () };
 }
+
+impl fidl::encoding::TopLevel for Table {}
 
 impl fidl::encoding::Persistable for Table {}
 

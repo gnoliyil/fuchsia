@@ -8,7 +8,7 @@ use {
         error::{Error, Location},
     },
     cm_rust::ComponentDecl,
-    fidl::encoding::decode_persistent,
+    fidl::encoding::unpersist,
     fidl_fuchsia_component_decl::Component,
     serde_json::Value,
     serde_json5,
@@ -110,7 +110,7 @@ pub fn read_cm(file: &Path) -> Result<ComponentDecl, Error> {
         .map_err(|e| Error::parse(format!("Couldn't open file: {}", e), None, Some(file)))?
         .read_to_end(&mut buffer)
         .map_err(|e| Error::parse(format!("Couldn't read file: {}", e), None, Some(file)))?;
-    let fidl_component_decl: Component = decode_persistent(&buffer).map_err(|e| {
+    let fidl_component_decl: Component = unpersist(&buffer).map_err(|e| {
         Error::parse(format!("Couldn't decode bytes to Component FIDL: {}", e), None, Some(file))
     })?;
     ComponentDecl::try_from(fidl_component_decl).map_err(|e| {

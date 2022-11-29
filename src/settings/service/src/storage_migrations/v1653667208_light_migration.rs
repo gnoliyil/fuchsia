@@ -5,7 +5,7 @@
 use crate::light::types::LightInfo;
 use crate::migration::{FileGenerator, Migration, MigrationError};
 use anyhow::{anyhow, Context};
-use fidl::encoding::encode_persistent;
+use fidl::encoding::persist;
 use fidl::endpoints::create_proxy;
 use fidl_fuchsia_io::FileProxy;
 use fidl_fuchsia_settings::LightGroup as LightGroupFidl;
@@ -68,8 +68,7 @@ impl Migration for V1653667208LightMigration {
                     .unwrap_err()
                     .into(),
             })?;
-        let encoded =
-            encode_persistent(&mut light_groups).context("failed to serialize new fidl format")?;
+        let encoded = persist(&mut light_groups).context("failed to serialize new fidl format")?;
         let _ = file.write(&encoded).await.context("file to call write")?.map_err(|e| {
             let status = zx::Status::from_raw(e);
             if status == zx::Status::NO_SPACE {

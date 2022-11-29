@@ -132,7 +132,7 @@ mod tests {
             OfferDirectoryDecl, OfferProtocolDecl, OfferSource, OfferTarget, ProgramDecl, UseDecl,
             UseDirectoryDecl, UseProtocolDecl, UseSource,
         },
-        fidl::encoding::encode_persistent_with_context,
+        fidl::encoding::persist,
         fidl_fuchsia_component_decl as fdecl,
         fidl_fuchsia_component_internal as component_internal, fidl_fuchsia_io as fio,
         maplit::hashset,
@@ -275,10 +275,7 @@ mod tests {
 
     fn make_v2_manifest(component_id: i32, decl: ComponentDecl) -> Result<Manifest> {
         let mut decl_fidl: fdecl::Component = decl.native_into_fidl();
-        let cm_base64 = base64::encode(&encode_persistent_with_context(
-            &fidl::encoding::Context { wire_format_version: fidl::encoding::WireFormatVersion::V2 },
-            &mut decl_fidl,
-        )?);
+        let cm_base64 = base64::encode(&persist(&mut decl_fidl)?);
         Ok(Manifest {
             component_id,
             manifest: ManifestData::Version2 { cm_base64, cvf_bytes: None },
@@ -490,10 +487,7 @@ mod tests {
             if split_index_path.as_slice()[..2] == ["/", "boot/"] {
                 bootfs.insert(
                     split_index_path[2..].join(""),
-                    fidl::encoding::encode_persistent_with_context(
-                        &fidl::encoding::Context {
-                            wire_format_version: fidl::encoding::WireFormatVersion::V2,
-                        },
+                    fidl::encoding::persist(
                         &mut component_internal::ComponentIdIndex::try_from(component_id_index)
                             .expect("failed to convert component id index to fidl"),
                     )
@@ -504,13 +498,7 @@ mod tests {
 
         bootfs.insert(
             DEFAULT_CONFIG_PATH.to_string(),
-            fidl::encoding::encode_persistent_with_context(
-                &fidl::encoding::Context {
-                    wire_format_version: fidl::encoding::WireFormatVersion::V2,
-                },
-                &mut runtime_config,
-            )
-            .unwrap(),
+            fidl::encoding::persist(&mut runtime_config).unwrap(),
         );
         return Zbi { sections: Vec::default(), bootfs, cmdline: "".to_string() };
     }

@@ -4,7 +4,7 @@
 
 use anyhow::{Context, Result};
 use cm_rust::{CapabilityName, ComponentDecl, FidlIntoNative, ProgramDecl};
-use fidl::encoding::decode_persistent;
+use fidl::encoding::unpersist;
 use fidl_fuchsia_component_decl as fdecl;
 use fidl_fuchsia_data as fdata;
 use fuchsia_archive::Utf8Reader;
@@ -18,7 +18,7 @@ pub fn find_driver_components(far_reader: &mut FarReader) -> Result<Vec<(Compone
         far_reader.list().map(|e| e.path().to_string()).filter(|p| p.ends_with(".cm")).collect();
     for cm_path in cm_paths {
         let cm_contents = far_reader.read_file(&cm_path)?;
-        let component: ComponentDecl = decode_persistent::<fdecl::Component>(&cm_contents)
+        let component: ComponentDecl = unpersist::<fdecl::Component>(&cm_contents)
             .context("Could not decode component manifest")?
             .fidl_into_native();
 

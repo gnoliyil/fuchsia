@@ -6,7 +6,7 @@ use crate::common::load_manifest;
 use anyhow::{Context as _, Error};
 use argh::FromArgs;
 use cm_rust::NativeIntoFidl;
-use fidl::encoding::encode_persistent_with_context;
+use fidl::encoding::persist;
 use std::{collections::BTreeMap, fs, io::Write, path::PathBuf};
 
 #[derive(FromArgs, PartialEq, Debug)]
@@ -44,11 +44,7 @@ impl GenerateValueFile {
         let values_data = config_value_file::populate_value_file(config_decl, values)
             .context("populating config values")?;
         let mut values_data = values_data.native_into_fidl();
-        let encoded_output = encode_persistent_with_context(
-            &fidl::encoding::Context { wire_format_version: fidl::encoding::WireFormatVersion::V2 },
-            &mut values_data,
-        )
-        .context("encoding value file")?;
+        let encoded_output = persist(&mut values_data).context("encoding value file")?;
 
         // write result to value file output
         if let Some(parent) = self.output.parent() {

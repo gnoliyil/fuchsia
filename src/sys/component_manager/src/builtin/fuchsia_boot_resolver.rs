@@ -143,7 +143,7 @@ impl FuchsiaBootResolver {
         let decl_bytes =
             mem_util::bytes_from_data(&data).map_err(|_| fresolution::ResolverError::Io)?;
 
-        let decl: fdecl::Component = fidl::encoding::decode_persistent(&decl_bytes[..])
+        let decl: fdecl::Component = fidl::encoding::unpersist(&decl_bytes[..])
             .map_err(|_| fresolution::ResolverError::InvalidManifest)?;
 
         let config_values = if let Some(config_decl) = decl.config.as_ref() {
@@ -389,7 +389,7 @@ mod tests {
         ::routing::resolving::ResolvedPackage,
         assert_matches::assert_matches,
         cm_rust::{FidlIntoNative, NativeIntoFidl},
-        fidl::encoding::encode_persistent_with_context,
+        fidl::encoding::persist,
         fidl::endpoints::{create_proxy, ServerEnd},
         fidl_fuchsia_component_config as fconfig, fidl_fuchsia_component_decl as fdecl,
         fidl_fuchsia_data as fdata,
@@ -530,16 +530,8 @@ mod tests {
             checksum: Some(fake_checksum.clone().native_into_fidl()),
             ..fconfig::ValuesData::EMPTY
         };
-        let manifest_encoded = encode_persistent_with_context(
-            &fidl::encoding::Context { wire_format_version: fidl::encoding::WireFormatVersion::V2 },
-            &mut manifest,
-        )
-        .unwrap();
-        let values_data_encoded = encode_persistent_with_context(
-            &fidl::encoding::Context { wire_format_version: fidl::encoding::WireFormatVersion::V2 },
-            &mut values_data,
-        )
-        .unwrap();
+        let manifest_encoded = persist(&mut manifest).unwrap();
+        let values_data_encoded = persist(&mut values_data).unwrap();
         let root = pseudo_directory! {
             "meta" => pseudo_directory! {
                 "has_config.cm" => read_only_static(manifest_encoded),
@@ -600,11 +592,7 @@ mod tests {
             ),
             ..fdecl::Component::EMPTY
         };
-        let manifest_encoded = encode_persistent_with_context(
-            &fidl::encoding::Context { wire_format_version: fidl::encoding::WireFormatVersion::V2 },
-            &mut manifest,
-        )
-        .unwrap();
+        let manifest_encoded = persist(&mut manifest).unwrap();
         let root = pseudo_directory! {
             "meta" => pseudo_directory! {
                 "has_config.cm" => read_only_static(manifest_encoded),
@@ -642,20 +630,14 @@ mod tests {
 
     #[fuchsia::test]
     async fn resolve_errors_test() {
-        let manifest_encoded = encode_persistent_with_context(
-            &fidl::encoding::Context { wire_format_version: fidl::encoding::WireFormatVersion::V2 },
-            &mut fdecl::Component {
-                program: Some(fdecl::Program {
-                    runner: None,
-                    info: Some(fdata::Dictionary {
-                        entries: Some(vec![]),
-                        ..fdata::Dictionary::EMPTY
-                    }),
-                    ..fdecl::Program::EMPTY
-                }),
-                ..fdecl::Component::EMPTY
-            },
-        )
+        let manifest_encoded = persist(&mut fdecl::Component {
+            program: Some(fdecl::Program {
+                runner: None,
+                info: Some(fdata::Dictionary { entries: Some(vec![]), ..fdata::Dictionary::EMPTY }),
+                ..fdecl::Program::EMPTY
+            }),
+            ..fdecl::Component::EMPTY
+        })
         .unwrap();
         let root = pseudo_directory! {
             "meta" => pseudo_directory! {

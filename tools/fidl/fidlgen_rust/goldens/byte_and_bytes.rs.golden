@@ -38,6 +38,8 @@ pub struct ByteAndBytes {
     pub single_byte: u8,
 }
 
+impl fidl::encoding::TopLevel for ByteAndBytes {}
+
 impl fidl::encoding::Persistable for ByteAndBytes {}
 
 fidl_struct_copy! {

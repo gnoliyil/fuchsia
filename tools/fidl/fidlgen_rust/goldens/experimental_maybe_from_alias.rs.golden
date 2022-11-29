@@ -64,6 +64,8 @@ pub struct Testing {
     pub aa3: [[u64; 2]; 3],
 }
 
+impl fidl::encoding::TopLevel for Testing {}
+
 fidl_struct! {
     name: Testing,
     members: [

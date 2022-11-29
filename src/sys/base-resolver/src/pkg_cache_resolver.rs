@@ -135,7 +135,7 @@ async fn resolve_pkg_cache(
         .await
         .map_err(crate::ResolverError::ComponentNotFound)?;
 
-    let decl: fdecl::Component = fidl::encoding::decode_persistent(
+    let decl: fdecl::Component = fidl::encoding::unpersist(
         &mem_util::bytes_from_data(&data).map_err(crate::ResolverError::ReadManifest)?[..],
     )
     .map_err(crate::ResolverError::ParsingManifest)?;
@@ -234,7 +234,7 @@ mod tests {
         let package = fuchsia_pkg_testing::PackageBuilder::new("fake-pkg-cache")
             .add_resource_at(
                 "meta/pkg-cache.cm",
-                fidl::encoding::encode_persistent(&mut fdecl::Component {
+                fidl::encoding::persist(&mut fdecl::Component {
                     config: Some(fdecl::ConfigSchema {
                         value_source: Some(fdecl::ConfigValueSource::PackagePath(
                             "meta/pkg-cache.cvf".into(),
@@ -248,7 +248,7 @@ mod tests {
             )
             .add_resource_at(
                 "meta/pkg-cache.cvf",
-                fidl::encoding::encode_persistent(
+                fidl::encoding::persist(
                     &mut fidl_fuchsia_component_config::ValuesData::EMPTY.clone(),
                 )
                 .unwrap()
@@ -272,9 +272,7 @@ mod tests {
         let package = fuchsia_pkg_testing::PackageBuilder::new("fake-pkg-cache")
             .add_resource_at(
                 "meta/pkg-cache.cm",
-                fidl::encoding::encode_persistent(&mut fdecl::Component::EMPTY.clone())
-                    .unwrap()
-                    .as_slice(),
+                fidl::encoding::persist(&mut fdecl::Component::EMPTY.clone()).unwrap().as_slice(),
             )
             .build()
             .await

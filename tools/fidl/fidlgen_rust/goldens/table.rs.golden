@@ -46,6 +46,8 @@ impl EmptyTable {
     pub const EMPTY: Self = Self { unknown_data: None, __non_exhaustive: () };
 }
 
+impl fidl::encoding::TopLevel for EmptyTable {}
+
 impl fidl::encoding::Persistable for EmptyTable {}
 
 fidl_table! {
@@ -70,6 +72,8 @@ impl ExtensionTable {
     #[allow(deprecated)]
     pub const EMPTY: Self = Self { unknown_data: None, __non_exhaustive: () };
 }
+
+impl fidl::encoding::TopLevel for ExtensionTable {}
 
 impl fidl::encoding::Persistable for ExtensionTable {}
 
@@ -99,6 +103,8 @@ impl NewerSimpleTable {
     pub const EMPTY: Self =
         Self { x: None, y: None, z: None, unknown_data: None, __non_exhaustive: () };
 }
+
+impl fidl::encoding::TopLevel for NewerSimpleTable {}
 
 impl fidl::encoding::Persistable for NewerSimpleTable {}
 
@@ -138,6 +144,8 @@ impl OlderSimpleTable {
     pub const EMPTY: Self = Self { x: None, unknown_data: None, __non_exhaustive: () };
 }
 
+impl fidl::encoding::TopLevel for OlderSimpleTable {}
+
 impl fidl::encoding::Persistable for OlderSimpleTable {}
 
 fidl_table! {
@@ -170,6 +178,8 @@ impl ReverseOrdinalTable {
     pub const EMPTY: Self =
         Self { z: None, y: None, x: None, unknown_data: None, __non_exhaustive: () };
 }
+
+impl fidl::encoding::TopLevel for ReverseOrdinalTable {}
 
 impl fidl::encoding::Persistable for ReverseOrdinalTable {}
 
@@ -209,6 +219,8 @@ impl SimpleTable {
     #[allow(deprecated)]
     pub const EMPTY: Self = Self { x: None, y: None, unknown_data: None, __non_exhaustive: () };
 }
+
+impl fidl::encoding::TopLevel for SimpleTable {}
 
 impl fidl::encoding::Persistable for SimpleTable {}
 
@@ -373,6 +385,8 @@ impl SixtyFourOrdinalTable {
         __non_exhaustive: (),
     };
 }
+
+impl fidl::encoding::TopLevel for SixtyFourOrdinalTable {}
 
 impl fidl::encoding::Persistable for SixtyFourOrdinalTable {}
 
@@ -655,6 +669,8 @@ impl TableWithAttributes {
     #[allow(deprecated)]
     pub const EMPTY: Self = Self { x: None, unknown_data: None, __non_exhaustive: () };
 }
+
+impl fidl::encoding::TopLevel for TableWithAttributes {}
 
 impl fidl::encoding::Persistable for TableWithAttributes {}
 

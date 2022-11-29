@@ -2033,7 +2033,7 @@ async fn use_resolver_from_parent_environment() {
                             .send(&mut Ok(fresolution::Component {
                                 url: Some("test://b".into()),
                                 decl: Some(fmem::Data::Bytes(
-                                    fidl::encoding::encode_persistent::<fdecl::Component>(
+                                    fidl::encoding::persist::<fdecl::Component>(
                                         &mut default_component_decl().native_into_fidl(),
                                     )
                                     .unwrap(),
@@ -2137,7 +2137,7 @@ async fn use_resolver_from_grandparent_environment() {
                             .send(&mut Ok(fresolution::Component {
                                 url: Some("test://c".into()),
                                 decl: Some(fmem::Data::Bytes(
-                                    fidl::encoding::encode_persistent::<fdecl::Component>(
+                                    fidl::encoding::persist::<fdecl::Component>(
                                         &mut default_component_decl().native_into_fidl(),
                                     )
                                     .unwrap(),
@@ -2239,7 +2239,7 @@ async fn resolver_is_not_available() {
                             .send(&mut Ok(fresolution::Component {
                                 url: Some("test://b".into()),
                                 decl: Some(fmem::Data::Bytes(
-                                    fidl::encoding::encode_persistent::<fdecl::Component>(
+                                    fidl::encoding::persist::<fdecl::Component>(
                                         &mut default_component_decl().native_into_fidl(),
                                     )
                                     .unwrap(),
@@ -2347,14 +2347,7 @@ async fn resolver_component_decl_is_validated() {
                                         )]),
                                         ..fdecl::Component::EMPTY
                                     };
-                                    fidl::encoding::encode_persistent_with_context(
-                                        &fidl::encoding::Context {
-                                            wire_format_version:
-                                                fidl::encoding::WireFormatVersion::V2,
-                                        },
-                                        &mut fidl,
-                                    )
-                                    .unwrap()
+                                    fidl::encoding::persist(&mut fidl).unwrap()
                                 })),
                                 package: None,
                                 // this test only resolves one component_url

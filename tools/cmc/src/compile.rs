@@ -8,7 +8,7 @@ use crate::features::FeatureSet;
 use crate::include;
 use crate::util;
 use crate::validate;
-use fidl::encoding::encode_persistent_with_context;
+use fidl::encoding::persist;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
@@ -63,10 +63,7 @@ pub fn compile(
     let mut out_file =
         fs::OpenOptions::new().create(true).truncate(true).write(true).open(output)?;
     let mut out_data = cml::compile(&document, config_package_path)?;
-    out_file.write_all(&encode_persistent_with_context(
-        &fidl::encoding::Context { wire_format_version: fidl::encoding::WireFormatVersion::V2 },
-        &mut out_data,
-    )?)?;
+    out_file.write_all(&persist(&mut out_data)?)?;
 
     // Write includes to depfile
     if let Some(depfile_path) = depfile {
@@ -108,7 +105,7 @@ mod tests {
     use super::*;
     use crate::features::Feature;
     use assert_matches::assert_matches;
-    use fidl::encoding::decode_persistent;
+    use fidl::encoding::unpersist;
     use fidl_fuchsia_component_decl as fdecl;
     use fidl_fuchsia_data as fdata;
     use serde_json::json;
@@ -143,7 +140,7 @@ mod tests {
         let mut buffer = Vec::new();
         fs::File::open(&out_path).unwrap().read_to_end(&mut buffer).unwrap();
 
-        let output: fdecl::Component = decode_persistent(&buffer).unwrap();
+        let output: fdecl::Component = unpersist(&buffer).unwrap();
         if output != expected_output {
             panic!(
                 "compiled output did not match expected\nactual: {:#?}\nexpected: {:#?}",

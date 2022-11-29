@@ -8,7 +8,7 @@ use anyhow::{ensure, format_err, Context};
 use assembly_validate_util::PkgNamespace;
 use camino::{Utf8Path, Utf8PathBuf};
 use cm_rust::{FidlIntoNative, NativeIntoFidl};
-use fidl::encoding::{decode_persistent, Persistable};
+use fidl::encoding::{unpersist, Persistable};
 use fuchsia_pkg::{PackageBuilder, PackageManifest};
 use std::{collections::BTreeMap, fmt::Debug};
 
@@ -74,7 +74,7 @@ impl<B: PkgNamespaceBuilder> Repackager<B> {
             // create a value file
             let mut config_values =
                 config_value_file::populate_value_file(&config_decl, values)?.native_into_fidl();
-            let config_bytes = fidl::encoding::encode_persistent(&mut config_values)
+            let config_bytes = fidl::encoding::persist(&mut config_values)
                 .map_err(RepackageError::EncodeConfig)?;
 
             // write it to the meta.far at the path expected by the resolver
@@ -241,7 +241,7 @@ where
     Raw: FidlIntoNative<Output> + Persistable,
     VF: Fn(&Raw) -> Result<(), cm_fidl_validator::error::ErrorList>,
 {
-    let raw: Raw = decode_persistent(&bytes).map_err(PersistentFidlError::Decode)?;
+    let raw: Raw = unpersist(&bytes).map_err(PersistentFidlError::Decode)?;
     validate(&raw).map_err(PersistentFidlError::Validate)?;
     Ok(raw.fidl_into_native())
 }

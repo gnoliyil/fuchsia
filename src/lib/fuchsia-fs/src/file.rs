@@ -7,7 +7,7 @@
 use {
     crate::node::{CloseError, OpenError},
     anyhow::Error,
-    fidl::encoding::{decode_persistent, encode_persistent_with_context, Persistable},
+    fidl::encoding::{persist, unpersist, Persistable},
     fidl_fuchsia_io as fio, fuchsia_zircon_status as zx_status,
     thiserror::Error,
 };
@@ -199,14 +199,7 @@ where
 
 /// Write the given FIDL message in a binary form into a file open for writing.
 pub async fn write_fidl<T: Persistable>(file: &fio::FileProxy, data: &mut T) -> Result<(), Error> {
-    write(
-        file,
-        encode_persistent_with_context(
-            &fidl::encoding::Context { wire_format_version: fidl::encoding::WireFormatVersion::V2 },
-            data,
-        )?,
-    )
-    .await?;
+    write(file, persist(data)?).await?;
     Ok(())
 }
 
@@ -218,14 +211,7 @@ pub async fn write_fidl_in_namespace<T: Persistable>(
     path: &str,
     data: &mut T,
 ) -> Result<(), Error> {
-    write_in_namespace(
-        path,
-        encode_persistent_with_context(
-            &fidl::encoding::Context { wire_format_version: fidl::encoding::WireFormatVersion::V2 },
-            data,
-        )?,
-    )
-    .await?;
+    write_in_namespace(path, persist(data)?).await?;
     Ok(())
 }
 
@@ -327,7 +313,7 @@ pub async fn read_in_namespace_to_string_with_timeout(
 /// https://fuchsia.dev/fuchsia-src/development/languages/fidl/guides/abi-compat
 pub async fn read_fidl<T: Persistable>(file: &fio::FileProxy) -> Result<T, Error> {
     let bytes = read(file).await?;
-    Ok(decode_persistent(&bytes)?)
+    Ok(unpersist(&bytes)?)
 }
 
 /// Read the given FIDL message from binary file at `path` in the current namespace. The path
@@ -338,7 +324,7 @@ pub async fn read_fidl<T: Persistable>(file: &fio::FileProxy) -> Result<T, Error
 #[cfg(target_os = "fuchsia")]
 pub async fn read_in_namespace_to_fidl<T: Persistable>(path: &str) -> Result<T, Error> {
     let bytes = read_in_namespace(path).await?;
-    Ok(decode_persistent(&bytes)?)
+    Ok(unpersist(&bytes)?)
 }
 
 #[cfg(test)]
@@ -568,11 +554,7 @@ mod tests {
         };
 
         // Binary encoded FIDL message, with header and padding.
-        let fidl_bytes = encode_persistent_with_context(
-            &fidl::encoding::Context { wire_format_version: fidl::encoding::WireFormatVersion::V2 },
-            &mut data,
-        )
-        .unwrap();
+        let fidl_bytes = persist(&mut data).unwrap();
 
         write_fidl(&file, &mut data).await.unwrap();
 

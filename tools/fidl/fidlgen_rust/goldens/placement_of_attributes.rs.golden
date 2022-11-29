@@ -118,6 +118,8 @@ impl ExampleUnion {
     }
 }
 
+impl fidl::encoding::TopLevel for ExampleUnion {}
+
 impl fidl::encoding::Persistable for ExampleUnion {}
 
 fidl_union! {
@@ -174,6 +176,8 @@ impl ExampleXUnion {
     }
 }
 
+impl fidl::encoding::TopLevel for ExampleXUnion {}
+
 impl fidl::encoding::Persistable for ExampleXUnion {}
 
 fidl_union! {
@@ -194,6 +198,8 @@ fidl_union! {
 pub struct ExampleStruct {
     pub member: u32,
 }
+
+impl fidl::encoding::TopLevel for ExampleStruct {}
 
 impl fidl::encoding::Persistable for ExampleStruct {}
 
@@ -230,6 +236,8 @@ impl ExampleTable {
     #[allow(deprecated)]
     pub const EMPTY: Self = Self { member: None, unknown_data: None, __non_exhaustive: () };
 }
+
+impl fidl::encoding::TopLevel for ExampleTable {}
 
 impl fidl::encoding::Persistable for ExampleTable {}
 

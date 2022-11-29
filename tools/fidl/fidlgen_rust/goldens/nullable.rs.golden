@@ -52,6 +52,8 @@ impl SimpleUnion {
     }
 }
 
+impl fidl::encoding::TopLevel for SimpleUnion {}
+
 impl fidl::encoding::Persistable for SimpleUnion {}
 
 fidl_union! {
@@ -76,6 +78,8 @@ pub struct Int32Wrapper {
     pub val: i32,
 }
 
+impl fidl::encoding::TopLevel for Int32Wrapper {}
+
 impl fidl::encoding::Persistable for Int32Wrapper {}
 
 fidl_struct_copy! {
@@ -99,6 +103,8 @@ fidl_struct_copy! {
 pub struct StructWithNullableHandle {
     pub val: Option<fidl::Vmo>,
 }
+
+impl fidl::encoding::TopLevel for StructWithNullableHandle {}
 
 fidl_struct! {
     name: StructWithNullableHandle,
@@ -126,6 +132,8 @@ pub struct StructWithNullableProtocol {
     pub val: Option<fidl::endpoints::ClientEnd<SimpleProtocolMarker>>,
 }
 
+impl fidl::encoding::TopLevel for StructWithNullableProtocol {}
+
 fidl_struct! {
     name: StructWithNullableProtocol,
     members: [
@@ -151,6 +159,8 @@ fidl_struct! {
 pub struct StructWithNullableRequest {
     pub val: Option<fidl::endpoints::ServerEnd<SimpleProtocolMarker>>,
 }
+
+impl fidl::encoding::TopLevel for StructWithNullableRequest {}
 
 fidl_struct! {
     name: StructWithNullableRequest,
@@ -178,6 +188,8 @@ pub struct StructWithNullableString {
     pub val: Option<String>,
 }
 
+impl fidl::encoding::TopLevel for StructWithNullableString {}
+
 impl fidl::encoding::Persistable for StructWithNullableString {}
 
 fidl_struct! {
@@ -201,6 +213,8 @@ fidl_struct! {
 pub struct StructWithNullableStruct {
     pub val: Option<Box<Int32Wrapper>>,
 }
+
+impl fidl::encoding::TopLevel for StructWithNullableStruct {}
 
 impl fidl::encoding::Persistable for StructWithNullableStruct {}
 
@@ -226,6 +240,8 @@ pub struct StructWithNullableUnion {
     pub val: Option<Box<SimpleUnion>>,
 }
 
+impl fidl::encoding::TopLevel for StructWithNullableUnion {}
+
 impl fidl::encoding::Persistable for StructWithNullableUnion {}
 
 fidl_struct! {
@@ -249,6 +265,8 @@ fidl_struct! {
 pub struct StructWithNullableVector {
     pub val: Option<Vec<i32>>,
 }
+
+impl fidl::encoding::TopLevel for StructWithNullableVector {}
 
 impl fidl::encoding::Persistable for StructWithNullableVector {}
 

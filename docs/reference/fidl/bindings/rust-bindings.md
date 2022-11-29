@@ -700,42 +700,46 @@ This provides the `PROTOCOL_NAME` associated constant.
 
 FIDL messages are automatically encoded when they are sent and decoded when they
 are received. You can also encode and decode explicitly, for example to persist
-FIDL data to a file. This works for [non-resource][lang-resource] structs,
-tables, and unions.
+FIDL data to a file. Following [RFC-0120: Standalone use of the FIDL wire
+format][rfc-0120], the bindings offer a [persistence API](#persistence) and a
+[standalone API](#standalone).
 
-### Simple method {#encoding-decoding-simple-method}
+### Persistence {#persistence}
 
-The easiest way to to explicitly encode and decode is to use
-[`encode_persistent`] and [`decode_persistent`].
+The recommended way to to explicitly encode and decode is to use [`persist`] and
+[`unpersist`]. This works for [non-resource][lang-resource] structs, tables, and
+unions.
 
-For example, you can encode a [`Color` struct](#types-structs):
+For example, you can persist a [`Color` struct](#types-structs):
 
 ```rust
-{% includecode gerrit_repo="fuchsia/fuchsia" gerrit_path="examples/fidl/rust/persistence/src/lib.rs" region_tag="simple_method_encode" adjust_indentation="auto" %}
+{% includecode gerrit_repo="fuchsia/fuchsia" gerrit_path="examples/fidl/rust/persistence/src/lib.rs" region_tag="persist" adjust_indentation="auto" %}
 ```
 
-And then decode it later:
+And then unpersist it later:
 
 ```rust
-{% includecode gerrit_repo="fuchsia/fuchsia" gerrit_path="examples/fidl/rust/persistence/src/lib.rs" region_tag="simple_method_decode" adjust_indentation="auto" %}
+{% includecode gerrit_repo="fuchsia/fuchsia" gerrit_path="examples/fidl/rust/persistence/src/lib.rs" region_tag="unpersist" adjust_indentation="auto" %}
 ```
 
-### Separating the header
+### Standalone {#standalone}
 
-The [simple method](#encoding-decoding-simple-method) automatically places a
-small header at the beginning that stores FIDL metadata. For advanced use cases,
-you can manage the header manually. For example, you can encode both a
-[`JsonValue` union](#types-unions) and a [`User` table](#types-tables) using
-only one header instead of two:
+For advanced use cases where the [persistence API](#persistence) is not
+sufficient, you can use the [`standalone_encode`] and [`standalone_decode`].
+This works for structs, tables, and unions, even if they contain handles.
+
+For example, you can encode a [`JsonValue` union](#types-unions):
 
 ```rust
-{% includecode gerrit_repo="fuchsia/fuchsia" gerrit_path="examples/fidl/rust/persistence/src/lib.rs" region_tag="separate_header_encode" adjust_indentation="auto" %}
+{% includecode gerrit_repo="fuchsia/fuchsia" gerrit_path="examples/fidl/rust/persistence/src/lib.rs" region_tag="standalone_encode" adjust_indentation="auto" %}
 ```
 
-Then, you must first decode the header and use it to decode the other values:
+This returns a vector of bytes, a vector of [`HandleDisposition`]s, and an
+opaque object that stores wire format metadata. To decode, you need to provide
+all three values, with handle dispositions converted to [`HandleInfo`]s:
 
 ```rust
-{% includecode gerrit_repo="fuchsia/fuchsia" gerrit_path="examples/fidl/rust/persistence/src/lib.rs" region_tag="separate_header_decode" adjust_indentation="auto" %}
+{% includecode gerrit_repo="fuchsia/fuchsia" gerrit_path="examples/fidl/rust/persistence/src/lib.rs" region_tag="standalone_decode" adjust_indentation="auto" %}
 ```
 
 ## Appendix A: Derived traits {#derived-traits}
@@ -754,9 +758,13 @@ The calculation of traits derivation rules is visible in
 ```
 
 <!-- link labels -->
+[`HandleDisposition`]: https://fuchsia-docs.firebaseapp.com/rust/fuchsia_zircon/struct.HandleDisposition.html
+[`HandleInfo`]: https://fuchsia-docs.firebaseapp.com/rust/fuchsia_zircon/struct.HandleInfo.html
+[`persist`]: https://fuchsia-docs.firebaseapp.com/rust/fidl/encoding/fn.persist.html
+[`standalone_decode`]: https://fuchsia-docs.firebaseapp.com/rust/fidl/encoding/fn.standalone_decode.html
+[`standalone_encode`]: https://fuchsia-docs.firebaseapp.com/rust/fidl/encoding/fn.standalone_encode.html
+[`unpersist`]: https://fuchsia-docs.firebaseapp.com/rust/fidl/encoding/fn.unpersist.html
 [anon-names]: /docs/reference/fidl/language/language.md#inline-layouts
-[`decode_persistent`]: https://fuchsia-docs.firebaseapp.com/rust/fidl/encoding/fn.decode_persistent.html
-[`encode_persistent`]: https://fuchsia-docs.firebaseapp.com/rust/fidl/encoding/fn.encode_persistent.html
 [lang-bits]: /docs/reference/fidl/language/language.md#bits
 [lang-constants]: /docs/reference/fidl/language/language.md#constants
 [lang-enums]: /docs/reference/fidl/language/language.md#enums
@@ -767,5 +775,6 @@ The calculation of traits derivation rules is visible in
 [lang-structs]: /docs/reference/fidl/language/language.md#structs
 [lang-tables]: /docs/reference/fidl/language/language.md#tables
 [lang-unions]: /docs/reference/fidl/language/language.md#unions
+[rfc-0120]: /docs/contribute/governance/rfcs/0120_standalone_use_of_fidl_wire_format.md
 [tutorial]: /docs/development/languages/fidl/tutorials/rust
 [unknown-attr]: /docs/reference/fidl/language/attributes.md#unknown

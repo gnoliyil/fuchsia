@@ -59,7 +59,7 @@ pub fn create_rust_wrapper(
 
     let stream = quote! {
         use #fidl_library_name::Config as FidlConfig;
-        use fidl::encoding::decode_persistent;
+        use fidl::encoding::unpersist;
         use fuchsia_inspect::{#(#inspect_uses),*};
         use fuchsia_runtime::{take_startup_handle, HandleInfo, HandleType};
         use fuchsia_zircon as zx;
@@ -88,7 +88,7 @@ pub fn create_rust_wrapper(
 
                 assert_eq!(observed_checksum, expected_checksum, "checksum from config VMO does not match expected checksum");
 
-                let fidl_config: FidlConfig = decode_persistent(&config_bytes[fidl_start..]).expect("must be able to parse bytes as config FIDL");
+                let fidl_config: FidlConfig = unpersist(&config_bytes[fidl_start..]).expect("must be able to parse bytes as config FIDL");
 
                 Self {
                     #(#field_conversions),*

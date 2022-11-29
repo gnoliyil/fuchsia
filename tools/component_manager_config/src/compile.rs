@@ -6,7 +6,7 @@ use {
     argh::FromArgs,
     cm_types::{symmetrical_enums, Url},
     cml::error::{Error, Location},
-    fidl::encoding::encode_persistent_with_context,
+    fidl::encoding::persist,
     fidl_fuchsia_component_decl as fdecl, fidl_fuchsia_component_internal as component_internal,
     serde::Deserialize,
     serde_json5,
@@ -469,11 +469,7 @@ fn compile(args: Args) -> Result<(), Error> {
         configs.into_iter().try_fold(Config::default(), |acc, next| acc.merge(next))?;
 
     let mut config_fidl: component_internal::Config = config_json.try_into()?;
-    let bytes = encode_persistent_with_context(
-        &fidl::encoding::Context { wire_format_version: fidl::encoding::WireFormatVersion::V2 },
-        &mut config_fidl,
-    )
-    .map_err(|e| Error::FidlEncoding(e))?;
+    let bytes = persist(&mut config_fidl).map_err(|e| Error::FidlEncoding(e))?;
     let mut file = File::create(args.output).map_err(|e| Error::Io(e))?;
     file.write_all(&bytes).map_err(|e| Error::Io(e))?;
     Ok(())
@@ -483,7 +479,7 @@ fn compile(args: Args) -> Result<(), Error> {
 mod tests {
     use super::*;
     use {
-        assert_matches::assert_matches, fidl::encoding::decode_persistent,
+        assert_matches::assert_matches, fidl::encoding::unpersist,
         fidl_fuchsia_component_decl as fdecl, fidl_fuchsia_io as fio, std::io::Read,
         tempfile::TempDir,
     };
@@ -497,7 +493,7 @@ mod tests {
         compile(args)?;
         let mut bytes = Vec::new();
         File::open(output_path)?.read_to_end(&mut bytes)?;
-        let config: component_internal::Config = decode_persistent(&bytes)?;
+        let config: component_internal::Config = unpersist(&bytes)?;
         Ok(config)
     }
 
@@ -897,7 +893,7 @@ mod tests {
 
         let mut bytes = Vec::new();
         File::open(output_path)?.read_to_end(&mut bytes)?;
-        let config: component_internal::Config = decode_persistent(&bytes)?;
+        let config: component_internal::Config = unpersist(&bytes)?;
         assert_eq!(config.debug, Some(true));
         assert_eq!(config.list_children_batch_size, Some(42));
         assert_eq!(config.reboot_on_terminate_enabled, Some(true));

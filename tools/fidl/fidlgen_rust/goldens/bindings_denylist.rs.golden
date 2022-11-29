@@ -84,6 +84,8 @@ pub struct MemberOnlyAppearsInImportingLibrary {
     pub a: bool,
 }
 
+impl fidl::encoding::TopLevel for MemberOnlyAppearsInImportingLibrary {}
+
 impl fidl::encoding::Persistable for MemberOnlyAppearsInImportingLibrary {}
 
 fidl_struct! {
@@ -107,6 +109,8 @@ fidl_struct! {
 pub struct OnlyAppearsInImportingLibrary {
     pub member_only_appears_in_importing_library: MemberOnlyAppearsInImportingLibrary,
 }
+
+impl fidl::encoding::TopLevel for OnlyAppearsInImportingLibrary {}
 
 impl fidl::encoding::Persistable for OnlyAppearsInImportingLibrary {}
 
@@ -142,6 +146,8 @@ impl OnlyRust {
     #[allow(deprecated)]
     pub const EMPTY: Self = Self { unknown_data: None, __non_exhaustive: () };
 }
+
+impl fidl::encoding::TopLevel for OnlyRust {}
 
 impl fidl::encoding::Persistable for OnlyRust {}
 

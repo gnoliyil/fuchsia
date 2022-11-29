@@ -1,4 +1,4 @@
-use fidl::encoding::decode_persistent;
+use fidl::encoding::unpersist;
 use fidl_my_config_lib::Config as FidlConfig;
 use fuchsia_inspect::{ArithmeticArrayProperty, ArrayProperty, Node};
 use fuchsia_runtime::{take_startup_handle, HandleInfo, HandleType};
@@ -50,7 +50,7 @@ impl Config {
             observed_checksum, expected_checksum,
             "checksum from config VMO does not match expected checksum"
         );
-        let fidl_config: FidlConfig = decode_persistent(&config_bytes[fidl_start..])
+        let fidl_config: FidlConfig = unpersist(&config_bytes[fidl_start..])
             .expect("must be able to parse bytes as config FIDL");
         Self {
             my_flag: fidl_config.my_flag,
