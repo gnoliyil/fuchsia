@@ -129,6 +129,8 @@ pub enum Function {
     Apply,
     Map,
     Fold,
+    All,
+    Any,
     Filter,
     Count,
     Nanos,
@@ -193,6 +195,15 @@ enum ShortCircuitBehavior {
     True,
     // Short circuit when the first false value is found.
     False,
+}
+
+struct MapFoldBoolArgs<'a> {
+    pub namespace: &'a str,
+    pub operands: &'a [ExpressionTree],
+    pub function_name: &'a str,
+    pub default_when_empty: bool,
+    pub function: &'a dyn Fn(bool, bool) -> bool,
+    pub short_circuit_behavior: ShortCircuitBehavior,
 }
 
 /// ExpressionTree represents the parsed body of an Eval Metric. It applies
@@ -572,6 +583,22 @@ impl<'a> MetricState<'a> {
             Function::Apply => self.apply(namespace, operands),
             Function::Map => self.map(namespace, operands),
             Function::Fold => self.fold(namespace, operands),
+            Function::All => self.map_fold_bool(MapFoldBoolArgs {
+                namespace,
+                operands,
+                function_name: "All",
+                default_when_empty: true,
+                function: &|a, b| a && b,
+                short_circuit_behavior: ShortCircuitBehavior::False,
+            }),
+            Function::Any => self.map_fold_bool(MapFoldBoolArgs {
+                namespace,
+                operands,
+                function_name: "Any",
+                default_when_empty: false,
+                function: &|a, b| a || b,
+                short_circuit_behavior: ShortCircuitBehavior::True,
+            }),
             Function::Filter => self.filter(namespace, operands),
             Function::Count => self.count(namespace, operands),
             Function::Nanos => self.time(namespace, operands, 1),
@@ -799,6 +826,38 @@ impl<'a> MetricState<'a> {
             result = self.apply_lambda(namespace, &lambda, &[&result, item]);
         }
         result
+    }
+
+    fn map_fold_bool(&self, args: MapFoldBoolArgs<'_>) -> MetricValue {
+        let (lambda, arguments) =
+            match self.unpack_lambda(args.namespace, args.operands, args.function_name) {
+                Ok((lambda, arguments)) => (lambda, arguments),
+                Err(problem) => return problem,
+            };
+        if arguments.len() != 1 {
+            return syntax_error(&format!(
+                "{} needs two arguments (function, vector)",
+                args.function_name
+            ));
+        }
+        let MetricValue::Vector(v) = &arguments[0] else {
+            return syntax_error(&format!(
+                "The second argument passed to {} must be a vector",
+                args.function_name
+            ));
+        };
+        // Return default_when_empty in case of empty args
+        if v.is_empty() {
+            return MetricValue::Bool(args.default_when_empty);
+        }
+        let operands: Vec<_> = v
+            .iter()
+            .map(|item| {
+                let metric_value = self.apply_lambda(args.namespace, &lambda, &[&item]);
+                ExpressionTree::Value(metric_value)
+            })
+            .collect();
+        self.fold_bool(args.namespace, args.function, &operands, args.short_circuit_behavior)
     }
 
     /// This implements the Filter() function.

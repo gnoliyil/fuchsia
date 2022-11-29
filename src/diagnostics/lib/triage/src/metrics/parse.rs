@@ -292,6 +292,8 @@ fn function_name_parser<'a>(i: ParsingContext<'a>) -> ParsingResult<'a, Function
             function!("Fn", Lambda),
             function!("Map", Map),
             function!("Fold", Fold),
+            function!("All", All),
+            function!("Any", Any),
             function!("Filter", Filter),
             function!("Apply", Apply),
             function!("Count", Count),
@@ -918,9 +920,14 @@ mod test {
         Ok(())
     }
 
+    fn b(b: bool) -> MetricValue {
+        MetricValue::Bool(b)
+    }
+
     fn i(i: i64) -> MetricValue {
         MetricValue::Int(i)
     }
+
     fn v(v: &[MetricValue]) -> MetricValue {
         MetricValue::Vector(v.to_vec())
     }
@@ -944,6 +951,38 @@ mod test {
         assert_eq!(eval!("Fold(Fn([a, b], a + 1), ['a', 'b', 'c', 'd'], 0)"), i(4));
         assert_eq!(eval!("Filter(Fn([a], a > 5), [2, 4, 6, 8])"), v(&[i(6), i(8)]));
         assert_eq!(eval!("Count([1, 'a', 3, 2])"), i(4));
+
+        assert_eq!(eval!("All(Fn([a], a > 5), [2, 4, 6, 8])"), b(false));
+        assert_eq!(eval!("All(Fn([a], a > 1), [2, 4, 6, 8])"), b(true));
+        assert_eq!(eval!("Any(Fn([a], a > 5), [2, 4, 6, 8])"), b(true));
+        assert_eq!(eval!("Any(Fn([a], a > 8), [2, 4, 6, 8])"), b(false));
+        assert_eq!(eval!("Any(Fn([a], a > 8), [])"), b(false));
+        assert_eq!(eval!("All(Fn([a], a > 8), [])"), b(true));
+
+        // Wrong arguments order
+        assert_problem!(
+            eval!("All([2, 4, 6, 8], Fn([a], a > 8))"),
+            "SyntaxError: All needs a function in its first argument"
+        );
+        // Wrong number of arguments: 0
+        assert_problem!(eval!("All()"), "SyntaxError: All needs a function in its first argument");
+        // Wrong number of arguments: 1
+        assert_problem!(
+            eval!("All(Fn([a], a > 8))"),
+            "SyntaxError: All needs two arguments (function, vector)"
+        );
+        // Wrong number of arguments: 3
+        assert_problem!(
+            eval!("All(Fn([a], a > 8), [], [])"),
+            "SyntaxError: All needs two arguments (function, vector)"
+        );
+        // Wrong argument type
+        assert_problem!(
+            eval!("All(Fn([a], a > 8), 'b')"),
+            "SyntaxError: The second argument passed to All must be a vector"
+        );
+        // Lambda not returning a boolean
+        assert_problem!(eval!("Any(Fn([a], a), [2, 4])"), "ValueError: Int(2) is not boolean");
         Ok(())
     }
 
