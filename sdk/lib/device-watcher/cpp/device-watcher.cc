@@ -9,10 +9,9 @@
 #include <lib/fdio/directory.h>
 #include <lib/fdio/unsafe.h>
 #include <lib/fdio/watcher.h>
+#include <lib/fit/defer.h>
 #include <lib/zx/clock.h>
 #include <string.h>
-
-#include <fbl/unique_fd.h>
 
 namespace device_watcher {
 
@@ -22,29 +21,28 @@ constexpr char kDevPath[] = "/dev/";
 
 }
 
-namespace fio = fuchsia_io;
-
 __EXPORT
-zx_status_t DirWatcher::Create(fbl::unique_fd dir_fd,
-                               std::unique_ptr<DirWatcher>* out_dir_watcher) {
-  zx::result endpoints = fidl::CreateEndpoints<fio::DirectoryWatcher>();
+zx_status_t DirWatcher::Create(int dir_fd, std::unique_ptr<DirWatcher>* out_dir_watcher) {
+  zx::result endpoints = fidl::CreateEndpoints<fuchsia_io::DirectoryWatcher>();
   if (endpoints.is_error()) {
     return endpoints.status_value();
   }
 
-  fdio_t* io = fdio_unsafe_fd_to_io(dir_fd.get());
+  fdio_t* io = fdio_unsafe_fd_to_io(dir_fd);
   zx::unowned_channel channel{fdio_unsafe_borrow_channel(io)};
 
   // Make a one-off call to fuchsia.io.Directory.Watch to open a channel from
   // which watch events can be read.
-  auto result = fidl::WireCall(fidl::UnownedClientEnd<fio::Directory>(channel))
-                    ->Watch(fio::wire::WatchMask::kRemoved, 0, std::move(endpoints->server));
+  auto result = fidl::WireCall(fidl::UnownedClientEnd<fuchsia_io::Directory>(channel))
+                    ->Watch(fuchsia_io::wire::WatchMask::kRemoved, 0, std::move(endpoints->server));
 
   fdio_unsafe_release(io);
+
   if (!result.ok()) {
     return result.status();
   }
   *out_dir_watcher = std::make_unique<DirWatcher>(std::move(endpoints->client));
+
   return ZX_OK;
 }
 
@@ -66,13 +64,14 @@ zx_status_t DirWatcher::WaitForRemoval(std::string_view filename, zx::duration t
     //  uint8_t event
     //  uint8_t len
     //  char* name
-    uint8_t buf[fio::wire::kMaxBuf];
+    uint8_t buf[fuchsia_io::wire::kMaxBuf];
     uint32_t actual_len;
     status = client_.channel().read(0, buf, nullptr, sizeof(buf), 0, &actual_len, nullptr);
     if (status != ZX_OK) {
       return status;
     }
-    if (static_cast<fio::wire::WatchEvent>(buf[0]) != fio::wire::WatchEvent::kRemoved) {
+    if (static_cast<fuchsia_io::wire::WatchEvent>(buf[0]) !=
+        fuchsia_io::wire::WatchEvent::kRemoved) {
       continue;
     }
     if (filename.length() == 0) {
@@ -88,15 +87,15 @@ zx_status_t DirWatcher::WaitForRemoval(std::string_view filename, zx::duration t
 }
 
 __EXPORT
-zx_status_t IterateDirectory(const fbl::unique_fd& fd, FileCallback callback) {
+zx_status_t IterateDirectory(const int fd, FileCallback callback) {
   struct dirent* entry;
 
-  DIR* dir = fdopendir(fd.get());
+  DIR* dir = fdopendir(fd);
   if (dir == nullptr) {
     return ZX_ERR_IO;
   }
 
-  fdio_t* io = fdio_unsafe_fd_to_io(fd.get());
+  fdio_t* io = fdio_unsafe_fd_to_io(fd);
   zx::unowned_channel dir_channel{fdio_unsafe_borrow_channel(io)};
 
   zx_status_t status = ZX_OK;
@@ -106,7 +105,7 @@ zx_status_t IterateDirectory(const fbl::unique_fd& fd, FileCallback callback) {
       continue;
     }
 
-    auto endpoints = fidl::CreateEndpoints<fio::Node>();
+    auto endpoints = fidl::CreateEndpoints<fuchsia_io::Node>();
     if (endpoints.is_error()) {
       status = endpoints.status_value();
       goto finish;
@@ -132,10 +131,8 @@ finish:
   return status;
 }
 
-// Waits for |file| to appear in |dir|, and opens it when it does.  Times out if
-// the deadline passes.
 __EXPORT
-zx_status_t WaitForFile(const fbl::unique_fd& dir, const char* file, fbl::unique_fd* out) {
+zx::result<zx::channel> WaitForFile(const int dir_fd, const char* file) {
   auto watch_func = [](int dirfd, int event, const char* fn, void* cookie) -> zx_status_t {
     const std::string_view& file = *static_cast<std::string_view*>(cookie);
     if (event != WATCH_EVENT_ADD_FILE) {
@@ -148,15 +145,17 @@ zx_status_t WaitForFile(const fbl::unique_fd& dir, const char* file, fbl::unique
   };
 
   std::string_view file_view{file};
-  zx_status_t status = fdio_watch_directory(dir.get(), watch_func, ZX_TIME_INFINITE, &file_view);
+  zx_status_t status = fdio_watch_directory(dir_fd, watch_func, ZX_TIME_INFINITE, &file_view);
   if (status != ZX_ERR_STOP) {
-    return status;
+    return zx::error(status);
   }
-  out->reset(openat(dir.get(), file, O_RDWR));
-  if (!out->is_valid()) {
-    return ZX_ERR_IO;
+  // Open a channel to the file.
+  zx::channel chan;
+  status = fdio_get_service_handle(openat(dir_fd, file, O_RDWR), chan.reset_and_get_address());
+  if (status != ZX_OK) {
+    return zx::error(status);
   }
-  return ZX_OK;
+  return zx::ok(std::move(chan));
 }
 
 namespace {
@@ -164,9 +163,8 @@ namespace {
 // This variant of WaitForFile opens the file specified relative to the rootdir,
 // using the full_path. This is a workaround to deal with the fact that devhosts
 // do not implement open_at.
-zx_status_t WaitForFile2(const fbl::unique_fd& rootdir, const fbl::unique_fd& dir,
-                         const char* full_path, const char* file, bool last, bool readonly,
-                         fbl::unique_fd* out) {
+zx::result<zx::channel> WaitForFile2(const int rootdir_fd, const int dir_fd, const char* full_path,
+                                     const char* file, bool last, bool readonly) {
   auto watch_func = [](int dirfd, int event, const char* fn, void* cookie) -> zx_status_t {
     const std::string_view& file = *static_cast<std::string_view*>(cookie);
     if (event != WATCH_EVENT_ADD_FILE) {
@@ -179,9 +177,9 @@ zx_status_t WaitForFile2(const fbl::unique_fd& rootdir, const fbl::unique_fd& di
   };
 
   std::string_view file_view{file};
-  zx_status_t status = fdio_watch_directory(dir.get(), watch_func, ZX_TIME_INFINITE, &file_view);
+  zx_status_t status = fdio_watch_directory(dir_fd, watch_func, ZX_TIME_INFINITE, &file_view);
   if (status != ZX_ERR_STOP) {
-    return status;
+    return zx::error(status);
   }
   int flags = O_RDWR;
   if (readonly) {
@@ -190,74 +188,81 @@ zx_status_t WaitForFile2(const fbl::unique_fd& rootdir, const fbl::unique_fd& di
   if (!last) {
     flags = O_RDONLY | O_DIRECTORY;
   }
-  out->reset(openat(rootdir.get(), full_path, flags));
-  if (!out->is_valid()) {
-    return ZX_ERR_IO;
+
+  // Open a channel to the file.
+  zx::channel chan;
+  status =
+      fdio_get_service_handle(openat(rootdir_fd, full_path, flags), chan.reset_and_get_address());
+  if (status != ZX_OK) {
+    return zx::error(status);
   }
-  return ZX_OK;
+  return zx::ok(std::move(chan));
 }
 
 // Version of RecursiveWaitForFile that can mutate its path
-zx_status_t RecursiveWaitForFileHelper(const fbl::unique_fd& rootdir, const fbl::unique_fd& dir,
-                                       const char* full_path, char* path, bool readonly,
-                                       fbl::unique_fd* out) {
+zx::result<zx::channel> RecursiveWaitForFileHelper(const int rootdir_fd, const int dir_fd,
+                                                   const char* full_path, char* path,
+                                                   bool readonly) {
   char* first_slash = strchr(path, '/');
   if (first_slash == nullptr) {
     // If there's no first slash, then we're just waiting for the file
     // itself to appear.
-    return WaitForFile2(rootdir, dir, full_path, path, true, readonly, out);
+    return WaitForFile2(rootdir_fd, dir_fd, full_path, path, true, readonly);
   }
   *first_slash = 0;
 
-  fbl::unique_fd next_dir;
-  zx_status_t status = WaitForFile2(rootdir, dir, full_path, path, false, readonly, &next_dir);
-  if (status != ZX_OK) {
-    return status;
+  auto result = WaitForFile2(rootdir_fd, dir_fd, full_path, path, false, readonly);
+  if (!result.is_ok()) {
+    return result.take_error();
   }
+  int next_fd;
+  zx_status_t status = fdio_fd_create(result.value().release(), &next_fd);
+  if (status != ZX_OK) {
+    return zx::error(status);
+  }
+  auto close_action = fit::defer([next_fd]() { close(next_fd); });
   *first_slash = '/';
-  return RecursiveWaitForFileHelper(rootdir, next_dir, full_path, first_slash + 1, readonly, out);
+  return RecursiveWaitForFileHelper(rootdir_fd, next_fd, full_path, first_slash + 1, readonly);
 }
 
 }  // namespace
 
-// Waits for the relative |path| starting in |dir| to appear, and opens it.
 __EXPORT
-zx_status_t RecursiveWaitForFile(const fbl::unique_fd& dir, const char* path, fbl::unique_fd* out) {
+zx::result<zx::channel> RecursiveWaitForFile(const int dir_fd, const char* path) {
   char path_copy[PATH_MAX];
   if (strlen(path) >= sizeof(path_copy)) {
-    return ZX_ERR_INVALID_ARGS;
+    return zx::error(ZX_ERR_INVALID_ARGS);
   }
   strcpy(path_copy, path);
-  return RecursiveWaitForFileHelper(dir, dir, path_copy, path_copy, false, out);
+  return RecursiveWaitForFileHelper(dir_fd, dir_fd, path_copy, path_copy, false);
 }
 
 __EXPORT
-zx_status_t RecursiveWaitForFile(const char* path, fbl::unique_fd* out) {
+zx::result<zx::channel> RecursiveWaitForFile(const char* path) {
   if (strncmp(kDevPath, path, strlen(kDevPath) - 1) != 0) {
-    return ZX_ERR_NOT_SUPPORTED;
+    return zx::error(ZX_ERR_NOT_SUPPORTED);
   }
-  fbl::unique_fd dev(open(kDevPath, O_RDONLY | O_DIRECTORY));
-  return RecursiveWaitForFile(dev, path + strlen(kDevPath), out);
+  const int dev_fd = open(kDevPath, O_RDONLY | O_DIRECTORY);
+  return RecursiveWaitForFile(dev_fd, path + strlen(kDevPath));
 }
 
 __EXPORT
-zx_status_t RecursiveWaitForFileReadOnly(const char* path, fbl::unique_fd* out) {
+zx::result<zx::channel> RecursiveWaitForFileReadOnly(const char* path) {
   if (strncmp(kDevPath, path, strlen(kDevPath) - 1) != 0) {
-    return ZX_ERR_NOT_SUPPORTED;
+    return zx::error(ZX_ERR_NOT_SUPPORTED);
   }
-  fbl::unique_fd dev(open(kDevPath, O_RDONLY | O_DIRECTORY));
-  return RecursiveWaitForFileReadOnly(dev, path + strlen(kDevPath), out);
+  const int dev_fd = open(kDevPath, O_RDONLY | O_DIRECTORY);
+  return RecursiveWaitForFileReadOnly(dev_fd, path + strlen(kDevPath));
 }
 
 __EXPORT
-zx_status_t RecursiveWaitForFileReadOnly(const fbl::unique_fd& dir, const char* path,
-                                         fbl::unique_fd* out) {
+zx::result<zx::channel> RecursiveWaitForFileReadOnly(const int dir_fd, const char* path) {
   char path_copy[PATH_MAX];
   if (strlen(path) >= sizeof(path_copy)) {
-    return ZX_ERR_INVALID_ARGS;
+    return zx::error(ZX_ERR_INVALID_ARGS);
   }
   strcpy(path_copy, path);
-  return RecursiveWaitForFileHelper(dir, dir, path_copy, path_copy, true, out);
+  return RecursiveWaitForFileHelper(dir_fd, dir_fd, path_copy, path_copy, true);
 }
 
 }  // namespace device_watcher

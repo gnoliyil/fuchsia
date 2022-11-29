@@ -48,12 +48,14 @@ TEST(DeviceWatcherTest, Smoke) {
   ASSERT_EQ(ZX_OK,
             fdio_fd_create(endpoints->client.TakeChannel().release(), dir.reset_and_get_address()));
 
-  fbl::unique_fd out;
-  ASSERT_EQ(ZX_OK, device_watcher::WaitForFile(dir, "file", &out));
+  ASSERT_EQ(ZX_OK, device_watcher::WaitForFile(dir.get(), "file").status_value());
 
-  ASSERT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile(dir, "second/third/file", &out));
+  ASSERT_EQ(ZX_OK,
+            device_watcher::RecursiveWaitForFile(dir.get(), "second/third/file").status_value());
 
-  ASSERT_EQ(ZX_OK, device_watcher::RecursiveWaitForFileReadOnly(dir, "second/third/file", &out));
+  ASSERT_EQ(
+      ZX_OK,
+      device_watcher::RecursiveWaitForFileReadOnly(dir.get(), "second/third/file").status_value());
 
   sync_completion_t shutdown;
 
@@ -65,11 +67,11 @@ TEST(DeviceWatcherTest, Smoke) {
 }
 
 TEST(DeviceWatcherTest, OpenInNamespace) {
-  fbl::unique_fd f;
-  ASSERT_EQ(device_watcher::RecursiveWaitForFileReadOnly("/dev/sys/test", &f), ZX_OK);
-  ASSERT_EQ(device_watcher::RecursiveWaitForFile("/dev/sys/test", &f), ZX_OK);
+  ASSERT_EQ(device_watcher::RecursiveWaitForFileReadOnly("/dev/sys/test").status_value(), ZX_OK);
+  ASSERT_EQ(device_watcher::RecursiveWaitForFile("/dev/sys/test").status_value(), ZX_OK);
 
-  ASSERT_EQ(device_watcher::RecursiveWaitForFile("/other-test/file", &f), ZX_ERR_NOT_SUPPORTED);
+  ASSERT_EQ(device_watcher::RecursiveWaitForFile("/other-test/file").status_value(),
+            ZX_ERR_NOT_SUPPORTED);
 }
 
 TEST(DeviceWatcherTest, DirWatcherWaitForRemoval) {
@@ -100,9 +102,9 @@ TEST(DeviceWatcherTest, DirWatcherWaitForRemoval) {
             fdio_fd_create(endpoints->client.TakeChannel().release(), dir.reset_and_get_address()));
   fbl::unique_fd sub_dir(openat(dir.get(), "second/third", O_DIRECTORY | O_RDONLY));
 
-  fbl::unique_fd out;
-  ASSERT_EQ(ZX_OK, device_watcher::WaitForFile(dir, "file", &out));
-  ASSERT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile(dir, "second/third/file", &out));
+  ASSERT_EQ(ZX_OK, device_watcher::WaitForFile(dir.get(), "file").status_value());
+  ASSERT_EQ(ZX_OK,
+            device_watcher::RecursiveWaitForFile(dir.get(), "second/third/file").status_value());
 
   // Verify removal of the root directory file
   std::unique_ptr<device_watcher::DirWatcher> root_watcher;
@@ -117,6 +119,47 @@ TEST(DeviceWatcherTest, DirWatcherWaitForRemoval) {
 
   third->RemoveEntry("file");
   ASSERT_EQ(ZX_OK, sub_watcher->WaitForRemoval("file", zx::duration::infinite()));
+
+  sync_completion_t shutdown;
+
+  vfs.Shutdown([&shutdown](zx_status_t status) {
+    sync_completion_signal(&shutdown);
+    ASSERT_EQ(status, ZX_OK);
+  });
+  ASSERT_EQ(sync_completion_wait(&shutdown, zx::duration::infinite().get()), ZX_OK);
+}
+
+TEST(DeviceWatcherTest, DirWatcherVerifyUnowned) {
+  async::Loop loop(&kAsyncLoopConfigNoAttachToCurrentThread);
+  auto file = fbl::MakeRefCounted<fs::UnbufferedPseudoFile>(
+      [](fbl::String* output) { return ZX_OK; }, [](std::string_view input) { return ZX_OK; });
+
+  auto first = fbl::MakeRefCounted<fs::PseudoDir>();
+  first->AddEntry("file", file);
+
+  auto endpoints = fidl::CreateEndpoints<fuchsia_io::Directory>();
+  ASSERT_EQ(ZX_OK, endpoints.status_value());
+
+  loop.StartThread();
+  fs::ManagedVfs vfs(loop.dispatcher());
+
+  vfs.ServeDirectory(first, std::move(endpoints->server));
+
+  fbl::unique_fd dir;
+  ASSERT_EQ(ZX_OK,
+            fdio_fd_create(endpoints->client.TakeChannel().release(), dir.reset_and_get_address()));
+
+  ASSERT_EQ(ZX_OK, device_watcher::WaitForFile(dir.get(), "file").status_value());
+
+  std::unique_ptr<device_watcher::DirWatcher> root_watcher;
+  ASSERT_EQ(ZX_OK, device_watcher::DirWatcher::Create(dir.get(), &root_watcher));
+
+  // Close the directory fd
+  ASSERT_EQ(ZX_OK, dir.reset());
+
+  // Verify the watcher can still successfully wait for removal
+  first->RemoveEntry("file");
+  ASSERT_EQ(ZX_OK, root_watcher->WaitForRemoval("file", zx::duration::infinite()));
 
   sync_completion_t shutdown;
 
@@ -172,7 +215,7 @@ class IterateDirectoryTest : public zxtest::Test {
 TEST_F(IterateDirectoryTest, IterateDirectory) {
   std::vector<std::string> seen;
   zx_status_t status = device_watcher::IterateDirectory(
-      std::move(dir_), [&seen](std::string_view filename, zx::channel channel) {
+      dir_.get(), [&seen](std::string_view filename, zx::channel channel) {
         // Collect the file names into the vector.
         seen.emplace_back(filename);
         return ZX_OK;
@@ -190,7 +233,7 @@ TEST_F(IterateDirectoryTest, IterateDirectoryCancelled) {
   // Test that iteration is cancelled when the callback returns an error
   std::vector<std::string> seen;
   zx_status_t status = device_watcher::IterateDirectory(
-      std::move(dir_), [&seen](std::string_view filename, zx::channel channel) {
+      dir_.get(), [&seen](std::string_view filename, zx::channel channel) {
         seen.emplace_back(filename);
         return ZX_ERR_INTERNAL;
       });
@@ -205,7 +248,7 @@ TEST_F(IterateDirectoryTest, IterateDirectoryChannel) {
   // fuchsia.io.Node calls.
   std::vector<uint64_t> content_sizes;
   zx_status_t status = device_watcher::IterateDirectory(
-      std::move(dir_), [&content_sizes](std::string_view filename, zx::channel channel) {
+      dir_.get(), [&content_sizes](std::string_view filename, zx::channel channel) {
         auto result =
             fidl::WireCall(fidl::UnownedClientEnd<fuchsia_io::Node>(channel.borrow()))->GetAttr();
         if (!result.ok()) {

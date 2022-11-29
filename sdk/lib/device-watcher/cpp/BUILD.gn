@@ -11,12 +11,16 @@ sdk_source_set("cpp") {
   sdk_name = "device-watcher"
   include_base = "//sdk"
   sources = [
+    "device-watcher-internal.cc",
     "device-watcher.cc",
     "device-watcher.h",
   ]
   public_deps = [
     "//sdk/fidl/fuchsia.io:fuchsia.io_cpp_wire",
+    "//sdk/lib/fit",
     "//zircon/system/ulib/async",
+
+    # TODO(fxbug.dev/89042): Move fbl to private deps or remove.
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/zx",
     "//zircon/system/ulib/zxc",
