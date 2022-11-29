@@ -17,7 +17,7 @@ done the following:
   include `tools` bundle by default, then you can manually add it with `fx set`:
 
   <pre class="prettyprint">
-  <code class="devsite-terminal">fx set <var>PRODUCT</var>.<var>BOARD</var> --with-base '//bundles:tools'</code>
+  <code class="devsite-terminal">fx set <var>PRODUCT</var>.<var>BOARD</var> --with-base '//bundles/tools'</code>
   </pre>
 
 ## Use the utilities
