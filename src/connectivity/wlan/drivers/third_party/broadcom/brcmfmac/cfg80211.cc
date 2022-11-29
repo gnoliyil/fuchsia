@@ -2121,15 +2121,13 @@ static void brcmf_log_client_stats(struct brcmf_cfg80211_info* cfg) {
       zxlogf(
           INFO,
           "FW Err Counts: Rx: Err Rate: %.2f err %u oflo %u nobuf %u runt %u fragerr %u badplcp %u "
-          "crsglitch %u badfcs %u fragerr %u giant %u noscb %u badsrcmac %u",
+          "crsglitch %u badfcs %u giant %u noscb %u badsrcmac %u",
           rx_err_rate * 100.0, counters->rxerror, counters->rxoflo, counters->rxnobuf,
           counters->rxrunt, counters->rxfragerr, counters->rxbadplcp, counters->rxcrsglitch,
-          counters->rxbadfcs, counters->rxfragerr, counters->rxgiant, counters->rxnoscb,
-          counters->rxbadsrcmac);
+          counters->rxbadfcs, counters->rxgiant, counters->rxnoscb, counters->rxbadsrcmac);
     }
-
-    ndev->client_stats_log_count++;
   }
+  ndev->client_stats_log_count++;
 }
 
 static void brcmf_disconnect_done(struct brcmf_cfg80211_info* cfg) {
