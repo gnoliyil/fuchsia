@@ -46,7 +46,7 @@
             "mon:stdio",
         {{else}}
             "-serial",
-            "unix:{{runtime.instance_directory}}/serial,server,nowait",
+            "unix:{{runtime.instance_directory}}/serial,server,nowait,logfile={{host.log}}.serial",
         {{/if}}
         "-machine",
         {{#if (eq device.cpu.architecture "arm64")}}
