@@ -1263,6 +1263,7 @@ mod tests {
             future::Future,
             net::{Ipv4Addr, Ipv6Addr, SocketAddr},
             rc::Rc,
+            str::FromStr,
             sync::{Arc, Mutex},
         },
     };
@@ -2786,7 +2787,7 @@ mod tests {
         assert_eq!(
             DaemonEventHandler::build_matcher(TargetInfo {
                 nodename: Some(TARGET_NODENAME.to_string()),
-                addresses: vec![TargetAddr::new("[fe80::1%1000]:0").unwrap()],
+                addresses: vec![TargetAddr::from_str("[fe80::1%1000]:0").unwrap()],
                 ..TargetInfo::default()
             }),
             Some(TARGET_NODENAME.to_string())
@@ -2797,7 +2798,7 @@ mod tests {
     fn test_build_matcher_missing_nodename_no_port() {
         assert_eq!(
             DaemonEventHandler::build_matcher(TargetInfo {
-                addresses: vec![TargetAddr::new("[fe80::1%1000]:0").unwrap()],
+                addresses: vec![TargetAddr::from_str("[fe80::1%1000]:0").unwrap()],
                 ..TargetInfo::default()
             }),
             Some("fe80::1%1000".to_string())
@@ -2808,7 +2809,7 @@ mod tests {
     fn test_build_matcher_missing_nodename_with_port() {
         assert_eq!(
             DaemonEventHandler::build_matcher(TargetInfo {
-                addresses: vec![TargetAddr::new("[fe80::1%1000]:0").unwrap()],
+                addresses: vec![TargetAddr::from_str("[fe80::1%1000]:0").unwrap()],
                 ssh_port: Some(9182),
                 ..TargetInfo::default()
             }),

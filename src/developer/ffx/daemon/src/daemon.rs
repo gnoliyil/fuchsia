@@ -815,6 +815,7 @@ mod test {
         std::cell::RefCell,
         std::collections::BTreeSet,
         std::iter::FromIterator,
+        std::str::FromStr,
         std::time::SystemTime,
     };
 
@@ -848,7 +849,7 @@ mod test {
         let (_proxy, daemon, _task) = spawn_test_daemon();
         let target = Target::new_with_netsvc_addrs(
             Some("abc"),
-            BTreeSet::from_iter(vec![TargetAddr::new("[fe80::1%1]:22").unwrap()].into_iter()),
+            BTreeSet::from_iter(vec![TargetAddr::from_str("[fe80::1%1]:22").unwrap()].into_iter()),
         );
         daemon.target_collection.merge_insert(target);
         let result = daemon.open_remote_control(None).await;
@@ -942,7 +943,7 @@ mod test {
         let expiring_target = Target::new_with_addr_entries(
             Some("goodbye-world"),
             vec![TargetAddrEntry {
-                addr: TargetAddr::new("127.0.0.1:8088").unwrap(),
+                addr: TargetAddr::from_str("127.0.0.1:8088").unwrap(),
                 timestamp: Utc::now(),
                 addr_type: TargetAddrType::Manual(Some(SystemTime::now())),
             }]
@@ -953,7 +954,7 @@ mod test {
         let persistent_target = Target::new_with_addr_entries(
             Some("i-will-stick-around"),
             vec![TargetAddrEntry {
-                addr: TargetAddr::new("127.0.0.1:8089").unwrap(),
+                addr: TargetAddr::from_str("127.0.0.1:8089").unwrap(),
                 timestamp: Utc::now(),
                 addr_type: TargetAddrType::Manual(None),
             }]

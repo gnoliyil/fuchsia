@@ -413,6 +413,7 @@ mod test {
     use super::*;
     use addr::TargetAddr;
     use assert_matches::assert_matches;
+    use std::str::FromStr;
     use std::rc::Rc;
 
     const ERR_CTX: &'static str = "running fake host-pipe command for test";
@@ -478,7 +479,7 @@ mod test {
     async fn test_host_pipe_start_and_stop_normal_operation() {
         let target = crate::target::Target::new_with_addrs(
             Some("flooooooooberdoober"),
-            [TargetAddr::new("192.168.1.1:22").unwrap()].into(),
+            [TargetAddr::from_str("192.168.1.1:22").unwrap()].into(),
         );
         let res = HostPipeConnection::new_with_cmd(
             Rc::downgrade(&target),
@@ -495,7 +496,7 @@ mod test {
         // TODO(awdavies): Verify the error matches.
         let target = crate::target::Target::new_with_addrs(
             Some("flooooooooberdoober"),
-            [TargetAddr::new("192.168.1.1:22").unwrap()].into(),
+            [TargetAddr::from_str("192.168.1.1:22").unwrap()].into(),
         );
         let res = HostPipeConnection::new_with_cmd(
             Rc::downgrade(&target),
@@ -510,7 +511,7 @@ mod test {
     async fn test_host_pipe_start_and_stop_ssh_failure() {
         let target = crate::target::Target::new_with_addrs(
             Some("flooooooooberdoober"),
-            [TargetAddr::new("192.168.1.1:22").unwrap()].into(),
+            [TargetAddr::from_str("192.168.1.1:22").unwrap()].into(),
         );
         let events = target.events.clone();
         let task = Task::local(async move {

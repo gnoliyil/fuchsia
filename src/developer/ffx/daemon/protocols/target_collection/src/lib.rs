@@ -186,6 +186,7 @@ impl TargetCollectionProtocol {
                 }
             } else {
                 // Manual targets without a lifetime are always reloaded.
+                tracing::debug!("Loading manual target: {:?}", sa);
                 add_manual_target(self.manual_targets.clone(), tc, sa, None).await;
             }
         }
@@ -543,6 +544,7 @@ mod tests {
     use protocols::testing::FakeDaemonBuilder;
     use serde_json::{json, Map, Value};
     use std::cell::RefCell;
+    use std::str::FromStr;
 
     #[fuchsia_async::run_singlethreaded(test)]
     async fn test_handle_mdns_non_fastboot() {
@@ -823,7 +825,7 @@ mod tests {
             .register_fidl_protocol::<FakeFastboot>()
             .register_fidl_protocol::<TargetCollectionProtocol>()
             .build();
-        let target_addr = TargetAddr::new("[::1]:0").unwrap();
+        let target_addr = TargetAddr::from_str("[::1]:0").unwrap();
         let proxy = fake_daemon.open_proxy::<ffx::TargetCollectionMarker>().await;
         let (client, server) =
             fidl::endpoints::create_endpoints::<ffx::AddTargetResponder_Marker>().unwrap();
@@ -843,7 +845,7 @@ mod tests {
             .register_fidl_protocol::<FakeFastboot>()
             .register_fidl_protocol::<TargetCollectionProtocol>()
             .build();
-        let target_addr = TargetAddr::new("[::1]:0").unwrap();
+        let target_addr = TargetAddr::from_str("[::1]:0").unwrap();
         let proxy = fake_daemon.open_proxy::<ffx::TargetCollectionMarker>().await;
         proxy.add_ephemeral_target(&mut target_addr.into(), 3600).await.unwrap();
         let target_collection = Context::new(fake_daemon).get_target_collection().await.unwrap();
@@ -859,7 +861,7 @@ mod tests {
             .register_fidl_protocol::<FakeFastboot>()
             .register_fidl_protocol::<TargetCollectionProtocol>()
             .build();
-        let target_addr = TargetAddr::new("[::1]:8022").unwrap();
+        let target_addr = TargetAddr::from_str("[::1]:8022").unwrap();
         let proxy = fake_daemon.open_proxy::<ffx::TargetCollectionMarker>().await;
         let (client, server) =
             fidl::endpoints::create_endpoints::<ffx::AddTargetResponder_Marker>().unwrap();
@@ -879,7 +881,7 @@ mod tests {
             .register_fidl_protocol::<FakeFastboot>()
             .register_fidl_protocol::<TargetCollectionProtocol>()
             .build();
-        let target_addr = TargetAddr::new("[::1]:8022").unwrap();
+        let target_addr = TargetAddr::from_str("[::1]:8022").unwrap();
         let proxy = fake_daemon.open_proxy::<ffx::TargetCollectionMarker>().await;
         proxy.add_ephemeral_target(&mut target_addr.into(), 3600).await.unwrap();
         let target_collection = Context::new(fake_daemon).get_target_collection().await.unwrap();

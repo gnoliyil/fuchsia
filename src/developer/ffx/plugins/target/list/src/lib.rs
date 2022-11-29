@@ -111,8 +111,11 @@ mod test {
     }
 
     fn to_fidl_target(nodename: String) -> FidlTargetInfo {
-        let addr: TargetAddr =
-            (IpAddr::from([0xfe80, 0x0, 0x0, 0x0, 0xdead, 0xbeef, 0xbeef, 0xbeef]), 3).into();
+        let addr: TargetAddr = TargetAddr::new(
+            IpAddr::from([0xfe80, 0x0, 0x0, 0x0, 0xdead, 0xbeef, 0xbeef, 0xbeef]),
+            3,
+            0,
+        );
         FidlTargetInfo {
             nodename: Some(nodename),
             addresses: Some(vec![addr.into()]),

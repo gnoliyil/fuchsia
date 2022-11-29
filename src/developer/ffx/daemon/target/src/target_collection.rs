@@ -373,8 +373,8 @@ impl From<String> for TargetQuery {
         // looking up a target, however (like `fe80::1%nonsense`).
         let scope = scope.map(|s| netext::get_verified_scope_id(s).unwrap_or(0)).unwrap_or(0);
         match port {
-            Some(p) => Self::AddrPort((TargetAddr::from((addr, scope)), p)),
-            None => Self::Addr(TargetAddr::from((addr, scope))),
+            Some(p) => Self::AddrPort((TargetAddr::new(addr, scope, 0), p)),
+            None => Self::Addr(TargetAddr::new(addr, scope, 0)),
         }
     }
 }
@@ -450,17 +450,17 @@ mod tests {
         ));
         let a3 = IpAddr::V6(Ipv6Addr::new(0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1));
         let tae1 = TargetAddrEntry {
-            addr: (a1, 1).into(),
+            addr: TargetAddr::new(a1, 1, 0),
             timestamp: Utc.ymd(2014, 10, 31).and_hms(9, 10, 12),
             addr_type: TargetAddrType::Ssh,
         };
         let tae2 = TargetAddrEntry {
-            addr: (a2, 1).into(),
+            addr: TargetAddr::new(a2, 1, 0),
             timestamp: Utc.ymd(2014, 10, 31).and_hms(9, 10, 12),
             addr_type: TargetAddrType::Ssh,
         };
         let tae3 = TargetAddrEntry {
-            addr: (a3, 1).into(),
+            addr: TargetAddr::new(a3, 1, 0),
             timestamp: Utc.ymd(2014, 10, 31).and_hms(9, 10, 12),
             addr_type: TargetAddrType::Manual(None),
         };
@@ -470,12 +470,12 @@ mod tests {
         tc.merge_insert(clone_target(&t));
         let t2 = Target::new_with_time(&nodename, Utc.ymd(2014, 11, 2).and_hms(13, 2, 1));
         let a1 = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 10));
-        t2.addrs_insert((a1.clone(), 1).into());
+        t2.addrs_insert(TargetAddr::new(a1.clone(), 1, 0));
         let merged_target = tc.merge_insert(t2);
         assert_eq!(merged_target.nodename(), Some(nodename));
         assert_eq!(merged_target.addrs().len(), 2);
-        assert!(merged_target.addrs().contains(&(a1, 1).into()));
-        assert!(merged_target.addrs().contains(&(a3, 1).into()));
+        assert!(merged_target.addrs().contains(&TargetAddr::new(a1, 1, 0)));
+        assert!(merged_target.addrs().contains(&TargetAddr::new(a3, 1, 0)));
     }
 
     #[fuchsia_async::run_singlethreaded(test)]
@@ -488,8 +488,8 @@ mod tests {
         let a2 = IpAddr::V6(Ipv6Addr::new(
             0xfe80, 0xcafe, 0xf00d, 0xf000, 0xb412, 0xb455, 0x1337, 0xfeed,
         ));
-        t1.addrs_insert((a1.clone(), 1).into());
-        t2.addrs_insert((a2.clone(), 1).into());
+        t1.addrs_insert(TargetAddr::new(a1.clone(), 1, 0));
+        t2.addrs_insert(TargetAddr::new(a2.clone(), 1, 0));
         tc.merge_insert(clone_target(&t2));
         tc.merge_insert(clone_target(&t1));
         let merged_target = tc.get(nodename.clone()).unwrap();
@@ -497,21 +497,21 @@ mod tests {
         assert_ne!(merged_target, t2);
         assert_eq!(merged_target.addrs().len(), 2);
         assert_eq!(*merged_target.last_response.borrow(), Utc.ymd(2014, 11, 2).and_hms(13, 2, 1));
-        assert!(merged_target.addrs().contains(&(a1, 1).into()));
-        assert!(merged_target.addrs().contains(&(a2, 1).into()));
+        assert!(merged_target.addrs().contains(&TargetAddr::new(a1, 1, 0)));
+        assert!(merged_target.addrs().contains(&TargetAddr::new(a2, 1, 0)));
 
         // Insert another instance of the a2 address, but with a missing
         // scope_id, and ensure that the new address does not affect the address
         // collection.
         let t3 = Target::new_with_time(&nodename, Utc.ymd(2014, 10, 31).and_hms(9, 10, 12));
-        t3.addrs_insert((a2.clone(), 0).into());
+        t3.addrs_insert(TargetAddr::new(a2.clone(), 0, 0));
         tc.merge_insert(clone_target(&t3));
         let merged_target = tc.get(nodename.clone()).unwrap();
         assert_eq!(merged_target.addrs().len(), 2);
 
         // Insert another instance of the a2 address, but with a new scope_id, and ensure that the new scope is used.
         let t3 = Target::new_with_time(&nodename, Utc.ymd(2014, 10, 31).and_hms(9, 10, 12));
-        t3.addrs_insert((a2.clone(), 3).into());
+        t3.addrs_insert(TargetAddr::new(a2.clone(), 3, 0));
         tc.merge_insert(clone_target(&t3));
         let merged_target = tc.get(nodename.clone()).unwrap();
         assert_eq!(merged_target.addrs().iter().filter(|addr| addr.scope_id() == 3).count(), 1);
@@ -527,8 +527,8 @@ mod tests {
         let a2 = IpAddr::V6(Ipv6Addr::new(
             0xfe80, 0x0000, 0x0000, 0x0000, 0xb412, 0xb455, 0x1337, 0xfeed,
         ));
-        t1.addrs_insert((a1.clone(), 0).into());
-        t2.addrs_insert((a2.clone(), 0).into());
+        t1.addrs_insert(TargetAddr::new(a1.clone(), 0, 0));
+        t2.addrs_insert(TargetAddr::new(a2.clone(), 0, 0));
         tc.merge_insert(clone_target(&t2));
         tc.merge_insert(clone_target(&t1));
         let merged_target = tc.get(nodename.clone()).unwrap();
@@ -536,13 +536,13 @@ mod tests {
         assert_ne!(&merged_target, &t2);
         assert_eq!(merged_target.addrs().len(), 1);
         assert_eq!(*merged_target.last_response.borrow(), Utc.ymd(2014, 11, 2).and_hms(13, 2, 1));
-        assert!(merged_target.addrs().contains(&(a1, 0).into()));
-        assert!(!merged_target.addrs().contains(&(a2, 0).into()));
+        assert!(merged_target.addrs().contains(&TargetAddr::new(a1, 0, 0)));
+        assert!(!merged_target.addrs().contains(&TargetAddr::new(a2, 0, 0)));
     }
 
     #[fuchsia_async::run_singlethreaded(test)]
     async fn test_target_by_addr() {
-        let addr: TargetAddr = (IpAddr::from([192, 168, 0, 1]), 0).into();
+        let addr: TargetAddr = TargetAddr::new(IpAddr::from([192, 168, 0, 1]), 0, 0);
         let t = Target::new_named("foo");
         t.addrs_insert(addr.clone());
         let tc = TargetCollection::new_with_queue();
@@ -551,8 +551,11 @@ mod tests {
         assert_eq!(tc.get("192.168.0.1").unwrap(), t);
         assert!(tc.get("fe80::dead:beef:beef:beef").is_none());
 
-        let addr: TargetAddr =
-            (IpAddr::from([0xfe80, 0x0, 0x0, 0x0, 0xdead, 0xbeef, 0xbeef, 0xbeef]), 3).into();
+        let addr: TargetAddr = TargetAddr::new(
+            IpAddr::from([0xfe80, 0x0, 0x0, 0x0, 0xdead, 0xbeef, 0xbeef, 0xbeef]),
+            3,
+            0,
+        );
         let t = Target::new_named("fooberdoober");
         t.addrs_insert(addr.clone());
         tc.merge_insert(clone_target(&t));
@@ -776,7 +779,7 @@ mod tests {
         let address = "f111::1";
         let ip = address.parse().unwrap();
         let mut addr_set = BTreeSet::new();
-        addr_set.replace(TargetAddr::from((ip, 0)));
+        addr_set.replace(TargetAddr::new(ip, 0, 0));
         let t = Target::new_with_addrs(Option::<String>::None, addr_set);
         let tc = TargetCollection::new_with_queue();
         tc.merge_insert(t);
@@ -787,7 +790,7 @@ mod tests {
         // the collection and create an updated target event.
         let t2 = Target::new_autoconnected(target_name);
         t2.addrs.borrow_mut().replace(TargetAddrEntry::new(
-            TargetAddr::from((ip, 0)),
+            TargetAddr::new(ip, 0, 0),
             Utc::now(),
             TargetAddrType::Ssh,
         ));
@@ -803,7 +806,7 @@ mod tests {
         // user adding it explicitly. That is, the target has a correctly scoped
         // link-local address.
         let mut addr_set = BTreeSet::new();
-        addr_set.replace(TargetAddr::from((ip, 0xbadf00d)));
+        addr_set.replace(TargetAddr::new(ip, 0xbadf00d, 0));
         let t1 = Target::new_with_addrs(Option::<String>::None, addr_set);
 
         // t2 is an incoming target that has the same address, but, it is
@@ -811,7 +814,7 @@ mod tests {
         // ask the target for its addresses.
         let t2 = Target::new_named("this-is-a-crunchy-falafel");
         t2.addrs.borrow_mut().replace(TargetAddrEntry::new(
-            TargetAddr::from((ip, 0)),
+            TargetAddr::new(ip, 0xbadf00d, 0),
             Utc::now(),
             TargetAddrType::Ssh,
         ));
@@ -826,7 +829,7 @@ mod tests {
         let mut addrs = target.addrs().into_iter();
         let addr = addrs.next().expect("Merged target has no address.");
         assert!(addrs.next().is_none());
-        assert_eq!(addr, TargetAddr::from((ip, 0xbadf00d)));
+        assert_eq!(addr, TargetAddr::new(ip, 0xbadf00d, 0));
         assert_eq!(addr.ip(), ip);
         assert_eq!(addr.scope_id(), 0xbadf00d);
     }
@@ -836,7 +839,7 @@ mod tests {
         let ip = "fe80::1".parse().unwrap();
 
         let mut addr_set = BTreeSet::new();
-        addr_set.replace(TargetAddr::from((ip, 1)));
+        addr_set.replace(TargetAddr::new(ip, 1, 0));
         let t1 = Target::new_with_addrs(Option::<String>::None, addr_set.clone());
         t1.set_ssh_port(Some(8022));
         let t2 = Target::new_with_addrs(Option::<String>::None, addr_set.clone());
@@ -872,7 +875,7 @@ mod tests {
         let ip = "fe80::1".parse().unwrap();
 
         let mut addr_set = BTreeSet::new();
-        addr_set.replace(TargetAddr::from((ip, 1)));
+        addr_set.replace(TargetAddr::new(ip, 1, 0));
         let t1 = Target::new_with_addrs(Some("t1"), addr_set.clone());
         t1.set_ssh_port(Some(8022));
         let t2 = Target::new_with_addrs(Some("t2"), addr_set.clone());
@@ -925,11 +928,11 @@ mod tests {
         let ip1 = "f111::3".parse().unwrap();
         let ip2 = "f111::4".parse().unwrap();
         let mut addr_set = BTreeSet::new();
-        addr_set.replace(TargetAddr::from((ip1, 0xbadf00d)));
+        addr_set.replace(TargetAddr::new(ip1, 0xbadf00d, 0));
         let t1 = Target::new_with_addrs::<String>(None, addr_set);
         let t2 = Target::new_named("this-is-a-crunchy-falafel");
         let tc = TargetCollection::new_with_queue();
-        t2.addrs.borrow_mut().replace(TargetAddr::from((ip2, 0)).into());
+        t2.addrs.borrow_mut().replace(TargetAddr::new(ip2, 0, 0).into());
         tc.merge_insert(t1);
         tc.merge_insert(t2);
         let mut targets = tc.targets().into_iter();
@@ -955,11 +958,11 @@ mod tests {
         let ip1 = "f111::3".parse().unwrap();
         let ip2 = "f111::4".parse().unwrap();
         let mut addr_set = BTreeSet::new();
-        addr_set.replace(TargetAddr::from((ip1, 0xbadf00d)));
+        addr_set.replace(TargetAddr::new(ip1, 0xbadf00d, 0));
         let t1 = Target::new_with_addrs::<String>(None, addr_set);
         let t2 = Target::new_named("this-is-a-crunchy-falafel");
         let tc = TargetCollection::new_with_queue();
-        t2.addrs.borrow_mut().replace(TargetAddr::from((ip2, 0)).into());
+        t2.addrs.borrow_mut().replace(TargetAddr::new(ip2, 0, 0).into());
         tc.merge_insert(t1);
         tc.merge_insert(t2);
         let mut targets = tc.targets().into_iter();
@@ -984,11 +987,11 @@ mod tests {
         let ip1 = "f111::3".parse().unwrap();
         let ip2 = "f111::4".parse().unwrap();
         let mut addr_set = BTreeSet::new();
-        addr_set.replace(TargetAddr::from((ip1, 0xbadf00d)));
+        addr_set.replace(TargetAddr::new(ip1, 0xbadf00d, 0));
         let t1 = Target::new_with_addrs::<String>(None, addr_set);
         let t2 = Target::new_named("this-is-a-crunchy-falafel");
         let tc = TargetCollection::new_with_queue();
-        t2.addrs.borrow_mut().replace(TargetAddr::from((ip2, 0)).into());
+        t2.addrs.borrow_mut().replace(TargetAddr::new(ip2, 0, 0).into());
         tc.merge_insert(t1);
         tc.merge_insert(t2);
         let mut targets = tc.targets().into_iter();
@@ -1070,7 +1073,7 @@ mod tests {
     fn test_target_query_from_socketaddr_both_zero_port() {
         let tq = TargetQuery::from("127.0.0.1:0");
         let ti = TargetInfo {
-            addresses: vec![("127.0.0.1".parse::<IpAddr>().unwrap(), 0).into()],
+            addresses: vec![TargetAddr::new("127.0.0.1".parse::<IpAddr>().unwrap(), 0, 0)],
             ssh_port: None,
             ..Default::default()
         };
@@ -1084,7 +1087,7 @@ mod tests {
     fn test_target_query_from_socketaddr_zero_port_to_standard_ssh_port_fails() {
         let tq = TargetQuery::from("127.0.0.1:0");
         let ti = TargetInfo {
-            addresses: vec![("127.0.0.1".parse::<IpAddr>().unwrap(), 0).into()],
+            addresses: vec![TargetAddr::new("127.0.0.1".parse::<IpAddr>().unwrap(), 0, 0)],
             ssh_port: Some(22),
             ..Default::default()
         };
@@ -1098,7 +1101,7 @@ mod tests {
     fn test_target_query_from_socketaddr_standard_port_to_no_port() {
         let tq = TargetQuery::from("127.0.0.1:22");
         let ti = TargetInfo {
-            addresses: vec![("127.0.0.1".parse::<IpAddr>().unwrap(), 0).into()],
+            addresses: vec![TargetAddr::new("127.0.0.1".parse::<IpAddr>().unwrap(), 0, 0)],
             ssh_port: None,
             ..Default::default()
         };
@@ -1112,7 +1115,7 @@ mod tests {
     fn test_target_query_from_socketaddr_both_standard_port() {
         let tq = TargetQuery::from("127.0.0.1:22");
         let ti = TargetInfo {
-            addresses: vec![("127.0.0.1".parse::<IpAddr>().unwrap(), 0).into()],
+            addresses: vec![TargetAddr::new("127.0.0.1".parse::<IpAddr>().unwrap(), 0, 0)],
             ssh_port: Some(22),
             ..Default::default()
         };
@@ -1126,7 +1129,7 @@ mod tests {
     fn test_target_query_from_socketaddr_random_port_no_target_port_fails() {
         let tq = TargetQuery::from("127.0.0.1:2342");
         let ti = TargetInfo {
-            addresses: vec![("127.0.0.1".parse::<IpAddr>().unwrap(), 0).into()],
+            addresses: vec![TargetAddr::new("127.0.0.1".parse::<IpAddr>().unwrap(), 0, 0)],
             ssh_port: None,
             ..Default::default()
         };
@@ -1140,7 +1143,7 @@ mod tests {
     fn test_target_query_from_socketaddr_zero_port_to_random_target_port_fails() {
         let tq = TargetQuery::from("127.0.0.1:0");
         let ti = TargetInfo {
-            addresses: vec![("127.0.0.1".parse::<IpAddr>().unwrap(), 0).into()],
+            addresses: vec![TargetAddr::new("127.0.0.1".parse::<IpAddr>().unwrap(), 0, 0)],
             ssh_port: Some(2223),
             ..Default::default()
         };
@@ -1154,7 +1157,7 @@ mod tests {
     fn test_target_query_from_sockaddr() {
         let tq = TargetQuery::from("127.0.0.1:8022");
         let ti = TargetInfo {
-            addresses: vec![("127.0.0.1".parse::<IpAddr>().unwrap(), 0).into()],
+            addresses: vec![TargetAddr::new("127.0.0.1".parse::<IpAddr>().unwrap(), 0, 0)],
             ssh_port: Some(8022),
             ..Default::default()
         };
@@ -1165,7 +1168,7 @@ mod tests {
 
         let tq = TargetQuery::from("[::1]:8022");
         let ti = TargetInfo {
-            addresses: vec![("::1".parse::<IpAddr>().unwrap(), 0).into()],
+            addresses: vec![TargetAddr::new("::1".parse::<IpAddr>().unwrap(), 0, 0)],
             ssh_port: Some(8022),
             ..Default::default()
         };
@@ -1176,7 +1179,7 @@ mod tests {
 
         let tq = TargetQuery::from("[::1]");
         let ti = TargetInfo {
-            addresses: vec![("::1".parse::<IpAddr>().unwrap(), 0).into()],
+            addresses: vec![TargetAddr::new("::1".parse::<IpAddr>().unwrap(), 0, 0)],
             ssh_port: None,
             ..Default::default()
         };
@@ -1185,7 +1188,7 @@ mod tests {
 
         let tq = TargetQuery::from("[fe80::1]:22");
         let ti = TargetInfo {
-            addresses: vec![("fe80::1".parse::<IpAddr>().unwrap(), 0).into()],
+            addresses: vec![TargetAddr::new("fe80::1".parse::<IpAddr>().unwrap(), 0, 0)],
             ssh_port: Some(22),
             ..Default::default()
         };
@@ -1196,7 +1199,7 @@ mod tests {
 
         let tq = TargetQuery::from("192.168.0.1:22");
         let ti = TargetInfo {
-            addresses: vec![("192.168.0.1".parse::<IpAddr>().unwrap(), 0).into()],
+            addresses: vec![TargetAddr::new("192.168.0.1".parse::<IpAddr>().unwrap(), 0, 0)],
             ssh_port: Some(22),
             ..Default::default()
         };
@@ -1208,7 +1211,7 @@ mod tests {
         // Note: socketaddr only supports numeric scopes
         let tq = TargetQuery::from("[fe80::1%1]:22");
         let ti = TargetInfo {
-            addresses: vec![("fe80::1".parse::<IpAddr>().unwrap(), 1).into()],
+            addresses: vec![TargetAddr::new("fe80::1".parse::<IpAddr>().unwrap(), 1, 0)],
             ssh_port: Some(22),
             ..Default::default()
         };
@@ -1226,8 +1229,11 @@ mod tests {
 
     #[test]
     fn test_target_query_with_no_scope_matches_scoped_target_info() {
-        let addr: TargetAddr =
-            (IpAddr::from([0xfe80, 0x0, 0x0, 0x0, 0xdead, 0xbeef, 0xbeef, 0xbeef]), 3).into();
+        let addr: TargetAddr = TargetAddr::new(
+            IpAddr::from([0xfe80, 0x0, 0x0, 0x0, 0xdead, 0xbeef, 0xbeef, 0xbeef]),
+            3,
+            0,
+        );
         let tq = TargetQuery::from("fe80::dead:beef:beef:beef");
         assert!(tq.match_info(&TargetInfo { addresses: vec![addr], ..Default::default() }))
     }

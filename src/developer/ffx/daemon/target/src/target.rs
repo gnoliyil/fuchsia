@@ -689,15 +689,16 @@ impl Target {
             .collect();
     }
 
+    /// Drops all loopback addresses on the target that do not have a port set
     pub fn drop_loopback_addrs(&self) {
         let mut addrs = self.addrs.borrow_mut();
 
         *addrs = addrs
             .clone()
             .into_iter()
-            .filter(|entry| match (&entry.addr_type, &entry.addr.ip()) {
-                (TargetAddrType::Manual(_), _) => true,
-                (_, IpAddr::V4(v)) => !v.is_loopback(),
+            .filter(|entry| match (&entry.addr_type, &entry.addr.ip(), entry.addr.port()) {
+                (TargetAddrType::Manual(_), _, _) => true,
+                (_, IpAddr::V4(v), p) => !(v.is_loopback() && p == 0),
                 _ => true,
             })
             .collect();
@@ -836,7 +837,7 @@ impl Target {
                     IpAddress::Ipv4(Ipv4Address { addr }) => addr.into(),
                     IpAddress::Ipv6(Ipv6Address { addr }) => addr.into(),
                 };
-                TargetAddrEntry::new((addr, 0).into(), now.clone(), TargetAddrType::Ssh)
+                TargetAddrEntry::new(TargetAddr::new(addr, 0, 0), now.clone(), TargetAddrType::Ssh)
             }) {
                 taddrs.insert(addr);
             }
@@ -1296,7 +1297,7 @@ mod test {
     async fn test_target_disconnect_multiple_invocations() {
         let t = Rc::new(Target::new_named("flabbadoobiedoo"));
         {
-            let addr: TargetAddr = (IpAddr::from([192, 168, 0, 1]), 0).into();
+            let addr: TargetAddr = TargetAddr::new(IpAddr::from([192, 168, 0, 1]), 0, 0);
             t.addrs_insert(addr);
         }
         // Assures multiple "simultaneous" invocations to start the target
@@ -1342,7 +1343,7 @@ mod test {
             let a2 = IpAddr::V6(Ipv6Addr::new(
                 0xfe80, 0xcafe, 0xf00d, 0xf000, 0xb412, 0xb455, 0x1337, 0xfeed,
             ));
-            t.addrs_insert((a2, 2).into());
+            t.addrs_insert(TargetAddr::new(a2, 2, 0));
             if test.loop_started {
                 t.run_host_pipe();
             }
@@ -1372,8 +1373,8 @@ mod test {
             board_config: DEFAULT_BOARD_CONFIG.to_owned(),
             product_config: DEFAULT_PRODUCT_CONFIG.to_owned(),
         });
-        t.addrs_insert((a1, 1).into());
-        t.addrs_insert((a2, 1).into());
+        t.addrs_insert(TargetAddr::new(a1, 1, 0));
+        t.addrs_insert(TargetAddr::new(a2, 1, 0));
 
         let t_conv: ffx::TargetInfo = t.as_ref().into();
         assert_eq!(t.nodename().unwrap(), t_conv.nodename.unwrap().to_string());
@@ -1601,7 +1602,7 @@ mod test {
 
     #[fuchsia_async::run_singlethreaded(test)]
     async fn test_set_preferred_ssh_address() {
-        let target_addr: TargetAddr = ("fe80::2".parse().unwrap(), 1).into();
+        let target_addr: TargetAddr = TargetAddr::new("fe80::2".parse().unwrap(), 1, 0);
         let target = Target::new_with_addr_entries(
             Some("foo"),
             vec![TargetAddrEntry::new(target_addr, Utc::now(), TargetAddrType::Ssh)].into_iter(),
@@ -1615,14 +1616,18 @@ mod test {
         let target = Target::new_with_addr_entries(
             Some("foo"),
             vec![TargetAddrEntry::new(
-                TargetAddr::from(("::1".parse::<IpAddr>().unwrap().into(), 0)),
+                TargetAddr::new("::1".parse::<IpAddr>().unwrap().into(), 0, 0),
                 Utc::now(),
                 TargetAddrType::Ssh,
             )]
             .into_iter(),
         );
 
-        assert!(!target.set_preferred_ssh_address(("fe80::2".parse().unwrap(), 1).into()));
+        assert!(!target.set_preferred_ssh_address(TargetAddr::new(
+            "fe80::2".parse().unwrap(),
+            1,
+            0
+        )));
     }
 
     #[fuchsia_async::run_singlethreaded(test)]
@@ -1638,12 +1643,12 @@ mod test {
         // Given two addresses, from the exact same time, neither manual, prefer any link-local address.
         let addrs = BTreeSet::from_iter(vec![
             TargetAddrEntry::new(
-                ("2000::1".parse().unwrap(), 0).into(),
+                TargetAddr::new("2000::1".parse().unwrap(), 0, 0),
                 start.into(),
                 TargetAddrType::Ssh,
             ),
             TargetAddrEntry::new(
-                ("fe80::1".parse().unwrap(), 2).into(),
+                TargetAddr::new("fe80::1".parse().unwrap(), 2, 0),
                 start.into(),
                 TargetAddrType::Ssh,
             ),
@@ -1656,12 +1661,12 @@ mod test {
         // Given two addresses, one link local the other not, prefer the link local even if older.
         let addrs = BTreeSet::from_iter(vec![
             TargetAddrEntry::new(
-                ("2000::1".parse().unwrap(), 0).into(),
+                TargetAddr::new("2000::1".parse().unwrap(), 0, 0),
                 start.into(),
                 TargetAddrType::Ssh,
             ),
             TargetAddrEntry::new(
-                ("fe80::1".parse().unwrap(), 2).into(),
+                TargetAddr::new("fe80::1".parse().unwrap(), 2, 0),
                 (start - Duration::from_secs(1)).into(),
                 TargetAddrType::Ssh,
             ),
@@ -1674,12 +1679,12 @@ mod test {
         // Given two addresses, both link-local, pick the one most recent.
         let addrs = BTreeSet::from_iter(vec![
             TargetAddrEntry::new(
-                ("fe80::2".parse().unwrap(), 1).into(),
+                TargetAddr::new("fe80::2".parse().unwrap(), 1, 0),
                 start.into(),
                 TargetAddrType::Ssh,
             ),
             TargetAddrEntry::new(
-                ("fe80::1".parse().unwrap(), 2).into(),
+                TargetAddr::new("fe80::1".parse().unwrap(), 2, 0),
                 (start - Duration::from_secs(1)).into(),
                 TargetAddrType::Ssh,
             ),
@@ -1692,12 +1697,12 @@ mod test {
         // Given two addresses, one manual, old and non-local, prefer the manual entry.
         let addrs = BTreeSet::from_iter(vec![
             TargetAddrEntry::new(
-                ("fe80::2".parse().unwrap(), 1).into(),
+                TargetAddr::new("fe80::2".parse().unwrap(), 1, 0),
                 start.into(),
                 TargetAddrType::Ssh,
             ),
             TargetAddrEntry::new(
-                ("2000::1".parse().unwrap(), 0).into(),
+                TargetAddr::new("2000::1".parse().unwrap(), 0, 0),
                 (start - Duration::from_secs(1)).into(),
                 TargetAddrType::Manual(None),
             ),
@@ -1710,12 +1715,12 @@ mod test {
         // Given two addresses, neither local, neither manual, prefer the most recent.
         let addrs = BTreeSet::from_iter(vec![
             TargetAddrEntry::new(
-                ("2000::1".parse().unwrap(), 0).into(),
+                TargetAddr::new("2000::1".parse().unwrap(), 0, 0),
                 start.into(),
                 TargetAddrType::Ssh,
             ),
             TargetAddrEntry::new(
-                ("2000::2".parse().unwrap(), 0).into(),
+                TargetAddr::new("2000::2".parse().unwrap(), 0, 0),
                 (start + Duration::from_secs(1)).into(),
                 TargetAddrType::Ssh,
             ),
@@ -1725,13 +1730,13 @@ mod test {
             Some("[2000::2]:22".parse().unwrap())
         );
 
-        let preferred_target_addr: TargetAddr = ("fe80::2".parse().unwrap(), 1).into();
+        let preferred_target_addr: TargetAddr = TargetAddr::new("fe80::2".parse().unwrap(), 1, 0);
         // User expressed a preferred SSH address. Prefer it over all other
         // addresses (even manual).
         let addrs = BTreeSet::from_iter(vec![
             TargetAddrEntry::new(preferred_target_addr, start.into(), TargetAddrType::Ssh),
             TargetAddrEntry::new(
-                ("2000::1".parse().unwrap(), 0).into(),
+                TargetAddr::new("2000::1".parse().unwrap(), 0, 0),
                 (start - Duration::from_secs(1)).into(),
                 TargetAddrType::Manual(None),
             ),
@@ -1747,7 +1752,7 @@ mod test {
         let target = Target::new_with_addr_entries(
             Some("foo"),
             vec![TargetAddrEntry::new(
-                TargetAddr::from(("::1".parse::<IpAddr>().unwrap().into(), 0)),
+                TargetAddr::new("::1".parse::<IpAddr>().unwrap().into(), 0, 0),
                 Utc::now(),
                 TargetAddrType::Ssh,
             )]
@@ -1771,7 +1776,7 @@ mod test {
         let target = Target::new_with_addr_entries(
             Some("foo"),
             vec![TargetAddrEntry::new(
-                TargetAddr::from(("::1".parse::<IpAddr>().unwrap().into(), 0)),
+                TargetAddr::new("::1".parse::<IpAddr>().unwrap().into(), 0, 0),
                 Utc::now(),
                 TargetAddrType::Ssh,
             )]
@@ -1862,7 +1867,7 @@ mod test {
         let target = Target::new();
         target.addrs_insert_entry(
             TargetAddrEntry::new(
-                ("2000::1".parse().unwrap(), 0).into(),
+                TargetAddr::new("2000::1".parse().unwrap(), 0, 0),
                 Utc::now().into(),
                 TargetAddrType::Netsvc,
             )
@@ -1870,7 +1875,7 @@ mod test {
         );
         target.addrs_insert_entry(
             TargetAddrEntry::new(
-                ("fe80::1".parse().unwrap(), 0).into(),
+                TargetAddr::new("fe80::1".parse().unwrap(), 0, 0),
                 Utc::now().into(),
                 TargetAddrType::Ssh,
             )
@@ -1883,7 +1888,7 @@ mod test {
     async fn test_netsvc_ssh_address_info_should_be_none() {
         let ip = "f111::4".parse().unwrap();
         let mut addr_set = BTreeSet::new();
-        addr_set.replace(TargetAddr::from((ip, 0xbadf00d)));
+        addr_set.replace(TargetAddr::new(ip, 0xbadf00d, 0));
         let target = Target::new_with_netsvc_addrs(Some("foo"), addr_set);
 
         assert!(target.ssh_address_info().is_none());
@@ -1893,7 +1898,7 @@ mod test {
     async fn test_target_is_manual() {
         let target = Target::new();
         target.addrs_insert_entry(TargetAddrEntry::new(
-            ("::1".parse().unwrap(), 0).into(),
+            TargetAddr::new("::1".parse().unwrap(), 0, 0),
             Utc::now(),
             TargetAddrType::Manual(None),
         ));
@@ -1909,7 +1914,7 @@ mod test {
         assert_eq!(target.get_manual_timeout(), None);
 
         target.addrs_insert_entry(TargetAddrEntry::new(
-            ("::1".parse().unwrap(), 0).into(),
+            TargetAddr::new("::1".parse().unwrap(), 0, 0),
             Utc::now(),
             TargetAddrType::Manual(None),
         ));
@@ -1919,7 +1924,7 @@ mod test {
         let target = Target::new();
         let now = SystemTime::now();
         target.addrs_insert_entry(TargetAddrEntry::new(
-            ("::1".parse().unwrap(), 0).into(),
+            TargetAddr::new("::1".parse().unwrap(), 0, 0),
             Utc::now(),
             TargetAddrType::Manual(Some(now)),
         ));
@@ -1933,7 +1938,7 @@ mod test {
 
         let target = Target::new();
         target.addrs_insert_entry(TargetAddrEntry::new(
-            ("::1".parse().unwrap(), 0).into(),
+            TargetAddr::new("::1".parse().unwrap(), 0, 0),
             Utc::now(),
             TargetAddrType::Manual(None),
         ));
@@ -1964,7 +1969,7 @@ mod test {
 
         let target = Target::new();
         target.addrs_insert_entry(TargetAddrEntry::new(
-            ("::1".parse().unwrap(), 0).into(),
+            TargetAddr::new("::1".parse().unwrap(), 0, 0),
             Utc::now(),
             TargetAddrType::Manual(Some(SystemTime::now() - Duration::from_secs(3600))),
         ));
@@ -1995,7 +2000,7 @@ mod test {
 
         let target = Target::new();
         target.addrs_insert_entry(TargetAddrEntry::new(
-            ("::1".parse().unwrap(), 0).into(),
+            TargetAddr::new("::1".parse().unwrap(), 0, 0),
             Utc::now(),
             TargetAddrType::Manual(Some(SystemTime::now() + Duration::from_secs(3600))),
         ));
