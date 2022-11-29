@@ -38,7 +38,7 @@ use {
     fidl_fuchsia_component_runner as fcrunner, fidl_fuchsia_io as fio, fidl_fuchsia_sys2 as fsys,
     fuchsia_inspect as inspect, fuchsia_zircon as zx,
     futures::lock::Mutex,
-    futures::{prelude::*, TryStreamExt},
+    futures::{channel::oneshot, prelude::*, TryStreamExt},
     moniker::{AbsoluteMoniker, AbsoluteMonikerBase, ChildMoniker, ChildMonikerBase},
     std::{
         collections::{HashMap, HashSet},
@@ -67,10 +67,10 @@ pub type CheckUse = ::routing_test_helpers::CheckUse;
 ///       .add_outgoing_path(...)
 ///       .build();
 /// ```
-#[derive(Default)]
 pub struct RoutingTestBuilder {
     root_component: String,
     components: Vec<(&'static str, ComponentDecl)>,
+    blockers: Vec<(&'static str, (oneshot::Sender<()>, oneshot::Receiver<()>))>,
     additional_hooks: Vec<HooksRegistration>,
     outgoing_paths: HashMap<String, HashMap<CapabilityPath, Arc<dyn DirectoryEntry>>>,
     builtin_runners: HashMap<CapabilityName, Arc<dyn BuiltinRunnerFactory>>,
@@ -89,10 +89,22 @@ pub struct RoutingTestBuilder {
 
 impl RoutingTestBuilder {
     pub fn new(root_component: &str, components: Vec<(&'static str, ComponentDecl)>) -> Self {
-        RoutingTestBuilder {
+        Self {
             root_component: root_component.to_string(),
             components,
-            ..Default::default()
+            blockers: vec![],
+            additional_hooks: vec![],
+            outgoing_paths: HashMap::new(),
+            builtin_runners: HashMap::new(),
+            mock_builtin_runners: HashSet::new(),
+            namespace_capabilities: vec![],
+            builtin_capabilities: vec![],
+            component_id_index_path: None,
+            custom_outgoing_host_fns: HashMap::new(),
+            capability_policy: HashMap::new(),
+            debug_capability_policy: HashMap::new(),
+            child_policy: ChildPolicyAllowlists::default(),
+            reboot_on_terminate_enabled: false,
         }
     }
 
@@ -173,6 +185,17 @@ impl RoutingTestBuilder {
         allowlist: HashSet<DebugCapabilityAllowlistEntry>,
     ) -> Self {
         self.debug_capability_policy.insert(key, allowlist);
+        self
+    }
+
+    /// Add a resolver blocker for `name`.
+    pub fn add_blocker(
+        mut self,
+        name: &'static str,
+        send: oneshot::Sender<()>,
+        recv: oneshot::Receiver<()>,
+    ) -> Self {
+        self.blockers.push((name, (send, recv)));
         self
     }
 
@@ -280,6 +303,10 @@ impl RoutingTest {
             };
             mock_runner.add_host_fn(&format!("test:///{}_resolved", name), host_fn);
             mock_resolver.add_component(name, decl.clone());
+        }
+        for (name, blocker) in builder.blockers {
+            let (send, recv) = blocker;
+            mock_resolver.add_blocker(name, send, recv);
         }
 
         let echo_service = Arc::new(EchoService::new());
@@ -1294,7 +1321,7 @@ pub mod capability_util {
         call_echo_and_validate_result(echo_proxy, expected_res).await;
     }
 
-    async fn call_echo_and_validate_result(
+    pub async fn call_echo_and_validate_result(
         echo_proxy: echo::EchoProxy,
         expected_res: ExpectedResult,
     ) {

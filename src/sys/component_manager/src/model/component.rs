@@ -359,8 +359,12 @@ pub struct ComponentInstance {
     execution: Mutex<ExecutionState>,
     /// Actions on the instance that must eventually be completed.
     actions: Mutex<ActionSet>,
-    /// Tasks owned by this component instance.
-    task_scope: TaskScope,
+    /// Tasks owned by this component instance that will be cancelled if the component is
+    /// destroyed.
+    nonblocking_task_scope: TaskScope,
+    /// Tasks owned by this component instance that will block destruction if the component is
+    /// destroyed.
+    blocking_task_scope: TaskScope,
 }
 
 impl ComponentInstance {
@@ -412,7 +416,8 @@ impl ComponentInstance {
             execution: Mutex::new(ExecutionState::new()),
             actions: Mutex::new(ActionSet::new()),
             hooks,
-            task_scope: TaskScope::new(),
+            nonblocking_task_scope: TaskScope::new(),
+            blocking_task_scope: TaskScope::new(),
             numbered_handles: Mutex::new(numbered_handles),
             persistent_storage,
         })
@@ -438,9 +443,16 @@ impl ComponentInstance {
         self.context.upgrade()
     }
 
-    /// Returns a scope for this instance where tasks can be run
-    pub fn task_scope(&self) -> TaskScope {
-        self.task_scope.clone()
+    /// Returns a scope for this instance where tasks can be run. Tasks run in this scope will
+    /// be cancelled if the component is destroyed.
+    pub fn nonblocking_task_scope(&self) -> TaskScope {
+        self.nonblocking_task_scope.clone()
+    }
+
+    /// Returns a scope for this instance where tasks can be run. Tasks run in this scope will
+    /// block destruction if the component is destroyed.
+    pub fn blocking_task_scope(&self) -> TaskScope {
+        self.blocking_task_scope.clone()
     }
 
     /// Locks and returns a lazily resolved and populated `ResolvedInstanceState`. Does not

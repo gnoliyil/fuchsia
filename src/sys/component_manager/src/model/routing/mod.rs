@@ -303,7 +303,7 @@ async fn open_capability_at_source(open_request: OpenRequest<'_>) -> Result<(), 
         let source_instance = source.source_instance().upgrade()?;
         let task_scope = match source_instance {
             ExtendedInstance::AboveRoot(top) => top.task_scope(),
-            ExtendedInstance::Component(component) => component.task_scope(),
+            ExtendedInstance::Component(component) => component.nonblocking_task_scope(),
         };
         capability_provider.open(task_scope, flags, open_mode, relative_path, server_chan).await?;
         Ok(())

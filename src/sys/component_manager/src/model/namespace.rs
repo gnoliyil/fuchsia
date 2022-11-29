@@ -149,7 +149,13 @@ pub async fn populate_and_get_logsink_decl<'a>(
     // Start hosting the services directories and add them to the namespace
     serve_and_install_svc_dirs(&mut ns, svc_dirs)?;
     let component = component.upgrade()?;
-    start_directory_waiters(directory_waiters, &component.task_scope()).await;
+    // The directory waiter will run in the component's nonblocking task scope, but
+    // when it gets a readable signal it will spawn the routing task in the blocking scope as
+    // that it blocks destruction, like service and protocol routing.
+    //
+    // TODO(fxbug.dev/76579): It would probably be more correct to run this in an execution_scope
+    // attached to the namespace (but that requires a bigger refactor)
+    start_directory_waiters(directory_waiters, &component.nonblocking_task_scope()).await;
 
     Ok((ns, log_sink_decl))
 }
@@ -298,37 +304,13 @@ fn add_directory_helper(
                 return;
             }
         };
-        let mut server_end = server_end.into_zx_channel();
-        let (route_request, open_options) = match &use_ {
-            UseDecl::Directory(use_dir_decl) => (
-                RouteRequest::UseDirectory(use_dir_decl.clone()),
-                OpenOptions::Directory(OpenDirectoryOptions {
-                    flags,
-                    open_mode: fio::MODE_TYPE_DIRECTORY,
-                    relative_path: String::new(),
-                    server_chan: &mut server_end,
-                }),
-            ),
-            UseDecl::Storage(use_storage_decl) => (
-                RouteRequest::UseStorage(use_storage_decl.clone()),
-                OpenOptions::Storage(OpenStorageOptions {
-                    flags,
-                    open_mode: fio::MODE_TYPE_DIRECTORY,
-                    relative_path: ".".into(),
-                    server_chan: &mut server_end,
-                }),
-            ),
-            _ => panic!("not a directory or storage capability"),
-        };
-        if let Err(e) = route_and_open_capability(route_request, &target, open_options).await {
-            routing::report_routing_failure(
-                &target,
-                &ComponentCapability::Use(use_),
-                &e,
-                server_end,
-            )
+        let server_end = server_end.into_zx_channel();
+        // Spawn a separate task to perform routing in the blocking scope. This way it won't
+        // block namespace teardown, but it will block component destruction.
+        target
+            .blocking_task_scope()
+            .add_task(route_directory(target, use_, flags, server_end))
             .await;
-        }
     };
 
     waiters.push(Box::pin(route_on_usage));
@@ -338,6 +320,39 @@ fn add_directory_helper(
         ..fcrunner::ComponentNamespaceEntry::EMPTY
     });
     Ok(())
+}
+
+async fn route_directory(
+    target: Arc<ComponentInstance>,
+    use_: UseDecl,
+    flags: fio::OpenFlags,
+    mut server_end: zx::Channel,
+) {
+    let (route_request, open_options) = match &use_ {
+        UseDecl::Directory(use_dir_decl) => (
+            RouteRequest::UseDirectory(use_dir_decl.clone()),
+            OpenOptions::Directory(OpenDirectoryOptions {
+                flags,
+                open_mode: fio::MODE_TYPE_DIRECTORY,
+                relative_path: String::new(),
+                server_chan: &mut server_end,
+            }),
+        ),
+        UseDecl::Storage(use_storage_decl) => (
+            RouteRequest::UseStorage(use_storage_decl.clone()),
+            OpenOptions::Storage(OpenStorageOptions {
+                flags,
+                open_mode: fio::MODE_TYPE_DIRECTORY,
+                relative_path: ".".into(),
+                server_chan: &mut server_end,
+            }),
+        ),
+        _ => panic!("not a directory or storage capability"),
+    };
+    if let Err(e) = route_and_open_capability(route_request, &target, open_options).await {
+        routing::report_routing_failure(&target, &ComponentCapability::Use(use_), &e, server_end)
+            .await;
+    }
 }
 
 /// start_directory_waiters will spawn the futures in directory_waiters
@@ -363,7 +378,7 @@ fn add_service_or_protocol_use(
 ) -> Result<(), ModelError> {
     let not_found_component_copy = component.clone();
     let use_clone = use_.clone();
-    let route_open_fn = move |_scope: ExecutionScope,
+    let route_open_fn = move |scope: ExecutionScope,
                               flags: fio::OpenFlags,
                               mode: u32,
                               relative_path: Path,
@@ -435,8 +450,7 @@ fn add_service_or_protocol_use(
                 .await;
             }
         };
-        // This is a non-async callback, so we must spawn a task to add the task.
-        fasync::Task::spawn(async move { component.task_scope().add_task(task).await }).detach();
+        scope.spawn(async move { component.blocking_task_scope().add_task(task).await })
     };
 
     let service_dir = svc_dirs.entry(capability_path.dirname.clone()).or_insert_with(|| {

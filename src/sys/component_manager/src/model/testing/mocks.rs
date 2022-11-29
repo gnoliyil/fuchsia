@@ -156,11 +156,16 @@ fn new_proxy_routing_fn(ty: CapabilityType) -> RoutingFn {
 pub struct MockResolver {
     components: HashMap<String, ComponentDecl>,
     configs: HashMap<String, ValuesData>,
+    blockers: HashMap<String, Arc<Mutex<Option<(oneshot::Sender<()>, oneshot::Receiver<()>)>>>>,
 }
 
 impl MockResolver {
     pub fn new() -> Self {
-        MockResolver { components: HashMap::new(), configs: HashMap::new() }
+        MockResolver {
+            components: HashMap::new(),
+            configs: HashMap::new(),
+            blockers: HashMap::new(),
+        }
     }
 
     async fn resolve_async(
@@ -203,6 +208,15 @@ impl MockResolver {
             ServerEnd::new(server.into_channel()),
         );
 
+        if let Some(blocker) = self.blockers.get(name) {
+            let mut blocker = blocker.lock().await;
+            if let Some(blocker) = blocker.take() {
+                let (send, recv) = blocker;
+                send.send(()).unwrap();
+                let _ = recv.await.unwrap();
+            }
+        }
+
         Ok(ResolvedComponent {
             resolved_by: "mocks::MockResolver".into(),
             resolved_url: format!("test:///{}_resolved", name),
@@ -219,6 +233,15 @@ impl MockResolver {
 
     pub fn add_config_values(&mut self, path: &str, values: ValuesData) {
         self.configs.insert(path.to_string(), values);
+    }
+
+    pub fn add_blocker(
+        &mut self,
+        path: &str,
+        send: oneshot::Sender<()>,
+        recv: oneshot::Receiver<()>,
+    ) {
+        self.blockers.insert(path.to_string(), Arc::new(Mutex::new(Some((send, recv)))));
     }
 
     pub fn get_component_decl(&self, name: &str) -> Option<ComponentDecl> {

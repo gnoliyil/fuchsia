@@ -181,7 +181,7 @@ impl CapabilityProvider for EventSourceV2 {
         let task_scope = match &self.v1.subscriber {
             ExtendedMoniker::ComponentInstance(m) => {
                 let target = model.look_up(&m).await?;
-                target.task_scope()
+                target.nonblocking_task_scope()
             }
             ExtendedMoniker::ComponentManager => model.top_instance().task_scope(),
         };

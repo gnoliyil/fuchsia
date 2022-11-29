@@ -18,6 +18,7 @@ use {
         framework::realm::SDK_REALM_SERVICE,
         model::{
             actions::{ActionSet, DestroyAction, DestroyChildAction, ShutdownAction},
+            component::StartReason,
             error::ModelError,
             hooks::{Event, EventPayload, EventType, Hook, HooksRegistration},
             routing::{RouteRequest, RouteSource, RoutingError},
@@ -43,9 +44,9 @@ use {
     fidl_fuchsia_component_resolution as fresolution, fidl_fuchsia_component_runner as fcrunner,
     fidl_fuchsia_io as fio, fidl_fuchsia_mem as fmem, fidl_fuchsia_sys2 as fsys,
     fuchsia_async as fasync, fuchsia_zircon as zx,
-    futures::{join, lock::Mutex, StreamExt, TryStreamExt},
+    futures::{channel::oneshot, join, lock::Mutex, StreamExt, TryStreamExt},
     maplit::hashmap,
-    moniker::{AbsoluteMoniker, AbsoluteMonikerBase, ChildMonikerBase},
+    moniker::{AbsoluteMoniker, AbsoluteMonikerBase, ChildMoniker, ChildMonikerBase},
     routing_test_helpers::{
         default_service_capability, instantiate_common_routing_tests, RoutingTestModel,
     },
@@ -1234,6 +1235,135 @@ async fn destroying_instance_kills_framework_service_task() {
         .expect("destroy failed");
     let mut event_stream = proxy.take_event_stream();
     assert_matches!(event_stream.next().await, None);
+}
+
+#[fuchsia::test]
+async fn destroying_instance_blocks_on_routing() {
+    // Directories and protocols have a different routing flow so test both.
+    let components = vec![
+        (
+            "a",
+            ComponentDeclBuilder::new()
+                .offer(OfferDecl::Protocol(OfferProtocolDecl {
+                    source: OfferSource::static_child("c".into()),
+                    source_name: "foo_svc".into(),
+                    target_name: "foo_svc".into(),
+                    target: OfferTarget::static_child("b".into()),
+                    dependency_type: DependencyType::Strong,
+                    availability: Availability::Required,
+                }))
+                .offer(OfferDecl::Directory(OfferDirectoryDecl {
+                    source: OfferSource::static_child("c".into()),
+                    source_name: "foo_data".into(),
+                    target_name: "foo_data".into(),
+                    target: OfferTarget::static_child("b".into()),
+                    rights: None,
+                    subdir: None,
+                    dependency_type: DependencyType::Strong,
+                    availability: Availability::Required,
+                }))
+                .add_lazy_child("b")
+                .add_lazy_child("c")
+                .build(),
+        ),
+        (
+            "b",
+            ComponentDeclBuilder::new()
+                .use_(UseDecl::Protocol(UseProtocolDecl {
+                    source: UseSource::Parent,
+                    source_name: "foo_svc".into(),
+                    target_path: CapabilityPath::try_from("/svc/echo").unwrap(),
+                    dependency_type: DependencyType::Strong,
+                    availability: Availability::Required,
+                }))
+                .use_(UseDecl::Directory(UseDirectoryDecl {
+                    source: UseSource::Parent,
+                    source_name: "foo_data".into(),
+                    target_path: CapabilityPath::try_from("/data").unwrap(),
+                    rights: *routing::rights::READ_RIGHTS,
+                    subdir: None,
+                    dependency_type: DependencyType::Strong,
+                    availability: Availability::Required,
+                }))
+                .build(),
+        ),
+        (
+            "c",
+            ComponentDeclBuilder::new()
+                .protocol(ProtocolDeclBuilder::new("foo_svc").build())
+                .directory(DirectoryDeclBuilder::new("foo_data").build())
+                .expose(ExposeDecl::Protocol(ExposeProtocolDecl {
+                    source: ExposeSource::Self_,
+                    source_name: "foo_svc".into(),
+                    target_name: "foo_svc".into(),
+                    target: ExposeTarget::Parent,
+                }))
+                .expose(ExposeDecl::Directory(ExposeDirectoryDecl {
+                    source: ExposeSource::Self_,
+                    source_name: "foo_data".into(),
+                    target_name: "foo_data".into(),
+                    target: ExposeTarget::Parent,
+                    rights: Some(*routing::rights::READ_RIGHTS),
+                    subdir: None,
+                }))
+                .build(),
+        ),
+    ];
+    // Cause resolution for `c` to block until we explicitly tell it to proceed. This is useful
+    // for coordinating the progress of `echo`'s routing task with destruction.
+    let builder = RoutingTestBuilder::new("a", components);
+    let (resolved_tx, resolved_rx) = oneshot::channel::<()>();
+    let (continue_tx, continue_rx) = oneshot::channel::<()>();
+    let test = builder.add_blocker("c", resolved_tx, continue_rx).build().await;
+
+    // Connect to `echo` in `b`'s namespace to kick off a protocol routing task.
+    let (_, component_name) =
+        test.start_and_get_instance(&vec!["b"].into(), StartReason::Eager, true).await.unwrap();
+    let component_resolved_url = RoutingTest::resolved_url(&component_name);
+    let namespace = test.mock_runner.get_namespace(&component_resolved_url).unwrap();
+    let echo_proxy = capability_util::connect_to_svc_in_namespace::<echo::EchoMarker>(
+        &namespace,
+        &CapabilityPath::try_from("/svc/echo").unwrap(),
+    )
+    .await;
+
+    // Connect to `data` in `b`'s namespace to kick off a directory routing task.
+    let dir_proxy = capability_util::take_dir_from_namespace(&namespace, "/data").await;
+    let file_proxy = fuchsia_fs::directory::open_file_no_describe(
+        &dir_proxy,
+        "hippo",
+        fio::OpenFlags::RIGHT_READABLE,
+    )
+    .unwrap();
+    capability_util::add_dir_to_namespace(&namespace, "/data", dir_proxy).await;
+
+    // Destroy `b`.
+    let root = test.model.look_up(&vec![].into()).await.unwrap();
+    let mut actions = root.lock_actions().await;
+    let destroy_nf = actions.register_no_wait(&root, DestroyChildAction::new("b".into(), 0));
+    drop(actions);
+
+    // Give the destroy action some time to complete. Sleeping is not an ideal testing strategy,
+    // but it helps add confidence to the test because it makes it more likely the test would
+    // fail if the destroy action is not correctly blocking on the routing task.
+    fasync::Timer::new(fasync::Time::after(zx::Duration::from_seconds(5))).await;
+
+    // Wait until routing reaches resolution. It should get here because `Destroy` should not
+    // cancel the routing task.
+    let _ = resolved_rx.await.unwrap();
+
+    // `b` is not yet destroyed.
+    let state = root.lock_resolved_state().await.unwrap();
+    state.get_child(&ChildMoniker::parse("b").unwrap()).expect("b was destroyed");
+    drop(state);
+
+    // Let routing complete. This should allow destruction to complete.
+    continue_tx.send(()).unwrap();
+    destroy_nf.await.unwrap();
+
+    // Verify the connection to `echo` and `data` was bound by the provider.
+    capability_util::call_echo_and_validate_result(echo_proxy, ExpectedResult::Ok).await;
+    assert_eq!(fuchsia_fs::read_file(&file_proxy).await.unwrap(), "hello");
 }
 
 ///  a

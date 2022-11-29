@@ -169,7 +169,7 @@ impl LifecycleController {
         let component =
             self.model.find(&moniker).await.ok_or(fcomponent::Error::InstanceNotFound)?;
         let storage_admin = StorageAdmin::new(Arc::downgrade(&self.model));
-        let task_scope = component.task_scope();
+        let task_scope = component.nonblocking_task_scope();
 
         let storage_decl = {
             let locked_component = component.lock_resolved_state().await.map_err(|error| {

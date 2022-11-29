@@ -98,15 +98,18 @@ async fn do_destroy(component: &Arc<ComponentInstance>) -> Result<(), ModelError
             }
         })
     }
+
+    // Wait for any remaining blocking tasks and actions finish up.
+    let task_shutdown = Box::pin(component.blocking_task_scope().shutdown());
     let nfs = {
         let actions = component.lock_actions().await;
         vec![
             wait(actions.wait(ResolveAction::new())),
             wait(actions.wait(StartAction::new(StartReason::Debug))),
+            task_shutdown,
         ]
-        .into_iter()
     };
-    join_all(nfs).await;
+    join_all(nfs.into_iter()).await;
 
     Ok(())
 }
