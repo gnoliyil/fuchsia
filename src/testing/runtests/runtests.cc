@@ -2,9 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <fcntl.h>
+#include <lib/device-watcher/cpp/device-watcher.h>
 #include <lib/zx/clock.h>
 
 #include <fbl/string.h>
+#include <fbl/unique_fd.h>
 #include <fbl/vector.h>
 #include <runtests-utils/fuchsia-run-test.h>
 #include <runtests-utils/log-exporter.h>
@@ -91,6 +94,24 @@ int main(int argc, char** argv) {
   fbl::Vector<fbl::String> default_test_dirs;
   for (auto& kDefaultTestDir : kDefaultTestDirs) {
     default_test_dirs.push_back(kDefaultTestDir);
+  }
+
+  // runtests is used to run tests in bringup configurations. Because the
+  // console shell dynamically mounts the "/dev" directory during system
+  // startup, we need to wait for "/dev" to appear, before running any tests
+  // which may depend on nodes inside "/dev".
+  //
+  // We are able to open the namespace root because the shell has a single
+  // namespace entry at "/". See /src/bringup/bin/console-launcher/main.cc.
+  fbl::unique_fd root(open("/", O_RDONLY | O_DIRECTORY));
+  ZX_ASSERT_MSG(root.is_valid(),
+                "runtests must be given \"/\" as the sole entry "
+                "in its incoming namespace");
+  fbl::unique_fd dev_fd;
+  zx_status_t status = device_watcher::RecursiveWaitForFileReadOnly(root, "dev", &dev_fd);
+  if (status != ZX_OK) {
+    printf("Error: Failed to wait for /dev to appear: %s", zx_status_get_string(status));
+    return -1;
   }
 
   FuchsiaStopwatch stopwatch;
