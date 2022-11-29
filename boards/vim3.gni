@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//boards/common/arm64-common.gni")
+import("//boards/arm64.gni")
 
 board_name = "vim3"
 board_description = "A generic vim3 device"
