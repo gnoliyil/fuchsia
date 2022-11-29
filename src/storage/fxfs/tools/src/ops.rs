@@ -159,7 +159,7 @@ pub async fn get(vol: &Arc<ObjectStore>, src: &Path) -> Result<Vec<u8>, Error> {
     }
 }
 
-/// Write the contents of a Vec to a file int he image.
+/// Write the contents of a Vec to a file in the image.
 pub async fn put(
     fs: &OpenFxFilesystem,
     vol: &Arc<ObjectStore>,
