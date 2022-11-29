@@ -10,6 +10,7 @@ rustc_library("recovery-ui") {
   edition = "2021"
   with_unit_tests = true
   deps = [
+    "//sdk/fidl/fuchsia.wlan.policy:fuchsia.wlan.policy_rust",
     "//src/graphics/lib/compute/rive-rs",
     "//src/lib/fuchsia-async",
     "//src/lib/ui/carnelian",
@@ -31,6 +32,7 @@ rustc_library("recovery-ui") {
     "src/keyboard.rs",
     "src/keys.rs",
     "src/lib.rs",
+    "src/network.rs",
     "src/progress_bar.rs",
     "src/proxy_view_assistant.rs",
     "src/screens.rs",

@@ -11,10 +11,12 @@ use crate::constants::constants::{
 use crate::font;
 use crate::generic_view::{ButtonInfo, GenericSplitViewAssistant};
 use crate::keyboard::KeyboardViewAssistant;
+use crate::network::NetworkViewAssistant;
 use crate::proxy_view_assistant::ProxyMessages;
 use crate::text_field::TextVisibility;
 use carnelian::{make_message, AppSender, MessageTarget, ViewAssistantPtr, ViewKey};
 use recovery_util::ota::state_machine::{Event, Operation, State, StateHandler};
+use recovery_util::wlan::NetworkInfo;
 
 pub struct Screens {
     app_sender: AppSender,
@@ -35,6 +37,8 @@ impl Screens {
             State::Home => self.factory_reset(),
             State::Failed(operation, error) => self.failed(operation, error),
             State::Reinstall => self.reinstall(),
+            State::GetWiFiNetworks => self.select_wifi(&Vec::new()),
+            State::SelectWiFi(networks) => self.select_wifi(networks),
             State::EnterWiFi => {
                 self.user_entry("Enter Network Name".to_string(), TextVisibility::Always)
             }
@@ -135,6 +139,14 @@ impl Screens {
             .unwrap(),
         );
         view_assistant_ptr
+    }
+
+    fn select_wifi(&self, networks: &Vec<NetworkInfo>) -> ViewAssistantPtr {
+        let network_view = Box::new(
+            NetworkViewAssistant::new(self.app_sender.clone(), self.view_key, networks.to_vec())
+                .unwrap(),
+        );
+        network_view
     }
 
     fn user_entry(&self, text: String, privacy: TextVisibility) -> ViewAssistantPtr {

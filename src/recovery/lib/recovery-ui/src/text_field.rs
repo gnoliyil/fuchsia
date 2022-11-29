@@ -10,6 +10,7 @@ use crate::{
     },
     font,
 };
+use rive_rs::File;
 use {
     carnelian::{
         color::Color,
@@ -67,6 +68,8 @@ pub struct TextField {
     privacy: TextVisibility,
     text_field: FacetId,
     button: Option<Button>,
+    // We need to keep this file open while icons are in use
+    _icon_file: Option<File>,
 }
 
 impl TextField {
@@ -78,6 +81,7 @@ impl TextField {
         options: TextFieldOptions,
         builder: &mut SceneBuilder,
     ) -> Self {
+        let icon_file = Self::open_icon_file();
         let stack_options =
             StackOptions { alignment: Alignment::top_left(), ..StackOptions::default() };
 
@@ -144,7 +148,7 @@ impl TextField {
 
         let button = match privacy {
             TextVisibility::Toggleable(text_visible) => {
-                Some(Self::add_privacy_button(&title, text_visible, builder))
+                Some(Self::add_privacy_button(&icon_file, &title, text_visible, builder))
             }
             TextVisibility::Always => None,
         };
@@ -173,10 +177,11 @@ impl TextField {
         builder.end_group(); // field body column
         builder.end_group(); // text field
 
-        Self { title, text, privacy, text_field, button }
+        Self { title, text, privacy, text_field, button, _icon_file: icon_file }
     }
 
     fn add_privacy_button(
+        icon_file: &Option<File>,
         title: &String,
         text_visible: bool,
         builder: &mut SceneBuilder,
@@ -192,7 +197,7 @@ impl TextField {
 
         let button = builder.button(
             &title,
-            Self::get_eye_icon(text_visible),
+            Self::get_eye_icon(icon_file, text_visible),
             ButtonOptions {
                 hide_text: true,
                 bg_fg_swapped: true,
@@ -206,22 +211,36 @@ impl TextField {
         button
     }
 
-    fn get_eye_icon(visible: bool) -> Option<RiveFacet> {
+    fn open_icon_file() -> Option<File> {
         let icon_file = load_rive(ICONS_PATH);
-        if let Err(error) = icon_file {
-            eprintln!("Cannot read Rive icon file: {}", error);
-            return None;
-        }
-        let icon_file = icon_file.unwrap();
-        let icon_name = if visible { ICON_PASSWORD_VISIBLE } else { ICON_PASSWORD_INVISIBLE };
-        let facet =
-            RiveFacet::new_from_file(ICON_PASSWORD_VISIBLE_SIZE, &icon_file, Some(icon_name));
-        match facet {
-            Ok(facet) => Some(facet),
+        match icon_file {
+            Ok(file) => Some(file),
             Err(error) => {
-                eprintln!("failed to read password icon from file: {}", error);
+                eprintln!("Cannot read Rive icon file: {}", error);
                 None
             }
+        }
+    }
+
+    fn get_eye_icon(icon_file: &Option<File>, visible: bool) -> Option<RiveFacet> {
+        match icon_file {
+            Some(icon_file) => {
+                let icon_name =
+                    if visible { ICON_PASSWORD_VISIBLE } else { ICON_PASSWORD_INVISIBLE };
+                let facet = RiveFacet::new_from_file(
+                    ICON_PASSWORD_VISIBLE_SIZE,
+                    &icon_file,
+                    Some(icon_name),
+                );
+                match facet {
+                    Ok(facet) => Some(facet),
+                    Err(error) => {
+                        eprintln!("failed to read password icon from file: {}", error);
+                        None
+                    }
+                }
+            }
+            None => None,
         }
     }
 

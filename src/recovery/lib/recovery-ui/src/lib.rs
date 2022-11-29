@@ -10,6 +10,7 @@ pub mod font;
 pub mod generic_view;
 pub mod keyboard;
 pub mod keys;
+pub mod network;
 pub mod progress_bar;
 pub mod proxy_view_assistant;
 pub mod screens;
