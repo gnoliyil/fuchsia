@@ -17,7 +17,7 @@ use {
         collections::BTreeMap,
         fs::{self, File},
         io,
-        io::{Read, Seek, SeekFrom, Write},
+        io::{BufReader, Read, Seek, SeekFrom, Write},
         path::Path,
         str,
     },
@@ -451,7 +451,7 @@ pub mod host {
                 let file = File::open(manifest_path)
                     .with_context(|| format!("Opening package manifest: {}", manifest_path))?;
 
-                PackageManifest::from_reader(manifest_path, file)
+                PackageManifest::from_reader(manifest_path, BufReader::new(file))
             }
             inner(manifest_path.as_ref())
         }
