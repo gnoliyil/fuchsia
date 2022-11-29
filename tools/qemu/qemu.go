@@ -141,6 +141,12 @@ var TargetEnum = &targetList{
 	X86_64:  "x86_64",
 }
 
+type uefiVolumes struct {
+	rom        string
+	nvram      string
+	filesystem string
+}
+
 // QEMUCommandBuilder provides methods to construct an arbitrary
 // QEMU invocation, it does not validate inputs only that the
 // resulting invocation is structurely valid.
@@ -150,7 +156,9 @@ type QEMUCommandBuilder struct {
 	hasNetwork bool
 	initrd     string
 	kernel     string
+	uefi       *uefiVolumes
 	kernelArgs []string
+	hasDisk    bool
 
 	// Any errors encountered while building the command.
 	errs []string
@@ -170,6 +178,14 @@ func (q *QEMUCommandBuilder) SetKernel(kernel string) {
 
 func (q *QEMUCommandBuilder) SetInitrd(initrd string) {
 	q.initrd = initrd
+}
+
+// SetUEFIVolumes specifies three storage volumes necessary for booting through
+// UEFI: the ROM image implementing UEFI itself, a NVRAM image containing the
+// EFI global variable store, and a bootable (FAT) filesystem image containing
+// the desired application.
+func (q *QEMUCommandBuilder) SetUEFIVolumes(rom, nvram, fileystem string) {
+	q.uefi = &uefiVolumes{rom, nvram, fileystem}
 }
 
 func (q *QEMUCommandBuilder) SetTarget(target Target, kvm bool) {
@@ -211,6 +227,7 @@ func (q *QEMUCommandBuilder) SetCPUCount(cpuCount int) {
 }
 
 func (q *QEMUCommandBuilder) AddVirtioBlkPciDrive(d Drive) {
+	q.hasDisk = true
 	iothread := fmt.Sprintf("iothread-%s", d.ID)
 	q.SetFlag("-object", fmt.Sprintf("iothread,id=%s", iothread))
 	q.SetFlag("-drive", fmt.Sprintf("id=%s,file=%s,format=raw,if=none,cache=unsafe,aio=threads", d.ID, d.File))
@@ -291,8 +308,11 @@ func (q *QEMUCommandBuilder) validate() error {
 	if len(q.errs) > 0 {
 		return fmt.Errorf("multiple errors: [\n%s\n]", strings.Join(q.errs, ",\n"))
 	}
-	if q.kernel == "" {
-		return fmt.Errorf("QEMU kernel path must be set.")
+	if q.kernel == "" && q.uefi == nil {
+		return fmt.Errorf("precisely one of QEMU kernel path or a UEFI image must be set.")
+	}
+	if q.uefi != nil && (q.kernel != "" || q.initrd != "") {
+		return fmt.Errorf("specifying a UEFI image is mutually exclusive with QEMU kernel and initrd.")
 	}
 	return nil
 }
@@ -327,10 +347,41 @@ func (q *QEMUCommandBuilder) BuildConfig() (Config, error) {
 	}
 	config.Envs = make(map[string]string)
 	config.Features = []string{}
-	config.KernelArgs = q.kernelArgs
-	config.Args = []string{"-kernel", q.kernel}
+	if q.kernel != "" {
+		config.Args = append(config.Args, "-kernel", q.kernel)
+	}
 	if q.initrd != "" {
 		config.Args = append(config.Args, "-initrd", q.initrd)
+	}
+	if q.uefi != nil {
+		config.Args = append(
+			config.Args,
+			"-drive",
+			fmt.Sprintf("if=pflash,format=raw,readonly=on,file=%s", q.uefi.rom),
+			// `snapshot=true`` ensures that this image is copy-on-write and that
+			// state does not persist across invocations.
+			"-drive",
+			fmt.Sprintf("if=pflash,format=raw,snapshot=on,file=%s", q.uefi.nvram),
+			"-drive",
+			fmt.Sprintf("if=none,format=raw,file=%s,id=uefi", q.uefi.filesystem),
+		)
+
+		// `bootindex=0` ensures that the provided storage device is regarded
+		// as the highest priority boot option.
+		if q.hasDisk {
+			config.Args = append(config.Args, "-device", "virtio-blk-pci,drive=uefi,bootindex=0")
+		} else {
+			config.Args = append(
+				config.Args,
+				"-device",
+				"nec-usb-xhci,id=xhci0",
+				"-device",
+				"usb-storage,bus=xhci0.0,drive=uefi,removable=on,bootindex=0",
+			)
+		}
+	} else {
+		// `-append`` is mutually exclusive with UEFI specification.
+		config.KernelArgs = q.kernelArgs
 	}
 	config.Args = append(config.Args, q.args...)
 	config.Options = []string{}

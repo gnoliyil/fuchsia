@@ -4,6 +4,7 @@
 # license that can be found in the LICENSE file or at
 # https://opensource.org/licenses/MIT
 
+import("//build/testing/boot_test.gni")
 import("efi_executable.gni")
 import("fat_filesystem.gni")
 
@@ -14,6 +15,9 @@ import("fat_filesystem.gni")
 #   * $target_name.executable
 #     - The associated efi_executable() target.
 #
+#   * $target_name.fatfs
+#     - The associated fat_filesystem() target.
+#
 # Parameters
 #
 #   * data_deps
@@ -21,10 +25,16 @@ import("fat_filesystem.gni")
 #       local filesystem at runtime.
 #     - Type: list(label)
 #
+#   * disabled
+#     - Optional: Whether the test is enabled.
+#     - Type: bool
+#     - Default: false
+#
 # See efi_executable() for other parameters.
 #
 template("efi_test") {
   executable_target = "$target_name.executable"
+  fs_target = "$target_name.fatfs"
   main_target = target_name
 
   efi_executable(executable_target) {
@@ -34,24 +44,39 @@ template("efi_test") {
     # boot option that boots this executable.
     install_path = "efi/boot/boot${efi_cpu}.efi"
 
-    forward_variables_from(invoker, "*", [ "testonly" ])
+    forward_variables_from(invoker,
+                           "*",
+                           [
+                             "disabled",
+                             "testonly",
+                           ])
     if (defined(visibility)) {
-      visibility += [ ":$main_target" ]
+      visibility += [ ":$fs_target" ]
     }
     if (!defined(output_name)) {
       output_name = main_target
     }
   }
 
-  fat_filesystem(main_target) {
+  fat_filesystem(fs_target) {
     testonly = true
     forward_variables_from(invoker, [ "visibility" ])
 
     # The metadata collection for the manifest will reach the data deps of the
     # executable.
     deps = [ ":$executable_target" ]
-    outputs = [ "$target_out_dir/$target_name.raw" ]
+    outputs = [ "$target_out_dir/$main_target.fat" ]
   }
 
-  # TODO(fxbug.dev/113961): Define a boot_test().
+  boot_test(main_target) {
+    # UEFI testing is only available to emulators at this time.
+    device_types = []
+    if (!defined(invoker.disabled) || !invoker.disabled) {
+      device_types += [
+        "QEMU",
+        "AEMU",
+      ]
+    }
+    efi = ":$fs_target"
+  }
 }

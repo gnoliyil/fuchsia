@@ -77,6 +77,9 @@ type QEMUConfig struct {
 	// Path is a path to a directory that contains QEMU system binary.
 	Path string `json:"path"`
 
+	// EDK2Dir is a path to a directory of EDK II (UEFI) prebuilts.
+	EDK2Dir string `json:"edk2_dir"`
+
 	// Target is the QEMU target to emulate.
 	Target string `json:"target"`
 
@@ -135,6 +138,7 @@ type EMUCommandBuilder interface {
 	SetBinary(string)
 	SetKernel(string)
 	SetInitrd(string)
+	SetUEFIVolumes(string, string, string)
 	SetTarget(qemu.Target, bool)
 	SetMemory(int)
 	SetCPUCount(int)
@@ -247,15 +251,17 @@ func (t *QEMUTarget) Start(ctx context.Context, images []bootserver.Image, args 
 	} else {
 		qemuKernel = getImageByLabel(images, t.imageOverrides.QEMUKernel)
 	}
-	if qemuKernel == nil {
-		return fmt.Errorf("could not find \"kernel_qemu-kernel\" or QEMU kernel override")
-	}
 
 	var zbi *bootserver.Image
 	if t.imageOverrides.ZBI == "" {
 		zbi = getImageByName(images, "zbi_zircon-a")
 	} else {
 		zbi = getImageByLabel(images, t.imageOverrides.ZBI)
+	}
+
+	var efi *bootserver.Image
+	if t.imageOverrides.EFI != "" {
+		efi = getImageByLabel(images, t.imageOverrides.EFI)
 	}
 
 	// The QEMU command needs to be invoked within an empty directory, as QEMU
@@ -273,7 +279,7 @@ func (t *QEMUTarget) Start(ctx context.Context, images []bootserver.Image, args 
 
 	storageFull := getImageByName(images, "blk_storage-full")
 
-	if err := copyImagesToDir(ctx, workdir, false, qemuKernel, zbi, storageFull); err != nil {
+	if err := copyImagesToDir(ctx, workdir, false, qemuKernel, zbi, efi, storageFull); err != nil {
 		return err
 	}
 
@@ -304,9 +310,32 @@ func (t *QEMUTarget) Start(ctx context.Context, images []bootserver.Image, args 
 
 	// Now that the images hav successfully been copied to the working
 	// directory, Path points to their path on disk.
-	qemuCmd.SetKernel(qemuKernel.Path)
+	if qemuKernel != nil {
+		qemuCmd.SetKernel(qemuKernel.Path)
+	}
 	if zbi != nil {
 		qemuCmd.SetInitrd(zbi.Path)
+	}
+	if efi != nil {
+		edk2Dir := filepath.Join(t.config.EDK2Dir, "qemu-"+t.config.Target)
+		var code, data string
+		switch t.config.Target {
+		case "x64":
+			code = filepath.Join(edk2Dir, "OVMF_CODE.fd")
+			data = filepath.Join(edk2Dir, "OVMF_VARS.fd")
+		case "arm64":
+			code = filepath.Join(edk2Dir, "QEMU_EFI.fd")
+			data = filepath.Join(edk2Dir, "QEMU_VARS.fd")
+		}
+		code, err = normalizeFile(code)
+		if err != nil {
+			return err
+		}
+		data, err = normalizeFile(data)
+		if err != nil {
+			return err
+		}
+		qemuCmd.SetUEFIVolumes(code, data, efi.Path)
 	}
 
 	if storageFull != nil {

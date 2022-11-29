@@ -94,19 +94,36 @@ if (current_toolchain != default_toolchain) {
     deps = [ "//zircon/kernel/lib/libc" ]
   }
 
-  # Build both a qemu_kernel_test() and zbi_executable()/zbi_test() from the
+  # Build a qemu_kernel_test(), zbi_test(), and an efi_test() from the
   # same sources.
+  #
+  # Parameters
+  #
+  #   * disabled_for_efi
+  #     - Optional: Whether the efi_test() subtarget should be disabled.
+  #     - Type: bool
+  #     - Default: false
   #
   # Generates a target with a name of the form "qemu-xxx" for the QEMU test,
   # and "zbi-xxx" for the ZBI test.
   template("common_test") {
     qemu_kernel_test("qemu-$target_name") {
       visibility = [ ":*" ]
-      forward_variables_from(invoker, "*", [ "target_name" ])
+      forward_variables_from(invoker,
+                             "*",
+                             [
+                               "target_name",
+                               "disabled_for_efi",
+                             ])
     }
 
     phys_zbi_test("zbi-$target_name") {
-      forward_variables_from(invoker, "*", [ "target_name" ])
+      forward_variables_from(invoker,
+                             "*",
+                             [
+                               "target_name",
+                               "disabled_for_efi",
+                             ])
     }
 
     efi_test("efi-$target_name") {
@@ -119,6 +136,9 @@ if (current_toolchain != default_toolchain) {
                                "testonly",
                              ])
       deps += [ ":efi-test-main" ]
+      if (defined(disabled_for_efi)) {
+        disabled = disabled_for_efi
+      }
     }
 
     group(target_name) {
@@ -146,6 +166,9 @@ if (current_toolchain != default_toolchain) {
   }
 
   common_test("backtrace-test") {
+    # TODO(fxbug.dev/115879): Fix and enable me.
+    disabled_for_efi = true
+
     sources = [ "backtrace-test.cc" ]
     deps = [
       ":test-main",
@@ -161,6 +184,9 @@ if (current_toolchain != default_toolchain) {
   # only enables extra stack support conditionally so as not to waste space, so
   # there isn't a good way to test non-default configurations.
   common_test("phys-unittests") {
+    # TODO(fxbug.dev/115881): Fix and enable me.
+    disabled_for_efi = current_cpu == "x64"
+
     sources = [
       "phys-unittests.cc",
       "stack-tests.cc",

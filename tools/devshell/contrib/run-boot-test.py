@@ -33,6 +33,7 @@ class BootTest(object):
         self.qemu_kernel = (
             images_by_label[images["qemu_kernel"]]
             if "qemu_kernel" in images else None)
+        self.efi = images_by_label[images["efi"]] if "efi" in images else None
 
     @staticmethod
     def is_boot_test(test_json):
@@ -45,6 +46,8 @@ class BootTest(object):
             kinds.append("QEMU kernel")
         if self.zbi:
             kinds.append("ZBI")
+        if self.efi:
+            kinds.append("EFI")
         print("* %s (%s)" % (self.name, ", ".join(kinds)))
         print("    label: %s" % self.label)
         if command:
@@ -161,6 +164,8 @@ def main():
             cmd += ["-t", test.qemu_kernel["path"]]
         if test.zbi:
             cmd += ["-z", test.zbi["path"]]
+        if test.efi:
+            cmd += ["--uefi", test.efi["path"]]
 
     for arg in args.cmdline:
         cmd += ["-c", arg]

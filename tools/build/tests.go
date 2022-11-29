@@ -115,6 +115,9 @@ type ImageOverrides struct {
 	ZBI        string `json:"zbi,omitempty"`
 	VBMeta     string `json:"vbmeta,omitempty"`
 	QEMUKernel string `json:"qemu_kernel,omitempty"`
+
+	// EFI is the label of a bootable, UEFI (FAT) filesystem image.
+	EFI string `json:"efi,omitempty"`
 }
 
 // DimensionSet encapsulates the Swarming dimensions a test wishes to target.
