@@ -23,6 +23,8 @@ FileLine::FileLine(std::string file, std::string comp_dir, int line)
   FX_DCHECK(line_ > 0 || (file_.empty() && comp_dir_.empty()));
 }
 
+FileLine::~FileLine() = default;
+
 bool operator<(const FileLine& a, const FileLine& b) {
   return std::make_tuple(a.line(), a.file(), a.comp_dir()) <
          std::make_tuple(b.line(), b.file(), b.comp_dir());

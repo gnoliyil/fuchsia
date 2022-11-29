@@ -666,12 +666,6 @@ fxl::RefPtr<Symbol> DwarfSymbolFactory::DecodeDataMember(const llvm::DWARFDie& d
   ConstValue const_value;
   decoder.AddConstValue(llvm::dwarf::DW_AT_const_value, &const_value);
 
-  // These are set for Rust generators.
-  llvm::Optional<std::string> decl_file;
-  llvm::Optional<uint64_t> decl_line;
-  decoder.AddFile(llvm::dwarf::DW_AT_decl_file, &decl_file);
-  decoder.AddUnsignedConstant(llvm::dwarf::DW_AT_decl_line, &decl_line);
-
   if (!decoder.Decode(die))
     return fxl::MakeRefCounted<Symbol>();
 
@@ -695,10 +689,7 @@ fxl::RefPtr<Symbol> DwarfSymbolFactory::DecodeDataMember(const llvm::DWARFDie& d
   if (data_bit_offset)
     result->set_data_bit_offset(static_cast<uint32_t>(*data_bit_offset));
   result->set_const_value(std::move(const_value));
-  if (decl_file) {
-    result->set_decl_line(
-        MakeFileLine(die.getDwarfUnit(), decl_file, decl_line, symbols_->GetBuildDir()));
-  }
+
   return result;
 }
 

@@ -3,7 +3,6 @@
 # found in the LICENSE file.
 
 import("//build/components.gni")
-import("//build/rust/rustc_binary.gni")
 
 # Declare an inferior with a default manifest.
 template("inferior") {
@@ -11,12 +10,7 @@ template("inferior") {
   _target_bin = target_name + "_bin"
   _target_manifest = target_name + "_manifest"
 
-  _type = "executable"
-  if (defined(invoker.type)) {
-    _type = invoker.type
-  }
-
-  target(_type, _target_bin) {
+  executable(_target_bin) {
     output_name = _target_name
     forward_variables_from(invoker, "*")
   }
@@ -56,20 +50,8 @@ inferior("inlined_crasher") {
   sources = [ "inlined_crasher.cc" ]
 }
 
-inferior("async_rust") {
-  type = "rustc_binary"
-  edition = "2021"
-  sources = [ "async_rust.rs" ]
-  source_root = "async_rust.rs"
-  deps = [
-    "//src/lib/fuchsia-async",
-    "//third_party/rust_crates:futures",
-  ]
-}
-
 fuchsia_package("zxdb_e2e_inferiors") {
   deps = [
-    ":async_rust",
     ":inlined_crasher",
     ":step_plt",
     ":wait_for_debugger",

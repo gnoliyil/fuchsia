@@ -293,10 +293,7 @@ void ConditionExprNode::EmitBytecode(VmStream& stream) const {
       // Match succeeded: Extract the enum value. This can be nothing, a tuple, or a struct.
       // Currently we don't support structs. This consumes the duplicated value we made from the
       // expression above.
-      stream.push_back(
-          VmOp::MakeCallback1([](const fxl::RefPtr<EvalContext>& context, const ExprValue& value) {
-            return ResolveSingleVariantValue(context, value);
-          }));
+      stream.push_back(VmOp::MakeCallback1(&ResolveSingleVariantValue));
 
       // Validate the number of tuple elements matches the number of arguments.
       stream.push_back(VmOp::MakeDup());

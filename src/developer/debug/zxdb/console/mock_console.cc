@@ -95,9 +95,4 @@ void MockConsole::ProcessInputLine(const std::string& line, fxl::RefPtr<CommandC
   }
 }
 
-void MockConsole::ProcessInputLine(const std::string& line,
-                                   OfflineCommandContext::CompletionCallback cb) {
-  return ProcessInputLine(line, fxl::MakeRefCounted<OfflineCommandContext>(this, std::move(cb)));
-}
-
 }  // namespace zxdb
