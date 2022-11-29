@@ -411,7 +411,15 @@ Remove all existing configurations and data of `ffx`:
   ```
 
   ```posix-terminal
-  rm -fr $HOME/Library/Fuchsia/ffx
+  rm -rf $HOME/Library/Fuchsia/ffx
+  ```
+
+  ```posix-terminal
+  rm -rf $HOME/Library/Preferences/Fuchsia/ffx
+  ```
+
+  ```posix-terminal
+  rm -rf $HOME/Library/Application\ Support/Fuchsia/ffx
   ```
 
 When Bazel fails to build, try the commands below:
