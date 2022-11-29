@@ -99,30 +99,30 @@ int main(int argc, char* argv[]) {
   ZX_ASSERT(wait.Begin(loop.dispatcher()) == ZX_OK);
 
   // Create the device and publish its service.
-  auto result = camera::DeviceImpl::Create(loop.dispatcher(), executor, std::move(control_sync_ptr),
-                                           std::move(allocator_ptr), std::move(event));
   std::unique_ptr<camera::DeviceImpl> device;
-  executor.schedule_task(
-      result.then([&context, &device, &loop, &outgoing_service_name](
-                      fpromise::result<std::unique_ptr<camera::DeviceImpl>, zx_status_t>& result) {
-        if (result.is_error()) {
-          FX_PLOGS(FATAL, result.error()) << "Failed to create device.";
-          loop.Quit();
-          return;
-        }
-        device = result.take_value();
+  auto create_device_and_add_service =
+      camera::DeviceImpl::Create(loop.dispatcher(), std::move(control_sync_ptr),
+                                 std::move(allocator_ptr), std::move(event))
+          .and_then([&](std::unique_ptr<camera::DeviceImpl>& dev) {
+            device = std::move(dev);
 
-        // TODO(fxbug.dev/44628): publish discoverable service name once supported
-        zx_status_t status =
-            context->outgoing()->AddPublicService(device->GetHandler(), outgoing_service_name);
-        if (status != ZX_OK) {
-          FX_PLOGS(FATAL, status) << "Failed to publish service.";
-          loop.Quit();
-          return;
-        }
-        context->outgoing()->ServeFromStartupInfo();
-      }));
+            // TODO(fxbug.dev/44628): publish discoverable service name once
+            // supported
+            zx_status_t status =
+                context->outgoing()->AddPublicService(device->GetHandler(), outgoing_service_name);
+            if (status != ZX_OK) {
+              FX_PLOGS(FATAL, status) << "Failed to publish service.";
+              loop.Quit();
+              return;
+            }
+            context->outgoing()->ServeFromStartupInfo();
+          })
+          .or_else([&loop](zx_status_t& error) {
+            FX_PLOGS(FATAL, error) << "Failed to create device.";
+            loop.Quit();
+          });
 
+  executor.schedule_task(std::move(create_device_and_add_service));
   loop.Run();
   return EXIT_SUCCESS;
 }

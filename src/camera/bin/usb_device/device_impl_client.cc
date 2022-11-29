@@ -27,12 +27,12 @@ void DeviceImpl::Client::ConfigurationUpdated(uint32_t index) { configuration_.S
 
 void DeviceImpl::Client::OnClientDisconnected(zx_status_t status) {
   FX_PLOGS(INFO, status) << log_prefix_ << "closed connection";
-  device_.RemoveClient(id_);
+  device_.Schedule(device_.RemoveClient(id_));
 }
 
 void DeviceImpl::Client::CloseConnection(zx_status_t status) {
   binding_.Close(status);
-  device_.RemoveClient(id_);
+  device_.Schedule(device_.RemoveClient(id_));
 }
 
 void DeviceImpl::Client::GetIdentifier(GetIdentifierCallback callback) {
@@ -86,7 +86,7 @@ void DeviceImpl::Client::SetCurrentConfiguration(uint32_t index) {
     return;
   }
 
-  device_.SetConfiguration(index);
+  device_.Schedule(device_.SetConfiguration(index));
 }
 
 void DeviceImpl::Client::WatchMuteState(WatchMuteStateCallback callback) {
@@ -100,12 +100,12 @@ void DeviceImpl::Client::SetSoftwareMuteState(bool muted, SetSoftwareMuteStateCa
 void DeviceImpl::Client::ConnectToStream(uint32_t index,
                                          fidl::InterfaceRequest<fuchsia::camera3::Stream> request) {
   FX_LOGS(INFO) << log_prefix_ << "called ConnectToStream(" << index << ")";
-  device_.ConnectToStream(index, std::move(request));
+  device_.Schedule(device_.ConnectToStream(index, std::move(request)));
 }
 
 void DeviceImpl::Client::Rebind(fidl::InterfaceRequest<fuchsia::camera3::Device> request) {
   FX_LOGS(INFO) << log_prefix_ << "called Rebind(koid = " << GetRelatedKoid(request) << ")";
-  device_.Bind(std::move(request));
+  device_.Schedule(device_.Bind(std::move(request)));
 }
 
 }  // namespace camera

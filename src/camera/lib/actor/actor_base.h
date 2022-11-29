@@ -34,6 +34,17 @@ class ActorBase {
         fpromise::pending_task(fpromise::make_promise(std::move(lambda)).wrap_with(scope_)));
   }
 
+  template <typename Ret, typename Err>
+  void ScheduleAfterDelay(zx::duration duration, fpromise::promise<Ret, Err> promise) {
+    Schedule(executor_.MakeDelayedPromise(duration).and_then(std::move(promise)));
+  }
+
+  template <typename Lambda>
+  void ScheduleAfterDelay(zx::duration duration, Lambda lambda) {
+    Schedule(
+        executor_.MakeDelayedPromise(duration).and_then(fpromise::make_promise(std::move(lambda))));
+  }
+
   void WaitOnce(zx_handle_t object, zx_signals_t trigger, uint32_t options, WaitHandler handler) {
     auto wait = std::make_shared<async::WaitOnce>(object, trigger, options);
     wait->Begin(executor_.dispatcher(),

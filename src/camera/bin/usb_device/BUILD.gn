@@ -35,6 +35,7 @@ source_set("lib") {
 
   deps = [
     "//sdk/lib/syslog/cpp",
+    "//src/camera/lib/actor:actor_base",
     "//src/camera/lib/hanging_get_helper",
     "//src/lib/fsl",
     "//zircon/system/ulib/async-loop:async-loop-default",

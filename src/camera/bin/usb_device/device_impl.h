@@ -12,6 +12,7 @@
 #include <lib/fidl/cpp/binding.h>
 #include <lib/fpromise/promise.h>
 #include <lib/fpromise/result.h>
+#include <lib/fpromise/scope.h>
 #include <lib/sys/cpp/component_context.h>
 #include <zircon/status.h>
 #include <zircon/types.h>
@@ -22,31 +23,31 @@
 #include <vector>
 
 #include "src/camera/bin/usb_device/stream_impl.h"
+#include "src/camera/lib/actor/actor_base.h"
 #include "src/camera/lib/hanging_get_helper/hanging_get_helper.h"
 
 namespace camera {
 
 // Represents a physical camera device, and serves multiple clients of the camera3.Device protocol.
-class DeviceImpl : public fuchsia::ui::policy::MediaButtonsListener {
+class DeviceImpl : public actor::ActorBase, public fuchsia::ui::policy::MediaButtonsListener {
  public:
+  template <typename RetT_, typename ErrT_ = void>
+  using promise = fpromise::promise<RetT_, ErrT_>;
+
   // Creates a DeviceImpl using the given |controller|.
   //
   // References to |dispatcher|, |executor|, and |context| may be retained by the instance so the
   // caller must ensure these outlive the returned DeviceImpl.
-  static fpromise::promise<std::unique_ptr<DeviceImpl>, zx_status_t> Create(
-      async_dispatcher_t* dispatcher, fpromise::executor& executor,
-      fuchsia::camera::ControlSyncPtr control, fuchsia::sysmem::AllocatorPtr allocator,
-      zx::event bad_state_event);
+  static promise<std::unique_ptr<DeviceImpl>, zx_status_t> Create(
+      async_dispatcher_t* dispatcher, fuchsia::camera::ControlSyncPtr control,
+      fuchsia::sysmem::AllocatorPtr allocator, zx::event bad_state_event);
 
-  DeviceImpl(async_dispatcher_t* dispatcher, fpromise::executor& executor,
-             fuchsia::camera::ControlSyncPtr control, fuchsia::sysmem::AllocatorPtr allocator,
-             zx::event bad_state_event);
+  DeviceImpl(async_dispatcher_t* dispatcher, fuchsia::camera::ControlSyncPtr control,
+             fuchsia::sysmem::AllocatorPtr allocator, zx::event bad_state_event);
   ~DeviceImpl() override;
 
   // Returns a service handler for use with a service directory.
   fidl::InterfaceRequestHandler<fuchsia::camera3::Device> GetHandler();
-
-  async_dispatcher_t* dispatcher() const { return dispatcher_; }
 
  private:
   // Called by the request handler returned by GetHandler, i.e. when a new client connects to the
@@ -54,27 +55,24 @@ class DeviceImpl : public fuchsia::ui::policy::MediaButtonsListener {
   void OnNewRequest(fidl::InterfaceRequest<fuchsia::camera3::Device> request);
 
   // Posts a task to bind a new client.
-  void Bind(fidl::InterfaceRequest<fuchsia::camera3::Device> request);
+  promise<void> Bind(fidl::InterfaceRequest<fuchsia::camera3::Device> request);
 
   // Posts a task to remove the client with the given id.
-  void RemoveClient(uint64_t id);
+  promise<void> RemoveClient(uint64_t id);
 
   // Sets the current configuration to the provided index.
-  void SetConfiguration(uint32_t index);
-
-  // Posts a task to connect to a stream.
-  void PostConnectToStream(uint32_t index,
-                           fidl::InterfaceRequest<fuchsia::camera3::Stream> request);
+  promise<void> SetConfiguration(uint32_t index);
 
   // Connects to a stream.
-  void ConnectToStream(uint32_t index, fidl::InterfaceRequest<fuchsia::camera3::Stream> request);
+  promise<void> ConnectToStream(uint32_t index,
+                                fidl::InterfaceRequest<fuchsia::camera3::Stream> request);
 
   // Called by a stream when it has sufficient information to connect to the legacy stream protocol.
-  void OnStreamRequested(uint32_t index,
-                         fuchsia::sysmem::BufferCollectionInfo buffer_collection_info,
-                         fuchsia::camera::FrameRate frame_rate,
-                         fidl::InterfaceRequest<fuchsia::camera::Stream> request,
-                         zx::eventpair driver_token);
+  promise<void> OnStreamRequested(uint32_t index,
+                                  fuchsia::sysmem::BufferCollectionInfo buffer_collection_info,
+                                  fuchsia::camera::FrameRate frame_rate,
+                                  fidl::InterfaceRequest<fuchsia::camera::Stream> request,
+                                  zx::eventpair driver_token);
 
   void AllocatorBindSharedCollection(
       fuchsia::sysmem::BufferCollectionTokenHandle token,
@@ -122,8 +120,9 @@ class DeviceImpl : public fuchsia::ui::policy::MediaButtonsListener {
     HangingGetHelper<uint32_t> configuration_;
   };
 
-  async_dispatcher_t* dispatcher_;
-  fpromise::executor& executor_;
+  // Keep a copy of the dispatcher just for initializing streams.
+  async_dispatcher_t* stream_dispatcher_;
+
   fuchsia::camera::ControlSyncPtr control_;
   fuchsia::sysmem::AllocatorPtr allocator_;
   zx::event bad_state_event_;
@@ -135,9 +134,10 @@ class DeviceImpl : public fuchsia::ui::policy::MediaButtonsListener {
   uint32_t current_configuration_index_ = 0;
 
   std::vector<zx::eventpair> deallocation_events_;
-  std::vector<fpromise::promise<void, zx_status_t>> deallocation_promises_;
+  std::vector<promise<void, zx_status_t>> deallocation_promises_;
   std::vector<std::unique_ptr<StreamImpl>> streams_;
 
+  fpromise::scope scope_;
   friend class Client;
 };
 

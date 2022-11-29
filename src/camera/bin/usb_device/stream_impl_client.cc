@@ -4,6 +4,7 @@
 
 #include <lib/async-loop/default.h>
 #include <lib/async/cpp/task.h>
+#include <lib/fpromise/result.h>
 #include <lib/syslog/cpp/macros.h>
 #include <lib/trace/event.h>
 
@@ -15,6 +16,18 @@
 #include "src/lib/fsl/handles/object_info.h"
 
 namespace camera {
+namespace {
+
+using fpromise::make_error_promise;
+using fpromise::make_ok_promise;
+using fpromise::make_promise;
+
+using fuchsia::camera3::FrameInfo2;
+
+using fuchsia::sysmem::BufferCollectionInfo;
+using fuchsia::sysmem::BufferCollectionTokenPtr;
+
+}  // namespace
 
 StreamImpl::Client::Client(StreamImpl& stream, uint64_t id,
                            fidl::InterfaceRequest<fuchsia::camera3::Stream> request)
@@ -27,7 +40,7 @@ StreamImpl::Client::Client(StreamImpl& stream, uint64_t id,
 
 StreamImpl::Client::~Client() = default;
 
-void StreamImpl::Client::AddFrame(fuchsia::camera3::FrameInfo2 frame) {
+void StreamImpl::Client::AddFrame(FrameInfo2 frame) {
   TRACE_DURATION("camera", "StreamImpl::Client::AddFrame");
   frames_.push(std::move(frame));
   if (!frame_logging_state_.available) {
@@ -60,14 +73,17 @@ void StreamImpl::Client::MaybeSendFrame() {
 
 void StreamImpl::Client::ReceiveBufferCollection(
     fidl::InterfaceHandle<fuchsia::sysmem::BufferCollectionToken> token) {
+  TRACE_DURATION("camera", "StreamImpl::Client::ReceiveBufferCollection");
   buffers_.Set(std::move(token));
 }
 
 void StreamImpl::Client::ReceiveResolution(fuchsia::math::Size coded_size) {
+  TRACE_DURATION("camera", "StreamImpl::Client::ReceiveResolution");
   resolution_.Set(coded_size);
 }
 
 void StreamImpl::Client::ReceiveCropRegion(std::unique_ptr<fuchsia::math::RectF> region) {
+  TRACE_DURATION("camera", "StreamImpl::Client::ReceiveCropRegion");
   crop_region_.Set(std::move(region));
 }
 
@@ -81,12 +97,11 @@ void StreamImpl::Client::ClearFrames() {
 
 void StreamImpl::Client::OnClientDisconnected(zx_status_t status) {
   FX_PLOGS(INFO, status) << log_prefix_ << "closed connection";
-  stream_.RemoveClient(id_);
+  stream_.Schedule(stream_.RemoveClient(id_));
 }
 
 void StreamImpl::Client::CloseConnection(zx_status_t status) {
   binding_.Close(status);
-  stream_.RemoveClient(id_);
 }
 
 void StreamImpl::Client::GetProperties(GetPropertiesCallback callback) {
@@ -115,10 +130,34 @@ void StreamImpl::Client::WatchResolution(WatchResolutionCallback callback) {
 
 void StreamImpl::Client::SetBufferCollection(
     fidl::InterfaceHandle<fuchsia::sysmem::BufferCollectionToken> token) {
-  TRACE_DURATION("camera", "StreamImpl::Client::SetBufferCollection");
+  auto nonce = TRACE_NONCE();
+  TRACE_ASYNC_BEGIN("camera", "StreamImpl::Client::SetBufferCollection", nonce);
   FX_LOGS(INFO) << log_prefix_ << "called SetBufferCollection(koid = " << GetRelatedKoid(token)
                 << ")";
-  stream_.SetBufferCollection(id_, std::move(token));
+  auto promise =
+      stream_.SetClientParticipation(id_, std::move(token))
+          .then([this,
+                 nonce](fpromise::result<std::optional<BufferCollectionTokenPtr>>& result) mutable
+                -> fpromise::promise<void> {
+            // If the result of SetClientParticipation was nullopt, we're done.
+            if (!result.value())
+              return make_ok_promise();
+
+            return stream_.InitBufferCollections(std::move(*result.value()))
+                .then([this](fpromise::result<BufferCollectionInfo, zx_status_t>& result)
+                          -> fpromise::promise<void> {
+                  if (result.is_ok()) {
+                    return stream_.ConnectAndStartStream(std::move(result.value()));
+                  } else {
+                    stream_.OnError(result.error(), ":failed to initialize buffer collections.");
+                    return make_ok_promise();
+                  }
+                })
+                .and_then([nonce]() {
+                  TRACE_ASYNC_END("camera", "StreamImpl::Client::SetBufferCollection", nonce);
+                });
+          });
+  stream_.Schedule(std::move(promise));
 }
 
 void StreamImpl::Client::WatchBufferCollection(WatchBufferCollectionCallback callback) {
@@ -126,13 +165,16 @@ void StreamImpl::Client::WatchBufferCollection(WatchBufferCollectionCallback cal
   FX_LOGS(INFO) << log_prefix_ << "called WatchBufferCollection()";
   if (buffers_.Get(std::move(callback))) {
     CloseConnection(ZX_ERR_BAD_STATE);
+    stream_.Schedule(stream_.RemoveClient(id_));
   }
 }
 
 void StreamImpl::Client::WatchOrientation(WatchOrientationCallback callback) {
+  TRACE_DURATION("camera", "StreamImpl::Client::WatchOrientation");
   // It is invalid to have multiple Watch requests in flight.
   if (orientation_callback_) {
     CloseConnection(ZX_ERR_BAD_STATE);
+    stream_.Schedule(stream_.RemoveClient(id_));
     return;
   }
 
@@ -143,7 +185,7 @@ void StreamImpl::Client::WatchOrientation(WatchOrientationCallback callback) {
 }
 
 void StreamImpl::Client::GetNextFrame(GetNextFrameCallback callback) {
-  GetNextFrame2([callback = std::move(callback)](fuchsia::camera3::FrameInfo2 frame) {
+  GetNextFrame2([callback = std::move(callback)](FrameInfo2 frame) {
     callback({.buffer_index = frame.buffer_index(),
               .frame_counter = frame.frame_counter(),
               .timestamp = frame.timestamp(),
@@ -161,6 +203,7 @@ void StreamImpl::Client::GetNextFrame2(GetNextFrame2Callback callback) {
     FX_LOGS(INFO) << stream_.description_ << ": " << id_
                   << ": Client called GetNextFrame while a previous call was still pending.";
     CloseConnection(ZX_ERR_BAD_STATE);
+    stream_.Schedule(stream_.RemoveClient(id_));
     return;
   }
   frame_callback_ = std::move(callback);

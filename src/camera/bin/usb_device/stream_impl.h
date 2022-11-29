@@ -9,7 +9,7 @@
 #include <fuchsia/camera3/cpp/fidl.h>
 #include <lib/async/cpp/wait.h>
 #include <lib/fidl/cpp/binding.h>
-#include <lib/fpromise/result.h>
+#include <lib/fpromise/promise.h>
 #include <lib/fpromise/scope.h>
 #include <lib/zx/result.h>
 #include <zircon/status.h>
@@ -22,89 +22,103 @@
 #include "src/camera/bin/usb_device/frame_waiter.h"
 #include "src/camera/bin/usb_device/util_fidl.h"
 #include "src/camera/bin/usb_device/uvc_hack.h"
+#include "src/camera/lib/actor/actor_base.h"
 #include "src/camera/lib/hanging_get_helper/hanging_get_helper.h"
 
 namespace camera {
 
 // Represents a specific stream in a camera device's configuration. Serves multiple clients of the
 // camera3.Stream protocol.
-class StreamImpl {
+class StreamImpl : public actor::ActorBase {
  public:
+  template <typename RetT_, typename ErrT_ = void>
+  using promise = fpromise::promise<RetT_, ErrT_>;
+
   // Called by the stream when it needs to connect to its associated legacy stream.
   using StreamRequestedCallback =
-      fit::function<void(fuchsia::sysmem::BufferCollectionInfo, fuchsia::camera::FrameRate,
-                         fidl::InterfaceRequest<fuchsia::camera::Stream>, zx::eventpair)>;
+      fit::function<promise<void>(fuchsia::sysmem::BufferCollectionInfo, fuchsia::camera::FrameRate,
+                                  fidl::InterfaceRequest<fuchsia::camera::Stream>, zx::eventpair)>;
   // Called by the stream when it needs to call BindSharedCollection.
   using AllocatorBindSharedCollectionCallback =
-      fit::function<void(fidl::InterfaceHandle<fuchsia::sysmem::BufferCollectionToken>,
-                         fidl::InterfaceRequest<fuchsia::sysmem::BufferCollection>)>;
+      fit::function<promise<void>(fidl::InterfaceHandle<fuchsia::sysmem::BufferCollectionToken>,
+                                  fidl::InterfaceRequest<fuchsia::sysmem::BufferCollection>)>;
+  // Called by the stream when it has no more clients.
+  using NoClientsCallback = fit::function<promise<void>()>;
 
   StreamImpl(async_dispatcher_t* dispatcher, const fuchsia::camera3::StreamProperties2& properties,
              fidl::InterfaceRequest<fuchsia::camera3::Stream> request,
              StreamRequestedCallback on_stream_requested,
              AllocatorBindSharedCollectionCallback allocator_bind_shared_collection,
-             fit::closure on_no_clients, std::optional<std::string> description = std::nullopt);
-  ~StreamImpl();
+             NoClientsCallback on_no_clients,
+             std::optional<std::string> description = std::nullopt);
+  ~StreamImpl() = default;
+
+  // Ask UVC driver to stop streaming.
+  promise<void> StopStreaming();
 
   // Close all client connections with given status as epitaph.
-  void CloseAllClients(zx_status_t status);
-
-  fpromise::scope& Scope();
+  promise<void> CloseAllClients(zx_status_t status);
 
  private:
-  // Allocate driver-facing buffer collection.
-  zx::result<fuchsia::sysmem::BufferCollectionInfo> Gralloc(
-      fuchsia::camera::VideoFormat video_format, uint32_t num_buffers);
+  // Error handler, disconnects all clients and calls the on_no_clients_ callback.
+  void OnError(zx_status_t status, const std::string& message);
 
   // Called when a client calls Rebind.
   void OnNewRequest(fidl::InterfaceRequest<fuchsia::camera3::Stream> request);
 
-  // Called if the underlying legacy stream disconnects.
-  void OnLegacyStreamDisconnected(zx_status_t status);
-
   // Remove the client with the given id.
-  void RemoveClient(uint64_t id);
+  promise<void> RemoveClient(uint64_t id);
 
   // Called when the legacy stream's OnFrameAvailable event fires.
   void OnFrameAvailable(fuchsia::camera::FrameAvailableEvent info);
 
-  // Renegotiate buffers or opt out of buffer renegotiation for the client with the given id.
-  void SetBufferCollection(
+  // Calls Sync on the given token and then produces that token when the sync is complete.
+  promise<fuchsia::sysmem::BufferCollectionTokenPtr> TokenSync(
+      fuchsia::sysmem::BufferCollectionTokenPtr token);
+
+  // Calls Sync on the given BufferCollection and the promise completes when the sync is complete.
+  promise<void> BufferCollectionSync(fuchsia::sysmem::BufferCollectionPtr& collection);
+
+  // Calls WaitForBuffersAllocated on client_buffer_collection_ and then returns either a status in
+  // the case of an error or the BufferCollectionInfo_2 if it was successful.
+  promise<fuchsia::sysmem::BufferCollectionInfo_2, zx_status_t>
+  WaitForClientBufferCollectionAllocated();
+
+  // Given an InterfaceHandle<BufferCollectionToken> with a valid underlying channel, the client
+  // will be set as a participant and the returned promise will yield the bound token for further
+  // use. Otherwise, the client will not be a particpant and the promise will yield nullopt.
+  promise<std::optional<fuchsia::sysmem::BufferCollectionTokenPtr>> SetClientParticipation(
       uint64_t id, fidl::InterfaceHandle<fuchsia::sysmem::BufferCollectionToken> token_handle);
 
-  // Error handler for client-facing buffer collection.
-  void OnClientBufferCollectionError(zx_status_t status);
+  // Renegotiate buffers or opt out of buffer renegotiation for the client with the given id.
+  promise<fuchsia::sysmem::BufferCollectionInfo, zx_status_t> InitBufferCollections(
+      fuchsia::sysmem::BufferCollectionTokenPtr token);
 
   // The following functions are async daisy-chained to execute the steps to initialize the
   // client-facing buffer collection:
   //
-  // 1. InitializeClientBufferCollection - Flush token to sysmem to synchronize
-  // 2. InitializeSharedCollection - Bind shared collection and set attributes
-  // 3. SetClientBufferCollectionConstraints - Set constraints and finish allocation
-  // 4. InitializeBuffers - Initialize individual buffers
-  //
-  // TODO(ernesthua) - Probably could do this as a chain of promises?
-  void InitializeClientBufferCollection(
-      fidl::InterfaceHandle<fuchsia::sysmem::BufferCollectionToken> token_handle);
-  void InitializeClientSharedCollection(fuchsia::sysmem::BufferCollectionTokenPtr token);
-  void SetClientBufferCollectionConstraints();
-  void InitializeClientBuffers(fuchsia::sysmem::BufferCollectionInfo_2 buffer_collection_info);
+  // 1. InitializeSharedCollection - Bind shared collection and set attributes
+  // 2. SetClientBufferCollectionConstraints - Set constraints
+  // 3. WaitForClientBufferCollectionAllocated - Wait for the allocation to finish
+  // 4. InitializeClientBuffers - Initialize individual buffers
+  promise<void> InitializeClientSharedCollection(fuchsia::sysmem::BufferCollectionTokenPtr token);
+  promise<void> SetClientBufferCollectionConstraints();
+  promise<void> InitializeClientBuffers(
+      fuchsia::sysmem::BufferCollectionInfo_2 buffer_collection_info);
 
   // Allocate the driver-facing buffer collection.
-  void AllocateDriverBufferCollection();
+  promise<fuchsia::sysmem::BufferCollectionInfo, zx_status_t> AllocateDriverBufferCollection(
+      fuchsia::camera::VideoFormat video_format);
 
   // Connect to UVC camera stream and start streaming.
-  void ConnectAndStartStream(fuchsia::sysmem::BufferCollectionInfo buffer_collection_info);
+  promise<void> ConnectAndStartStream(fuchsia::sysmem::BufferCollectionInfo buffer_collection_info);
 
   // Setup our end of the UVC camera stream and connect to the UVC camera stream.
-  void ConnectToStream(fuchsia::sysmem::BufferCollectionInfo buffer_collection_info,
-                       fuchsia::camera::FrameRate frame_rate);
+  promise<void> ConnectToStream(fuchsia::sysmem::BufferCollectionInfo buffer_collection_info,
+                                fuchsia::camera::FrameRate frame_rate);
 
   // Ask UVC driver to start streaming.
-  void StartStreaming();
-
-  // Ask UVC driver to stop streaming.
-  void StopStreaming();
+  promise<void> StartStreaming();
 
   // Our local stub to call BindSharedCollection at DeviceImpl.
   void AllocatorBindSharedCollection(
@@ -203,7 +217,7 @@ class StreamImpl {
   uint64_t client_id_next_ = 1;
   StreamRequestedCallback on_stream_requested_;
   AllocatorBindSharedCollectionCallback allocator_bind_shared_collection_;
-  fit::closure on_no_clients_;
+  NoClientsCallback on_no_clients_;
   uint32_t max_camping_buffers_ = kUvcHackClientMaxBufferCountForCamping;
 
   // USB video stream
@@ -235,8 +249,8 @@ class StreamImpl {
   std::map<uint32_t, std::unique_ptr<FrameWaiter>> frame_waiters_;
   fuchsia::math::Size current_resolution_;
   std::unique_ptr<fuchsia::math::RectF> current_crop_region_;
-  fpromise::scope scope_;
   std::string description_;
+  fpromise::scope scope_;  // This must be the last member.
   friend class Client;
 };
 

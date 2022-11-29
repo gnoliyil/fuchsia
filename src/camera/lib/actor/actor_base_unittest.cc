@@ -72,6 +72,14 @@ class TestActorA : public actor::ActorBase {
              });
   }
 
+  void UpdateAfterDelay(zx::duration delay, int new_state) {
+    ScheduleAfterDelay(delay, [this, new_state]() {
+      std::cout << "Actor A UpdateAfterDelay running." << std::endl;
+      state_ = new_state;
+    });
+    std::cout << "Actor A UpdateAfterDelay scheduled." << std::endl;
+  }
+
   // Used to test that an actor can schedule things on another actor and wait for the result, even
   // if the other actor is running on the same async loop.
   fpromise::promise<void> FetchAndSetBState() {
@@ -180,6 +188,24 @@ TEST(ActorBase, BasicSchedulingTest) {
   EXPECT_EQ(ZX_OK, loop.RunUntilIdle());
 
   EXPECT_EQ(1337, future_state.get());
+}
+
+TEST(ActorBase, DelayedSchedulingTest) {
+  async::Loop loop(&kAsyncLoopConfigNeverAttachToThread);
+
+  TestActorA actor(loop.dispatcher());
+
+  actor.UpdateAfterDelay(zx::msec(1000), 1337);
+
+  EXPECT_EQ(0, actor.GetStateImmediateForTest());
+
+  EXPECT_EQ(ZX_ERR_TIMED_OUT, loop.Run(zx::deadline_after(zx::msec(500))));
+
+  EXPECT_EQ(0, actor.GetStateImmediateForTest());
+
+  EXPECT_EQ(ZX_ERR_TIMED_OUT, loop.Run(zx::deadline_after(zx::msec(600))));
+
+  EXPECT_EQ(1337, actor.GetStateImmediateForTest());
 }
 
 TEST(ActorBase, WaitOnceTest) {
