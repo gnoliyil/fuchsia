@@ -42,9 +42,10 @@ ScopedChild ScopedChild::New(fuchsia::component::RealmSyncPtr realm_proxy, std::
 ScopedChild ScopedChild::New(fuchsia::component::RealmSyncPtr realm_proxy, std::string collection,
                              std::string name, std::string url) {
   internal::CreateChild(realm_proxy.get(), collection, name, std::move(url));
-  auto exposed_dir = internal::OpenExposedDir(
+  fuchsia::io::DirectorySyncPtr exposed_dir;
+  exposed_dir.Bind(internal::OpenExposedDir(
       realm_proxy.get(),
-      fuchsia::component::decl::ChildRef{.name = name, .collection = collection});
+      fuchsia::component::decl::ChildRef{.name = name, .collection = collection}));
   return ScopedChild(sys::ServiceDirectory::CreateFromNamespace(),
                      fuchsia::component::decl::ChildRef{.name = name, .collection = collection},
                      std::move(exposed_dir));
@@ -55,9 +56,10 @@ ScopedChild ScopedChild::New(std::string collection, std::string name, std::stri
   fuchsia::component::RealmSyncPtr realm_proxy;
   svc->Connect(realm_proxy.NewRequest());
   internal::CreateChild(realm_proxy.get(), collection, name, std::move(url));
-  auto exposed_dir = internal::OpenExposedDir(
+  fuchsia::io::DirectorySyncPtr exposed_dir;
+  exposed_dir.Bind(internal::OpenExposedDir(
       realm_proxy.get(),
-      fuchsia::component::decl::ChildRef{.name = name, .collection = collection});
+      fuchsia::component::decl::ChildRef{.name = name, .collection = collection}));
   return ScopedChild(svc,
                      fuchsia::component::decl::ChildRef{.name = name, .collection = collection},
                      std::move(exposed_dir));
@@ -71,7 +73,7 @@ ScopedChild ScopedChild::New(std::string collection, std::string url,
 
 ScopedChild::ScopedChild(std::shared_ptr<sys::ServiceDirectory> svc,
                          fuchsia::component::decl::ChildRef child_ref,
-                         sys::ServiceDirectory exposed_dir)
+                         fuchsia::io::DirectorySyncPtr exposed_dir)
     : svc_(std::move(svc)),
       child_ref_(std::move(child_ref)),
       exposed_dir_(std::move(exposed_dir)) {}
@@ -136,7 +138,8 @@ void ScopedChild::MakeTeardownAsync(async_dispatcher_t* dispatcher, TeardownCall
 }
 
 zx_status_t ScopedChild::Connect(const std::string& interface_name, zx::channel request) const {
-  return this->exposed_dir_.Connect(interface_name, std::move(request));
+  return fdio_service_connect_at(exposed_dir_.unowned_channel()->get(), interface_name.c_str(),
+                                 request.release());
 }
 
 std::string ScopedChild::GetChildName() const { return child_ref_.name; }

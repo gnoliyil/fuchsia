@@ -7,7 +7,9 @@
 
 #include <fuchsia/component/cpp/fidl.h>
 #include <fuchsia/component/decl/cpp/fidl.h>
+#include <fuchsia/io/cpp/fidl.h>
 #include <lib/async/dispatcher.h>
+#include <lib/fidl/cpp/interface_handle.h>
 #include <lib/sys/cpp/component_context.h>
 #include <lib/sys/cpp/service_directory.h>
 #include <zircon/status.h>
@@ -111,7 +113,7 @@ class ScopedChild final {
   // Connect to exposed directory of the child component.
   template <typename Interface>
   zx_status_t Connect(fidl::InterfaceRequest<Interface> request) const {
-    return exposed_dir_.Connect<Interface>(std::move(request));
+    return Connect(Interface::Name_, request.TakeChannel());
   }
 
   // Connect to an interface in the exposed directory using the supplied
@@ -123,16 +125,23 @@ class ScopedChild final {
 
   // Clone the exposed directory.
   fidl::InterfaceHandle<fuchsia::io::Directory> CloneExposedDir() const {
-    return exposed_dir_.CloneChannel();
+    fidl::InterfaceHandle<fuchsia::io::Directory> clone;
+    zx_status_t status = exposed_dir_->Clone(
+        fuchsia::io::OpenFlags::CLONE_SAME_RIGHTS,
+        fidl::InterfaceRequest<fuchsia::io::Node>(clone.NewRequest().TakeChannel()));
+    ZX_ASSERT_MSG(status == ZX_OK, "Cloning exposed directory failed: %s",
+                  zx_status_get_string(status));
+    return clone;
   }
 
  private:
   ScopedChild(std::shared_ptr<sys::ServiceDirectory> svc,
-              fuchsia::component::decl::ChildRef child_ref, sys::ServiceDirectory exposed_dir);
+              fuchsia::component::decl::ChildRef child_ref,
+              fuchsia::io::DirectorySyncPtr exposed_dir);
 
   std::shared_ptr<sys::ServiceDirectory> svc_ = nullptr;
   fuchsia::component::decl::ChildRef child_ref_;
-  sys::ServiceDirectory exposed_dir_;
+  fuchsia::io::DirectorySyncPtr exposed_dir_;
   async_dispatcher_t* dispatcher_ = nullptr;
   TeardownCallback teardown_callback_ = nullptr;
   bool has_moved_ = false;

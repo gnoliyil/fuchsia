@@ -240,7 +240,10 @@ RealmBuilder RealmBuilder::CreateImpl(cpp17::optional<std::string_view> relative
   auto realm_proxy = internal::CreateRealmPtr(svc);
   auto child_ref = fuchsia::component::decl::ChildRef{.name = kFrameworkIntermediaryChildName};
   auto exposed_dir = internal::OpenExposedDir(realm_proxy.get(), child_ref);
-  exposed_dir.Connect(factory_proxy.NewRequest());
+  zx_status_t status = fdio_service_connect_at(exposed_dir.channel().get(),
+                                               fuchsia::component::test::RealmBuilderFactory::Name_,
+                                               factory_proxy.NewRequest().TakeChannel().release());
+  ZX_COMPONENT_ASSERT_STATUS_OK("RealmBuilderFactory/Create", status);
   fuchsia::component::test::BuilderSyncPtr builder_proxy;
   fuchsia::component::test::RealmSyncPtr test_realm_proxy;
   if (relative_url.has_value()) {

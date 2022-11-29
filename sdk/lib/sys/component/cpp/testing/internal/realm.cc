@@ -32,15 +32,15 @@ fuchsia::component::RealmSyncPtr CreateRealmPtr(std::shared_ptr<sys::ServiceDire
   return realm;
 }
 
-sys::ServiceDirectory OpenExposedDir(fuchsia::component::Realm_Sync* realm,
-                                     const fuchsia::component::decl::ChildRef& child_ref) {
+fidl::InterfaceHandle<fuchsia::io::Directory> OpenExposedDir(
+    fuchsia::component::Realm_Sync* realm, const fuchsia::component::decl::ChildRef& child_ref) {
   ZX_SYS_ASSERT_NOT_NULL(realm);
-  fuchsia::io::DirectorySyncPtr exposed_dir;
+  fidl::InterfaceHandle<fuchsia::io::Directory> exposed_dir;
   fuchsia::component::Realm_OpenExposedDir_Result result;
   ZX_COMPONENT_ASSERT_STATUS_AND_RESULT_OK(
       "Realm/OpenExposedDir", realm->OpenExposedDir(child_ref, exposed_dir.NewRequest(), &result),
       result);
-  return sys::ServiceDirectory(std::move(exposed_dir));
+  return exposed_dir;
 }
 
 void CreateChild(fuchsia::component::Realm_Sync* realm, std::string collection, std::string name,
