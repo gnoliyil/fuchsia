@@ -17,6 +17,15 @@ use {
     std::{collections::HashMap, path::Path, path::PathBuf, str::from_utf8, sync::Arc},
 };
 
+/// The path to the unsigned fuchsia ZBI image relative to the update package root.
+const FUCHSIA_ZBI_PATH: &str = "zbi";
+/// The path to the signed fuchsia ZBI image relative to the update package root.
+const FUCHSIA_ZBI_SIGNED_PATH: &str = "zbi.signed";
+/// The path to the unsigned recovery ZBI image relative to the update package root.
+const RECOVERY_ZBI_PATH: &str = "recovery";
+/// The path to the signed recovery ZBI image relative to the update package root.
+const RECOVERY_ZBI_SIGNED_PATH: &str = "recovery.signed";
+
 // Load the devmgr configuration file by following update package -> zbi -> bootfs -> devmgr config
 // file. The zbi is assumed to be stored at the file path "zbi.signed" or "zbi" in the update
 // package, and `devmgr_config_path` is a path in bootfs embedded in the ZBI.
@@ -30,6 +39,7 @@ fn load_devmgr_config<P1: AsRef<Path>, P2: AsRef<Path>>(
     update_package_path: P1,
     artifact_reader: &mut Box<dyn ArtifactReader>,
     devmgr_config_path: P2,
+    recovery: bool,
 ) -> Result<DevmgrConfigContents, DevmgrConfigError> {
     let devmgr_config_path_ref = devmgr_config_path.as_ref();
     let devmgr_config_path_str = devmgr_config_path_ref.to_str().ok_or_else(|| {
@@ -45,9 +55,14 @@ fn load_devmgr_config<P1: AsRef<Path>, P2: AsRef<Path>>(
                 io_error: format!("{:?}", err),
             }
         })?;
-    let zbi_buffer = read_content_blob(&mut far_reader, artifact_reader, "zbi.signed").or_else(
+    let (zbi_path, zbi_signed_path) = if recovery {
+        (RECOVERY_ZBI_PATH, RECOVERY_ZBI_SIGNED_PATH)
+    } else {
+        (FUCHSIA_ZBI_PATH, FUCHSIA_ZBI_SIGNED_PATH)
+    };
+    let zbi_buffer = read_content_blob(&mut far_reader, artifact_reader, zbi_signed_path).or_else(
         |signed_err| {
-            read_content_blob(&mut far_reader, artifact_reader, "zbi").map_err(|err| {
+            read_content_blob(&mut far_reader, artifact_reader, zbi_path).map_err(|err| {
                 DevmgrConfigError::FailedToReadZbi {
                     update_package_path: update_package_path_ref.to_path_buf(),
                     io_error: format!("{:?}\n{:?}", signed_err, err),
@@ -131,9 +146,7 @@ pub struct DevmgrConfigCollector;
 impl DataCollector for DevmgrConfigCollector {
     fn collect(&self, model: Arc<DataModel>) -> Result<()> {
         let model_config = model.config();
-        if model_config.is_recovery() {
-            unimplemented!("devmgr config data collection for recovery images");
-        }
+        let recovery = model_config.is_recovery();
         let update_package_path = model_config.update_package_path();
         let blobs_directory = model_config.blobs_directory();
         let devmgr_config_path = model_config.devmgr_config_path();
@@ -143,8 +156,12 @@ impl DataCollector for DevmgrConfigCollector {
             Box::new(FileArtifactReader::new(&PathBuf::new(), &blobs_directory));
 
         // Execute query using deps-tracking artifact reader.
-        let result =
-            load_devmgr_config(&update_package_path, &mut artifact_reader, &devmgr_config_path);
+        let result = load_devmgr_config(
+            &update_package_path,
+            &mut artifact_reader,
+            &devmgr_config_path,
+            recovery,
+        );
 
         // Store result in model.
         model
