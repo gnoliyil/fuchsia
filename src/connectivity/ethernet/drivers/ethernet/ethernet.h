@@ -46,8 +46,8 @@ class EthDev0;
 class EthDev;
 
 struct TransmitInfo {
-  TransmitInfo() {}
-  TransmitInfo(fbl::RefPtr<EthDev> ethdev) : edev(std::move(ethdev)) {}
+  TransmitInfo() = default;
+  explicit TransmitInfo(fbl::RefPtr<EthDev> ethdev) : edev(std::move(ethdev)) {}
 
   uint64_t fifo_cookie = 0;
   fbl::RefPtr<EthDev> edev;
@@ -60,7 +60,7 @@ using EthDev0Type = ddk::Device<EthDev0, ddk::Openable, ddk::Unbindable>;
 
 class EthDev0 : public EthDev0Type, public ddk::EmptyProtocol<ZX_PROTOCOL_ETHERNET> {
  public:
-  EthDev0(zx_device_t* parent);
+  explicit EthDev0(zx_device_t* parent);
 
   EthDev0(const EthDev0&) = delete;
   EthDev0(EthDev0&&) = delete;
@@ -126,27 +126,28 @@ class EthDev : public EthDevType,
   zx_status_t AddDevice(zx_device_t** out);
 
   // These methods are guarded by EthDev0's ethdev_lock_.
-  void GetInfo(GetInfoCompleter::Sync& completer);
-  void GetFifos(GetFifosCompleter::Sync& completer);
-  void SetIoBuffer(SetIoBufferRequestView request, SetIoBufferCompleter::Sync& completer);
-  void Start(StartCompleter::Sync& completer);
-  void Stop(StopCompleter::Sync& completer);
-  void ListenStart(ListenStartCompleter::Sync& completer);
-  void ListenStop(ListenStopCompleter::Sync& completer);
-  void SetClientName(SetClientNameRequestView request, SetClientNameCompleter::Sync& completer);
-  void GetStatus(GetStatusCompleter::Sync& completer);
+  void GetInfo(GetInfoCompleter::Sync& completer) override;
+  void GetFifos(GetFifosCompleter::Sync& completer) override;
+  void SetIoBuffer(SetIoBufferRequestView request, SetIoBufferCompleter::Sync& completer) override;
+  void Start(StartCompleter::Sync& completer) override;
+  void Stop(StopCompleter::Sync& completer) override;
+  void ListenStart(ListenStartCompleter::Sync& completer) override;
+  void ListenStop(ListenStopCompleter::Sync& completer) override;
+  void SetClientName(SetClientNameRequestView request,
+                     SetClientNameCompleter::Sync& completer) override;
+  void GetStatus(GetStatusCompleter::Sync& completer) override;
   void SetPromiscuousMode(SetPromiscuousModeRequestView request,
-                          SetPromiscuousModeCompleter::Sync& completer);
+                          SetPromiscuousModeCompleter::Sync& completer) override;
   void ConfigMulticastAddMac(ConfigMulticastAddMacRequestView request,
-                             ConfigMulticastAddMacCompleter::Sync& completer);
+                             ConfigMulticastAddMacCompleter::Sync& completer) override;
   void ConfigMulticastDeleteMac(ConfigMulticastDeleteMacRequestView request,
-                                ConfigMulticastDeleteMacCompleter::Sync& completer);
+                                ConfigMulticastDeleteMacCompleter::Sync& completer) override;
   void ConfigMulticastSetPromiscuousMode(
       ConfigMulticastSetPromiscuousModeRequestView request,
-      ConfigMulticastSetPromiscuousModeCompleter::Sync& completer);
-  void ConfigMulticastTestFilter(ConfigMulticastTestFilterCompleter::Sync& completer);
-  void DumpRegisters(DumpRegistersCompleter::Sync& completer);
-  ~EthDev();
+      ConfigMulticastSetPromiscuousModeCompleter::Sync& completer) override;
+  void ConfigMulticastTestFilter(ConfigMulticastTestFilterCompleter::Sync& completer) override;
+  void DumpRegisters(DumpRegistersCompleter::Sync& completer) override;
+  ~EthDev() override;
 
  private:
   friend class EthDev0;
@@ -171,7 +172,7 @@ class EthDev : public EthDevType,
   static constexpr uint32_t kPageMask = PAGE_SIZE - 1;
   // Ensure that we will not exceed fifo capacity.
   // Limited to one page - see fifo_create.md.
-  static_assert((kFifoDepth * kFifoEntrySize) <= 4096, "");
+  static_assert((kFifoDepth * kFifoEntrySize) <= 4096);
   // Number of empty fifo entries to read at a time.
   static constexpr uint32_t kFifoBatchSize = 32;
 
@@ -190,7 +191,8 @@ class EthDev : public EthDevType,
   zx_status_t SetPromiscLocked(bool req_on) __TA_REQUIRES(edev0_->ethdev_lock_);
   zx_status_t SetMulticastPromiscLocked(bool req_on) __TA_REQUIRES(edev0_->ethdev_lock_);
   zx_status_t RebuildMulticastFilterLocked() __TA_REQUIRES(edev0_->ethdev_lock_);
-  int MulticastAddressIndex(const uint8_t* mac) __TA_REQUIRES(edev0_->ethdev_lock_);
+  std::optional<size_t> MulticastAddressIndex(const uint8_t* mac)
+      __TA_REQUIRES(edev0_->ethdev_lock_);
   zx_status_t AddMulticastAddressLocked(const uint8_t* mac) __TA_REQUIRES(edev0_->ethdev_lock_);
   zx_status_t DelMulticastAddressLocked(const uint8_t* mac) __TA_REQUIRES(edev0_->ethdev_lock_);
   zx_status_t TestClearMulticastPromiscLocked() __TA_REQUIRES(edev0_->ethdev_lock_);
