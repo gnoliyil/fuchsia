@@ -90,7 +90,7 @@ where
     }
 }
 #[repr(C)]
-#[derive(Default)]
+#[derive(Default, FromBytes)]
 pub struct __IncompleteArrayField<T>(::std::marker::PhantomData<T>, [T; 0]);
 impl<T> __IncompleteArrayField<T> {
     #[inline]
@@ -7327,12 +7327,12 @@ pub struct sockaddr_in {
     pub __pad: [crate::x86_64_types::c_uchar; 8usize],
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, FromBytes)]
 pub struct in6_addr {
     pub in6_u: in6_addr__bindgen_ty_1,
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, FromBytes)]
 pub union in6_addr__bindgen_ty_1 {
     pub u6_addr8: [__u8; 16usize],
     pub u6_addr16: [__be16; 8usize],
@@ -7624,7 +7624,7 @@ pub struct xt_counters {
     pub bcnt: __u64,
 }
 #[repr(C)]
-#[derive(Debug, Default)]
+#[derive(Debug, Default, FromBytes)]
 pub struct xt_counters_info {
     pub name: [crate::x86_64_types::c_char; 32usize],
     pub num_counters: crate::x86_64_types::c_uint,
@@ -7665,7 +7665,7 @@ pub struct ipt_ip {
     pub invflags: __u8,
 }
 #[repr(C)]
-#[derive(Debug, Default)]
+#[derive(Debug, Default, FromBytes)]
 pub struct ipt_entry {
     pub ip: ipt_ip,
     pub nfcache: crate::x86_64_types::c_uint,
@@ -7693,7 +7693,7 @@ pub struct ipt_getinfo {
     pub size: crate::x86_64_types::c_uint,
 }
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, FromBytes)]
 pub struct ipt_replace {
     pub name: [crate::x86_64_types::c_char; 32usize],
     pub valid_hooks: crate::x86_64_types::c_uint,
@@ -7702,7 +7702,7 @@ pub struct ipt_replace {
     pub hook_entry: [crate::x86_64_types::c_uint; 5usize],
     pub underflow: [crate::x86_64_types::c_uint; 5usize],
     pub num_counters: crate::x86_64_types::c_uint,
-    pub counters: *mut xt_counters,
+    pub counters: u64,
     pub entries: __IncompleteArrayField<ipt_entry>,
 }
 impl Default for ipt_replace {
@@ -7715,7 +7715,7 @@ impl Default for ipt_replace {
     }
 }
 #[repr(C)]
-#[derive(Debug, Default)]
+#[derive(Debug, Default, FromBytes)]
 pub struct ipt_get_entries {
     pub name: [crate::x86_64_types::c_char; 32usize],
     pub size: crate::x86_64_types::c_uint,
@@ -7738,7 +7738,7 @@ pub const nf_ip6_hook_priorities_NF_IP6_PRI_CONNTRACK_HELPER: nf_ip6_hook_priori
 pub const nf_ip6_hook_priorities_NF_IP6_PRI_LAST: nf_ip6_hook_priorities = 2147483647;
 pub type nf_ip6_hook_priorities = crate::x86_64_types::c_int;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, FromBytes)]
 pub struct ip6t_ip6 {
     pub src: in6_addr,
     pub dst: in6_addr,
@@ -7764,6 +7764,7 @@ impl Default for ip6t_ip6 {
     }
 }
 #[repr(C)]
+#[derive(FromBytes)]
 pub struct ip6t_entry {
     pub ipv6: ip6t_ip6,
     pub nfcache: crate::x86_64_types::c_uint,
@@ -7829,6 +7830,7 @@ pub struct ip6t_getinfo {
     pub size: crate::x86_64_types::c_uint,
 }
 #[repr(C)]
+#[derive(FromBytes)]
 pub struct ip6t_replace {
     pub name: [crate::x86_64_types::c_char; 32usize],
     pub valid_hooks: crate::x86_64_types::c_uint,
@@ -7837,7 +7839,7 @@ pub struct ip6t_replace {
     pub hook_entry: [crate::x86_64_types::c_uint; 5usize],
     pub underflow: [crate::x86_64_types::c_uint; 5usize],
     pub num_counters: crate::x86_64_types::c_uint,
-    pub counters: *mut xt_counters,
+    pub counters: u64,
     pub entries: __IncompleteArrayField<ip6t_entry>,
 }
 impl Default for ip6t_replace {
@@ -7850,6 +7852,7 @@ impl Default for ip6t_replace {
     }
 }
 #[repr(C)]
+#[derive(FromBytes)]
 pub struct ip6t_get_entries {
     pub name: [crate::x86_64_types::c_char; 32usize],
     pub size: crate::x86_64_types::c_uint,

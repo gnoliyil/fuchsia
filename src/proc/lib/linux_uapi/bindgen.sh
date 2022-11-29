@@ -72,10 +72,10 @@ function auto_derive_from_bytes_for() {
   # TODO(https://github.com/rust-lang/rust-bindgen/issues/2170): Remove in favor of bindgen support
   # for custom derives.
   sed -i \
-    "/#\[derive(Copy, Clone)\]/ { N; s/.*\n\(pub \(struct\|union\) $1\)/#[derive(Copy, Clone, FromBytes)]\n\1/; p; d; }" \
+    "/#\[derive(.*)\]/ { N; /FromBytes/! s/#\[derive(\(.*\))\]\n\(pub \(struct\|union\) $1\)/#[derive(\1, FromBytes)]\n\2/; p; d; }" \
     src/proc/lib/linux_uapi/src/x86_64.rs
 
-# Use CStr to represent constant C strings.
+  # Use CStr to represent constant C strings.
   sed -i 's/: &\[u8; [0-9][0-9]*usize\] = \(b".*\)\\0";$/: '"\&'"'static std::ffi::CStr = unsafe { std::ffi::CStr::from_bytes_with_nul_unchecked(\1\\0") };/g' \
     src/proc/lib/linux_uapi/src/x86_64.rs
 }
@@ -83,5 +83,34 @@ function auto_derive_from_bytes_for() {
 auto_derive_from_bytes_for binder_transaction_data
 auto_derive_from_bytes_for flat_binder_object
 auto_derive_from_bytes_for bpf_attr
+auto_derive_from_bytes_for __IncompleteArrayField
+auto_derive_from_bytes_for ipt_get_entries
+auto_derive_from_bytes_for ipt_replace
+auto_derive_from_bytes_for ipt_entry
+auto_derive_from_bytes_for ip6t_ip6
+auto_derive_from_bytes_for in6_addr
+auto_derive_from_bytes_for xt_counters_info
+
+# Adds a derive for `FromBytes` for the given type.
+#
+# Use this function instead of `auto_derive_from_bytes_for` when the type doesn't have any derives.
+#
+# Params:
+#   $1: The name of the type.
+function add_derive_from_bytes_for() {
+  sed -i \
+    "/pub \(struct\|union\) $1/i #[derive(FromBytes)]" \
+    src/proc/lib/linux_uapi/src/x86_64.rs
+}
+
+add_derive_from_bytes_for ip6t_get_entries
+add_derive_from_bytes_for ip6t_entry
+add_derive_from_bytes_for ip6t_replace
+
+function replace_raw_pointer_with_user_address() {
+  sed -i "s/*\(const\|mut\) $1/u64/" src/proc/lib/linux_uapi/src/x86_64.rs
+}
+
+replace_raw_pointer_with_user_address xt_counters
 
 scripts/fx format-code --files=src/proc/lib/linux_uapi/src/x86_64.rs
