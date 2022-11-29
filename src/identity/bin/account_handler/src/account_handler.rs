@@ -699,29 +699,6 @@ mod tests {
     const TEST_AUTH_MECHANISM_ID: &str = "<AUTH MECHANISM ID>";
 
     lazy_static! {
-        /// Initial enrollment data
-        static ref TEST_ENROLLMENT_DATA: Vec<u8> = vec![13, 37];
-
-        /// Updated enrollment data
-        static ref TEST_UPDATED_ENROLLMENT_DATA: Vec<u8> = vec![14, 37];
-
-        /// An initial pre-authentication state with a single enrollment static
-        static ref TEST_PRE_AUTH_SINGLE: pre_auth::EnrollmentState =
-            pre_auth::EnrollmentState::SingleEnrollment {
-                auth_mechanism_id: TEST_AUTH_MECHANISM_ID.to_string(),
-                data: TEST_ENROLLMENT_DATA.clone(),
-            };
-
-        /// An updated pre-authentication state
-        static ref TEST_PRE_AUTH_UPDATED: pre_auth::EnrollmentState =
-            pre_auth::EnrollmentState::SingleEnrollment {
-                auth_mechanism_id: TEST_AUTH_MECHANISM_ID.to_string(),
-                data: TEST_UPDATED_ENROLLMENT_DATA.clone(),
-            };
-
-        /// Pre-key material that fails authentication.
-        static ref TEST_NOT_MAGIC_PREKEY: Vec<u8>  = vec![80; 32];
-
         /// Assumed time between a lock request and when the account handler is locked
         static ref LOCK_REQUEST_DURATION: zx::Duration = zx::Duration::from_millis(20);
 
