@@ -779,7 +779,7 @@ impl SharedMemory {
 
         // SAFETY: The offsets and lengths have been bounds-checked above. Constructing a
         // `SharedBuffer` should be safe.
-        return unsafe {
+        unsafe {
             Ok((
                 SharedBuffer::new_unchecked(self, this_offset, data_length),
                 SharedBuffer::new_unchecked(self, this_offset + data_cap, offsets_length),
@@ -789,7 +789,7 @@ impl SharedMemory {
                     sg_buffers_length,
                 ),
             ))
-        };
+        }
     }
 
     // This temporary allocator implementation does not reclaim free buffers.
@@ -800,6 +800,9 @@ impl SharedMemory {
         }
         let offset = buffer - self.user_address;
         self.allocations.remove(&offset);
+        if self.allocations.is_empty() {
+            self.next_free_offset = 0;
+        }
         Ok(())
     }
 }
