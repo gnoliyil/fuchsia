@@ -940,6 +940,11 @@ def main():
         ### Flutter
         # Implicit engine deps
         os.path.join(src_root, "prebuilt", "third_party", "sky_engine", "lib/"),
+
+        ### Ninja
+        # There is no way to specify this file as an input to a GN action
+        # since this file is not known to GN.
+        os.path.join(os.getcwd(), "build.ninja.d"),
     }
     # Ignored prefixes are to be given relative to the root_build_dir (since
     # that is the only rebase_path() option from GN that can be used.

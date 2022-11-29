@@ -11,11 +11,13 @@ rbe_common_tools = [
   "//prebuilt/proprietary/third_party/reclient/$host_platform/rewrapper",
 ]
 
+rbe_config_file = "//build/rbe/fuchsia-re-client.cfg"
+
 # Toolchain-agnostic RBE scripts and configuration.
 rbe_common_scripts = [
   "//build/rbe/fuchsia-rbe-action.sh",
-  "//build/rbe/fuchsia-re-client.cfg",
   "//build/rbe/fuchsia-reproxy-wrap.sh",
+  rbe_config_file,
 ]
 
 rustc_remote_wrapper = "//build/rbe/rustc-remote-wrapper.sh"

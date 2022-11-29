@@ -7,6 +7,7 @@ import("//build/bazel/bazel_workspace.gni")
 import("//build/bazel/legacy_ninja_build_outputs.gni")
 import("//build/images/vbmeta.gni")
 import("//build/product.gni")
+import("//build/toolchain/rbe.gni")
 
 assert(
     current_toolchain == default_toolchain,
@@ -90,6 +91,15 @@ action("generate_main_workspace") {
 
     # The bazel prebuilt is an implicit input for the script.
     "//prebuilt/third_party/bazel/${host_os}-${host_cpu}/bazel",
+
+    # The script expands these templates
+    "//build/bazel/templates/template.WORKSPACE.bazel",
+    "//build/bazel/templates/template.bazel.sh",
+    "//build/bazel/templates/template.bazelrc",
+    "//build/bazel/templates/template.fuchsia_build_config.bzl",
+
+    # The script reads RBE configs
+    rbe_config_file,
   ]
 
   deps = [
@@ -111,10 +121,6 @@ action("generate_main_workspace") {
     "--target_arch",
     target_cpu,
   ]
-
-  # This cannot be hermetic since it creates a collection of
-  # symlinks that depends on the state of the source tree.
-  hermetic_deps = false
 
   # The generated wrapper includes the absolute path of the Ninja output
   # directory, which will be read by Bazel repository rules during workspace
