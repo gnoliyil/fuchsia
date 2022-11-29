@@ -3057,8 +3057,8 @@ fn process_reply_with_leases<B: ByteSlice>(
     // TODO(https://fxbug.dev/113080) Add actions to discover/invalidate prefix.
     let actions = match next_state {
         StateAfterReplyWithLeases::Assigned => Some(
-            std::iter::once(Action::CancelTimer(ClientTimerType::Retransmission))
-                .chain(dns_servers.clone().map(Action::UpdateDnsServers))
+            [
+                Action::CancelTimer(ClientTimerType::Retransmission),
                 // Set timer to start renewing addresses, per RFC 8415, section
                 // 18.2.4:
                 //
@@ -3070,13 +3070,13 @@ fn process_reply_with_leases<B: ByteSlice>(
                 //
                 //    A client will never attempt to extend the lifetimes of any
                 //    addresses in an IA with T1 set to 0xffffffff.
-                .chain(match t1 {
-                    v6::NonZeroTimeValue::Finite(t1_val) => Some(Action::ScheduleTimer(
+                match t1 {
+                    v6::NonZeroTimeValue::Finite(t1_val) => Action::ScheduleTimer(
                         ClientTimerType::Renew,
                         Duration::from_secs(t1_val.get().into()),
-                    )),
-                    v6::NonZeroTimeValue::Infinity => None,
-                })
+                    ),
+                    v6::NonZeroTimeValue::Infinity => Action::CancelTimer(ClientTimerType::Renew),
+                },
                 // Per RFC 8415 section 18.2.5, set timer to enter rebind state:
                 //
                 //   At time T2 (which will only be reached if the server to
@@ -3090,13 +3090,16 @@ fn process_reply_with_leases<B: ByteSlice>(
                 //   A client will never attempt to use a Rebind message to
                 //   locate a different server to extend the lifetimes of any
                 //   addresses in an IA with T2 set to 0xffffffff.
-                .chain(match t2 {
-                    v6::NonZeroTimeValue::Finite(t2_val) => Some(Action::ScheduleTimer(
+                match t2 {
+                    v6::NonZeroTimeValue::Finite(t2_val) => Action::ScheduleTimer(
                         ClientTimerType::Rebind,
                         Duration::from_secs(t2_val.get().into()),
-                    )),
-                    v6::NonZeroTimeValue::Infinity => None,
-                }),
+                    ),
+                    v6::NonZeroTimeValue::Infinity => Action::CancelTimer(ClientTimerType::Rebind),
+                },
+            ]
+            .into_iter()
+            .chain(dns_servers.clone().map(Action::UpdateDnsServers)),
         ),
         StateAfterReplyWithLeases::RequestNextServer
         | StateAfterReplyWithLeases::StayRenewingRebinding
@@ -5462,22 +5465,22 @@ pub(crate) mod testutil {
                 )
             })
             .collect::<HashMap<_, _>>();
-        let expected_actions = [Action::CancelTimer(ClientTimerType::Retransmission)]
-            .into_iter()
-            .chain(maybe_dns_server_action)
-            .chain([
-                Action::ScheduleTimer(
-                    ClientTimerType::Renew,
-                    Duration::from_secs(expected_t1_secs.get().into()),
-                ),
-                Action::ScheduleTimer(
-                    ClientTimerType::Rebind,
-                    Duration::from_secs(expected_t2_secs.get().into()),
-                ),
-            ])
-            .chain((!iana_updates.is_empty()).then(|| Action::IaNaUpdates(iana_updates)))
-            .chain((!iapd_updates.is_empty()).then(|| Action::IaPdUpdates(iapd_updates)))
-            .collect::<Vec<_>>();
+        let expected_actions = [
+            Action::CancelTimer(ClientTimerType::Retransmission),
+            Action::ScheduleTimer(
+                ClientTimerType::Renew,
+                Duration::from_secs(expected_t1_secs.get().into()),
+            ),
+            Action::ScheduleTimer(
+                ClientTimerType::Rebind,
+                Duration::from_secs(expected_t2_secs.get().into()),
+            ),
+        ]
+        .into_iter()
+        .chain(maybe_dns_server_action)
+        .chain((!iana_updates.is_empty()).then(|| Action::IaNaUpdates(iana_updates)))
+        .chain((!iapd_updates.is_empty()).then(|| Action::IaPdUpdates(iapd_updates)))
+        .collect::<Vec<_>>();
         assert_eq!(actions, expected_actions);
 
         // Renew timeout should trigger a transition to Renewing, send a renew
@@ -7497,54 +7500,25 @@ mod tests {
                 ),
             ]))];
 
-            match (expected_t1, expected_t2) {
-                (v6::NonZeroTimeValue::Finite(t1_val), v6::NonZeroTimeValue::Finite(t2_val)) => {
-                    assert_eq!(
-                        actions,
-                        [
-                            Action::CancelTimer(ClientTimerType::Retransmission),
-                            Action::ScheduleTimer(
-                                ClientTimerType::Renew,
-                                Duration::from_secs(t1_val.get().into())
-                            ),
-                            Action::ScheduleTimer(
-                                ClientTimerType::Rebind,
-                                Duration::from_secs(t2_val.get().into())
-                            )
-                        ]
-                        .into_iter()
-                        .chain(update_actions)
-                        .collect::<Vec<_>>(),
-                    );
+            let timer_action = |timer, tv| match tv {
+                v6::NonZeroTimeValue::Finite(tv) => {
+                    Action::ScheduleTimer(timer, Duration::from_secs(tv.get().into()))
                 }
-                (v6::NonZeroTimeValue::Finite(t1_val), v6::NonZeroTimeValue::Infinity) => {
-                    assert_eq!(
-                        actions,
-                        [
-                            Action::CancelTimer(ClientTimerType::Retransmission),
-                            Action::ScheduleTimer(
-                                ClientTimerType::Renew,
-                                Duration::from_secs(t1_val.get().into())
-                            ),
-                        ]
-                        .into_iter()
-                        .chain(update_actions)
-                        .collect::<Vec<_>>()
-                    );
-                }
-                (v6::NonZeroTimeValue::Infinity, v6::NonZeroTimeValue::Infinity) => {
-                    assert_eq!(
-                        actions,
-                        [Action::CancelTimer(ClientTimerType::Retransmission)]
-                            .into_iter()
-                            .chain(update_actions)
-                            .collect::<Vec<_>>()
-                    );
-                }
-                (v6::NonZeroTimeValue::Infinity, v6::NonZeroTimeValue::Finite(t2_val)) => {
-                    panic!("cannot have a finite T2={:?} with an infinite T1", t2_val)
-                }
+                v6::NonZeroTimeValue::Infinity => Action::CancelTimer(timer),
             };
+
+            assert!(expected_t1 <= expected_t2);
+            assert_eq!(
+                actions,
+                [
+                    Action::CancelTimer(ClientTimerType::Retransmission),
+                    timer_action(ClientTimerType::Renew, expected_t1),
+                    timer_action(ClientTimerType::Rebind, expected_t2),
+                ]
+                .into_iter()
+                .chain(update_actions)
+                .collect::<Vec<_>>(),
+            );
         }
     }
 
@@ -7996,9 +7970,9 @@ mod tests {
             &actions[..],
             [
                 Action::CancelTimer(ClientTimerType::Retransmission),
-                Action::UpdateDnsServers(dns_servers),
                 Action::ScheduleTimer(ClientTimerType::Renew, t1),
                 Action::ScheduleTimer(ClientTimerType::Rebind, t2),
+                Action::UpdateDnsServers(dns_servers),
                 Action::IaNaUpdates(iana_updates),
             ] => {
                 assert_eq!(dns_servers[..], DNS_SERVERS);
@@ -8321,7 +8295,7 @@ mod tests {
         ia_na_t2: v6::TimeValue,
         ia_pd_t1: v6::TimeValue,
         ia_pd_t2: v6::TimeValue,
-        expected_timer_actions: Option<Vec<Action>>,
+        expected_timer_actions: [Action; 2],
     }
 
     // Make sure that both IA_NA and IA_PD is considered when calculating
@@ -8331,26 +8305,30 @@ mod tests {
         ia_na_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
         ia_pd_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
         ia_pd_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
-        expected_timer_actions: None,
+        expected_timer_actions: [
+            Action::CancelTimer(ClientTimerType::Renew),
+            Action::CancelTimer(ClientTimerType::Rebind),
+        ],
     }; "all infinite time values")]
     #[test_case(ScheduleRenewAndRebindTimersAfterAssignmentTestCase{
         ia_na_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T1)),
         ia_na_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
         ia_pd_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
         ia_pd_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
-        expected_timer_actions: Some(vec![
+        expected_timer_actions: [
             Action::ScheduleTimer(
                 ClientTimerType::Renew,
                 Duration::from_secs(T1.get().into()),
             ),
-        ]),
+            Action::CancelTimer(ClientTimerType::Rebind),
+        ],
     }; "finite IA_NA T1")]
     #[test_case(ScheduleRenewAndRebindTimersAfterAssignmentTestCase{
         ia_na_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T1)),
         ia_na_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T2)),
         ia_pd_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
         ia_pd_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
-        expected_timer_actions: Some(vec![
+        expected_timer_actions: [
             Action::ScheduleTimer(
                 ClientTimerType::Renew,
                 Duration::from_secs(T1.get().into()),
@@ -8359,26 +8337,27 @@ mod tests {
                 ClientTimerType::Rebind,
                 Duration::from_secs(T2.get().into()),
             ),
-        ]),
+        ],
     }; "finite IA_NA T1 and T2")]
     #[test_case(ScheduleRenewAndRebindTimersAfterAssignmentTestCase{
         ia_na_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
         ia_na_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
         ia_pd_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T1)),
         ia_pd_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
-        expected_timer_actions: Some(vec![
+        expected_timer_actions: [
             Action::ScheduleTimer(
                 ClientTimerType::Renew,
                 Duration::from_secs(T1.get().into()),
             ),
-        ]),
+            Action::CancelTimer(ClientTimerType::Rebind),
+        ],
     }; "finite IA_PD t1")]
     #[test_case(ScheduleRenewAndRebindTimersAfterAssignmentTestCase{
         ia_na_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
         ia_na_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Infinity),
         ia_pd_t1: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T1)),
         ia_pd_t2: v6::TimeValue::NonZero(v6::NonZeroTimeValue::Finite(T2)),
-        expected_timer_actions: Some(vec![
+        expected_timer_actions: [
             Action::ScheduleTimer(
                 ClientTimerType::Renew,
                 Duration::from_secs(T1.get().into()),
@@ -8387,7 +8366,7 @@ mod tests {
                 ClientTimerType::Rebind,
                 Duration::from_secs(T2.get().into()),
             ),
-        ]),
+        ],
     }; "finite IA_PD T1 and T2")]
     fn schedule_renew_and_rebind_timers_after_assignment(
         ScheduleRenewAndRebindTimersAfterAssignmentTestCase {
@@ -8444,7 +8423,7 @@ mod tests {
             actions,
             [Action::CancelTimer(ClientTimerType::Retransmission)]
                 .into_iter()
-                .chain(expected_timer_actions.into_iter().flatten())
+                .chain(expected_timer_actions)
                 .chain((!iana_updates.is_empty()).then(|| Action::IaNaUpdates(iana_updates)))
                 .chain((!iapd_updates.is_empty()).then(|| Action::IaPdUpdates(iapd_updates)))
                 .collect::<Vec<_>>()
