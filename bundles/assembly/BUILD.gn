@@ -18,6 +18,7 @@ group("assembly") {
     # The testonly assembly bundles
     ":common_bringup_eng",
     ":common_minimal_eng",
+    ":common_minimal_userdebug",
   ]
 }
 

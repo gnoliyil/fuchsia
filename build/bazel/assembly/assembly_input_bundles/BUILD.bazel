@@ -32,6 +32,7 @@ platform_aibs(
         "@legacy_ninja_build_outputs//:obj/bundles/assembly/common_bringup_eng",
         "@legacy_ninja_build_outputs//:obj/bundles/assembly/common_minimal",
         "@legacy_ninja_build_outputs//:obj/bundles/assembly/common_minimal_eng",
+        "@legacy_ninja_build_outputs//:obj/bundles/assembly/common_minimal_userdebug",
         "@legacy_ninja_build_outputs//:obj/bundles/assembly/emulator_support",
     ],
     # NOTE: Including `bazel_migration` has no real effect because it's not
