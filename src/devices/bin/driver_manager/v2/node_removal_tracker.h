@@ -6,13 +6,9 @@
 #define SRC_DEVICES_BIN_DRIVER_MANAGER_V2_NODE_REMOVAL_TRACKER_H_
 
 #include <lib/fit/function.h>
-#include <lib/zircon-internal/thread_annotations.h>
 
 #include <list>
 #include <map>
-
-#include <fbl/auto_lock.h>
-#include <fbl/mutex.h>
 
 #include "src/devices/bin/driver_manager/v2/node.h"
 
@@ -27,9 +23,8 @@ class NodeRemovalTracker {
 
  private:
   std::map<void*, std::tuple<std::string, Collection, NodeState>> nodes_;
-  fbl::Mutex pkg_callback_lock_, all_callback_lock_;
-  fit::callback<void()> pkg_callback_ __TA_GUARDED(pkg_callback_lock_);
-  fit::callback<void()> all_callback_ __TA_GUARDED(all_callback_lock_);
+  fit::callback<void()> pkg_callback_;
+  fit::callback<void()> all_callback_;
 };
 
 }  // namespace dfv2
