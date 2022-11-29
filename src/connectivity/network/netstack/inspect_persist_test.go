@@ -31,56 +31,11 @@ func (server *fakePersistServer) Persist(ctx fidl.Context, tag string) (persist.
 	return persist.PersistResultQueued, nil
 }
 
-func TestPeriodicallyRequestsPersistence(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	clock := faketime.NewManualClock()
-
-	t.Log("setting up")
-	req, client, err := persist.NewDataPersistenceWithCtxInterfaceRequest()
-	if err != nil {
-		t.Fatalf("persist.NewDataPersistenceWithCtxInterfaceRequest(): %s", err)
-	}
-
-	impl := fakePersistServer{}
-	stub := persist.DataPersistenceWithCtxStub{Impl: &impl}
-	serveCtx, serveCancel := context.WithCancel(context.Background())
-	defer serveCancel()
-	go component.Serve(serveCtx, &stub, req.Channel, component.ServeOptions{
-		Concurrent: true,
-		OnError: func(err error) {
-			t.Fatalf("got unexpected error %s", err)
-			_ = syslog.WarnTf(neighbor.ViewName, "%s", err)
-		},
-	})
-
-	runPersistClient(client, ctx, clock)
-	expectRequests(t, impl.requests, 1)
-
-	clock.Advance(3 * persistPeriod)
-	expectRequests(t, impl.requests, 4)
-
-	cancel()
-	clock.Advance(2 * persistPeriod)
-	expectRequests(t, impl.requests, 4)
-}
-
-func TestExitsAfterRequestChannelFailure(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	clock := faketime.NewManualClock()
-
-	req, client, err := persist.NewDataPersistenceWithCtxInterfaceRequest()
-	if err != nil {
-		t.Fatalf("persist.NewDataPersistenceWithCtxInterfaceRequest(): %s", err)
-	}
-
-	impl := fakePersistServer{}
-	stub := persist.DataPersistenceWithCtxStub{Impl: &impl}
-	serveCtx, serveCancel := context.WithCancel(context.Background())
-
+func (server *fakePersistServer) ServeInBackground(t *testing.T, req persist.DataPersistenceWithCtxInterfaceRequest, ctx context.Context) chan struct{} {
+	stub := persist.DataPersistenceWithCtxStub{Impl: server}
 	serveDone := make(chan struct{})
 	go func() {
-		component.Serve(serveCtx, &stub, req.Channel, component.ServeOptions{
+		component.Serve(ctx, &stub, req.Channel, component.ServeOptions{
 			Concurrent: true,
 			OnError: func(err error) {
 				t.Errorf("got unexpected error %s", err)
@@ -89,13 +44,66 @@ func TestExitsAfterRequestChannelFailure(t *testing.T) {
 		})
 		close(serveDone)
 	}()
+	return serveDone
+}
+
+func TestPeriodicallyRequestsPersistence(t *testing.T) {
+	req, client, err := persist.NewDataPersistenceWithCtxInterfaceRequest()
+	if err != nil {
+		t.Fatalf("persist.NewDataPersistenceWithCtxInterfaceRequest(): %s", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	impl := fakePersistServer{}
+	serveDone := impl.ServeInBackground(t, req, ctx)
+	defer func() {
+		cancel()
+		<-serveDone
+	}()
+
+	// Use a different context for the client so it can be cancelled before the
+	// server.
+	ctx, clientCancel := context.WithCancel(context.Background())
+	clock := faketime.NewManualClock()
+
+	runPersistClient(client, ctx, clock)
+	expectRequests(t, impl.requests, 1)
+
+	clock.Advance(3 * persistPeriod)
+	expectRequests(t, impl.requests, 4)
+
+	clientCancel()
+	clock.Advance(2 * persistPeriod)
+	expectRequests(t, impl.requests, 4)
+}
+
+func TestExitsAfterRequestChannelFailure(t *testing.T) {
+	req, client, err := persist.NewDataPersistenceWithCtxInterfaceRequest()
+	if err != nil {
+		t.Fatalf("persist.NewDataPersistenceWithCtxInterfaceRequest(): %s", err)
+	}
+
+	impl := fakePersistServer{}
+	var serveCancelAndWait context.CancelFunc
+	{
+		ctx, cancel := context.WithCancel(context.Background())
+		serveDone := impl.ServeInBackground(t, req, ctx)
+		serveCancelAndWait = func() {
+			cancel()
+			<-serveDone
+		}
+	}
+	defer serveCancelAndWait()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	clock := faketime.NewManualClock()
 
 	runPersistClient(client, ctx, clock)
 	expectRequests(t, impl.requests, 1)
 
 	// Cancel the server and wait for it to shut down.
-	serveCancel()
-	<-serveDone
+	serveCancelAndWait()
 
 	clock.Advance(persistPeriod)
 	expectRequests(t, impl.requests, 1)
