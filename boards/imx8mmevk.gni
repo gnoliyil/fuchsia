@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//boards/arm64.gni")
+import("//boards/common/arm64-common.gni")
 
 # The targeted CPU affects many parts of the build process.
 target_cpu = "arm64"

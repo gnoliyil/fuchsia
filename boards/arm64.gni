@@ -2,45 +2,29 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("emulation/emulation_arm64.gni")
+import("common/arm64-common.gni")
 
-has_board = true
+_imports = {  # Import into hidden scope, to avoid importing into args.gn.
+  import("//boards/emulation/virtio_drivers.gni")
+}
 
-target_cpu = "arm64"
-
-board_name = "qemu-arm64"
+board_name = "arm64"
 board_description = "A generic emulated arm64 device."
 
-blobfs_capacity = 10485760000  # 10000 MiB
-max_blob_contents_size =
-    5216665600  # 4975 MiB. Leaves 50 MiB for the update package.
+_bootfs_deps = [ "//src/devices/block/drivers/nvme" ]
 
-_common_bootfs_deps = [
-  "//src/devices/bus/drivers/pci:bus-pci",
-  "//src/devices/usb/drivers/xhci",
-  "//src/power/power-manager:base_config",
-]
-_common_bootfs_deps += [ "//src/security/policy/zxcrypt:null" ]
+# Additional drivers to support running as a virtualization guest.
+_bootfs_deps += _imports.virtio_drivers + [
+                  "//src/devices/block/drivers/ahci",
+                  "//src/devices/board/drivers/acpi-arm64",
+                  "//src/devices/board/drivers/qemu-arm64",
+                  "//src/devices/rtc/drivers/pl031-rtc",
+                  "//src/graphics/display/drivers/fake:fake-display",
+                ]
 
-board_bootfs_labels += _common_bootfs_deps
-
-board_zedboot_bootfs_labels += _common_bootfs_deps
-
-board_recovery_bootfs_labels += _common_bootfs_deps
-
-board_driver_package_labels += [
-  "//bundles/packages/prod:drivers-system",
-  "//src/media/audio/bundles:virtual_audio_driver",
-]
-
-board_package_labels += [
-  "//src/hwinfo:default_board_config",
-  "//src/devices/sysmem/bin/sysmem_connector",
-  "//src/graphics/bin/vulkan_loader",
-]
-
-max_fuchsia_zbi_size = 16777216  # 16 MiB
-max_zedboot_zbi_size = 16777216  # 16 MiB
+board_bootfs_labels += _bootfs_deps
+board_recovery_bootfs_labels += _bootfs_deps
+board_zedboot_bootfs_labels += _bootfs_deps
 
 # Supports only virtual devices.
 board_is_emu = true
