@@ -4,6 +4,7 @@
 
 #include <fcntl.h>
 #include <fidl/fuchsia.hardware.acpi/cpp/wire.h>
+#include <lib/device-watcher/cpp/device-watcher.h>
 #include <lib/fdio/cpp/caller.h>
 #include <lib/fdio/directory.h>
 #include <lib/stdcompat/span.h>
@@ -32,7 +33,9 @@ const char kAcpiDevicePath[] = "/dev/sys/platform/pt/acpi";
 
 // Open up channel to ACPI device.
 fdio_cpp::FdioCaller OpenChannel() {
-  fbl::unique_fd fd{open(kAcpiDevicePath, O_RDWR)};
+  fbl::unique_fd fd;
+  zx_status_t status = device_watcher::RecursiveWaitForFile(kAcpiDevicePath, &fd);
+  ZX_ASSERT_MSG(status == ZX_OK, "RecursiveWaitForFile failed: %d", status);
   ZX_ASSERT(fd.is_valid());
   return fdio_cpp::FdioCaller{std::move(fd)};
 }
