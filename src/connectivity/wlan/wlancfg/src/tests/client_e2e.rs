@@ -576,7 +576,7 @@ pub fn poll_for_sme_scan_request(
     let sme_stream_result = loop {
         counter += 1;
         if counter > 1000 {
-            panic!("Failed to progress network selection future until active scan");
+            panic!("Failed to progress network selection future until next scan");
         };
         let sleep_duration = zx::Duration::from_millis(2);
         exec.run_singlethreaded(fasync::Timer::new(sleep_duration.after_now()));
@@ -995,12 +995,11 @@ fn save_and_fail_to_connect(
     assert_eq!(network.state.unwrap(), types::ConnectionState::Connecting);
     assert_eq!(network.id.unwrap(), network_id.clone());
 
-    for i in 0..3 {
-        // On first iteration, save request returns once the scan has been queued.
-        if i == 0 {
-            assert_variant!(exec.run_until_stalled(&mut save_fut), Poll::Ready(Ok(Ok(()))));
-        }
+    // Save request returns once the scan has been queued.
+    assert_variant!(exec.run_until_stalled(&mut save_fut), Poll::Ready(Ok(Ok(()))));
 
+    let mut bss_selection_scan_count = 0;
+    while bss_selection_scan_count < 3 {
         // BSS selection scans occur for requested network. Return scan results.
         let expected_scan_request =
             fidl_sme::ActiveScanRequest { ssids: vec![TEST_SSID.clone().into()], channels: vec![] };
@@ -1029,7 +1028,10 @@ fn save_and_fail_to_connect(
                 req, responder
             } => {
                 match req {
-                    fidl_sme::ScanRequest::Active(req) => assert_eq!(req, expected_scan_request),
+                    fidl_sme::ScanRequest::Active(req) => {
+                        assert_eq!(req, expected_scan_request);
+                        bss_selection_scan_count += 1;
+                    },
                     fidl_sme::ScanRequest::Passive(_req) => {
                         // Sometimes, a passive scan sneaks in for the idle interface. Ignore it.
                         // Context: https://fxbug.dev/115137

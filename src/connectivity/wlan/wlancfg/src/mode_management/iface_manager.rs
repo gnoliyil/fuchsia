@@ -1024,6 +1024,7 @@ async fn handle_bss_selection_for_connect_request_results(
                     Err(e) => error!("Failed to initiate bss selection for scan retry: {:?}", e),
                 }
             } else {
+                info!("Failed to find a candidate for the connect request");
                 // Send connection failed update.
                 let networks = vec![listener::ClientNetworkState {
                     id: request.network.clone(),
