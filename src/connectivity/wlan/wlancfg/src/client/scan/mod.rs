@@ -33,6 +33,8 @@ use {
     wlan_common,
 };
 
+mod queue;
+
 // TODO(fxbug.dev/80422): Remove this.
 // Size of FIDL message header and FIDL error-wrapped vector header
 const FIDL_HEADER_AND_ERR_WRAPPED_VEC_HEADER_SIZE: usize = 56;

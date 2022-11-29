@@ -19,6 +19,10 @@ use {
     },
 };
 
+pub fn generate_ssid(ssid: &str) -> types::Ssid {
+    types::Ssid::try_from(ssid).unwrap()
+}
+
 pub fn generate_random_channel() -> Channel {
     let mut rng = rand::thread_rng();
     generate_channel(rng.gen::<u8>())
