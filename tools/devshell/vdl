@@ -12,12 +12,12 @@ DEVSHELL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 source "${DEVSHELL_DIR}"/lib/vars.sh || exit $?
 
 echo
-fx-warn "This tool has been deprecated, and will soon be removed completely."
+fx-warn "This tool has been deprecated."
 fx-warn "Please change your tools and workflows to use 'ffx emu' instead."
 fx-warn "If you have questions or concerns, please reach out to femu-core@google.com."
-fx-warn "Sleeping for 5 seconds."
+fx-warn "Terminating script."
 echo
-sleep 5
+exit 1
 
 function main {
   local build=false
