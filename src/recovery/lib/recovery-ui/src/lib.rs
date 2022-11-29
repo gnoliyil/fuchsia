@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 pub mod button;
+pub mod check_network;
 #[cfg(feature = "debug_console")]
 pub mod console;
 mod constants;

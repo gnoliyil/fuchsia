@@ -25,6 +25,7 @@ rustc_library("recovery-ui") {
   ]
   sources = [
     "src/button.rs",
+    "src/check_network.rs",
     "src/console.rs",
     "src/constants.rs",
     "src/font.rs",

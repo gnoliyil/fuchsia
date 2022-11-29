@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+use crate::check_network::CheckNetworkViewAssistant;
 #[allow(unused)]
 use crate::constants::constants::{
     ScreenSplit, ICON_FACTORY_RESET, ICON_REINSTALL_SOFTWARE, IMAGE_DEFAULT_SIZE,
@@ -46,6 +47,8 @@ impl Screens {
                 format!("Enter Password for {} ", network),
                 TextVisibility::Toggleable(false),
             ),
+            State::Connecting(network, password) => self.connecting(network, password),
+            State::ConnectionFailed(network, password) => self.connection_failed(network, password),
             // Temporary catch-all until all the other states are added
             _ => self.failed(&Operation::Reinstall, &Some("State not yet implemented".to_string())),
         };
@@ -162,6 +165,52 @@ impl Screens {
         keyboard.set_text_field(String::new());
         keyboard.set_privacy(privacy);
         keyboard
+    }
+
+    fn connecting(&self, _network: &String, _password: &String) -> ViewAssistantPtr {
+        let view_assistant_ptr = Box::new(
+            GenericSplitViewAssistant::new(
+                self.app_sender.clone(),
+                self.view_key,
+                ScreenSplit::Even,
+                Some("Connecting Wi-Fi".to_string()),
+                Some("Sit tight. This may take a few\nseconds.".to_string()),
+                None,
+                vec![ButtonInfo::new("Cancel", None, false, true, Event::Cancel)],
+                None,
+                None,
+                Some(IMAGE_DEVICE_CONNECT),
+                Some(IMAGE_DEFAULT_SIZE),
+            )
+            .unwrap(),
+        );
+        view_assistant_ptr
+    }
+
+    fn connection_failed(&self, network: &String, password: &String) -> ViewAssistantPtr {
+        let title_text = "Check Wi-Fi Network".to_string();
+        let body_text = format!(
+            "Incorrect password for Wi-Fi “{}”\n\
+            Try again or choose a different Wi-Fi network.",
+            network
+        );
+        let view_assistant_ptr = Box::new(
+            CheckNetworkViewAssistant::new(
+                self.app_sender.clone(),
+                self.view_key,
+                title_text,
+                body_text,
+                network.into(),
+                password.into(),
+                vec![
+                    ButtonInfo::new("Cancel", None, false, true, Event::Cancel),
+                    ButtonInfo::new("Choose network", None, false, true, Event::ChooseNetwork),
+                    ButtonInfo::new("Try Again", None, false, false, Event::TryAgain),
+                ],
+            )
+            .unwrap(),
+        );
+        view_assistant_ptr
     }
 }
 

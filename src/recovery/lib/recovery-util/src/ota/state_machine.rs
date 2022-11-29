@@ -75,11 +75,6 @@ impl PartialEq for Event {
 }
 
 #[cfg_attr(test, automock)]
-pub trait EventHandler {
-    fn handle_event(&mut self, event: Event);
-}
-
-#[cfg_attr(test, automock)]
 pub trait StateHandler {
     fn handle_state(&mut self, event: State);
 }

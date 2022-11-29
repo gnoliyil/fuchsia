@@ -7,10 +7,7 @@ use crate::ota::actions::get_wifi_networks::GetWifiNetworksAction;
 use crate::ota::actions::set_sharing_consent::SetSharingConsentAction;
 use crate::ota::actions::wifi_connect::WifiConnectAction;
 use crate::ota::controller::EventSender;
-use crate::ota::state_machine::{EventHandler, State, StateHandler};
-use std::sync::{Arc, Mutex};
-
-pub type EventHandlerHolder = Arc<Mutex<Box<dyn EventHandler>>>;
+use crate::ota::state_machine::{State, StateHandler};
 
 /// This file initiates all the non-ui, background actions that are required to satisfy
 /// the OTA UX UI slides. In general some states cause a background task to be run which
@@ -31,10 +28,10 @@ impl StateHandler for Action {
         // There are six states that will need background actions
         // They will be added in future CLs
         match state {
+            State::GetWiFiNetworks => GetWifiNetworksAction::run(event_sender),
             State::Connecting(network, password) => {
                 WifiConnectAction::run(event_sender, network, password)
             }
-            State::GetWiFiNetworks => GetWifiNetworksAction::run(event_sender),
             State::SetPrivacy(user_data_sharing_consent) => {
                 SetSharingConsentAction::run(event_sender, user_data_sharing_consent)
             }
