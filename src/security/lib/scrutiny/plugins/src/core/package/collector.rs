@@ -55,8 +55,10 @@ use {
 // Constants/Statics
 static SERVICE_CONFIG_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"data/sysmgr/.+\.config").unwrap());
-static ZBI_PATH: Lazy<PathBuf> = Lazy::new(|| PathBuf::from("zbi"));
-static ZBI_SIGNED_PATH: Lazy<PathBuf> = Lazy::new(|| PathBuf::from("zbi.signed"));
+static FUCHSIA_ZBI_PATH: Lazy<PathBuf> = Lazy::new(|| PathBuf::from("zbi"));
+static FUCHSIA_ZBI_SIGNED_PATH: Lazy<PathBuf> = Lazy::new(|| PathBuf::from("zbi.signed"));
+static RECOVERY_ZBI_PATH: Lazy<PathBuf> = Lazy::new(|| PathBuf::from("recovery"));
+static RECOVERY_ZBI_SIGNED_PATH: Lazy<PathBuf> = Lazy::new(|| PathBuf::from("recovery.signed"));
 static IMAGES_JSON_PATH: Lazy<PathBuf> = Lazy::new(|| PathBuf::from("images.json"));
 static IMAGES_JSON_ORIG_PATH: Lazy<PathBuf> = Lazy::new(|| PathBuf::from("images.json.orig"));
 
@@ -260,12 +262,18 @@ impl PackageDataCollector {
         reader: &mut Box<dyn ArtifactReader>,
         update_package: &PartialPackageDefinition,
         fuchsia_packages: &Vec<PackageDefinition>,
+        recovery: bool,
     ) -> Result<Zbi> {
         info!("Extracting the ZBI from update package");
 
-        let result_from_update_package = Self::lookup_zbi_hash_in_update_package(update_package);
-        let result_from_images_json =
-            Self::lookup_zbi_hash_in_images_json(reader, update_package, fuchsia_packages);
+        let result_from_update_package =
+            Self::lookup_zbi_hash_in_update_package(update_package, recovery);
+        let result_from_images_json = Self::lookup_zbi_hash_in_images_json(
+            reader,
+            update_package,
+            fuchsia_packages,
+            recovery,
+        );
         let zbi_hash = match (result_from_update_package, result_from_images_json) {
             (Ok(zbi_hash_from_update_package), Ok(zbi_hash_from_images_json)) => {
                 if zbi_hash_from_update_package != zbi_hash_from_images_json {
@@ -312,19 +320,29 @@ impl PackageDataCollector {
 
     fn lookup_zbi_hash_in_update_package(
         update_package: &PartialPackageDefinition,
+        recovery: bool,
     ) -> Result<Hash> {
+        let (signed_zbi_path, zbi_path) = if recovery {
+            (&*RECOVERY_ZBI_SIGNED_PATH, &*RECOVERY_ZBI_PATH)
+        } else {
+            (&*FUCHSIA_ZBI_SIGNED_PATH, &*FUCHSIA_ZBI_PATH)
+        };
         update_package
             .contents
-            .get(&*ZBI_SIGNED_PATH)
-            .or(update_package.contents.get(&*ZBI_PATH))
+            .get(signed_zbi_path)
+            .or(update_package.contents.get(zbi_path))
             .map(Hash::clone)
-            .ok_or(anyhow!("Update package contains no zbi.signed or zbi entry"))
+            .ok_or(anyhow!(
+                "Update package contains no {} zbi image",
+                if recovery { "recovery" } else { "fuchsia" }
+            ))
     }
 
     fn lookup_zbi_hash_in_images_json(
         reader: &mut Box<dyn ArtifactReader>,
         update_package: &PartialPackageDefinition,
         fuchsia_packages: &Vec<PackageDefinition>,
+        recovery: bool,
     ) -> Result<Hash> {
         let images_json_hash = update_package
             .contents
@@ -336,25 +354,33 @@ impl PackageDataCollector {
             .context("Failed to open images manifest blob designated in update package")?;
         let image_packages_manifest = parse_image_packages_json(images_json_contents.as_slice())
             .context("Failed to parse images manifest in update package")?;
-        let fuchsia_metadata = image_packages_manifest.fuchsia().ok_or(anyhow!(
-            "Update package images manifest contains no fuchsia boot slot images"
-        ))?;
-        let images_package_url = fuchsia_metadata.zbi().url();
+        let metadata = if recovery {
+            image_packages_manifest.recovery().ok_or(anyhow!(
+                "Update package images manifest contains no recovery boot slot images"
+            ))
+        } else {
+            image_packages_manifest.fuchsia().ok_or(anyhow!(
+                "Update package images manifest contains no fuchsia boot slot images"
+            ))
+        }?;
+        let zbi_component_url = metadata.zbi().url();
+        let zbi_path = PathBuf::from(zbi_component_url.resource());
+        let zbi_package_url = zbi_component_url.package_url();
 
         let images_package = fuchsia_packages
             .iter()
-            .find(|&pkg_def| &pkg_def.url == images_package_url.clone().package_url())
+            .find(|&pkg_def| &pkg_def.url == zbi_package_url)
             .ok_or_else(|| {
                 anyhow!(
-                    "Failed to locate update package images package with URL {} ",
-                    **images_package_url
+                    "Failed to locate update package images package with URL {}",
+                    zbi_package_url
                 )
             })?;
-        images_package
-            .contents
-            .get(&PathBuf::from("zbi"))
-            .map(Hash::clone)
-            .ok_or(anyhow!("Update package images package contains no zbi.signed or zbi entry"))
+        images_package.contents.get(&zbi_path).map(Hash::clone).ok_or(anyhow!(
+            "Update package images package contains no {} zbi entry {:?}",
+            if recovery { "recovery" } else { "fuchsia" },
+            zbi_path
+        ))
     }
 
     fn get_non_bootfs_pkg_source<'a>(
@@ -873,6 +899,7 @@ impl PackageDataCollector {
         fuchsia_packages: Vec<PackageDefinition>,
         mut service_map: ServiceMapping,
         static_pkgs: &'a Option<Vec<StaticPackageDescription<'a>>>,
+        recovery: bool,
     ) -> Result<PackageDataResponse> {
         let mut components: HashMap<Url, Component> = HashMap::new();
         let mut packages: Vec<Package> = Vec::new();
@@ -910,6 +937,7 @@ impl PackageDataCollector {
             &mut artifact_reader,
             update_package,
             &fuchsia_packages,
+            recovery,
         ) {
             Ok(zbi) => {
                 Self::extract_zbi_data(
@@ -979,6 +1007,7 @@ impl PackageDataCollector {
             served_packages,
             sysmgr_config.services.clone(),
             &static_pkgs,
+            config.is_recovery(),
         )?;
 
         let mut model_comps = vec![];
@@ -1021,9 +1050,6 @@ impl DataCollector for PackageDataCollector {
     /// connect the nodes.
     fn collect(&self, model: Arc<DataModel>) -> Result<()> {
         let model_config = model.config();
-        if model_config.is_recovery() {
-            unimplemented!("package data collection for recovery images");
-        }
         let blobs_directory = &model_config.blobs_directory();
         let artifact_reader_for_artifact_reader =
             FileArtifactReader::new(&PathBuf::new(), blobs_directory);
@@ -1083,6 +1109,10 @@ pub mod tests {
 
     fn zero_content_zbi() -> Vec<u8> {
         zbi_container_header(0).as_bytes().into()
+    }
+
+    fn non_zero_content_zbi() -> Vec<u8> {
+        zbi_container_header(1).as_bytes().into()
     }
 
     // Return the sha256 content hash of bytes, not to be confused with the fuchsia merkle root.
@@ -1346,6 +1376,7 @@ pub mod tests {
             served,
             services,
             &None,
+            false,
         )
         .unwrap();
 
@@ -1390,6 +1421,7 @@ pub mod tests {
             served,
             services,
             &static_pkgs,
+            false,
         )
         .unwrap();
 
@@ -1424,6 +1456,7 @@ pub mod tests {
             served,
             services,
             &None,
+            false,
         )
         .unwrap();
 
@@ -1457,6 +1490,7 @@ pub mod tests {
             served,
             services,
             &None,
+            false,
         )
         .unwrap();
 
@@ -1485,6 +1519,7 @@ pub mod tests {
             served,
             services,
             &None,
+            false,
         )
         .unwrap();
 
@@ -1525,6 +1560,7 @@ pub mod tests {
             served,
             services,
             &None,
+            false,
         )
         .unwrap();
 
@@ -1564,6 +1600,7 @@ pub mod tests {
             served,
             services,
             &None,
+            false,
         )
         .unwrap();
 
@@ -1671,6 +1708,7 @@ pub mod tests {
             served,
             services,
             &None,
+            false,
         )
         .unwrap();
         assert_eq!(None, response.zbi);
@@ -1944,6 +1982,7 @@ pub mod tests {
             served,
             services,
             &None,
+            false,
         )
         .unwrap();
 
@@ -2002,6 +2041,7 @@ pub mod tests {
             served,
             services,
             &None,
+            false,
         )
         .unwrap();
 
@@ -2049,11 +2089,12 @@ pub mod tests {
 
         let mut artifact_reader: Box<dyn ArtifactReader> = Box::new(mock_artifact_reader);
 
-        // Extraction should succeed because ZBI in update package is sufficent.
+        // Extraction should succeed because ZBI in update package is sufficient.
         let result = PackageDataCollector::extract_zbi_from_update_package(
             &mut artifact_reader,
             &update_pkg,
             &vec![],
+            false,
         );
         match result {
             Ok(_) => return,
@@ -2069,7 +2110,7 @@ pub mod tests {
 
         // Create valid images.json with images that includes a ZBI.
         let mut images_json_builder = ImagePackagesManifest::builder();
-        let url = "fuchsia-pkg://test.fuchsia.com/update-images-fuchsia/0?hash=0000000000000000000000000000000000000000000000000000000000000000#data".parse().unwrap();
+        let url = "fuchsia-pkg://test.fuchsia.com/update-images-fuchsia/0?hash=0000000000000000000000000000000000000000000000000000000000000000#zbi".parse().unwrap();
 
         images_json_builder.fuchsia_package(
             ImageMetadata::new(zbi_contents.len().try_into().unwrap(), zbi_content_hash, url),
@@ -2106,11 +2147,186 @@ pub mod tests {
 
         let mut artifact_reader: Box<dyn ArtifactReader> = Box::new(mock_artifact_reader);
 
-        // Extraction should succeed because ZBI in images.json is sufficent.
+        // Extraction should succeed because ZBI in images.json is sufficient.
         let result = PackageDataCollector::extract_zbi_from_update_package(
             &mut artifact_reader,
             &update_pkg,
             &vec![images_pkg],
+            false,
+        );
+
+        match result {
+            Ok(_) => return,
+            Err(err) => panic!("Unexpected error: {:?}", err),
+        };
+    }
+
+    #[fuchsia::test]
+    fn test_read_recovery_zbi_with_two_zbis_available() {
+        let fuchsia_zbi_path = "zbi";
+        let recovery_zbi_path = "recovery";
+
+        // Use `non_zero_content_zbi()` to construct fuchsia ZBI that is different from the recovery
+        // ZBI that is expected to be read by code under test.
+        let fuchsia_zbi_contents = non_zero_content_zbi();
+        let fuchsia_zbi_content_hash = content_hash(fuchsia_zbi_contents.as_slice());
+        let fuchsia_zbi_hash =
+            MerkleTree::from_reader(fuchsia_zbi_contents.as_slice()).unwrap().root();
+
+        // Use `zero_content_zbi()` for ZBI that is expected to be read without error.
+        let recovery_zbi_contents = zero_content_zbi();
+        let recovery_zbi_content_hash = content_hash(recovery_zbi_contents.as_slice());
+        let recovery_zbi_hash =
+            MerkleTree::from_reader(recovery_zbi_contents.as_slice()).unwrap().root();
+
+        // Create valid images.json with images that includes both ZBIs.
+        let mut images_json_builder = ImagePackagesManifest::builder();
+        let update_images_pkg_url_str = "fuchsia-pkg://test.fuchsia.com/update-images-fuchsia/0?hash=0000000000000000000000000000000000000000000000000000000000000000";
+        let fuchsia_zbi_url: AbsoluteComponentUrl =
+            format!("{}#{}", update_images_pkg_url_str, fuchsia_zbi_path).parse().unwrap();
+        let recovery_zbi_url: AbsoluteComponentUrl =
+            format!("{}#{}", update_images_pkg_url_str, recovery_zbi_path).parse().unwrap();
+
+        images_json_builder.fuchsia_package(
+            ImageMetadata::new(
+                fuchsia_zbi_contents.len().try_into().unwrap(),
+                fuchsia_zbi_content_hash,
+                fuchsia_zbi_url,
+            ),
+            None,
+        );
+        images_json_builder.recovery_package(
+            ImageMetadata::new(
+                recovery_zbi_contents.len().try_into().unwrap(),
+                recovery_zbi_content_hash,
+                recovery_zbi_url,
+            ),
+            None,
+        );
+        let images_json = images_json_builder.build();
+        let images_json_contents = serde_json::to_vec(&images_json).unwrap();
+        let images_json_hash =
+            MerkleTree::from_reader(images_json_contents.as_slice()).unwrap().root();
+
+        let update_pkg = create_test_partial_package_with_contents(hashmap! {
+            // Update package contains images.json and both fuchsia and recovery ZBIs.
+            "images.json".into() => images_json_hash.clone(),
+            fuchsia_zbi_path.into() => fuchsia_zbi_hash.clone(),
+            recovery_zbi_path.into() => recovery_zbi_hash.clone(),
+        });
+        let images_pkg = create_test_package_with_contents(
+            PackageName::from_str("update-images-fuchsia").unwrap(),
+            Some(PackageVariant::zero()),
+            // Designate ZBIs in images package.
+            hashmap! {
+                fuchsia_zbi_path.into() => fuchsia_zbi_hash.clone(),
+                recovery_zbi_path.into() => recovery_zbi_hash.clone(),
+            },
+        );
+
+        let mut mock_artifact_reader = MockArtifactReader::new();
+
+        // Code under test will read artifacts in the following order:
+        // 1. images.json to determine its ZBI hash;
+        mock_artifact_reader.append_artifact(&images_json_hash.to_string(), images_json_contents);
+        // 2. the recovery ZBI designated in images.json.
+        mock_artifact_reader.append_artifact(&recovery_zbi_hash.to_string(), recovery_zbi_contents);
+
+        let mut artifact_reader: Box<dyn ArtifactReader> = Box::new(mock_artifact_reader);
+
+        // Extraction should succeed because ZBI in images.json is sufficient.
+        let result = PackageDataCollector::extract_zbi_from_update_package(
+            &mut artifact_reader,
+            &update_pkg,
+            &vec![images_pkg],
+            true,
+        );
+
+        match result {
+            Ok(_) => return,
+            Err(err) => panic!("Unexpected error: {:?}", err),
+        };
+    }
+
+    #[fuchsia::test]
+    fn test_read_fuchsia_zbi_with_two_zbis_available() {
+        let fuchsia_zbi_path = "zbi";
+        let recovery_zbi_path = "recovery";
+
+        // Use `zero_content_zbi()` for ZBI that is expected to be read without error.
+        let fuchsia_zbi_contents = zero_content_zbi();
+        let fuchsia_zbi_content_hash = content_hash(fuchsia_zbi_contents.as_slice());
+        let fuchsia_zbi_hash =
+            MerkleTree::from_reader(fuchsia_zbi_contents.as_slice()).unwrap().root();
+
+        // Use `non_zero_content_zbi()` to construct fuchsia ZBI that is different from the fuchsia
+        // ZBI that is expected to be read by code under test.
+        let recovery_zbi_contents = non_zero_content_zbi();
+        let recovery_zbi_content_hash = content_hash(recovery_zbi_contents.as_slice());
+        let recovery_zbi_hash =
+            MerkleTree::from_reader(recovery_zbi_contents.as_slice()).unwrap().root();
+
+        // Create valid images.json with images that includes both ZBIs.
+        let mut images_json_builder = ImagePackagesManifest::builder();
+        let update_images_pkg_url_str = "fuchsia-pkg://test.fuchsia.com/update-images-fuchsia/0?hash=0000000000000000000000000000000000000000000000000000000000000000";
+        let fuchsia_zbi_url: AbsoluteComponentUrl =
+            format!("{}#{}", update_images_pkg_url_str, fuchsia_zbi_path).parse().unwrap();
+        let recovery_zbi_url: AbsoluteComponentUrl =
+            format!("{}#{}", update_images_pkg_url_str, recovery_zbi_path).parse().unwrap();
+
+        images_json_builder.fuchsia_package(
+            ImageMetadata::new(
+                fuchsia_zbi_contents.len().try_into().unwrap(),
+                fuchsia_zbi_content_hash,
+                fuchsia_zbi_url,
+            ),
+            None,
+        );
+        images_json_builder.recovery_package(
+            ImageMetadata::new(
+                recovery_zbi_contents.len().try_into().unwrap(),
+                recovery_zbi_content_hash,
+                recovery_zbi_url,
+            ),
+            None,
+        );
+        let images_json = images_json_builder.build();
+        let images_json_contents = serde_json::to_vec(&images_json).unwrap();
+        let images_json_hash =
+            MerkleTree::from_reader(images_json_contents.as_slice()).unwrap().root();
+
+        let update_pkg = create_test_partial_package_with_contents(hashmap! {
+            // Update package contains images.json and both fuchsia and recovery ZBIs.
+            "images.json".into() => images_json_hash.clone(),
+            fuchsia_zbi_path.into() => fuchsia_zbi_hash.clone(),
+            recovery_zbi_path.into() => recovery_zbi_hash.clone(),
+        });
+        let images_pkg = create_test_package_with_contents(
+            PackageName::from_str("update-images-fuchsia").unwrap(),
+            Some(PackageVariant::zero()),
+            // Designate ZBIs in images package.
+            hashmap! {
+                fuchsia_zbi_path.into() => fuchsia_zbi_hash.clone(),
+                recovery_zbi_path.into() => recovery_zbi_hash.clone(),
+            },
+        );
+
+        let mut mock_artifact_reader = MockArtifactReader::new();
+
+        // Code under test will read artifacts in the following order:
+        // 1. images.json to determine its ZBI hash;
+        mock_artifact_reader.append_artifact(&images_json_hash.to_string(), images_json_contents);
+        // 2. the fuchsia ZBI designated in images.json.
+        mock_artifact_reader.append_artifact(&fuchsia_zbi_hash.to_string(), fuchsia_zbi_contents);
+
+        let mut artifact_reader: Box<dyn ArtifactReader> = Box::new(mock_artifact_reader);
+
+        // Extraction should succeed because ZBI in images.json is sufficient.
+        let result = PackageDataCollector::extract_zbi_from_update_package(
+            &mut artifact_reader,
+            &update_pkg,
+            &vec![images_pkg],
+            false,
         );
 
         match result {
@@ -2129,7 +2345,7 @@ pub mod tests {
 
         // Create valid images.json with "fuchsia" images that includes a ZBI.
         let mut images_json_builder = ImagePackagesManifest::builder();
-        let url = "fuchsia-pkg://test.fuchsia.com/update-images-fuchsia/0?hash=0000000000000000000000000000000000000000000000000000000000000000#data".parse().unwrap();
+        let url = "fuchsia-pkg://test.fuchsia.com/update-images-fuchsia/0?hash=0000000000000000000000000000000000000000000000000000000000000000#zbi".parse().unwrap();
 
         images_json_builder.fuchsia_package(
             ImageMetadata::new(zbi_contents.len().try_into().unwrap(), zbi_content_hash, url),
@@ -2173,6 +2389,7 @@ pub mod tests {
             &mut artifact_reader,
             &update_pkg,
             &vec![images_pkg],
+            false,
         )
         .err()
         .unwrap()
@@ -2188,7 +2405,7 @@ pub mod tests {
 
         // Create valid images.json with "fuchsia" images that includes a ZBI.
         let mut images_json_builder = ImagePackagesManifest::builder();
-        let url = "fuchsia-pkg://fuchsia.com/update-images-firmware/0?hash=000000000000000000000000000000000000000000000000000000000000000a#data".parse().unwrap();
+        let url = "fuchsia-pkg://fuchsia.com/update-images-firmware/0?hash=000000000000000000000000000000000000000000000000000000000000000a#zbi".parse().unwrap();
 
         images_json_builder.fuchsia_package(
             ImageMetadata::new(zbi_contents.len().try_into().unwrap(), zbi_content_hash, url),
@@ -2228,6 +2445,7 @@ pub mod tests {
             &mut artifact_reader,
             &update_pkg,
             &vec![images_pkg],
+            false,
         );
         match result {
             Ok(_) => return,
