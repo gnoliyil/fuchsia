@@ -215,6 +215,8 @@ def prebuilt_clang_cc_toolchain(
             "@//build/bazel/platforms/arch:" + host_arch,
         ],
         target_compatible_with = [
+            "@//build/bazel/platforms/os:" + host_os,
+            "@//build/bazel/platforms/arch:" + host_arch,
             "@//build/bazel/platforms/os:" + target_os,
             "@//build/bazel/platforms/arch:" + target_arch,
         ],
