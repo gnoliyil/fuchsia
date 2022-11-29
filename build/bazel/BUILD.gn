@@ -112,7 +112,11 @@ action("generate_main_workspace") {
 
   outputs = [
     "$target_gen_dir/bazel",
+    "$target_gen_dir/download_config_file",
     "$target_gen_dir/generated-info.json",
+    "$target_gen_dir/workspace/.bazelrc",
+    "$target_gen_dir/workspace/WORKSPACE.bazel",
+    "$target_gen_dir/workspace/fuchsia_build_config.bzl",
   ]
 
   args = [
