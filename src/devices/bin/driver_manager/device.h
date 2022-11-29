@@ -133,6 +133,8 @@ class Device final
   std::list<const Device*> children() const;
   std::list<Device*> children();
 
+  zx::result<std::string> GetTopologicalPath() const;
+
   zx_status_t InitializeToDevfs();
 
   // Signal that this device is ready for bind to happen.  This should happen

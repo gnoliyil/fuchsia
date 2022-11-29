@@ -359,10 +359,7 @@ void Device::InitializeInspectValues() {
   inspect().set_flags(flags);
   inspect().set_properties(props());
 
-  char path[fuchsia_device_manager::wire::kDevicePathMax] = {};
-  coordinator->GetTopologicalPath(fbl::RefPtr(this), path,
-                                  fuchsia_device_manager::wire::kDevicePathMax);
-  inspect().set_topological_path(path);
+  inspect().set_topological_path(GetTopologicalPath().value().c_str());
 
   std::string type("Device");
   if (flags & DEV_CTX_PROXY) {
@@ -433,6 +430,45 @@ std::list<const Device*> Device::children() const {
 }
 
 std::list<Device*> Device::children() { return Device::GetChildren<Device>(this); }
+
+zx::result<std::string> Device::GetTopologicalPath() const {
+  char tmp[fuchsia_device::wire::kMaxDevicePathLen];
+  char* path = tmp + sizeof(tmp) - 1;
+  *path = 0;
+  size_t chars_written = 1;
+
+  // Build the topological path by walking backwards up the tree.
+  fbl::RefPtr<const Device> itr = fbl::RefPtr<const Device>(this);
+  while (itr != nullptr) {
+    if (itr->flags & DEV_CTX_PROXY) {
+      itr = itr->parent();
+    }
+
+    const char* name = itr->name().data();
+
+    size_t len = itr->name().size() + 1;
+    if ((len + chars_written) > sizeof(tmp)) {
+      return zx::error(ZX_ERR_BUFFER_TOO_SMALL);
+    }
+
+    memcpy(path - len + 1, name, len - 1);
+    path -= len;
+    *path = '/';
+    chars_written += len;
+    itr = itr->parent();
+  }
+
+  // Add the "/dev" prefix to the front of the path.
+  constexpr std::string_view devfs_prefix = "/dev";
+  if ((devfs_prefix.size() + chars_written) > sizeof(tmp)) {
+    return zx::error(ZX_ERR_BUFFER_TOO_SMALL);
+  }
+  memcpy(path - devfs_prefix.size(), devfs_prefix.data(), devfs_prefix.size());
+  path -= devfs_prefix.size();
+  chars_written += devfs_prefix.size();
+
+  return zx::ok(std::string(path));
+}
 
 zx_status_t Device::InitializeToDevfs() {
   ZX_ASSERT(parent_ != nullptr);
@@ -853,15 +889,11 @@ void Device::BindDevice(BindDeviceRequestView request, BindDeviceCompleter::Sync
 }
 
 void Device::GetTopologicalPath(GetTopologicalPathCompleter::Sync& completer) {
-  auto dev = fbl::RefPtr(this);
-  char path[fuchsia_device_manager::wire::kDevicePathMax + 1];
-  if (zx_status_t status = dev->coordinator->GetTopologicalPath(dev, path, sizeof(path));
-      status != ZX_OK) {
-    completer.ReplyError(status);
-    return;
+  zx::result path = GetTopologicalPath();
+  if (path.is_error()) {
+    completer.ReplyError(path.error_value());
   }
-  auto path_view = ::fidl::StringView::FromExternal(path);
-  completer.ReplySuccess(path_view);
+  completer.ReplySuccess(fidl::StringView::FromExternal(path.value()));
 }
 
 void Device::LoadFirmware(LoadFirmwareRequestView request, LoadFirmwareCompleter::Sync& completer) {
@@ -968,11 +1000,12 @@ zx::result<std::shared_ptr<dfv2::Node>> Device::CreateDFv2Device() {
     return zx::error(ZX_ERR_ALREADY_EXISTS);
   }
 
-  char path[fuchsia_device_manager::wire::kDevicePathMax + 1];
-  auto dev = fbl::RefPtr<Device>(this);
-  coordinator->GetTopologicalPath(dev, path, sizeof(path));
+  zx::result full_path = GetTopologicalPath();
+  if (full_path.is_error()) {
+    return full_path.take_error();
+  }
   // The topo_path needs to remove the leading "/dev/".
-  auto topo_path = std::string(path + sizeof("/dev/") - 1);
+  auto topo_path = full_path.value().substr(std::string_view("/dev/").size());
 
   std::string name = std::to_string(coordinator->GetNextDfv2DeviceId());
 

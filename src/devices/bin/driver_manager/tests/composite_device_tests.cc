@@ -928,10 +928,11 @@ TEST_F(CompositeTestCase, Topology) {
 
   for (size_t i = 0; i < devices_.size(); ++i) {
     const auto& device = devices_[i];
-    char path_buf[PATH_MAX];
 
-    ASSERT_OK(coordinator().GetTopologicalPath(device.device, path_buf, sizeof(path_buf)));
-    const std::string_view parent_topological_path{path_buf + kDev.size()};
+    auto path = device.device->GetTopologicalPath();
+    ASSERT_OK(path.status_value());
+
+    const std::string_view parent_topological_path{path.value().c_str() + kDev.size()};
     zx::result parent = root.walk(parent_topological_path);
     ASSERT_OK(parent);
     zx::result child = parent.value()->walk(kCompositeDevName);

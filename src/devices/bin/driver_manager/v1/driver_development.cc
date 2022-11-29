@@ -61,13 +61,12 @@ zx::result<std::vector<fdd::wire::DeviceInfo>> GetDeviceInfo(
       device_info.driver_host_koid(device->host()->koid());
     }
 
-    char path[fdm::wire::kDevicePathMax + 1];
-    if (auto status = Coordinator::GetTopologicalPath(device, path, sizeof(path));
-        status != ZX_OK) {
-      return zx::error(status);
+    zx::result path = device->GetTopologicalPath();
+    if (path.is_error()) {
+      return path.take_error();
     }
 
-    device_info.topological_path(fidl::StringView(allocator, {path, strlen(path)}));
+    device_info.topological_path(fidl::StringView(allocator, path.value()));
 
     device_info.bound_driver_libname(
         fidl::StringView(allocator, {device->libname().data(), device->libname().size()}));

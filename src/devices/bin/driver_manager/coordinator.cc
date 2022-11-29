@@ -445,48 +445,6 @@ zx_status_t Coordinator::LibnameToVmo(const fbl::String& libname, zx::vmo* out_v
   return ZX_OK;
 }
 
-zx_status_t Coordinator::GetTopologicalPath(const fbl::RefPtr<const Device>& dev, char* out,
-                                            size_t max) {
-  // TODO: Remove VLA.
-  char tmp[max];
-  char* path = tmp + max - 1;
-  *path = 0;
-  size_t chars_written = 1;
-
-  // Build the topological path by walking backwards up the tree.
-  fbl::RefPtr<const Device> itr = dev;
-  while (itr != nullptr) {
-    if (itr->flags & DEV_CTX_PROXY) {
-      itr = itr->parent();
-    }
-
-    const char* name = itr->name().data();
-
-    size_t len = strlen(name) + 1;
-    if ((len + chars_written) > max) {
-      return ZX_ERR_BUFFER_TOO_SMALL;
-    }
-
-    memcpy(path - len + 1, name, len - 1);
-    path -= len;
-    *path = '/';
-    chars_written += len;
-    itr = itr->parent();
-  }
-
-  // Add the "/dev" prefix to the front of the path.
-  constexpr std::string_view devfs_prefix = "/dev";
-  if ((devfs_prefix.size() + chars_written) > max) {
-    return ZX_ERR_BUFFER_TOO_SMALL;
-  }
-  memcpy(path - devfs_prefix.size(), devfs_prefix.data(), devfs_prefix.size());
-  path -= devfs_prefix.size();
-  chars_written += devfs_prefix.size();
-
-  memcpy(out, path, chars_written);
-  return ZX_OK;
-}
-
 zx_status_t Coordinator::NewDriverHost(const char* name, fbl::RefPtr<DriverHost>* out) {
   std::string root_driver_path_arg;
   std::vector<const char*> env;
@@ -982,15 +940,17 @@ void Coordinator::GetDeviceInfo(GetDeviceInfoRequestView request,
   } else {
     for (const fidl::StringView& device_filter : request->device_filter) {
       for (auto& device : device_manager_->devices()) {
-        char path[fdm::wire::kDevicePathMax] = {};
-        GetTopologicalPath(fbl::RefPtr(&device), path, fdm::wire::kDevicePathMax);
-        std::string_view topo_path = path;
+        zx::result path = device.GetTopologicalPath();
+        if (path.is_error()) {
+          request->iterator.Close(path.status_value());
+          return;
+        }
         bool matches = false;
         // TODO(fxbug.dev/115717): Matches should also check the /dev/class/ path.
         if (request->exact_match) {
-          matches = topo_path == device_filter.get();
+          matches = path.value() == device_filter.get();
         } else {
-          matches = topo_path.find(device_filter.get()) != std::string_view::npos;
+          matches = path.value().find(device_filter.get()) != std::string_view::npos;
         }
         if (matches) {
           device_list.emplace_back(&device);
