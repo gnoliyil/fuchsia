@@ -128,19 +128,13 @@ void AgentRunner::AddRunningAgent(
   fuchsia::modular::session::AppConfig agent_config;
   agent_config.set_url(agent_url);
 
-  // AgentContextImpl will call on_critical_agent_crash if this agent is listed
-  // in |restart_session_on_agent_crash_| and terminates unexpectedly.
-  bool restart_session_on_crash =
-      !config_accessor_->sessionmgr_config().disable_agent_restart_on_crash() ||
-      std::find(restart_session_on_agent_crash_.begin(), restart_session_on_agent_crash_.end(),
-                agent_url) != restart_session_on_agent_crash_.end();
-
   FX_CHECK(
       running_agents_
-          .emplace(agent_url, std::make_unique<AgentContextImpl>(
-                                  info, agent_url, std::move(app_client),
-                                  session_inspect_node_->CreateChild(agent_url),
-                                  restart_session_on_crash ? on_critical_agent_crash_ : nullptr))
+          .emplace(agent_url,
+                   std::make_unique<AgentContextImpl>(
+                       info, agent_url, std::move(app_client),
+                       session_inspect_node_->CreateChild(agent_url),
+                       ShouldRestartSessionOnCrash(agent_url) ? on_critical_agent_crash_ : nullptr))
           .second);
 }
 
@@ -151,19 +145,13 @@ void AgentRunner::AddAgentFromService(std::string agent_url, fuchsia::modular::A
   fuchsia::modular::session::AppConfig agent_config;
   agent_config.set_url(agent_url);
 
-  // AgentContextImpl will call on_critical_agent_crash if this agent is listed
-  // in |restart_session_on_agent_crash_| and terminates unexpectedly.
-  bool restart_session_on_crash =
-      !config_accessor_->sessionmgr_config().disable_agent_restart_on_crash() ||
-      std::find(restart_session_on_agent_crash_.begin(), restart_session_on_agent_crash_.end(),
-                agent_url) != restart_session_on_agent_crash_.end();
-
   FX_CHECK(
       running_agents_
-          .emplace(agent_url, std::make_unique<AgentContextImpl>(
-                                  info, agent_url, std::move(agent),
-                                  session_inspect_node_->CreateChild(agent_url),
-                                  restart_session_on_crash ? on_critical_agent_crash_ : nullptr))
+          .emplace(
+              agent_url,
+              std::make_unique<AgentContextImpl>(
+                  info, agent_url, std::move(agent), session_inspect_node_->CreateChild(agent_url),
+                  ShouldRestartSessionOnCrash(agent_url) ? on_critical_agent_crash_ : nullptr))
           .second);
 }
 
@@ -202,18 +190,12 @@ void AgentRunner::RunAgent(const std::string& agent_url) {
   fuchsia::modular::session::AppConfig agent_config;
   agent_config.set_url(agent_url);
 
-  // AgentContextImpl will call on_critical_agent_crash if this agent is listed
-  // in |restart_session_on_agent_crash_| and terminates unexpectedly.
-  bool restart_session_on_crash =
-      std::find(restart_session_on_agent_crash_.begin(), restart_session_on_agent_crash_.end(),
-                agent_url) != restart_session_on_agent_crash_.end();
-
   FX_CHECK(
       running_agents_
           .emplace(agent_url,
                    std::make_unique<AgentContextImpl>(
                        info, std::move(agent_config), session_inspect_node_->CreateChild(agent_url),
-                       restart_session_on_crash ? on_critical_agent_crash_ : nullptr))
+                       ShouldRestartSessionOnCrash(agent_url) ? on_critical_agent_crash_ : nullptr))
           .second);
 
   auto run_callbacks_it = run_agent_callbacks_.find(agent_url);
@@ -333,6 +315,18 @@ void AgentRunner::RemoveAgent(const std::string& agent_url) {
   if (run_agent_callbacks_.find(agent_url) != run_agent_callbacks_.end()) {
     RunAgent(agent_url);
   }
+}
+
+bool AgentRunner::IsRunning(const std::string& agent_url) {
+  return running_agents_.find(agent_url) != running_agents_.end();
+}
+
+bool AgentRunner::ShouldRestartSessionOnCrash(const std::string& agent_url) {
+  // AgentContextImpl will call on_critical_agent_crash if this agent is listed
+  // in |restart_session_on_agent_crash_| and terminates unexpectedly.
+  return std::find(restart_session_on_agent_crash_.begin(), restart_session_on_agent_crash_.end(),
+                   agent_url) != restart_session_on_agent_crash_.end() &&
+         !config_accessor_->sessionmgr_config().disable_agent_restart_on_crash();
 }
 
 }  // namespace modular

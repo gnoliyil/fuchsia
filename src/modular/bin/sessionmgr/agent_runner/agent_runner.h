@@ -98,6 +98,9 @@ class AgentRunner {
   // the moment we delete |AgentContextImpl|.
   void RemoveAgent(const std::string& agent_url);
 
+  // Returns true if the agent is running.
+  bool IsRunning(const std::string& agent_url);
+
  private:
   // Used by ConnectToAgentService() to connect to the agent (if known) and its
   // named service. Calls ConnectToAgent(), providing a temporary
@@ -132,6 +135,9 @@ class AgentRunner {
 
   // A set of all agents that are either running or scheduled to be run.
   std::vector<std::string> GetAllAgents();
+
+  // Returns true if the session should be restarted when this agent crashes.
+  bool ShouldRestartSessionOnCrash(const std::string& agent_url);
 
   const ModularConfigAccessor* config_accessor_;
 

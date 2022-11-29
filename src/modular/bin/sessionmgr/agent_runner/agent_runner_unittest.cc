@@ -729,6 +729,7 @@ TEST_F(AgentRunnerTest, CriticalAgents_NoSessionRestartOnCrash) {
 
   // Terminate the agent.
   test_agent->KillApplication();
+  RunLoopUntil([&] { return !GetOrCreateAgentRunner()->IsRunning(kTestAgentUrl); });
 
   // Teardown the session.
   auto is_torn_down = false;
@@ -765,6 +766,7 @@ TEST_F(AgentRunnerTest, CriticalAgents_SessionRestartOnCrash) {
 
   // Terminate the agent.
   test_agent->KillApplication();
+  RunLoopUntil([&] { return !GetOrCreateAgentRunner()->IsRunning(kTestAgentUrl); });
 
   RunLoopUntil([&is_restart_called] { return is_restart_called; });
 
