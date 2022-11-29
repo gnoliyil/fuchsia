@@ -25,7 +25,7 @@ directory should make it easy for you to verify the release locally.
 Launch a new terminal window or tab, and run the following command:
 
 ```
-fx vdl start --headless
+ffx emu start --headless
 ```
 
 Leave this terminal window running in the background.
