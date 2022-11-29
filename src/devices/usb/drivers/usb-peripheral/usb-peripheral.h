@@ -21,6 +21,7 @@
 #include <fbl/ref_ptr.h>
 #include <fbl/string.h>
 #include <fbl/vector.h>
+#include <usb-monitor-util/usb-monitor-util.h>
 #include <usb/request-cpp.h>
 
 /*
@@ -224,6 +225,8 @@ class UsbPeripheral : public UsbPeripheralType,
 
   bool cache_enabled_ = true;
   bool cache_report_enabled_ = true;
+
+  USBMonitor usb_monitor_;
 
   fbl::Mutex pending_requests_lock_;
   usb::BorrowedRequestList<void> pending_requests_ __TA_GUARDED(pending_requests_lock_);

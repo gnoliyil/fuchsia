@@ -18,6 +18,7 @@ source_set("usb-monitor-util") {
   sources = [ "usb-monitor-util.cc" ]
   public_deps = [ ":usb-monitor-util-headers" ]
   deps = [
+    "//src/devices/usb/lib/usb",
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/trace",
   ]

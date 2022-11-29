@@ -65,6 +65,7 @@ void UsbPeripheral::RequestComplete(usb_request_t* req) {
   pending_requests_.erase(&request);
   l.release();
   request.Complete(request.request()->response.status, request.request()->response.actual);
+  usb_monitor_.AddRecord(req);
 }
 
 void UsbPeripheral::UsbPeripheralRequestQueue(usb_request_t* usb_request,
@@ -82,6 +83,7 @@ void UsbPeripheral::UsbPeripheralRequestQueue(usb_request_t* usb_request,
   };
   pending_requests_.push_back(&request);
   l.release();
+  usb_monitor_.AddRecord(usb_request);
   dci_.RequestQueue(request.take(), &completion);
 }
 
@@ -192,6 +194,8 @@ zx_status_t UsbPeripheral::Init() {
   }
   SetDefaultConfig(reinterpret_cast<FunctionDescriptor*>(config->functions),
                    (metasize - sizeof(UsbConfig)) / sizeof(FunctionDescriptor));
+
+  usb_monitor_.Start();
   return ZX_OK;
 }
 
@@ -977,6 +981,7 @@ void UsbPeripheral::DdkUnbind(ddk::UnbindTxn txn) {
   zxlogf(DEBUG, "%s", __func__);
   ClearFunctions();
   txn.Reply();
+  usb_monitor_.Stop();
 }
 
 void UsbPeripheral::DdkRelease() {

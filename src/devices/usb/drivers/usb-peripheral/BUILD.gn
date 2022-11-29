@@ -39,6 +39,7 @@ fuchsia_driver("usb-peripheral-driver") {
     "//src/devices/usb/lib/usb",
     "//src/devices/usb/lib/usb:cdc",
     "//src/devices/usb/lib/usb:peripheral",
+    "//src/devices/usb/lib/usb-monitor-util",
     "//src/lib/ddk",
     "//src/lib/ddk:ddk-metadata-headers",
     "//src/lib/ddktl",
@@ -101,6 +102,7 @@ test("usb-peripheral-unittest-bin") {
     "//src/devices/usb/lib/usb",
     "//src/devices/usb/lib/usb:cdc",
     "//src/devices/usb/lib/usb:peripheral",
+    "//src/devices/usb/lib/usb-monitor-util",
     "//src/lib/ddk",
 
     # TODO(fxb/38132): Migrate to the new bind rules and delete the below

@@ -6,7 +6,6 @@
 #define SRC_DEVICES_USB_LIB_USB_MONITOR_UTIL_INCLUDE_USB_MONITOR_UTIL_USB_MONITOR_UTIL_H_
 
 #include <fuchsia/hardware/usb/request/c/banjo.h>
-
 #include <atomic>
 
 #include <fbl/mutex.h>
@@ -31,7 +30,7 @@ class USBMonitor {
   bool Started() const;
 
   // Records a new usb request.
-  void AddRecord(usb_request_t request);
+  void AddRecord(usb_request_t* request);
 
   // Returns statistics on the currently stored USB transactions.
   USBMonitorStats GetStats() const;
