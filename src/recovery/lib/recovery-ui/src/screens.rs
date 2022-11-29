@@ -16,7 +16,10 @@ use crate::network::NetworkViewAssistant;
 use crate::proxy_view_assistant::ProxyMessages;
 use crate::text_field::TextVisibility;
 use carnelian::{make_message, AppSender, MessageTarget, ViewAssistantPtr, ViewKey};
-use recovery_util::ota::state_machine::{Event, Operation, State, StateHandler};
+use recovery_util::ota::state_machine::DataSharingConsent::Allow;
+use recovery_util::ota::state_machine::{
+    DataSharingConsent, Event, Operation, State, StateHandler,
+};
 use recovery_util::wlan::NetworkInfo;
 
 pub struct Screens {
@@ -49,6 +52,9 @@ impl Screens {
             ),
             State::Connecting(network, password) => self.connecting(network, password),
             State::ConnectionFailed(network, password) => self.connection_failed(network, password),
+            State::ReinstallConfirm { desired: user_data_sharing_consent, reported } => {
+                self.reinstall_confirm(user_data_sharing_consent.clone(), reported.clone())
+            }
             // Temporary catch-all until all the other states are added
             _ => self.failed(&Operation::Reinstall, &Some("State not yet implemented".to_string())),
         };
@@ -207,6 +213,47 @@ impl Screens {
                     ButtonInfo::new("Choose network", None, false, true, Event::ChooseNetwork),
                     ButtonInfo::new("Try Again", None, false, false, Event::TryAgain),
                 ],
+            )
+            .unwrap(),
+        );
+        view_assistant_ptr
+    }
+
+    fn reinstall_confirm(
+        &self,
+        _desired: DataSharingConsent,
+        reported: DataSharingConsent,
+    ) -> ViewAssistantPtr {
+        let view_assistant_ptr = Box::new(
+            GenericSplitViewAssistant::new(
+                self.app_sender.clone(),
+                self.view_key,
+                ScreenSplit::Even,
+                Some("Reinstall Software".to_string()),
+                // TODO(b/260539609 Reinstall timing hint text needs an update
+                Some(
+                    "• This will clear your data from the\n  \
+                       device and can't be undone\n\
+                     • It may take 4 minutes\n\
+                     • Upon completion, the device will\n  \
+                       automatically restart"
+                        .to_string(),
+                ),
+                None,
+                vec![
+                    ButtonInfo::new("Cancel", None, false, true, Event::Cancel),
+                    ButtonInfo::new("Reinstall Now", None, false, false, Event::Reinstall),
+                ],
+                None,
+                Some(vec![ButtonInfo::new(
+                    "Permission",
+                    None,
+                    false,
+                    reported == Allow,
+                    Event::SendReports(reported.toggle()),
+                )]),
+                Some(IMAGE_DEVICE_INSTALL),
+                Some(IMAGE_DEFAULT_SIZE),
             )
             .unwrap(),
         );

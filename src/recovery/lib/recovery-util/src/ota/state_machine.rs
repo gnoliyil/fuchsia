@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+use crate::ota::state_machine::DataSharingConsent::{DontAllow, Unknown};
 use crate::wlan::NetworkInfo;
 #[cfg(test)]
 use mockall::*;
@@ -17,13 +18,30 @@ pub enum Operation {
     Reinstall,
 }
 
-pub(crate) type DataSharingConsent = bool;
 pub(crate) type Network = String;
-pub(crate) type Password = String;
 pub(crate) type NetworkInfos = Vec<NetworkInfo>;
+pub(crate) type Password = String;
+
 type Text = String;
 type ErrorMessage = String;
 type PercentProgress = i32;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DataSharingConsent {
+    Allow,
+    DontAllow,
+    Unknown,
+}
+
+impl DataSharingConsent {
+    pub fn toggle(&self) -> DataSharingConsent {
+        match self {
+            Self::Allow => Self::DontAllow,
+            Self::DontAllow => Self::Allow,
+            Self::Unknown => Self::Unknown,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum State {
@@ -37,7 +55,7 @@ pub enum State {
     Failed(Operation, Option<ErrorMessage>),
     Home,
     Reinstall,
-    SetPrivacy(bool),
+    ReinstallConfirm { desired: DataSharingConsent, reported: DataSharingConsent },
     GetWiFiNetworks,
     SelectWiFi(NetworkInfos),
 }
@@ -56,10 +74,10 @@ pub enum Event {
     Error(ErrorMessage),
     WiFiConnected,
     Networks(NetworkInfos),
-    Privacy(DataSharingConsent),
     Progress(PercentProgress),
     Reinstall,
-    SendReports(bool),
+    SystemPrivacySetting(DataSharingConsent),
+    SendReports(DataSharingConsent),
     StartFactoryReset,
     TryAnotherWay,
     TryAgain,
@@ -136,7 +154,9 @@ impl StateMachine {
                 Some(State::Connecting(network.clone(), password.clone()))
             }
 
-            (State::Connecting(_, _), Event::WiFiConnected) => Some(State::SetPrivacy(false)),
+            (State::Connecting(_, _), Event::WiFiConnected) => {
+                Some(State::ReinstallConfirm { desired: DontAllow, reported: Unknown })
+            }
             (State::Connecting(network, password), Event::Error(_reason)) => {
                 Some(State::ConnectionFailed(network.clone(), password.clone()))
             }
@@ -146,10 +166,24 @@ impl StateMachine {
                 Some(State::Connecting(network.clone(), password.clone()))
             }
 
-            (State::SetPrivacy(_), Event::SendReports(user_data_sharing_consent)) => {
-                Some(State::SetPrivacy(user_data_sharing_consent))
+            (
+                State::ReinstallConfirm { desired: _, reported: _ },
+                Event::SystemPrivacySetting(system_setting),
+            ) => Some(State::ReinstallConfirm {
+                desired: system_setting.clone(),
+                reported: system_setting.clone(),
+            }),
+
+            (
+                State::ReinstallConfirm { desired: _, reported },
+                Event::SendReports(desired_setting),
+            ) => Some(State::ReinstallConfirm {
+                desired: desired_setting,
+                reported: reported.clone(),
+            }),
+            (State::ReinstallConfirm { desired: _, reported: _ }, Event::Reinstall) => {
+                Some(State::ExecuteReinstall(0))
             }
-            (State::SetPrivacy(_), Event::Reinstall) => Some(State::ExecuteReinstall(0)),
 
             (State::ExecuteReinstall(_), Event::Progress(100)) => {
                 Some(State::Done(Operation::Reinstall))
@@ -188,7 +222,8 @@ mod test {
     // TODO(b/258049697): Tests to check the expected flow through more than one state.
     // c.f. https://cs.opensource.google/fuchsia/fuchsia/+/main:src/recovery/system/src/fdr.rs;l=183.
 
-    use crate::ota::state_machine::{Event, Operation, State, StateMachine};
+    use crate::ota::state_machine::DataSharingConsent::{DontAllow, Unknown};
+    use crate::ota::state_machine::{DataSharingConsent, Event, Operation, State, StateMachine};
     use lazy_static::lazy_static;
 
     lazy_static! {
@@ -205,7 +240,6 @@ mod test {
             State::Home,
             State::Reinstall,
             State::SelectWiFi(vec![]),
-            State::SetPrivacy(true),
         ];
         static ref EVENTS: Vec<Event> = vec![
             Event::AddNetwork,
@@ -215,7 +249,7 @@ mod test {
             Event::Progress(0),
             Event::Networks(Vec::new()),
             Event::Reinstall,
-            Event::SendReports(true),
+            Event::SendReports(DataSharingConsent::Allow),
             Event::StartFactoryReset,
             Event::TryAnotherWay,
             Event::TryAgain,
@@ -262,7 +296,7 @@ mod test {
         state = sm.event(Event::UserInput("Password".to_string())).unwrap();
         assert_eq!(state, State::Connecting("Network".to_string(), "Password".to_string()));
         state = sm.event(Event::WiFiConnected).unwrap();
-        assert_eq!(state, State::SetPrivacy(false));
+        assert_eq!(state, State::ReinstallConfirm { desired: DontAllow, reported: Unknown });
         state = sm.event(Event::Reinstall).unwrap();
         assert_eq!(state, State::ExecuteReinstall(0));
         state = sm.event(Event::Progress(100)).unwrap();

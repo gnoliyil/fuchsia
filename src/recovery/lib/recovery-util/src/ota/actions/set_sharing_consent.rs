@@ -3,7 +3,8 @@
 // found in the LICENSE file.
 
 use crate::ota::controller::SendEvent;
-use crate::ota::state_machine::Event;
+use crate::ota::state_machine::DataSharingConsent::{Allow, DontAllow, Unknown};
+use crate::ota::state_machine::{DataSharingConsent, Event};
 use fidl_fuchsia_settings::{PrivacyMarker, PrivacyProxy, PrivacySettings};
 use fuchsia_async::Task;
 use fuchsia_component::client::connect_to_protocol;
@@ -11,19 +12,28 @@ use fuchsia_component::client::connect_to_protocol;
 pub struct SetSharingConsentAction {}
 
 impl SetSharingConsentAction {
-    pub fn run(event_sender: Box<dyn SendEvent>, data_sharing_consent: bool) {
+    pub fn run(
+        event_sender: Box<dyn SendEvent>,
+        desired: DataSharingConsent,
+        reported: DataSharingConsent,
+    ) {
         let proxy = connect_to_protocol::<PrivacyMarker>().unwrap();
-        Self::run_with_proxy(event_sender, data_sharing_consent, proxy)
+        Self::run_with_proxy(event_sender, desired, reported, proxy)
     }
 
     fn run_with_proxy(
         mut event_sender: Box<dyn SendEvent>,
-        data_sharing_consent: bool,
+        desired: DataSharingConsent,
+        reported: DataSharingConsent,
         proxy: PrivacyProxy,
     ) {
+        // Do we need to ask?
+        if desired == reported && desired != Unknown {
+            return;
+        }
         let task = async move {
             let mut privacy_settings = PrivacySettings::EMPTY;
-            privacy_settings.user_data_sharing_consent = Some(data_sharing_consent);
+            privacy_settings.user_data_sharing_consent = Some(desired == Allow);
             #[cfg(feature = "debug_logging")]
             println!("Setting privacy to {}", data_sharing_consent);
             let res = proxy.set(privacy_settings).await;
@@ -32,21 +42,16 @@ impl SetSharingConsentAction {
             match res {
                 Ok(Err(error)) => {
                     // Errors come back inside an Ok!
-                    event_sender.send(Event::Error(format!(
-                        "Failed to set privacy permission: {:?}",
-                        error
-                    )));
+                    eprintln!("Set privacy returned an internal error: {:?}", error);
+                    event_sender.send(Event::SystemPrivacySetting(DontAllow));
                 }
                 Ok(Ok(())) => {
-                    event_sender.send(Event::Privacy(data_sharing_consent));
+                    //Ok's come back inside an Ok!
+                    event_sender.send(Event::SystemPrivacySetting(desired));
                 }
                 Err(error) => {
-                    // Something has gone horribly wrong in the service
-                    eprintln!("Set privacy returned an error: {:?}", error);
-                    event_sender.send(Event::Error(format!(
-                        "Failed to set privacy permission: {:?}",
-                        error
-                    )));
+                    eprintln!("Set privacy returned a FIDL error: {:?}", error);
+                    event_sender.send(Event::SystemPrivacySetting(DontAllow));
                 }
             };
         };
@@ -58,6 +63,7 @@ impl SetSharingConsentAction {
 mod test {
     use super::SetSharingConsentAction;
     use crate::ota::controller::{MockSendEvent, SendEvent};
+    use crate::ota::state_machine::DataSharingConsent::{Allow, DontAllow, Unknown};
     use crate::ota::state_machine::Event;
     use anyhow::Error;
     use fidl::endpoints::{ControlHandle, Responder};
@@ -102,9 +108,8 @@ mod test {
         event_sender
             .expect_send()
             .withf(move |event| {
-                if let Event::Privacy(consent) = event {
-                    // == true written for clarity!
-                    *consent == true
+                if let Event::SystemPrivacySetting(desired) = event {
+                    *desired == Allow
                 } else {
                     false
                 }
@@ -113,8 +118,9 @@ mod test {
             .return_const(());
         let event_sender: Box<dyn SendEvent> = Box::new(event_sender);
         let proxy = create_mock_privacy_server(Some(true)).unwrap();
-        let consent = true;
-        SetSharingConsentAction::run_with_proxy(event_sender, consent, proxy);
+        let desired = Allow;
+        let reported = Unknown;
+        SetSharingConsentAction::run_with_proxy(event_sender, desired, reported, proxy);
         let _ = exec.run_until_stalled(&mut future::pending::<()>());
     }
 
@@ -125,9 +131,8 @@ mod test {
         event_sender
             .expect_send()
             .withf(move |event| {
-                if let Event::Privacy(consent) = event {
-                    // == false written for clarity!
-                    *consent == false
+                if let Event::SystemPrivacySetting(desired) = event {
+                    *desired == DontAllow
                 } else {
                     false
                 }
@@ -136,8 +141,9 @@ mod test {
             .return_const(());
         let event_sender: Box<dyn SendEvent> = Box::new(event_sender);
         let proxy = create_mock_privacy_server(Some(true)).unwrap();
-        let consent = false;
-        SetSharingConsentAction::run_with_proxy(event_sender, consent, proxy);
+        let desired = DontAllow;
+        let reported = Unknown;
+        SetSharingConsentAction::run_with_proxy(event_sender, desired, reported, proxy);
         let _ = exec.run_until_stalled(&mut future::pending::<()>());
     }
 
@@ -147,13 +153,14 @@ mod test {
         let mut event_sender = MockSendEvent::new();
         event_sender
             .expect_send()
-            .with(eq(Event::Error("Error".to_string())))
+            .with(eq(Event::SystemPrivacySetting(DontAllow)))
             .times(1)
             .return_const(());
         let event_sender: Box<dyn SendEvent> = Box::new(event_sender);
         let proxy = create_mock_privacy_server(Some(false)).unwrap();
-        let consent = false;
-        SetSharingConsentAction::run_with_proxy(event_sender, consent, proxy);
+        let desired = Allow;
+        let reported = Unknown;
+        SetSharingConsentAction::run_with_proxy(event_sender, desired, reported, proxy);
         let _ = exec.run_until_stalled(&mut future::pending::<()>());
     }
 
@@ -163,13 +170,14 @@ mod test {
         let mut event_sender = MockSendEvent::new();
         event_sender
             .expect_send()
-            .with(eq(Event::Error("Error".to_string())))
+            .with(eq(Event::SystemPrivacySetting(DontAllow)))
             .times(1)
             .return_const(());
         let event_sender: Box<dyn SendEvent> = Box::new(event_sender);
         let proxy = create_mock_privacy_server(None).unwrap();
-        let consent = false;
-        SetSharingConsentAction::run_with_proxy(event_sender, consent, proxy);
+        let desired = Allow;
+        let reported = Unknown;
+        SetSharingConsentAction::run_with_proxy(event_sender, desired, reported, proxy);
         let _ = exec.run_until_stalled(&mut future::pending::<()>());
     }
 }

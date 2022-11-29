@@ -32,11 +32,11 @@ impl StateHandler for Action {
             State::Connecting(network, password) => {
                 WifiConnectAction::run(event_sender, network, password)
             }
-            State::SetPrivacy(user_data_sharing_consent) => {
-                SetSharingConsentAction::run(event_sender, user_data_sharing_consent)
+            State::ReinstallConfirm { desired: user_data_sharing_consent, reported } => {
+                SetSharingConsentAction::run(event_sender, user_data_sharing_consent, reported)
             }
             State::FactoryReset => FactoryResetAction::run(event_sender),
-            // We ignore all other sates
+            // We ignore all other states
             _ => {}
         };
     }
