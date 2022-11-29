@@ -625,8 +625,7 @@ impl BinderProcess {
 impl Drop for BinderProcess {
     fn drop(&mut self) {
         // Notify any subscribers that the objects this process owned are now dead.
-        let mut death_subscribers = vec![];
-        std::mem::swap(&mut *self.death_subscribers.lock(), &mut death_subscribers);
+        let death_subscribers = std::mem::take(&mut *self.death_subscribers.lock());
         for (proc, cookie) in death_subscribers {
             if let Some(target_proc) = proc.upgrade() {
                 target_proc.enqueue_command(Command::DeadBinder(cookie));
@@ -635,8 +634,7 @@ impl Drop for BinderProcess {
 
         // Notify all callers that had transactions scheduled for this process that the recipient is
         // dead.
-        let mut command_queue = VecDeque::default();
-        std::mem::swap(&mut *self.command_queue.lock(), &mut command_queue);
+        let command_queue = std::mem::take(&mut *self.command_queue.lock());
         for command in command_queue {
             if let Command::Transaction { sender, .. } = command {
                 if let Some(sender_thread) = sender.thread.upgrade() {
