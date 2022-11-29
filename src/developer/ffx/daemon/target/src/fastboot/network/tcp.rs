@@ -196,7 +196,13 @@ const FASTBOOT_PORT: u16 = 5554;
 async fn open_once(target: &Target) -> Result<TcpNetworkInterface> {
     let mut addr: SocketAddr =
         target.fastboot_address().ok_or(anyhow!("No network address for fastboot"))?.0.into();
-    addr.set_port(FASTBOOT_PORT);
+    if addr.port() == 0 {
+        tracing::debug!(
+            "Address does not have port set ({addr:?}. Using default:  {FASTBOOT_PORT}"
+        );
+        addr.set_port(FASTBOOT_PORT);
+    }
+    tracing::debug!("Trying to establish TCP Conneciton to address: {addr:?}");
     let mut stream = TcpStream::connect(addr).await.context("Establishing TCP connection")?;
     handshake(&mut stream).await?;
 
