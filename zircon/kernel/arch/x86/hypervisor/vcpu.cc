@@ -1145,7 +1145,7 @@ zx_status_t NormalVcpu::Enter(zx_port_packet_t& packet) {
     return vmexit_handler_normal(vmcs, vmx_state_.guest_state, local_apic_state_, pv_clock_state_,
                                  guest.AddressSpace(), guest.Traps(), packet);
   };
-  return EnterInternal(std::move(pre_enter), std::move(post_exit), packet);
+  return EnterInternal(ktl::move(pre_enter), ktl::move(post_exit), packet);
 }
 
 void NormalVcpu::Kick() {
@@ -1207,7 +1207,6 @@ DirectVcpu::DirectVcpu(DirectGuest& guest, uint16_t vpid, Thread* thread)
     : Vcpu(guest, vpid, thread) {}
 
 zx_status_t DirectVcpu::Enter(zx_port_packet_t& packet) {
-  auto& guest = static_cast<DirectGuest&>(guest_);
   auto pre_enter = [this](AutoVmcs& vmcs) mutable {
     if (fs_base_ != 0) {
       vmcs.Write(VmcsFieldXX::GUEST_FS_BASE, fs_base_);
@@ -1215,12 +1214,12 @@ zx_status_t DirectVcpu::Enter(zx_port_packet_t& packet) {
     }
     return ZX_OK;
   };
-  auto post_exit = [this, &guest](AutoVmcs& vmcs, zx_port_packet_t& packet) {
-    return vmexit_handler_direct(vmcs, vmx_state_.guest_state, guest.user_aspace(), fs_base_,
-                                 packet);
+  auto post_exit = [this](AutoVmcs& vmcs, zx_port_packet_t& packet) {
+    return vmexit_handler_direct(vmcs, vmx_state_.guest_state, fs_base_, packet);
   };
-  VmAspace& host_user_aspace = hypervisor::switch_aspace(guest.user_aspace());
-  zx_status_t status = EnterInternal(std::move(pre_enter), std::move(post_exit), packet);
+  auto& guest_user_aspace = static_cast<DirectGuest&>(guest_).user_aspace();
+  VmAspace& host_user_aspace = hypervisor::switch_aspace(guest_user_aspace);
+  zx_status_t status = EnterInternal(ktl::move(pre_enter), ktl::move(post_exit), packet);
   hypervisor::switch_aspace(host_user_aspace);
   return status;
 }

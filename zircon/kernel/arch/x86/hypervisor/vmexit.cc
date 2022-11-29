@@ -94,7 +94,7 @@ void next_rip(const ExitInfo& exit_info, AutoVmcs& vmcs) {
   }
 }
 
-zx_status_t handle_exception_or_nmi(AutoVmcs& vmcs, VmAspace& user_aspace) {
+zx_status_t handle_exception_or_nmi(AutoVmcs& vmcs) {
   const ExitInterruptionInfo int_info(vmcs);
   DEBUG_ASSERT(int_info.valid);
   // Only handle page faults, everything else should terminate the VCPU.
@@ -1263,14 +1263,14 @@ zx_status_t vmexit_handler_normal(AutoVmcs& vmcs, GuestState& guest_state,
   return status;
 }
 
-zx_status_t vmexit_handler_direct(AutoVmcs& vmcs, GuestState& guest_state, VmAspace& user_aspace,
-                                  uintptr_t& fs_base, zx_port_packet_t& packet) {
+zx_status_t vmexit_handler_direct(AutoVmcs& vmcs, GuestState& guest_state, uintptr_t& fs_base,
+                                  zx_port_packet_t& packet) {
   zx_status_t status;
   const ExitInfo exit_info(vmcs);
   switch (exit_info.exit_reason) {
     case ExitReason::EXCEPTION_OR_NMI:
       ktrace_vcpu_exit(VCPU_EXCEPTION_OR_NMI, exit_info.guest_rip);
-      status = handle_exception_or_nmi(vmcs, user_aspace);
+      status = handle_exception_or_nmi(vmcs);
       break;
     case ExitReason::EXTERNAL_INTERRUPT:
       ktrace_vcpu_exit(VCPU_EXTERNAL_INTERRUPT, exit_info.guest_rip);

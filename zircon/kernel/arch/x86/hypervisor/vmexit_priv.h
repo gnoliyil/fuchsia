@@ -341,7 +341,7 @@ zx_status_t vmexit_handler_normal(AutoVmcs& vmcs, GuestState& guest_state,
                                   hypervisor::GuestPhysicalAspace& gpa, hypervisor::TrapMap& traps,
                                   zx_port_packet_t& packet);
 
-zx_status_t vmexit_handler_direct(AutoVmcs& vmcs, GuestState& guest_state, VmAspace& user_aspace,
-                                  uintptr_t& fs_base, zx_port_packet_t& packet);
+zx_status_t vmexit_handler_direct(AutoVmcs& vmcs, GuestState& guest_state, uintptr_t& fs_base,
+                                  zx_port_packet_t& packet);
 
 #endif  // ZIRCON_KERNEL_ARCH_X86_HYPERVISOR_VMEXIT_PRIV_H_
