@@ -25,13 +25,17 @@ If you are making a change in fuchsia.git that causes this, you need to perform 
 5: For each existing line you modified in 2, remove the line.
 ";
 
-pub async fn verify(cmd: &Command) -> Result<HashSet<PathBuf>> {
+pub async fn verify(cmd: &Command, recovery: bool) -> Result<HashSet<PathBuf>> {
     if cmd.golden.len() == 0 {
         bail!("Must specify at least one --golden");
     }
     let mut deps = HashSet::new();
     let command = CommandBuilder::new("zbi.bootfs").build();
-    let model = ModelConfig::from_product_bundle(cmd.product_bundle.clone())?;
+    let model = if recovery {
+        ModelConfig::from_product_bundle_recovery(cmd.product_bundle.clone())
+    } else {
+        ModelConfig::from_product_bundle(cmd.product_bundle.clone())
+    }?;
     let plugins = vec!["ZbiPlugin".to_string()];
     let mut config = ConfigBuilder::with_model(model).command(command).plugins(plugins).build();
     config.runtime.logging.silent_mode = true;

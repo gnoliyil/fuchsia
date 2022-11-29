@@ -13,7 +13,11 @@ use {
 #[ffx_plugin()]
 pub async fn scrutiny_shell(cmd: ScrutinyShellCommand) -> Result<(), Error> {
     let model = if let Some(product_bundle) = cmd.product_bundle {
-        ModelConfig::from_product_bundle(product_bundle)?
+        if cmd.recovery {
+            ModelConfig::from_product_bundle_recovery(product_bundle)
+        } else {
+            ModelConfig::from_product_bundle(product_bundle)
+        }?
     } else {
         ModelConfig::empty()
     };

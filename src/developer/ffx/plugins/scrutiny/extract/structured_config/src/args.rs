@@ -27,4 +27,7 @@ pub struct ScrutinyStructuredConfigCommand {
     /// path to file to which to write the extracted configuration.
     #[argh(option)]
     pub output: PathBuf,
+    /// build scrutiny model based on recovery-mode build artifacts.
+    #[argh(switch)]
+    pub recovery: bool,
 }

@@ -169,6 +169,10 @@ pub struct ModelConfig {
     /// Whether the model is empty, meaning whether the values are stubbed out or actually assigned
     /// real values.
     pub is_empty: bool,
+    /// Whether the model is is based on recovery-mode build artifacts such as the `/recovery` file
+    /// in an update package, which is the ZBI installed for booting into recovery mode when
+    /// installing an update.
+    pub is_recovery: bool,
 }
 
 impl ModelConfig {
@@ -185,11 +189,24 @@ impl ModelConfig {
             component_tree_config_path: None,
             tmp_dir_path: None,
             is_empty: true,
+            is_recovery: false,
         }
     }
 
     /// Build a model based on the contents of a product bundle.
     pub fn from_product_bundle(product_bundle_path: impl AsRef<Path>) -> Result<Self> {
+        Self::from_product_bundle_and_recovery(product_bundle_path, false)
+    }
+
+    /// Build a model based on the contents of a product bundle using recovery-mode artifacts.
+    pub fn from_product_bundle_recovery(product_bundle_path: impl AsRef<Path>) -> Result<Self> {
+        Self::from_product_bundle_and_recovery(product_bundle_path, true)
+    }
+
+    fn from_product_bundle_and_recovery(
+        product_bundle_path: impl AsRef<Path>,
+        is_recovery: bool,
+    ) -> Result<Self> {
         let product_bundle_path = product_bundle_path.as_ref().to_path_buf();
         let product_bundle_path =
             Utf8PathBuf::try_from(product_bundle_path).context("Converting Path to Utf8Path")?;
@@ -219,6 +236,7 @@ impl ModelConfig {
             component_tree_config_path: None,
             tmp_dir_path: None,
             is_empty: false,
+            is_recovery,
         })
     }
 
@@ -252,6 +270,10 @@ impl ModelConfig {
     /// Whether the model is empty and the values should not be used.
     pub fn is_empty(&self) -> bool {
         self.is_empty
+    }
+    /// Whether the model is based on recovery-mode build artifacts.
+    pub fn is_recovery(&self) -> bool {
+        self.is_recovery
     }
 }
 

@@ -12,9 +12,14 @@ use scrutiny_utils::path::relativize_path;
 
 #[ffx_plugin()]
 pub async fn scrutiny_structured_config(cmd: ScrutinyStructuredConfigCommand) -> Result<(), Error> {
-    let ScrutinyStructuredConfigCommand { product_bundle, build_path, depfile, output } = cmd;
+    let ScrutinyStructuredConfigCommand { product_bundle, build_path, depfile, output, recovery } =
+        cmd;
 
-    let model = ModelConfig::from_product_bundle(product_bundle)?;
+    let model = if recovery {
+        ModelConfig::from_product_bundle_recovery(product_bundle)
+    } else {
+        ModelConfig::from_product_bundle(product_bundle)
+    }?;
     let command = CommandBuilder::new("verify.structured_config.extract").build();
     let plugins = vec![
         "CorePlugin".to_string(),

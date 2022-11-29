@@ -60,6 +60,7 @@ trait QueryComponentResolvers {
 struct ScrutinyQueryComponentResolvers {
     product_bundle: PathBuf,
     tmp_dir_path: Option<PathBuf>,
+    recovery: bool,
 }
 
 impl QueryComponentResolvers for ScrutinyQueryComponentResolvers {
@@ -76,7 +77,11 @@ impl QueryComponentResolvers for ScrutinyQueryComponentResolvers {
             .param("protocol", &request.protocol)
             .build();
         let plugins = vec!["DevmgrConfigPlugin", "StaticPkgsPlugin", "CorePlugin", "VerifyPlugin"];
-        let model = ModelConfig::from_product_bundle(self.product_bundle.clone())?;
+        let model = if self.recovery {
+            ModelConfig::from_product_bundle_recovery(self.product_bundle.clone())
+        } else {
+            ModelConfig::from_product_bundle(self.product_bundle.clone())
+        }?;
         let mut config = ConfigBuilder::with_model(model).command(command).plugins(plugins).build();
         config.runtime.model.tmp_dir_path = self.tmp_dir_path.clone();
         config.runtime.logging.silent_mode = true;
@@ -135,11 +140,16 @@ fn verify_component_resolvers(
     }
 }
 
-pub async fn verify(cmd: &Command, tmp_dir: Option<&PathBuf>) -> Result<HashSet<PathBuf>> {
+pub async fn verify(
+    cmd: &Command,
+    tmp_dir: Option<&PathBuf>,
+    recovery: bool,
+) -> Result<HashSet<PathBuf>> {
     let allowlist_path = &cmd.allowlist;
     let scrutiny = ScrutinyQueryComponentResolvers {
         product_bundle: cmd.product_bundle.clone(),
         tmp_dir_path: tmp_dir.map(PathBuf::clone),
+        recovery,
     };
 
     let allowlist: AllowList = serde_json5::from_str(

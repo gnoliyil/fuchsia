@@ -30,12 +30,18 @@ If you are making a change in fuchsia.git that causes this, you need to perform 
 struct Query {
     // A host filesystem path to the product bundle.
     product_bundle: PathBuf,
+    // Whether to build scrutiny model based on recovery-mode build artifacts.
+    recovery: bool,
 }
 
 fn verify_kernel_cmdline<P: AsRef<Path>>(query: &Query, golden_path: P) -> Result<()> {
     let command = CommandBuilder::new("zbi.cmdline").build();
     let plugins = vec!["ZbiPlugin".to_string()];
-    let model = ModelConfig::from_product_bundle(query.product_bundle.clone())?;
+    let model = if query.recovery {
+        ModelConfig::from_product_bundle_recovery(query.product_bundle.clone())
+    } else {
+        ModelConfig::from_product_bundle(query.product_bundle.clone())
+    }?;
     let mut config = ConfigBuilder::with_model(model).command(command).plugins(plugins).build();
     config.runtime.logging.silent_mode = true;
 
@@ -65,13 +71,13 @@ fn verify_kernel_cmdline<P: AsRef<Path>>(query: &Query, golden_path: P) -> Resul
     }
 }
 
-pub async fn verify(cmd: &Command) -> Result<HashSet<PathBuf>> {
+pub async fn verify(cmd: &Command, recovery: bool) -> Result<HashSet<PathBuf>> {
     if cmd.golden.len() == 0 {
         bail!("Must specify at least one --golden");
     }
     let mut deps = HashSet::new();
 
-    let query = Query { product_bundle: cmd.product_bundle.clone() };
+    let query = Query { product_bundle: cmd.product_bundle.clone(), recovery };
     for golden_file_path in cmd.golden.iter() {
         verify_kernel_cmdline(&query, golden_file_path)?;
 

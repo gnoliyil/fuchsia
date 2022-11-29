@@ -41,4 +41,6 @@ pub struct ScrutinyShellCommand {
     pub port: Option<u16>,
     #[argh(option, description = "set the verbosity level of logging", short = 'v')]
     pub verbosity: Option<String>,
+    #[argh(switch, description = "build scrutiny model based on recovery-mode build artifacts")]
+    pub recovery: bool,
 }

@@ -32,6 +32,9 @@ pub struct BootFsCollector;
 impl DataCollector for BootFsCollector {
     fn collect(&self, model: Arc<DataModel>) -> Result<()> {
         let model_config = model.config();
+        if model_config.is_recovery() {
+            unimplemented!("bootfs data collection for recovery images");
+        }
         let update_package_path = model_config.update_package_path();
         let blobs_directory = model_config.blobs_directory();
 

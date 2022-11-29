@@ -14,7 +14,11 @@ use {
 pub async fn scrutiny_package(cmd: ScrutinyPackageCommand) -> Result<(), Error> {
     let url_string = format!("{}", cmd.url);
     let command = CommandBuilder::new("search.package.list").param("url", url_string).build();
-    let model = ModelConfig::from_product_bundle(&cmd.product_bundle)?;
+    let model = if cmd.recovery {
+        ModelConfig::from_product_bundle_recovery(&cmd.product_bundle)
+    } else {
+        ModelConfig::from_product_bundle(&cmd.product_bundle)
+    }?;
     let config = ConfigBuilder::with_model(model).command(command).build();
     launcher::launch_from_config(config)?;
 

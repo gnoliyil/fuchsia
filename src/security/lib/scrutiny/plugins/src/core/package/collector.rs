@@ -1021,6 +1021,9 @@ impl DataCollector for PackageDataCollector {
     /// connect the nodes.
     fn collect(&self, model: Arc<DataModel>) -> Result<()> {
         let model_config = model.config();
+        if model_config.is_recovery() {
+            unimplemented!("package data collection for recovery images");
+        }
         let blobs_directory = &model_config.blobs_directory();
         let artifact_reader_for_artifact_reader =
             FileArtifactReader::new(&PathBuf::new(), blobs_directory);

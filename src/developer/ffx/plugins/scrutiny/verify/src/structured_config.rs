@@ -9,7 +9,7 @@ use scrutiny_frontend::{command_builder::CommandBuilder, launcher};
 use scrutiny_plugins::verify::VerifyStructuredConfigResponse;
 use std::{collections::HashSet, path::PathBuf};
 
-pub async fn verify(cmd: &Command) -> Result<HashSet<PathBuf>> {
+pub async fn verify(cmd: &Command, recovery: bool) -> Result<HashSet<PathBuf>> {
     let policy_path = &cmd.policy.to_str().context("converting policy path to string")?.to_owned();
     let command = CommandBuilder::new("verify.structured_config")
         .param("policy", policy_path.clone())
@@ -20,7 +20,11 @@ pub async fn verify(cmd: &Command) -> Result<HashSet<PathBuf>> {
         "StaticPkgsPlugin".to_string(),
         "VerifyPlugin".to_string(),
     ];
-    let model = ModelConfig::from_product_bundle(&cmd.product_bundle)?;
+    let model = if recovery {
+        ModelConfig::from_product_bundle_recovery(&cmd.product_bundle)
+    } else {
+        ModelConfig::from_product_bundle(&cmd.product_bundle)
+    }?;
     let mut config = ConfigBuilder::with_model(model).command(command).plugins(plugins).build();
     config.runtime.logging.silent_mode = true;
 

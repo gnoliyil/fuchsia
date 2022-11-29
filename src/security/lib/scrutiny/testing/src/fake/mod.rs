@@ -30,6 +30,7 @@ pub fn fake_model_config() -> ModelConfig {
         component_tree_config_path: None,
         tmp_dir_path: None,
         is_empty: false,
+        is_recovery: false,
     }
 }
 

@@ -20,11 +20,17 @@ struct Query {
     product_bundle: PathBuf,
     config_path: String,
     tmp_dir_path: Option<PathBuf>,
+    recovery: bool,
 }
 
 impl Query {
     fn with_temporary_directory(mut self, tmp_dir_path: Option<&PathBuf>) -> Self {
         self.tmp_dir_path = tmp_dir_path.map(PathBuf::clone);
+        self
+    }
+
+    fn with_recovery_artifacts(mut self) -> Self {
+        self.recovery = true;
         self
     }
 }
@@ -39,7 +45,12 @@ impl TryFrom<&Command> for Query {
             )
         })?;
         let config_path = config_path.to_string();
-        Ok(Query { product_bundle: cmd.product_bundle.clone(), config_path, tmp_dir_path: None })
+        Ok(Query {
+            product_bundle: cmd.product_bundle.clone(),
+            config_path,
+            tmp_dir_path: None,
+            recovery: false,
+        })
     }
 }
 
@@ -47,7 +58,11 @@ fn verify_route_sources(query: Query) -> Result<HashSet<PathBuf>> {
     let command =
         CommandBuilder::new("verify.route_sources").param("input", query.config_path).build();
     let plugins = vec!["DevmgrConfigPlugin", "StaticPkgsPlugin", "CorePlugin", "VerifyPlugin"];
-    let model = ModelConfig::from_product_bundle(&query.product_bundle)?;
+    let model = if query.recovery {
+        ModelConfig::from_product_bundle_recovery(&query.product_bundle)
+    } else {
+        ModelConfig::from_product_bundle(&query.product_bundle)
+    }?;
     let mut config = ConfigBuilder::with_model(model).command(command).plugins(plugins).build();
     config.runtime.logging.silent_mode = true;
     config.runtime.model.tmp_dir_path = query.tmp_dir_path;
@@ -75,8 +90,15 @@ fn verify_route_sources(query: Query) -> Result<HashSet<PathBuf>> {
     Ok(route_sources_results.deps)
 }
 
-pub async fn verify(cmd: &Command, tmp_dir: Option<&PathBuf>) -> Result<HashSet<PathBuf>> {
-    let query = Query::try_from(cmd)?.with_temporary_directory(tmp_dir);
+pub async fn verify(
+    cmd: &Command,
+    tmp_dir: Option<&PathBuf>,
+    recovery: bool,
+) -> Result<HashSet<PathBuf>> {
+    let mut query = Query::try_from(cmd)?.with_temporary_directory(tmp_dir);
+    if recovery {
+        query = query.with_recovery_artifacts();
+    }
     let deps = verify_route_sources(query)?;
     Ok(deps)
 }

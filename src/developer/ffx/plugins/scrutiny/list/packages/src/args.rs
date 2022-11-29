@@ -22,4 +22,7 @@ pub struct ScrutinyPackagesCommand {
     /// path to a product bundle.
     #[argh(option)]
     pub product_bundle: PathBuf,
+    /// build scrutiny model based on recovery-mode build artifacts.
+    #[argh(switch)]
+    pub recovery: bool,
 }

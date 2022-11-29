@@ -23,12 +23,17 @@ If you are making a change in fuchsia.git that causes this, you need to perform 
 
 struct Query {
     product_bundle: PathBuf,
+    recovery: bool,
 }
 
 fn verify_static_pkgs(query: &Query, golden_file_path: PathBuf) -> Result<HashSet<PathBuf>> {
     let command = CommandBuilder::new("static.pkgs").build();
     let plugins = vec!["DevmgrConfigPlugin".to_string(), "StaticPkgsPlugin".to_string()];
-    let model = ModelConfig::from_product_bundle(query.product_bundle.clone())?;
+    let model = if query.recovery {
+        ModelConfig::from_product_bundle_recovery(query.product_bundle.clone())
+    } else {
+        ModelConfig::from_product_bundle(query.product_bundle.clone())
+    }?;
     let mut config = ConfigBuilder::with_model(model).command(command).plugins(plugins).build();
     config.runtime.logging.silent_mode = true;
 
@@ -78,9 +83,9 @@ fn verify_static_pkgs(query: &Query, golden_file_path: PathBuf) -> Result<HashSe
     }
 }
 
-pub async fn verify(cmd: &Command) -> Result<HashSet<PathBuf>> {
+pub async fn verify(cmd: &Command, recovery: bool) -> Result<HashSet<PathBuf>> {
     let product_bundle = cmd.product_bundle.clone();
-    let query = Query { product_bundle };
+    let query = Query { product_bundle, recovery };
     let mut deps = HashSet::new();
 
     for golden_file_path in cmd.golden.iter() {

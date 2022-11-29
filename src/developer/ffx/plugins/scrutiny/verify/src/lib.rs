@@ -34,17 +34,22 @@ pub async fn scrutiny_verify(cmd: Command) -> Result<()> {
             )
         })?;
     }
+    let recovery = cmd.recovery;
 
     let deps_set = match &cmd.subcommand {
-        SubCommand::Bootfs(subcommand) => bootfs::verify(subcommand).await,
+        SubCommand::Bootfs(subcommand) => bootfs::verify(subcommand, recovery).await,
         SubCommand::ComponentResolvers(subcommand) => {
-            component_resolvers::verify(subcommand, tmp_dir).await
+            component_resolvers::verify(subcommand, tmp_dir, recovery).await
         }
-        SubCommand::KernelCmdline(subcommand) => kernel_cmdline::verify(subcommand).await,
-        SubCommand::RouteSources(subcommand) => route_sources::verify(subcommand, tmp_dir).await,
-        SubCommand::Routes(subcommand) => routes::verify(subcommand, tmp_dir).await,
-        SubCommand::StaticPkgs(subcommand) => static_pkgs::verify(subcommand).await,
-        SubCommand::StructuredConfig(subcommand) => structured_config::verify(subcommand).await,
+        SubCommand::KernelCmdline(subcommand) => kernel_cmdline::verify(subcommand, recovery).await,
+        SubCommand::RouteSources(subcommand) => {
+            route_sources::verify(subcommand, tmp_dir, recovery).await
+        }
+        SubCommand::Routes(subcommand) => routes::verify(subcommand, tmp_dir, recovery).await,
+        SubCommand::StaticPkgs(subcommand) => static_pkgs::verify(subcommand, recovery).await,
+        SubCommand::StructuredConfig(subcommand) => {
+            structured_config::verify(subcommand, recovery).await
+        }
     }?;
 
     if let Some(depfile_path) = cmd.depfile.as_ref() {

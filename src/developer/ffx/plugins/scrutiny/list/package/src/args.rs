@@ -27,4 +27,7 @@ pub struct ScrutinyPackageCommand {
     /// fuchsia url to the package.
     #[argh(option)]
     pub url: AbsolutePackageUrl,
+    /// build scrutiny model based on recovery-mode build artifacts.
+    #[argh(switch)]
+    pub recovery: bool,
 }

@@ -13,7 +13,11 @@ use {
 #[ffx_plugin()]
 pub async fn scrutiny_package(cmd: ScrutinyPackagesCommand) -> Result<()> {
     let command = "packages.urls".to_string();
-    let model = ModelConfig::from_product_bundle(&cmd.product_bundle)?;
+    let model = if cmd.recovery {
+        ModelConfig::from_product_bundle_recovery(&cmd.product_bundle)
+    } else {
+        ModelConfig::from_product_bundle(&cmd.product_bundle)
+    }?;
     let config = ConfigBuilder::with_model(model).command(command).build();
     launcher::launch_from_config(config)?;
 

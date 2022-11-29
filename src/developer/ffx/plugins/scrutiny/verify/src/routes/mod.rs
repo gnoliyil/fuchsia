@@ -75,9 +75,17 @@ fn load_allowlist(allowlist_paths: &Vec<PathBuf>) -> Result<Box<dyn AllowlistFil
     Err(err.unwrap())
 }
 
-pub async fn verify(cmd: &Command, tmp_dir: Option<&PathBuf>) -> Result<HashSet<PathBuf>> {
+pub async fn verify(
+    cmd: &Command,
+    tmp_dir: Option<&PathBuf>,
+    recovery: bool,
+) -> Result<HashSet<PathBuf>> {
     let query: Query = Query::from(cmd).with_temporary_directory(tmp_dir);
-    let model = ModelConfig::from_product_bundle(&query.product_bundle)?;
+    let model = if recovery {
+        ModelConfig::from_product_bundle_recovery(&query.product_bundle)
+    } else {
+        ModelConfig::from_product_bundle(&query.product_bundle)
+    }?;
     let command = CommandBuilder::new("verify.capability_routes")
         .param("capability_types", query.capability_types.join(" "))
         .param("response_level", query.response_level)

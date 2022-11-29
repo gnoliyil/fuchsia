@@ -12,7 +12,11 @@ use {
 
 #[ffx_plugin()]
 pub async fn scrutiny_package(cmd: ScrutinyPackageCommand) -> Result<(), Error> {
-    let model = ModelConfig::from_product_bundle(cmd.product_bundle)?;
+    let model = if cmd.recovery {
+        ModelConfig::from_product_bundle_recovery(cmd.product_bundle)
+    } else {
+        ModelConfig::from_product_bundle(cmd.product_bundle)
+    }?;
     let command = CommandBuilder::new("package.extract")
         .param("url", cmd.url)
         .param("output", cmd.output)

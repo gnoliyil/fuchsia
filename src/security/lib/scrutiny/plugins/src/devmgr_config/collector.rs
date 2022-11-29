@@ -131,6 +131,9 @@ pub struct DevmgrConfigCollector;
 impl DataCollector for DevmgrConfigCollector {
     fn collect(&self, model: Arc<DataModel>) -> Result<()> {
         let model_config = model.config();
+        if model_config.is_recovery() {
+            unimplemented!("devmgr config data collection for recovery images");
+        }
         let update_package_path = model_config.update_package_path();
         let blobs_directory = model_config.blobs_directory();
         let devmgr_config_path = model_config.devmgr_config_path();

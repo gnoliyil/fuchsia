@@ -25,6 +25,9 @@ pub struct Command {
     /// path to directory to use for temporary files.
     #[argh(option)]
     pub tmp_dir: Option<PathBuf>,
+    /// build scrutiny model based on recovery-mode build artifacts.
+    #[argh(switch)]
+    pub recovery: bool,
     #[argh(subcommand)]
     pub subcommand: SubCommand,
 }
