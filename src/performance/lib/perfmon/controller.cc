@@ -9,12 +9,12 @@
 #include <lib/syslog/cpp/macros.h>
 #include <sys/stat.h>
 
+#include <memory>
+
 #include <fbl/algorithm.h>
 
 #include "src/lib/fxl/strings/string_printf.h"
-#include "src/performance/lib/perfmon/config_impl.h"
 #include "src/performance/lib/perfmon/controller_impl.h"
-#include "src/performance/lib/perfmon/device_reader.h"
 #include "src/performance/lib/perfmon/properties_impl.h"
 
 namespace perfmon {
@@ -55,17 +55,16 @@ bool Controller::IsSupported() {
 }
 
 bool Controller::GetProperties(Properties* props) {
-  ::fuchsia::perfmon::cpu::ControllerSyncPtr controller_ptr;
-  zx_status_t status =
-      fdio_service_connect(kPerfMonDev, controller_ptr.NewRequest().TakeChannel().release());
-  if (status != ZX_OK) {
-    FX_LOGS(ERROR) << "Error connecting to " << kPerfMonDev << ": " << status;
+  fuchsia::perfmon::cpu::ControllerSyncPtr controller_ptr;
+  if (zx_status_t status =
+          fdio_service_connect(kPerfMonDev, controller_ptr.NewRequest().TakeChannel().release());
+      status != ZX_OK) {
+    FX_PLOGS(ERROR, status) << "Error connecting to " << kPerfMonDev;
     return false;
   }
 
   FidlPerfmonProperties properties;
-  status = controller_ptr->GetProperties(&properties);
-  if (status != ZX_OK) {
+  if (zx_status_t status = controller_ptr->GetProperties(&properties); status != ZX_OK) {
     FX_LOGS(ERROR) << "Failed to get properties: " << status;
     return false;
   }
@@ -124,18 +123,18 @@ static bool Initialize(::fuchsia::perfmon::cpu::ControllerSyncPtr* controller_pt
   return true;
 }
 
-bool Controller::Create(uint32_t buffer_size_in_pages, const Config config,
+bool Controller::Create(uint32_t buffer_size_in_pages, const Config& config,
                         std::unique_ptr<Controller>* out_controller) {
   if (buffer_size_in_pages > kMaxBufferSizeInPages) {
     FX_LOGS(ERROR) << "Buffer size is too large, max " << kMaxBufferSizeInPages << " pages";
     return false;
   }
 
-  ::fuchsia::perfmon::cpu::ControllerSyncPtr controller_ptr;
-  zx_status_t status =
-      fdio_service_connect(kPerfMonDev, controller_ptr.NewRequest().TakeChannel().release());
-  if (status != ZX_OK) {
-    FX_LOGS(ERROR) << "Error connecting to " << kPerfMonDev << ": " << status;
+  fuchsia::perfmon::cpu::ControllerSyncPtr controller_ptr;
+  if (zx_status_t status =
+          fdio_service_connect(kPerfMonDev, controller_ptr.NewRequest().TakeChannel().release());
+      status != ZX_OK) {
+    FX_PLOGS(ERROR, status) << "Error connecting to " << kPerfMonDev;
     return false;
   }
 
@@ -149,8 +148,8 @@ bool Controller::Create(uint32_t buffer_size_in_pages, const Config config,
     return false;
   }
 
-  out_controller->reset(new internal::ControllerImpl(std::move(controller_ptr), num_traces,
-                                                     buffer_size_in_pages, std::move(config)));
+  *out_controller = std::make_unique<internal::ControllerImpl>(
+      std::move(controller_ptr), num_traces, buffer_size_in_pages, config);
   return true;
 }
 

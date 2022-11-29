@@ -85,8 +85,8 @@ void PerfmonDevice::InitializeStagingState(StagingState* ss) {
 }
 
 zx_status_t PerfmonDevice::StageFixedConfig(const FidlPerfmonConfig* icfg, StagingState* ss,
-                                            unsigned input_index, PmuConfig* ocfg) {
-  const unsigned ii = input_index;
+                                            size_t input_index, PmuConfig* ocfg) {
+  const size_t ii = input_index;
   const EventId id = icfg->events[ii].event;
   EventRate rate = icfg->events[ii].rate;
   fidl_perfmon::wire::EventConfigFlags flags = icfg->events[ii].flags;
@@ -94,7 +94,7 @@ zx_status_t PerfmonDevice::StageFixedConfig(const FidlPerfmonConfig* icfg, Stagi
 
   // There's only one fixed counter on ARM64, the cycle counter.
   if (id != FIXED_CYCLE_COUNTER_ID) {
-    zxlogf(ERROR, "%s: Invalid fixed event [%u]", __func__, ii);
+    zxlogf(ERROR, "%s: Invalid fixed event [%zu]", __func__, ii);
     return ZX_ERR_INVALID_ARGS;
   }
   if (ss->num_fixed > 0) {
@@ -139,8 +139,8 @@ zx_status_t PerfmonDevice::StageFixedConfig(const FidlPerfmonConfig* icfg, Stagi
 }
 
 zx_status_t PerfmonDevice::StageProgrammableConfig(const FidlPerfmonConfig* icfg, StagingState* ss,
-                                                   unsigned input_index, PmuConfig* ocfg) {
-  const unsigned ii = input_index;
+                                                   size_t input_index, PmuConfig* ocfg) {
+  const size_t ii = input_index;
   EventId id = icfg->events[ii].event;
   unsigned group = GetEventIdGroup(id);
   unsigned event = GetEventIdEvent(id);
@@ -177,18 +177,18 @@ zx_status_t PerfmonDevice::StageProgrammableConfig(const FidlPerfmonConfig* icfg
   switch (group) {
     case kGroupArch:
       if (event >= kArchEventMapSize) {
-        zxlogf(ERROR, "%s: Invalid event id, event [%u]", __func__, ii);
+        zxlogf(ERROR, "%s: Invalid event id, event [%zu]", __func__, ii);
         return ZX_ERR_INVALID_ARGS;
       }
       details = &kArchEvents[kArchEventMap[event]];
       break;
     default:
-      zxlogf(ERROR, "%s: Invalid event id, event [%u]", __func__, ii);
+      zxlogf(ERROR, "%s: Invalid event id, event [%zu]", __func__, ii);
       return ZX_ERR_INVALID_ARGS;
   }
   // Arch events have at least ARM64_PMU_REG_FLAG_{ARCH,MICROARCH} set.
   if (details->flags == 0) {
-    zxlogf(ERROR, "%s: Invalid event id, event [%u]", __func__, ii);
+    zxlogf(ERROR, "%s: Invalid event id, event [%zu]", __func__, ii);
     return ZX_ERR_INVALID_ARGS;
   }
   ZX_DEBUG_ASSERT((details->flags & (ARM64_PMU_REG_FLAG_ARCH | ARM64_PMU_REG_FLAG_MICROARCH)) != 0);
@@ -216,9 +216,9 @@ zx_status_t PerfmonDevice::StageProgrammableConfig(const FidlPerfmonConfig* icfg
 }
 
 zx_status_t PerfmonDevice::StageMiscConfig(const FidlPerfmonConfig* icfg, StagingState* ss,
-                                           unsigned input_index, PmuConfig* ocfg) {
+                                           size_t input_index, PmuConfig* ocfg) {
   // There are no misc events yet.
-  zxlogf(ERROR, "%s: Invalid event [%u] (no misc events)", __func__, input_index);
+  zxlogf(ERROR, "%s: Invalid event [%zu] (no misc events)", __func__, input_index);
   return ZX_ERR_INVALID_ARGS;
 }
 

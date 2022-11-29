@@ -80,8 +80,8 @@ uint16_t GetLargestEventId(const EventDetails* events, size_t count);
 // The lookup map translates event ids, which is used as the index into the
 // map and returns an enum value for the particular event kind.
 // Event ids aren't necessarily dense, but the enums are.
-zx_status_t BuildEventMap(const EventDetails* events, size_t count, const uint16_t** out_event_map,
-                          size_t* out_map_size);
+zx_status_t BuildEventMap(const EventDetails* events, uint16_t count,
+                          const uint16_t** out_event_map, size_t* out_map_size);
 
 // All configuration data is staged here before writing any MSRs, etc.
 // Then when ready the "Start" FIDL call will write all the necessary MSRS,
@@ -135,7 +135,7 @@ class PerfmonDevice : public DeviceType {
 
   explicit PerfmonDevice(zx_device_t* parent, zx::bti bti, perfmon::PmuHwProperties props,
                          mtrace_control_func_t* mtrace_control);
-  ~PerfmonDevice() = default;
+  ~PerfmonDevice() override = default;
 
   const PmuHwProperties& pmu_hw_properties() const { return pmu_hw_properties_; }
 
@@ -175,13 +175,13 @@ class PerfmonDevice : public DeviceType {
   // Initialize |ss| in preparation for processing the PMU configuration.
   void InitializeStagingState(StagingState* ss);
   // Stage fixed counter |input_index| in |icfg|.
-  zx_status_t StageFixedConfig(const FidlPerfmonConfig* icfg, StagingState* ss,
-                               unsigned input_index, PmuConfig* ocfg);
+  zx_status_t StageFixedConfig(const FidlPerfmonConfig* icfg, StagingState* ss, size_t input_index,
+                               PmuConfig* ocfg);
   // Stage fixed counter |input_index| in |icfg|.
   zx_status_t StageProgrammableConfig(const FidlPerfmonConfig* icfg, StagingState* ss,
-                                      unsigned input_index, PmuConfig* ocfg);
+                                      size_t input_index, PmuConfig* ocfg);
   // Stage fixed counter |input_index| in |icfg|.
-  zx_status_t StageMiscConfig(const FidlPerfmonConfig* icfg, StagingState* ss, unsigned input_index,
+  zx_status_t StageMiscConfig(const FidlPerfmonConfig* icfg, StagingState* ss, size_t input_index,
                               PmuConfig* ocfg);
   // Verify the result. This is where the architecture can do any last
   // minute verification.

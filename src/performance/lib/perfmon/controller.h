@@ -33,7 +33,7 @@ class Controller {
   // Fetch the properties of this device.
   static bool GetProperties(Properties* props);
 
-  static bool Create(uint32_t buffer_size_in_pages, const Config config,
+  static bool Create(uint32_t buffer_size_in_pages, const Config& config,
                      std::unique_ptr<Controller>* out_controller);
 
   // Note: Virtual methods are used here to hide the implementation.

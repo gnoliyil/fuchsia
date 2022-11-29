@@ -54,8 +54,8 @@ uint16_t GetLargestEventId(const EventDetails* events, size_t count) {
   return largest;
 }
 
-zx_status_t BuildEventMap(const EventDetails* events, size_t count, const uint16_t** out_event_map,
-                          size_t* out_map_size) {
+zx_status_t BuildEventMap(const EventDetails* events, uint16_t count,
+                          const uint16_t** out_event_map, size_t* out_map_size) {
   static_assert(kMaxEvent < std::numeric_limits<uint16_t>::max());
 
   uint16_t largest_event_id = GetLargestEventId(events, count);
@@ -70,7 +70,7 @@ zx_status_t BuildEventMap(const EventDetails* events, size_t count, const uint16
 
   fbl::AllocChecker ac;
   size_t event_map_size = largest_event_id + 1;
-  zxlogf(DEBUG, "PMU: %zu arch events", count);
+  zxlogf(DEBUG, "PMU: %hu arch events", count);
   zxlogf(DEBUG, "PMU: arch event id range: 1-%zu", event_map_size);
   auto event_map = std::unique_ptr<uint16_t[]>(new (&ac) uint16_t[event_map_size]{});
   if (!ac.check()) {
@@ -192,18 +192,14 @@ zx_status_t PerfmonDevice::PmuInitialize(const FidlPerfmonAllocation* allocation
     return ZX_ERR_NO_MEMORY;
   }
 
-  size_t buffer_size = allocation->buffer_size_in_pages * kPageSize;
-  uint32_t i = 0;
-  for (; i < num_cpus; ++i) {
+  size_t buffer_size = static_cast<size_t>(allocation->buffer_size_in_pages) * kPageSize;
+  for (uint32_t i = 0; i < num_cpus; ++i) {
     zx_status_t status =
         io_buffer_init(&per_trace->buffers[i], bti_.get(), buffer_size, IO_BUFFER_RW);
     if (status != ZX_OK) {
-      break;
+      FreeBuffersForTrace(per_trace.get(), i);
+      return status;
     }
-  }
-  if (i != num_cpus) {
-    FreeBuffersForTrace(per_trace.get(), i);
-    return ZX_ERR_NO_MEMORY;
   }
 
   per_trace->num_buffers = allocation->num_buffers;
@@ -356,10 +352,9 @@ zx_status_t PerfmonDevice::PmuStageConfig(const FidlPerfmonConfig* fidl_config) 
     return status;
   }
 
-  unsigned ii;  // ii: input index
-  for (ii = 0; ii < icfg->events.size(); ++ii) {
+  for (size_t ii = 0; ii < decltype(icfg->events)::size(); ++ii) {
     EventId id = icfg->events[ii].event;
-    zxlogf(DEBUG, "%s: processing [%u] = %u", __func__, ii, id);
+    zxlogf(DEBUG, "%s: processing [%zu] = %u", __func__, ii, id);
     if (id == kEventIdNone) {
       break;
     }
@@ -386,7 +381,7 @@ zx_status_t PerfmonDevice::PmuStageConfig(const FidlPerfmonConfig* fidl_config) 
         }
         break;
       default:
-        zxlogf(ERROR, "%s: Invalid event [%u] (bad group)", __func__, ii);
+        zxlogf(ERROR, "%s: Invalid event [%zu] (bad group)", __func__, ii);
         return ZX_ERR_INVALID_ARGS;
     }
   }
@@ -506,7 +501,7 @@ void PerfmonDevice::PmuStop() {
 void PerfmonDevice::GetProperties(GetPropertiesCompleter::Sync& completer) {
   FidlPerfmonProperties props{};
   PmuGetProperties(&props);
-  completer.Reply(std::move(props));
+  completer.Reply(props);
 }
 
 void PerfmonDevice::Initialize(InitializeRequestView request,

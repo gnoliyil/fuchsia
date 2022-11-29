@@ -9,17 +9,16 @@
 
 #include "src/performance/lib/perfmon/config_impl.h"
 #include "src/performance/lib/perfmon/device_reader.h"
-#include "src/performance/lib/perfmon/properties_impl.h"
 
 namespace perfmon {
 namespace internal {
 
 ControllerImpl::ControllerImpl(ControllerSyncPtr controller_ptr, uint32_t num_traces,
-                               uint32_t buffer_size_in_pages, Config config)
+                               uint32_t buffer_size_in_pages, const Config& config)
     : controller_ptr_(std::move(controller_ptr)),
       num_traces_(num_traces),
       buffer_size_in_pages_(buffer_size_in_pages),
-      config_(std::move(config)),
+      config_(config),
       weak_ptr_factory_(this) {}
 
 ControllerImpl::~ControllerImpl() { Reset(); }

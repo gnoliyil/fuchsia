@@ -18,7 +18,7 @@ using ::fuchsia::perfmon::cpu::ControllerSyncPtr;
 class ControllerImpl final : public Controller {
  public:
   ControllerImpl(ControllerSyncPtr controller_ptr, uint32_t num_traces,
-                 uint32_t buffer_size_in_pages, Config config);
+                 uint32_t buffer_size_in_pages, const Config& config);
   ~ControllerImpl() override;
 
   bool Start() override;
