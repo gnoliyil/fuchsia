@@ -4,7 +4,7 @@
 # license that can be found in the LICENSE file or at
 # https://opensource.org/licenses/MIT
 
-import("//build/testing/zbi_test.gni")
+import("//build/testing/boot_test.gni")
 import("//zircon/kernel/phys/phys_executable.gni")
 
 # TODO(mcgrathr): declare_args() { qemu_boot_format = "multiboot"/"zeropage" }
@@ -84,23 +84,19 @@ foreach(qemu, qemu_boot_formats) {
   }
 }
 
-# Build a test that runs directly as a QEMU kernel.  This is wired up as a
-# zbi_test() for infrastructure purposes though there is nothing in the ZBI.
-# This produces a hidden phys_executable() target and a public zbi_test()
-# target for each entry in the $qemu_boot_formats list.  Each zbi_test() is
-# named "$target_name.$format" where $format is the $name field an entry from
-# the $qemu_boot_formats list.  The overall $target_name is a group of all
-# those tests.
+# Defines a boot test that runs a QEMU kernel directly, for each supported
+# QEMU boot format.  In particular, the expanded `boot_test()` instances are
+# named "$target_name.$format" for each $format in $qemu_boot_formats.  The
+# The overall $target_name is a group of all those tests.
 #
 # Parameters
 #
-#   * output_dir, output_extension
+#   * initrd
+#     - Optional: A ramdisk (e.g., ZBI) with which to boot.
+#     - Type: label
 #
-#   * tags
-#     - Optional: Propagated to zbi_test(), which see.
-#     - Type: list(string)
-#
-# Other parameters are propagated to phys_executable(), which see.
+# Apart from output_dir and output_extension, other parameters are propagated
+# to phys_executable(), which see.
 #
 template("qemu_kernel_test") {
   group_target = target_name
@@ -142,6 +138,7 @@ template("qemu_kernel_test") {
         forward_variables_from(invoker,
                                "*",
                                [
+                                 "initrd",
                                  "output_dir",
                                  "output_extension",
                                  "output_name",
@@ -154,29 +151,14 @@ template("qemu_kernel_test") {
         deps += qemu.deps + [ "//zircon/kernel/phys/test:qemu-test-main" ]
       }
 
-      zbi_test(test_target) {
+      boot_test(test_target) {
         visibility = public_visibility
-
-        # The ZBI is empty other than the boilerplate cmdline, and does not
-        # contain a ZBI-bootable kernel.
-        args = []
-        cpu = ""
-        deps = []
-        tags = [ "incomplete" ]
-        if (defined(invoker.tags)) {
-          tags += invoker.tags
-        }
 
         # The special kernel is all that really matters for this test.
         device_types = [ "QEMU" ]
         qemu_kernel = ":$executable_target"
-
-        # Set a short timeout since the tests don't necessarily shut down QEMU
-        # after printing the success string.
-        if (defined(invoker.timeout)) {
-          forward_variables_from(invoker, [ "timeout" ])
-        } else {
-          forward_variables_from(qemu, [ "timeout" ])
+        if (defined(invoker.initrd)) {
+          zbi = invoker.initrd
         }
       }
     } else {

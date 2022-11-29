@@ -64,8 +64,14 @@ func TestQEMUCommandBuilder(t *testing.T) {
 	b.SetKernel("./data/qemu-kernel")
 	cmd, err = b.Build()
 	check(t, expected{
-		cmd: []string{},
-		err: errors.New("QEMU initrd path must be set."),
+		cmd: []string{
+			"./bin/qemu",
+			"-kernel",
+			"./data/qemu-kernel",
+			"-net",
+			"none",
+		},
+		err: nil,
 	}, cmd, err)
 
 	// Invalid HCI

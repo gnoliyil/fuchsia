@@ -294,9 +294,6 @@ func (q *QEMUCommandBuilder) validate() error {
 	if q.kernel == "" {
 		return fmt.Errorf("QEMU kernel path must be set.")
 	}
-	if q.initrd == "" {
-		return fmt.Errorf("QEMU initrd path must be set.")
-	}
 	return nil
 }
 
@@ -331,10 +328,11 @@ func (q *QEMUCommandBuilder) BuildConfig() (Config, error) {
 	config.Envs = make(map[string]string)
 	config.Features = []string{}
 	config.KernelArgs = q.kernelArgs
-	config.Args = append([]string{
-		"-kernel", q.kernel,
-		"-initrd", q.initrd,
-	}, q.args...)
+	config.Args = []string{"-kernel", q.kernel}
+	if q.initrd != "" {
+		config.Args = append(config.Args, "-initrd", q.initrd)
+	}
+	config.Args = append(config.Args, q.args...)
 	config.Options = []string{}
 
 	// Treat the absence of specified networks as a directive to disable networking entirely.

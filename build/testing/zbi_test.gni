@@ -36,6 +36,9 @@ import("//build/zbi/zbi_input.gni")
 #     [label_with_toolchain] Label corresponding to the qemu-kernel image
 #     in images.json that should be used with the zbi_image. This will appear
 #     as the qemu_kernel_label in a boot_tests.json entry.
+#     TODO(joshuaseaton|mcgrathr): Use a QEMU-specific boot test template for
+#     specifying QEMU kernel + ZBI initrd, rather than allowing QEMU kernel to
+#     be supplied here.
 #
 #   deps, data_deps, replace, complete, compress
 #     See //build/zbi/zbi.gni.

@@ -33,8 +33,26 @@ func TestAEMUCommandBuilder(t *testing.T) {
 	// No initrd set.
 	cmd, err = b.Build()
 	check(t, expected{
-		cmd: []string{},
-		err: fmt.Errorf("QEMU initrd path must be set."),
+		cmd: []string{
+			"./bin/emulator",
+			"-feature",
+			"GLDirectMem,HostComposition,VirtioInput,Vulkan",
+			"-gpu",
+			"swiftshader_indirect",
+			"-no-window",
+			"-fuchsia",
+			"-kernel",
+			"./data/qemu-kernel",
+			"-vga",
+			"none",
+			"-device",
+			"virtio-keyboard-pci",
+			"-device",
+			"virtio_input_multi_touch_pci_1",
+			"-net",
+			"none",
+		},
+		err: nil,
 	}, cmd, err)
 
 	b.SetInitrd("./data/zircon-a")

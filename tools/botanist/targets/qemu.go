@@ -257,9 +257,6 @@ func (t *QEMUTarget) Start(ctx context.Context, images []bootserver.Image, args 
 	} else {
 		zbi = getImageByLabel(images, t.imageOverrides.ZBI)
 	}
-	if zbi == nil {
-		return fmt.Errorf("could not find \"zbi_zircon-a\" or ZBI override")
-	}
 
 	// The QEMU command needs to be invoked within an empty directory, as QEMU
 	// will attempt to pick up files from its working directory, one notable
@@ -280,7 +277,7 @@ func (t *QEMUTarget) Start(ctx context.Context, images []bootserver.Image, args 
 		return err
 	}
 
-	if t.config.ZBITool != "" && t.SSHKey() != "" {
+	if zbi != nil && t.config.ZBITool != "" && t.SSHKey() != "" {
 		signers, err := parseOutSigners([]string{t.SSHKey()})
 		if err != nil {
 			return fmt.Errorf("could not parse out signers from private keys: %w", err)
@@ -308,7 +305,9 @@ func (t *QEMUTarget) Start(ctx context.Context, images []bootserver.Image, args 
 	// Now that the images hav successfully been copied to the working
 	// directory, Path points to their path on disk.
 	qemuCmd.SetKernel(qemuKernel.Path)
-	qemuCmd.SetInitrd(zbi.Path)
+	if zbi != nil {
+		qemuCmd.SetInitrd(zbi.Path)
+	}
 
 	if storageFull != nil {
 		if t.config.FVMTool != "" {
