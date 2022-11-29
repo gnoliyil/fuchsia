@@ -1176,8 +1176,8 @@ mod host_tests {
         let manifest_dir = temp_dir.join("manifest_dir");
         let manifest_path = manifest_dir.join("package_manifest.json");
 
-        std::fs::create_dir_all(&data_dir).unwrap();
-        std::fs::create_dir_all(&subpackage_dir).unwrap();
+        std::fs::create_dir_all(data_dir).unwrap();
+        std::fs::create_dir_all(subpackage_dir).unwrap();
         std::fs::create_dir_all(&manifest_dir).unwrap();
 
         let manifest = PackageManifest(VersionedPackageManifest::Version1(PackageManifestV1 {

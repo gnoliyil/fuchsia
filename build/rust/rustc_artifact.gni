@@ -79,6 +79,12 @@ import("//build/toolchain/rbe.gni")
 #   disable_clippy (optional)
 #     Don't run clippy on this target.
 #
+#   quiet_clippy (boolean, optional)
+#     Run clippy on this target, producing a JSON output but do not print the output or fail the
+#     target based on clippy's success. Intended for use when testing clippy itself, use in normal
+#     build targets will hide lint warnings from developers and tools while still paying the
+#     overhead of running clippy.
+#
 #   clippy_crate_type
 #     Usually GN handles this internally for rust targets, but we have to set it explicitly
 #     for targets that generate a corresponding clippy target so that clippy has access to it.
@@ -128,6 +134,7 @@ template("rustc_artifact") {
 
   _disable_clippy = defined(invoker.disable_clippy) && invoker.disable_clippy
   if (!_disable_clippy) {
+    _quiet_clippy = defined(invoker.quiet_clippy) && invoker.quiet_clippy
     clippy(_clippy_name) {
       forward_variables_from(invoker,
                              [
@@ -140,6 +147,7 @@ template("rustc_artifact") {
       deps = invoker.deps
       rustflags = _rustflags
       sources = invoker.sources
+      quiet = _quiet_clippy
     }
   } else {
     if (defined(invoker.clippy_crate_type)) {
@@ -147,6 +155,9 @@ template("rustc_artifact") {
     }
     if (defined(invoker.rustenv)) {
       not_needed(invoker, [ "rustenv" ])
+    }
+    if (defined(invoker.quiet_clippy)) {
+      not_needed(invoker, [ "quiet_clippy" ])
     }
     not_needed([ "_clippy_name" ])
   }

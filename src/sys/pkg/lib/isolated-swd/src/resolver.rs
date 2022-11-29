@@ -147,7 +147,7 @@ pub(crate) mod for_tests {
             blobfs: &BlobfsRamdisk,
         ) -> Result<ResolverRealm, Error> {
             let cache_ref =
-                CacheForTest::realm_setup(&realm_builder, &blobfs).await.expect("setting up cache");
+                CacheForTest::realm_setup(realm_builder, blobfs).await.expect("setting up cache");
 
             let repo_config =
                 RepositoryConfigs::Version1(vec![served_repo.make_repo_config(repo_url)]);
