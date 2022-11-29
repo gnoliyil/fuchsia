@@ -55,11 +55,17 @@ bool Controller::IsSupported() {
 }
 
 bool Controller::GetProperties(Properties* props) {
-  fuchsia::perfmon::cpu::ControllerSyncPtr controller_ptr;
+  fuchsia::perfmon::cpu::DeviceSyncPtr device_ptr;
   if (zx_status_t status =
-          fdio_service_connect(kPerfMonDev, controller_ptr.NewRequest().TakeChannel().release());
+          fdio_service_connect(kPerfMonDev, device_ptr.NewRequest().TakeChannel().release());
       status != ZX_OK) {
     FX_PLOGS(ERROR, status) << "Error connecting to " << kPerfMonDev;
+    return false;
+  }
+
+  fuchsia::perfmon::cpu::ControllerSyncPtr controller_ptr;
+  if (zx_status_t status = device_ptr->OpenSession(controller_ptr.NewRequest()); status != ZX_OK) {
+    FX_PLOGS(ERROR, status) << "Error opening session on " << kPerfMonDev;
     return false;
   }
 
@@ -130,11 +136,17 @@ bool Controller::Create(uint32_t buffer_size_in_pages, const Config& config,
     return false;
   }
 
-  fuchsia::perfmon::cpu::ControllerSyncPtr controller_ptr;
+  fuchsia::perfmon::cpu::DeviceSyncPtr device_ptr;
   if (zx_status_t status =
-          fdio_service_connect(kPerfMonDev, controller_ptr.NewRequest().TakeChannel().release());
+          fdio_service_connect(kPerfMonDev, device_ptr.NewRequest().TakeChannel().release());
       status != ZX_OK) {
     FX_PLOGS(ERROR, status) << "Error connecting to " << kPerfMonDev;
+    return false;
+  }
+
+  fuchsia::perfmon::cpu::ControllerSyncPtr controller_ptr;
+  if (zx_status_t status = device_ptr->OpenSession(controller_ptr.NewRequest()); status != ZX_OK) {
+    FX_PLOGS(ERROR, status) << "Error opening session on " << kPerfMonDev;
     return false;
   }
 

@@ -139,6 +139,26 @@ void PerfmonDevice::FreeBuffersForTrace(PmuPerTraceState* per_trace, uint32_t nu
   per_trace->buffers.reset();
 }
 
+void PerfmonDevice::OpenSession(OpenSessionRequestView request,
+                                OpenSessionCompleter::Sync& completer) {
+  if (binding_.has_value()) {
+    request->session.Close(ZX_ERR_ALREADY_BOUND);
+    return;
+  }
+  binding_ = Binding{
+      .binding = fidl::BindServer(
+          fdf::Dispatcher::GetCurrent()->async_dispatcher(), std::move(request->session), this,
+          [](PerfmonDevice* self, fidl::UnbindInfo, fidl::ServerEnd<fidl_perfmon::Controller>) {
+            std::optional opt = std::exchange(self->binding_, {});
+            ZX_ASSERT(opt.has_value());
+            Binding& binding = opt.value();
+            if (binding.unbind_txn.has_value()) {
+              binding.unbind_txn.value().Reply();
+            }
+          }),
+  };
+}
+
 void PerfmonDevice::PmuGetProperties(FidlPerfmonProperties* props) {
   zxlogf(DEBUG, "%s called", __func__);
 
@@ -566,18 +586,15 @@ void PerfmonDevice::Stop(StopCompleter::Sync& completer) {
 
 // Devhost interface.
 
-zx_status_t PerfmonDevice::DdkOpen(zx_device_t** dev_out, uint32_t flags) {
-  if (opened_) {
-    return ZX_ERR_ALREADY_BOUND;
+void PerfmonDevice::DdkUnbind(ddk::UnbindTxn txn) {
+  if (binding_.has_value()) {
+    Binding& binding = binding_.value();
+    ZX_ASSERT(!binding.unbind_txn.has_value());
+    binding.unbind_txn.emplace(std::move(txn));
+    binding.binding.Unbind();
+  } else {
+    txn.Reply();
   }
-
-  opened_ = true;
-  return ZX_OK;
-}
-
-zx_status_t PerfmonDevice::DdkClose(uint32_t flags) {
-  opened_ = false;
-  return ZX_OK;
 }
 
 void PerfmonDevice::DdkRelease() {

@@ -112,12 +112,11 @@ struct PmuPerTraceState {
 
 // Devhost interface.
 
-// TODO(dje): add unbindable?
 class PerfmonDevice;
-using DeviceType = ddk::Device<PerfmonDevice, ddk::Openable, ddk::Closable,
-                               ddk::Messageable<fidl_perfmon::Controller>::Mixin>;
+using DeviceType =
+    ddk::Device<PerfmonDevice, ddk::Messageable<fidl_perfmon::Device>::Mixin, ddk::Unbindable>;
 
-class PerfmonDevice : public DeviceType {
+class PerfmonDevice : public DeviceType, public fidl::WireServer<fidl_perfmon::Controller> {
  public:
   // The page size we use.
   static constexpr uint32_t kLog2PageSize = 12;
@@ -139,6 +138,7 @@ class PerfmonDevice : public DeviceType {
 
   const PmuHwProperties& pmu_hw_properties() const { return pmu_hw_properties_; }
 
+  void DdkUnbind(ddk::UnbindTxn txn);
   void DdkRelease();
 
   // Handlers for each of the operations.
@@ -153,6 +153,9 @@ class PerfmonDevice : public DeviceType {
   void PmuStop();
 
   // FIDL server methods
+
+  void OpenSession(OpenSessionRequestView request, OpenSessionCompleter::Sync& completer) override;
+
   void GetProperties(GetPropertiesCompleter::Sync& completer) override;
   void Initialize(InitializeRequestView request, InitializeCompleter::Sync& completer) override;
   void Terminate(TerminateCompleter::Sync& completer) override;
@@ -163,10 +166,6 @@ class PerfmonDevice : public DeviceType {
                        GetBufferHandleCompleter::Sync& completer) override;
   void Start(StartCompleter::Sync& completer) override;
   void Stop(StopCompleter::Sync& completer) override;
-
-  // Device protocol implementation
-  zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags);
-  zx_status_t DdkClose(uint32_t flags);
 
  private:
   static void FreeBuffersForTrace(PmuPerTraceState* per_trace, uint32_t num_allocated);
@@ -198,7 +197,11 @@ class PerfmonDevice : public DeviceType {
   mtrace_control_func_t* const mtrace_control_;
 
   // Only one open of this device is supported at a time. KISS for now.
-  bool opened_ = false;
+  using Binding = struct {
+    fidl::ServerBindingRef<fuchsia_perfmon_cpu::Controller> binding;
+    std::optional<ddk::UnbindTxn> unbind_txn;
+  };
+  std::optional<Binding> binding_;
 
   // Once tracing has started various things are not allowed until it stops.
   bool active_ = false;
