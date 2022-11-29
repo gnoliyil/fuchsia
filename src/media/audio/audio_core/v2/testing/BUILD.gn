@@ -8,6 +8,7 @@ source_set("testing") {
   testonly = true
 
   sources = [
+    "fake_gain_control_server.h",
     "fake_graph_server.h",
     "matchers.h",
   ]
