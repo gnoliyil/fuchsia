@@ -385,14 +385,6 @@ class Vnode : public VnodeRefCounted<Vnode>, public fbl::Recyclable<Vnode> {
       __TA_EXCLUDES(gInotifyLock);
 #endif  // __Fuchsia__
 
-  // Invoked by internal Connections to account transactions
-  void RegisterInflightTransaction() __TA_EXCLUDES(mutex_);
-  void UnregisterInflightTransaction() __TA_EXCLUDES(mutex_);
-
-  // Number of FIDL messages issued on this vnode that have been dispatched, but for which a reply
-  // has not been made.
-  size_t GetInflightTransactions() const __TA_EXCLUDES(mutex_);
-
  protected:
   DISALLOW_COPY_ASSIGN_AND_MOVE(Vnode);
 
@@ -444,7 +436,6 @@ class Vnode : public VnodeRefCounted<Vnode>, public fbl::Recyclable<Vnode> {
 #endif
 
  private:
-  size_t inflight_transactions_ __TA_GUARDED(mutex_) = 0;
   size_t open_count_ __TA_GUARDED(mutex_) = 0;
 #ifdef __Fuchsia__
   static std::mutex gLockAccess;

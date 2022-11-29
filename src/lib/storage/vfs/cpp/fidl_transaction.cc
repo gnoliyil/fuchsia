@@ -41,7 +41,6 @@ void FidlTransaction::Close(zx_status_t epitaph) {
 
 FidlTransaction::~FidlTransaction() {
   if (auto binding = binding_.lock()) {
-    binding->UnregisterInflightTransaction();
     zx_status_t status = binding->StartDispatching();
     ZX_ASSERT_MSG(status == ZX_OK, "Dispatch loop unexpectedly ended");
   }
@@ -53,17 +52,11 @@ std::unique_ptr<::fidl::Transaction> FidlTransaction::TakeOwnership() {
 
 FidlTransaction::Result FidlTransaction::ToResult() {
   if (status_ != ZX_OK) {
-    if (auto binding = binding_.lock()) {
-      binding->UnregisterInflightTransaction();
-    }
     binding_.reset();
     return Result::kClosed;
   }
   if (binding_.expired()) {
     return Result::kPendingAsyncReply;
-  }
-  if (auto binding = binding_.lock()) {
-    binding->UnregisterInflightTransaction();
   }
   binding_.reset();
   return Result::kRepliedSynchronously;

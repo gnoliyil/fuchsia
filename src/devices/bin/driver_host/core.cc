@@ -555,11 +555,6 @@ void DriverHostContext::DeviceUnbindReply(const fbl::RefPtr<zx_device_t>& dev) {
     LOGD(FATAL, *dev, "Device %p cannot reply to unbind, not in unbinding state (flags %#x)",
          dev.get(), dev->flags());
   }
-  if (dev->vnode->GetInflightTransactions() > 0) {
-    LOGD(FATAL, *dev, "Device %p cannot reply to unbind, has %zu outstanding transactions",
-         dev.get(), dev->vnode->GetInflightTransactions());
-  }
-
   VLOGD(1, *dev, "Device %p unbind completed", dev.get());
   if (dev->unbind_cb) {
     dev->CloseAllConnections();
@@ -572,15 +567,6 @@ void DriverHostContext::DeviceUnbindReply(const fbl::RefPtr<zx_device_t>& dev) {
 
 void DriverHostContext::DeviceSuspendReply(const fbl::RefPtr<zx_device_t>& dev, zx_status_t status,
                                            uint8_t out_state) {
-  // There are 3 references when this function gets called in response to
-  // selective suspend on a device. 1. When we create a connection in ReadMessage
-  // 2. When we wrap the txn in Transaction.
-  // 3. When we make the suspend txn asynchronous using ToAsync()
-  if (dev->vnode->GetInflightTransactions() > 3) {
-    LOGD(FATAL, *dev, "Device %p cannot reply to suspend, has %zu outstanding transactions",
-         dev.get(), dev->vnode->GetInflightTransactions());
-  }
-
   if (dev->suspend_cb) {
     dev->suspend_cb(status, out_state);
   } else {

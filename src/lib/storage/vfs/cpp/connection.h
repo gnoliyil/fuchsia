@@ -92,9 +92,6 @@ class Connection : public fbl::DoublyLinkedListable<std::unique_ptr<Connection>>
   // teardown the connection.
   bool OnMessage();
 
-  void RegisterInflightTransaction() { vnode_->RegisterInflightTransaction(); }
-  void UnregisterInflightTransaction() { vnode_->UnregisterInflightTransaction(); }
-
   // For AdvisoryLocking - the KOID of the incoming FIDL channel acts as the identifier
   // (or owner) for the remote file or directory.
   zx_koid_t GetChannelOwnerKoid();
@@ -272,9 +269,6 @@ class Binding final {
   void AsyncTeardown();
 
   zx::channel& channel() { return channel_; }
-
-  void RegisterInflightTransaction() { connection_.RegisterInflightTransaction(); }
-  void UnregisterInflightTransaction() { connection_.UnregisterInflightTransaction(); }
 
  private:
   // Callback for when new signals arrive on the channel, which could be: readable, peer closed,

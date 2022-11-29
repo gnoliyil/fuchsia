@@ -32,17 +32,14 @@ std::mutex Vnode::gLockAccess;
 std::map<const Vnode*, std::shared_ptr<file_lock::FileLock>> Vnode::gLockMap;
 #endif
 
-Vnode::~Vnode() {
-  std::lock_guard lock(mutex_);
-
-  ZX_DEBUG_ASSERT_MSG(inflight_transactions_ == 0, "Inflight transactions in dtor %zu\n",
-                      inflight_transactions_);
-
 #ifdef __Fuchsia__
+Vnode::~Vnode() {
   ZX_DEBUG_ASSERT_MSG(gLockMap.find(this) == gLockMap.end(),
                       "lock entry in gLockMap not cleaned up for Vnode");
-#endif
 }
+#else
+Vnode::~Vnode() = default;
+#endif
 
 #ifdef __Fuchsia__
 
@@ -303,21 +300,6 @@ bool Vnode::DeleteFileLockInTeardown(zx_koid_t owner) {
 }
 
 #endif  // __Fuchsia__
-
-void Vnode::RegisterInflightTransaction() {
-  std::lock_guard lock(mutex_);
-  inflight_transactions_++;
-}
-
-void Vnode::UnregisterInflightTransaction() {
-  std::lock_guard lock(mutex_);
-  inflight_transactions_--;
-}
-
-size_t Vnode::GetInflightTransactions() const {
-  SharedLock lock(mutex_);
-  return inflight_transactions_;
-}
 
 DirentFiller::DirentFiller(void* ptr, size_t len)
     : ptr_(static_cast<char*>(ptr)), pos_(0), len_(len) {}

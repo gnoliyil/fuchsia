@@ -24,11 +24,7 @@ namespace internal {
 class FidlTransaction final : public ::fidl::Transaction {
  public:
   FidlTransaction(zx_txid_t transaction_id, std::weak_ptr<internal::Binding> binding)
-      : transaction_id_(transaction_id), binding_(std::move(binding)) {
-    if (auto binding = binding_.lock()) {
-      binding->RegisterInflightTransaction();
-    }
-  }
+      : transaction_id_(transaction_id), binding_(std::move(binding)) {}
 
   ~FidlTransaction() final;
 
