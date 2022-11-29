@@ -1028,7 +1028,7 @@ zx_status_t handle_pause(const ExitInfo& exit_info, AutoVmcs& vmcs) {
   return ZX_OK;
 }
 
-bool is_cpl0(AutoVmcs& vmcs, GuestState& guest_state) {
+bool is_cpl0(AutoVmcs& vmcs) {
   const uint32_t access_rights = vmcs.Read(VmcsField32::GUEST_SS_ACCESS_RIGHTS);
   // We only accept a VMCALL if CPL is 0.
   return (access_rights & kGuestXxAccessRightsDplUser) == 0;
@@ -1037,7 +1037,7 @@ bool is_cpl0(AutoVmcs& vmcs, GuestState& guest_state) {
 zx_status_t handle_vmcall_regular(const ExitInfo& exit_info, AutoVmcs& vmcs,
                                   GuestState& guest_state, hypervisor::GuestPhysicalAspace& gpa) {
   next_rip(exit_info, vmcs);
-  if (!is_cpl0(vmcs, guest_state)) {
+  if (!is_cpl0(vmcs)) {
     guest_state.rax = VmCallStatus::NOT_PERMITTED;
     return ZX_OK;
   }
@@ -1074,7 +1074,7 @@ zx_status_t handle_vmcall_regular(const ExitInfo& exit_info, AutoVmcs& vmcs,
 zx_status_t handle_vmcall_direct(const ExitInfo& exit_info, AutoVmcs& vmcs, GuestState& guest_state,
                                  uintptr_t& fs_base, zx_port_packet_t& packet) {
   next_rip(exit_info, vmcs);
-  if (!is_cpl0(vmcs, guest_state)) {
+  if (!is_cpl0(vmcs)) {
     guest_state.rax = ZX_ERR_ACCESS_DENIED;
     return ZX_OK;
   }
