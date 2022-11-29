@@ -7,6 +7,7 @@ pub mod button;
 pub mod console;
 mod constants;
 pub mod font;
+pub mod generic_view;
 pub mod keyboard;
 pub mod keys;
 pub mod progress_bar;

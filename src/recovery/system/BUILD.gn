@@ -101,9 +101,19 @@ resource("recovery_logo") {
   outputs = [ "data/logo.riv" ]
 }
 
+resource("icons") {
+  sources = [ icons_path ]
+  outputs = [ "data/ota_icons.riv" ]
+}
+
 resource("instructions") {
   sources = [ instructions_path ]
   outputs = [ "data/instructions.txt" ]
+}
+
+resource("qr_codes") {
+  sources = [ qr_codes_path ]
+  outputs = [ "data/qr_codes.riv" ]
 }
 
 resource("roboto_regular") {
@@ -227,6 +237,10 @@ rustc_binary("bin") {
     "src/main.rs",
   ]
   if (enable_recovery_ui_v2) {
+    deps += [
+      ":icons",
+      ":qr_codes",
+    ]
     features += [ "ota_ui" ]
     sources += [ "src/ui_v2.rs" ]
   }

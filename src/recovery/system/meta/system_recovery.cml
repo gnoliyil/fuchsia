@@ -18,7 +18,11 @@
         {
             protocol: [
                 "fuchsia.buildinfo.Provider",
+                "fuchsia.hwinfo.Board",
+                "fuchsia.hwinfo.Device",
+                "fuchsia.hwinfo.Product",
                 "fuchsia.paver.Paver",
+                "fuchsia.settings.Privacy",
             ],
         },
     ],

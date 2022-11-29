@@ -54,8 +54,7 @@ impl AppAssistant for RecoveryAppAssistant {
     // Create the State Machine
     fn create_view_assistant(&mut self, view_key: ViewKey) -> Result<ViewAssistantPtr, Error> {
         // TODO(b/244744635) Add a structured initialization flow for the recovery component
-        // This initial state will change back to State::Home when the generic view is added
-        let state_machine = Box::new(StateMachine::new(State::EnterWiFi));
+        let state_machine = Box::new(StateMachine::new(State::Home));
         let mut controller = Controller::new();
         let event_sender = controller.get_event_sender();
 
