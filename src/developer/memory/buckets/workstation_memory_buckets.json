@@ -62,7 +62,7 @@
     {
         "event_code": 9,
         "name": "Scenic",
-        "process": "scenic\\.cm",
+        "process": "(scenic|scene_manager)\\.cm",
         "vmo": ""
     },
     {
