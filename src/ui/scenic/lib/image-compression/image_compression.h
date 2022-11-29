@@ -24,10 +24,14 @@ class App {
 // This class implements the ImageCompressor protocol. It is stateless.
 class ImageCompression : public fidl::Server<fuchsia_ui_compression_internal::ImageCompressor> {
  public:
-  ImageCompression() = default;
+  ImageCompression(
+      fidl::ServerEnd<fuchsia_ui_compression_internal::ImageCompressor> image_compressor);
 
   // |fidl::Server<fuchsia_ui_compression_internal::ImageCompressor>|
   void EncodePng(EncodePngRequest& request, EncodePngCompleter::Sync& completer) override;
+
+ private:
+  fidl::ServerBinding<fuchsia_ui_compression_internal::ImageCompressor> binding_;
 };
 
 }  // namespace image_compression

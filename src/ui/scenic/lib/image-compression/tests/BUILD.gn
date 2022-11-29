@@ -17,8 +17,10 @@ executable("unittests") {
 
   deps = [
     "//src/lib/fxl/test:gtest_main",
+    "//src/lib/testing/loop_fixture",
     "//src/ui/scenic/lib/image-compression:lib",
     "//third_party/googletest:gtest",
+    "//third_party/libpng",
     "//zircon/system/ulib/async-default",
     "//zircon/system/ulib/async-loop:async-loop-cpp",
     "//zircon/system/ulib/async-loop:async-loop-default",
