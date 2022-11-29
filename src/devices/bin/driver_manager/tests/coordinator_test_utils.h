@@ -27,7 +27,7 @@
 #include <mock-boot-arguments/server.h>
 
 #include "src/devices/bin/driver_manager/coordinator.h"
-#include "src/devices/bin/driver_manager/devfs.h"
+#include "src/devices/bin/driver_manager/devfs/devfs.h"
 #include "src/devices/bin/driver_manager/driver_host.h"
 #include "src/devices/bin/driver_manager/fdio.h"
 

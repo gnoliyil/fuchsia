@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "src/devices/bin/driver_manager/builtin_devices.h"
+#include "src/devices/bin/driver_manager/devfs/builtin_devices.h"
 
 #include "src/lib/storage/vfs/cpp/vfs_types.h"
 

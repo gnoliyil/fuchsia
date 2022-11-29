@@ -21,7 +21,7 @@
 #include <fbl/vector.h>
 #include <zxtest/zxtest.h>
 
-#include "src/devices/bin/driver_manager/devfs.h"
+#include "src/devices/bin/driver_manager/devfs/devfs.h"
 #include "src/devices/bin/driver_manager/driver_host.h"
 #include "src/devices/bin/driver_manager/fdio.h"
 #include "src/devices/bin/driver_manager/tests/coordinator_test_utils.h"

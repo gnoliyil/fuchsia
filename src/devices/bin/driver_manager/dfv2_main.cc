@@ -35,12 +35,12 @@
 
 #include <fbl/string_printf.h>
 
-#include "devfs.h"
 #include "driver_host_loader_service.h"
 #include "fdio.h"
 #include "lib/async/cpp/task.h"
 #include "main.h"
-#include "src/devices/bin/driver_manager/devfs_exporter.h"
+#include "src/devices/bin/driver_manager/devfs/devfs.h"
+#include "src/devices/bin/driver_manager/devfs/devfs_exporter.h"
 #include "src/devices/bin/driver_manager/device_watcher.h"
 #include "src/devices/bin/driver_manager/v2/driver_development_service.h"
 #include "src/devices/bin/driver_manager/v2/shutdown_manager.h"

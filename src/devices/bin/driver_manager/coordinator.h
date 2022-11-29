@@ -39,7 +39,7 @@
 
 #include "lib/async/dispatcher.h"
 #include "src/devices/bin/driver_manager/bind_driver_manager.h"
-#include "src/devices/bin/driver_manager/devfs.h"
+#include "src/devices/bin/driver_manager/devfs/devfs.h"
 #include "src/devices/bin/driver_manager/device.h"
 #include "src/devices/bin/driver_manager/driver.h"
 #include "src/devices/bin/driver_manager/driver_host.h"

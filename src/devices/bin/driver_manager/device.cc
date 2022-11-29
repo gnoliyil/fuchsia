@@ -18,7 +18,7 @@
 #include <string_view>
 
 #include "src/devices/bin/driver_manager/coordinator.h"
-#include "src/devices/bin/driver_manager/devfs.h"
+#include "src/devices/bin/driver_manager/devfs/devfs.h"
 #include "src/devices/lib/log/log.h"
 #include "src/lib/fxl/strings/utf_codecs.h"
 

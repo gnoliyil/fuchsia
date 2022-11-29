@@ -26,7 +26,7 @@
 
 #include <fbl/ref_ptr.h>
 
-#include "src/devices/bin/driver_manager/builtin_devices.h"
+#include "src/devices/bin/driver_manager/devfs/builtin_devices.h"
 #include "src/devices/lib/log/log.h"
 #include "src/lib/fxl/strings/split_string.h"
 #include "src/lib/fxl/strings/string_printf.h"

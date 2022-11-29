@@ -27,7 +27,7 @@
 #include <fbl/vector.h>
 
 #include "src/devices/bin/driver_manager/composite_device.h"
-#include "src/devices/bin/driver_manager/devfs.h"
+#include "src/devices/bin/driver_manager/devfs/devfs.h"
 #include "src/devices/bin/driver_manager/device_v2.h"
 #include "src/devices/bin/driver_manager/inspect.h"
 #include "src/devices/bin/driver_manager/metadata.h"

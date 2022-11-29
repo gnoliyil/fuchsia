@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#ifndef SRC_DEVICES_BIN_DRIVER_MANAGER_BUILTIN_DEVICES_H_
-#define SRC_DEVICES_BIN_DRIVER_MANAGER_BUILTIN_DEVICES_H_
+#ifndef SRC_DEVICES_BIN_DRIVER_MANAGER_DEVFS_BUILTIN_DEVICES_H_
+#define SRC_DEVICES_BIN_DRIVER_MANAGER_DEVFS_BUILTIN_DEVICES_H_
 
 #include <lib/async/dispatcher.h>
 
@@ -35,4 +35,4 @@ class BuiltinDevVnode : public fs::Vnode {
   const bool null_;
 };
 
-#endif  // SRC_DEVICES_BIN_DRIVER_MANAGER_BUILTIN_DEVICES_H_
+#endif  // SRC_DEVICES_BIN_DRIVER_MANAGER_DEVFS_BUILTIN_DEVICES_H_

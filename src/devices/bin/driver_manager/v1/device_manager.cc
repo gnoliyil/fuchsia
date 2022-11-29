@@ -7,7 +7,7 @@
 #include <lib/ddk/driver.h>
 
 #include "src/devices/bin/driver_manager/coordinator.h"
-#include "src/devices/bin/driver_manager/devfs.h"
+#include "src/devices/bin/driver_manager/devfs/devfs.h"
 #include "src/devices/lib/log/log.h"
 
 namespace fdm = fuchsia_device_manager;

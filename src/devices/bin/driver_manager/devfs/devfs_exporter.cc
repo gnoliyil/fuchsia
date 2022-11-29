@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "src/devices/bin/driver_manager/devfs_exporter.h"
+#include "src/devices/bin/driver_manager/devfs/devfs_exporter.h"
 
 #include "src/devices/lib/log/log.h"
 

@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#ifndef SRC_DEVICES_BIN_DRIVER_MANAGER_DEVFS_H_
-#define SRC_DEVICES_BIN_DRIVER_MANAGER_DEVFS_H_
+#ifndef SRC_DEVICES_BIN_DRIVER_MANAGER_DEVFS_DEVFS_H_
+#define SRC_DEVICES_BIN_DRIVER_MANAGER_DEVFS_DEVFS_H_
 
 #include <fidl/fuchsia.device.fs/cpp/wire.h>
 #include <fidl/fuchsia.device.manager/cpp/wire.h>
@@ -248,4 +248,4 @@ class Devfs {
   std::unordered_map<uint32_t, ProtoNode> proto_info_nodes;
 };
 
-#endif  // SRC_DEVICES_BIN_DRIVER_MANAGER_DEVFS_H_
+#endif  // SRC_DEVICES_BIN_DRIVER_MANAGER_DEVFS_DEVFS_H_

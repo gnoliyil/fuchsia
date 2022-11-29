@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "src/devices/bin/driver_manager/devfs.h"
+#include "src/devices/bin/driver_manager/devfs/devfs.h"
 
 #include <lib/async-loop/cpp/loop.h>
 #include <lib/async-loop/default.h>
@@ -13,7 +13,7 @@
 
 #include <zxtest/zxtest.h>
 
-#include "src/devices/bin/driver_manager/devfs_exporter.h"
+#include "src/devices/bin/driver_manager/devfs/devfs_exporter.h"
 
 namespace fio = fuchsia_io;
 

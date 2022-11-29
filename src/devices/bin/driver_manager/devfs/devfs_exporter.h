@@ -2,13 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#ifndef SRC_DEVICES_BIN_DRIVER_MANAGER_DEVFS_EXPORTER_H_
-#define SRC_DEVICES_BIN_DRIVER_MANAGER_DEVFS_EXPORTER_H_
+#ifndef SRC_DEVICES_BIN_DRIVER_MANAGER_DEVFS_DEVFS_EXPORTER_H_
+#define SRC_DEVICES_BIN_DRIVER_MANAGER_DEVFS_DEVFS_EXPORTER_H_
 
 #include <fidl/fuchsia.device.fs/cpp/wire.h>
 #include <lib/sys/component/cpp/outgoing_directory.h>
 
-#include "src/devices/bin/driver_manager/devfs.h"
+#include "src/devices/bin/driver_manager/devfs/devfs.h"
 
 namespace driver_manager {
 
@@ -73,4 +73,4 @@ class DevfsExporter : public fidl::WireServer<fuchsia_device_fs::Exporter> {
 
 }  // namespace driver_manager
 
-#endif  // SRC_DEVICES_BIN_DRIVER_MANAGER_DEVFS_EXPORTER_H_
+#endif  // SRC_DEVICES_BIN_DRIVER_MANAGER_DEVFS_DEVFS_EXPORTER_H_
