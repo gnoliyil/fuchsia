@@ -41,13 +41,6 @@ fuchsia_component("test-ui-stack-component") {
   deps = [ ":bin" ]
 }
 
-fuchsia_component("test-ui-stack-realm") {
-  testonly = true
-  component_name = "test-ui-stack-realm"
-  manifest = "meta/test-ui-stack-realm.cml"
-  deps = [ ":test-ui-stack-component" ]
-}
-
 # Required for structured config.
 fuchsia_component_manifest("test_ui_stack_manifest") {
   testonly = true
