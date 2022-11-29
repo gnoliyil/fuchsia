@@ -155,17 +155,21 @@ then
 
   status="$?"
 
-  # On success, check the outputs.
+  # On success, check the output files' contents.
   test "$status" != 0 || {
     for f in "${outputs[@]}"
     do
-      if grep -qwF "\<$build_subdir\>" "$f"
+      # skip directory outputs
+      if test -f "$f"
       then
-        err=1
-        error_msg "Output file $f contains '$build_subdir'." \
-          "If this cannot be fixed in the tool, mark this action in GN with 'no_output_dir_leaks = false'."
+        if grep -qwF "\<$build_subdir\>" "$f"
+        then
+          err=1
+          error_msg "Output file $f contains '$build_subdir'." \
+            "If this cannot be fixed in the tool, mark this action in GN with 'no_output_dir_leaks = false'."
+        fi
+        # TODO(http://fxbug.dev/92670) check for known remote paths, like "/b/f/w"
       fi
-      # TODO(http://fxbug.dev/92670) check for known remote paths, like "/b/f/w"
     done
   }
 else
