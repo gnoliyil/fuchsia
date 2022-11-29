@@ -9,7 +9,7 @@
 
 use {
     fidl::endpoints::ServerEnd,
-    fidl_fuchsia_io as fio,
+    fidl_fuchsia_io as fio, fidl_fuchsia_pkg as fpkg,
     fuchsia_hash::{Hash, ParseHashError},
     fuchsia_zircon::{self as zx, AsHandleRef as _, Status},
     futures::{stream, StreamExt as _},
@@ -207,8 +207,9 @@ impl Client {
     pub async fn open_blob_for_write(
         &self,
         blob: &Hash,
+        blob_type: fpkg::BlobType,
     ) -> Result<blob::Blob<blob::NeedsTruncate>, blob::CreateError> {
-        blob::create(&self.proxy, blob).await
+        blob::create(&self.proxy, blob, blob_type).await
     }
 
     /// Returns whether blobfs has a blob with the given hash.
@@ -488,7 +489,7 @@ mod tests {
 
     async fn open_blob_only(client: &Client, blob: &[u8; 1024]) -> TestBlob<blob::NeedsTruncate> {
         let hash = MerkleTree::from_reader(&blob[..]).unwrap().root();
-        let blob = client.open_blob_for_write(&hash).await.unwrap();
+        let blob = client.open_blob_for_write(&hash, fpkg::BlobType::Uncompressed).await.unwrap();
         TestBlob { _blob: blob, hash }
     }
 
@@ -498,7 +499,7 @@ mod tests {
     ) -> TestBlob<blob::NeedsData> {
         let hash = MerkleTree::from_reader(&blob[..]).unwrap().root();
         let blob = client
-            .open_blob_for_write(&hash)
+            .open_blob_for_write(&hash, fpkg::BlobType::Uncompressed)
             .await
             .unwrap()
             .truncate(blob.len() as u64)
@@ -511,7 +512,7 @@ mod tests {
     async fn partially_write_blob(client: &Client, blob: &[u8; 1024]) -> TestBlob<blob::NeedsData> {
         let hash = MerkleTree::from_reader(&blob[..]).unwrap().root();
         let blob = client
-            .open_blob_for_write(&hash)
+            .open_blob_for_write(&hash, fpkg::BlobType::Uncompressed)
             .await
             .unwrap()
             .truncate(blob.len() as u64)
@@ -528,7 +529,7 @@ mod tests {
     async fn fully_write_blob(client: &Client, blob: &[u8; 1024]) -> TestBlob<blob::AtEof> {
         let hash = MerkleTree::from_reader(&blob[..]).unwrap().root();
         let blob = client
-            .open_blob_for_write(&hash)
+            .open_blob_for_write(&hash, fpkg::BlobType::Uncompressed)
             .await
             .unwrap()
             .truncate(blob.len() as u64)
@@ -765,7 +766,7 @@ mod tests {
         let (blobfs, _fake) = Client::new_temp_dir_fake();
 
         assert_matches!(
-            blobfs.open_blob_for_write(&Hash::from([0; 32])).await,
+            blobfs.open_blob_for_write(&Hash::from([0; 32]), fpkg::BlobType::Uncompressed).await,
             Err(blob::CreateError::AlreadyExists)
         );
     }

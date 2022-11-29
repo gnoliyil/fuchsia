@@ -4,23 +4,30 @@
 
 //! Typesafe wrappers around writing blobs to blobfs.
 
-use {fidl_fuchsia_io as fio, fuchsia_hash::Hash, fuchsia_zircon::Status, thiserror::Error};
+use {
+    fidl_fuchsia_io as fio, fidl_fuchsia_pkg as fpkg, fuchsia_hash::Hash, fuchsia_zircon::Status,
+    thiserror::Error,
+};
 
 pub(crate) async fn create(
     blobfs: &fio::DirectoryProxy,
     hash: &Hash,
+    blob_type: fpkg::BlobType,
 ) -> Result<Blob<NeedsTruncate>, CreateError> {
     let flags =
         fio::OpenFlags::CREATE | fio::OpenFlags::RIGHT_WRITABLE | fio::OpenFlags::RIGHT_READABLE;
 
+    let path = match blob_type {
+        fpkg::BlobType::Uncompressed => hash.to_string(),
+        // TODO(fxbug.dev/116103): write tests for writing delivery blobs.
+        fpkg::BlobType::Delivery => format!("v1-{hash}"),
+    };
     let proxy =
-        fuchsia_fs::directory::open_file(blobfs, &hash.to_string(), flags).await.map_err(|e| {
-            match e {
-                fuchsia_fs::node::OpenError::OpenError(Status::ACCESS_DENIED) => {
-                    CreateError::AlreadyExists
-                }
-                other => CreateError::Io(other),
+        fuchsia_fs::directory::open_file(blobfs, &path, flags).await.map_err(|e| match e {
+            fuchsia_fs::node::OpenError::OpenError(Status::ACCESS_DENIED) => {
+                CreateError::AlreadyExists
             }
+            other => CreateError::Io(other),
         })?;
 
     Ok(Blob { proxy, state: NeedsTruncate })
@@ -357,7 +364,7 @@ mod tests {
         let contents = [0_0; 0_0];
         let hash = MerkleTree::from_reader(&contents[..]).unwrap().root();
 
-        let blob = client.open_blob_for_write(&hash).await.unwrap();
+        let blob = client.open_blob_for_write(&hash, fpkg::BlobType::Uncompressed).await.unwrap();
         let blob = blob.truncate(0u64).await.unwrap().unwrap_done();
 
         // Verify that:
@@ -385,7 +392,7 @@ mod tests {
         // A 0 length blob with any other name (like all f's) is corrupt, but also empty.
         let hash = Hash::from([0xff; 32]);
 
-        let blob = client.open_blob_for_write(&hash).await.unwrap();
+        let blob = client.open_blob_for_write(&hash, fpkg::BlobType::Uncompressed).await.unwrap();
         assert_matches!(blob.truncate(0u64).await, Err(TruncateError::Corrupt));
 
         blobfs.stop().await.unwrap();
@@ -399,7 +406,7 @@ mod tests {
         // The merkle root of b"test" is not all f's, so this blob is corrupt.
         let hash = Hash::from([0xff; 32]);
 
-        let blob = client.open_blob_for_write(&hash).await.unwrap();
+        let blob = client.open_blob_for_write(&hash, fpkg::BlobType::Uncompressed).await.unwrap();
         let blob = blob.truncate(4u64).await.unwrap().unwrap_needs_data();
         assert_matches!(blob.write(&b"test"[..]).await, Err(WriteError::Corrupt));
 
@@ -412,7 +419,10 @@ mod tests {
         let client = Client::for_ramdisk(&blobfs);
 
         let hash = MerkleTree::from_reader(&b""[..]).unwrap().root();
-        assert_matches!(client.open_blob_for_write(&hash).await, Err(CreateError::AlreadyExists));
+        assert_matches!(
+            client.open_blob_for_write(&hash, fpkg::BlobType::Uncompressed).await,
+            Err(CreateError::AlreadyExists)
+        );
 
         blobfs.stop().await.unwrap();
     }
@@ -423,7 +433,10 @@ mod tests {
         let client = Client::for_ramdisk(&blobfs);
 
         let hash = MerkleTree::from_reader(&b"present"[..]).unwrap().root();
-        assert_matches!(client.open_blob_for_write(&hash).await, Err(CreateError::AlreadyExists));
+        assert_matches!(
+            client.open_blob_for_write(&hash, fpkg::BlobType::Uncompressed).await,
+            Err(CreateError::AlreadyExists)
+        );
 
         blobfs.stop().await.unwrap();
     }
@@ -436,7 +449,7 @@ mod tests {
         let contents = [3; 1024];
         let hash = MerkleTree::from_reader(&contents[..]).unwrap().root();
 
-        let blob = client.open_blob_for_write(&hash).await.unwrap();
+        let blob = client.open_blob_for_write(&hash, fpkg::BlobType::Uncompressed).await.unwrap();
         let blob = blob.truncate(1024u64).await.unwrap().unwrap_needs_data();
         let blob = blob.write(&contents[..]).await.unwrap().unwrap_done();
 
@@ -461,7 +474,7 @@ mod tests {
         let chunk = [4; 1];
         let hash = MerkleTree::from_reader(&contents[..]).unwrap().root();
 
-        let blob = client.open_blob_for_write(&hash).await.unwrap();
+        let blob = client.open_blob_for_write(&hash, fpkg::BlobType::Uncompressed).await.unwrap();
         let mut blob = blob.truncate(1024u64).await.unwrap().unwrap_needs_data();
         // verify Blob does correct accounting of written data and forwards small writes correctly
         // by issuing more than 1 write call instead of 1 big call.
@@ -486,7 +499,7 @@ mod tests {
         let contents = (0u8..=255u8).cycle().take(1_000_000).collect::<Vec<u8>>();
         let hash = MerkleTree::from_reader(&contents[..]).unwrap().root();
 
-        let blob = client.open_blob_for_write(&hash).await.unwrap();
+        let blob = client.open_blob_for_write(&hash, fpkg::BlobType::Uncompressed).await.unwrap();
         let blob = blob.truncate(contents.len() as u64).await.unwrap().unwrap_needs_data();
         let blob = blob.write(&contents[..]).await.unwrap().unwrap_done();
 
@@ -506,7 +519,7 @@ mod tests {
         let contents = [3; 1024];
         let hash = MerkleTree::from_reader(&contents[..]).unwrap().root();
 
-        let blob = client.open_blob_for_write(&hash).await.unwrap();
+        let blob = client.open_blob_for_write(&hash, fpkg::BlobType::Uncompressed).await.unwrap();
         // make a closer and then immediately close it, then use the now closed blob proxy to show
         // that it has been closed.
         blob.closer().close().await;
@@ -529,7 +542,7 @@ mod tests {
         let contents = [3; 1024];
         let hash = MerkleTree::from_reader(&contents[..]).unwrap().root();
 
-        let blob = client.open_blob_for_write(&hash).await.unwrap();
+        let blob = client.open_blob_for_write(&hash, fpkg::BlobType::Uncompressed).await.unwrap();
         // make and disarm a closer, then use the not-closed blob proxy to show it is still open.
         blob.closer().disarm();
         let blob = blob.truncate(1024u64).await.unwrap().unwrap_needs_data();
@@ -547,10 +560,13 @@ mod tests {
         let contents = [3; 1024];
         let hash = MerkleTree::from_reader(&contents[..]).unwrap().root();
 
-        let blob1 = client.open_blob_for_write(&hash).await.unwrap();
+        let blob1 = client.open_blob_for_write(&hash, fpkg::BlobType::Uncompressed).await.unwrap();
         let _blob1 = blob1.truncate(1024u64).await.unwrap().unwrap_needs_data();
 
-        assert_matches!(client.open_blob_for_write(&hash).await, Err(CreateError::AlreadyExists));
+        assert_matches!(
+            client.open_blob_for_write(&hash, fpkg::BlobType::Uncompressed).await,
+            Err(CreateError::AlreadyExists)
+        );
 
         blobfs.stop().await.unwrap();
     }
@@ -565,8 +581,8 @@ mod tests {
 
         // concurrent opens will succeed as long as no connections have called truncate() yet.
         // First truncate() wins.
-        let blob1 = client.open_blob_for_write(&hash).await.unwrap();
-        let blob2 = client.open_blob_for_write(&hash).await.unwrap();
+        let blob1 = client.open_blob_for_write(&hash, fpkg::BlobType::Uncompressed).await.unwrap();
+        let blob2 = client.open_blob_for_write(&hash, fpkg::BlobType::Uncompressed).await.unwrap();
         let _blob1 = blob1.truncate(1024u64).await.unwrap().unwrap_needs_data();
         assert_matches!(blob2.truncate(1024u64).await, Err(TruncateError::ConcurrentWrite));
 
@@ -588,7 +604,7 @@ mod tests {
         let hash = MerkleTree::from_reader(&contents[..]).unwrap().root();
 
         // Verify writing that blob fails with an out of space error.
-        let blob = client.open_blob_for_write(&hash).await.unwrap();
+        let blob = client.open_blob_for_write(&hash, fpkg::BlobType::Uncompressed).await.unwrap();
         let blob = blob.truncate(LARGE_BLOB_FILE_SIZE).await.unwrap().unwrap_needs_data();
         assert_matches!(blob.write(&contents[..]).await, Err(WriteError::NoSpace));
 

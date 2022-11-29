@@ -785,7 +785,7 @@ async fn open_write_blob(
     responder: impl OpenBlobResponder,
     blobfs: &blobfs::Client,
     blob_id: Hash,
-    _blob_type: fpkg::BlobType,
+    blob_type: fpkg::BlobType,
     kind: BlobKind,
     parent_trace_id: ftrace::Id,
 ) -> Result<(), OpenWriteBlobError> {
@@ -800,7 +800,7 @@ async fn open_write_blob(
         // relationship.
         "parent_trace_id" => u64::from(parent_trace_id)
     );
-    let create_res = blobfs.open_blob_for_write(&blob_id).await;
+    let create_res = blobfs.open_blob_for_write(&blob_id, blob_type).await;
     ftrace::async_instant!(trace_id, "app", "open_write_blob_opened");
 
     let is_readable = match &create_res {

@@ -210,7 +210,7 @@ async fn handles_partially_written_pkg() {
 
     // Write the meta far to blobfs.
     let _ = blobfs
-        .open_blob_for_write(&meta_far_hash)
+        .open_blob_for_write(&meta_far_hash, fpkg::BlobType::Uncompressed)
         .await
         .unwrap()
         .truncate(meta_far_data.len() as u64)
@@ -227,7 +227,7 @@ async fn handles_partially_written_pkg() {
         let data = &b"some contents"[..];
         let hash = MerkleTree::from_reader(data).unwrap().root();
         let _ = blobfs
-            .open_blob_for_write(&hash)
+            .open_blob_for_write(&hash, fpkg::BlobType::Uncompressed)
             .await
             .unwrap()
             .truncate(data.len() as u64)
