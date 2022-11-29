@@ -364,9 +364,9 @@ constexpr UndocumentedErrorDef<153, uint64_t> ErrInvalidVersion(
     "the special constant `HEAD`");
 constexpr UndocumentedErrorDef<154> ErrInvalidAvailabilityOrder(
     "invalid availability; must have added <= deprecated < removed");
-constexpr UndocumentedErrorDef<155, const flat::AttributeArg *, std::string_view,
-                               const flat::AttributeArg *, std::string_view, SourceSpan,
-                               std::string_view, std::string_view, std::string_view>
+constexpr ErrorDef<155, const flat::AttributeArg *, std::string_view, const flat::AttributeArg *,
+                   std::string_view, SourceSpan, std::string_view, std::string_view,
+                   std::string_view>
     ErrAvailabilityConflictsWithParent(
         "the argument {}={} conflicts with {}={} at {}; a child element "
         "cannot be {} {} its parent element is {}");

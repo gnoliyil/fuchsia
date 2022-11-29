@@ -1087,13 +1087,8 @@ type Foo = struct {};
 }
 
 TEST(VersioningTests, BadAddedBeforeParentAdded) {
-  TestLibrary library(R"FIDL(
-@available(added=2, deprecated=4, removed=6)
-library example;
-
-@available(added=1)
-type Foo = struct {};
-)FIDL");
+  TestLibrary library;
+  library.AddFile("bad/fi-0155-a.test.fidl");
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrAvailabilityConflictsWithParent);
   EXPECT_SUBSTR(library.errors()[0]->msg, "cannot be added before its parent element is added");
 }
@@ -1131,13 +1126,8 @@ type Foo = struct {};
 }
 
 TEST(VersioningTests, BadAddedWhenParentRemoved) {
-  TestLibrary library(R"FIDL(
-@available(added=2, deprecated=4, removed=6)
-library example;
-
-@available(added=6)
-type Foo = struct {};
-)FIDL");
+  TestLibrary library;
+  library.AddFile("bad/fi-0155-b.test.fidl");
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrAvailabilityConflictsWithParent);
   EXPECT_SUBSTR(library.errors()[0]->msg, "cannot be added after its parent element is removed");
 }
