@@ -1,0 +1,37 @@
+// Copyright 2022 The Fuchsia Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+{
+    include: [ "syslog/client.shard.cml" ],
+    program: {
+        runner: "elf",
+        binary: "bin/vmm_rs",
+    },
+    capabilities: [
+        {
+            protocol: [
+                "fuchsia.virtualization.Guest",
+                "fuchsia.virtualization.GuestLifecycle",
+            ],
+        },
+    ],
+    use: [
+        {
+            protocol: [
+                "fuchsia.kernel.HypervisorResource",
+                "fuchsia.kernel.VmexResource",
+                "fuchsia.sysinfo.SysInfo",
+                "fuchsia.tracing.provider.Registry",
+            ],
+        },
+    ],
+    expose: [
+        {
+            protocol: [
+                "fuchsia.virtualization.Guest",
+                "fuchsia.virtualization.GuestLifecycle",
+            ],
+            from: "self",
+        },
+    ],
+}
