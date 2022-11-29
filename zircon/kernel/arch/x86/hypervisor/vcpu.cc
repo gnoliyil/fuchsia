@@ -1206,14 +1206,6 @@ zx::result<ktl::unique_ptr<Vcpu>> DirectVcpu::Create(DirectGuest& guest, zx_vadd
 DirectVcpu::DirectVcpu(DirectGuest& guest, uint16_t vpid, Thread* thread)
     : Vcpu(guest, vpid, thread) {}
 
-VmAspace& DirectVcpu::SwitchAspace(VmAspace& aspace) {
-  auto* thread = Thread::Current::Get();
-  Guard<MonitoredSpinLock, IrqSave> guard{ThreadLock::Get(), SOURCE_TAG};
-  VmAspace* old_aspace = thread->switch_aspace(&aspace);
-  vmm_context_switch(old_aspace, &aspace);
-  return *old_aspace;
-}
-
 zx_status_t DirectVcpu::Enter(zx_port_packet_t& packet) {
   auto& guest = static_cast<DirectGuest&>(guest_);
   auto pre_enter = [this](AutoVmcs& vmcs) mutable {
@@ -1227,9 +1219,9 @@ zx_status_t DirectVcpu::Enter(zx_port_packet_t& packet) {
     return vmexit_handler_direct(vmcs, vmx_state_.guest_state, guest.user_aspace(), fs_base_,
                                  packet);
   };
-  VmAspace& host_user_aspace = SwitchAspace(guest.user_aspace());
+  VmAspace& host_user_aspace = hypervisor::switch_aspace(guest.user_aspace());
   zx_status_t status = EnterInternal(std::move(pre_enter), std::move(post_exit), packet);
-  SwitchAspace(host_user_aspace);
+  hypervisor::switch_aspace(host_user_aspace);
   return status;
 }
 

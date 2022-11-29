@@ -222,8 +222,6 @@ class DirectVcpu : public Vcpu {
   void Kick() override;
 
  private:
-  VmAspace& SwitchAspace(VmAspace& aspace);
-
   uintptr_t fs_base_ = 0;
 };
 

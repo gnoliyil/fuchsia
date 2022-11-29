@@ -103,6 +103,8 @@ class DirectPhysicalAspace {
   fbl::RefPtr<VmAspace> physical_aspace_;
 };
 
+VmAspace& switch_aspace(VmAspace& aspace);
+
 }  // namespace hypervisor
 
 #endif  // ZIRCON_KERNEL_HYPERVISOR_INCLUDE_HYPERVISOR_ASPACE_H_
