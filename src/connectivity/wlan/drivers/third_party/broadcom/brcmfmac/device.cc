@@ -544,8 +544,8 @@ void Device::DestroyIface(WlanInterface** iface_ptr, fit::callback<void(zx_statu
     return;
   }
 
-  wireless_dev* wdev = iface->take_wdev();
   iface->RemovePort();
+  wireless_dev* wdev = iface->take_wdev();
   if ((status = brcmf_cfg80211_del_iface(brcmf_pub_->config, wdev)) != ZX_OK) {
     BRCMF_ERR("Failed to del iface, status: %s", zx_status_get_string(status));
     iface->set_wdev(wdev);

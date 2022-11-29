@@ -502,6 +502,11 @@ uint32_t WlanInterface::PortGetMtu() { return kEthernetMtu; }
 
 void WlanInterface::MacGetAddress(uint8_t out_mac[MAC_SIZE]) {
   std::shared_lock<std::shared_mutex> guard(lock_);
+  if (wdev_ == nullptr) {
+    BRCMF_WARN("Interface not available, returning empty MAC address");
+    memset(out_mac, 0, MAC_SIZE);
+    return;
+  }
   memcpy(out_mac, ndev_to_if(wdev_->netdev)->mac_addr, MAC_SIZE);
 }
 
