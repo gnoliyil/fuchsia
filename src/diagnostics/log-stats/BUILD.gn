@@ -7,10 +7,7 @@ import("//build/rust/rustc_library.gni")
 
 group("log-stats") {
   testonly = true
-  deps = [
-    ":package",
-    ":tests",
-  ]
+  deps = [ ":tests" ]
 }
 
 group("tests") {

@@ -14,7 +14,7 @@ legacy_base_package_labels += [ "//src/media/audio/bundles:services" ]
 # Remove as much as possible from core to produce a minimal headless system. We
 # eventually have to reintroduce some of these packages to support a fully
 # functional product. See fxbug.dev/92985 for milestone progress.
-legacy_base_package_labels -= [
+_legacy_base_package_labels_TO_REMOVE = [
   "//src/cobalt/bin/app:cobalt",
   "//src/cobalt/bin/app:cobalt_registry",
   "//src/cobalt/bin/app:config",
@@ -35,6 +35,9 @@ legacy_base_package_labels -= [
   "//src/settings/service:setui_service",
   "//src/sys/activity",
 ]
+
+legacy_base_package_labels += _legacy_base_package_labels_TO_REMOVE
+legacy_base_package_labels -= _legacy_base_package_labels_TO_REMOVE
 
 # Remove intl_services default shards that were added in core.gni.
 core_realm_shards -= [
