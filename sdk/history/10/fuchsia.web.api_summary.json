@@ -493,6 +493,12 @@
     },
     {
         "kind": "protocol/member",
+        "name": "fuchsia.web/Frame.Close",
+        "ordinal": "307063091439752017",
+        "type": "(fuchsia.web/FrameCloseRequest payload)"
+    },
+    {
+        "kind": "protocol/member",
         "name": "fuchsia.web/Frame.ConfigureInputTypes",
         "ordinal": "4098433884881338102",
         "type": "(fuchsia.web/InputTypes types,fuchsia.web/AllowInputState allow)"
@@ -668,6 +674,16 @@
     {
         "kind": "protocol",
         "name": "fuchsia.web/Frame"
+    },
+    {
+        "kind": "table/member",
+        "name": "fuchsia.web/FrameCloseRequest.timeout",
+        "ordinal": "1",
+        "type": "int64"
+    },
+    {
+        "kind": "table",
+        "name": "fuchsia.web/FrameCloseRequest"
     },
     {
         "kind": "enum/member",

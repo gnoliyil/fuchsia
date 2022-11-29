@@ -10,6 +10,7 @@ using fuchsia.mem;
 using fuchsia.settings;
 using fuchsia.ui.gfx;
 using fuchsia.ui.views;
+using zx;
 
 // TODO(fxbug.dev/29927): Consider using [`fuchsia.logger/LogLevelFilter`] if possible.
 type ConsoleLogLevel = strict enum : int32 {
@@ -480,6 +481,31 @@ protocol Frame {
 
     /// Reset the Frame's [`ContentAreaSettings`] to default values.
     ResetContentAreaSettings();
+
+    /// Request graceful or immediate teardown of the Frame content and notification of completion
+    /// via Frame epitaph.
+    ///
+    /// Graceful teardown allows unload and cleanup tasks in the implementation and web content
+    /// (e.g., `unload` event handlers) to run for up to the specified period of time. Immediate
+    /// teardown only runs the minimum cleanup tasks in the implementation and does not allow web
+    /// content to run event handlers.
+    ///
+    /// * If `timeout` is zero, an immediate teardown is initiated. The channel will close with
+    ///   `ZX_OK`. This is equivalent to the caller closing the Frame channel.
+    ///
+    /// * If `timeout` is non-zero, a graceful teardown is initiated. The channel will close with
+    ///   `ZX_OK` if the Frame closes within the specified `timeout` and with `ZX_ERR_TIMED_OUT`
+    ///   otherwise.
+    ///
+    /// * If `timeout` is not specified, a reasonable implementation-specific timeout is applied.
+    ///
+    /// Subsequent calls to `Close()` will override any previously specified `Close()` timeout.
+    @available(added=10)
+    @transitional
+    Close(table {
+        /// Optional.
+        1: timeout zx.duration;
+    });
 };
 
 type WebMessage = resource table {
