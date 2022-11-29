@@ -156,6 +156,23 @@ class PrettyHeapString : public PrettyType {
   const std::string size_expr_;
 };
 
+// A PrettyIterator is halfway between a PrettyPointer and a PrettyWrappedValue. Unlike
+// PrettyPointer, the expression produces a value, rather than a pointer which is dereferenced
+// (normally the iterator is a pointer to an internal tree node, and then selects the non-pointer
+// value from it). And unlike PrettyWrappedValue, we want the resulting presentation in the console
+// to be like a pointer since that's how it appears to the user.
+class PrettyIterator : public PrettyType {
+ public:
+  explicit PrettyIterator(std::string value_expr) : value_expr_(std::move(value_expr)) {}
+
+  void Format(FormatNode* node, const FormatOptions& options,
+              const fxl::RefPtr<EvalContext>& context, fit::deferred_callback cb) override;
+  EvalFunction GetDereferencer() const override;
+
+ private:
+  std::string value_expr_;
+};
+
 // For pretty-printing smart pointers.
 //
 // This has an expression that evaluates to a single pointer. This pointer is the result of the
@@ -260,7 +277,7 @@ class PrettyRecursiveVariant : public PrettyType {
 };
 
 // Pretty-printer for a value inside some kind of container. This acts like a smart pointer but the
-// contained value isn't a pointer. This is for thigs like std::atomic or std::reference_wrapper.
+// contained value isn't a pointer. This is for things like std::atomic or std::reference_wrapper.
 //
 // Currently this is formatted like "typename(value)". For some types it might be nice to format
 // them just as the value, but the confusing part is that it won't behave exactly like the value in

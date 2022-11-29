@@ -35,7 +35,7 @@ constexpr uint32_t kMaxLocals = 256;
 
 // Sanity check for total program instructions executed. The program will be terminated after
 // this many instructions. This is to prevent infinite loops from hanging the debugger.
-constexpr int kMaxInstructions = 16384;
+constexpr int kMaxInstructions = 65535;
 
 // This class wants to run everything sequentially until an asynchronous operation happens. It
 // needs to integrate with the rest of the expression system which takes EvalCallbacks that can

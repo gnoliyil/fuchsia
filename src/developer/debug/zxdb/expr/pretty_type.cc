@@ -31,8 +31,8 @@ enum class NameQuotes { kStrip, kKeep };
 // strings, we need a stringified version of the ExprValue.
 //
 // This is relatively simplistic. It just formats the value and takes the toplevel description of
-// that node. If the key is some complicated struct, you probably can't handle that being formatted
-// as the key in a list of array values anyway.
+// that node. This is normally empty for complex structs. If the key is some complicated struct, you
+// probably can't handle that being formatted as the key in a list of array values anyway.
 //
 // It would be nice to give the pretty-printer more control over what the key is. Implementing
 // something like StringPrintf might be nice, here showing a Golang-like "%v" for what our default
@@ -58,6 +58,10 @@ void PopulateName(const fxl::RefPtr<EvalContext>& eval_context, fxl::WeakPtr<For
                   desc.back() == '"') {
                 // Strip the quotes.
                 weak_node->set_name(desc.substr(1, desc.size() - 2));
+              } else if (desc.empty()) {
+                // In cases where the output is empty, add some placeholder text so it doesn't
+                // look broken.
+                weak_node->set_name("{…}");
               } else {
                 weak_node->set_name(desc);
               }
@@ -470,6 +474,37 @@ PrettyHeapString::EvalArrayFunction PrettyHeapString::GetArrayAccess() const {
     EvalExpressionOn(context, object_value,
                      fxl::StringPrintf("(%s)[%" PRId64 "]", expression.c_str(), index),
                      std::move(cb));
+  };
+}
+
+void PrettyIterator::Format(FormatNode* node, const FormatOptions& options,
+                            const fxl::RefPtr<EvalContext>& context, fit::deferred_callback cb) {
+  EvalExpressionOn(context, node->value(), value_expr_,
+                   [weak_node = node->GetWeakPtr(), cb = std::move(cb)](ErrOrValue value) {
+                     if (!weak_node)
+                       return;
+                     if (value.has_error())
+                       return weak_node->SetDescribedError(value.err());
+
+                     // Declare it as a pointer with the value as the pointed-to thing.
+                     weak_node->set_description_kind(FormatNode::kPointer);
+
+                     // There isn't a good address to show since the actual pointer is to the tree
+                     // node and showing the node address in the description looks misleading. But
+                     // some generic text.
+                     weak_node->set_description("iterator");
+
+                     // Make the dereference child node the value.
+                     auto deref_node = std::make_unique<FormatNode>("*", value.take_value());
+                     deref_node->set_child_kind(FormatNode::kPointerExpansion);
+                     weak_node->children().push_back(std::move(deref_node));
+                   });
+}
+
+PrettyIterator::EvalFunction PrettyIterator::GetDereferencer() const {
+  return [expr = value_expr_](const fxl::RefPtr<EvalContext>& context, const ExprValue& iter,
+                              EvalCallback cb) {
+    EvalExpressionOn(context, iter, expr, std::move(cb));
   };
 }
 
