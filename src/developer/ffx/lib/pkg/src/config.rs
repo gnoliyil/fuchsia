@@ -83,11 +83,15 @@ pub async fn set_repository_server_enabled(enabled: bool) -> Result<()> {
 /// Return the repository server address.
 pub async fn repository_listen_addr() -> Result<Option<std::net::SocketAddr>> {
     if let Some(address) = ffx_config::get::<Option<String>, _>(CONFIG_KEY_SERVER_LISTEN).await? {
-        Ok(Some(
-            address
-                .parse::<std::net::SocketAddr>()
-                .with_context(|| format!("Failed to parse {}", CONFIG_KEY_SERVER_LISTEN))?,
-        ))
+        if address.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(
+                address
+                    .parse::<std::net::SocketAddr>()
+                    .with_context(|| format!("Parsing {}", CONFIG_KEY_SERVER_LISTEN))?,
+            ))
+        }
     } else {
         Ok(None)
     }

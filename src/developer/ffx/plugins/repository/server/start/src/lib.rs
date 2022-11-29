@@ -34,6 +34,21 @@ async fn start_impl(
     repos: RepositoryRegistryProxy,
     writer: &mut Writer,
 ) -> Result<()> {
+    let listen_address = match pkg_config::repository_listen_addr().await {
+        Ok(Some(address)) => address,
+        Ok(None) => {
+            ffx_bail!(
+                "The server listening address is unspecified. You can fix this with:\n\
+                \n\
+                $ ffx config set repository.server.listen '[::]:8083'\n\
+                $ ffx repository server start",
+            )
+        }
+        Err(err) => {
+            ffx_bail!("Failed to read repository server from config: {:#?}", err)
+        }
+    };
+
     match repos
         .server_start()
         .await
@@ -51,27 +66,17 @@ async fn start_impl(
             Ok(())
         }
         Err(err @ RepositoryError::ServerAddressAlreadyInUse) => {
-            if let Ok(Some(address)) = pkg_config::repository_listen_addr().await {
-                ffx_bail!("Failed to start repository server on {}: {}", address, err)
-            } else {
-                ffx_bail!(
-                    "Failed to start repository server: {}\n\
-                    The server listening address is now unspecified. You can fix this\n\
-                    with:\n\
-                    $ ffx config set repository.server.listen '[::]:8083'\n\
-                    $ ffx repository server start",
-                    err
-                )
-            }
+            ffx_bail!("Failed to start repository server on {}: {}", listen_address, err)
         }
         Err(RepositoryError::ServerNotRunning) => {
             ffx_bail!(
-                "Failed to start repository server: {:#}",
+                "Failed to start repository server on {}: {:#}",
+                listen_address,
                 pkg::config::determine_why_repository_server_is_not_running().await
             )
         }
         Err(err) => {
-            ffx_bail!("Failed to start repository server: {}", err)
+            ffx_bail!("Failed to start repository server on {}: {}", listen_address, err)
         }
     }
 }
@@ -81,69 +86,90 @@ mod tests {
     use {
         super::*,
         fidl_fuchsia_developer_ffx::{RepositoryError, RepositoryRegistryRequest},
-        fuchsia_async as fasync,
         futures::channel::oneshot::channel,
-        std::net::Ipv4Addr,
+        std::{future::Future, net::Ipv4Addr},
     };
 
-    #[fasync::run_singlethreaded(test)]
-    async fn test_start() {
-        let mut writer = Writer::new_test(None);
-
-        let (sender, receiver) = channel();
-        let mut sender = Some(sender);
-        let repos = setup_fake_repos(move |req| match req {
-            RepositoryRegistryRequest::ServerStart { responder } => {
-                sender.take().unwrap().send(()).unwrap();
-                let address = SocketAddress((Ipv4Addr::LOCALHOST, 0).into()).into();
-                responder.send(&mut Ok(address)).unwrap()
-            }
-            other => panic!("Unexpected request: {:?}", other),
-        });
-
-        start_impl(StartCommand {}, repos, &mut writer).await.unwrap();
-        assert_eq!(receiver.await, Ok(()));
+    // FIXME(http://fxbug.dev/80740): Unfortunately ffx_config is global, and so each of these tests
+    // could step on each others ffx_config entries if run in parallel. To avoid this, we will:
+    //
+    // * use the `serial_test` crate to make sure each test runs sequentially
+    // * clear out the config keys before we run each test to make sure state isn't leaked across
+    //   tests.
+    fn run_async_test<F: Future>(fut: F) -> F::Output {
+        fuchsia_async::TestExecutor::new().unwrap().run_singlethreaded(async move {
+            let _env = ffx_config::test_init().await.unwrap();
+            fut.await
+        })
     }
 
-    #[fasync::run_singlethreaded(test)]
-    async fn test_start_machine() {
-        let mut writer = Writer::new_test(Some(ffx_writer::Format::Json));
+    #[serial_test::serial]
+    #[test]
+    fn test_start() {
+        run_async_test(async {
+            let mut writer = Writer::new_test(None);
 
-        let address = (Ipv4Addr::LOCALHOST, 1234).into();
+            let (sender, receiver) = channel();
+            let mut sender = Some(sender);
+            let repos = setup_fake_repos(move |req| match req {
+                RepositoryRegistryRequest::ServerStart { responder } => {
+                    sender.take().unwrap().send(()).unwrap();
+                    let address = SocketAddress((Ipv4Addr::LOCALHOST, 0).into()).into();
+                    responder.send(&mut Ok(address)).unwrap()
+                }
+                other => panic!("Unexpected request: {:?}", other),
+            });
 
-        let (sender, receiver) = channel();
-        let mut sender = Some(sender);
-        let repos = setup_fake_repos(move |req| match req {
-            RepositoryRegistryRequest::ServerStart { responder } => {
-                sender.take().unwrap().send(()).unwrap();
-                let address = SocketAddress(address).into();
-                responder.send(&mut Ok(address)).unwrap()
-            }
-            other => panic!("Unexpected request: {:?}", other),
-        });
-
-        start_impl(StartCommand {}, repos, &mut writer).await.unwrap();
-        assert_eq!(receiver.await, Ok(()));
-
-        let info: ServerInfo = serde_json::from_str(&writer.test_output().unwrap()).unwrap();
-        assert_eq!(info, ServerInfo { address },);
+            start_impl(StartCommand {}, repos, &mut writer).await.unwrap();
+            assert_eq!(receiver.await, Ok(()));
+        })
     }
 
-    #[fasync::run_singlethreaded(test)]
-    async fn test_start_failed() {
-        let mut writer = Writer::new_test(None);
+    #[serial_test::serial]
+    #[test]
+    fn test_start_machine() {
+        run_async_test(async {
+            let mut writer = Writer::new_test(Some(ffx_writer::Format::Json));
 
-        let (sender, receiver) = channel();
-        let mut sender = Some(sender);
-        let repos = setup_fake_repos(move |req| match req {
-            RepositoryRegistryRequest::ServerStart { responder } => {
-                sender.take().unwrap().send(()).unwrap();
-                responder.send(&mut Err(RepositoryError::ServerNotRunning)).unwrap()
-            }
-            other => panic!("Unexpected request: {:?}", other),
-        });
+            let address = (Ipv4Addr::LOCALHOST, 1234).into();
 
-        assert!(start_impl(StartCommand {}, repos, &mut writer).await.is_err());
-        assert_eq!(receiver.await, Ok(()));
+            let (sender, receiver) = channel();
+            let mut sender = Some(sender);
+            let repos = setup_fake_repos(move |req| match req {
+                RepositoryRegistryRequest::ServerStart { responder } => {
+                    sender.take().unwrap().send(()).unwrap();
+                    let address = SocketAddress(address).into();
+                    responder.send(&mut Ok(address)).unwrap()
+                }
+                other => panic!("Unexpected request: {:?}", other),
+            });
+
+            start_impl(StartCommand {}, repos, &mut writer).await.unwrap();
+            assert_eq!(receiver.await, Ok(()));
+
+            let info: ServerInfo = serde_json::from_str(&writer.test_output().unwrap()).unwrap();
+            assert_eq!(info, ServerInfo { address },);
+        })
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn test_start_failed() {
+        run_async_test(async {
+            let mut writer = Writer::new_test(None);
+
+            let (sender, receiver) = channel();
+            let mut sender = Some(sender);
+            let repos = setup_fake_repos(move |req| match req {
+                RepositoryRegistryRequest::ServerStart { responder } => {
+                    sender.take().unwrap().send(()).unwrap();
+                    responder.send(&mut Err(RepositoryError::ServerNotRunning)).unwrap()
+                }
+                other => panic!("Unexpected request: {:?}", other),
+            });
+
+            assert!(start_impl(StartCommand {}, repos, &mut writer).await.is_err());
+            assert_eq!(receiver.await, Ok(()));
+        })
     }
 }
