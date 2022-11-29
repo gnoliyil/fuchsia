@@ -12,7 +12,6 @@
 #include <zircon/syscalls/port.h>
 #include <zircon/syscalls/types.h>
 
-#include <arch/x86/hypervisor/invalidate.h>
 #include <arch/x86/hypervisor/vmx_state.h>
 #include <ktl/bit.h>
 
@@ -46,6 +45,20 @@ class GuestHandle {
   user_out_handle out_;
   zx_handle_t* value_;
 };
+
+template <size_t NumHandles>
+zx_status_t CopyHandles(ProcessDispatcher* process, GuestHandle (&handles)[NumHandles]) {
+  for (auto& handle : handles) {
+    zx_status_t status = handle.begin_copyout(process);
+    if (status != ZX_OK) {
+      return ZX_ERR_INVALID_ARGS;
+    }
+  }
+  for (auto& handle : handles) {
+    handle.finish_copyout(process);
+  }
+  return ZX_OK;
+}
 
 // Casts a `uint64` to type `T`.
 template <typename T>
@@ -122,26 +135,21 @@ class Vmcall {
   template <size_t NumHandles, typename R, typename... Args>
   static void DispatchWithHandles(GuestState& guest_state, R (*syscall)(Args...)) {
     GuestHandle handles[NumHandles];
-    DispatchWithResult(guest_state, handles, syscall);
-
-    ProcessDispatcher* current_process = ProcessDispatcher::GetCurrent();
-    for (auto& handle : handles) {
-      zx_status_t status = handle.begin_copyout(current_process);
-      if (status != ZX_OK) {
-        guest_state.rax = ZX_ERR_INVALID_ARGS;
-        return;
-      }
+    zx_status_t status = DispatchWithResult(guest_state, handles, syscall);
+    if (status != ZX_OK) {
+      return;
     }
-    for (auto& handle : handles) {
-      handle.finish_copyout(current_process);
+    status = CopyHandles(ProcessDispatcher::GetCurrent(), handles);
+    if constexpr (ktl::is_same_v<zx_status_t, R>) {
+      guest_state.rax = status;
     }
   }
 
   // Dispatch a `syscall`, and if the syscall has a return value, store it
   // within `guest_state.rax`.
   template <typename R, typename... Args>
-  static void DispatchWithResult(GuestState& guest_state, GuestHandle* handles,
-                                 R (*syscall)(Args...)) {
+  static zx_status_t DispatchWithResult(GuestState& guest_state, GuestHandle* handles,
+                                        R (*syscall)(Args...)) {
     if constexpr (ktl::is_same_v<void, R>) {
       // If we are handling a syscall without a return value.
       DispatchSyscall(guest_state, handles, syscall, std::make_index_sequence<NumArgs>());
@@ -151,11 +159,10 @@ class Vmcall {
       guest_state.rax = result;
       if constexpr (ktl::is_same_v<zx_status_t, R>) {
         // If we are handling a syscall with a `zx_status_t` return value.
-        if (result != ZX_OK) {
-          return;
-        }
+        return result;
       }
     }
+    return ZX_OK;
   }
 
   // Dispatch a `syscall`, using `AbiArg` to cast each register to the
