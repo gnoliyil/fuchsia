@@ -1,0 +1,247 @@
+# Copyright 2022 The Fuchsia Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import("//build/testing/test_spec.gni")
+
+# The test runners have no better way to determine that a boot test succeeded
+# than to look for an exact string in the console log output.  zbi_test()
+# targets produce metadata to drive the test runners, which tells them to
+# match this particular string.  When booted in standalone mode, userboot
+# prints this message after the initial process exits iff its return_code was
+# zero, but shutting down.  This string includes some random data that
+# shouldn't appear elsewhere, to avoid false-positive matches.
+boot_test_success_string =
+    "***Boot-test-successful!-MDd7/O65SuVZ23yGAaQG4CedYQGH9E1/58r73pSAVK0=***"
+
+_all_emu_types = [
+  "QEMU",
+  "AEMU",
+]
+
+# Helper template defining a boot test for a particular host architecture. This
+# flexibility is needed as we wish to define one for emulators on $target_cpu
+# hosts even when $target_cpu != $host_cpu in order to take advantage of KVM,
+# HVF, etc.
+#
+# Parameters
+#
+#  * cpu_for_host
+#    Required: the host CPU to generate the test for.
+#
+# See boot_test() for all other parameters.
+template("_boot_test") {
+  main_target = target_name
+  script_target = "_boot_test.${target_name}.create_script"
+
+  toolchain = "//build/toolchain:host_${invoker.cpu_for_host}"
+  test_script = "$root_out_dir/$main_target.sh"
+
+  action(script_target) {
+    visibility = [ ":*" ]
+    testonly = true
+
+    deps = [ "//tools/testing/seriallistener($toolchain)" ]
+    inputs = [ get_label_info(deps[0], "root_out_dir") + "/seriallistener" ]
+    outputs = [ test_script ]
+
+    script = "//build/testing/create_test.sh"
+    args = [
+      rebase_path(outputs[0], root_build_dir),
+      rebase_path(inputs[0], root_build_dir),
+      "-success-str",
+      boot_test_success_string,
+    ]
+
+    metadata = {
+      test_runtime_deps = inputs + outputs
+    }
+  }
+
+  test_spec(main_target) {
+    target = get_label_info(invoker.label, "label_with_toolchain")
+    path = test_script
+    os = host_os
+    cpu = invoker.cpu_for_host
+    isolated = true
+
+    forward_variables_from(invoker,
+                           [
+                             "assert_no_deps",
+                             "visibility",
+                           ])
+
+    if (defined(invoker.timeout)) {
+      if (invoker.timeout != false) {
+        timeout_secs = invoker.timeout
+      }
+    } else {
+      timeout_secs = 600
+    }
+
+    deps = [ ":$script_target" ]
+    if (defined(invoker.qemu_kernel)) {
+      deps += [ invoker.qemu_kernel ]
+    }
+    if (defined(invoker.vbmeta)) {
+      deps += [ invoker.vbmeta ]
+    }
+    if (defined(invoker.zbi)) {
+      deps += [ invoker.zbi ]
+    }
+
+    environments = []
+    foreach(device_type, invoker.device_types) {
+      environments += [
+        {
+          dimensions = {
+            device_type = device_type
+          }
+          image_overrides = {
+            forward_variables_from(invoker,
+                                   [
+                                     "qemu_kernel",
+                                     "vbmeta",
+                                     "zbi",
+                                   ])
+
+            # Absolutize the path part in any provided labels.
+            if (defined(qemu_kernel)) {
+              qemu_kernel = get_label_info(qemu_kernel, "label_with_toolchain")
+            }
+            if (defined(vbmeta)) {
+              vbmeta = get_label_info(vbmeta, "label_with_toolchain")
+            }
+            if (defined(zbi)) {
+              zbi = get_label_info(zbi, "label_with_toolchain")
+            }
+          }
+        },
+      ]
+    }
+  }
+}
+
+# Specifies a boot test.
+#
+# A boot test is a general category of test defined by booting select images on
+# a device and declaring success if a certain magic string is written by the
+# booted system. This set-up allows us to execute test logic in constrained
+# environments (e.g., in physical memory or UEFI) that lack finer command-control
+# options for driving testing from the outside or a robust means of exfiltrating
+# test results for later analysis.
+#
+# While this template does define host-side test target(s) for listening on
+# serial for the success string, the contained logic expects to already be run
+# after the associated system has been booted as a 'host-target interaction'
+# test, specifically with the environment variables of `$FUCHSIA_SERIAL_SOCKET`
+# and `$FUCHSIA_DEVICE_TYPE` set, specifying a Unix socket path from which
+# serial can be read and a device type (as spelled in
+# //build/testing/environments.gni). This eventually define a test that is
+# less geared towards automation, but for now boot tests can be discovered and
+# run locally with `fx run-boot-test`.
+#
+# Parameters:
+#
+#  * device_types
+#    - Required: A list of device types on which this test is meant to run.
+#      The full set of device types can be found in
+#      //build/testing/environments.gni. An empty list signifies a disabled
+#      test.
+#    - Type: list of strings
+#
+#  * zbi, qemu_kernel, vbmeta
+#    - Optional: A label specifying a ZBI, QEMU kernel, or VBMeta to boot,
+#      respectively. At least one of these parameters must be set, but each
+#      on their own is optional.
+#    - Type: label
+#
+#  * timeout
+#    - Optional: The test's timeout, in seconds.
+#      TODO(ihuh): Once we have more data, we can override this with a more
+#      sensible timeout for each test.
+#    - Type: int
+#    - Default: 600 (10 minutes)
+#
+#  * visibility, assert_no_deps
+#    - Optional: Usual GN meanings.
+#
+template("boot_test") {
+  assert(defined(invoker.device_types),
+         "boot_test(\"$target_name\") must define `device_types`")
+  assert(
+      defined(invoker.zbi) || defined(invoker.qemu_kernel) ||
+          defined(invoker.vbmeta),
+      "boot_test(\"$target_name\") must define at least one of `zbi`, `qemu_kernel`, or `vbmeta`")
+
+  hw_types = invoker.device_types + _all_emu_types - _all_emu_types
+  emu_types = invoker.device_types - hw_types
+  if (emu_types == [] && hw_types == []) {  # Disabled
+    group(target_name) {
+      testonly = true
+      forward_variables_from(invoker,
+                             [
+                               "qemu_kernel",
+                               "vbmeta",
+                               "zbi",
+                             ])
+      deps = []
+      if (defined(qemu_kernel)) {
+        deps += [ qemu_kernel ]
+      }
+      if (defined(vbmeta)) {
+        deps += [ vbmeta ]
+      }
+      if (defined(zbi)) {
+        deps += [ zbi ]
+      }
+    }
+    not_needed(invoker, [ "timeout" ])
+  } else if (emu_types == [] || host_cpu == target_cpu) {
+    _boot_test(target_name) {
+      label = ":$target_name"
+      forward_variables_from(invoker, "*")
+      cpu_for_host = host_cpu
+    }
+  } else {
+    common_params = {
+      forward_variables_from(invoker,
+                             "*",
+                             [
+                               "assert_no_deps",
+                               "device_types",
+                               "visibility",
+                             ])
+      visibility = [ ":*" ]
+      label = ":$target_name"
+    }
+
+    # If an emulator is specified and $host_cpu != $target_cpu, then we make
+    # sure to define a separate boot test for a $target_cpu host in order to
+    # take advantage of KVM, HVF, etc.
+    _boot_test("$target_name.emu") {
+      cpu_for_host = target_cpu
+      device_types = emu_types
+      forward_variables_from(common_params, "*")
+    }
+    group_deps = [ ":$target_name.emu" ]
+
+    if (hw_types != []) {
+      _boot_test("$target_name.hw") {
+        cpu_for_host = host_cpu
+        device_types = hw_types
+        forward_variables_from(common_params, "*")
+      }
+      group_deps += [ ":$target_name.hw" ]
+    }
+    group(target_name) {
+      forward_variables_from(invoker,
+                             [
+                               "assert_no_deps",
+                               "visibility",
+                             ])
+      testonly = true
+      deps = group_deps
+    }
+  }
+}

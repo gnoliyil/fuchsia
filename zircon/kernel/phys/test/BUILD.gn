@@ -311,6 +311,7 @@ if (current_toolchain != default_toolchain) {
 
   mobius_turducken_test("turducken-zbi-test") {
     kernel = ":turducken-test"
+    timeout = 300  # 5min
   }
 
   phys_zbi_test("zbi-phys-exception-test") {
@@ -349,6 +350,7 @@ if (current_toolchain != default_toolchain) {
 
   mobius_turducken_test("trampoline-boot-zbi-test") {
     kernel = ":trampoline-boot-test"
+    timeout = 300  # 5min
   }
 
   turducken_cuckoo_test("turducken-boot-next-zbi-test") {

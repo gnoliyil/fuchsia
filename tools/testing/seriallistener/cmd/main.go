@@ -74,13 +74,14 @@ func main() {
 		os.Stdout, os.Stderr, "seriallistener ")
 	ctx := logger.WithLogger(context.Background(), log)
 
-	socketPath := os.Getenv(constants.SerialSocketEnvKey)
-
+	// Emulator serial is already wired up to stdout
 	stdout := io.Discard
-	if redirectStdout {
+	deviceType := os.Getenv(constants.DeviceTypeEnvKey)
+	if deviceType != "QEMU" && deviceType != "AEMU" {
 		stdout = os.Stdout
 	}
 
+	socketPath := os.Getenv(constants.SerialSocketEnvKey)
 	if err := execute(ctx, socketPath, stdout); err != nil {
 		logger.Fatalf(ctx, "%s", err)
 	}

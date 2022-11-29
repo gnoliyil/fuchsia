@@ -218,7 +218,14 @@ func (t *SubprocessTester) Test(ctx context.Context, test testsharder.Test, stdo
 		ctx, cancel = context.WithTimeout(ctx, test.Timeout)
 		defer cancel()
 	}
-	testCmd := []string{test.Path}
+	// './' is a package-level construct in os/exec whose use is recommended
+	// when the provided invocation executes things relative to the local
+	// working directory. In particular, unless it is in $PATH, executables in
+	// the immediate working directory require this to be referenced
+	// relatively as of Go v1.19.
+	//
+	// https://pkg.go.dev/os/exec#hdr-Executables_in_the_current_directory
+	testCmd := []string{"./" + test.Path}
 	if t.sProps != nil {
 		testCmdBuilder := &NsJailCmdBuilder{
 			Bin: t.sProps.nsjailPath,

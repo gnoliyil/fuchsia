@@ -21,6 +21,7 @@ const (
 	SerialSocketEnvKey  = "FUCHSIA_SERIAL_SOCKET"
 	ECCableEnvKey       = "EC_CABLE_PATH"
 	DeviceAddrEnvKey    = "FUCHSIA_DEVICE_ADDR"
+	DeviceTypeEnvKey    = "FUCHSIA_DEVICE_TYPE" // Not set by botanist directly, but part of the host-target interaction API
 	IPv4AddrEnvKey      = "FUCHSIA_IPV4_ADDR"
 	IPv6AddrEnvKey      = "FUCHSIA_IPV6_ADDR"
 	PkgSrvPortKey       = "FUCHSIA_PACKAGE_SERVER_PORT"

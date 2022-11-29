@@ -128,7 +128,7 @@ func TestSubprocessTester(t *testing.T) {
 			name:           "test passes with profile",
 			test:           build.Test{Path: passingTest},
 			expectedResult: runtests.TestSuccess,
-			wantCmd:        []string{passingTest},
+			wantCmd:        []string{"./" + passingTest},
 			wantDataSinks: runtests.DataSinkMap{
 				"llvm-profile": []runtests.DataSink{
 					{
@@ -234,7 +234,7 @@ func TestSubprocessTester(t *testing.T) {
 				"--env",
 				"XDG_STATE_HOME=/tmp",
 				"--",
-				passingTest,
+				"./" + passingTest,
 			},
 			wantDataSinks: runtests.DataSinkMap{
 				"llvm-profile": []runtests.DataSink{
@@ -249,7 +249,7 @@ func TestSubprocessTester(t *testing.T) {
 			name:           "test passes without profile",
 			test:           build.Test{Path: "uninstrumented_test"},
 			expectedResult: runtests.TestSuccess,
-			wantCmd:        []string{"uninstrumented_test"},
+			wantCmd:        []string{"./uninstrumented_test"},
 			wantDataSinks:  nil,
 		},
 		{
@@ -257,7 +257,7 @@ func TestSubprocessTester(t *testing.T) {
 			test:           build.Test{Path: failingTest},
 			runErrs:        []error{fmt.Errorf("test failed")},
 			expectedResult: runtests.TestFailure,
-			wantCmd:        []string{failingTest},
+			wantCmd:        []string{"./" + failingTest},
 			wantDataSinks: runtests.DataSinkMap{
 				"llvm-profile": []runtests.DataSink{
 					{
