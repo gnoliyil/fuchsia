@@ -2736,7 +2736,7 @@ fn compute_new_entries_with_current_ias_and_reply<V: IaValue>(
             }
 
             let mut inner_updates = HashMap::new();
-            let ia_values = ia_values
+            let mut ia_values = ia_values
                 .into_iter()
                 .filter_map(|(value, lifetimes)| {
                     match lifetimes {
@@ -2818,6 +2818,38 @@ fn compute_new_entries_with_current_ias_and_reply<V: IaValue>(
                     }
                 })
                 .collect::<HashMap<_, _>>();
+
+            // Merge existing values that were not present in the new IA.
+            match current_entry {
+                IaEntry::Assigned(values) => {
+                    for (value, lifetimes) in values {
+                        match ia_values.entry(*value) {
+                            // If we got the value in the Reply, do nothing
+                            // further for this value.
+                            Entry::Occupied(_) => {},
+
+                            // We are missing the value in the new IA.
+                            //
+                            // Either the value is missing from the IA in the
+                            // Reply or the Reply invalidated the value.
+                            Entry::Vacant(e) => match inner_updates.get(value) {
+                                // If we have an update, it MUST be a removal
+                                // since add/lifetime change events should have
+                                // resulted in the value being present in the
+                                // new IA's values.
+                                Some(update) => assert_eq!(update, &IaValueUpdateKind::Removed),
+                                // The Reply is missing this value so we just copy
+                                // it into the new set of values.
+                                None => {
+                                    let _: &mut Lifetimes = e.insert(*lifetimes);
+                                }
+                            }
+
+                        }
+                    }
+                },
+                IaEntry::ToRequest(_) => {},
+            }
 
             assert_matches!(updates.insert(iaid, inner_updates), None);
 
@@ -9350,7 +9382,7 @@ mod tests {
 
     #[test_case(RENEW_TEST)]
     #[test_case(REBIND_TEST)]
-    fn receive_reply_with_different_address(
+    fn receive_reply_with_original_ia_value_omitted(
         RenewRebindTest {
             send_and_assert,
             message_type: _,
@@ -9375,6 +9407,7 @@ mod tests {
             &client;
         // The server includes IAs with different values from what was
         // previously assigned.
+        let iaid = v6::IAID::new(0);
         let buf = TestMessageBuilder {
             transaction_id: *transaction_id,
             message_type: v6::MessageType::Reply,
@@ -9383,11 +9416,11 @@ mod tests {
             preference: None,
             dns_servers: None,
             ia_nas: std::iter::once((
-                v6::IAID::new(0),
+                iaid,
                 TestIa::new_renewed_default(RENEW_NON_TEMPORARY_ADDRESSES[0]),
             )),
             ia_pds: std::iter::once((
-                v6::IAID::new(0),
+                iaid,
                 TestIa::new_renewed_default(RENEW_DELEGATED_PREFIXES[0]),
             )),
         }
@@ -9397,23 +9430,12 @@ mod tests {
         let actions = client.handle_message_receive(msg, time);
         let ClientStateMachine { transaction_id: _, options_to_request: _, state, rng: _ } =
             &client;
-        let iaid = v6::IAID::new(0);
-        let expected_non_temporary_addresses = HashMap::from([(
-            iaid,
-            AddressEntry::Assigned(HashMap::from([(
-                RENEW_NON_TEMPORARY_ADDRESSES[0],
-                Lifetimes::new_finite(RENEWED_PREFERRED_LIFETIME, RENEWED_VALID_LIFETIME),
-            )])),
-        )]);
-        let expected_delegated_prefixes = HashMap::from([(
-            iaid,
-            PrefixEntry::Assigned(HashMap::from([(
-                RENEW_DELEGATED_PREFIXES[0],
-                Lifetimes::new_finite(RENEWED_PREFERRED_LIFETIME, RENEWED_VALID_LIFETIME),
-            )])),
-        )]);
-        // Expect the client to transition to Assigned and assign the new
-        // address.
+
+        // Expect the client to transition to Assigned with both the new value
+        // found in the latest Reply and the original value found when we first
+        // transitioned to Assigned above. We always keep the old value even
+        // though it was missing from the received Reply since the server did
+        // not send an IA Address/Prefix option with the zero valid lifetime.
         assert_matches!(
             &state,
             Some(ClientState::Assigned(Assigned{
@@ -9425,8 +9447,47 @@ mod tests {
                 solicit_max_rt,
             })) => {
                 assert_eq!(client_id, &CLIENT_ID);
-                assert_eq!(non_temporary_addresses, &expected_non_temporary_addresses);
-                assert_eq!(delegated_prefixes, &expected_delegated_prefixes);
+                fn calc_expected<V: IaValue>(
+                    iaid: v6::IAID,
+                    initial: V,
+                    in_renew: V,
+                ) -> HashMap<v6::IAID, IaEntry<V>> {
+                    HashMap::from([(
+                        iaid,
+                        IaEntry::Assigned(HashMap::from([
+                            (
+                                initial,
+                                Lifetimes::new_finite(
+                                    PREFERRED_LIFETIME,
+                                    VALID_LIFETIME,
+                                ),
+                            ),
+                            (
+                                in_renew,
+                                Lifetimes::new_finite(
+                                    RENEWED_PREFERRED_LIFETIME,
+                                    RENEWED_VALID_LIFETIME,
+                                ),
+                            ),
+                        ])),
+                    )])
+                }
+                assert_eq!(
+                    non_temporary_addresses,
+                    &calc_expected(
+                        iaid,
+                        CONFIGURED_NON_TEMPORARY_ADDRESSES[0],
+                        RENEW_NON_TEMPORARY_ADDRESSES[0],
+                    )
+                );
+                assert_eq!(
+                    delegated_prefixes,
+                    &calc_expected(
+                        iaid,
+                        CONFIGURED_DELEGATED_PREFIXES[0],
+                        RENEW_DELEGATED_PREFIXES[0],
+                    )
+                );
                 assert_eq!(server_id.as_slice(), &SERVER_ID[0]);
                 assert_eq!(dns_servers.as_slice(), &[] as &[Ipv6Addr]);
                 assert_eq!(*solicit_max_rt, MAX_SOLICIT_TIMEOUT);
