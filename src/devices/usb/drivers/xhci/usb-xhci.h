@@ -150,6 +150,8 @@ class UsbXhci : public UsbXhciType, public ddk::UsbHciProtocol<UsbXhci, ddk::bas
   // Onlines a device, publishing a device node in the DDK.
   zx_status_t DeviceOnline(uint32_t slot, uint16_t port, usb_speed_t speed);
 
+  void CreateDeviceInspectNode(uint32_t slot, uint16_t vendor_id, uint16_t product_id);
+
   // Returns whether or not a device is connected to the root hub.
   // Always returns true for devices attached via a hub.
   bool IsDeviceConnected(uint8_t slot) {

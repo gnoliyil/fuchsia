@@ -174,4 +174,16 @@ TRBPromise DeviceState::AddressDeviceCommand(UsbXhci* hci, uint8_t slot, uint8_t
   return hci->SubmitCommand(command, std::move(command_context));
 }
 
+void DeviceState::CreateInspectNode(inspect::Node node, uint16_t vendor_id, uint16_t product_id) {
+  inspect_node_ = std::move(node);
+
+  char vendor_id_string[5];
+  snprintf(vendor_id_string, sizeof(vendor_id_string), "%04x", vendor_id);
+  vendor_id_ = inspect_node_.CreateString("Vendor ID", vendor_id_string);
+
+  char product_id_string[5];
+  snprintf(product_id_string, sizeof(product_id_string), "%04x", product_id);
+  product_id_ = inspect_node_.CreateString("Product ID", product_id_string);
+}
+
 }  // namespace usb_xhci

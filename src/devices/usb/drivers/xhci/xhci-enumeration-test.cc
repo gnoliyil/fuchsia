@@ -31,6 +31,7 @@
 #include <fake-dma-buffer/fake-dma-buffer.h>
 #include <zxtest/zxtest.h>
 
+#include "fuchsia/hardware/usb/descriptor/c/banjo.h"
 #include "usb-xhci.h"
 #include "xhci-event-ring.h"
 
@@ -358,6 +359,8 @@ TRBPromise UsbXhci::Timeout(uint16_t target_interrupter, zx::time deadline) {
   return interrupter(target_interrupter).Timeout(deadline);
 }
 
+void UsbXhci::CreateDeviceInspectNode(uint32_t slot, uint16_t vendor_id, uint16_t product_id) {}
+
 class EnumerationTests : public zxtest::Test {
  public:
   EnumerationTests()
@@ -641,6 +644,24 @@ TEST_F(EnumerationTests, AddressDeviceCommandShouldOnlineDeviceUponCompletion) {
   get_max_packet_size_request->Complete(ZX_OK, 8);
   controller().RunUntilIdle(0);
 
+  // GetDeviceDescriptor
+  auto get_descriptor = state().pending_operations.pop_front();
+  auto get_descriptor_request = std::move(get_descriptor->request);
+  ASSERT_EQ(get_descriptor_request->request()->header.device_id, 0);
+  ASSERT_EQ(get_descriptor_request->request()->header.ep_address, 0);
+  ASSERT_EQ(get_descriptor_request->request()->header.length, sizeof(usb_device_descriptor_t));
+  ASSERT_EQ(get_descriptor_request->request()->setup.bm_request_type,
+            USB_DIR_IN | USB_TYPE_STANDARD | USB_RECIP_DEVICE);
+  ASSERT_EQ(get_descriptor_request->request()->setup.w_value, USB_DT_DEVICE << 8);
+  ASSERT_EQ(get_descriptor_request->request()->setup.w_index, 0);
+  ASSERT_EQ(get_descriptor_request->request()->setup.b_request, USB_REQ_GET_DESCRIPTOR);
+  ASSERT_EQ(get_descriptor_request->request()->setup.w_length, sizeof(usb_device_descriptor_t));
+  ASSERT_TRUE(get_descriptor_request->request()->direct);
+  ASSERT_OK(get_descriptor_request->Mmap(reinterpret_cast<void**>(&descriptor)));
+  descriptor->b_descriptor_type = USB_DT_DEVICE;
+  get_descriptor_request->Complete(ZX_OK, sizeof(usb_device_descriptor_t));
+  controller().RunUntilIdle(0);
+
   // Online Device
   auto online_trb = FakeTRB::FromTRB(state().pending_operations.pop_front()->trb);
   ASSERT_EQ(online_trb->Op, FakeTRB::Op::OnlineDevice);
@@ -833,6 +854,24 @@ TEST_F(EnumerationTests, AddressDeviceCommandShouldOnlineDeviceAfterSuccessfulRe
   reinterpret_cast<CommandCompletionEvent*>(set_max_packet_size_trb.get())
       ->set_CompletionCode(CommandCompletionEvent::Success);
   set_max_packet_size->completer->complete_ok(set_max_packet_size_trb.get());
+  controller().RunUntilIdle(0);
+
+  // GetDeviceDescriptor
+  auto get_descriptor = state().pending_operations.pop_front();
+  auto get_descriptor_request = std::move(get_descriptor->request);
+  ASSERT_EQ(get_descriptor_request->request()->header.device_id, 1);
+  ASSERT_EQ(get_descriptor_request->request()->header.ep_address, 0);
+  ASSERT_EQ(get_descriptor_request->request()->header.length, sizeof(usb_device_descriptor_t));
+  ASSERT_EQ(get_descriptor_request->request()->setup.bm_request_type,
+            USB_DIR_IN | USB_TYPE_STANDARD | USB_RECIP_DEVICE);
+  ASSERT_EQ(get_descriptor_request->request()->setup.w_value, USB_DT_DEVICE << 8);
+  ASSERT_EQ(get_descriptor_request->request()->setup.w_index, 0);
+  ASSERT_EQ(get_descriptor_request->request()->setup.b_request, USB_REQ_GET_DESCRIPTOR);
+  ASSERT_EQ(get_descriptor_request->request()->setup.w_length, sizeof(usb_device_descriptor_t));
+  ASSERT_TRUE(get_descriptor_request->request()->direct);
+  ASSERT_OK(get_descriptor_request->Mmap(reinterpret_cast<void**>(&descriptor)));
+  descriptor->b_descriptor_type = USB_DT_DEVICE;
+  get_descriptor_request->Complete(ZX_OK, sizeof(usb_device_descriptor_t));
   controller().RunUntilIdle(0);
 
   // Online Device

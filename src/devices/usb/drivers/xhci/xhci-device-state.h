@@ -5,6 +5,8 @@
 #ifndef SRC_DEVICES_USB_DRIVERS_XHCI_XHCI_DEVICE_STATE_H_
 #define SRC_DEVICES_USB_DRIVERS_XHCI_XHCI_DEVICE_STATE_H_
 
+#include <lib/inspect/cpp/vmo/types.h>
+
 #include <optional>
 
 #include "xhci-hub.h"
@@ -81,6 +83,8 @@ class DeviceState {
     return transaction_lock_;
   }
 
+  void CreateInspectNode(inspect::Node node, uint16_t vendor_id, uint16_t product_id);
+
  private:
   zx_status_t InitializeSlotBuffer(const UsbXhci& hci, uint8_t slot_id, uint8_t port_id,
                                    const std::optional<HubInfo>& hub_info,
@@ -105,6 +109,11 @@ class DeviceState {
   TransferRing rings_[kMaxEndpoints] __TA_GUARDED(transaction_lock_);
   std::unique_ptr<dma_buffer::PagedBuffer> input_context_ __TA_GUARDED(transaction_lock_);
   std::unique_ptr<dma_buffer::PagedBuffer> device_context_ __TA_GUARDED(transaction_lock_);
+
+  // Published inspect data
+  inspect::Node inspect_node_;
+  inspect::StringProperty vendor_id_;
+  inspect::StringProperty product_id_;
 };
 }  // namespace usb_xhci
 

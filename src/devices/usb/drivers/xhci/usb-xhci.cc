@@ -433,6 +433,15 @@ TRBPromise UsbXhci::DeviceOffline(uint32_t slot, TRB* continuation) {
   return bridge.consumer.promise().box();
 }
 
+void UsbXhci::CreateDeviceInspectNode(uint32_t slot, uint16_t vendor_id, uint16_t product_id) {
+  auto& state = device_state_[slot - 1];
+
+  char name[64];
+  snprintf(name, sizeof(name), "Device %hu", slot);
+  auto node = inspect_root_node().CreateChild(name);
+  state.CreateInspectNode(std::move(node), vendor_id, product_id);
+}
+
 void UsbXhci::ResetPort(uint16_t port) {
   PORTSC sc = PORTSC::Get(cap_length_, port).ReadFrom(&mmio_.value());
   PORTSC::Get(cap_length_, port)

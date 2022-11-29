@@ -4,42 +4,65 @@
 
 #include "xhci-enumeration.h"
 
+#include <endian.h>
+#include <zircon/errors.h>
+#include <zircon/types.h>
+
+#include "fuchsia/hardware/usb/descriptor/c/banjo.h"
 #include "src/devices/usb/drivers/xhci/registers.h"
+#include "src/devices/usb/drivers/xhci/xhci-context.h"
 #include "usb-xhci.h"
 #include "xhci-async-auto-call.h"
+#include "zircon/status.h"
 
 namespace usb_xhci {
 
-fpromise::promise<uint8_t, zx_status_t> GetMaxPacketSize(UsbXhci* hci, uint8_t slot_id) {
+fpromise::promise<usb_device_descriptor_t, zx_status_t> GetDeviceDescriptor(UsbXhci* hci,
+                                                                            uint8_t slot_id,
+                                                                            uint16_t length) {
   std::optional<OwnedRequest> request_wrapper;
-  OwnedRequest::Alloc(&request_wrapper, 8, 0, hci->UsbHciGetRequestSize());
+  OwnedRequest::Alloc(&request_wrapper, length, 0, hci->UsbHciGetRequestSize());
   usb_request_t* request = request_wrapper->request();
-  request->direct = true;
   request->header.device_id = slot_id - 1;
   request->header.ep_address = 0;
   request->setup.bm_request_type = USB_DIR_IN | USB_TYPE_STANDARD | USB_RECIP_DEVICE;
   request->setup.w_value = USB_DT_DEVICE << 8;
   request->setup.w_index = 0;
   request->setup.b_request = USB_REQ_GET_DESCRIPTOR;
-  request->setup.w_length = 8;
+  request->setup.w_length = length;
   request->direct = true;
   return hci->UsbHciRequestQueue(std::move(*request_wrapper))
       .then([=](fpromise::result<OwnedRequest, void>& result)
-                -> fpromise::result<uint8_t, zx_status_t> {
-        auto request = result.value().request();
-        auto status = request->response.status;
+                -> fpromise::result<usb_device_descriptor_t, zx_status_t> {
+        auto& request = result.value();
+        zx_status_t status = request.request()->response.status;
         if (status != ZX_OK) {
+          zxlogf(ERROR, "GetDeviceDescriptor request failed %s", zx_status_get_string(status));
           return fpromise::error(status);
         }
-        usb_device_descriptor_t* descriptor;
-        if (usb_request_mmap(request, reinterpret_cast<void**>(&descriptor)) != ZX_OK) {
+        usb_device_descriptor_t descriptor;
+        ssize_t actual = request.CopyFrom(&descriptor, length, 0);
+        if (actual != length) {
+          zxlogf(ERROR, "GetDeviceDescriptor request expected %u bytes, got %zd", length, actual);
           return fpromise::error(ZX_ERR_IO);
         }
-        if (descriptor->b_descriptor_type != USB_DT_DEVICE) {
+        if (descriptor.b_descriptor_type != USB_DT_DEVICE) {
+          zxlogf(ERROR, "GetDeviceDescriptor got bad descriptor type: %u",
+                 descriptor.b_descriptor_type);
           return fpromise::error(ZX_ERR_IO);
         }
-        return fpromise::ok(descriptor->b_max_packet_size0);
+        return fpromise::ok(descriptor);
       })
+      .box();
+}
+
+fpromise::promise<uint8_t, zx_status_t> GetMaxPacketSize(UsbXhci* hci, uint8_t slot_id) {
+  // Read the first 8 bytes of the descriptor only, to get the max packet size.
+  return GetDeviceDescriptor(hci, slot_id, 8)
+      .and_then(
+          [=](const usb_device_descriptor_t& descriptor) -> fpromise::result<uint8_t, zx_status_t> {
+            return fpromise::ok(descriptor.b_max_packet_size0);
+          })
       .box();
 }
 
@@ -199,18 +222,29 @@ TRBPromise EnumerateDeviceInternal(UsbXhci* hci, uint8_t port, std::optional<Hub
         // prevent later enumeration failures.
         return GetMaxPacketSize(hci, state->slot);
       })
-      .and_then([=](uint8_t& result) -> TRBPromise {
+      .and_then([=](uint8_t& max_packet_size) -> fpromise::promise<void, zx_status_t> {
         // Set the max packet size if the device is a full speed device.
         auto speed = hci->GetDeviceSpeed(state->slot);
         if (!speed.has_value()) {
-          return fpromise::make_error_promise(ZX_ERR_BAD_STATE);
+          return fpromise::make_error_promise<zx_status_t>(ZX_ERR_BAD_STATE);
         }
-        if (speed.value() == USB_SPEED_FULL) {
-          return hci->SetMaxPacketSizeCommand(state->slot, result);
+        if (speed.value() != USB_SPEED_FULL) {
+          return fpromise::make_result_promise<void, zx_status_t>(fpromise::ok());
         }
-        return fpromise::make_ok_promise((TRB*)nullptr);
+        return hci->SetMaxPacketSizeCommand(state->slot, max_packet_size)
+            .and_then([=](TRB*& result) -> fpromise::promise<void, zx_status_t> {
+              // Discard TRB result.
+              return fpromise::make_result_promise<void, zx_status_t>(fpromise::ok());
+            });
       })
-      .and_then([=](TRB*& result) -> fpromise::result<TRB*, zx_status_t> {
+      .and_then([=]() -> fpromise::promise<usb_device_descriptor_t, zx_status_t> {
+        // Now read the whole descriptor.
+        return GetDeviceDescriptor(hci, state->slot, sizeof(usb_device_descriptor_t));
+      })
+      .and_then([=](usb_device_descriptor_t& descriptor) -> fpromise::result<TRB*, zx_status_t> {
+        hci->CreateDeviceInspectNode(state->slot, le16toh(descriptor.id_vendor),
+                                     le16toh(descriptor.id_product));
+
         // Online the device, making it visible to the DDK (enumeration has completed)
         auto speed = hci->GetDeviceSpeed(state->slot);
         if (!speed.has_value()) {
@@ -219,7 +253,7 @@ TRBPromise EnumerateDeviceInternal(UsbXhci* hci, uint8_t port, std::optional<Hub
         zx_status_t status = hci->DeviceOnline(state->slot, port, speed.value());
         if (status == ZX_OK) {
           error_handler->Cancel();
-          return fpromise::ok(result);
+          return fpromise::ok(nullptr);
         }
         return fpromise::error(status);
       })
