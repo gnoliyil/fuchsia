@@ -901,6 +901,41 @@ TEST(PromiseTests, discard_result_combinator) {
   }
 }
 
+TEST(PromiseTests, discard_value_combinator) {
+  fake_context fake_context;
+
+  // Chaining on OK.
+  {
+    auto p = make_delayed_ok_promise(42).discard_value();
+    static_assert(std::is_same<void, decltype(p)::value_type>::value, "");
+    static_assert(std::is_same<char, decltype(p)::error_type>::value, "");
+
+    fpromise::result<void, char> result = p(fake_context);
+    EXPECT_TRUE(p);
+    EXPECT_EQ(fpromise::result_state::pending, result.state());
+
+    result = p(fake_context);
+    EXPECT_FALSE(p);
+    EXPECT_EQ(fpromise::result_state::ok, result.state());
+  }
+
+  // Chaining on ERROR.
+  {
+    auto p = make_delayed_error_promise('x').discard_value();
+    static_assert(std::is_same<void, decltype(p)::value_type>::value, "");
+    static_assert(std::is_same<char, decltype(p)::error_type>::value, "");
+
+    fpromise::result<void, char> result = p(fake_context);
+    EXPECT_TRUE(p);
+    EXPECT_EQ(fpromise::result_state::pending, result.state());
+
+    result = p(fake_context);
+    EXPECT_FALSE(p);
+    EXPECT_EQ(fpromise::result_state::error, result.state());
+    EXPECT_EQ('x', result.error());
+  }
+}
+
 TEST(PromiseTests, wrap_with_combinator) {
   fake_context fake_context;
   capture_result_wrapper<int, char> wrapper;

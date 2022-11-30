@@ -612,6 +612,28 @@ class discard_result_continuation final {
   PriorPromise prior_;
 };
 
+// The continuation produced by |fpromise::promise::discard_value()|.
+template <typename PriorPromise>
+class discard_value_continuation final {
+ public:
+  explicit discard_value_continuation(PriorPromise prior_promise)
+      : prior_(std::move(prior_promise)) {}
+
+  fpromise::result<void, typename PriorPromise::error_type> operator()(
+      ::fpromise::context& context) {
+    if (!prior_(context)) {
+      return ::fpromise::pending();
+    }
+    if (prior_.is_error()) {
+      return prior_.take_error_result();
+    }
+    return ::fpromise::ok();
+  }
+
+ private:
+  future_impl<PriorPromise> prior_;
+};
+
 // The continuation produced by |make_promise()|.
 // This turns out to be equivalent to a context handler invoker.
 template <typename PromiseHandler>

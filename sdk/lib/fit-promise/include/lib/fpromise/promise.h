@@ -64,6 +64,8 @@ namespace fpromise {
 //    |inspect()|: examine result of prior promise
 //    |discard_result()|: discard result and unconditionally return
 //                        fpromise::result<> when prior promise completes
+//    |discard_value()|: discard value and return fpromise::result<void, E>
+//                       when prior promise completes
 //    |wrap_with()|: applies a wrapper to the promise
 //    |box()|: wraps the promise's continuation into a |fit::function|
 //    |fpromise::join_promises()|: await multiple promises in an argument list,
@@ -662,6 +664,27 @@ class promise_impl final {
     assert(state_.has_value());
     return make_promise_with_continuation(
         ::fpromise::internal::discard_result_continuation<promise_impl>(std::move(*this)));
+  }
+
+  // Returns an unboxed promise which discards the value of this promise
+  // once it completes, thereby always producing a result of type
+  // fpromise::result<void, E> regardless of whether this promise
+  // succeeded or failed.
+  //
+  // Asserts that the promise is non-empty.
+  // This method consumes the promise's continuation, leaving it empty.
+  //
+  // EXAMPLE
+  //
+  //     auto f = fpromise::make_promise(...)
+  //         .discard_value()
+  //         .and_then(...)
+  //         .or_else(...);
+  //
+  promise_impl<::fpromise::internal::discard_value_continuation<promise_impl>> discard_value() {
+    assert(state_.has_value());
+    return make_promise_with_continuation(
+        ::fpromise::internal::discard_value_continuation<promise_impl>(std::move(*this)));
   }
 
   // Applies a |wrapper| to the promise.  Invokes the wrapper's |wrap()|
