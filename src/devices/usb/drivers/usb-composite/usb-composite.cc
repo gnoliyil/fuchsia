@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "usb-composite.h"
+#include "src/devices/usb/drivers/usb-composite/usb-composite.h"
 
 #include <endian.h>
 #include <lib/ddk/debug.h>
@@ -10,8 +10,8 @@
 
 #include <fbl/auto_lock.h>
 
+#include "src/devices/usb/drivers/usb-composite/usb-interface.h"
 #include "src/devices/usb/drivers/usb-composite/usb_composite_bind.h"
-#include "usb-interface.h"
 
 namespace usb_composite {
 

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "dwc3.h"
+#include "src/devices/usb/drivers/dwc3/dwc3.h"
 
 #include <lib/fit/defer.h>
 #include <lib/zx/clock.h>
@@ -10,7 +10,7 @@
 #include <fbl/auto_lock.h>
 #include <usb/usb.h>
 
-#include "dwc3-regs.h"
+#include "src/devices/usb/drivers/dwc3/dwc3-regs.h"
 #include "src/devices/usb/drivers/dwc3/dwc3_bind.h"
 
 namespace dwc3 {

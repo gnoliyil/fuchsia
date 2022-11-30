@@ -5,7 +5,7 @@
 #ifndef SRC_DEVICES_USB_DRIVERS_XHCI_XHCI_ASYNC_AUTO_CALL_H_
 #define SRC_DEVICES_USB_DRIVERS_XHCI_XHCI_ASYNC_AUTO_CALL_H_
 
-#include "usb-xhci.h"
+#include "src/devices/usb/drivers/xhci/usb-xhci.h"
 
 namespace usb_xhci {
 // A reference counted class that automatically

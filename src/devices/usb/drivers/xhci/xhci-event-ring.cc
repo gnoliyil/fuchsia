@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "xhci-event-ring.h"
+#include "src/devices/usb/drivers/xhci/xhci-event-ring.h"
 
 #include <lib/async-loop/cpp/loop.h>
 #include <lib/async/cpp/executor.h>
@@ -12,7 +12,7 @@
 
 #include <optional>
 
-#include "usb-xhci.h"
+#include "src/devices/usb/drivers/xhci/usb-xhci.h"
 
 namespace usb_xhci {
 

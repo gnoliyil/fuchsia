@@ -5,7 +5,7 @@
 #ifndef SRC_DEVICES_USB_DRIVERS_XHCI_XHCI_ENUMERATION_H_
 #define SRC_DEVICES_USB_DRIVERS_XHCI_XHCI_ENUMERATION_H_
 
-#include "xhci-context.h"
+#include "src/devices/usb/drivers/xhci/xhci-context.h"
 
 // Helper functions to assist with setup and teardown of USB devices.
 

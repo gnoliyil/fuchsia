@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "usb-xhci.h"
+#include "src/devices/usb/drivers/xhci/usb-xhci.h"
 
 #include <lib/ddk/debug.h>
 #include <lib/ddk/hw/arch_ops.h>

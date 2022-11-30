@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "aml-usb-crg-phy.h"
+#include "src/devices/usb/drivers/aml-usb-crg-phy-v2/aml-usb-crg-phy.h"
 
 #include <assert.h>
 #include <lib/ddk/debug.h>
@@ -28,7 +28,7 @@
 #include <fbl/auto_lock.h>
 
 #include "src/devices/usb/drivers/aml-usb-crg-phy-v2/aml_usb_crg_phy_bind.h"
-#include "usb-phy-regs.h"
+#include "src/devices/usb/drivers/aml-usb-crg-phy-v2/usb-phy-regs.h"
 
 namespace aml_usb_crg_phy {
 

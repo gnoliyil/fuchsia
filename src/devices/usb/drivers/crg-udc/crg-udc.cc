@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "crg-udc.h"
+#include "src/devices/usb/drivers/crg-udc/crg-udc.h"
 
 #include <lib/ddk/hw/arch_ops.h>
 #include <lib/ddk/metadata.h>
@@ -21,8 +21,8 @@
 #include <usb/usb-request.h>
 #include <usb/usb.h>
 
-#include "crg_udc_regs.h"
 #include "src/devices/usb/drivers/crg-udc/crg_udc_bind.h"
+#include "src/devices/usb/drivers/crg-udc/crg_udc_regs.h"
 
 namespace crg_udc {
 

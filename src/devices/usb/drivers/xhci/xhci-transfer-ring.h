@@ -11,8 +11,8 @@
 
 #include <map>
 
-#include "xhci-context.h"
-#include "xhci-event-ring.h"
+#include "src/devices/usb/drivers/xhci/xhci-context.h"
+#include "src/devices/usb/drivers/xhci/xhci-event-ring.h"
 
 namespace usb_xhci {
 

@@ -20,9 +20,9 @@
 #include <usb/request-cpp.h>
 #include <usb/usb.h>
 
-#include "dwc3-types.h"
 #include "fuchsia/hardware/usb/dci/cpp/banjo.h"
 #include "fuchsia/hardware/usb/descriptor/cpp/banjo.h"
+#include "src/devices/usb/drivers/dwc3/dwc3-types.h"
 
 namespace dwc3 {
 

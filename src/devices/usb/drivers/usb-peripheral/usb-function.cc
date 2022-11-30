@@ -2,13 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "usb-function.h"
+#include "src/devices/usb/drivers/usb-peripheral/usb-function.h"
 
 #include <lib/ddk/debug.h>
 
 #include <fbl/array.h>
 
-#include "usb-peripheral.h"
+#include "src/devices/usb/drivers/usb-peripheral/usb-peripheral.h"
 
 namespace usb_peripheral {
 

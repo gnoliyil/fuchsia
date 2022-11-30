@@ -2,14 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "dwc3.h"
+#include "src/devices/usb/drivers/dwc3/dwc3.h"
 
 #include <fake-mmio-reg/fake-mmio-reg.h>
 #include <zxtest/zxtest.h>
 
-#include "dwc3-regs.h"
 #include "src/devices/bus/testing/fake-pdev/fake-pdev.h"
 #include "src/devices/testing/mock-ddk/mock-device.h"
+#include "src/devices/usb/drivers/dwc3/dwc3-regs.h"
 
 namespace dwc3 {
 

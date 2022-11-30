@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "usb-peripheral.h"
+#include "src/devices/usb/drivers/usb-peripheral/usb-peripheral.h"
 
 #include <assert.h>
 #include <fuchsia/hardware/usb/dci/c/banjo.h>
@@ -30,8 +30,8 @@
 #include <usb/peripheral.h>
 #include <usb/usb.h>
 
+#include "src/devices/usb/drivers/usb-peripheral/usb-function.h"
 #include "src/devices/usb/drivers/usb-peripheral/usb_peripheral-bind.h"
-#include "usb-function.h"
 
 namespace peripheral = fuchsia_hardware_usb_peripheral;
 

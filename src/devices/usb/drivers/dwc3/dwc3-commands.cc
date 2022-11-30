@@ -4,8 +4,8 @@
 
 #include <fbl/auto_lock.h>
 
-#include "dwc3-regs.h"
-#include "dwc3.h"
+#include "src/devices/usb/drivers/dwc3/dwc3-regs.h"
+#include "src/devices/usb/drivers/dwc3/dwc3.h"
 
 namespace dwc3 {
 

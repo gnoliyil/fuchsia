@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "xhci-event-ring.h"
+#include "src/devices/usb/drivers/xhci/xhci-event-ring.h"
 
 #include <lib/fake_ddk/fake_ddk.h>
 #include <lib/fpromise/bridge.h>
@@ -21,8 +21,8 @@
 #include <zxtest/zxtest.h>
 
 #include "src/devices/usb/drivers/xhci/registers.h"
-#include "usb-xhci.h"
-#include "xhci-event-ring.h"
+#include "src/devices/usb/drivers/xhci/usb-xhci.h"
+#include "src/devices/usb/drivers/xhci/xhci-event-ring.h"
 
 namespace usb_xhci {
 

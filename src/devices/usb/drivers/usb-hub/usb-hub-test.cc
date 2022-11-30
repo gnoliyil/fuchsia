@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "usb-hub.h"
+#include "src/devices/usb/drivers/usb-hub/usb-hub.h"
 
 #include <fuchsia/hardware/usb/hub/c/banjo.h>
 #include <fuchsia/hardware/usb/hubdescriptor/c/banjo.h>
@@ -29,8 +29,8 @@
 #include <fbl/ref_ptr.h>
 #include <zxtest/zxtest.h>
 
-#include "fake-device.h"
 #include "lib/fpromise/promise.h"
+#include "src/devices/usb/drivers/usb-hub/fake-device.h"
 
 namespace {
 template <EmulationMode mode>

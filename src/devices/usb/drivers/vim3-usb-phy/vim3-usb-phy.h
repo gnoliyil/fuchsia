@@ -19,8 +19,8 @@
 #include <fbl/mutex.h>
 #include <soc/aml-common/aml-registers.h>
 
-#include "dwc2-device.h"
-#include "xhci-device.h"
+#include "src/devices/usb/drivers/vim3-usb-phy/dwc2-device.h"
+#include "src/devices/usb/drivers/vim3-usb-phy/xhci-device.h"
 
 namespace vim3_usb_phy {
 

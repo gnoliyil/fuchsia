@@ -9,7 +9,7 @@
 
 #include <zxtest/zxtest.h>
 
-#include "usb-virtual-bus.h"
+#include "src/devices/usb/drivers/usb-virtual-bus/usb-virtual-bus.h"
 
 namespace usb_virtual_bus {
 

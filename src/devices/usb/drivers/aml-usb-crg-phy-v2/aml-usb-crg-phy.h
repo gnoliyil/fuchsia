@@ -19,8 +19,8 @@
 #include <fbl/mutex.h>
 #include <soc/aml-common/aml-registers.h>
 
-#include "udc-device.h"
-#include "xhci-device.h"
+#include "src/devices/usb/drivers/aml-usb-crg-phy-v2/udc-device.h"
+#include "src/devices/usb/drivers/aml-usb-crg-phy-v2/xhci-device.h"
 
 namespace aml_usb_crg_phy {
 

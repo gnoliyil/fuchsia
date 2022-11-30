@@ -16,8 +16,8 @@
 #include <usb/request-cpp.h>
 
 #include "lib/fpromise/promise.h"
-#include "registers.h"
-#include "xhci-hub.h"
+#include "src/devices/usb/drivers/xhci/registers.h"
+#include "src/devices/usb/drivers/xhci/xhci-hub.h"
 
 namespace usb_xhci {
 struct TRBContext;

@@ -10,7 +10,7 @@
 
 #include <ddktl/device.h>
 
-#include "dwc2-device.h"
+#include "src/devices/usb/drivers/as370-usb-phy/dwc2-device.h"
 
 namespace as370_usb_phy {
 

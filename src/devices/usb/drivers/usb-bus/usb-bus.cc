@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "usb-bus.h"
+#include "src/devices/usb/drivers/usb-bus/usb-bus.h"
 
 #include <lib/ddk/debug.h>
 #include <stdio.h>
@@ -11,8 +11,8 @@
 
 #include <fbl/alloc_checker.h>
 
+#include "src/devices/usb/drivers/usb-bus/usb-device.h"
 #include "src/devices/usb/drivers/usb-bus/usb_bus_bind.h"
-#include "usb-device.h"
 
 namespace usb_bus {
 

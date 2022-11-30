@@ -21,8 +21,8 @@
 #include <fbl/mutex.h>
 #include <usb/request-cpp.h>
 
-#include "usb-virtual-device.h"
-#include "usb-virtual-host.h"
+#include "src/devices/usb/drivers/usb-virtual-bus/usb-virtual-device.h"
+#include "src/devices/usb/drivers/usb-virtual-bus/usb-virtual-host.h"
 
 namespace usb_virtual_bus {
 

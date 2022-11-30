@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "xhci-transfer-ring.h"
+#include "src/devices/usb/drivers/xhci/xhci-transfer-ring.h"
 
-#include "usb-xhci.h"
+#include "src/devices/usb/drivers/xhci/usb-xhci.h"
 
 namespace usb_xhci {
 void TransferRing::AdvancePointer() {

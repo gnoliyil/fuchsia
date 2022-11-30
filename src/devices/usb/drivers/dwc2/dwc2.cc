@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "dwc2.h"
+#include "src/devices/usb/drivers/dwc2/dwc2.h"
 
 #include <lib/ddk/hw/arch_ops.h>
 #include <lib/ddk/metadata.h>
@@ -22,7 +22,7 @@
 #include <usb/usb.h>
 
 #include "src/devices/usb/drivers/dwc2/dwc2_bind.h"
-#include "usb_dwc_regs.h"
+#include "src/devices/usb/drivers/dwc2/usb_dwc_regs.h"
 
 namespace dwc2 {
 

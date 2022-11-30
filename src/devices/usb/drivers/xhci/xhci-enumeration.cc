@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "xhci-enumeration.h"
+#include "src/devices/usb/drivers/xhci/xhci-enumeration.h"
 
 #include <endian.h>
 #include <zircon/errors.h>
@@ -10,9 +10,9 @@
 
 #include "fuchsia/hardware/usb/descriptor/c/banjo.h"
 #include "src/devices/usb/drivers/xhci/registers.h"
+#include "src/devices/usb/drivers/xhci/usb-xhci.h"
+#include "src/devices/usb/drivers/xhci/xhci-async-auto-call.h"
 #include "src/devices/usb/drivers/xhci/xhci-context.h"
-#include "usb-xhci.h"
-#include "xhci-async-auto-call.h"
 #include "zircon/status.h"
 
 namespace usb_xhci {

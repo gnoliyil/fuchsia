@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "crg-udc.h"
+#include "src/devices/usb/drivers/crg-udc/crg-udc.h"
 
 #include <zxtest/zxtest.h>
 

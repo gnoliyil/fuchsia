@@ -15,8 +15,8 @@
 #include <ddktl/device.h>
 #include <fbl/mutex.h>
 
-#include "dwc2-device.h"
-#include "xhci-device.h"
+#include "src/devices/usb/drivers/nelson-usb-phy/dwc2-device.h"
+#include "src/devices/usb/drivers/nelson-usb-phy/xhci-device.h"
 
 namespace nelson_usb_phy {
 

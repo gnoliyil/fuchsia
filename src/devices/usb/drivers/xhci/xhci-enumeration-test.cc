@@ -18,7 +18,7 @@
 // unique template instantiation instead of passing TRBs around to everything (resulting in
 // tight coupling between the event ring, UsbXhci class, the transfer ring, and the enumerator).
 
-#include "xhci-enumeration.h"
+#include "src/devices/usb/drivers/xhci/xhci-enumeration.h"
 
 #include <lib/fake_ddk/fake_ddk.h>
 #include <lib/fpromise/bridge.h>
@@ -32,8 +32,8 @@
 #include <zxtest/zxtest.h>
 
 #include "fuchsia/hardware/usb/descriptor/c/banjo.h"
-#include "usb-xhci.h"
-#include "xhci-event-ring.h"
+#include "src/devices/usb/drivers/xhci/usb-xhci.h"
+#include "src/devices/usb/drivers/xhci/xhci-event-ring.h"
 
 namespace usb_xhci {
 

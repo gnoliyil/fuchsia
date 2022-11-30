@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "aml-usb-phy.h"
+#include "src/devices/usb/drivers/aml-usb-phy-v2/aml-usb-phy.h"
 
 #include <fuchsia/hardware/platform/device/c/banjo.h>
 #include <lib/ddk/device.h>
@@ -27,7 +27,7 @@
 
 #include "src/devices/registers/testing/mock-registers/mock-registers.h"
 #include "src/devices/usb/drivers/aml-usb-phy-v2/aml_usb_phy_bind.h"
-#include "usb-phy-regs.h"
+#include "src/devices/usb/drivers/aml-usb-phy-v2/usb-phy-regs.h"
 
 struct zx_device : std::enable_shared_from_this<zx_device> {
   std::list<std::shared_ptr<zx_device>> devices;

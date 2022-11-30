@@ -17,9 +17,9 @@
 #include <fbl/mutex.h>
 #include <usb/usb.h>
 
-#include "xhci-context.h"
-#include "xhci-hub.h"
-#include "xhci-port-state.h"
+#include "src/devices/usb/drivers/xhci/xhci-context.h"
+#include "src/devices/usb/drivers/xhci/xhci-hub.h"
+#include "src/devices/usb/drivers/xhci/xhci-port-state.h"
 #include "zircon/system/ulib/inspect/include/lib/inspect/cpp/vmo/types.h"
 
 namespace usb_xhci {

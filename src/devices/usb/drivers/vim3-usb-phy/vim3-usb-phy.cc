@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "vim3-usb-phy.h"
+#include "src/devices/usb/drivers/vim3-usb-phy/vim3-usb-phy.h"
 
 #include <assert.h>
 #include <lib/ddk/debug.h>
@@ -27,8 +27,8 @@
 #include <fbl/algorithm.h>
 #include <fbl/auto_lock.h>
 
+#include "src/devices/usb/drivers/vim3-usb-phy/usb-phy-regs.h"
 #include "src/devices/usb/drivers/vim3-usb-phy/vim3_usb_phy_bind.h"
-#include "usb-phy-regs.h"
 
 namespace vim3_usb_phy {
 

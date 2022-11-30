@@ -13,7 +13,7 @@
 #include <fbl/array.h>
 #include <fbl/ref_counted.h>
 
-#include "usb-peripheral.h"
+#include "src/devices/usb/drivers/usb-peripheral/usb-peripheral.h"
 
 namespace usb_peripheral {
 

@@ -15,7 +15,7 @@
 #include <fbl/ref_ptr.h>
 #include <usb/usb.h>
 
-#include "usb-composite.h"
+#include "src/devices/usb/drivers/usb-composite/usb-composite.h"
 
 namespace usb_composite {
 

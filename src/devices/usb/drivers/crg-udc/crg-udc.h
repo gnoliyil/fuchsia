@@ -23,7 +23,7 @@
 #include <usb/request-cpp.h>
 #include <usb/usb.h>
 
-#include "crg_udc_regs.h"
+#include "src/devices/usb/drivers/crg-udc/crg_udc_regs.h"
 
 namespace crg_udc {
 

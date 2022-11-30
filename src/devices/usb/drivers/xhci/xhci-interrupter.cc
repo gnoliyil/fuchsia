@@ -2,12 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "xhci-interrupter.h"
+#include "src/devices/usb/drivers/xhci/xhci-interrupter.h"
 
 #include <lib/async/cpp/irq.h>
 #include <lib/async/cpp/task.h>
 
-#include "usb-xhci.h"
+#include "src/devices/usb/drivers/xhci/usb-xhci.h"
 
 namespace usb_xhci {
 

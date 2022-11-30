@@ -23,7 +23,7 @@
 #include <usb/request-cpp.h>
 #include <usb/usb.h>
 
-#include "usb_dwc_regs.h"
+#include "src/devices/usb/drivers/dwc2/usb_dwc_regs.h"
 
 namespace dwc2 {
 

@@ -35,13 +35,13 @@
 #include <fbl/mutex.h>
 
 #include "lib/dma-buffer/buffer.h"
-#include "xhci-device-state.h"
-#include "xhci-enumeration.h"
-#include "xhci-event-ring.h"
-#include "xhci-hub.h"
-#include "xhci-interrupter.h"
-#include "xhci-port-state.h"
-#include "xhci-transfer-ring.h"
+#include "src/devices/usb/drivers/xhci/xhci-device-state.h"
+#include "src/devices/usb/drivers/xhci/xhci-enumeration.h"
+#include "src/devices/usb/drivers/xhci/xhci-event-ring.h"
+#include "src/devices/usb/drivers/xhci/xhci-hub.h"
+#include "src/devices/usb/drivers/xhci/xhci-interrupter.h"
+#include "src/devices/usb/drivers/xhci/xhci-port-state.h"
+#include "src/devices/usb/drivers/xhci/xhci-transfer-ring.h"
 #include "zircon/system/ulib/inspect/include/lib/inspect/cpp/vmo/types.h"
 
 namespace usb_xhci {

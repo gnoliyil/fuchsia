@@ -9,8 +9,8 @@
 
 #include <optional>
 
-#include "xhci-hub.h"
-#include "xhci-transfer-ring.h"
+#include "src/devices/usb/drivers/xhci/xhci-hub.h"
+#include "src/devices/usb/drivers/xhci/xhci-transfer-ring.h"
 #include "zircon/compiler.h"
 
 namespace usb_xhci {

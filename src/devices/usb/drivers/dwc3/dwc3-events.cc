@@ -4,9 +4,9 @@
 
 #include <lib/fit/defer.h>
 
-#include "dwc3-regs.h"
-#include "dwc3-types.h"
-#include "dwc3.h"
+#include "src/devices/usb/drivers/dwc3/dwc3-regs.h"
+#include "src/devices/usb/drivers/dwc3/dwc3-types.h"
+#include "src/devices/usb/drivers/dwc3/dwc3.h"
 
 namespace dwc3 {
 

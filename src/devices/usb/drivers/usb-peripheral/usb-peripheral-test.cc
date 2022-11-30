@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "usb-peripheral.h"
+#include "src/devices/usb/drivers/usb-peripheral/usb-peripheral.h"
 
 #include <fuchsia/hardware/platform/device/c/banjo.h>
 #include <fuchsia/hardware/usb/dci/c/banjo.h>
@@ -27,7 +27,7 @@
 #include <usb/usb.h>
 #include <zxtest/zxtest.h>
 
-#include "usb-function.h"
+#include "src/devices/usb/drivers/usb-peripheral/usb-function.h"
 
 struct zx_device : std::enable_shared_from_this<zx_device> {
   std::list<std::shared_ptr<zx_device>> devices;

@@ -12,7 +12,7 @@
 
 #include <thread>
 
-#include "xhci-event-ring.h"
+#include "src/devices/usb/drivers/xhci/xhci-event-ring.h"
 #include "zircon/system/ulib/inspect/include/lib/inspect/cpp/vmo/types.h"
 
 namespace usb_xhci {

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "usb-interface.h"
+#include "src/devices/usb/drivers/usb-composite/usb-interface.h"
 
 #include <fuchsia/hardware/usb/c/banjo.h>
 #include <fuchsia/hardware/usb/composite/c/banjo.h>
@@ -13,7 +13,7 @@
 
 #include <usb/usb-request.h>
 
-#include "usb-composite.h"
+#include "src/devices/usb/drivers/usb-composite/usb-composite.h"
 
 namespace usb_composite {
 

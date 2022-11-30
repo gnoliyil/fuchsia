@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "nelson-usb-phy.h"
+#include "src/devices/usb/drivers/nelson-usb-phy/nelson-usb-phy.h"
 
 #include <assert.h>
 #include <lib/ddk/debug.h>
@@ -21,7 +21,7 @@
 #include <soc/aml-common/aml-g12-reset.h>
 
 #include "src/devices/usb/drivers/nelson-usb-phy/nelson_usb_phy_bind.h"
-#include "usb-phy-regs.h"
+#include "src/devices/usb/drivers/nelson-usb-phy/usb-phy-regs.h"
 
 namespace nelson_usb_phy {
 
