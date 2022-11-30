@@ -4,8 +4,7 @@
 
 use {
     anyhow::Error,
-    banjo_fuchsia_hardware_wlan_softmac as banjo_wlan_softmac,
-    fidl_fuchsia_wlan_internal as fidl_internal,
+    banjo_fuchsia_wlan_softmac as banjo_wlan_softmac, fidl_fuchsia_wlan_internal as fidl_internal,
     ieee80211::Bssid,
     wlan_common::{channel::derive_channel, ie, mac::CapabilityInfo, TimeUnit},
 };
@@ -87,7 +86,7 @@ mod tests {
         snr_dbh: 35,
 
         // Unused fields
-        rx_flags: banjo_wlan_softmac::WlanRxInfoFlags(0),
+        rx_flags: 0,
         valid_fields: 0,
         phy: banjo_common::WlanPhyType::DSSS,
         data_rate: 0,

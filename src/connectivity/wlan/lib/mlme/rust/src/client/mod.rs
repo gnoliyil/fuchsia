@@ -21,8 +21,8 @@ use {
         logger,
     },
     anyhow::{self, format_err},
-    banjo_fuchsia_hardware_wlan_softmac as banjo_wlan_softmac,
     banjo_fuchsia_wlan_common as banjo_common, banjo_fuchsia_wlan_internal as banjo_internal,
+    banjo_fuchsia_wlan_softmac as banjo_wlan_softmac,
     channel_switch::ChannelState,
     fidl_fuchsia_wlan_ieee80211 as fidl_ieee80211, fidl_fuchsia_wlan_minstrel as fidl_minstrel,
     fidl_fuchsia_wlan_mlme as fidl_mlme, fuchsia_zircon as zx,
@@ -130,7 +130,7 @@ impl crate::MlmeImpl for ClientMlme {
     fn handle_mac_frame_rx(
         &mut self,
         bytes: &[u8],
-        rx_info: banjo_fuchsia_hardware_wlan_softmac::WlanRxInfo,
+        rx_info: banjo_fuchsia_wlan_softmac::WlanRxInfo,
     ) {
         Self::on_mac_frame_rx(self, bytes, rx_info)
     }
@@ -592,7 +592,7 @@ impl Client {
         })?;
         let out_buf = OutBuf::from(buf, bytes_written);
         ctx.device
-            .send_wlan_frame(out_buf, banjo_wlan_softmac::WlanTxInfoFlags(0))
+            .send_wlan_frame(out_buf, 0)
             .map_err(|error| Error::Status(format!("error sending power management frame"), error))
     }
 
@@ -787,7 +787,7 @@ impl<'a> BoundClient<'a> {
         let out_buf = OutBuf::from(buf, bytes_written);
         self.ctx
             .device
-            .send_wlan_frame(out_buf, banjo_wlan_softmac::WlanTxInfoFlags(0))
+            .send_wlan_frame(out_buf, 0)
             .map_err(|s| Error::Status(format!("error sending keep alive frame"), s))
     }
 
@@ -883,8 +883,8 @@ impl<'a> BoundClient<'a> {
         })?;
         let out_buf = OutBuf::from(buf, bytes_written);
         let tx_flags = match ether_type {
-            mac::ETHER_TYPE_EAPOL => banjo_wlan_softmac::WlanTxInfoFlags::FAVOR_RELIABILITY,
-            _ => banjo_wlan_softmac::WlanTxInfoFlags(0),
+            mac::ETHER_TYPE_EAPOL => banjo_wlan_softmac::WlanTxInfoFlags::FAVOR_RELIABILITY.0,
+            _ => 0,
         };
         self.ctx
             .device
@@ -1119,7 +1119,7 @@ impl<'a> BoundClient<'a> {
     }
 
     fn send_mgmt_or_ctrl_frame(&mut self, out_buf: OutBuf) -> Result<(), zx::Status> {
-        self.ctx.device.send_wlan_frame(out_buf, banjo_wlan_softmac::WlanTxInfoFlags(0))
+        self.ctx.device.send_wlan_frame(out_buf, 0)
     }
 }
 
@@ -1575,7 +1575,7 @@ mod tests {
         me.on_mac_frame_rx(
             BEACON_FRAME,
             banjo_wlan_softmac::WlanRxInfo {
-                rx_flags: banjo_wlan_softmac::WlanRxInfoFlags(0),
+                rx_flags: 0,
                 valid_fields: 0,
                 phy: banjo_common::WlanPhyType::DSSS,
                 data_rate: 0,
@@ -2226,8 +2226,7 @@ mod tests {
         assert_eq!(m.fake_device.keys.len(), 1);
 
         let sent_key = crate::test_utils::fake_key(BSSID.0);
-        let key_len = m.fake_device.keys[0].key_len as usize;
-        assert_eq!(m.fake_device.keys[0].key[0..key_len], sent_key.key[..]);
+        assert_eq!(m.fake_device.keys_vec[0], sent_key.key);
         assert_eq!(m.fake_device.keys[0].key_idx, sent_key.key_id as u8);
         assert_eq!(
             m.fake_device.keys[0].key_type,

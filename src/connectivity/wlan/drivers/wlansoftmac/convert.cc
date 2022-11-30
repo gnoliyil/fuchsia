@@ -120,30 +120,30 @@ zx_status_t ConvertWlanSoftmacInfo(const fuchsia_wlan_softmac::wire::WlanSoftmac
   for (size_t i = 0; i < in.band_caps().count(); i++) {
     switch (in.band_caps()[i].band) {
       case fuchsia_wlan_common::wire::WlanBand::kTwoGhz:
-        out->band_cap_list[i].band = WLAN_BAND_TWO_GHZ;
+        out->band_caps_list[i].band = WLAN_BAND_TWO_GHZ;
         break;
       case fuchsia_wlan_common::wire::WlanBand::kFiveGhz:
-        out->band_cap_list[i].band = WLAN_BAND_FIVE_GHZ;
+        out->band_caps_list[i].band = WLAN_BAND_FIVE_GHZ;
         break;
       default:
         errorf("WlanBand is not supported: %hhu", static_cast<uint8_t>(in.band_caps()[i].band));
         return ZX_ERR_NOT_SUPPORTED;
     }
-    out->band_cap_list[i].basic_rate_count = in.band_caps()[i].basic_rate_count;
+    out->band_caps_list[i].basic_rate_count = in.band_caps()[i].basic_rate_count;
 
-    memcpy(out->band_cap_list[i].basic_rate_list, in.band_caps()[i].basic_rate_list.data(),
+    memcpy(out->band_caps_list[i].basic_rate_list, in.band_caps()[i].basic_rate_list.data(),
            in.band_caps()[i].basic_rate_count);
-    out->band_cap_list[i].ht_supported = in.band_caps()[i].ht_supported;
-    ConvertHtCapabilities(in.band_caps()[i].ht_caps, &out->band_cap_list[i].ht_caps);
-    out->band_cap_list[i].vht_supported = in.band_caps()[i].vht_supported;
-    ConvertVhtCapabilities(in.band_caps()[i].vht_caps, &out->band_cap_list[i].vht_caps);
-    out->band_cap_list[i].operating_channel_count = in.band_caps()[i].operating_channel_count;
-    memcpy(out->band_cap_list[i].operating_channel_list,
+    out->band_caps_list[i].ht_supported = in.band_caps()[i].ht_supported;
+    ConvertHtCapabilities(in.band_caps()[i].ht_caps, &out->band_caps_list[i].ht_caps);
+    out->band_caps_list[i].vht_supported = in.band_caps()[i].vht_supported;
+    ConvertVhtCapabilities(in.band_caps()[i].vht_caps, &out->band_caps_list[i].vht_caps);
+    out->band_caps_list[i].operating_channel_count = in.band_caps()[i].operating_channel_count;
+    memcpy(out->band_caps_list[i].operating_channel_list,
            in.band_caps()[i].operating_channel_list.data(),
            sizeof(uint8_t) * in.band_caps()[i].operating_channel_count);
   }
 
-  out->band_cap_count = static_cast<uint8_t>(in.band_caps().count());
+  out->band_caps_count = static_cast<uint8_t>(in.band_caps().count());
   return ZX_OK;
 }
 
@@ -575,7 +575,7 @@ zx_status_t ConvertKeyConfig(const wlan_key_config_t& in,
   builder.peer_addr(peer_addr);
   builder.key_idx(in.key_idx);
 
-  auto key_vec = std::vector<uint8_t>(in.key, in.key + in.key_len);
+  auto key_vec = std::vector<uint8_t>(in.key_list, in.key_list + in.key_count);
   builder.key(fidl::VectorView<uint8_t>(arena, key_vec));
   builder.rsc(in.rsc);
   *out = builder.Build();

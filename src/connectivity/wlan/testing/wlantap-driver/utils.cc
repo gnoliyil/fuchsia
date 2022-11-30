@@ -6,12 +6,12 @@
 
 #include <fuchsia/hardware/ethernet/c/banjo.h>
 #include <fuchsia/hardware/wlan/associnfo/c/banjo.h>
-#include <fuchsia/hardware/wlan/softmac/c/banjo.h>
 #include <fuchsia/hardware/wlanphyimpl/c/banjo.h>
 #include <fuchsia/wlan/common/c/banjo.h>
 #include <fuchsia/wlan/common/cpp/fidl.h>
 #include <fuchsia/wlan/device/cpp/fidl.h>
 #include <fuchsia/wlan/internal/cpp/fidl.h>
+#include <fuchsia/wlan/softmac/c/banjo.h>
 #include <lib/ddk/debug.h>
 
 #include <wlan/common/band.h>

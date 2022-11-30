@@ -5,10 +5,9 @@
 use {
     anyhow::{format_err, Error},
     banjo_fuchsia_hardware_wlan_associnfo as banjo_wlan_associnfo,
-    banjo_fuchsia_hardware_wlan_softmac as banjo_wlan_softmac,
     banjo_fuchsia_wlan_common as banjo_common, banjo_fuchsia_wlan_ieee80211 as banjo_ieee80211,
-    fidl_fuchsia_wlan_common as fidl_common, fidl_fuchsia_wlan_ieee80211 as fidl_ieee80211,
-    fidl_fuchsia_wlan_mlme as fidl_mlme,
+    banjo_fuchsia_wlan_softmac as banjo_wlan_softmac, fidl_fuchsia_wlan_common as fidl_common,
+    fidl_fuchsia_wlan_ieee80211 as fidl_ieee80211, fidl_fuchsia_wlan_mlme as fidl_mlme,
     ieee80211::Bssid,
     wlan_common::{capabilities::StaCapabilities, ie, mac::Aid},
     zerocopy::AsBytes,
@@ -118,7 +117,10 @@ pub fn device_info_from_wlan_softmac_info(
         .ok_or(format_err!("Unknown WlanWlanMacRole: {}", info.mac_role.0))?;
     let softmac_hardware_capability = info.hardware_capability;
     let mut bands = vec![];
-    for band_cap in &info.band_cap_list[0..info.band_cap_count as usize] {
+    // SAFETY: softmac.fidl API guarantees these values represent a valid memory region.
+    let band_caps_list =
+        unsafe { std::slice::from_raw_parts(info.band_caps_list, info.band_caps_count) };
+    for band_cap in band_caps_list {
         bands.push(convert_ddk_band_cap(band_cap)?);
     }
     Ok(fidl_mlme::DeviceInfo {
@@ -307,7 +309,7 @@ mod tests {
 
     fn empty_rx_info() -> banjo_wlan_softmac::WlanRxInfo {
         banjo_wlan_softmac::WlanRxInfo {
-            rx_flags: banjo_wlan_softmac::WlanRxInfoFlags(0),
+            rx_flags: 0,
             valid_fields: 0,
             phy: banjo_common::WlanPhyType::DSSS,
             data_rate: 0,
@@ -351,9 +353,10 @@ mod tests {
 
     #[test]
     fn test_convert_band_cap() {
-        let wlan_softmac_info = fake_wlan_softmac_info();
-        let band0 = convert_ddk_band_cap(&wlan_softmac_info.band_cap_list[0])
-            .expect("failed to convert band capability");
+        let mut supported_phys: Vec<banjo_common::WlanPhyType> = Vec::new();
+        let mut band_caps: Vec<banjo_wlan_softmac::WlanSoftmacBandCapability> = Vec::new();
+        let _wlan_softmac_info = fake_wlan_softmac_info(&mut supported_phys, &mut band_caps);
+        let band0 = convert_ddk_band_cap(&band_caps[0]).expect("failed to convert band capability");
         assert_eq!(band0.band, fidl_common::WlanBand::TwoGhz);
         assert_eq!(
             band0.basic_rates,
@@ -366,7 +369,9 @@ mod tests {
 
     #[test]
     fn test_convert_device_info() {
-        let wlan_softmac_info = fake_wlan_softmac_info();
+        let mut supported_phys: Vec<banjo_common::WlanPhyType> = Vec::new();
+        let mut band_caps: Vec<banjo_wlan_softmac::WlanSoftmacBandCapability> = Vec::new();
+        let wlan_softmac_info = fake_wlan_softmac_info(&mut supported_phys, &mut band_caps);
         let device_info = device_info_from_wlan_softmac_info(wlan_softmac_info)
             .expect("Failed to conver wlan-softmac info");
         assert_eq!(device_info.sta_addr, wlan_softmac_info.sta_addr);
@@ -376,7 +381,9 @@ mod tests {
 
     #[test]
     fn test_convert_device_info_unknown_role() {
-        let mut wlan_softmac_info = fake_wlan_softmac_info();
+        let mut supported_phys: Vec<banjo_common::WlanPhyType> = Vec::new();
+        let mut band_caps: Vec<banjo_wlan_softmac::WlanSoftmacBandCapability> = Vec::new();
+        let mut wlan_softmac_info = fake_wlan_softmac_info(&mut supported_phys, &mut band_caps);
         wlan_softmac_info.mac_role.0 = 10;
         device_info_from_wlan_softmac_info(wlan_softmac_info)
             .expect_err("Shouldn't convert invalid mac role");

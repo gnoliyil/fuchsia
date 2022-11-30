@@ -19,7 +19,7 @@ use {
         error::Error,
         key::KeyConfig,
     },
-    banjo_fuchsia_hardware_wlan_softmac as banjo_wlan_softmac,
+    banjo_fuchsia_wlan_softmac as banjo_wlan_softmac,
     fidl_fuchsia_wlan_ieee80211 as fidl_ieee80211, fidl_fuchsia_wlan_internal as fidl_internal,
     fidl_fuchsia_wlan_mlme as fidl_mlme, fuchsia_zircon as zx,
     ieee80211::MacAddr,
@@ -950,7 +950,7 @@ impl States {
         }
 
         let body_aligned =
-            (rx_info.rx_flags & banjo_wlan_softmac::WlanRxInfoFlags::FRAME_BODY_PADDING_4).0 != 0;
+            (rx_info.rx_flags & banjo_wlan_softmac::WlanRxInfoFlags::FRAME_BODY_PADDING_4.0) != 0;
 
         // Parse mac frame. Drop corrupted ones.
         trace!("Parsing MAC frame:\n  {:02x?}", bytes.deref());
@@ -3465,10 +3465,9 @@ mod tests {
             fidl_mlme::SetKeyResult { key_id: 6, status: zx::Status::OK.into_raw() }
         );
 
-        assert_eq!(m.fake_device.keys[0].bssid, 0);
         assert_eq!(
             m.fake_device.keys[0].protection,
-            banjo_fuchsia_hardware_wlan_softmac::WlanProtection::RX_TX
+            banjo_fuchsia_wlan_softmac::WlanProtection::RX_TX
         );
         assert_eq!(m.fake_device.keys[0].cipher_oui, [1, 2, 3]);
         assert_eq!(m.fake_device.keys[0].cipher_type, 4);
@@ -3478,14 +3477,7 @@ mod tests {
         );
         assert_eq!(m.fake_device.keys[0].peer_addr, BSSID.0);
         assert_eq!(m.fake_device.keys[0].key_idx, 6);
-        assert_eq!(m.fake_device.keys[0].key_len, 7);
-        assert_eq!(
-            m.fake_device.keys[0].key,
-            [
-                1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0,
-            ]
-        );
+        assert_eq!(m.fake_device.keys_vec[0], [1, 2, 3, 4, 5, 6, 7]);
         assert_eq!(m.fake_device.keys[0].rsc, 8);
     }
 

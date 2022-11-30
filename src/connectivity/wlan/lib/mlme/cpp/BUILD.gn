@@ -38,7 +38,6 @@ source_set("mlme") {
     "beacon.cc",
     "debug.cc",
     "ht.cc",
-    "key.cc",
     "mac_frame.cc",
     "packet.cc",
     "rate_limiter.cc",
@@ -48,9 +47,9 @@ source_set("mlme") {
 
   public_deps = [
     "//sdk/banjo/fuchsia.hardware.ethernet:fuchsia.hardware.ethernet_banjo_cpp",
-    "//sdk/banjo/fuchsia.hardware.wlan.softmac:fuchsia.hardware.wlan.softmac_banjo_cpp",
     "//sdk/fidl/fuchsia.wlan.common:fuchsia.wlan.common_banjo_c",
     "//sdk/fidl/fuchsia.wlan.mlme:fuchsia.wlan.mlme_hlcpp",
+    "//sdk/fidl/fuchsia.wlan.softmac:fuchsia.wlan.softmac_banjo_c",
     "//sdk/fidl/fuchsia.wlan.stats:fuchsia.wlan.stats_hlcpp",
     "//sdk/lib/fdio",
     "//src/connectivity/wlan/lib/common/cpp:common",

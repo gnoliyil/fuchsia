@@ -25,9 +25,9 @@ wlansoftmac_convert_sources = [
 
 wlansoftmac_convert_deps = [
   "//sdk/banjo/fuchsia.hardware.ethernet:fuchsia.hardware.ethernet_banjo_cpp",
-  "//sdk/banjo/fuchsia.hardware.wlan.softmac:fuchsia.hardware.wlan.softmac_banjo_c",
   "//sdk/fidl/fuchsia.wlan.common:fuchsia.wlan.common_banjo_c",
   "//sdk/fidl/fuchsia.wlan.internal:fuchsia.wlan.internal_banjo_c",
+  "//sdk/fidl/fuchsia.wlan.softmac:fuchsia.wlan.softmac_banjo_c",
   "//sdk/fidl/fuchsia.wlan.softmac:fuchsia.wlan.softmac_cpp_driver",
   "//src/connectivity/wlan/lib/mlme/cpp:mlme",
   "//zircon/system/ulib/fbl",

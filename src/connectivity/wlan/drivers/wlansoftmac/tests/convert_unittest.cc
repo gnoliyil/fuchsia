@@ -126,7 +126,11 @@ TEST(ConvertTest, ToBanjoWlanSoftmacInfo) {
   auto in = builder.Build();
 
   // Conduct conversion
+  wlan_phy_type_t supported_phys[wlan_common::kMaxSupportedPhyTypes];
+  wlan_softmac_band_capability_t band_caps[wlan_common::kMaxBands];
   wlan_softmac_info_t out;
+  out.supported_phys_list = supported_phys;
+  out.band_caps_list = band_caps;
   ConvertWlanSoftmacInfo(in, &out);
 
   // Verify outputs
@@ -138,9 +142,9 @@ TEST(ConvertTest, ToBanjoWlanSoftmacInfo) {
   }
   EXPECT_EQ(kFakeBanjoSoftmacHardwareCapabilityBit, out.hardware_capability);
 
-  EXPECT_EQ(wlan_common::kMaxBands, out.band_cap_count);
+  EXPECT_EQ(wlan_common::kMaxBands, out.band_caps_count);
   for (size_t i = 0; i < wlan_common::kMaxBands; i++) {
-    auto band_cap = out.band_cap_list[i];
+    auto band_cap = out.band_caps_list[i];
     EXPECT_EQ(kFakeBanjoBand, band_cap.band);
     EXPECT_EQ(wlan_internal::kMaxSupportedBasicRates, band_cap.basic_rate_count);
     for (size_t j = 0; j < wlan_internal::kMaxSupportedBasicRates; j++) {
@@ -478,13 +482,18 @@ TEST(ConvertTest, ToFidlBcn) {
 }
 
 TEST(ConvertTest, ToFidlKeyConfig) {
+  // Create tmp non-const key from const key.
+  uint8_t TmpKey[wlan_ieee80211::kMaxKeyLen];
+  memcpy(TmpKey, kFakeKey, wlan_ieee80211::kMaxKeyLen);
+
   // Populate wlan_key_config_t
   wlan_key_config_t in = {
       .protection = kFakeBanjoProtection,
       .cipher_type = kRandomPopulaterUint8,
       .key_type = kFakeBanjoKeyType,
       .key_idx = kRandomPopulaterUint8,
-      .key_len = wlan_ieee80211::kMaxKeyLen,
+      .key_list = TmpKey,
+      .key_count = wlan_ieee80211::kMaxKeyLen,
       .rsc = kRandomPopulaterUint64,
   };
 
@@ -494,10 +503,6 @@ TEST(ConvertTest, ToFidlKeyConfig) {
 
   for (size_t i = 0; i < wlan_ieee80211::kMacAddrLen; i++) {
     in.peer_addr[i] = kFakeMacAddr[i];
-  }
-
-  for (size_t i = 0; i < wlan_ieee80211::kMaxKeyLen; i++) {
-    in.key[i] = kFakeKey[i];
   }
 
   // Conduct conversion

@@ -5,10 +5,10 @@
 #include "device.h"
 
 #include <fuchsia/hardware/ethernet/cpp/banjo.h>
-#include <fuchsia/hardware/wlan/softmac/cpp/banjo.h>
 #include <fuchsia/wlan/common/c/banjo.h>
 #include <fuchsia/wlan/ieee80211/c/banjo.h>
 #include <fuchsia/wlan/internal/c/banjo.h>
+#include <fuchsia/wlan/softmac/c/banjo.h>
 #include <lib/ddk/device.h>
 #include <lib/zx/thread.h>
 #include <lib/zx/time.h>
@@ -288,6 +288,13 @@ zx_status_t Device::Bind(fdf::Channel channel) __TA_NO_THREAD_SAFETY_ANALYSIS {
     return result->error_value();
   }
 
+  // Allocating memory for lists since banjo converts FIDL vectors into a pointer and count without
+  // memory to back it.
+  wlan_softmac_info_.supported_phys_list =
+      static_cast<wlan_phy_type_t*>(calloc(fuchsia_wlan_common_MAX_SUPPORTED_PHY_TYPES,
+                                           sizeof(*wlan_softmac_info_.supported_phys_list)));
+  wlan_softmac_info_.band_caps_list = static_cast<wlan_softmac_band_capability_t*>(
+      calloc(fuchsia_wlan_common_MAX_BANDS, sizeof(*wlan_softmac_info_.band_caps_list)));
   if ((status = ConvertWlanSoftmacInfo(result->value()->info, &wlan_softmac_info_)) != ZX_OK) {
     errorf("WlanSoftmacInfo conversion failed (%s)", zx_status_get_string(status));
     return status;
@@ -413,7 +420,11 @@ std::unique_ptr<Packet> Device::PreparePacket(const void* data, size_t length, P
 
 // Our Device instance is leaked deliberately during the driver bind procedure, so we
 // manually take ownership here.
-void Device::DestroySelf() { delete this; }
+void Device::DestroySelf() {
+  free(wlan_softmac_info_.supported_phys_list);
+  free(wlan_softmac_info_.band_caps_list);
+  delete this;
+}
 
 void Device::ShutdownMainLoop() {
   if (main_loop_dead_) {

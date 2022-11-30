@@ -6,8 +6,8 @@ use {
     crate::ie::SupportedRate,
     anyhow::{bail, Error},
     banjo_fuchsia_hardware_wlan_associnfo as hw_wlan_associnfo,
-    banjo_fuchsia_hardware_wlan_softmac as hw_wlan_softmac,
-    banjo_fuchsia_wlan_common as banjo_common, fidl_fuchsia_wlan_common as fidl_common,
+    banjo_fuchsia_wlan_common as banjo_common, banjo_fuchsia_wlan_softmac as hw_wlan_softmac,
+    fidl_fuchsia_wlan_common as fidl_common,
 };
 
 pub const HT_NUM_MCS: u8 = 32; // Only support MCS 0-31
@@ -207,7 +207,7 @@ impl TxVector {
 
     pub fn to_banjo_tx_info(
         &self,
-        tx_flags: hw_wlan_softmac::WlanTxInfoFlags,
+        tx_flags: u32,
         minstrel_enabled: bool,
     ) -> hw_wlan_softmac::WlanTxInfo {
         let valid_fields = hw_wlan_softmac::WlanTxInfoValid::CHANNEL_BANDWIDTH.0

@@ -10,10 +10,9 @@ use {
         error::Error,
     },
     anyhow::format_err,
-    banjo_fuchsia_hardware_wlan_softmac as banjo_wlan_softmac,
     banjo_fuchsia_wlan_common as banjo_common, banjo_fuchsia_wlan_ieee80211 as banjo_ieee80211,
-    fidl_fuchsia_wlan_internal as fidl_internal, fidl_fuchsia_wlan_mlme as fidl_mlme,
-    fuchsia_zircon as zx,
+    banjo_fuchsia_wlan_softmac as banjo_wlan_softmac, fidl_fuchsia_wlan_internal as fidl_internal,
+    fidl_fuchsia_wlan_mlme as fidl_mlme, fuchsia_zircon as zx,
     ieee80211::{Bssid, MacAddr},
     log::{error, warn},
     thiserror::Error,
@@ -410,10 +409,14 @@ fn band_cap_for_band(
     wlan_softmac_info: &banjo_wlan_softmac::WlanSoftmacInfo,
     band: banjo_common::WlanBand,
 ) -> Option<&banjo_wlan_softmac::WlanSoftmacBandCapability> {
-    wlan_softmac_info.band_cap_list[..wlan_softmac_info.band_cap_count as usize]
-        .iter()
-        .filter(|b| b.band == band)
-        .next()
+    // SAFETY: softmac.fidl API guarantees these values represent a valid memory region.
+    let band_caps_list = unsafe {
+        std::slice::from_raw_parts(
+            wlan_softmac_info.band_caps_list,
+            wlan_softmac_info.band_caps_count,
+        )
+    };
+    band_caps_list.iter().filter(|b| b.band == band).next()
 }
 
 // TODO(fxbug.dev/91036): Zero should not mark a null rate.

@@ -5,12 +5,12 @@
 use {
     crate::{buffer::OutBuf, key},
     banjo_fuchsia_hardware_wlan_associnfo::*,
-    banjo_fuchsia_hardware_wlan_softmac::{
-        self as banjo_wlan_softmac, WlanRxPacket, WlanSoftmacInfo, WlanTxPacket,
-    },
     banjo_fuchsia_wlan_common::{self as banjo_common, WlanTxStatus},
     banjo_fuchsia_wlan_ieee80211 as banjo_ieee80211,
     banjo_fuchsia_wlan_internal::BssConfig,
+    banjo_fuchsia_wlan_softmac::{
+        self as banjo_wlan_softmac, WlanRxPacket, WlanSoftmacInfo, WlanTxPacket,
+    },
     fidl_fuchsia_wlan_mlme as fidl_mlme, fuchsia_zircon as zx,
     ieee80211::MacAddr,
     std::{ffi::c_void, marker::PhantomData},
@@ -61,11 +61,7 @@ impl Device {
         self.raw_device.deliver_eth_frame(slice)
     }
 
-    pub fn send_wlan_frame(
-        &self,
-        buf: OutBuf,
-        mut tx_flags: banjo_wlan_softmac::WlanTxInfoFlags,
-    ) -> Result<(), zx::Status> {
+    pub fn send_wlan_frame(&self, buf: OutBuf, mut tx_flags: u32) -> Result<(), zx::Status> {
         if buf.as_slice().len() < REQUIRED_WLAN_HEADER_LEN {
             return Err(zx::Status::BUFFER_TOO_SMALL);
         }
@@ -75,7 +71,7 @@ impl Device {
                 .unwrap()
                 .into_ref();
         if frame_control.protected() {
-            tx_flags.0 |= banjo_wlan_softmac::WlanTxInfoFlags::PROTECTED.0;
+            tx_flags |= banjo_wlan_softmac::WlanTxInfoFlags::PROTECTED.0;
         }
         let mut peer_addr = [0u8; 6];
         peer_addr.copy_from_slice(&buf.as_slice()[PEER_ADDR_OFFSET..PEER_ADDR_OFFSET + 6]);
@@ -301,7 +297,7 @@ pub struct ActiveScanArgs {
 }
 
 // Private wrapper struct to manage the lifetime of the pointers contained in the
-// banjo_fuchsia_hardware_wlan_softmac::WlanSoftmacActiveScanArgs converted
+// banjo_fuchsia_wlan_softmac::WlanSoftmacActiveScanArgs converted
 // from an ActiveScanArgs.
 struct WlanSoftmacActiveScanArgs<'a, T> {
     args: banjo_wlan_softmac::WlanSoftmacActiveScanArgs,
@@ -477,7 +473,6 @@ impl DeviceInterface {
 
     fn set_key(&self, key: key::KeyConfig) -> Result<(), zx::Status> {
         let mut banjo_key = banjo_wlan_softmac::WlanKeyConfig {
-            bssid: key.bssid,
             protection: match key.protection {
                 key::Protection::NONE => banjo_wlan_softmac::WlanProtection::NONE,
                 key::Protection::RX => banjo_wlan_softmac::WlanProtection::RX,
@@ -496,8 +491,8 @@ impl DeviceInterface {
             },
             peer_addr: key.peer_addr,
             key_idx: key.key_idx,
-            key_len: key.key_len,
-            key: key.key,
+            key_list: key.key.as_ptr(),
+            key_count: usize::from(key.key_len),
             rsc: key.rsc,
         };
         let status = (self.set_key)(self.device, &mut banjo_key);
@@ -661,6 +656,7 @@ pub mod test_utils {
         pub mlme_request_stream_channel: Option<zx::Channel>,
         pub wlan_channel: banjo_common::WlanChannel,
         pub keys: Vec<banjo_wlan_softmac::WlanKeyConfig>,
+        pub keys_vec: Vec<Vec<u8>>,
         pub next_scan_id: u64,
         pub captured_passive_scan_args: Option<CapturedWlanSoftmacPassiveScanArgs>,
         pub captured_active_scan_args: Option<ActiveScanArgs>,
@@ -675,12 +671,17 @@ pub mod test_utils {
         pub assocs: std::collections::HashMap<MacAddr, WlanAssocCtx>,
         pub buffer_provider: BufferProvider,
         pub set_key_results: Vec<zx::Status>,
+        pub supported_phys: Vec<banjo_common::WlanPhyType>,
+        pub band_caps: Vec<banjo_wlan_softmac::WlanSoftmacBandCapability>,
     }
 
     impl FakeDevice {
         pub fn new(_executor: &fasync::TestExecutor) -> Self {
             // Create a channel for SME requests, to be surfaced by start().
             let (mlme_proxy_channel, mlme_request_stream_channel) = zx::Channel::create().unwrap();
+            let mut supported_phys: Vec<banjo_common::WlanPhyType> = Vec::new();
+            let mut band_caps: Vec<banjo_wlan_softmac::WlanSoftmacBandCapability> = Vec::new();
+
             Self {
                 eth_queue: vec![],
                 wlan_queue: vec![],
@@ -694,18 +695,21 @@ pub mod test_utils {
                 next_scan_id: 0,
                 captured_passive_scan_args: None,
                 captured_active_scan_args: None,
-                info: fake_wlan_softmac_info(),
+                info: fake_wlan_softmac_info(&mut supported_phys, &mut band_caps),
                 discovery_support: fake_discovery_support(),
                 mac_sublayer_support: fake_mac_sublayer_support(),
                 security_support: fake_security_support(),
                 spectrum_management_support: fake_spectrum_management_support(),
                 keys: vec![],
+                keys_vec: vec![],
                 bss_cfg: None,
                 bcn_cfg: None,
                 link_status: LinkStatus::DOWN,
                 assocs: std::collections::HashMap::new(),
                 buffer_provider: FakeBufferProvider::new(),
                 set_key_results: vec![],
+                supported_phys,
+                band_caps,
             }
         }
 
@@ -722,6 +726,7 @@ pub mod test_utils {
             unsafe {
                 *out_sme_channel = mlme_request_stream_handle;
             }
+            device.info = fake_wlan_softmac_info(&mut device.supported_phys, &mut device.band_caps);
             // TODO(fxbug.dev/45464): Capture _ifc and provide a testing surface.
             zx::sys::ZX_OK
         }
@@ -802,6 +807,10 @@ pub mod test_utils {
         ) -> i32 {
             let device = unsafe { &mut *(device as *mut Self) };
             device.keys.push(unsafe { (*key).clone() });
+            // SAFETY: softmac.fidl API guarantees these values represent a valid memory region.
+            let keys_vec =
+                unsafe { std::slice::from_raw_parts((*key).key_list, (*key).key_count).to_vec() };
+            device.keys_vec.push(keys_vec);
             if device.set_key_results.is_empty() {
                 zx::sys::ZX_OK
             } else {
@@ -1025,15 +1034,21 @@ pub mod test_utils {
         }
     }
 
-    pub fn fake_wlan_softmac_info() -> WlanSoftmacInfo {
-        let band_cap_count = 2;
-        let mut band_cap_list = [default_band_capability(); banjo_common::MAX_BANDS as usize];
+    // Note: The WlanSoftmacInfo return structure does not have backing memory for the list of supported_phys and
+    // band_caps that it holds. So in order to successfully construct this, we are needing to pass in a vector
+    // reference to serve as the memory backing these lists.
+    pub fn fake_wlan_softmac_info(
+        supported_phys: &mut Vec<banjo_common::WlanPhyType>,
+        band_caps: &mut Vec<banjo_wlan_softmac::WlanSoftmacBandCapability>,
+    ) -> WlanSoftmacInfo {
+        let band_caps_count = 2;
+        let mut band_caps_list = [default_band_capability(); banjo_common::MAX_BANDS as usize];
         let basic_rate_list = arr!(
             [0x02, 0x04, 0x0b, 0x16, 0x0c, 0x12, 0x18, 0x24, 0x30, 0x48, 0x60, 0x6c],
             banjo_wlan_internal::MAX_SUPPORTED_BASIC_RATES as usize
         );
         let basic_rate_count = basic_rate_list.len() as u8;
-        band_cap_list[0] = banjo_wlan_softmac::WlanSoftmacBandCapability {
+        band_caps_list[0] = banjo_wlan_softmac::WlanSoftmacBandCapability {
             band: banjo_common::WlanBand::TWO_GHZ,
             basic_rate_list,
             basic_rate_count,
@@ -1047,7 +1062,7 @@ pub mod test_utils {
             vht_supported: false,
             vht_caps: VhtCapabilities { bytes: Default::default() },
         };
-        band_cap_list[1] = banjo_wlan_softmac::WlanSoftmacBandCapability {
+        band_caps_list[1] = banjo_wlan_softmac::WlanSoftmacBandCapability {
             band: banjo_common::WlanBand::FIVE_GHZ,
             basic_rate_list: arr!(
                 [0x02, 0x04, 0x0b, 0x16, 0x30, 0x60, 0x7e, 0x7f],
@@ -1076,26 +1091,24 @@ pub mod test_utils {
             banjo_common::WlanPhyType::VHT,
         ];
         // Convert to u8 for use in WlanSoftmacInfo.supported_phys_count.
-        let supported_phys_count: u8 = supported_phys_list.len().try_into().unwrap();
+        let supported_phys_count: usize = supported_phys_list.len().try_into().unwrap();
 
         // The Banjo transport requires this array to have a
         // size of banjo_common::MAX_SUPPORTED_PHY_TYPES.
-        let supported_phys_list = {
-            let mut initialized_supported_phys_list =
-                [banjo_common::WlanPhyType(0); banjo_common::MAX_SUPPORTED_PHY_TYPES as usize];
-            initialized_supported_phys_list[..supported_phys_count as usize]
-                .copy_from_slice(&supported_phys_list);
-            initialized_supported_phys_list
-        };
+        *supported_phys =
+            vec![banjo_common::WlanPhyType(0); banjo_common::MAX_SUPPORTED_PHY_TYPES as usize];
+        supported_phys[..supported_phys_count as usize].copy_from_slice(&supported_phys_list);
+
+        *band_caps = band_caps_list.to_vec();
 
         WlanSoftmacInfo {
             sta_addr: [7u8; 6],
             mac_role: banjo_common::WlanMacRole::CLIENT,
-            supported_phys_list,
+            supported_phys_list: supported_phys.as_mut_ptr(),
             supported_phys_count,
             hardware_capability: 0,
-            band_cap_list,
-            band_cap_count,
+            band_caps_list: band_caps.as_mut_ptr(),
+            band_caps_count,
         }
     }
 
@@ -1385,7 +1398,7 @@ mod tests {
         assert_eq!(info.sta_addr, [7u8; 6]);
         assert_eq!(info.mac_role, banjo_common::WlanMacRole::CLIENT);
         assert_eq!(info.hardware_capability, 0);
-        assert_eq!(info.band_cap_count, 2);
+        assert_eq!(info.band_caps_count, 2);
     }
 
     #[test]

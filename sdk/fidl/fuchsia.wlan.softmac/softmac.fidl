@@ -53,6 +53,7 @@ type WlanSoftmacInfo = table {
     2: mac_role fuchsia.wlan.common.WlanMacRole;
 
     /// Bitmask indicating WlanInfoPhyType values supported by the hardware.
+    @mutable
     3: supported_phys
             vector<fuchsia.wlan.common.WlanPhyType>:fuchsia.wlan.common.MAX_SUPPORTED_PHY_TYPES;
 
@@ -60,9 +61,11 @@ type WlanSoftmacInfo = table {
     4: hardware_capability fuchsia.wlan.common.WlanSoftmacHardwareCapability;
 
     /// Supported bands.
+    @mutable
     5: band_caps vector<WlanSoftmacBandCapability>:fuchsia.wlan.common.MAX_BANDS;
 };
 
+// TODO(fxbug.dev/114778): Change to bits
 type WlanRxInfoFlags = strict enum : uint32 {
     /// The FCS for the received frame was invalid.
     FCS_INVALID = 0x1;
@@ -95,7 +98,8 @@ type WlanRxInfo = struct {
     snr_dbh int16;
 };
 
-type WlanTxInfoFlags = strict enum : uint8 {
+// TODO(fxbug.dev/114778): Change to bits
+type WlanTxInfoFlags = strict enum : uint32 {
     /// Indicate this packet should be protected.
     PROTECTED = 0x1;
     /// For rate control: indicate an important data frame, such as EAPOL, which should be sent
@@ -106,7 +110,8 @@ type WlanTxInfoFlags = strict enum : uint8 {
     QOS = 0x4;
 };
 
-type WlanTxInfoValid = strict enum : uint8 {
+// TODO(fxbug.dev/114778): Change to bits
+type WlanTxInfoValid = strict enum : uint32 {
     DATA_RATE = 0x1;
     TX_VECTOR_IDX = 0x2;
     PHY = 0x4;
@@ -158,7 +163,6 @@ type WlanKeyConfig = table {
     /// This value is always 0 for key types which aren't rotating, e.g. pairwise keys.
     6: key_idx uint8;
     // They key's actual bytes.
-    /// This field is still Array in banjo/fuchsia.hardware.wlan.softmac.softmac.fidl
     7: key vector<uint8>:ieee80211.MAX_KEY_LEN;
     /// Receive Sequence Counter for group keys only.
     /// In all other cases the RSC will be 0.
@@ -197,6 +201,7 @@ type WlanBcnConfig = table {
 
 @discoverable
 @transport("Driver")
+@banjo_layout("ddk-interface")
 protocol WlanSoftmacIfc {
     /// Report the status of the softmac device.
     Status(struct {
@@ -429,7 +434,7 @@ protocol WlanSoftmac {
     /// or `StartActiveScan()`. The return value of this function indicates whether
     /// a valid scan_id was passed and will be cancelled. The actual result of
     /// cancellation should be indicated by the driver using
-    /// `fuchsia.hardware.wlan.softmac/WlanSoftmacIfc.ScanComplete()`.
+    /// `fuchsia.wlan.softmac/WlanSoftmacIfc.ScanComplete()`.
     ///
     /// A device driver indicates support for `CancelScan()` using
     /// `fuchsia.wlan.common/ScanOffloadExtension.scan_cancel_supported`.

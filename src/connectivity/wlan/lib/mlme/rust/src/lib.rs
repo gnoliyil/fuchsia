@@ -30,8 +30,7 @@ pub use {ddk_converter::*, wlan_common as common};
 
 use {
     anyhow::{anyhow, bail, Error},
-    banjo_fuchsia_hardware_wlan_softmac as banjo_wlan_softmac,
-    banjo_fuchsia_wlan_common as banjo_common,
+    banjo_fuchsia_wlan_common as banjo_common, banjo_fuchsia_wlan_softmac as banjo_wlan_softmac,
     device::{Device, DeviceInterface},
     fidl_fuchsia_wlan_mlme as fidl_mlme, fuchsia_zircon as zx,
     futures::{
@@ -330,7 +329,7 @@ pub mod test_utils {
 
     #[derive(Copy, Clone, Debug)]
     pub struct MockWlanRxInfo {
-        pub rx_flags: banjo_wlan_softmac::WlanRxInfoFlags,
+        pub rx_flags: u32,
         pub valid_fields: u32,
         pub phy: banjo_common::WlanPhyType,
         pub data_rate: u32,
@@ -352,7 +351,7 @@ pub mod test_utils {
 
                 // Default to 0 for these fields since there are no
                 // other reasonable values to mock.
-                rx_flags: banjo_wlan_softmac::WlanRxInfoFlags(0),
+                rx_flags: 0,
                 phy: banjo_common::WlanPhyType::DSSS,
                 data_rate: 0,
                 mcs: 0,

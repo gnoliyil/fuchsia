@@ -14,9 +14,9 @@ use {
         error::Error,
         logger,
     },
-    banjo_fuchsia_hardware_wlan_softmac as banjo_wlan_softmac,
-    fidl_fuchsia_wlan_internal as fidl_internal, fidl_fuchsia_wlan_minstrel as fidl_minstrel,
-    fidl_fuchsia_wlan_mlme as fidl_mlme, fuchsia_zircon as zx,
+    banjo_fuchsia_wlan_softmac as banjo_wlan_softmac, fidl_fuchsia_wlan_internal as fidl_internal,
+    fidl_fuchsia_wlan_minstrel as fidl_minstrel, fidl_fuchsia_wlan_mlme as fidl_mlme,
+    fuchsia_zircon as zx,
     ieee80211::{Bssid, MacAddr, Ssid},
     log::{error, info, log, warn},
     std::fmt,
@@ -36,7 +36,7 @@ use remote_client::*;
 struct BufferedFrame {
     in_buf: InBuf,
     bytes_written: usize,
-    tx_flags: banjo_wlan_softmac::WlanTxInfoFlags,
+    tx_flags: u32,
 }
 
 /// Rejection reasons for why a frame was not proceessed.
@@ -133,7 +133,7 @@ impl crate::MlmeImpl for Ap {
     fn handle_mac_frame_rx(
         &mut self,
         frame: &[u8],
-        rx_info: banjo_fuchsia_hardware_wlan_softmac::WlanRxInfo,
+        rx_info: banjo_fuchsia_wlan_softmac::WlanRxInfo,
     ) {
         Self::handle_mac_frame_rx(self, frame, rx_info)
     }
@@ -406,7 +406,7 @@ impl Ap {
         }
 
         let body_aligned =
-            (rx_info.rx_flags & banjo_wlan_softmac::WlanRxInfoFlags::FRAME_BODY_PADDING_4).0 != 0;
+            (rx_info.rx_flags & banjo_wlan_softmac::WlanRxInfoFlags::FRAME_BODY_PADDING_4.0) != 0;
 
         let mac_frame = match mac::MacFrame::parse(bytes, body_aligned) {
             Some(mac_frame) => mac_frame,
@@ -787,7 +787,7 @@ mod tests {
         ap.handle_mac_frame_rx(
             &[0][..],
             banjo_wlan_softmac::WlanRxInfo {
-                rx_flags: banjo_wlan_softmac::WlanRxInfoFlags(0),
+                rx_flags: 0,
                 valid_fields: 0,
                 phy: banjo_common::WlanPhyType::DSSS,
                 data_rate: 0,
@@ -833,7 +833,7 @@ mod tests {
             0, 7, 0x63, 0x6f, 0x6f, 0x6c, 0x6e, 0x65, 0x74, 0x0a,
         ];
         let rx_info_wrong_channel = banjo_wlan_softmac::WlanRxInfo {
-            rx_flags: banjo_wlan_softmac::WlanRxInfoFlags(0),
+            rx_flags: 0,
             valid_fields: 0,
             phy: banjo_common::WlanPhyType::DSSS,
             data_rate: 0,
@@ -1032,10 +1032,9 @@ mod tests {
         })
         .expect("expected Ap::handle_mlme_setkeys_req OK");
         assert_eq!(fake_device.keys.len(), 1);
-        assert_eq!(fake_device.keys[0].bssid, 0);
         assert_eq!(
             fake_device.keys[0].protection,
-            banjo_fuchsia_hardware_wlan_softmac::WlanProtection::RX_TX
+            banjo_fuchsia_wlan_softmac::WlanProtection::RX_TX
         );
         assert_eq!(fake_device.keys[0].cipher_oui, [1, 2, 3]);
         assert_eq!(fake_device.keys[0].cipher_type, 4);
@@ -1045,14 +1044,7 @@ mod tests {
         );
         assert_eq!(fake_device.keys[0].peer_addr, [5; 6]);
         assert_eq!(fake_device.keys[0].key_idx, 6);
-        assert_eq!(fake_device.keys[0].key_len, 7);
-        assert_eq!(
-            fake_device.keys[0].key,
-            [
-                1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0,
-            ]
-        );
+        assert_eq!(fake_device.keys_vec[0], [1, 2, 3, 4, 5, 6, 7]);
         assert_eq!(fake_device.keys[0].rsc, 8);
     }
 

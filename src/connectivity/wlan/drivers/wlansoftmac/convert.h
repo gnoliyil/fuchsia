@@ -6,11 +6,11 @@
 #define SRC_CONNECTIVITY_WLAN_DRIVERS_WLANSOFTMAC_CONVERT_H_
 
 #include <fidl/fuchsia.wlan.softmac/cpp/driver/wire.h>
-#include <fuchsia/hardware/wlan/softmac/cpp/banjo.h>
 #include <fuchsia/wlan/common/c/banjo.h>
 #include <fuchsia/wlan/internal/c/banjo.h>
 #include <fuchsia/wlan/internal/cpp/fidl.h>
 #include <fuchsia/wlan/mlme/cpp/fidl.h>
+#include <fuchsia/wlan/softmac/c/banjo.h>
 #include <net/ethernet.h>
 
 namespace wlan {

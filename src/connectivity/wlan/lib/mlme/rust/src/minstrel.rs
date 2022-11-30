@@ -5,9 +5,8 @@
 use {
     crate::probe_sequence::{ProbeEntry, ProbeSequence},
     banjo_fuchsia_hardware_wlan_associnfo as banjo_wlan_associnfo,
-    banjo_fuchsia_hardware_wlan_softmac as hw_wlan_softmac,
-    banjo_fuchsia_wlan_common as banjo_common, fidl_fuchsia_wlan_minstrel as fidl_minstrel,
-    fuchsia_zircon as zx,
+    banjo_fuchsia_wlan_common as banjo_common, banjo_fuchsia_wlan_softmac as hw_wlan_softmac,
+    fidl_fuchsia_wlan_minstrel as fidl_minstrel, fuchsia_zircon as zx,
     log::{debug, error},
     static_assertions::const_assert_eq,
     std::{
@@ -551,14 +550,14 @@ impl<T: TimerManager> MinstrelRateSelector<T> {
         &mut self,
         frame_control: &FrameControl,
         peer_addr: &[u8; 6],
-        flags: hw_wlan_softmac::WlanTxInfoFlags,
+        flags: u32,
     ) -> Option<TxVecIdx> {
         match self.peer_map.get_mut(peer_addr) {
             None => TxVecIdx::new(ERP_START_IDX + ERP_NUM_TX_VECTOR as u16 - 1),
             Some(peer) => {
                 if frame_control.is_data() {
                     let needs_reliability =
-                        (flags & hw_wlan_softmac::WlanTxInfoFlags::FAVOR_RELIABILITY).0 != 0;
+                        (flags & hw_wlan_softmac::WlanTxInfoFlags::FAVOR_RELIABILITY.0) != 0;
                     peer.get_tx_vector_idx(needs_reliability, &mut self.probe_sequence)
                 } else {
                     peer.best_erp_for_reliability
@@ -976,7 +975,7 @@ mod tests {
             minstrel.get_fidl_peer_stats(&TEST_MAC_ADDR).expect("Failed to get peer stats").max_tp;
         let mut fc = FrameControl(0);
         fc.set_frame_type(FrameType::DATA);
-        let flags = hw_wlan_softmac::WlanTxInfoFlags(0);
+        let flags = 0;
 
         for i in 0..(PROBE_INTERVAL as usize * expected_probes.len()) {
             let tx_vec_idx = minstrel.get_tx_vector_idx(&fc, &TEST_MAC_ADDR, flags);

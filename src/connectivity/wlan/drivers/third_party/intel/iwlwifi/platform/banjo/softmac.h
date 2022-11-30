@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 // This file contains copies of banjo definitions that were auto generated from
-// fuchsia.hardware.wlan.softmac. Since banjo is being deprecated, we are making a local copy of
+// fuchsia.wlan.softmac. Since banjo is being deprecated, we are making a local copy of
 // defines that the driver relies upon.fxbug.dev/104598 is the tracking bug to remove the usage
 // of platforms/banjo/*.h files.
 

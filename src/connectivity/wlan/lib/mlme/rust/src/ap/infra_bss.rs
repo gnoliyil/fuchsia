@@ -14,7 +14,6 @@ use {
         key::KeyConfig,
     },
     anyhow::format_err,
-    banjo_fuchsia_hardware_wlan_softmac::WlanTxInfoFlags,
     banjo_fuchsia_wlan_common as banjo_common, fidl_fuchsia_wlan_mlme as fidl_mlme,
     fuchsia_zircon as zx,
     ieee80211::{MacAddr, Ssid},
@@ -284,17 +283,15 @@ impl InfraBss {
                 self.rsne.as_ref().map_or(&[], |rsne| &rsne),
             )
             .map_err(|e| Rejection::Client(client_addr, ClientRejection::WlanSendError(e)))?;
-        ctx.device.send_wlan_frame(OutBuf::from(in_buf, bytes_written), WlanTxInfoFlags(0)).map_err(
-            |s| {
-                Rejection::Client(
-                    client_addr,
-                    ClientRejection::WlanSendError(Error::Status(
-                        format!("failed to send probe resp"),
-                        s,
-                    )),
-                )
-            },
-        )
+        ctx.device.send_wlan_frame(OutBuf::from(in_buf, bytes_written), 0).map_err(|s| {
+            Rejection::Client(
+                client_addr,
+                ClientRejection::WlanSendError(Error::Status(
+                    format!("failed to send probe resp"),
+                    s,
+                )),
+            )
+        })
     }
 
     pub fn handle_mgmt_frame<B: ByteSlice>(
@@ -492,7 +489,7 @@ impl InfraBss {
                 body,
             )
             .map_err(|e| Rejection::Client(hdr.da, ClientRejection::WlanSendError(e)))?;
-        let tx_flags = WlanTxInfoFlags(0);
+        let tx_flags: u32 = 0;
 
         if !self.clients.values().any(|client| client.dozing()) {
             ctx.device.send_wlan_frame(OutBuf::from(in_buf, bytes_written), tx_flags).map_err(
@@ -1984,10 +1981,9 @@ mod tests {
         )
         .expect("expected InfraBss::handle_mlme_setkeys_req OK");
         assert_eq!(fake_device.keys.len(), 1);
-        assert_eq!(fake_device.keys[0].bssid, 0);
         assert_eq!(
             fake_device.keys[0].protection,
-            banjo_fuchsia_hardware_wlan_softmac::WlanProtection::RX_TX
+            banjo_fuchsia_wlan_softmac::WlanProtection::RX_TX
         );
         assert_eq!(fake_device.keys[0].cipher_oui, [1, 2, 3]);
         assert_eq!(fake_device.keys[0].cipher_type, 4);
@@ -1997,14 +1993,7 @@ mod tests {
         );
         assert_eq!(fake_device.keys[0].peer_addr, [5; 6]);
         assert_eq!(fake_device.keys[0].key_idx, 6);
-        assert_eq!(fake_device.keys[0].key_len, 7);
-        assert_eq!(
-            fake_device.keys[0].key,
-            [
-                1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0,
-            ]
-        );
+        assert_eq!(fake_device.keys_vec[0], [1, 2, 3, 4, 5, 6, 7]);
         assert_eq!(fake_device.keys[0].rsc, 8);
     }
 

@@ -7,11 +7,11 @@
 
 #include <fidl/fuchsia.wlan.softmac/cpp/driver/wire.h>
 #include <fidl/fuchsia.wlan.tap/cpp/wire.h>
-#include <fuchsia/hardware/wlan/softmac/c/banjo.h>
 #include <fuchsia/hardware/wlanphyimpl/c/banjo.h>
 #include <fuchsia/wlan/common/c/banjo.h>
 #include <fuchsia/wlan/common/cpp/fidl.h>
 #include <fuchsia/wlan/device/cpp/fidl.h>
+#include <fuchsia/wlan/softmac/c/banjo.h>
 
 namespace wlan_common = fuchsia_wlan_common::wire;
 namespace wlan_device = fuchsia_wlan_device::wire;
