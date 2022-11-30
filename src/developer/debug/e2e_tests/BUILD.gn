@@ -23,6 +23,7 @@ if (is_host) {
       "main_e2e_test.cc",
       "main_e2e_test.h",
       "test_break_dl_start.cc",
+      "test_inlined_frames.cc",
       "test_run_and_kill_process.cc",
       "test_run_failing_test_component.cc",
       "test_status.cc",

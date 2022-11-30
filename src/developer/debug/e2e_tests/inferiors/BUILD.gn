@@ -46,8 +46,13 @@ inferior("wait_for_debugger") {
   deps = [ "//src/lib/debug" ]
 }
 
+inferior("inlined_crasher") {
+  sources = [ "inlined_crasher.cc" ]
+}
+
 fuchsia_package("zxdb_e2e_inferiors") {
   deps = [
+    ":inlined_crasher",
     ":step_plt",
     ":wait_for_debugger",
   ]

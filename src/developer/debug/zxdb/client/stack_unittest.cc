@@ -166,18 +166,18 @@ TEST_F(StackTest, InlineFingerprint) {
 //
 //   // Not actually on the stack but looks like it.
 //   inline void bottom_ambig_inline_func() {
-//     ...                          // <- inline_exec_line
+//     ...                          // <- ambig_inline_line
 //   }
 //
 //   inline void bottom_inline_func() {
 //     ...
-//     TopFunc();                   // Non-inline
-//     bottom_ambig_inline_func();  // <- inline_ambig_call_line
+//     TopFunc();                   // <- top_call_line
+//     bottom_ambig_inline_func();  // <- ambig_inline_call_line
 //   }
 //
 //   void bottom() {
 //     ...
-//     bottom_inline_func();       // <- inline_call_line
+//     bottom_inline_func();       // <- bottom_call_line
 //     ...
 //   }
 TEST_F(StackTest, InlineExpansion) {
@@ -185,10 +185,11 @@ TEST_F(StackTest, InlineExpansion) {
   constexpr uint64_t kTopAddr = 0x893746123;  // IP for top stack frale.
 
   const char kFileName[] = "file.cc";
-  FileLine inline_ambig_call_line(kFileName, 5);
-  FileLine inline_call_line(kFileName, 10);
-  FileLine inline_exec_line(kFileName, 20);
-  FileLine top_line(kFileName, 30);
+  FileLine top_line(kFileName, 10);
+  FileLine ambig_inline_line(kFileName, 20);
+  FileLine top_call_line(kFileName, 30);
+  FileLine ambig_inline_call_line(kFileName, 31);
+  FileLine bottom_call_line(kFileName, 40);
 
   Session session;
   MockStackDelegate delegate(&session);
@@ -207,14 +208,14 @@ TEST_F(StackTest, InlineExpansion) {
   // Must start exactly at kBottomAddr for the location to be ambiguous.
   bottom_ambig_inline_func->set_code_ranges(
       AddressRanges(AddressRange(kBottomAddr, kBottomAddr + 8)));
-  bottom_ambig_inline_func->set_call_line(inline_ambig_call_line);
+  bottom_ambig_inline_func->set_call_line(ambig_inline_call_line);
 
   auto bottom_inline_func = fxl::MakeRefCounted<Function>(DwarfTag::kInlinedSubroutine);
   bottom_inline_func->set_assigned_name("Inline");
   // Must start before at kBottomAddr for the location to not be ambiguous.
   bottom_inline_func->set_code_ranges(
       AddressRanges(AddressRange(kBottomAddr - 8, kBottomAddr + 8)));
-  bottom_inline_func->set_call_line(inline_call_line);
+  bottom_inline_func->set_call_line(bottom_call_line);
 
   auto bottom_func = fxl::MakeRefCounted<Function>(DwarfTag::kSubprogram);
   bottom_func->set_assigned_name("Bottom");
@@ -226,11 +227,13 @@ TEST_F(StackTest, InlineExpansion) {
       UncachedLazySymbol::MakeUnsafe(bottom_inline_func));
   bottom_inline_func->set_containing_block(UncachedLazySymbol::MakeUnsafe(bottom_func));
 
-  // The location returned by the symbol function will have the file/line inside the inline
-  // function.
-  Location bottom_location(kBottomAddr, inline_exec_line, 0, symbol_context,
-                           bottom_ambig_inline_func);
-  delegate.AddLocation(bottom_location);
+  // The location for kBottomAddr, which is the return address and falls in the ambig_inline_func.
+  delegate.AddLocation(
+      Location(kBottomAddr, ambig_inline_line, 0, symbol_context, bottom_ambig_inline_func));
+
+  // The location for kBottomAddr-1, which is the actual call site.
+  delegate.AddLocation(
+      Location(kBottomAddr - 1, top_call_line, 0, symbol_context, bottom_inline_func));
 
   Stack stack(&delegate);
   delegate.set_stack(&stack);
@@ -253,22 +256,21 @@ TEST_F(StackTest, InlineExpansion) {
   EXPECT_EQ(kBottomAddr, stack[2]->GetAddress());
   Location loc = stack[2]->GetLocation();
   EXPECT_EQ(kBottomAddr, loc.address());
-  EXPECT_EQ(inline_call_line, loc.file_line());
+  EXPECT_EQ(bottom_call_line, loc.file_line());
   EXPECT_EQ(bottom_func.get(), loc.symbol().Get()->As<Function>());
 
   // Middle stack frame should be the inline bottom function, referencing the bottom one as the
-  // physical frame. The location should be the call line of the ambiguous inline function because
-  // it's next, even though that function was omitted from the stack.
+  // physical frame.
   EXPECT_TRUE(stack[1]->IsInline());
   EXPECT_EQ(stack[2], stack[1]->GetPhysicalFrame());
+  // The location should be top_call_line but the address should be the actual IP.
   EXPECT_EQ(kBottomAddr, stack[1]->GetAddress());
   loc = stack[1]->GetLocation();
   EXPECT_EQ(kBottomAddr, loc.address());
-  EXPECT_EQ(inline_ambig_call_line, loc.file_line());
+  EXPECT_EQ(top_call_line, loc.file_line());
   EXPECT_EQ(bottom_inline_func.get(), loc.symbol().Get()->As<Function>());
 
-  // The bottom_ambig_inline_func should be skipped because it's at the beginning of an inline call
-  // and it's not at the top physical frame of the stack.
+  // The bottom_ambig_inline_func shouldn't appear here.
 
   // Top stack frame.
   EXPECT_FALSE(stack[0]->IsInline());

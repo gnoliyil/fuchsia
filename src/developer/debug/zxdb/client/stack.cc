@@ -254,8 +254,20 @@ void Stack::AppendFrame(const debug_ipc::StackFrame& record) {
   // Indicates we're adding the newest physical frame and its inlines to the frame list.
   bool is_top_physical_frame = frames_.empty();
 
+  // Adjust locations for non-topmost frames because we should display the locations of function
+  // calls instead of return addresses. Inlined functions should also be expanded from the call
+  // sites rather than the return sites.
+  uint64_t address_to_symbolize = record.ip;
+  if (!is_top_physical_frame)
+    address_to_symbolize -= 1;
+
   // The symbols will provide the location for the innermost inlined function.
-  Location inner_loc = delegate_->GetSymbolizedLocationForStackFrame(record);
+  Location inner_loc = delegate_->GetSymbolizedLocationForAddress(address_to_symbolize);
+
+  // Restore the actual address so that the register value and commands like "disassemble" are
+  // still correct.
+  if (!is_top_physical_frame)
+    inner_loc.AddAddressOffset(1);
 
   const Function* cur_func = inner_loc.symbol().Get()->As<Function>();
   if (!cur_func) {
@@ -280,20 +292,8 @@ void Stack::AppendFrame(const debug_ipc::StackFrame& record) {
 
   // Add inline functions (skipping the last which is the physical frame made above).
   for (size_t i = 0; i < inline_chain.size() - 1; i++) {
-    auto inline_frame = std::make_unique<InlineFrame>(
-        physical_frame.get(), LocationForInlineFrameChain(inline_chain, i, inner_loc));
-
-    // Only add ambiguous inline frames when they correspond to the top physical frame of the stack.
-    // The reason is that the instruction pointer of non-topmost stack frames represents the return
-    // address. An ambiguous inline frame means the return address is the beginning of an inlined
-    // function. This implies that the function call itself isn't actually in that inlined function.
-    //
-    // TODO(brettw) we may want to consider checking the address immediately before the IP for these
-    // frames and using that for inline frame computation. This may make the stack make more sense
-    // when a function call is the last part of an inline frame, but it also may make the line
-    // numbers for these frames inconsistent with how they're displayed for non-inlined frames.
-    if (is_top_physical_frame || !inline_frame->IsAmbiguousInlineLocation())
-      frames_.push_back(std::move(inline_frame));
+    frames_.push_back(std::make_unique<InlineFrame>(
+        physical_frame.get(), LocationForInlineFrameChain(inline_chain, i, inner_loc)));
   }
 
   // Physical frame goes last (back in time).
