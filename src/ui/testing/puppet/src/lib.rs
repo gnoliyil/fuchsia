@@ -39,8 +39,14 @@ pub async fn run_puppet_factory(request_stream: PuppetFactoryRequestStream) {
                         payload.view_token.expect("missing puppet viewport creation token");
                     let puppet_server =
                         payload.puppet_server.expect("missing puppet server endpoint");
+                    let touch_listener = match payload.touch_listener {
+                        None => None,
+                        Some(touch_listener) => {
+                            Some(touch_listener.into_proxy().expect("failed to generate proxy"))
+                        }
+                    };
 
-                    let view = view::View::new(view_token).await;
+                    let view = view::View::new(view_token, touch_listener).await;
 
                     responder
                         .send(PuppetFactoryCreateResponse {

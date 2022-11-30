@@ -4,15 +4,21 @@
 
 use {
     crate::presentation_loop,
+    euclid::{Point2D, Transform2D},
     fidl::endpoints::create_proxy,
     fidl_fuchsia_math as fmath, fidl_fuchsia_ui_composition as ui_comp,
-    fidl_fuchsia_ui_views as ui_views, fuchsia_async as fasync,
+    fidl_fuchsia_ui_pointer::{
+        self as ui_pointer, TouchEvent, TouchInteractionId, TouchInteractionStatus, TouchResponse,
+    },
+    fidl_fuchsia_ui_test_input as test_input, fidl_fuchsia_ui_views as ui_views,
+    fuchsia_async as fasync,
     fuchsia_component::client::connect_to_protocol,
     fuchsia_scenic as scenic,
     futures::channel::{mpsc, oneshot},
     once_cell::unsync::OnceCell,
     parking_lot::Mutex,
-    std::rc::Rc,
+    std::collections::HashMap,
+    std::{rc::Rc, slice::Iter},
     tracing::info,
 };
 
@@ -39,6 +45,18 @@ async fn request_present(presentation_sender: &presentation_loop::PresentationSe
     _ = receiver.await;
 }
 
+// An interaction is a add-change-remove sequence for a single "finger" on a particular
+// device.  Until the interaction status has been settled (i.e. the entire interaction is
+// either denied or granted), events are buffered.  When the interaction is granted, the
+// buffered events are sent to the app via `touch_input_listener`, and subsequent events
+// are immediately sent via `touch_input_listener`.  Conversely, when the interaction is
+// denied, buffered events and all subsequent events are dropped.
+struct TouchInteraction {
+    // Only contains InternalMessage::TouchEvents.
+    pending_events: Vec<test_input::TouchInputListenerReportTouchInputRequest>,
+    status: Option<ui_pointer::TouchInteractionStatus>,
+}
+
 /// Encapsulates capabilities and resources associated with a puppet's view.
 pub(super) struct View {
     /// Flatland connection scoped to our view.
@@ -46,7 +64,7 @@ pub(super) struct View {
     flatland: FlatlandPtr,
 
     /// Task to poll continuously for view events, and respond as necessary.
-    _event_listener: OnceCell<fasync::Task<()>>,
+    view_event_listener: OnceCell<fasync::Task<()>>,
 
     /// Used to present changes to flatland.
     #[allow(dead_code)]
@@ -68,10 +86,26 @@ pub(super) struct View {
 
     /// Indicates whether our view is connected to the display.
     connected_to_display: bool,
+
+    /// Task to poll continuously for touch events, and respond as necessary.
+    touch_watcher_task: OnceCell<fasync::Task<()>>,
+
+    /// ViewParameters of touch event, need store this value because not all touch
+    /// events include this information.
+    view_parameters: Option<ui_pointer::ViewParameters>,
+
+    /// Store pending touch interactions.
+    touch_interactions: HashMap<TouchInteractionId, TouchInteraction>,
+
+    /// Proxy to forward touch events to test.
+    touch_input_listener: Option<test_input::TouchInputListenerProxy>,
 }
 
 impl View {
-    pub async fn new(mut view_creation_token: ui_views::ViewCreationToken) -> Rc<Mutex<Self>> {
+    pub async fn new(
+        mut view_creation_token: ui_views::ViewCreationToken,
+        touch_input_listener: Option<test_input::TouchInputListenerProxy>,
+    ) -> Rc<Mutex<Self>> {
         let (flatland, presentation_sender) = connect_to_flatland_and_presenter();
         let mut id_generator = scenic::flatland::IdGenerator::new();
 
@@ -79,8 +113,12 @@ impl View {
         let (parent_viewport_watcher, parent_viewport_watcher_request) =
             create_proxy::<ui_comp::ParentViewportWatcherMarker>()
                 .expect("failed to create parent viewport watcher channel");
-        let view_bound_protocols =
-            ui_comp::ViewBoundProtocols { ..ui_comp::ViewBoundProtocols::EMPTY };
+        let (touch_source, touch_source_request) = create_proxy::<ui_pointer::TouchSourceMarker>()
+            .expect("failed to create touch source channel");
+        let view_bound_protocols = ui_comp::ViewBoundProtocols {
+            touch_source: Some(touch_source_request),
+            ..ui_comp::ViewBoundProtocols::EMPTY
+        };
         let mut view_identity = ui_views::ViewIdentityOnCreation::from(
             scenic::ViewRefPair::new().expect("failed to create view ref pair"),
         );
@@ -102,22 +140,54 @@ impl View {
             .expect("failed to set root transform");
         request_present(&presentation_sender).await;
 
+        let (logical_size, device_pixel_ratio) = match parent_viewport_watcher.get_layout().await {
+            Err(_) => {
+                panic!("error from parent viewport watcher on get_layout");
+            }
+            Ok(ui_comp::LayoutInfo { logical_size, device_pixel_ratio, .. }) => {
+                let logical_size = match logical_size {
+                    Some(logical_size) => logical_size,
+                    None => panic!("no logical_size in LayoutInfo"),
+                };
+                let device_pixel_ratio = match device_pixel_ratio {
+                    Some(device_pixel_ratio) => device_pixel_ratio.x,
+                    None => panic!("no device_pixel_ratio in LayoutInfo"),
+                };
+                (logical_size, device_pixel_ratio)
+            }
+        };
+
         let this = Rc::new(Mutex::new(Self {
             flatland,
-            _event_listener: OnceCell::new(),
+            view_event_listener: OnceCell::new(),
             presentation_sender,
             id_generator,
             root_transform_id,
-            logical_size: fmath::SizeU { width: 0, height: 0 },
-            device_pixel_ratio: 0.,
+            logical_size,
+            device_pixel_ratio,
             connected_to_display: false,
+            touch_watcher_task: OnceCell::new(),
+            view_parameters: None,
+            touch_interactions: HashMap::new(),
+            touch_input_listener,
         }));
 
-        let task = fasync::Task::local(Self::listen_for_view_events(
+        let view_events_task = fasync::Task::local(Self::listen_for_view_events(
             this.clone(),
             parent_viewport_watcher,
         ));
-        this.lock()._event_listener.set(task).expect("set event listener task more than once");
+        this.lock()
+            .view_event_listener
+            .set(view_events_task)
+            .expect("set event listener task more than once");
+
+        // Start the touch watcher task.
+        let touch_task =
+            fasync::Task::local(Self::listen_for_touch_events(this.clone(), touch_source));
+        this.lock()
+            .touch_watcher_task
+            .set(touch_task)
+            .expect("set touch watcher task more than once");
 
         this
     }
@@ -191,5 +261,200 @@ impl View {
             ui_comp::ParentViewportStatus::ConnectedToDisplay => true,
             ui_comp::ParentViewportStatus::DisconnectedFromDisplay => false,
         };
+    }
+
+    // If no `Interaction` exists for the specified `id`, insert a newly-instantiated one.
+    fn ensure_interaction_exists(&mut self, id: &TouchInteractionId) {
+        if !self.touch_interactions.contains_key(id) {
+            self.touch_interactions
+                .insert(id.clone(), TouchInteraction { pending_events: vec![], status: None });
+        }
+    }
+
+    fn get_touch_report(
+        &self,
+        touch_event: &ui_pointer::TouchEvent,
+    ) -> test_input::TouchInputListenerReportTouchInputRequest {
+        let pointer_sample =
+            touch_event.pointer_sample.as_ref().expect("touch event missing pointer_sample");
+        let position_in_viewport = pointer_sample
+            .position_in_viewport
+            .expect("pointer sample missing position_in_viewport");
+        let local_position =
+            self.get_local_position(Point2D::new(position_in_viewport[0], position_in_viewport[1]));
+
+        let local_x: f64 = local_position.x.try_into().expect("failed to convert to f64");
+        let local_y: f64 = local_position.y.try_into().expect("failed to convert to f64");
+        let view_bounds = self.view_parameters.expect("missing view parameters").view;
+        let view_min_x: f64 = view_bounds.min[0].try_into().expect("failed to convert to f64");
+        let view_min_y: f64 = view_bounds.min[1].try_into().expect("failed to convert to f64");
+        let view_max_x: f64 = view_bounds.max[0].try_into().expect("failed to convert to f64");
+        let view_max_y: f64 = view_bounds.max[1].try_into().expect("failed to convert to f64");
+
+        info!("view min ({:?}, {:?})", view_min_x, view_min_y);
+        info!("view max ({:?}, {:?})", view_max_x, view_max_y);
+        info!("tap received at ({:?}, {:?})", local_x, local_y);
+
+        test_input::TouchInputListenerReportTouchInputRequest {
+            local_x: Some(local_x),
+            local_y: Some(local_y),
+            time_received: touch_event.timestamp,
+            device_pixel_ratio: Some(self.device_pixel_ratio as f64),
+            ..test_input::TouchInputListenerReportTouchInputRequest::EMPTY
+        }
+    }
+
+    fn get_local_position(&self, position_in_viewpoint: Point2D<f32, f32>) -> Point2D<f32, f32> {
+        let viewport_to_view_transform =
+            self.view_parameters.expect("missing view parameters").viewport_to_view_transform;
+        Transform2D::new(
+            /* 1, 1 */ viewport_to_view_transform[0],
+            /* 1, 2 */ viewport_to_view_transform[3],
+            /* 2, 1 */ viewport_to_view_transform[1],
+            /* 2, 2 */ viewport_to_view_transform[4],
+            /* 3, 1 */ viewport_to_view_transform[6],
+            /* 3, 2 */ viewport_to_view_transform[7],
+        )
+        .transform_point(position_in_viewpoint)
+    }
+
+    fn process_touch_events(
+        &mut self,
+        events: Vec<ui_pointer::TouchEvent>,
+    ) -> Vec<ui_pointer::TouchResponse> {
+        // Generate the responses which will be sent with the next call to
+        // `fuchsia.ui.pointer.TouchSource.Watch()`.
+        let pending_responses = Self::generate_touch_event_responses(events.iter());
+
+        for e in events.iter() {
+            if let Some(view_parameters) = e.view_parameters {
+                self.view_parameters = Some(view_parameters);
+            }
+
+            // Handle `pointer_sample` field, if it exists.
+            if let Some(ui_pointer::TouchPointerSample { interaction: Some(id), .. }) =
+                &e.pointer_sample
+            {
+                self.ensure_interaction_exists(&id);
+                let interaction_status =
+                    self.touch_interactions.get(id).expect("interaction does not exist").status;
+                match interaction_status {
+                    None => {
+                        // Queue pending report unil interaction is resolved.
+                        let touch_report = self.get_touch_report(&e);
+                        self.touch_interactions
+                            .get_mut(&id)
+                            .unwrap()
+                            .pending_events
+                            .push(touch_report);
+                    }
+                    Some(TouchInteractionStatus::Granted) => {
+                        match &self.touch_input_listener {
+                            Some(listener) => {
+                                // Samples received after the interaction is granted are
+                                // immediately sent to the listener
+                                let touch_report = self.get_touch_report(&e);
+                                listener
+                                    .report_touch_input(touch_report)
+                                    .expect("failed to send touch input report");
+                            }
+                            None => {
+                                info!("no touch event listener.");
+                            }
+                        }
+                    }
+                    Some(TouchInteractionStatus::Denied) => {
+                        // Drop the event/msg, and remove the interaction from the map:
+                        // we're guaranteed not to receive any further events for this
+                        // interaction.
+                        self.touch_interactions.remove(&id);
+                    }
+                }
+            }
+
+            // Handle `interaction_result` field, if it exists.
+            if let Some(ui_pointer::TouchInteractionResult { interaction: id, status }) =
+                &e.interaction_result
+            {
+                self.ensure_interaction_exists(&id);
+                let interaction = self.touch_interactions.get_mut(&id).unwrap();
+                if let Some(existing_status) = &interaction.status {
+                    // The status of an interaction can only change from None to Some().
+                    assert_eq!(status, existing_status);
+                } else {
+                    // Status was previously None.
+                    interaction.status = Some(status.clone());
+                }
+
+                match status {
+                    ui_pointer::TouchInteractionStatus::Granted => {
+                        // Report buffered events to touch listener
+                        let mut pending_events = vec![];
+                        std::mem::swap(
+                            &mut pending_events,
+                            &mut self.touch_interactions.get_mut(&id).unwrap().pending_events,
+                        );
+                        for pending_event in pending_events {
+                            match &self.touch_input_listener {
+                                Some(listener) => {
+                                    listener
+                                        .report_touch_input(pending_event)
+                                        .expect("failed to send touch input report");
+                                }
+                                None => {
+                                    info!("no touch event listener.");
+                                }
+                            }
+                        }
+                    }
+                    ui_pointer::TouchInteractionStatus::Denied => {
+                        // Drop any buffered events and remove the interaction from the
+                        // map: we're guaranteed not to receive any further events for
+                        // this interaction.
+                        self.touch_interactions.remove(&id);
+                    }
+                }
+            }
+        }
+
+        pending_responses
+    }
+
+    /// Generate a vector of responses to the input `TouchEvents`, as required by
+    /// `fuchsia.ui.pointer.TouchSource.Watch()`.
+    fn generate_touch_event_responses(events: Iter<'_, TouchEvent>) -> Vec<TouchResponse> {
+        events
+            .map(|evt| {
+                if let Some(_) = &evt.pointer_sample {
+                    return TouchResponse {
+                        response_type: Some(ui_pointer::TouchResponseType::Yes),
+                        trace_flow_id: evt.trace_flow_id,
+                        ..TouchResponse::EMPTY
+                    };
+                }
+                TouchResponse::EMPTY
+            })
+            .collect()
+    }
+
+    async fn listen_for_touch_events(
+        this: Rc<Mutex<Self>>,
+        touch_source: ui_pointer::TouchSourceProxy,
+    ) {
+        let mut pending_responses: Vec<TouchResponse> = vec![];
+
+        loop {
+            let events = touch_source.watch(&mut pending_responses.into_iter());
+
+            match events.await {
+                Ok(events) => {
+                    pending_responses = this.lock().process_touch_events(events);
+                }
+                _ => {
+                    info!("TouchSource connection closed");
+                    return;
+                }
+            }
+        }
     }
 }
