@@ -25,7 +25,6 @@ executable("pwrbtn-monitor") {
     "//sdk/fidl/fuchsia.hardware.input:fuchsia.hardware.input_cpp_wire",
     "//sdk/fidl/fuchsia.hardware.power.statecontrol:fuchsia.hardware.power.statecontrol_cpp_wire",
     "//sdk/fidl/fuchsia.kernel:fuchsia.kernel_cpp_wire",
-    "//sdk/fidl/fuchsia.kernel:fuchsia.kernel_hlcpp",
     "//sdk/fidl/fuchsia.power.button:fuchsia.power.button_cpp_wire",
     "//sdk/lib/component/incoming/cpp",
     "//sdk/lib/fdio",
@@ -42,11 +41,6 @@ executable("pwrbtn-monitor") {
   ]
 
   public_deps = [ "//zircon/system/ulib/zx" ]
-
-  # TODO(fxbug.dev/69585): This target uses raw zx::channel with LLCPP which is deprecated.
-  # Please migrate to typed channel APIs (fidl::ClientEnd<T>, fidl::ServerEnd<T>).
-  # See linked bug for details.
-  configs += [ "//build/cpp:fidl-llcpp-deprecated-raw-channels" ]
 }
 
 test("pwrbtn-monitor-unittests-bin") {

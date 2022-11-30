@@ -57,8 +57,8 @@ bool usage_eq(const hid::Usage& u1, const hid::Usage& u2) {
 // Generic Desktop:System Control collection.
 //
 // This method assumes the HID descriptor does not contain more than one such field.
-zx_status_t FindSystemPowerDown(const hid::DeviceDescriptor* desc, uint8_t* report_id,
-                                size_t* bit_offset) {
+bool FindSystemPowerDown(const hid::DeviceDescriptor* desc, uint8_t* report_id,
+                         size_t* bit_offset) {
   const hid::Usage system_control = {
       .page = static_cast<uint16_t>(hid::usage::Page::kGenericDesktop),
       .usage = static_cast<uint32_t>(hid::usage::GenericDesktop::kSystemControl),
@@ -86,10 +86,10 @@ zx_status_t FindSystemPowerDown(const hid::DeviceDescriptor* desc, uint8_t* repo
       }
       *report_id = field.report_id;
       *bit_offset = field.attr.offset;
-      return ZX_OK;
+      return true;
     }
   }
-  return ZX_ERR_NOT_FOUND;
+  return false;
 }
 
 struct PowerButtonInfo {
@@ -99,37 +99,22 @@ struct PowerButtonInfo {
   bool has_report_id_byte;
 };
 
-static zx_status_t InputDeviceAdded(int dirfd, int event, const char* name, void* cookie) {
+zx_status_t InputDeviceAdded(int dirfd, int event, const char* name, void* cookie) {
   if (event != WATCH_EVENT_ADD_FILE) {
     return ZX_OK;
   }
-
-  // Open the fd and get a FIDL client.
-  // Note: the rust vfs used in an integration test for this does not support
-  // using the DESCRIBE flag with a service node, which all of the functions
-  // that use file descriptors send as they are trying to emulate posix
-  // semantics. To work around this, clone the fd into a new handle and then use
-  // fdio_service_connect_at, which does not use the DESCRIBE flag.
-  zx::channel dir_chan;
-  zx_status_t status = fdio_fd_clone(dirfd, dir_chan.reset_and_get_address());
-  if (status != ZX_OK) {
-    printf("pwrbtn-monitor: clone failed: %s\n", zx_status_get_string(status));
+  if (std::string_view{name} == ".") {
     return ZX_OK;
   }
 
-  zx::channel chan, remote_chan;
-  status = zx::channel::create(0, &chan, &remote_chan);
-  if (status != ZX_OK) {
-    printf("pwrbtn-monitor: failed to create channel: %d\n", status);
-    return status;
+  fdio_cpp::UnownedFdioCaller caller(dirfd);
+  zx::result device =
+      component::ConnectAt<fuchsia_hardware_input::Device>(caller.directory(), name);
+  if (device.is_error()) {
+    return device.error_value();
   }
-  status = fdio_service_connect_at(dir_chan.get(), name, remote_chan.release());
-  if (status != ZX_OK) {
-    printf("pwrbtn-monitor: service handle conversion failed: %d\n", status);
-    return status;
-  }
-  auto client = fidl::WireSyncClient<fuchsia_hardware_input::Device>(std::move(chan));
 
+  fidl::WireSyncClient client(std::move(device.value()));
   // Get the report descriptor.
   auto result = client->GetReportDesc();
   if (result.status() != ZX_OK) {
@@ -145,8 +130,7 @@ static zx_status_t InputDeviceAdded(int dirfd, int event, const char* name, void
 
   uint8_t report_id;
   size_t bit_offset;
-  status = FindSystemPowerDown(desc, &report_id, &bit_offset);
-  if (status != ZX_OK) {
+  if (!FindSystemPowerDown(desc, &report_id, &bit_offset)) {
     return ZX_OK;
   }
 
