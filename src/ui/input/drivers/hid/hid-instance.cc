@@ -19,7 +19,6 @@
 #include <hid/boot.h>
 
 #include "hid.h"
-#include "src/lib/listnode/listnode.h"
 
 namespace hid_driver {
 
@@ -93,7 +92,7 @@ void HidInstance::ReadReport(ReadReportCompleter::Sync& completer) {
   }
 
   auto buf_view = fidl::VectorView<uint8_t>::FromExternal(buf.data(), report_size);
-  completer.Reply(status, std::move(buf_view), time);
+  completer.Reply(status, buf_view, time);
 }
 
 void HidInstance::ReadReports(ReadReportsCompleter::Sync& completer) {
@@ -127,12 +126,12 @@ void HidInstance::ReadReports(ReadReportsCompleter::Sync& completer) {
 
   if (status != ZX_OK) {
     ::fidl::VectorView<uint8_t> buf_view(nullptr, 0);
-    completer.Reply(status, std::move(buf_view));
+    completer.Reply(status, buf_view);
     return;
   }
 
   auto buf_view = fidl::VectorView<uint8_t>::FromExternal(buf.data(), buf_index);
-  completer.Reply(status, std::move(buf_view));
+  completer.Reply(status, buf_view);
 }
 
 void HidInstance::GetReportsEvent(GetReportsEventCompleter::Sync& completer) {
@@ -186,7 +185,7 @@ void HidInstance::GetReport(GetReportRequestView request, GetReportCompleter::Sy
                                                              request->id, report, needed, &actual);
 
   auto report_view = fidl::VectorView<uint8_t>::FromExternal(report, actual);
-  completer.Reply(status, std::move(report_view));
+  completer.Reply(status, report_view);
 }
 
 void HidInstance::SetReport(SetReportRequestView request, SetReportCompleter::Sync& completer) {
@@ -202,7 +201,6 @@ void HidInstance::SetReport(SetReportRequestView request, SetReportCompleter::Sy
       base_->GetHidbusProtocol()->SetReport(static_cast<uint8_t>(request->type), request->id,
                                             request->report.data(), request->report.count());
   completer.Reply(status);
-  return;
 }
 
 void HidInstance::GetDeviceReportsReader(GetDeviceReportsReaderRequestView request,
@@ -218,7 +216,7 @@ void HidInstance::GetDeviceReportsReader(GetDeviceReportsReaderRequestView reque
     loop_started_ = true;
   }
   readers_.push_back(std::make_unique<DeviceReportsReader>(base_));
-  fidl::BindSingleInFlightOnly(loop_.dispatcher(), request->reader.TakeChannel(),
+  fidl::BindSingleInFlightOnly(loop_.dispatcher(), std::move(request->reader),
                                readers_.back().get());
   completer.ReplySuccess();
 }
