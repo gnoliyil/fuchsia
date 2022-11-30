@@ -5,6 +5,7 @@
 #include "src/developer/debug/zxdb/console/command_sequence.h"
 
 #include "src/developer/debug/shared/message_loop.h"
+#include "src/developer/debug/zxdb/common/string_util.h"
 #include "src/developer/debug/zxdb/console/console.h"
 #include "src/lib/files/file.h"
 #include "src/lib/fxl/strings/split_string.h"
@@ -63,7 +64,8 @@ ErrOr<std::vector<std::string>> ReadCommandsFromFile(const std::string& path) {
   std::vector<std::string> result;
   for (auto& cmd :
        fxl::SplitStringCopy(contents, "\n", fxl::kTrimWhitespace, fxl::kSplitWantNonEmpty)) {
-    result.push_back(std::move(cmd));
+    if (!cmd.empty() && !StringStartsWith(cmd, "#"))
+      result.push_back(std::move(cmd));
   }
 
   return result;

@@ -82,6 +82,16 @@ pub async fn connect(
         args.push("--no-auto-attach-limbo".as_ref());
     }
 
+    for attach in cmd.attach.iter() {
+        args.push("--attach".as_ref());
+        args.push(attach.as_ref());
+    }
+
+    for execute in cmd.execute.iter() {
+        args.push("--execute".as_ref());
+        args.push(execute.as_ref());
+    }
+
     args.extend(cmd.zxdb_args.iter().map(|s| AsRef::<OsStr>::as_ref(s)));
 
     let mut zxdb = match cmd.debugger {

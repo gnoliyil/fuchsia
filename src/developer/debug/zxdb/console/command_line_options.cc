@@ -8,6 +8,7 @@
 
 #include <filesystem>
 #include <iostream>
+#include <system_error>
 
 namespace zxdb {
 
@@ -42,11 +43,6 @@ const char kHelpHelp[] = R"(  --help
   -h
       Prints all command-line switches.)";
 
-const char kRunHelp[] = R"(  --run=<program>
-  -r <program>
-      Attempts to run a binary in the target system. The debugger must be
-      already connected to the debug_agent (use with -c).)";
-
 const char kAttachHelp[] = R"(  --attach=<koid|filter>
   -a <koid|filter>
       Attaches to the given process or creates a filter that matches current
@@ -59,6 +55,10 @@ const char kScriptFileHelp[] = R"(  --script-file=<file>
       Reads a script file from a file. The file must contains valid zxdb
       commands as they would be input from the command line. They will be
       executed sequentially.)";
+
+const char kExecuteCommandHelp[] = R"(  --execute=<command>
+  -e <command>
+      Execute one zxdb command. Multiple commands will be executed sequentially.)";
 
 const char kSymbolIndexHelp[] = R"(  --symbol-index=<path>
       Populates --ids-txt and --build-id-dir using the given symbol-index file,
@@ -132,9 +132,9 @@ cmdline::Status ParseCommandLine(int argc, const char* argv[], CommandLineOption
   parser.AddSwitch("unix-connect", 'u', kUnixConnectHelp, &CommandLineOptions::unix_connect);
   parser.AddSwitch("core", 0, kCoreHelp, &CommandLineOptions::core);
   parser.AddSwitch("debug-mode", 'd', kDebugModeHelp, &CommandLineOptions::debug_mode);
-  parser.AddSwitch("run", 'r', kRunHelp, &CommandLineOptions::run);
   parser.AddSwitch("attach", 'a', kAttachHelp, &CommandLineOptions::attach);
-  parser.AddSwitch("script-file", 'S', kScriptFileHelp, &CommandLineOptions::script_file);
+  parser.AddSwitch("script-file", 'S', kScriptFileHelp, &CommandLineOptions::script_files);
+  parser.AddSwitch("execute", 'e', kExecuteCommandHelp, &CommandLineOptions::execute_commands);
   parser.AddSwitch("symbol-index", 0, kSymbolIndexHelp, &CommandLineOptions::symbol_index_files);
   parser.AddSwitch("symbol-path", 's', kSymbolPathHelp, &CommandLineOptions::symbol_paths);
   parser.AddSwitch("build-id-dir", 0, kBuildIdDirHelp, &CommandLineOptions::build_id_dirs);
@@ -177,6 +177,12 @@ cmdline::Status ParseCommandLine(int argc, const char* argv[], CommandLineOption
           options->symbol_index_files.push_back(path);
         }
       }
+    }
+    std::string zxdbrc = home_str + "/.fuchsia/debug/zxdbrc";
+    std::error_code ec;
+    if (std::filesystem::exists(zxdbrc, ec)) {
+      // zxdbrc is expected to execute first.
+      options->script_files.insert(options->script_files.begin(), zxdbrc);
     }
   }
 

@@ -18,6 +18,15 @@ pub struct ConnectCommand {
     #[argh(switch)]
     pub agent_only: bool,
 
+    /// attaches to given processes. The argument will be parsed in the same way as the "attach"
+    /// command in the console.
+    #[argh(option, short = 'a')]
+    pub attach: Vec<String>,
+
+    /// execute one zxdb command. Multiple commands will be executed sequentially.
+    #[argh(option, short = 'e')]
+    pub execute: Vec<String>,
+
     /// do not automatically attach to processes found in Process Limbo upon successful connection.
     /// convenience switch for the zxdb option of the same name.
     #[argh(switch, short = 'n')]

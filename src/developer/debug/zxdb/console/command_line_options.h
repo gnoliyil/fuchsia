@@ -24,9 +24,9 @@ struct CommandLineOptions {
   std::optional<std::string> unix_connect;
   bool debug_mode = false;
   std::optional<std::string> core;
-  std::optional<std::string> run;
   std::vector<std::string> attach;
-  std::optional<std::string> script_file;
+  std::vector<std::string> script_files;
+  std::vector<std::string> execute_commands;
   std::optional<std::string> symbol_cache;
   std::vector<std::string> symbol_index_files;
   std::vector<std::string> symbol_paths;

@@ -31,8 +31,8 @@ namespace {
 // Loads any actions specified on the command line into the vector.
 Err SetupActions(const CommandLineOptions& options, std::vector<std::string>* actions) {
   if (options.core) {
-    if (options.connect || options.run) {
-      return Err("--core can't be used with commands to connect or run.");
+    if (options.connect) {
+      return Err("--core can't be used with commands to connect.");
     }
     actions->push_back(VerbToString(Verb::kOpenDump) + " " + *options.core);
   }
@@ -43,11 +43,8 @@ Err SetupActions(const CommandLineOptions& options, std::vector<std::string>* ac
   if (options.unix_connect)
     actions->push_back(VerbToString(Verb::kConnect) + " -u " + *options.unix_connect);
 
-  if (options.run)
-    actions->push_back(VerbToString(Verb::kRun) + " " + *options.run);
-
-  if (options.script_file) {
-    ErrOr<std::vector<std::string>> cmds_or = ReadCommandsFromFile(*options.script_file);
+  for (const auto& script_file : options.script_files) {
+    ErrOr<std::vector<std::string>> cmds_or = ReadCommandsFromFile(script_file);
     if (cmds_or.has_error())
       return cmds_or.err();
     actions->insert(actions->end(), cmds_or.value().begin(), cmds_or.value().end());
@@ -56,6 +53,8 @@ Err SetupActions(const CommandLineOptions& options, std::vector<std::string>* ac
   for (const auto& attach : options.attach) {
     actions->push_back(VerbToString(Verb::kAttach) + " " + attach);
   }
+
+  actions->insert(actions->end(), options.execute_commands.begin(), options.execute_commands.end());
 
   return Err();
 }

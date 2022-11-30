@@ -74,9 +74,8 @@ pub mod include_target {
                 &config,
                 "debug",
                 "connect",
-                "--",
-                "--run",
-                "/boot/bin/crasher",
+                "-e",
+                "run /boot/bin/crasher",
             ])
             .await?
             .stdin(Stdio::piped())
