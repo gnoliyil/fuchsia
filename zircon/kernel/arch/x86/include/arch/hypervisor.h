@@ -68,12 +68,12 @@ class NormalGuest : public Guest {
   zx_status_t SetTrap(uint32_t kind, zx_vaddr_t addr, size_t len, fbl::RefPtr<PortDispatcher> port,
                       uint64_t key);
 
-  zx::result<uint16_t> TryAllocVpid() { return vpid_allocator_.TryAlloc(); }
-  zx::result<> FreeVpid(uint16_t vpid) { return vpid_allocator_.Free(vpid); }
-
-  hypervisor::GuestPhysicalAspace& AddressSpace() { return gpa_; }
+  hypervisor::GuestPhysicalAspace& PhysicalAspace() { return gpa_; }
   fbl::RefPtr<VmAddressRegion> RootVmar() const override { return gpa_.RootVmar(); }
   hypervisor::TrapMap& Traps() { return traps_; }
+
+  zx::result<uint16_t> TryAllocVpid() { return vpid_allocator_.TryAlloc(); }
+  zx::result<> FreeVpid(uint16_t vpid) { return vpid_allocator_.Free(vpid); }
 
  private:
   hypervisor::GuestPhysicalAspace gpa_;
@@ -83,19 +83,19 @@ class NormalGuest : public Guest {
 
 class DirectGuest : public Guest {
  public:
-  // Global VPID for a direct mode address space.
-  static constexpr uint16_t kGlobalAspaceVpid = 1;
+  // VPID shared by all direct VCPUs.
+  static constexpr uint16_t kSharedVpid = 1;
 
   static zx::result<ktl::unique_ptr<Guest>> Create();
   ~DirectGuest() override;
 
-  hypervisor::DirectPhysicalAspace& AddressSpace() { return dpa_; }
-  fbl::RefPtr<VmAddressRegion> RootVmar() const override { return user_aspace_->RootVmar(); }
-  VmAspace& user_aspace() { return *user_aspace_; }
+  hypervisor::DirectPhysicalAspace& PhysicalAspace() { return dpas_; }
+  fbl::RefPtr<VmAddressRegion> RootVmar() const override { return shared_aspace_->RootVmar(); }
+  VmAspace& SharedAspace() { return *shared_aspace_; }
 
  private:
-  hypervisor::DirectPhysicalAspace dpa_;
-  fbl::RefPtr<VmAspace> user_aspace_;
+  hypervisor::DirectPhysicalAspace dpas_;
+  fbl::RefPtr<VmAspace> shared_aspace_;
 };
 
 // Represents a virtual CPU within a guest.

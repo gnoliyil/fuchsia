@@ -750,7 +750,7 @@ zx::result<ktl::unique_ptr<V>> Vcpu::Create(G& guest, uint16_t vpid, zx_vaddr_t 
   VmxRegion* region = vcpu->vmcs_page_.template VirtualAddress<VmxRegion>();
   region->revision_id = vmx_info.revision_id;
 
-  zx_paddr_t ept_pml4 = guest.AddressSpace().arch_aspace().arch_table_phys();
+  zx_paddr_t ept_pml4 = guest.PhysicalAspace().arch_aspace().arch_table_phys();
   zx_paddr_t vmcs_address = vcpu->vmcs_page_.PhysicalAddress();
   // We create the `AutoVmcs` object here, so that we ensure that interrupts are
   // disabled from `vmcs_init` until `SetMigrateFn`. This is important to ensure
@@ -1137,13 +1137,13 @@ zx_status_t NormalVcpu::Enter(zx_port_packet_t& packet) {
     }
     // Updates guest system time if the guest subscribed to updates.
     auto& guest = static_cast<NormalGuest&>(guest_);
-    pv_clock_update_system_time(&pv_clock_state_, &guest.AddressSpace());
+    pv_clock_update_system_time(&pv_clock_state_, &guest.PhysicalAspace());
     return ZX_OK;
   };
   auto post_exit = [this](AutoVmcs& vmcs, zx_port_packet_t& packet) {
     auto& guest = static_cast<NormalGuest&>(guest_);
     return vmexit_handler_normal(vmcs, vmx_state_.guest_state, local_apic_state_, pv_clock_state_,
-                                 guest.AddressSpace(), guest.Traps(), packet);
+                                 guest.PhysicalAspace(), guest.Traps(), packet);
   };
   return EnterInternal(ktl::move(pre_enter), ktl::move(post_exit), packet);
 }
@@ -1178,7 +1178,7 @@ zx_status_t NormalVcpu::WriteState(const zx_vcpu_io_t& io_state) {
 
 // static
 zx::result<ktl::unique_ptr<Vcpu>> DirectVcpu::Create(DirectGuest& guest, zx_vaddr_t entry) {
-  auto vcpu = Vcpu::Create<DirectVcpu>(guest, DirectGuest::kGlobalAspaceVpid, entry);
+  auto vcpu = Vcpu::Create<DirectVcpu>(guest, DirectGuest::kSharedVpid, entry);
   if (vcpu.is_error()) {
     return vcpu.take_error();
   }
@@ -1194,8 +1194,8 @@ zx::result<ktl::unique_ptr<Vcpu>> DirectVcpu::Create(DirectGuest& guest, zx_vadd
                                                    X86_CR4_OSXSAVE);
   vmcs.Write(VmcsFieldXX::CR4_READ_SHADOW, X86_CR4_PAE | X86_CR4_PGE | X86_CR4_OSFXSR |
                                                X86_CR4_VMXE | X86_CR4_FSGSBASE | X86_CR4_OSXSAVE);
-  // Set CR3 to `user_aspace_`.
-  const paddr_t table_phys = guest.user_aspace().arch_aspace().arch_table_phys();
+  // Set CR3 to `SharedAspace()`.
+  const paddr_t table_phys = guest.SharedAspace().arch_aspace().arch_table_phys();
   vmcs.Write(VmcsFieldXX::HOST_CR3, table_phys);
   vmcs.Write(VmcsFieldXX::GUEST_CR3, table_phys);
   // VM exit on all exception.
@@ -1217,10 +1217,10 @@ zx_status_t DirectVcpu::Enter(zx_port_packet_t& packet) {
   auto post_exit = [this](AutoVmcs& vmcs, zx_port_packet_t& packet) {
     return vmexit_handler_direct(vmcs, vmx_state_.guest_state, fs_base_, packet);
   };
-  auto& guest_user_aspace = static_cast<DirectGuest&>(guest_).user_aspace();
-  VmAspace& host_user_aspace = hypervisor::switch_aspace(guest_user_aspace);
+  auto& shared_aspace = static_cast<DirectGuest&>(guest_).SharedAspace();
+  VmAspace& host_aspace = hypervisor::switch_aspace(shared_aspace);
   zx_status_t status = EnterInternal(ktl::move(pre_enter), ktl::move(post_exit), packet);
-  hypervisor::switch_aspace(host_user_aspace);
+  hypervisor::switch_aspace(host_aspace);
   return status;
 }
 
