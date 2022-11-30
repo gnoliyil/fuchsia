@@ -51,7 +51,7 @@ exports_files(
     #
     # This is the root directory for all source entries in the manifest.
     # Create a //:ninja_output symlink in the repository to point to it.
-    ninja_output_dir = repo_ctx.os.environ["BAZEL_FUCHSIA_NINJA_OUTPUT_DIR"]
+    ninja_output_dir = repo_ctx.os.environ["FUCHSIA_BUILD_DIR"]
     source_prefix = ninja_output_dir + "/"
 
     ninja_targets = []
