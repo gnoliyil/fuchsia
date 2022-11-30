@@ -468,6 +468,8 @@ void UITestRealm::ConfigureSceneProvider() {
   bool use_scene_manager = config_.scene_owner == SceneOwnerType::SCENE_MANAGER;
   realm_builder_.SetConfigValue(kSceneProviderName, "use_scene_manager",
                                 ConfigValue::Bool(use_scene_manager));
+  realm_builder_.SetConfigValue(kSceneProviderName, "use_flatland",
+                                ConfigValue::Bool(config_.use_flatland));
 }
 
 void UITestRealm::ConfigureActivityService() {
