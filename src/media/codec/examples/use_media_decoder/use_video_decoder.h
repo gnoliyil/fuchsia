@@ -358,7 +358,10 @@ void use_h264_multi_decoder(UseVideoDecoderParams params);
 // The same as use_h264_decoder, but for a VP9 file wrapped in an IVF container.
 void use_vp9_decoder(UseVideoDecoderParams params);
 
-// Common function pointer type shared by use_h264_decoder, use_vp9_decoder.
+// MJPEG file is a series of JPEG images
+void use_mjpeg_decoder(UseVideoDecoderParams params);
+
+// Common function pointer type shared by use_h264_decoder, use_vp9_decoder, use_mjpeg_decoder.
 typedef void (*UseVideoDecoderFunction)(UseVideoDecoderParams params);
 
 #endif  // SRC_MEDIA_CODEC_EXAMPLES_USE_MEDIA_DECODER_USE_VIDEO_DECODER_H_

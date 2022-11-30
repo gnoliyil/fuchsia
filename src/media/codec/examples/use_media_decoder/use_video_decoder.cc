@@ -11,9 +11,11 @@
 #include <lib/fdio/directory.h>
 #include <lib/fidl/cpp/clone.h>
 #include <lib/fit/defer.h>
+#include <lib/fit/function.h>
 #include <lib/media/codec_impl/fourcc.h>
 #include <lib/media/test/codec_client.h>
 #include <lib/media/test/one_shot_event.h>
+#include <lib/stdcompat/span.h>
 #include <lib/syslog/cpp/macros.h>
 #include <lib/zx/time.h>
 #include <stdint.h>
@@ -21,7 +23,9 @@
 #include <zircon/assert.h>
 #include <zircon/time.h>
 
+#include <algorithm>
 #include <cstring>
+#include <iterator>
 #include <optional>
 #include <thread>
 #include <vector>
@@ -135,7 +139,73 @@ struct __attribute__((__packed__)) IvfFrameHeader {
   uint64_t presentation_timestamp;
 };
 
+// Tries to find a Jpeg image within the buffer. The buffer must start with SOI marker. If the image
+// is found within the buffer the size of the image will be returned. If it can not find the image
+// std::nullopt will be returned.
+std::optional<size_t> FindJpegImage(cpp20::span<const uint8_t> buffer) {
+  static constexpr uint8_t MARKER_PREFIX = 0xFFu;
+  static constexpr uint8_t SOI = 0xD8u;
+  static constexpr uint8_t EOI = 0xD9u;
+  size_t cursor = 0u;
+
+  // Function that will read a byte from the given cursor position. If there is remaining data the
+  // byte will be read, the cursor position advanced, and the byte returned. If there are no
+  // remaining bytes left to read, std::nullopt will be returned instead.
+  auto read_byte =
+      fit::function<std::optional<uint8_t>()>([&cursor, &buffer]() -> std::optional<uint8_t> {
+        if (cursor < buffer.size_bytes()) {
+          uint8_t result = buffer[cursor];
+          cursor += 1u;
+          return result;
+        } else {
+          return std::nullopt;
+        }
+      });
+
+  // Ensure that we are at the SOI
+  auto marker1 = read_byte();
+  auto marker2 = read_byte();
+  if (!marker1.has_value() || !marker2.has_value()) {
+    return std::nullopt;
+  }
+  if ((marker1.value() != MARKER_PREFIX) || (marker2.value() != SOI)) {
+    return std::nullopt;
+  }
+
+  // Search for the EOI marker
+  while (cursor < buffer.size_bytes()) {
+    auto itr = std::find_if(buffer.data() + cursor, buffer.end(),
+                            [](uint8_t data) { return (data == MARKER_PREFIX); });
+
+    // If at the the end, then there isn't an EOI marker in this buffer
+    if (itr == buffer.end()) {
+      return std::nullopt;
+    }
+
+    // Update the cursor to the current position of the marker (one past the marker prefix)
+    cursor = std::distance(buffer.begin(), itr) + 1u;
+
+    // Skip any fill bytes
+    auto marker2 = read_byte();
+    while (marker2.has_value() && (marker2.value() == MARKER_PREFIX)) {
+      marker2 = read_byte();
+    }
+
+    if (!marker2.has_value()) {
+      return std::nullopt;
+    }
+
+    if (marker2.value() == EOI) {
+      return cursor;
+    }
+  }
+
+  // If we exited, we ran out of bytes without find the EOI
+  return std::nullopt;
+}
+
 enum class Format {
+  kMjpeg,
   kH264,
   // This uses the multi-instance h.264 decoder.
   kH264Multi,
@@ -257,6 +327,7 @@ class VideoDecoderRunner {
   void Run();
 
  private:
+  uint64_t QueueMjpegFrames(uint64_t stream_lifetime_ordinal, uint64_t input_pts_counter_start);
   uint64_t QueueH264Frames(uint64_t stream_lifetime_ordinal, uint64_t input_pts_counter_start);
   uint64_t QueueVp9Frames(uint64_t stream_lifetime_ordinal, uint64_t input_pts_counter_start);
 
@@ -281,6 +352,123 @@ class VideoDecoderRunner {
 
 VideoDecoderRunner::VideoDecoderRunner(Format format, UseVideoDecoderParams params)
     : format_(std::move(format)), params_(std::move(params)) {}
+
+uint64_t VideoDecoderRunner::QueueMjpegFrames(uint64_t stream_lifetime_ordinal,
+                                              uint64_t input_pts_counter_start) {
+  int64_t input_pts_counter = input_pts_counter_start;
+  uint32_t frame_ordinal = 0;
+
+  auto queue_jpeg_frame = [this, stream_lifetime_ordinal, &input_pts_counter,
+                           &frame_ordinal](size_t byte_count) {
+    auto in_stream = params_.in_stream;
+    const int64_t skip_frame_ordinal = params_.test_params->skip_frame_ordinal;
+    std::unique_ptr<fuchsia::media::Packet> packet = codec_client_->BlockingGetFreeInputPacket();
+    if (!packet) {
+      fprintf(stderr, "Returning because failed to get input packet\n");
+      return false;
+    }
+
+    auto increment_input_pts_counter = fit::defer([&input_pts_counter] { input_pts_counter++; });
+
+    ZX_ASSERT(packet->has_header());
+    ZX_ASSERT(packet->header().has_packet_index());
+    const CodecBuffer& buffer = codec_client_->BlockingGetFreeInputBufferForPacket(packet.get());
+    ZX_ASSERT(packet->buffer_index() == buffer.buffer_index());
+    // MJPEG decoder doesn't yet support splitting access units into multiple
+    // packets.
+    if (byte_count > buffer.size_bytes()) {
+      Exit("buffer_count >= buffer.size_bytes() - byte_count: %lu buffer.size_bytes(): %lu\n",
+           byte_count, buffer.size_bytes());
+    }
+
+    // Setup packet
+    packet->set_stream_lifetime_ordinal(stream_lifetime_ordinal);
+    packet->set_start_offset(0);
+    packet->set_valid_length_bytes(byte_count);
+    packet->set_timestamp_ish(input_pts_counter);
+    packet->set_start_access_unit(true);
+    packet->set_known_end_access_unit(true);
+
+    uint32_t actual_bytes_read;
+    uint8_t* read_address = buffer.base();
+
+    zx_status_t status =
+        in_stream->ReadBytesComplete(byte_count, &actual_bytes_read, read_address,
+                                     zx::deadline_after(kInStreamDeadlineDuration));
+    ZX_ASSERT(status == ZX_OK);
+    if (actual_bytes_read < byte_count) {
+      Exit("Frame truncated.");
+    }
+    ZX_DEBUG_ASSERT(actual_bytes_read == byte_count);
+
+    auto do_not_queue_input_packet_after_all = fit::defer(
+        [this, &packet] { codec_client_->DoNotQueueInputPacketAfterAll(std::move(packet)); });
+
+    if (input_pts_counter == skip_frame_ordinal) {
+      LOGF("skipping input frame: %" PRId64, input_pts_counter);
+      // ~do_not_queue_input_packet_after_all, ~increment_input_pts_counter
+      return true;
+    }
+    do_not_queue_input_packet_after_all.cancel();
+
+    codec_client_->QueueInputPacket(std::move(packet));
+
+    ++frame_ordinal;
+
+    if (frame_ordinal == params_.test_params->frame_count) {
+      return false;
+    }
+
+    // ~increment_input_pts_counter
+    return true;
+  };
+
+  auto in_stream = params_.in_stream;
+  uint32_t max_peek_bytes = in_stream->max_peek_bytes();
+  int64_t input_stop_stream_after_frame_ordinal =
+      params_.test_params->input_stop_stream_after_frame_ordinal;
+  int64_t stream_frame_ordinal = 0;
+
+  while (true) {
+    uint32_t actual_peek_bytes;
+    uint8_t* peek;
+    VLOGF("PeekBytes()...");
+    zx_status_t status = in_stream->PeekBytes(max_peek_bytes, &actual_peek_bytes, &peek,
+                                              zx::deadline_after(kInStreamDeadlineDuration));
+    ZX_ASSERT(status == ZX_OK);
+    VLOGF("PeekBytes() done");
+    if (actual_peek_bytes == 0) {
+      // Out of input.  Not an error.  No more input AUs.
+      ZX_DEBUG_ASSERT(in_stream->eos_position_known() &&
+                      in_stream->cursor_position() == in_stream->eos_position());
+      break;
+    }
+
+    auto maybe_found_image = FindJpegImage({peek, actual_peek_bytes});
+    if (!maybe_found_image.has_value()) {
+      // If we could not find a JPEG image with the max allow peek bytes then we never will. Either
+      // the stream is invalid or the encoded picture exceeds our peek limit and we will have to
+      // increase it.
+      if (actual_peek_bytes == max_peek_bytes) {
+        Exit("Could not find JPEG image in stream with max peek bytes.");
+      }
+
+      continue;
+    }
+
+    // Queue the whole JPEG image
+    if (!queue_jpeg_frame(maybe_found_image.value())) {
+      break;
+    }
+
+    if (stream_frame_ordinal == input_stop_stream_after_frame_ordinal) {
+      break;
+    }
+    stream_frame_ordinal++;
+  }
+
+  return input_pts_counter - input_pts_counter_start;
+}
 
 // Payload data for bear.h264 is 00 00 00 01 start code before each NAL, with
 // SPS / PPS NALs and also frame NALs.  We deliver to Codec NAL-by-NAL without
@@ -543,9 +731,8 @@ uint64_t VideoDecoderRunner::QueueVp9Frames(uint64_t stream_lifetime_ordinal,
     // codec_client.  The codec_client only wants the input packet back after its been filled out
     // completely.
     ////////////////////////////////////////////////////////////////////////////////////////////////
-    auto do_not_return_early_interval = fit::defer([] {
-      ZX_PANIC("don't return early until packet is set up and returned to codec_client");
-    });
+    auto do_not_return_early_interval = fit::defer(
+        [] { ZX_PANIC("don't return early until packet is set up and returned to codec_client"); });
     auto increment_input_pts_counter = fit::defer([&input_pts_counter] { input_pts_counter++; });
 
     ZX_ASSERT(packet->has_header());
@@ -745,6 +932,10 @@ void VideoDecoderRunner::Run() {
 
   std::string mime_type;
   switch (format_) {
+    case Format::kMjpeg:
+      mime_type = "video/x-motion-jpeg";
+      break;
+
     case Format::kH264:
       mime_type = "video/h264";
       break;
@@ -814,6 +1005,10 @@ void VideoDecoderRunner::Run() {
     for (uint32_t loop_ordinal = 0; loop_ordinal < loop_stream_count;
          ++loop_ordinal, stream_lifetime_ordinal += 2) {
       switch (format_) {
+        case Format::kMjpeg:
+          frames_queued = QueueMjpegFrames(stream_lifetime_ordinal, input_frame_pts_counter);
+          break;
+
         case Format::kH264:
         case Format::kH264Multi:
           frames_queued = QueueH264Frames(stream_lifetime_ordinal, input_frame_pts_counter);
@@ -1218,4 +1413,8 @@ void use_h264_multi_decoder(UseVideoDecoderParams params) {
 
 void use_vp9_decoder(UseVideoDecoderParams params) {
   use_video_decoder(Format::kVp9, std::move(params));
+}
+
+void use_mjpeg_decoder(UseVideoDecoderParams params) {
+  use_video_decoder(Format::kMjpeg, std::move(params));
 }

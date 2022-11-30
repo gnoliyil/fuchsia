@@ -303,6 +303,16 @@ test("use_vp9_decoder_secure_input_output_test") {
   deps = [ ":use_media_decoder_source_set" ]
 }
 
+test("use_mjpeg_decoder_test") {
+  testonly = true
+
+  output_name = "use_mjpeg_decoder_test"
+
+  sources = [ "test/use_mjpeg_decoder_test.cc" ]
+
+  deps = [ ":use_media_decoder_source_set" ]
+}
+
 test("vp9_decoder_conformance_test") {
   testonly = true
 

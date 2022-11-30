@@ -43,6 +43,11 @@ resource("bear_vp9") {
   outputs = [ "data/bear-vp9.ivf" ]
 }
 
+resource("bear_mjpeg") {
+  sources = [ "//prebuilt/test_data/media/third_party/chromium_media_test_data/bear.mjpeg" ]
+  outputs = [ "data/bear.mjpeg" ]
+}
+
 resource("1080p_10_frames_h264") {
   sources = [ "//prebuilt/test_data/media/third_party/chromium_media_test_data_downstream/1080p_10_frames.h264" ]
   outputs = [ "data/1080p_10_frames.h264" ]
@@ -595,6 +600,26 @@ fuchsia_unittest_package("use_vp9_decoder_secure_input_output_test") {
     # Without ClearTVP, can't pass anywhere at the moment.
     # TODO(fxbug.dev/42991): Re-enable.
     environments = []
+  }
+}
+
+fuchsia_unittest_component("use_mjpeg_decoder_test_component") {
+  manifest = "use_media_decoder/meta/use_mjpeg_decoder_test.cml"
+  deps = [
+    ":bear_mjpeg",
+    "//src/media/codec:codec_factory",
+    "//src/media/codec/examples/use_media_decoder:use_mjpeg_decoder_test",
+  ]
+}
+
+# Test x86 mjpeg decoder on target x86 hardware (excluding emulator)
+fuchsia_test_package("use_mjpeg_decoder_tests_x86") {
+  test_components = [ ":use_mjpeg_decoder_test_component" ]
+  test_specs = {
+    environments = [
+      atlas_env,
+      nuc_env,
+    ]
   }
 }
 
