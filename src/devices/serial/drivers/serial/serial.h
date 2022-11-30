@@ -21,34 +21,34 @@
 namespace serial {
 
 class SerialDevice;
-using DeviceType = ddk::Device<SerialDevice, ddk::Openable, ddk::Closable,
-                               ddk::Messageable<fuchsia_hardware_serial::Device>::Mixin>;
+using DeviceType =
+    ddk::Device<SerialDevice, ddk::Messageable<fuchsia_hardware_serial::DeviceProxy>::Mixin,
+                ddk::Unbindable>;
 
 class SerialDevice : public DeviceType,
-                     public ddk::SerialProtocol<SerialDevice, ddk::base_protocol> {
+                     public ddk::SerialProtocol<SerialDevice, ddk::base_protocol>,
+                     public fidl::WireServer<fuchsia_hardware_serial::Device> {
  public:
-  explicit SerialDevice(zx_device_t* parent) : DeviceType(parent), serial_(parent), open_(false) {}
+  explicit SerialDevice(zx_device_t* parent) : DeviceType(parent), serial_(parent) {}
 
   static zx_status_t Create(void* ctx, zx_device_t* dev);
   zx_status_t Bind();
   zx_status_t Init();
 
   // Device protocol implementation.
-  zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags);
-  zx_status_t DdkClose(uint32_t flags);
+  void DdkUnbind(ddk::UnbindTxn txn);
   void DdkRelease();
 
   // Serial protocol implementation.
   zx_status_t SerialGetInfo(serial_port_info_t* info);
   zx_status_t SerialConfig(uint32_t baud_rate, uint32_t flags);
+
+  void GetChannel(GetChannelRequestView request, GetChannelCompleter::Sync& completer) override;
+
   void Read(ReadCompleter::Sync& completer) override;
   void Write(WriteRequestView request, WriteCompleter::Sync& completer) override;
-  zx_status_t SerialOpenSocket(zx::socket* out_handle);
 
  private:
-  zx_status_t WorkerThread();
-  void StateCallback(serial_state_t state);
-
   // Fidl protocol implementation.
   void GetClass(GetClassCompleter::Sync& completer) override;
   void SetConfig(SetConfigRequestView request, SetConfigCompleter::Sync& completer) override;
@@ -56,13 +56,12 @@ class SerialDevice : public DeviceType,
   // The serial protocol of the device we are binding against.
   ddk::SerialImplProtocolClient serial_;
 
-  zx::socket socket_;  // socket used for communicating with our client
-  zx::event event_;    // event for signaling serial driver state changes
-
-  fbl::Mutex lock_;
-  thrd_t thread_;
   uint32_t serial_class_;
-  bool open_ TA_GUARDED(lock_);
+  using Binding = struct {
+    fidl::ServerBindingRef<fuchsia_hardware_serial::Device> binding;
+    std::optional<ddk::UnbindTxn> unbind_txn;
+  };
+  std::optional<Binding> binding_;
 };
 
 }  // namespace serial

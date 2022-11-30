@@ -61,10 +61,4 @@ protocol Serial {
     }) -> (struct {
         s zx.status;
     });
-    /// Returns a socket that can be used for reading and writing data
-    /// from the given serial port.
-    OpenSocket() -> (resource struct {
-        s zx.status;
-        handle zx.handle:SOCKET;
-    });
 };
