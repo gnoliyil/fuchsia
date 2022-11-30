@@ -28,9 +28,6 @@
 class AutoVmcs;
 struct VmxInfo;
 
-// Maximum VCPUs per guest.
-constexpr size_t kMaxGuestVcpus = 64;
-
 class VmxPage : public hypervisor::Page {
  public:
   zx_status_t Alloc(const VmxInfo& info, uint8_t fill);
@@ -63,6 +60,9 @@ class Guest {
 
 class NormalGuest : public Guest {
  public:
+  // Maximum VCPUs per guest.
+  static constexpr size_t kMaxGuestVcpus = 64;
+
   static zx::result<ktl::unique_ptr<Guest>> Create();
 
   zx_status_t SetTrap(uint32_t kind, zx_vaddr_t addr, size_t len, fbl::RefPtr<PortDispatcher> port,

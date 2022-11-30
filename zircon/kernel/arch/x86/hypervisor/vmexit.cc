@@ -673,7 +673,7 @@ void update_timer(LocalApicState& local_apic_state, zx_time_t deadline) {
 }
 
 uint64_t ipi_target_mask(const InterruptCommandRegister& icr, uint16_t self) {
-  DEBUG_ASSERT(self < kMaxGuestVcpus);
+  DEBUG_ASSERT(self < NormalGuest::kMaxGuestVcpus);
 
   switch (icr.destination_shorthand) {
     case InterruptDestinationShorthand::NO_SHORTHAND: {
@@ -685,7 +685,7 @@ uint64_t ipi_target_mask(const InterruptCommandRegister& icr, uint16_t self) {
       }
 
       // If an invalid destination was provided, just return the empty mask.
-      if (unlikely(icr.destination >= kMaxGuestVcpus)) {
+      if (unlikely(icr.destination >= NormalGuest::kMaxGuestVcpus)) {
         return 0;
       }
 
