@@ -45,6 +45,54 @@ TEST(FormatTest, CreateFromNatural) {
   EXPECT_EQ(format.valid_bits_per_sample(), 32);
 }
 
+TEST(FormatTest, CreateFromHardwareWire) {
+  fidl::Arena<> arena;
+  auto msg = fuchsia_hardware_audio::wire::Format::Builder(arena)
+                 .pcm_format(fuchsia_hardware_audio::wire::PcmFormat{
+                     .number_of_channels = 2,
+                     .sample_format = fuchsia_hardware_audio::SampleFormat::kPcmSigned,
+                     .bytes_per_sample = 4,
+                     .valid_bits_per_sample = 1,  // anything <= 32 is ok
+                     .frame_rate = 48000,
+                 })
+                 .Build();
+
+  auto format_result = Format::Create(msg);
+  ASSERT_TRUE(format_result.is_ok());
+
+  auto format = format_result.take_value();
+  EXPECT_EQ(format.sample_type(), SampleType::kInt32);
+  EXPECT_EQ(format.channels(), 2);
+  EXPECT_EQ(format.frames_per_second(), 48000);
+  EXPECT_EQ(format.bytes_per_frame(), 8);
+  EXPECT_EQ(format.bytes_per_sample(), 4);
+  EXPECT_EQ(format.valid_bits_per_sample(), 32);
+}
+
+TEST(FormatTest, CreateFromHardwareNatural) {
+  fidl::Arena<> arena;
+  auto msg = fuchsia_hardware_audio::Format({
+      .pcm_format = fuchsia_hardware_audio::PcmFormat({
+          .number_of_channels = 2,
+          .sample_format = fuchsia_hardware_audio::SampleFormat::kPcmFloat,
+          .bytes_per_sample = 4,
+          .valid_bits_per_sample = 32,  // anything <= 32 is ok
+          .frame_rate = 48000,
+      }),
+  });
+
+  auto format_result = Format::Create(msg);
+  ASSERT_TRUE(format_result.is_ok());
+
+  auto format = format_result.take_value();
+  EXPECT_EQ(format.sample_type(), SampleType::kFloat32);
+  EXPECT_EQ(format.channels(), 2);
+  EXPECT_EQ(format.frames_per_second(), 48000);
+  EXPECT_EQ(format.bytes_per_frame(), 8);
+  EXPECT_EQ(format.bytes_per_sample(), 4);
+  EXPECT_EQ(format.valid_bits_per_sample(), 32);
+}
+
 TEST(FormatTest, CreateFromArgs) {
   Format format = Format::CreateOrDie({
       .sample_type = SampleType::kInt32,
@@ -93,14 +141,14 @@ TEST(FormatTest, ToNaturalFidl) {
   EXPECT_EQ(*msg.frames_per_second(), 48000u);
 }
 
-TEST(FormatTest, ToLegacyFidl) {
+TEST(FormatTest, ToLegacyWireFidl) {
   Format format = Format::CreateOrDie({
       .sample_type = SampleType::kInt32,
       .channels = 2,
       .frames_per_second = 48000,
   });
 
-  auto msg = format.ToLegacyFidl();
+  auto msg = format.ToLegacyWireFidl();
   EXPECT_EQ(msg.sample_format, fuchsia_mediastreams::wire::AudioSampleFormat::kSigned24In32);
   EXPECT_EQ(msg.channel_count, 2u);
   EXPECT_EQ(msg.frames_per_second, 48000u);

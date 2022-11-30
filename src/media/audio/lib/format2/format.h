@@ -7,6 +7,8 @@
 
 #include <fidl/fuchsia.audio/cpp/natural_types.h>
 #include <fidl/fuchsia.audio/cpp/wire_types.h>
+#include <fidl/fuchsia.hardware.audio/cpp/natural_types.h>
+#include <fidl/fuchsia.hardware.audio/cpp/wire_types.h>
 #include <fidl/fuchsia.media/cpp/natural_types.h>
 #include <fidl/fuchsia.media/cpp/wire_types.h>
 #include <fidl/fuchsia.mediastreams/cpp/natural_types.h>
@@ -31,16 +33,24 @@ class Format {
     int64_t frames_per_second;
   };
 
-  // Creates a Format from a wire FIDL object, a natural FIDL object, or an inline struct.
+  // Creates a Format from a wire FIDL object, a natural FIDL object, or an inline struct. The wire
+  // types are passed by value because they're either a simple pointer (for FIDL tables) or a small
+  // struct (for FIDL structs). The natural types are passed by reference because cloning those
+  // types always involves an allocation, even for FIDL structs.
+  //
   // Returns an error if the struct contains invalid parameters.
   static fpromise::result<Format, std::string> Create(fuchsia_audio::wire::Format msg);
-  static fpromise::result<Format, std::string> Create(fuchsia_audio::Format msg);
+  static fpromise::result<Format, std::string> Create(const fuchsia_audio::Format& msg);
+  static fpromise::result<Format, std::string> Create(fuchsia_hardware_audio::wire::Format msg);
+  static fpromise::result<Format, std::string> Create(fuchsia_hardware_audio::wire::PcmFormat msg);
+  static fpromise::result<Format, std::string> Create(const fuchsia_hardware_audio::Format& msg);
+  static fpromise::result<Format, std::string> Create(const fuchsia_hardware_audio::PcmFormat& msg);
   static fpromise::result<Format, std::string> Create(Args args);
 
   // Creates a Format from a wire FIDL object, a natural FIDL object, or an inline struct.
   // Crashes if the the struct contains invalid parameters.
   static Format CreateOrDie(fuchsia_audio::wire::Format msg);
-  static Format CreateOrDie(fuchsia_audio::Format msg);
+  static Format CreateOrDie(const fuchsia_audio::Format& msg);
   static Format CreateOrDie(Args args);
 
   // TODO(fxbug.dev/114919): Remove when fuchsia.audio.effects has migrated to the new types.
@@ -65,8 +75,10 @@ class Format {
 
   fuchsia_audio::wire::Format ToWireFidl(fidl::AnyArena& arena) const;
   fuchsia_audio::Format ToNaturalFidl() const;
+  fuchsia_hardware_audio::wire::Format ToHardwareWireFidl(fidl::AnyArena& arena) const;
+  fuchsia_hardware_audio::Format ToHardwareNaturalFidl() const;
   // TODO(fxbug.dev/114919): Remove when fuchsia.audio.effects has migrated to the new types.
-  fuchsia_mediastreams::wire::AudioFormat ToLegacyFidl() const;
+  fuchsia_mediastreams::wire::AudioFormat ToLegacyWireFidl() const;
 
   fuchsia_audio::SampleType sample_type() const { return sample_type_; }
   int64_t channels() const { return channels_; }

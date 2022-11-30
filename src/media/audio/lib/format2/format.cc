@@ -25,6 +25,54 @@ using TimelineRate = media::TimelineRate;
 
 namespace {
 
+std::optional<SampleType> ConvertHardwareFormatToSampleType(
+    fuchsia_hardware_audio::wire::PcmFormat msg) {
+  switch (msg.sample_format) {
+    case fuchsia_hardware_audio::SampleFormat::kPcmSigned:
+      switch (msg.bytes_per_sample) {
+        case 2:
+          return SampleType::kInt16;
+        case 4:
+          return SampleType::kInt32;
+      }
+      return std::nullopt;
+
+    case fuchsia_hardware_audio::SampleFormat::kPcmUnsigned:
+      if (msg.bytes_per_sample == 1) {
+        return SampleType::kUint8;
+      }
+      return std::nullopt;
+
+    case fuchsia_hardware_audio::SampleFormat::kPcmFloat:
+      switch (msg.bytes_per_sample) {
+        case 4:
+          return SampleType::kFloat32;
+        case 8:
+          return SampleType::kFloat64;
+      }
+      return std::nullopt;
+
+    default:
+      return std::nullopt;
+  }
+}
+
+fuchsia_hardware_audio::SampleFormat ToHardwareSampleFormat(SampleType sample_type) {
+  switch (sample_type) {
+    case SampleType::kUint8:
+      return fuchsia_hardware_audio::SampleFormat::kPcmUnsigned;
+    case SampleType::kInt16:
+    case SampleType::kInt32:
+      return fuchsia_hardware_audio::SampleFormat::kPcmSigned;
+    case SampleType::kFloat32:
+    case SampleType::kFloat64:
+      return fuchsia_hardware_audio::SampleFormat::kPcmFloat;
+    default:
+      FX_LOGS(FATAL) << "unexpected sample_type '" << sample_type << "'";
+      __builtin_unreachable();
+  }
+}
+
 std::optional<SampleType> ConvertLegacySampleType(fuchsia_mediastreams::AudioSampleFormat fmt) {
   switch (fmt) {
     case fuchsia_mediastreams::AudioSampleFormat::kUnsigned8:
@@ -75,7 +123,7 @@ fpromise::result<Format, std::string> Format::Create(fuchsia_audio::wire::Format
   });
 }
 
-fpromise::result<Format, std::string> Format::Create(fuchsia_audio::Format msg) {
+fpromise::result<Format, std::string> Format::Create(const fuchsia_audio::Format& msg) {
   if (!msg.sample_type().has_value()) {
     return fpromise::error("missing required field (sample_type)");
   }
@@ -90,6 +138,52 @@ fpromise::result<Format, std::string> Format::Create(fuchsia_audio::Format msg) 
       .sample_type = *msg.sample_type(),
       .channels = *msg.channel_count(),
       .frames_per_second = *msg.frames_per_second(),
+  });
+}
+
+fpromise::result<Format, std::string> Format::Create(fuchsia_hardware_audio::wire::Format msg) {
+  if (!msg.has_pcm_format()) {
+    return fpromise::error("missing required field (pcm_format)");
+  }
+  return Create(msg.pcm_format());
+}
+
+fpromise::result<Format, std::string> Format::Create(fuchsia_hardware_audio::wire::PcmFormat msg) {
+  // The valid bits property is ignored, except to verify that it is not too large.
+  if (msg.valid_bits_per_sample > 8 * msg.bytes_per_sample) {
+    return fpromise::error("incompatible valid_bits_per_sample '" +
+                           std::to_string(msg.valid_bits_per_sample) + "' and bytes_per_sample '" +
+                           std::to_string(msg.bytes_per_sample));
+  }
+
+  auto sample_type = ConvertHardwareFormatToSampleType(msg);
+  if (!sample_type) {
+    return fpromise::error("incompatible sample_format '" +
+                           std::to_string(fidl::ToUnderlying(msg.sample_format)) +
+                           "' and bytes_per_sample '" + std::to_string(msg.bytes_per_sample));
+  }
+
+  return Create(Args{
+      .sample_type = *sample_type,
+      .channels = msg.number_of_channels,
+      .frames_per_second = msg.frame_rate,
+  });
+}
+
+fpromise::result<Format, std::string> Format::Create(const fuchsia_hardware_audio::Format& msg) {
+  if (!msg.pcm_format()) {
+    return fpromise::error("missing required field (pcm_format)");
+  }
+  return Create(*msg.pcm_format());
+}
+
+fpromise::result<Format, std::string> Format::Create(const fuchsia_hardware_audio::PcmFormat& msg) {
+  return Create(fuchsia_hardware_audio::wire::PcmFormat{
+      .number_of_channels = msg.number_of_channels(),
+      .sample_format = msg.sample_format(),
+      .bytes_per_sample = msg.bytes_per_sample(),
+      .valid_bits_per_sample = msg.valid_bits_per_sample(),
+      .frame_rate = msg.frame_rate(),
   });
 }
 
@@ -127,7 +221,7 @@ Format Format::CreateOrDie(fuchsia_audio::wire::Format msg) {
   return result.take_value();
 }
 
-Format Format::CreateOrDie(fuchsia_audio::Format msg) {
+Format Format::CreateOrDie(const fuchsia_audio::Format& msg) {
   auto result = Create(msg);
   if (!result.is_ok()) {
     FX_CHECK(false) << "Format::CreateOrDie failed: " << result.error();
@@ -291,7 +385,31 @@ fuchsia_audio::Format Format::ToNaturalFidl() const {
   return msg;
 }
 
-fuchsia_mediastreams::wire::AudioFormat Format::ToLegacyFidl() const {
+fuchsia_hardware_audio::wire::Format Format::ToHardwareWireFidl(fidl::AnyArena& arena) const {
+  return fuchsia_hardware_audio::wire::Format::Builder(arena)
+      .pcm_format(fuchsia_hardware_audio::wire::PcmFormat{
+          .number_of_channels = static_cast<uint8_t>(channels_),
+          .sample_format = ToHardwareSampleFormat(sample_type_),
+          .bytes_per_sample = static_cast<uint8_t>(bytes_per_sample()),
+          .valid_bits_per_sample = static_cast<uint8_t>(8 * bytes_per_sample()),
+          .frame_rate = static_cast<uint32_t>(frames_per_second_),
+      })
+      .Build();
+}
+
+fuchsia_hardware_audio::Format Format::ToHardwareNaturalFidl() const {
+  return fuchsia_hardware_audio::Format({
+      .pcm_format = fuchsia_hardware_audio::PcmFormat({
+          .number_of_channels = static_cast<uint8_t>(channels_),
+          .sample_format = ToHardwareSampleFormat(sample_type_),
+          .bytes_per_sample = static_cast<uint8_t>(bytes_per_sample()),
+          .valid_bits_per_sample = static_cast<uint8_t>(8 * bytes_per_sample()),
+          .frame_rate = static_cast<uint32_t>(frames_per_second_),
+      }),
+  });
+}
+
+fuchsia_mediastreams::wire::AudioFormat Format::ToLegacyWireFidl() const {
   auto sample_format = fuchsia_mediastreams::AudioSampleFormat::kFloat;
   switch (sample_type_) {
     case SampleType::kUint8:
