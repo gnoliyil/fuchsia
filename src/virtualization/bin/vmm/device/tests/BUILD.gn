@@ -398,6 +398,7 @@ device_test("virtio_mem_device_tests") {
     "//sdk/fidl/fuchsia.virtualization.hardware:fuchsia.virtualization.hardware_hlcpp",
     "//sdk/lib/sys/component/cpp/testing:cpp",
     "//zircon/system/ulib/virtio",
+    "//zircon/system/ulib/zircon-internal",
   ]
 
   test_specs = {

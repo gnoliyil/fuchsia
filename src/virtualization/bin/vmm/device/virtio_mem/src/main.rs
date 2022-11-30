@@ -19,12 +19,13 @@ use {
 
 async fn run_virtio_mem(mut virtio_mem_fidl: VirtioMemRequestStream) -> Result<(), anyhow::Error> {
     // Receive start info as first message.
-    let (start_info, plugged_block_size, plugged_region_size, responder) = virtio_mem_fidl
-        .try_next()
-        .await?
-        .ok_or(anyhow!("Failed to read fidl message from the channel."))?
-        .into_start()
-        .ok_or(anyhow!("Start should be the first message sent."))?;
+    let (start_info, _region_addr, plugged_block_size, plugged_region_size, responder) =
+        virtio_mem_fidl
+            .try_next()
+            .await?
+            .ok_or(anyhow!("Failed to read fidl message from the channel."))?
+            .into_start()
+            .ok_or(anyhow!("Start should be the first message sent."))?;
 
     // Prepare the device builder
     let (mut device_builder, guest_mem) = machina_virtio_device::from_start_info(start_info)?;

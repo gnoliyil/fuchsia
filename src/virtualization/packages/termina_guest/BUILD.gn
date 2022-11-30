@@ -60,6 +60,7 @@ guest_package("termina_guest") {
   virtio_balloon = true
   virtio_console = true
   virtio_gpu = true
+  virtio_mem = false
   virtio_rng = true
   virtio_sound = true
   virtio_sound_input = false

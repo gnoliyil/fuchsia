@@ -27,6 +27,8 @@ import("//build/components.gni")
 #     Enable the virtio-consoledevice.
 #   virtio_gpu
 #     Enable the virtio-gpu & virtio-input devices.
+#   virtio_mem
+#     Enable the virtio-mem device.
 #   virtio_rng
 #     Enable the virtio-rng device.
 #   virtio_sound
@@ -108,6 +110,9 @@ template("guest_package") {
     }
     if (defined(invoker.virtio_gpu) && invoker.virtio_gpu) {
       args += [ "--virtio-gpu" ]
+    }
+    if (defined(invoker.virtio_mem) && invoker.virtio_mem) {
+      args += [ "--virtio-mem" ]
     }
     if (defined(invoker.virtio_rng) && invoker.virtio_rng) {
       args += [ "--virtio-rng" ]

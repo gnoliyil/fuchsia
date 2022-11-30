@@ -128,4 +128,11 @@ protocol Guest {
     GetBalloonController(resource struct {
         controller server_end:BalloonController;
     }) -> () error GuestError;
+
+    /// Get the mem controller endpoint for the guest.
+    ///
+    /// Returns error DEVICE_NOT_PRESENT if the guest was started without a mem device.
+    GetMemController(resource struct {
+        controller server_end:MemController;
+    }) -> () error GuestError;
 };

@@ -109,6 +109,9 @@ class EnclosedGuest {
   fit::result<::fuchsia::virtualization::GuestError> GetHostVsockEndpoint(
       ::fidl::InterfaceRequest<::fuchsia::virtualization::HostVsockEndpoint> endpoint);
 
+  fit::result<::fuchsia::virtualization::GuestError> ConnectToMem(
+      ::fidl::InterfaceRequest<::fuchsia::virtualization::MemController> controller);
+
   template <typename Interface>
   fidl::InterfacePtr<Interface> ConnectToService(
       const std::string& interface_name = Interface::Name_) const {

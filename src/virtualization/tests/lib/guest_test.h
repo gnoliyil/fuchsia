@@ -70,6 +70,10 @@ class GuestTest : public ::testing::Test {
     return GetEnclosedGuest().ConnectToBalloon(std::move(balloon_controller)).is_ok();
   }
 
+  bool ConnectToMem(fidl::InterfaceRequest<fuchsia::virtualization::MemController> mem_controller) {
+    return GetEnclosedGuest().ConnectToMem(std::move(mem_controller)).is_ok();
+  }
+
   T& GetEnclosedGuest() { return enclosed_guest_; }
 
  private:

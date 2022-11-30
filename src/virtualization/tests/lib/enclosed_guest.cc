@@ -458,6 +458,34 @@ fit::result<::fuchsia::virtualization::GuestError> EnclosedGuest::ConnectToBallo
   return fit::ok();
 }
 
+fit::result<::fuchsia::virtualization::GuestError> EnclosedGuest::ConnectToMem(
+    ::fidl::InterfaceRequest<::fuchsia::virtualization::MemController> controller) {
+  zx_status_t status = ZX_ERR_TIMED_OUT;
+  fuchsia::virtualization::GuestError error;
+  guest_->GetMemController(
+      std::move(controller),
+      [&status, &error](fuchsia::virtualization::Guest_GetMemController_Result result) {
+        if (result.is_response()) {
+          status = ZX_OK;
+        } else {
+          status = ZX_ERR_INTERNAL;
+          error = result.err();
+        }
+      });
+
+  const bool success = RunLoopUntil([&status] { return status != ZX_ERR_TIMED_OUT; },
+                                    zx::deadline_after(zx::sec(20)));
+  if (!success) {
+    FX_LOGS(ERROR) << "Timed out waiting to get mem controller";
+    return fit::error(fuchsia::virtualization::GuestError::DEVICE_NOT_PRESENT);
+  }
+
+  if (status != ZX_OK) {
+    return fit::error(error);
+  }
+  return fit::ok();
+}
+
 fit::result<::fuchsia::virtualization::GuestError> EnclosedGuest::GetHostVsockEndpoint(
     ::fidl::InterfaceRequest<::fuchsia::virtualization::HostVsockEndpoint> endpoint) {
   zx_status_t status = ZX_ERR_TIMED_OUT;

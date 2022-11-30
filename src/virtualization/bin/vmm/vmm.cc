@@ -104,7 +104,15 @@ fit::result<GuestError> Vmm::Initialize(GuestConfig cfg, ::sys::ComponentContext
 
   DevMem dev_mem;
   guest_ = std::make_unique<::Guest>();
-  zx_status_t status = guest_->Init(cfg.guest_memory());
+  uint64_t virtio_mem_region_size = 0;
+  uint64_t virtio_mem_region_alignment = 0;
+  if (cfg.has_virtio_mem() && cfg.virtio_mem()) {
+    virtio_mem_region_size = cfg.virtio_mem_region_size();
+    virtio_mem_region_alignment =
+        std::max(cfg.virtio_mem_block_size(), cfg.virtio_mem_region_alignment());
+  }
+  zx_status_t status =
+      guest_->Init(cfg.guest_memory(), virtio_mem_region_size, virtio_mem_region_alignment);
   if (status != ZX_OK) {
     return fit::error(GuestError::GUEST_INITIALIZATION_FAILURE);
   }
@@ -172,6 +180,23 @@ fit::result<GuestError> Vmm::Initialize(GuestConfig cfg, ::sys::ComponentContext
   }
   platform_devices_.push_back(pci_bus_.get());
 
+  // Setup mem device.
+  if (cfg.has_virtio_mem() && cfg.virtio_mem()) {
+    mem_ = std::make_unique<VirtioMem>(guest_->phys_mem(), cfg.virtio_mem_block_size(),
+                                       guest_->mem_pluggable_region_addr(),
+                                       cfg.virtio_mem_region_size());
+    status = pci_bus_->Connect(mem_->pci_device(), dispatcher);
+    if (status != ZX_OK) {
+      FX_PLOGS(ERROR, status) << "Failed to connect mem device";
+      return fit::error(GuestError::DEVICE_INITIALIZATION_FAILURE);
+    }
+    status = mem_->Start(guest_->object(), context, dispatcher, cfg.virtio_mem_block_size(),
+                         cfg.virtio_mem_region_size());
+    if (status != ZX_OK) {
+      FX_PLOGS(ERROR, status) << "Failed to start mem device";
+      return fit::error(GuestError::DEVICE_START_FAILURE);
+    }
+  }
   // Setup balloon device.
   if (cfg.has_virtio_balloon() && cfg.virtio_balloon()) {
     balloon_ = std::make_unique<VirtioBalloon>(guest_->phys_mem());
@@ -539,6 +564,17 @@ void Vmm::GetBalloonController(fidl::InterfaceRequest<BalloonController> endpoin
     callback(fpromise::ok());
   } else {
     FX_LOGS(WARNING) << "Attempted to get BalloonController, but the balloon device is not present";
+    callback(fpromise::error(GuestError::DEVICE_NOT_PRESENT));
+  }
+}
+
+void Vmm::GetMemController(fidl::InterfaceRequest<fuchsia::virtualization::MemController> endpoint,
+                           GetMemControllerCallback callback) {
+  if (mem_) {
+    mem_->ConnectToMemController(std::move(endpoint));
+    callback(fpromise::ok());
+  } else {
+    FX_LOGS(WARNING) << "Attempted to get MemController, but the mem device is not present";
     callback(fpromise::error(GuestError::DEVICE_NOT_PRESENT));
   }
 }

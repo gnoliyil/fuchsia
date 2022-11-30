@@ -17,6 +17,7 @@
 #include "src/virtualization/bin/vmm/controller/virtio_gpu.h"
 #include "src/virtualization/bin/vmm/controller/virtio_input.h"
 #include "src/virtualization/bin/vmm/controller/virtio_magma.h"
+#include "src/virtualization/bin/vmm/controller/virtio_mem.h"
 #include "src/virtualization/bin/vmm/controller/virtio_net.h"
 #include "src/virtualization/bin/vmm/controller/virtio_rng.h"
 #include "src/virtualization/bin/vmm/controller/virtio_sound.h"
@@ -63,6 +64,8 @@ class Vmm : public fuchsia::virtualization::Guest {
   void GetBalloonController(
       fidl::InterfaceRequest<fuchsia::virtualization::BalloonController> endpoint,
       GetBalloonControllerCallback callback) override;
+  void GetMemController(fidl::InterfaceRequest<fuchsia::virtualization::MemController> endpoint,
+                        GetMemControllerCallback callback) override;
 
  private:
 #if __x86_64__
@@ -96,6 +99,7 @@ class Vmm : public fuchsia::virtualization::Guest {
   std::unique_ptr<VirtioGpu> gpu_;
   std::unique_ptr<VirtioInput> input_keyboard_;
   std::unique_ptr<VirtioInput> input_pointer_;
+  std::unique_ptr<VirtioMem> mem_;
   std::unique_ptr<VirtioRng> rng_;
   std::unique_ptr<controller::VirtioVsock> vsock_;
   std::unique_ptr<VirtioWl> wl_;

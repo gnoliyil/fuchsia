@@ -6,6 +6,7 @@
 #include <fuchsia/tracing/provider/cpp/fidl.h>
 #include <fuchsia/virtualization/hardware/cpp/fidl.h>
 #include <lib/sys/component/cpp/testing/realm_builder.h>
+#include <lib/zircon-internal/align.h>
 #include <threads.h>
 
 #include "src/virtualization/bin/vmm/device/tests/test_with_device.h"
@@ -14,8 +15,8 @@
 static constexpr uint16_t kNumQueues = 1;
 static constexpr uint16_t kQueueSize = 16;
 
-static constexpr uint64_t kPluggedBlockSize = 4 * 1024 * 1024;
-static constexpr uint64_t kPluggedRegionSize = static_cast<uint64_t>(8) * 1024 * 1024 * 1024;
+static constexpr uint64_t kPluggedBlockSize = 2 * 1024 * 1024;
+static constexpr uint64_t kRegionSize = static_cast<uint64_t>(1) * 1024 * 1024 * 1024;
 
 class VirtioMemTest : public TestWithDevice {
  public:
@@ -33,9 +34,6 @@ class VirtioMemTest : public TestWithDevice {
     using component_testing::Route;
 
     constexpr auto kVirtioMemUrl = "#meta/virtio_mem.cm";
-    // Add extra memory pages which we will be zero'ing inside of the test
-    constexpr auto kNumExtraTestMemoryPages = 1024;
-
     auto realm_builder = RealmBuilder::Create();
     realm_builder.AddChild(kComponentName, kVirtioMemUrl);
 
@@ -58,11 +56,13 @@ class VirtioMemTest : public TestWithDevice {
     mem_ = realm_->ConnectSync<fuchsia::virtualization::hardware::VirtioMem>();
 
     fuchsia::virtualization::hardware::StartInfo start_info;
-    zx_status_t status = MakeStartInfo(
-        guest_request_queue_.end() + kNumExtraTestMemoryPages * PAGE_SIZE, &start_info);
+    size_t vmo_size = guest_request_queue_.end();
+    uint64_t region_addr = ZX_ALIGN(vmo_size, 128 * 1024 * 1024);
+    vmo_size = region_addr + kRegionSize;
+    zx_status_t status = MakeStartInfo(vmo_size, &start_info);
     ASSERT_EQ(ZX_OK, status);
 
-    status = mem_->Start(std::move(start_info), kPluggedBlockSize, kPluggedRegionSize);
+    status = mem_->Start(std::move(start_info), region_addr, kPluggedBlockSize, kRegionSize);
     ASSERT_EQ(ZX_OK, status);
 
     // Configure device queues.

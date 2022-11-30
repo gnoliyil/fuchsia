@@ -407,6 +407,10 @@ fuchsia::virtualization::GuestConfig MergeConfigs(fuchsia::virtualization::Guest
   COPY_GUEST_CONFIG_FIELD(wayland_device);
   COPY_GUEST_CONFIG_FIELD(magma_device);
   COPY_GUEST_CONFIG_FIELD(default_net);
+  COPY_GUEST_CONFIG_FIELD(virtio_mem);
+  COPY_GUEST_CONFIG_FIELD(virtio_mem_block_size);
+  COPY_GUEST_CONFIG_FIELD(virtio_mem_region_size);
+  COPY_GUEST_CONFIG_FIELD(virtio_mem_region_alignment);
   COPY_GUEST_CONFIG_FIELD(virtio_balloon);
   COPY_GUEST_CONFIG_FIELD(virtio_console);
   COPY_GUEST_CONFIG_FIELD(virtio_gpu);

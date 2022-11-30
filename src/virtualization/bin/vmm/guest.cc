@@ -6,6 +6,8 @@
 
 #include <fcntl.h>
 #include <lib/syslog/cpp/macros.h>
+#include <lib/zircon-internal/align.h>
+#include <zircon/assert.h>
 #include <zircon/status.h>
 #include <zircon/syscalls/hypervisor.h>
 #include <zircon/threads.h>
@@ -225,7 +227,23 @@ bool Guest::GenerateGuestMemoryRegions(uint64_t guest_memory,
   return true;
 }
 
-zx_status_t Guest::Init(uint64_t guest_memory) {
+bool Guest::FitPluggableRegionBase(cpp20::span<const GuestMemoryRegion> restrictions, uint64_t base,
+                                   uint64_t size, uint64_t alignment, uint64_t* result_base) {
+  base = ZX_ALIGN(base, alignment);
+  for (auto& restriction : restrictions) {
+    if (restriction.HasOverlap(GuestMemoryRegion{base, size})) {
+      if (restriction.size == kGuestMemoryAllRemainingRange) {
+        return false;
+      }
+      base = ZX_ALIGN(restriction.base + restriction.size, alignment);
+    }
+  }
+  *result_base = base;
+  return true;
+}
+
+zx_status_t Guest::Init(uint64_t guest_memory, uint64_t pluggable_region_size,
+                        uint64_t pluggable_region_alignment) {
   zx::resource hypervisor_resource;
   zx_status_t status = get_hypervisor_resource(&hypervisor_resource);
   if (status != ZX_OK) {
@@ -248,8 +266,20 @@ zx_status_t Guest::Init(uint64_t guest_memory) {
                                             "ranges. Try requesting less memory.";
   }
 
-  // The VMO is sized to include any device regions inclusive of the guest memory ranges so that
-  // there will always be a valid offset for any guest memory address.
+  if (pluggable_region_size > 0) {
+    uint64_t pluggable_region_base = memory_regions_.back().base + memory_regions_.back().size;
+    // Calculate the position of the pluggable memory region
+    if (!Guest::FitPluggableRegionBase(Guest::GetDefaultRestrictionsForArchitecture(),
+                                       pluggable_region_base, pluggable_region_size,
+                                       pluggable_region_alignment, &mem_pluggable_region_addr_)) {
+      status = ZX_ERR_INVALID_ARGS;
+      FX_PLOGS(ERROR, status) << "Failed to place pluggable memory region avoiding device memory "
+                                 "ranges. Try requesting smaller pluggable region size.";
+      return status;
+    } else {
+      memory_regions_.push_back({mem_pluggable_region_addr_, pluggable_region_size});
+    }
+  }
   uint64_t vmo_size = memory_regions_.back().base + memory_regions_.back().size;
 
   zx::vmo vmo;
@@ -272,6 +302,23 @@ zx_status_t Guest::Init(uint64_t guest_memory) {
   }
 
   std::vector<GuestMemoryRegion> vmar_regions = memory_regions_;
+  if (pluggable_region_size > 0) {
+    // We do want vmar mapping for the pluggable memory region but we don't want
+    // the pluggable memory region to be a part of the e820 memory map.
+    // So, leave the pluggable memory region part of vmar_regions and remove it
+    // from memory_regions_ which will be later used to set up e820 map
+    //
+    // TODO(fxbug.dev/100514): Get virtio-mem to take the guest and host vmars,
+    // keep all pluggable memory unmapped and only map plugged regions. This
+    // would require adding EXECUTE and perhaps other flags to the vmo which is
+    // passed to the virtio-mem. Mapping only plugged regions can make existing
+    // virtio-mem tests flaky because test is not guaranteed to use the plugged
+    // memory during its test allocate for something which requires EXECUTE.
+    // Need to write a stress test for virtio-mem before making this change.
+    FX_CHECK(!memory_regions_.empty());
+    FX_CHECK(memory_regions_.back().base == mem_pluggable_region_addr_);
+    memory_regions_.pop_back();
+  }
 #if __x86_64__
   // x86 has reserved memory from 0 to 32KiB, and 512KiB to 1MiB. While we will not allocate guest
   // memory in those regions, we still want to map these regions into the guest VMAR as they are

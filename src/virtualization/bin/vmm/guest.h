@@ -39,7 +39,8 @@ class Guest {
   using VcpuArray = std::array<std::optional<Vcpu>, kMaxVcpus>;
   using IoMappingList = std::forward_list<IoMapping>;
 
-  zx_status_t Init(uint64_t guest_memory);
+  zx_status_t Init(uint64_t guest_memory, uint64_t pluggable_region_size,
+                   uint64_t pluggable_region_alignment);
 
   const PhysMem& phys_mem() const { return phys_mem_; }
   const zx::guest& object() { return guest_; }
@@ -78,15 +79,22 @@ class Guest {
   static bool GenerateGuestMemoryRegions(uint64_t guest_memory,
                                          cpp20::span<const GuestMemoryRegion> restrictions,
                                          std::vector<GuestMemoryRegion>* regions);
+  // Find the aligned base offset for the pluggable memory region avoiding restricted regions
+  static bool FitPluggableRegionBase(cpp20::span<const GuestMemoryRegion> restrictions,
+                                     uint64_t base, uint64_t size, uint64_t alignment,
+                                     uint64_t* result_base);
 
   const IoMappingList& mappings() const { return mappings_; }
   const VcpuArray& vcpus() const { return vcpus_; }
   const std::vector<GuestMemoryRegion>& memory_regions() const { return memory_regions_; }
 
+  uint64_t mem_pluggable_region_addr() const { return mem_pluggable_region_addr_; }
+
  private:
   zx::guest guest_;
   zx::vmar vmar_;
   PhysMem phys_mem_;
+  uint64_t mem_pluggable_region_addr_ = 0;
   IoMappingList mappings_;
   std::vector<GuestMemoryRegion> memory_regions_;
 

@@ -121,4 +121,45 @@ TEST(GuestTest, GetTooLargeGuestMemoryRegion) {
       guest_memory, Guest::GetDefaultRestrictionsForArchitecture(), &regions));
 }
 
+constexpr uint64_t kOneMib = 1u * 1024 * 1024;
+
+TEST(GuestTest, GetPluggableRegionBaseSkipSmallOnesAndAlign) {
+  const uint64_t given_base = 160u * kOneMib;
+  const uint64_t pluggable_region_size = 1024 * kOneMib;
+  const uint64_t guest_block_memory_size = 128 * kOneMib;
+  uint64_t result = 0;
+  EXPECT_TRUE(Guest::FitPluggableRegionBase(Guest::GetDefaultRestrictionsForArchitecture(),
+                                            given_base, pluggable_region_size,
+                                            guest_block_memory_size, &result));
+  EXPECT_EQ(result % guest_block_memory_size, 0u);
+  EXPECT_EQ(result, 256u * kOneMib);
+}
+
+TEST(GuestTest, GetPluggableRegionBaseSkipDeviceRangeForx86NoSkipForArm) {
+  const uint64_t given_base = 20u * kOneMib;
+  const uint64_t pluggable_region_size = 8 * 1024 * kOneMib;
+  const uint64_t guest_block_memory_size = 32 * kOneMib;
+  uint64_t result = 0;
+  EXPECT_TRUE(Guest::FitPluggableRegionBase(Guest::GetDefaultRestrictionsForArchitecture(),
+                                            given_base, pluggable_region_size,
+                                            guest_block_memory_size, &result));
+  EXPECT_EQ(result % guest_block_memory_size, 0u);
+#if __aarch64__
+  EXPECT_EQ(result, guest_block_memory_size);
+#elif __x86_64__
+  EXPECT_EQ(result, 4u * 1024 * kOneMib);
+#endif
+}
+
+TEST(GuestTest, GetPluggableRegionBaseCannotFit) {
+  const uint64_t given_base = 160u * kOneMib;
+  const uint64_t pluggable_region_size = 64u * 1024 * kOneMib;
+  const uint64_t guest_block_memory_size = 64 * kOneMib;
+  uint64_t result = 0;
+  EXPECT_FALSE(Guest::FitPluggableRegionBase(Guest::GetDefaultRestrictionsForArchitecture(),
+                                             given_base, pluggable_region_size,
+                                             guest_block_memory_size, &result));
+  EXPECT_EQ(result, 0u);
+}
+
 }  // namespace

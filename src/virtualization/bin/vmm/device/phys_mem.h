@@ -28,6 +28,11 @@ struct GuestMemoryRegion {
                                          const GuestMemoryRegion& rhs) {
     return lhs.base < rhs.base;
   }
+
+  bool HasOverlap(const GuestMemoryRegion& rhs) const {
+    return ((base >= rhs.base && base < rhs.base + rhs.size) ||
+            (base + size >= rhs.base && base + size < rhs.base + rhs.size));
+  }
 };
 
 class PhysMem {

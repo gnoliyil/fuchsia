@@ -41,6 +41,8 @@ source_set("lib") {
     "controller/virtio_input.h",
     "controller/virtio_magma.cc",
     "controller/virtio_magma.h",
+    "controller/virtio_mem.cc",
+    "controller/virtio_mem.h",
     "controller/virtio_net.cc",
     "controller/virtio_net.h",
     "controller/virtio_rng.cc",
