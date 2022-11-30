@@ -161,6 +161,26 @@ pub async fn load_image_from_bytes_using_allocators(
         return Err(anyhow!("Failed to allocate buffer for image."));
     }
 
+    // Get pixels per row. Note that the stride of the buffer may be different than the width of the
+    // image, if the width of the image is not a multiple of 64, or some other power of 2.
+    //
+    // For instance, if the original image were 1024x600 and rotated 90*, then the new width is
+    // 600. 600 px * 4 bytes per px = 2400 bytes, which is not a multiple of 64. The next
+    // multiple would be 2432, which would mean the buffer is actually a 608x1024 "pixel"
+    // buffer, since 2432/4=608. We must account for that 8*4=32 byte padding when copying the
+    // bytes over to be buffer.
+    let bytes_per_row_divisor =
+        collection_info.settings.image_format_constraints.bytes_per_row_divisor;
+    let min_bytes_per_row = collection_info.settings.image_format_constraints.min_bytes_per_row;
+    let bytes_per_row = if min_bytes_per_row > width * 4 { min_bytes_per_row } else { width * 4 };
+    // Round up bytes_per_row to the next multiple of `bytes_per_row_divisor`.
+    // Rust has nightly support for u32::next_multiple_of: http://go/rs:u32#method.next_multiple_of
+    // But for stable, we use this:
+    // https://users.rust-lang.org/t/solved-rust-round-usize-to-nearest-multiple-of-8/25549/3
+    let tmp = bytes_per_row_divisor - 1;
+    let bytes_per_row = bytes_per_row + tmp & !tmp;
+    let pixels_per_row = bytes_per_row / 4;
+
     let size: usize = collection_info.settings.buffer_settings.size_bytes.try_into()?;
     let vmo = collection_info.buffers[0]
         .vmo
@@ -170,7 +190,18 @@ pub async fn load_image_from_bytes_using_allocators(
     // Write bytes to VMO.
     let mapping =
         Mapping::create_from_vmo(vmo, size, zx::VmarFlags::PERM_READ | zx::VmarFlags::PERM_WRITE)?;
-    mapping.write(bytes);
+
+    if pixels_per_row == width {
+        mapping.write(bytes);
+    } else {
+        // Copy row by row.
+        for i in 0..height {
+            let dst_offset: usize = (i * bytes_per_row).try_into().unwrap();
+            let src_offset: usize = (i * width * 4).try_into().unwrap();
+            let src_size: usize = (width * 4).try_into().unwrap();
+            mapping.write_at(dst_offset, &bytes[src_offset..src_offset + src_size]);
+        }
+    }
 
     // Flush VMO if needed.
     if collection_info.settings.buffer_settings.coherency_domain == sysmem::CoherencyDomain::Ram {
