@@ -1,6 +1,6 @@
 # VkProto
 A cross platform vulkan prototyping template for validation of
-[Magma](/docs/the-book/magma/overview.md) drivers and prototyping vulkan
+[Magma](/docs/development/graphics/magma/README.md) drivers and prototyping vulkan
 logic.
 
 ## Overview
