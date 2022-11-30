@@ -244,34 +244,38 @@ impl FileOps for BinderConnection {
 
 #[derive(Debug, Default)]
 struct BinderProcessState {
-    /// Handle table of remote binder objects.
-    handles: HandleTable,
     /// The set of threads that are interacting with the binder driver.
     thread_pool: ThreadPool,
+    /// Binder objects hosted by the process shared with other processes.
+    objects: BTreeMap<UserAddress, Weak<BinderObject>>,
+    /// Handle table of remote binder objects.
+    handles: HandleTable,
+    /// A queue for commands that could not be scheduled on any existing binder threads. Binder
+    /// threads that exhaust their own queue will read from this one.
+    command_queue: VecDeque<Command>,
+    /// State associated with active transactions, keyed by the userspace addresses of the buffers
+    /// allocated to them. When the process frees a transaction buffer with `BC_FREE_BUFFER`, the
+    /// state is dropped, releasing temporary strong references and the memory allocated to the
+    /// transaction.
+    active_transactions: BTreeMap<UserAddress, ActiveTransaction>,
+    /// The list of processes that should be notified if this process dies.
+    death_subscribers: Vec<(Weak<BinderProcess>, binder_uintptr_t)>,
 }
 
 #[derive(Debug)]
 struct BinderProcess {
     pid: pid_t,
 
+    // The mutable state of `BinderProcess` is protected by 3 locks. For ordering purpose, locks
+    // must be taken in the order they are defined in this class, even across `BinderProcess`
+    // instances.
+    // Moreover, any `BinderThread` lock must be ordered after any `state` lock from a
+    // `BinderProcess`.
     /// The [`SharedMemory`] region mapped in both the driver and the binder process. Allows for
     /// transactions to copy data once from the sender process into the receiver process.
     shared_memory: Mutex<Option<SharedMemory>>,
-    /// The mutable state of the `BinderProcess`.
-    // TODO(qsr): Move most of the state inside BinderProcessState.
+    /// The main mutable state of the `BinderProcess`.
     state: Mutex<BinderProcessState>,
-    /// Binder objects hosted by the process shared with other processes.
-    objects: Mutex<BTreeMap<UserAddress, Weak<BinderObject>>>,
-    /// A queue for commands that could not be scheduled on any existing binder threads. Binder
-    /// threads that exhaust their own queue will read from this one.
-    command_queue: Mutex<VecDeque<Command>>,
-    /// State associated with active transactions, keyed by the userspace addresses of the buffers
-    /// allocated to them. When the process frees a transaction buffer with `BC_FREE_BUFFER`, the
-    /// state is dropped, releasing temporary strong references and the memory allocated to the
-    /// transaction.
-    active_transactions: Mutex<BTreeMap<UserAddress, ActiveTransaction>>,
-    /// The list of processes that should be notified if this process dies.
-    death_subscribers: Mutex<Vec<(Weak<BinderProcess>, binder_uintptr_t)>>,
     /// When there are no commands in a thread's and the process' command queue, a binder thread can
     /// register with this [`WaitQueue`] to be notified when commands are available.
     waiters: Mutex<WaitQueue>,
@@ -405,23 +409,15 @@ impl BinderProcess {
     fn new(pid: pid_t) -> Arc<Self> {
         let result = Arc::new(Self {
             pid,
-            shared_memory: Mutex::new(None),
+            shared_memory: Default::default(),
             state: Default::default(),
-            objects: Mutex::new(BTreeMap::new()),
-            command_queue: Mutex::new(VecDeque::new()),
-            active_transactions: Mutex::new(BTreeMap::new()),
-            death_subscribers: Mutex::new(Vec::new()),
-            waiters: Mutex::new(WaitQueue::default()),
+            waiters: Default::default(),
         });
         #[cfg(any(test, debug_assertions))]
         {
-            let _l0 = result.shared_memory.lock();
-            let _l1 = result.lock();
-            let _l2 = result.objects.lock();
-            let _l3 = result.command_queue.lock();
-            let _l4 = result.active_transactions.lock();
-            let _l5 = result.death_subscribers.lock();
-            let _l6 = result.waiters.lock();
+            let _l1 = result.shared_memory.lock();
+            let _l2 = result.lock();
+            let _l3 = result.waiters.lock();
         }
         result
     }
@@ -430,20 +426,13 @@ impl BinderProcess {
         Guard::new(self, self.state.lock())
     }
 
-    /// Enqueues `command` for the process and wakes up any thread that is waiting for commands.
-    fn enqueue_process_command(self: &Arc<Self>, command: Command) {
-        self.command_queue.lock().push_back(command);
-        self.waiters.lock().notify_events(FdEvents::POLLIN);
-    }
-
     /// Finds the binder object that corresponds to the process-local addresses `local`, or creates
     /// a new [`BinderObject`] to represent the one in the process.
     pub fn find_or_register_object(
         self: &Arc<BinderProcess>,
         local: LocalBinderObject,
     ) -> Arc<BinderObject> {
-        let mut objects = self.objects.lock();
-        match objects.entry(local.weak_ref_addr) {
+        match self.lock().objects.entry(local.weak_ref_addr) {
             BTreeMapEntry::Occupied(mut entry) => {
                 if let Some(binder_object) = entry.get().upgrade() {
                     binder_object
@@ -465,7 +454,7 @@ impl BinderProcess {
     /// driver can reclaim this buffer.
     fn handle_free_buffer(self: &Arc<Self>, buffer_ptr: UserAddress) -> Result<(), Errno> {
         // Drop the state associated with the now completed transaction.
-        let active_transaction = self.active_transactions.lock().remove(&buffer_ptr);
+        let active_transaction = self.lock().active_transactions.remove(&buffer_ptr);
 
         // Check if this was a oneway transaction and schedule the next oneway if this is the case.
         if let Some(ActiveTransaction { request_type: RequestType::Oneway { object }, .. }) =
@@ -541,7 +530,7 @@ impl BinderProcess {
             }
         };
         if let Some(owner) = proxy.owner.upgrade() {
-            owner.death_subscribers.lock().push((Arc::downgrade(self), cookie));
+            owner.lock().death_subscribers.push((Arc::downgrade(self), cookie));
         } else {
             // The object is already dead. Notify immediately. However, the requesting thread
             // cannot handle the notification, in case it is holding some mutex while processing a
@@ -571,15 +560,27 @@ impl BinderProcess {
             }
         };
         if let Some(owner) = proxy.owner.upgrade() {
-            let mut death_subscribers = owner.death_subscribers.lock();
+            let mut owner = owner.lock();
             if let Some((idx, _)) =
-                death_subscribers.iter().enumerate().find(|(_idx, (proc, c))| {
+                owner.death_subscribers.iter().enumerate().find(|(_idx, (proc, c))| {
                     std::ptr::eq(proc.as_ptr(), Arc::as_ptr(self)) && *c == cookie
                 })
             {
-                death_subscribers.swap_remove(idx);
+                owner.death_subscribers.swap_remove(idx);
             }
         }
+        Ok(())
+    }
+
+    /// Map the external vmo into the driver address space, recording the userspace address.
+    fn map_external_vmo(&self, vmo: fidl::Vmo, mapped_address: u64) -> Result<(), Errno> {
+        let mut shared_memory = self.shared_memory.lock();
+        // Do not support mapping shared memory more than once.
+        if shared_memory.is_some() {
+            return error!(EINVAL);
+        }
+        let size = vmo.get_size().map_err(|_| errno!(EINVAL))?;
+        *shared_memory = Some(SharedMemory::map(&vmo, mapped_address.into(), size as usize)?);
         Ok(())
     }
 }
@@ -587,14 +588,14 @@ impl BinderProcess {
 impl<'a> BinderProcessGuard<'a> {
     /// Enqueues `command` on the first available thread. If none are available, enqueues it on the
     /// process queue where it will be handled once a thread is available.
-    pub fn enqueue_command(&self, command: Command) {
+    pub fn enqueue_command(&mut self, command: Command) {
         self.enqueue_command_filtered(|_| true, command)
     }
 
     /// Enqueues `command` on the first available thread that satisfied `filter`. If none are
     /// available, enqueues it on the process queue where it will be handled once a thread is
     /// available.
-    pub fn enqueue_command_filtered<F>(&self, filter: F, command: Command)
+    pub fn enqueue_command_filtered<F>(&mut self, filter: F, command: Command)
     where
         F: Fn(&BinderThreadState) -> bool,
     {
@@ -604,7 +605,13 @@ impl<'a> BinderProcessGuard<'a> {
                 return;
             };
         };
-        self.base.enqueue_process_command(command);
+        self.enqueue_process_command(command);
+    }
+
+    /// Enqueues `command` for the process and wakes up any thread that is waiting for commands.
+    fn enqueue_process_command(&mut self, command: Command) {
+        self.command_queue.push_back(command);
+        self.base.waiters.lock().notify_events(FdEvents::POLLIN);
     }
 
     /// Return the `BinderThread` with the given `tid`, creating it if it doesn't exist.
@@ -612,7 +619,7 @@ impl<'a> BinderProcessGuard<'a> {
         if let Some(thread) = self.thread_pool.0.get(&tid) {
             return thread.clone();
         }
-        let thread = Arc::new(BinderThread::new(self.base, tid));
+        let thread = Arc::new(BinderThread::new(self, tid));
         self.thread_pool.0.insert(tid, thread.clone());
         thread
     }
@@ -670,8 +677,11 @@ impl<'a> BinderProcessGuard<'a> {
 
 impl Drop for BinderProcess {
     fn drop(&mut self) {
+        let (death_subscribers, command_queue) = {
+            let mut state = self.state.lock();
+            (std::mem::take(&mut state.death_subscribers), std::mem::take(&mut state.command_queue))
+        };
         // Notify any subscribers that the objects this process owned are now dead.
-        let death_subscribers = std::mem::take(&mut *self.death_subscribers.lock());
         for (proc, cookie) in death_subscribers {
             if let Some(target_proc) = proc.upgrade() {
                 target_proc.lock().enqueue_command(Command::DeadBinder(cookie));
@@ -680,7 +690,6 @@ impl Drop for BinderProcess {
 
         // Notify all callers that had transactions scheduled for this process that the recipient is
         // dead.
-        let command_queue = std::mem::take(&mut *self.command_queue.lock());
         for command in command_queue {
             if let Command::Transaction { sender, .. } = command {
                 if let Some(sender_thread) = sender.thread.upgrade() {
@@ -1146,14 +1155,15 @@ struct BinderThread {
 }
 
 impl BinderThread {
-    fn new(binder_proc: &Arc<BinderProcess>, tid: pid_t) -> Self {
-        let state = RwLock::new(BinderThreadState::new(tid, binder_proc));
+    fn new(binder_proc: &BinderProcessGuard<'_>, tid: pid_t) -> Self {
+        let state = RwLock::new(BinderThreadState::new(tid, binder_proc.base));
         #[cfg(any(test, debug_assertions))]
         {
-            // The state must be acquired after thread_pool from the `BinderProcess` and before
-            // `waiters`. When the constructor is called, thread_pool has already been acquired.
+            // The state must be acquired after the mutable state from the `BinderProcess` and before
+            // `waiters`. `binder_proc` being a guard, the mutable state of `BinderProcess` is
+            // already locked.
             let _l1 = state.read();
-            let _l2 = binder_proc.waiters.lock();
+            let _l2 = binder_proc.base.waiters.lock();
         }
         Self { tid, state }
     }
@@ -1900,25 +1910,7 @@ impl BinderDriver {
                 while let Some(event) = stream.try_next().await? {
                     match event {
                         fbinder::BinderRequest::SetVmo { vmo, mapped_address, control_handle } => {
-                            // Do not support mapping shared memory more than once.
-                            let mut shared_memory = binder_process.shared_memory.lock();
-                            if shared_memory.is_some() {
-                                control_handle.shutdown();
-                                continue;
-                            }
-
-                            if let Ok(size) = vmo.get_size() {
-                                match SharedMemory::map(&vmo, mapped_address.into(), size as usize)
-                                {
-                                    Ok(mem) => {
-                                        *shared_memory = Some(mem);
-                                    }
-                                    Err(_) => {
-                                        control_handle.shutdown();
-                                        continue;
-                                    }
-                                }
-                            } else {
+                            if binder_process.map_external_vmo(vmo, mapped_address).is_err() {
                                 control_handle.shutdown();
                             }
                         }
@@ -2261,7 +2253,7 @@ impl BinderDriver {
             binder_thread.write().enqueue_command(Command::OnewayTransactionComplete);
 
             // Register the transaction buffer.
-            target_proc.active_transactions.lock().insert(
+            target_proc.lock().active_transactions.insert(
                 data_buffer.address,
                 ActiveTransaction {
                     request_type: RequestType::Oneway { object: Arc::downgrade(&object) },
@@ -2295,7 +2287,7 @@ impl BinderDriver {
                 .push(TransactionRole::Sender(WeakBinderPeer::new(binder_proc, binder_thread)));
 
             // Register the transaction buffer.
-            target_proc.active_transactions.lock().insert(
+            target_proc.lock().active_transactions.insert(
                 data_buffer.address,
                 ActiveTransaction {
                     request_type: RequestType::RequestResponse,
@@ -2342,7 +2334,7 @@ impl BinderDriver {
         )?;
 
         // Register the transaction buffer.
-        target_proc.active_transactions.lock().insert(
+        target_proc.lock().active_transactions.insert(
             data_buffer.address,
             ActiveTransaction {
                 request_type: RequestType::RequestResponse,
@@ -2379,9 +2371,9 @@ impl BinderDriver {
         read_buffer: &UserBuffer,
     ) -> Result<usize, Errno> {
         loop {
-            // THREADING: Always acquire the [`BinderProcess::command_queue`] lock before the
+            // THREADING: Always acquire the [`BinderProcess::state`] lock before the
             // [`BinderThread::state`] lock or else it may lead to deadlock.
-            let mut proc_command_queue = binder_proc.command_queue.lock();
+            let mut binder_proc = binder_proc.lock();
             let mut thread_state = binder_thread.write();
 
             // Select which command queue to read from, preferring the thread-local one.
@@ -2391,7 +2383,7 @@ impl BinderDriver {
             {
                 &mut thread_state.command_queue
             } else {
-                &mut *proc_command_queue
+                &mut binder_proc.command_queue
             };
 
             if let Some(command) = command_queue.pop_front() {
@@ -2431,7 +2423,7 @@ impl BinderDriver {
             let waiter = Waiter::new();
             thread_state.waiter = waiter.weak();
             drop(thread_state);
-            drop(proc_command_queue);
+            drop(binder_proc);
 
             // Put this thread to sleep.
             scopeguard::defer! {
@@ -2754,12 +2746,12 @@ impl BinderDriver {
         handler: EventHandler,
         _options: WaitAsyncOptions,
     ) -> WaitKey {
-        // THREADING: Always acquire the [`BinderProcess::command_queue`] lock before the
+        // THREADING: Always acquire the [`BinderProcess::state`] lock before the
         // [`BinderThread::state`] lock or else it may lead to deadlock.
-        let proc_command_queue = binder_proc.command_queue.lock();
+        let proc_state = binder_proc.lock();
         let thread_state = binder_thread.write();
 
-        if proc_command_queue.is_empty() && thread_state.command_queue.is_empty() {
+        if proc_state.command_queue.is_empty() && thread_state.command_queue.is_empty() {
             binder_proc.waiters.lock().wait_async_events(waiter, events, handler)
         } else {
             waiter.wake_immediately(FdEvents::POLLIN.mask(), handler)
@@ -3507,7 +3499,7 @@ mod tests {
         drop(object);
 
         assert_matches!(
-            proc.command_queue.lock().front(),
+            proc.lock().command_queue.front(),
             Some(Command::ReleaseRef(LOCAL_BINDER_OBJECT))
         );
     }
@@ -4870,7 +4862,7 @@ mod tests {
         // to receive it, or else a deadlock may occur if the thread is in the middle of a
         // transaction. Since there is only one thread, check the process command queue.
         assert_matches!(
-            client_proc.command_queue.lock().front(),
+            client_proc.lock().command_queue.front(),
             Some(Command::DeadBinder(DEATH_NOTIFICATION_COOKIE))
         );
     }
@@ -4929,7 +4921,7 @@ mod tests {
         assert!(client_thread.read().command_queue.is_empty());
 
         // The client process should have no notification.
-        assert!(client_proc.command_queue.lock().is_empty());
+        assert!(client_proc.lock().command_queue.is_empty());
     }
 
     #[fuchsia::test]
@@ -5117,7 +5109,7 @@ mod tests {
 
         // The thread is ineligible to take the command (not sleeping) so check the process queue.
         assert_matches!(
-            receiver_proc.command_queue.lock().front(),
+            receiver_proc.lock().command_queue.front(),
             Some(Command::OnewayTransaction(TransactionData { code: FIRST_TRANSACTION_CODE, .. }))
         );
 
@@ -5153,8 +5145,8 @@ mod tests {
 
         // The process queue should be unchanged. Simulate dispatching the command.
         let buffer_addr = match receiver_proc
-            .command_queue
             .lock()
+            .command_queue
             .pop_front()
             .expect("the first oneway transaction should be queued on the process")
         {
@@ -5178,8 +5170,8 @@ mod tests {
 
         // The process queue should have a new transaction. Simulate dispatching the command.
         let buffer_addr = match receiver_proc
-            .command_queue
             .lock()
+            .command_queue
             .pop_front()
             .expect("the second oneway transaction should be queued on the process")
         {
@@ -5251,7 +5243,7 @@ mod tests {
         // The thread is ineligible to take the command (not sleeping) so check (and dequeue)
         // the process queue.
         assert_matches!(
-            receiver_proc.command_queue.lock().pop_front(),
+            receiver_proc.lock().command_queue.pop_front(),
             Some(Command::OnewayTransaction(TransactionData { code: ONEWAY_TRANSACTION_CODE, .. }))
         );
 
@@ -5293,7 +5285,7 @@ mod tests {
 
         // The process queue should now have the synchronous transaction queued.
         assert_matches!(
-            receiver_proc.command_queue.lock().pop_front(),
+            receiver_proc.lock().command_queue.pop_front(),
             Some(Command::Transaction {
                 data: TransactionData { code: SYNC_TRANSACTION_CODE, .. },
                 ..
@@ -5336,7 +5328,7 @@ mod tests {
 
         // Check that the receiving process has a transaction scheduled.
         assert_matches!(
-            test.receiver_proc.command_queue.lock().front(),
+            test.receiver_proc.lock().command_queue.front(),
             Some(Command::Transaction { .. })
         );
 
@@ -5588,7 +5580,7 @@ mod tests {
             owner,
             LocalBinderObject { weak_ref_addr, strong_ref_addr },
         ));
-        owner.objects.lock().insert(weak_ref_addr, Arc::downgrade(&object));
+        owner.lock().objects.insert(weak_ref_addr, Arc::downgrade(&object));
         object
     }
 }
