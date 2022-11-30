@@ -7,7 +7,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <fidl/fuchsia.hardware.input/cpp/wire.h>
-#include <lib/fdio/fdio.h>
+#include <lib/component/incoming/cpp/service_client.h>
+#include <lib/fdio/cpp/caller.h>
 #include <lib/fdio/watcher.h>
 #include <lib/fit/defer.h>
 #include <lib/zx/event.h>
@@ -32,8 +33,6 @@
 #include <hid-parser/units.h>
 #include <hid-parser/usages.h>
 
-#include "src/lib/listnode/listnode.h"
-
 // defined in report.cpp
 void print_report_descriptor(const uint8_t* rpt_desc, size_t desc_len);
 
@@ -48,7 +47,7 @@ static bool verbose = false;
 
 enum class Command { read, read_all, get, set, descriptor, descriptor_all };
 
-void usage(void) {
+void usage() {
   printf("usage: hid [-v] <command> [<args>]\n\n");
   printf("  commands:\n");
   printf("    read [<devpath> [num reads]]\n");
@@ -92,7 +91,7 @@ static void print_hex(const uint8_t* buf, size_t len) {
 }
 
 static zx_status_t parse_uint_arg(const char* arg, uint32_t min, uint32_t max, uint32_t* out_val) {
-  if ((arg == NULL) || (out_val == NULL)) {
+  if ((arg == nullptr) || (out_val == nullptr)) {
     return ZX_ERR_INVALID_ARGS;
   }
 
@@ -110,7 +109,7 @@ static zx_status_t parse_uint_arg(const char* arg, uint32_t min, uint32_t max, u
 
 static zx_status_t parse_input_report_type(const char* arg,
                                            fuchsia_hardware_input::wire::ReportType* out_type) {
-  if ((arg == NULL) || (out_type == NULL)) {
+  if ((arg == nullptr) || (out_type == nullptr)) {
     return ZX_ERR_INVALID_ARGS;
   }
 
@@ -123,9 +122,9 @@ static zx_status_t parse_input_report_type(const char* arg,
       {.name = "feature", .type = fuchsia_hardware_input::wire::ReportType::kFeature},
   };
 
-  for (size_t i = 0; i < std::size(LUT); ++i) {
-    if (!strcasecmp(arg, LUT[i].name)) {
-      *out_type = LUT[i].type;
+  for (auto i : LUT) {
+    if (!strcasecmp(arg, i.name)) {
+      *out_type = i.type;
       return ZX_OK;
     }
   }
@@ -281,7 +280,7 @@ static int hid_read_reports(input_args_t* args) {
 }
 
 static int hid_input_thread(void* arg) {
-  input_args_t* args = (input_args_t*)arg;
+  input_args_t* args = static_cast<input_args_t*>(arg);
   lprintf("hid: thread started for %s\n", args->devpath);
 
   zx_status_t status = ZX_OK;
@@ -302,21 +301,20 @@ static zx_status_t hid_input_device_added(int dirfd, int event, const char* fn, 
   if (event != WATCH_EVENT_ADD_FILE) {
     return ZX_OK;
   }
-
-  int fd = openat(dirfd, fn, O_RDONLY);
-  if (fd < 0) {
+  if (std::string_view{fn} == ".") {
     return ZX_OK;
   }
 
+  fdio_cpp::UnownedFdioCaller caller(dirfd);
+  zx::result device = component::ConnectAt<fuchsia_hardware_input::Device>(caller.directory(), fn);
+  if (device.is_error()) {
+    return device.error_value();
+  }
   input_args_t* args = new input_args_t;
   args->command = *reinterpret_cast<Command*>(cookie);
 
-  zx::channel chan;
-  zx_status_t status = fdio_get_service_handle(fd, chan.reset_and_get_address());
-  if (status != ZX_OK) {
-    return status;
-  }
-  args->sync_client = fidl::WireSyncClient<fuchsia_hardware_input::Device>(std::move(chan));
+  args->sync_client =
+      fidl::WireSyncClient<fuchsia_hardware_input::Device>(std::move(device.value()));
 
   // TODO: support setting num_reads across all devices. requires a way to
   // signal shutdown to all input threads.
@@ -324,10 +322,9 @@ static zx_status_t hid_input_device_added(int dirfd, int event, const char* fn, 
   snprintf(args->devpath, kDevPathSize, "%s", fn);
 
   thrd_t t;
-  int ret = thrd_create_with_name(&t, hid_input_thread, (void*)args, args->devpath);
+  int ret = thrd_create_with_name(&t, hid_input_thread, args, args->devpath);
   if (ret != thrd_success) {
     printf("hid: thread %s did not start (error=%d)\n", args->devpath, ret);
-    close(fd);
     return thrd_status_to_zx_status(ret);
   }
   thrd_detach(t);
@@ -430,17 +427,12 @@ zx_status_t parse_input_args(int argc, const char** argv, input_args_t* args) {
   }
 
   // Parse <devpath>
-  int fd = open(argv[1], O_RDWR);
-  if (fd < 0) {
-    printf("could not open %s: %d\n", argv[0], errno);
-    return ZX_ERR_INTERNAL;
+  zx::result device = component::Connect<fuchsia_hardware_input::Device>(argv[1]);
+  if (device.is_error()) {
+    printf("could not open %s: %s\n", argv[1], device.status_string());
+    return device.error_value();
   }
-  zx::channel chan;
-  status = fdio_get_service_handle(fd, chan.reset_and_get_address());
-  if (status != ZX_OK) {
-    return status;
-  }
-  args->sync_client = fidl::WireSyncClient<fuchsia_hardware_input::Device>(std::move(chan));
+  args->sync_client = fidl::WireSyncClient(std::move(device.value()));
   snprintf(args->devpath, kDevPathSize, "%s", argv[1]);
 
   if (args->command == Command::descriptor) {
@@ -509,15 +501,20 @@ int main(int argc, const char** argv) {
 
   if (args.command == Command::descriptor) {
     return parse_rpt_descriptor(&args);
-  } else if (args.command == Command::get) {
+  }
+  if (args.command == Command::get) {
     return get_report(&args);
-  } else if (args.command == Command::set) {
+  }
+  if (args.command == Command::set) {
     return set_report(&args);
-  } else if (args.command == Command::read) {
+  }
+  if (args.command == Command::read) {
     return hid_read_reports(&args);
-  } else if (args.command == Command::read_all) {
+  }
+  if (args.command == Command::read_all) {
     return watch_all_devices(Command::read);
-  } else if (args.command == Command::descriptor_all) {
+  }
+  if (args.command == Command::descriptor_all) {
     return watch_all_devices(Command::descriptor);
   }
 
