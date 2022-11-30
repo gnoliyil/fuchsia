@@ -36,8 +36,8 @@ use derivative::Derivative;
 use log::warn;
 use net_types::{
     ip::{
-        GenericOverIp, Ip, IpAddr, IpAddress, IpInvariant as IpInv, IpVersion, IpVersionMarker,
-        Ipv4, Ipv4Addr, Ipv6, Ipv6Addr,
+        GenericOverIp, Ip, IpAddr, IpAddress, IpInvariant, IpVersion, IpVersionMarker, Ipv4,
+        Ipv4Addr, Ipv6, Ipv6Addr,
     },
     SpecifiedAddr,
 };
@@ -1000,9 +1000,9 @@ where
     C: NonSyncContext,
 {
     I::map_ip(
-        IpInv((&mut sync_ctx, ctx)),
-        |IpInv((sync_ctx, ctx))| TcpSocketHandler::create_socket(sync_ctx, ctx),
-        |IpInv((sync_ctx, ctx))| TcpSocketHandler::create_socket(sync_ctx, ctx),
+        IpInvariant((&mut sync_ctx, ctx)),
+        |IpInvariant((sync_ctx, ctx))| TcpSocketHandler::create_socket(sync_ctx, ctx),
+        |IpInvariant((sync_ctx, ctx))| TcpSocketHandler::create_socket(sync_ctx, ctx),
     )
 }
 
@@ -1031,11 +1031,11 @@ where
     C: NonSyncContext,
 {
     I::map_ip(
-        (IpInv((&mut sync_ctx, ctx, port)), id, local_ip),
-        |(IpInv((sync_ctx, ctx, port)), id, local_ip)| {
+        (IpInvariant((&mut sync_ctx, ctx, port)), id, local_ip),
+        |(IpInvariant((sync_ctx, ctx, port)), id, local_ip)| {
             TcpSocketHandler::bind(sync_ctx, ctx, id, local_ip, port)
         },
-        |(IpInv((sync_ctx, ctx, port)), id, local_ip)| {
+        |(IpInvariant((sync_ctx, ctx, port)), id, local_ip)| {
             TcpSocketHandler::bind(sync_ctx, ctx, id, local_ip, port)
         },
     )
@@ -1053,11 +1053,11 @@ where
     C: NonSyncContext,
 {
     I::map_ip(
-        (IpInv((&mut sync_ctx, ctx, backlog)), id),
-        |(IpInv((sync_ctx, ctx, backlog)), id)| {
+        (IpInvariant((&mut sync_ctx, ctx, backlog)), id),
+        |(IpInvariant((sync_ctx, ctx, backlog)), id)| {
             TcpSocketHandler::listen(sync_ctx, ctx, id, backlog)
         },
-        |(IpInv((sync_ctx, ctx, backlog)), id)| {
+        |(IpInvariant((sync_ctx, ctx, backlog)), id)| {
             TcpSocketHandler::listen(sync_ctx, ctx, id, backlog)
         },
     )
@@ -1084,15 +1084,15 @@ where
     C: NonSyncContext,
 {
     I::map_ip::<_, Result<_, _>>(
-        (IpInv((&mut sync_ctx, ctx)), id),
-        |(IpInv((sync_ctx, ctx)), id)| {
-            TcpSocketHandler::accept(sync_ctx, ctx, id).map(|(a, b, c)| (a, b, IpInv(c)))
+        (IpInvariant((&mut sync_ctx, ctx)), id),
+        |(IpInvariant((sync_ctx, ctx)), id)| {
+            TcpSocketHandler::accept(sync_ctx, ctx, id).map(|(a, b, c)| (a, b, IpInvariant(c)))
         },
-        |(IpInv((sync_ctx, ctx)), id)| {
-            TcpSocketHandler::accept(sync_ctx, ctx, id).map(|(a, b, c)| (a, b, IpInv(c)))
+        |(IpInvariant((sync_ctx, ctx)), id)| {
+            TcpSocketHandler::accept(sync_ctx, ctx, id).map(|(a, b, c)| (a, b, IpInvariant(c)))
         },
     )
-    .map(|(a, b, IpInv(c))| (a, b, c))
+    .map(|(a, b, IpInvariant(c))| (a, b, c))
 }
 
 /// Possible errors when connecting a socket.
@@ -1117,11 +1117,11 @@ where
     C: NonSyncContext,
 {
     I::map_ip(
-        (IpInv((&mut sync_ctx, ctx, netstack_buffers)), id, remote),
-        |(IpInv((sync_ctx, ctx, netstack_buffers)), id, remote)| {
+        (IpInvariant((&mut sync_ctx, ctx, netstack_buffers)), id, remote),
+        |(IpInvariant((sync_ctx, ctx, netstack_buffers)), id, remote)| {
             TcpSocketHandler::connect_bound(sync_ctx, ctx, id, remote, netstack_buffers)
         },
-        |(IpInv((sync_ctx, ctx, netstack_buffers)), id, remote)| {
+        |(IpInvariant((sync_ctx, ctx, netstack_buffers)), id, remote)| {
             TcpSocketHandler::connect_bound(sync_ctx, ctx, id, remote, netstack_buffers)
         },
     )
@@ -1140,11 +1140,11 @@ where
     C: NonSyncContext,
 {
     I::map_ip(
-        (IpInv((&mut sync_ctx, ctx, netstack_buffers)), id, remote),
-        |(IpInv((sync_ctx, ctx, netstack_buffers)), id, remote)| {
+        (IpInvariant((&mut sync_ctx, ctx, netstack_buffers)), id, remote),
+        |(IpInvariant((sync_ctx, ctx, netstack_buffers)), id, remote)| {
             TcpSocketHandler::connect_unbound(sync_ctx, ctx, id, remote, netstack_buffers)
         },
-        |(IpInv((sync_ctx, ctx, netstack_buffers)), id, remote)| {
+        |(IpInvariant((sync_ctx, ctx, netstack_buffers)), id, remote)| {
             TcpSocketHandler::connect_unbound(sync_ctx, ctx, id, remote, netstack_buffers)
         },
     )
@@ -1216,9 +1216,9 @@ where
     C: NonSyncContext,
 {
     I::map_ip(
-        (IpInv((&mut sync_ctx, ctx)), id),
-        |(IpInv((sync_ctx, ctx)), id)| TcpSocketHandler::close_conn(sync_ctx, ctx, id),
-        |(IpInv((sync_ctx, ctx)), id)| TcpSocketHandler::close_conn(sync_ctx, ctx, id),
+        (IpInvariant((&mut sync_ctx, ctx)), id),
+        |(IpInvariant((sync_ctx, ctx)), id)| TcpSocketHandler::close_conn(sync_ctx, ctx, id),
+        |(IpInvariant((sync_ctx, ctx)), id)| TcpSocketHandler::close_conn(sync_ctx, ctx, id),
     )
 }
 
@@ -1237,9 +1237,9 @@ where
     C: NonSyncContext,
 {
     I::map_ip(
-        (IpInv((&mut sync_ctx, ctx)), id),
-        |(IpInv((sync_ctx, ctx)), id)| TcpSocketHandler::shutdown_conn(sync_ctx, ctx, id),
-        |(IpInv((sync_ctx, ctx)), id)| TcpSocketHandler::shutdown_conn(sync_ctx, ctx, id),
+        (IpInvariant((&mut sync_ctx, ctx)), id),
+        |(IpInvariant((sync_ctx, ctx)), id)| TcpSocketHandler::shutdown_conn(sync_ctx, ctx, id),
+        |(IpInvariant((sync_ctx, ctx)), id)| TcpSocketHandler::shutdown_conn(sync_ctx, ctx, id),
     )
 }
 
@@ -1250,9 +1250,9 @@ where
     C: NonSyncContext,
 {
     I::map_ip(
-        (IpInv(&mut sync_ctx), id),
-        |(IpInv(sync_ctx), id)| TcpSocketHandler::remove_unbound(sync_ctx, id),
-        |(IpInv(sync_ctx), id)| TcpSocketHandler::remove_unbound(sync_ctx, id),
+        (IpInvariant(&mut sync_ctx), id),
+        |(IpInvariant(sync_ctx), id)| TcpSocketHandler::remove_unbound(sync_ctx, id),
+        |(IpInvariant(sync_ctx), id)| TcpSocketHandler::remove_unbound(sync_ctx, id),
     )
 }
 
@@ -1263,9 +1263,9 @@ where
     C: NonSyncContext,
 {
     I::map_ip(
-        (IpInv(&mut sync_ctx), id),
-        |(IpInv(sync_ctx), id)| TcpSocketHandler::remove_bound(sync_ctx, id),
-        |(IpInv(sync_ctx), id)| TcpSocketHandler::remove_bound(sync_ctx, id),
+        (IpInvariant(&mut sync_ctx), id),
+        |(IpInvariant(sync_ctx), id)| TcpSocketHandler::remove_bound(sync_ctx, id),
+        |(IpInvariant(sync_ctx), id)| TcpSocketHandler::remove_bound(sync_ctx, id),
     )
 }
 
@@ -1283,9 +1283,9 @@ where
     C: NonSyncContext,
 {
     I::map_ip(
-        (IpInv((&mut sync_ctx, ctx)), id),
-        |(IpInv((sync_ctx, ctx)), id)| TcpSocketHandler::shutdown_listener(sync_ctx, ctx, id),
-        |(IpInv((sync_ctx, ctx)), id)| TcpSocketHandler::shutdown_listener(sync_ctx, ctx, id),
+        (IpInvariant((&mut sync_ctx, ctx)), id),
+        |(IpInvariant((sync_ctx, ctx)), id)| TcpSocketHandler::shutdown_listener(sync_ctx, ctx, id),
+        |(IpInvariant((sync_ctx, ctx)), id)| TcpSocketHandler::shutdown_listener(sync_ctx, ctx, id),
     )
 }
 
@@ -1346,9 +1346,9 @@ pub fn get_unbound_info<I: Ip, C: NonSyncContext>(
     id: UnboundId<I>,
 ) -> UnboundInfo<DeviceId<C::Instant>> {
     I::map_ip(
-        (IpInv(&mut sync_ctx), id),
-        |(IpInv(sync_ctx), id)| TcpSocketHandler::<Ipv4, _>::get_unbound_info(sync_ctx, id),
-        |(IpInv(sync_ctx), id)| TcpSocketHandler::<Ipv6, _>::get_unbound_info(sync_ctx, id),
+        (IpInvariant(&mut sync_ctx), id),
+        |(IpInvariant(sync_ctx), id)| TcpSocketHandler::<Ipv4, _>::get_unbound_info(sync_ctx, id),
+        |(IpInvariant(sync_ctx), id)| TcpSocketHandler::<Ipv6, _>::get_unbound_info(sync_ctx, id),
     )
 }
 
@@ -1358,9 +1358,9 @@ pub fn get_bound_info<I: Ip, C: NonSyncContext>(
     id: BoundId<I>,
 ) -> BoundInfo<I::Addr, DeviceId<C::Instant>> {
     I::map_ip(
-        (IpInv(&mut sync_ctx), id),
-        |(IpInv(sync_ctx), id)| TcpSocketHandler::<Ipv4, _>::get_bound_info(sync_ctx, id),
-        |(IpInv(sync_ctx), id)| TcpSocketHandler::<Ipv6, _>::get_bound_info(sync_ctx, id),
+        (IpInvariant(&mut sync_ctx), id),
+        |(IpInvariant(sync_ctx), id)| TcpSocketHandler::<Ipv4, _>::get_bound_info(sync_ctx, id),
+        |(IpInvariant(sync_ctx), id)| TcpSocketHandler::<Ipv6, _>::get_bound_info(sync_ctx, id),
     )
 }
 
@@ -1370,9 +1370,9 @@ pub fn get_listener_info<I: Ip, C: NonSyncContext>(
     id: ListenerId<I>,
 ) -> BoundInfo<I::Addr, DeviceId<C::Instant>> {
     I::map_ip(
-        (IpInv(&mut sync_ctx), id),
-        |(IpInv(sync_ctx), id)| TcpSocketHandler::<Ipv4, _>::get_listener_info(sync_ctx, id),
-        |(IpInv(sync_ctx), id)| TcpSocketHandler::<Ipv6, _>::get_listener_info(sync_ctx, id),
+        (IpInvariant(&mut sync_ctx), id),
+        |(IpInvariant(sync_ctx), id)| TcpSocketHandler::<Ipv4, _>::get_listener_info(sync_ctx, id),
+        |(IpInvariant(sync_ctx), id)| TcpSocketHandler::<Ipv6, _>::get_listener_info(sync_ctx, id),
     )
 }
 
@@ -1382,9 +1382,13 @@ pub fn get_connection_info<I: Ip, C: NonSyncContext>(
     id: ConnectionId<I>,
 ) -> ConnectionInfo<I::Addr, DeviceId<C::Instant>> {
     I::map_ip(
-        (IpInv(&mut sync_ctx), id),
-        |(IpInv(sync_ctx), id)| TcpSocketHandler::<Ipv4, _>::get_connection_info(sync_ctx, id),
-        |(IpInv(sync_ctx), id)| TcpSocketHandler::<Ipv6, _>::get_connection_info(sync_ctx, id),
+        (IpInvariant(&mut sync_ctx), id),
+        |(IpInvariant(sync_ctx), id)| {
+            TcpSocketHandler::<Ipv4, _>::get_connection_info(sync_ctx, id)
+        },
+        |(IpInvariant(sync_ctx), id)| {
+            TcpSocketHandler::<Ipv6, _>::get_connection_info(sync_ctx, id)
+        },
     )
 }
 
@@ -1399,9 +1403,9 @@ where
     C: NonSyncContext,
 {
     I::map_ip(
-        (IpInv((&mut sync_ctx, ctx)), conn_id),
-        |(IpInv((sync_ctx, ctx)), conn_id)| TcpSocketHandler::do_send(sync_ctx, ctx, conn_id),
-        |(IpInv((sync_ctx, ctx)), conn_id)| TcpSocketHandler::do_send(sync_ctx, ctx, conn_id),
+        (IpInvariant((&mut sync_ctx, ctx)), conn_id),
+        |(IpInvariant((sync_ctx, ctx)), conn_id)| TcpSocketHandler::do_send(sync_ctx, ctx, conn_id),
+        |(IpInvariant((sync_ctx, ctx)), conn_id)| TcpSocketHandler::do_send(sync_ctx, ctx, conn_id),
     )
 }
 

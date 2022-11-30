@@ -19,7 +19,7 @@ use derivative::Derivative;
 use either::Either;
 use log::trace;
 use net_types::{
-    ip::{GenericOverIp, Ip, IpAddress, IpInvariant as IpInv, IpVersionMarker, Ipv4, Ipv6},
+    ip::{GenericOverIp, Ip, IpAddress, IpInvariant, IpVersionMarker, Ipv4, Ipv6},
     MulticastAddr, MulticastAddress as _, SpecifiedAddr, Witness, ZonedAddr,
 };
 use nonzero_ext::nonzero;
@@ -1540,17 +1540,17 @@ pub fn send_udp_conn<I: IpExt, B: BufferMut, C: BufferNonSyncContext<B>>(
     body: B,
 ) -> Result<(), (B, IpSockSendError)> {
     I::map_ip::<_, Result<_, _>>(
-        (IpInv((&mut sync_ctx, ctx, body)), conn),
-        |(IpInv((sync_ctx, ctx, body)), conn)| {
+        (IpInvariant((&mut sync_ctx, ctx, body)), conn),
+        |(IpInvariant((sync_ctx, ctx, body)), conn)| {
             BufferUdpSocketHandler::<Ipv4, _, _>::send_udp_conn(sync_ctx, ctx, conn, body)
-                .map_err(IpInv)
+                .map_err(IpInvariant)
         },
-        |(IpInv((sync_ctx, ctx, body)), conn)| {
+        |(IpInvariant((sync_ctx, ctx, body)), conn)| {
             BufferUdpSocketHandler::<Ipv6, _, _>::send_udp_conn(sync_ctx, ctx, conn, body)
-                .map_err(IpInv)
+                .map_err(IpInvariant)
         },
     )
-    .map_err(|IpInv(a)| a)
+    .map_err(|IpInvariant(a)| a)
 }
 
 /// Sends a UDP packet using an existing connected socket but overriding the
@@ -1564,8 +1564,8 @@ pub fn send_udp_conn_to<I: IpExt, B: BufferMut, C: BufferNonSyncContext<B>>(
     body: B,
 ) -> Result<(), (B, UdpSendToError)> {
     I::map_ip::<_, Result<_, _>>(
-        (IpInv((&mut sync_ctx, ctx, remote_port, body)), conn, remote_ip),
-        |(IpInv((sync_ctx, ctx, remote_port, body)), conn, remote_ip)| {
+        (IpInvariant((&mut sync_ctx, ctx, remote_port, body)), conn, remote_ip),
+        |(IpInvariant((sync_ctx, ctx, remote_port, body)), conn, remote_ip)| {
             BufferUdpSocketHandler::<Ipv4, _, _>::send_udp_conn_to(
                 sync_ctx,
                 ctx,
@@ -1574,9 +1574,9 @@ pub fn send_udp_conn_to<I: IpExt, B: BufferMut, C: BufferNonSyncContext<B>>(
                 remote_port,
                 body,
             )
-            .map_err(IpInv)
+            .map_err(IpInvariant)
         },
-        |(IpInv((sync_ctx, ctx, remote_port, body)), conn, remote_ip)| {
+        |(IpInvariant((sync_ctx, ctx, remote_port, body)), conn, remote_ip)| {
             BufferUdpSocketHandler::<Ipv6, _, _>::send_udp_conn_to(
                 sync_ctx,
                 ctx,
@@ -1585,10 +1585,10 @@ pub fn send_udp_conn_to<I: IpExt, B: BufferMut, C: BufferNonSyncContext<B>>(
                 remote_port,
                 body,
             )
-            .map_err(IpInv)
+            .map_err(IpInvariant)
         },
     )
-    .map_err(|IpInv(e)| e)
+    .map_err(|IpInvariant(e)| e)
 }
 
 /// Send a UDP packet on an existing listener.
@@ -1608,8 +1608,8 @@ pub fn send_udp_listener<I: IpExt, B: BufferMut, C: BufferNonSyncContext<B>>(
     body: B,
 ) -> Result<(), (B, UdpSendToError)> {
     I::map_ip::<_, Result<_, _>>(
-        (IpInv((&mut sync_ctx, ctx, remote_port, body)), listener, remote_ip),
-        |(IpInv((sync_ctx, ctx, remote_port, body)), listener, remote_ip)| {
+        (IpInvariant((&mut sync_ctx, ctx, remote_port, body)), listener, remote_ip),
+        |(IpInvariant((sync_ctx, ctx, remote_port, body)), listener, remote_ip)| {
             BufferUdpSocketHandler::<Ipv4, _, _>::send_udp_listener(
                 sync_ctx,
                 ctx,
@@ -1618,9 +1618,9 @@ pub fn send_udp_listener<I: IpExt, B: BufferMut, C: BufferNonSyncContext<B>>(
                 remote_port,
                 body,
             )
-            .map_err(IpInv)
+            .map_err(IpInvariant)
         },
-        |(IpInv((sync_ctx, ctx, remote_port, body)), listener, remote_ip)| {
+        |(IpInvariant((sync_ctx, ctx, remote_port, body)), listener, remote_ip)| {
             BufferUdpSocketHandler::<Ipv6, _, _>::send_udp_listener(
                 sync_ctx,
                 ctx,
@@ -1629,10 +1629,10 @@ pub fn send_udp_listener<I: IpExt, B: BufferMut, C: BufferNonSyncContext<B>>(
                 remote_port,
                 body,
             )
-            .map_err(IpInv)
+            .map_err(IpInvariant)
         },
     )
-    .map_err(|IpInv(e)| e)
+    .map_err(|IpInvariant(e)| e)
 }
 
 impl<I: IpExt, C: UdpStateNonSyncContext<I>, SC: UdpStateContext<I, C>>
@@ -1712,9 +1712,9 @@ pub fn create_udp_unbound<I: IpExt, C: NonSyncContext>(
     mut sync_ctx: &SyncCtx<C>,
 ) -> UdpUnboundId<I> {
     I::map_ip(
-        IpInv(&mut sync_ctx),
-        |IpInv(sync_ctx)| UdpSocketHandler::<Ipv4, _>::create_udp_unbound(sync_ctx),
-        |IpInv(sync_ctx)| UdpSocketHandler::<Ipv6, _>::create_udp_unbound(sync_ctx),
+        IpInvariant(&mut sync_ctx),
+        |IpInvariant(sync_ctx)| UdpSocketHandler::<Ipv4, _>::create_udp_unbound(sync_ctx),
+        |IpInvariant(sync_ctx)| UdpSocketHandler::<Ipv6, _>::create_udp_unbound(sync_ctx),
     )
 }
 
@@ -1730,11 +1730,11 @@ pub fn remove_udp_unbound<I: IpExt, C: NonSyncContext>(
     id: UdpUnboundId<I>,
 ) {
     I::map_ip(
-        (IpInv((&mut sync_ctx, ctx)), id),
-        |(IpInv((sync_ctx, ctx)), id)| {
+        (IpInvariant((&mut sync_ctx, ctx)), id),
+        |(IpInvariant((sync_ctx, ctx)), id)| {
             UdpSocketHandler::<Ipv4, _>::remove_udp_unbound(sync_ctx, ctx, id)
         },
-        |(IpInv((sync_ctx, ctx)), id)| {
+        |(IpInvariant((sync_ctx, ctx)), id)| {
             UdpSocketHandler::<Ipv6, _>::remove_udp_unbound(sync_ctx, ctx, id)
         },
     )
@@ -1769,17 +1769,17 @@ pub fn connect_udp<I: IpExt, C: NonSyncContext>(
     remote_port: NonZeroU16,
 ) -> Result<UdpConnId<I>, SockCreationError> {
     I::map_ip::<_, Result<_, _>>(
-        (IpInv((&mut sync_ctx, ctx, remote_port)), id, remote_ip),
-        |(IpInv((sync_ctx, ctx, remote_port)), id, remote_ip)| {
+        (IpInvariant((&mut sync_ctx, ctx, remote_port)), id, remote_ip),
+        |(IpInvariant((sync_ctx, ctx, remote_port)), id, remote_ip)| {
             UdpSocketHandler::<Ipv4, _>::connect_udp(sync_ctx, ctx, id, remote_ip, remote_port)
-                .map_err(IpInv)
+                .map_err(IpInvariant)
         },
-        |(IpInv((sync_ctx, ctx, remote_port)), id, remote_ip)| {
+        |(IpInvariant((sync_ctx, ctx, remote_port)), id, remote_ip)| {
             UdpSocketHandler::<Ipv6, _>::connect_udp(sync_ctx, ctx, id, remote_ip, remote_port)
-                .map_err(IpInv)
+                .map_err(IpInvariant)
         },
     )
-    .map_err(|IpInv(a)| a)
+    .map_err(|IpInvariant(a)| a)
 }
 
 /// Sets the device to be bound to for an unbound socket.
@@ -1794,11 +1794,11 @@ pub fn set_unbound_udp_device<I: IpExt, C: NonSyncContext>(
     device_id: Option<&DeviceId<C::Instant>>,
 ) {
     I::map_ip(
-        (IpInv((&mut sync_ctx, ctx, device_id)), id),
-        |(IpInv((sync_ctx, ctx, device_id)), id)| {
+        (IpInvariant((&mut sync_ctx, ctx, device_id)), id),
+        |(IpInvariant((sync_ctx, ctx, device_id)), id)| {
             UdpSocketHandler::<Ipv4, _>::set_unbound_udp_device(sync_ctx, ctx, id, device_id)
         },
-        |(IpInv((sync_ctx, ctx, device_id)), id)| {
+        |(IpInvariant((sync_ctx, ctx, device_id)), id)| {
             UdpSocketHandler::<Ipv6, _>::set_unbound_udp_device(sync_ctx, ctx, id, device_id)
         },
     )
@@ -1819,17 +1819,17 @@ pub fn set_listener_udp_device<I: IpExt, C: NonSyncContext>(
     device_id: Option<&DeviceId<C::Instant>>,
 ) -> Result<(), LocalAddressError> {
     I::map_ip::<_, Result<_, _>>(
-        (IpInv((&mut sync_ctx, ctx, device_id)), id),
-        |(IpInv((sync_ctx, ctx, device_id)), id)| {
+        (IpInvariant((&mut sync_ctx, ctx, device_id)), id),
+        |(IpInvariant((sync_ctx, ctx, device_id)), id)| {
             UdpSocketHandler::<Ipv4, _>::set_listener_udp_device(sync_ctx, ctx, id, device_id)
-                .map_err(IpInv)
+                .map_err(IpInvariant)
         },
-        |(IpInv((sync_ctx, ctx, device_id)), id)| {
+        |(IpInvariant((sync_ctx, ctx, device_id)), id)| {
             UdpSocketHandler::<Ipv6, _>::set_listener_udp_device(sync_ctx, ctx, id, device_id)
-                .map_err(IpInv)
+                .map_err(IpInvariant)
         },
     )
-    .map_err(|IpInv(a)| a)
+    .map_err(|IpInvariant(a)| a)
 }
 
 /// Sets the device the specified connected socket is bound to.
@@ -1847,17 +1847,17 @@ pub fn set_conn_udp_device<I: IpExt, C: NonSyncContext>(
     device_id: Option<&DeviceId<C::Instant>>,
 ) -> Result<(), SocketError> {
     I::map_ip::<_, Result<_, _>>(
-        (IpInv((&mut sync_ctx, ctx, device_id)), id),
-        |(IpInv((sync_ctx, ctx, device_id)), id)| {
+        (IpInvariant((&mut sync_ctx, ctx, device_id)), id),
+        |(IpInvariant((sync_ctx, ctx, device_id)), id)| {
             UdpSocketHandler::<Ipv4, _>::set_conn_udp_device(sync_ctx, ctx, id, device_id)
-                .map_err(IpInv)
+                .map_err(IpInvariant)
         },
-        |(IpInv((sync_ctx, ctx, device_id)), id)| {
+        |(IpInvariant((sync_ctx, ctx, device_id)), id)| {
             UdpSocketHandler::<Ipv6, _>::set_conn_udp_device(sync_ctx, ctx, id, device_id)
-                .map_err(IpInv)
+                .map_err(IpInvariant)
         },
     )
-    .map_err(|IpInv(a)| a)
+    .map_err(|IpInvariant(a)| a)
 }
 
 /// Gets the device the specified socket is bound to.
@@ -1870,13 +1870,13 @@ pub fn get_udp_bound_device<I: IpExt, C: NonSyncContext>(
     ctx: &C,
     id: UdpSocketId<I>,
 ) -> Option<DeviceId<C::Instant>> {
-    let IpInv(device) = I::map_ip::<_, IpInv<Option<DeviceId<C::Instant>>>>(
-        (IpInv((&sync_ctx, ctx)), id),
-        |(IpInv((sync_ctx, ctx)), id)| {
-            IpInv(UdpSocketHandler::<Ipv4, _>::get_udp_bound_device(sync_ctx, ctx, id))
+    let IpInvariant(device) = I::map_ip::<_, IpInvariant<Option<DeviceId<C::Instant>>>>(
+        (IpInvariant((&sync_ctx, ctx)), id),
+        |(IpInvariant((sync_ctx, ctx)), id)| {
+            IpInvariant(UdpSocketHandler::<Ipv4, _>::get_udp_bound_device(sync_ctx, ctx, id))
         },
-        |(IpInv((sync_ctx, ctx)), id)| {
-            IpInv(UdpSocketHandler::<Ipv6, _>::get_udp_bound_device(sync_ctx, ctx, id))
+        |(IpInvariant((sync_ctx, ctx)), id)| {
+            IpInvariant(UdpSocketHandler::<Ipv6, _>::get_udp_bound_device(sync_ctx, ctx, id))
         },
     );
     device
@@ -1894,11 +1894,11 @@ pub fn set_udp_posix_reuse_port<I: IpExt, C: NonSyncContext>(
     reuse_port: bool,
 ) {
     I::map_ip(
-        (IpInv((&mut sync_ctx, ctx, reuse_port)), id),
-        |(IpInv((sync_ctx, ctx, reuse_port)), id)| {
+        (IpInvariant((&mut sync_ctx, ctx, reuse_port)), id),
+        |(IpInvariant((sync_ctx, ctx, reuse_port)), id)| {
             UdpSocketHandler::<Ipv4, _>::set_udp_posix_reuse_port(sync_ctx, ctx, id, reuse_port)
         },
-        |(IpInv((sync_ctx, ctx, reuse_port)), id)| {
+        |(IpInvariant((sync_ctx, ctx, reuse_port)), id)| {
             UdpSocketHandler::<Ipv6, _>::set_udp_posix_reuse_port(sync_ctx, ctx, id, reuse_port)
         },
     )
@@ -1914,13 +1914,13 @@ pub fn get_udp_posix_reuse_port<I: IpExt, C: NonSyncContext>(
     ctx: &C,
     id: UdpSocketId<I>,
 ) -> bool {
-    let IpInv(reuse_port) = I::map_ip::<_, IpInv<bool>>(
-        (IpInv((&sync_ctx, ctx)), id),
-        |(IpInv((sync_ctx, ctx)), id)| {
-            IpInv(UdpSocketHandler::<Ipv4, _>::get_udp_posix_reuse_port(sync_ctx, ctx, id))
+    let IpInvariant(reuse_port) = I::map_ip::<_, IpInvariant<bool>>(
+        (IpInvariant((&sync_ctx, ctx)), id),
+        |(IpInvariant((sync_ctx, ctx)), id)| {
+            IpInvariant(UdpSocketHandler::<Ipv4, _>::get_udp_posix_reuse_port(sync_ctx, ctx, id))
         },
-        |(IpInv((sync_ctx, ctx)), id)| {
-            IpInv(UdpSocketHandler::<Ipv6, _>::get_udp_posix_reuse_port(sync_ctx, ctx, id))
+        |(IpInvariant((sync_ctx, ctx)), id)| {
+            IpInvariant(UdpSocketHandler::<Ipv6, _>::get_udp_posix_reuse_port(sync_ctx, ctx, id))
         },
     );
     reuse_port
@@ -1942,8 +1942,8 @@ pub fn set_udp_multicast_membership<I: IpExt, C: NonSyncContext>(
     want_membership: bool,
 ) -> Result<(), SetMulticastMembershipError> {
     I::map_ip::<_, Result<_, _>>(
-        (IpInv((&mut sync_ctx, ctx, want_membership)), id, multicast_group, interface),
-        |(IpInv((sync_ctx, ctx, want_membership)), id, multicast_group, interface)| {
+        (IpInvariant((&mut sync_ctx, ctx, want_membership)), id, multicast_group, interface),
+        |(IpInvariant((sync_ctx, ctx, want_membership)), id, multicast_group, interface)| {
             UdpSocketHandler::<Ipv4, _>::set_udp_multicast_membership(
                 sync_ctx,
                 ctx,
@@ -1952,9 +1952,9 @@ pub fn set_udp_multicast_membership<I: IpExt, C: NonSyncContext>(
                 interface,
                 want_membership,
             )
-            .map_err(IpInv)
+            .map_err(IpInvariant)
         },
-        |(IpInv((sync_ctx, ctx, want_membership)), id, multicast_group, interface)| {
+        |(IpInvariant((sync_ctx, ctx, want_membership)), id, multicast_group, interface)| {
             UdpSocketHandler::<Ipv6, _>::set_udp_multicast_membership(
                 sync_ctx,
                 ctx,
@@ -1963,10 +1963,10 @@ pub fn set_udp_multicast_membership<I: IpExt, C: NonSyncContext>(
                 interface,
                 want_membership,
             )
-            .map_err(IpInv)
+            .map_err(IpInvariant)
         },
     )
-    .map_err(|IpInv(e)| e)
+    .map_err(|IpInvariant(e)| e)
 }
 
 /// Sets the hop limit for packets sent by the socket to a unicast destination.
@@ -1980,8 +1980,8 @@ pub fn set_udp_unicast_hop_limit<I: IpExt, C: NonSyncContext>(
     unicast_hop_limit: Option<NonZeroU8>,
 ) {
     I::map_ip(
-        (IpInv((&mut sync_ctx, ctx, unicast_hop_limit)), id),
-        |(IpInv((sync_ctx, ctx, unicast_hop_limit)), id)| {
+        (IpInvariant((&mut sync_ctx, ctx, unicast_hop_limit)), id),
+        |(IpInvariant((sync_ctx, ctx, unicast_hop_limit)), id)| {
             UdpSocketHandler::<Ipv4, _>::set_udp_unicast_hop_limit(
                 sync_ctx,
                 ctx,
@@ -1989,7 +1989,7 @@ pub fn set_udp_unicast_hop_limit<I: IpExt, C: NonSyncContext>(
                 unicast_hop_limit,
             )
         },
-        |(IpInv((sync_ctx, ctx, unicast_hop_limit)), id)| {
+        |(IpInvariant((sync_ctx, ctx, unicast_hop_limit)), id)| {
             UdpSocketHandler::<Ipv6, _>::set_udp_unicast_hop_limit(
                 sync_ctx,
                 ctx,
@@ -2011,8 +2011,8 @@ pub fn set_udp_multicast_hop_limit<I: IpExt, C: NonSyncContext>(
     multicast_hop_limit: Option<NonZeroU8>,
 ) {
     I::map_ip(
-        (IpInv((&mut sync_ctx, ctx, multicast_hop_limit)), id),
-        |(IpInv((sync_ctx, ctx, multicast_hop_limit)), id)| {
+        (IpInvariant((&mut sync_ctx, ctx, multicast_hop_limit)), id),
+        |(IpInvariant((sync_ctx, ctx, multicast_hop_limit)), id)| {
             UdpSocketHandler::<Ipv4, _>::set_udp_multicast_hop_limit(
                 sync_ctx,
                 ctx,
@@ -2020,7 +2020,7 @@ pub fn set_udp_multicast_hop_limit<I: IpExt, C: NonSyncContext>(
                 multicast_hop_limit,
             )
         },
-        |(IpInv((sync_ctx, ctx, multicast_hop_limit)), id)| {
+        |(IpInvariant((sync_ctx, ctx, multicast_hop_limit)), id)| {
             UdpSocketHandler::<Ipv6, _>::set_udp_multicast_hop_limit(
                 sync_ctx,
                 ctx,
@@ -2037,13 +2037,13 @@ pub fn get_udp_unicast_hop_limit<I: IpExt, C: NonSyncContext>(
     ctx: &C,
     id: UdpSocketId<I>,
 ) -> NonZeroU8 {
-    let IpInv(hop_limit) = I::map_ip::<_, IpInv<NonZeroU8>>(
-        (IpInv((&sync_ctx, ctx)), id),
-        |(IpInv((sync_ctx, ctx)), id)| {
-            IpInv(UdpSocketHandler::<Ipv4, _>::get_udp_unicast_hop_limit(sync_ctx, ctx, id))
+    let IpInvariant(hop_limit) = I::map_ip::<_, IpInvariant<NonZeroU8>>(
+        (IpInvariant((&sync_ctx, ctx)), id),
+        |(IpInvariant((sync_ctx, ctx)), id)| {
+            IpInvariant(UdpSocketHandler::<Ipv4, _>::get_udp_unicast_hop_limit(sync_ctx, ctx, id))
         },
-        |(IpInv((sync_ctx, ctx)), id)| {
-            IpInv(UdpSocketHandler::<Ipv6, _>::get_udp_unicast_hop_limit(sync_ctx, ctx, id))
+        |(IpInvariant((sync_ctx, ctx)), id)| {
+            IpInvariant(UdpSocketHandler::<Ipv6, _>::get_udp_unicast_hop_limit(sync_ctx, ctx, id))
         },
     );
     hop_limit
@@ -2058,13 +2058,13 @@ pub fn get_udp_multicast_hop_limit<I: IpExt, C: NonSyncContext>(
     ctx: &C,
     id: UdpSocketId<I>,
 ) -> NonZeroU8 {
-    let IpInv(hop_limit) = I::map_ip::<_, IpInv<NonZeroU8>>(
-        (IpInv((&sync_ctx, ctx)), id),
-        |(IpInv((sync_ctx, ctx)), id)| {
-            IpInv(UdpSocketHandler::<Ipv4, _>::get_udp_multicast_hop_limit(sync_ctx, ctx, id))
+    let IpInvariant(hop_limit) = I::map_ip::<_, IpInvariant<NonZeroU8>>(
+        (IpInvariant((&sync_ctx, ctx)), id),
+        |(IpInvariant((sync_ctx, ctx)), id)| {
+            IpInvariant(UdpSocketHandler::<Ipv4, _>::get_udp_multicast_hop_limit(sync_ctx, ctx, id))
         },
-        |(IpInv((sync_ctx, ctx)), id)| {
-            IpInv(UdpSocketHandler::<Ipv6, _>::get_udp_multicast_hop_limit(sync_ctx, ctx, id))
+        |(IpInvariant((sync_ctx, ctx)), id)| {
+            IpInvariant(UdpSocketHandler::<Ipv6, _>::get_udp_multicast_hop_limit(sync_ctx, ctx, id))
         },
     );
     hop_limit
@@ -2088,8 +2088,8 @@ pub fn connect_udp_listener<I: IpExt, C: NonSyncContext>(
     remote_port: NonZeroU16,
 ) -> Result<UdpConnId<I>, (ConnectListenerError, UdpListenerId<I>)> {
     I::map_ip::<_, Result<_, _>>(
-        (IpInv((&mut sync_ctx, ctx, remote_port)), id, remote_ip),
-        |(IpInv((sync_ctx, ctx, remote_port)), id, remote_ip)| {
+        (IpInvariant((&mut sync_ctx, ctx, remote_port)), id, remote_ip),
+        |(IpInvariant((sync_ctx, ctx, remote_port)), id, remote_ip)| {
             UdpSocketHandler::<Ipv4, _>::connect_udp_listener(
                 sync_ctx,
                 ctx,
@@ -2097,9 +2097,9 @@ pub fn connect_udp_listener<I: IpExt, C: NonSyncContext>(
                 remote_ip,
                 remote_port,
             )
-            .map_err(|(a, b)| (IpInv(a), b))
+            .map_err(|(a, b)| (IpInvariant(a), b))
         },
-        |(IpInv((sync_ctx, ctx, remote_port)), id, remote_ip)| {
+        |(IpInvariant((sync_ctx, ctx, remote_port)), id, remote_ip)| {
             UdpSocketHandler::<Ipv6, _>::connect_udp_listener(
                 sync_ctx,
                 ctx,
@@ -2107,10 +2107,10 @@ pub fn connect_udp_listener<I: IpExt, C: NonSyncContext>(
                 remote_ip,
                 remote_port,
             )
-            .map_err(|(a, b)| (IpInv(a), b))
+            .map_err(|(a, b)| (IpInvariant(a), b))
         },
     )
-    .map_err(|(IpInv(a), b)| (a, b))
+    .map_err(|(IpInvariant(a), b)| (a, b))
 }
 
 /// Disconnects a connected UDP socket.
@@ -2127,11 +2127,11 @@ pub fn disconnect_udp_connected<I: IpExt, C: NonSyncContext>(
     id: UdpConnId<I>,
 ) -> UdpListenerId<I> {
     I::map_ip(
-        (IpInv((&mut sync_ctx, ctx)), id),
-        |(IpInv((sync_ctx, ctx)), id)| {
+        (IpInvariant((&mut sync_ctx, ctx)), id),
+        |(IpInvariant((sync_ctx, ctx)), id)| {
             UdpSocketHandler::<Ipv4, _>::disconnect_udp_connected(sync_ctx, ctx, id)
         },
-        |(IpInv((sync_ctx, ctx)), id)| {
+        |(IpInvariant((sync_ctx, ctx)), id)| {
             UdpSocketHandler::<Ipv6, _>::disconnect_udp_connected(sync_ctx, ctx, id)
         },
     )
@@ -2151,17 +2151,17 @@ pub fn reconnect_udp<I: IpExt, C: NonSyncContext>(
     remote_port: NonZeroU16,
 ) -> Result<UdpConnId<I>, (ConnectListenerError, UdpConnId<I>)> {
     I::map_ip::<_, Result<_, _>>(
-        (IpInv((&mut sync_ctx, ctx, remote_port)), id, remote_ip),
-        |(IpInv((sync_ctx, ctx, remote_port)), id, remote_ip)| {
+        (IpInvariant((&mut sync_ctx, ctx, remote_port)), id, remote_ip),
+        |(IpInvariant((sync_ctx, ctx, remote_port)), id, remote_ip)| {
             UdpSocketHandler::<Ipv4, _>::reconnect_udp(sync_ctx, ctx, id, remote_ip, remote_port)
-                .map_err(|(a, b)| (IpInv(a), b))
+                .map_err(|(a, b)| (IpInvariant(a), b))
         },
-        |(IpInv((sync_ctx, ctx, remote_port)), id, remote_ip)| {
+        |(IpInvariant((sync_ctx, ctx, remote_port)), id, remote_ip)| {
             UdpSocketHandler::<Ipv6, _>::reconnect_udp(sync_ctx, ctx, id, remote_ip, remote_port)
-                .map_err(|(a, b)| (IpInv(a), b))
+                .map_err(|(a, b)| (IpInvariant(a), b))
         },
     )
-    .map_err(|(IpInv(a), b)| (a, b))
+    .map_err(|(IpInvariant(a), b)| (a, b))
 }
 
 /// Removes a previously registered UDP connection.
@@ -2179,11 +2179,11 @@ pub fn remove_udp_conn<I: IpExt, C: NonSyncContext>(
     id: UdpConnId<I>,
 ) -> UdpConnInfo<I::Addr, DeviceId<C::Instant>> {
     I::map_ip(
-        (IpInv((&mut sync_ctx, ctx)), id),
-        |(IpInv((sync_ctx, ctx)), id)| {
+        (IpInvariant((&mut sync_ctx, ctx)), id),
+        |(IpInvariant((sync_ctx, ctx)), id)| {
             UdpSocketHandler::<Ipv4, _>::remove_udp_conn(sync_ctx, ctx, id)
         },
-        |(IpInv((sync_ctx, ctx)), id)| {
+        |(IpInvariant((sync_ctx, ctx)), id)| {
             UdpSocketHandler::<Ipv6, _>::remove_udp_conn(sync_ctx, ctx, id)
         },
     )
@@ -2200,11 +2200,11 @@ pub fn get_udp_conn_info<I: IpExt, C: NonSyncContext>(
     id: UdpConnId<I>,
 ) -> UdpConnInfo<I::Addr, DeviceId<C::Instant>> {
     I::map_ip(
-        (IpInv((&sync_ctx, ctx)), id),
-        |(IpInv((sync_ctx, ctx)), id)| {
+        (IpInvariant((&sync_ctx, ctx)), id),
+        |(IpInvariant((sync_ctx, ctx)), id)| {
             UdpSocketHandler::<Ipv4, _>::get_udp_conn_info(sync_ctx, ctx, id)
         },
-        |(IpInv((sync_ctx, ctx)), id)| {
+        |(IpInvariant((sync_ctx, ctx)), id)| {
             UdpSocketHandler::<Ipv6, _>::get_udp_conn_info(sync_ctx, ctx, id)
         },
     )
@@ -2234,15 +2234,17 @@ pub fn listen_udp<I: IpExt, C: NonSyncContext>(
     port: Option<NonZeroU16>,
 ) -> Result<UdpListenerId<I>, LocalAddressError> {
     I::map_ip::<_, Result<_, _>>(
-        (IpInv((&mut sync_ctx, ctx, port)), id, addr),
-        |(IpInv((sync_ctx, ctx, port)), id, addr)| {
-            UdpSocketHandler::<Ipv4, _>::listen_udp(sync_ctx, ctx, id, addr, port).map_err(IpInv)
+        (IpInvariant((&mut sync_ctx, ctx, port)), id, addr),
+        |(IpInvariant((sync_ctx, ctx, port)), id, addr)| {
+            UdpSocketHandler::<Ipv4, _>::listen_udp(sync_ctx, ctx, id, addr, port)
+                .map_err(IpInvariant)
         },
-        |(IpInv((sync_ctx, ctx, port)), id, addr)| {
-            UdpSocketHandler::<Ipv6, _>::listen_udp(sync_ctx, ctx, id, addr, port).map_err(IpInv)
+        |(IpInvariant((sync_ctx, ctx, port)), id, addr)| {
+            UdpSocketHandler::<Ipv6, _>::listen_udp(sync_ctx, ctx, id, addr, port)
+                .map_err(IpInvariant)
         },
     )
-    .map_err(|IpInv(a)| a)
+    .map_err(|IpInvariant(a)| a)
 }
 
 /// Removes a previously registered UDP listener.
@@ -2260,11 +2262,11 @@ pub fn remove_udp_listener<I: IpExt, C: NonSyncContext>(
     id: UdpListenerId<I>,
 ) -> UdpListenerInfo<I::Addr, DeviceId<C::Instant>> {
     I::map_ip(
-        (IpInv((&mut sync_ctx, ctx)), id),
-        |(IpInv((sync_ctx, ctx)), id)| {
+        (IpInvariant((&mut sync_ctx, ctx)), id),
+        |(IpInvariant((sync_ctx, ctx)), id)| {
             UdpSocketHandler::<Ipv4, _>::remove_udp_listener(sync_ctx, ctx, id)
         },
-        |(IpInv((sync_ctx, ctx)), id)| {
+        |(IpInvariant((sync_ctx, ctx)), id)| {
             UdpSocketHandler::<Ipv6, _>::remove_udp_listener(sync_ctx, ctx, id)
         },
     )
@@ -2282,11 +2284,11 @@ pub fn get_udp_listener_info<I: IpExt, C: NonSyncContext>(
     id: UdpListenerId<I>,
 ) -> UdpListenerInfo<I::Addr, DeviceId<C::Instant>> {
     I::map_ip(
-        (IpInv((&sync_ctx, ctx)), id),
-        |(IpInv((sync_ctx, ctx)), id)| {
+        (IpInvariant((&sync_ctx, ctx)), id),
+        |(IpInvariant((sync_ctx, ctx)), id)| {
             UdpSocketHandler::<Ipv4, _>::get_udp_listener_info(sync_ctx, ctx, id)
         },
-        |(IpInv((sync_ctx, ctx)), id)| {
+        |(IpInvariant((sync_ctx, ctx)), id)| {
             UdpSocketHandler::<Ipv6, _>::get_udp_listener_info(sync_ctx, ctx, id)
         },
     )
