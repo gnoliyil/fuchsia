@@ -393,8 +393,8 @@ zx_status_t vmcs_init(AutoVmcs& vmcs, const VcpuConfig& config, uint16_t vpid, u
   }
   vmcs.Write(VmcsFieldXX::GUEST_CR0, cr0);
 
-  // Enable FXSAVE, VMX, and XSAVE.
-  uint64_t cr4 = X86_CR4_OSFXSR | X86_CR4_VMXE | X86_CR4_OSXSAVE;
+  // Enable FXSAVE, VMX, FSGSBASE, and XSAVE.
+  uint64_t cr4 = X86_CR4_OSFXSR | X86_CR4_VMXE | X86_CR4_FSGSBASE | X86_CR4_OSXSAVE;
   if (is_base_processor) {
     // Enable PAE and PGE on the BSP.
     cr4 |= X86_CR4_PAE | X86_CR4_PGE;
@@ -1189,10 +1189,11 @@ zx::result<ktl::unique_ptr<Vcpu>> DirectVcpu::Create(DirectGuest& guest, zx_vadd
   vmcs.Write(VmcsFieldXX::CR0_READ_SHADOW,
              X86_CR0_PE | X86_CR0_ET | X86_CR0_NE | X86_CR0_WP | X86_CR0_PG);
   // Mask access to CR4.
-  vmcs.Write(VmcsFieldXX::CR4_GUEST_HOST_MASK,
-             X86_CR4_PAE | X86_CR4_PGE | X86_CR4_OSFXSR | X86_CR4_VMXE | X86_CR4_OSXSAVE);
-  vmcs.Write(VmcsFieldXX::CR4_READ_SHADOW,
-             X86_CR4_PAE | X86_CR4_PGE | X86_CR4_OSFXSR | X86_CR4_VMXE | X86_CR4_OSXSAVE);
+  vmcs.Write(VmcsFieldXX::CR4_GUEST_HOST_MASK, X86_CR4_PAE | X86_CR4_PGE | X86_CR4_OSFXSR |
+                                                   X86_CR4_VMXE | X86_CR4_FSGSBASE |
+                                                   X86_CR4_OSXSAVE);
+  vmcs.Write(VmcsFieldXX::CR4_READ_SHADOW, X86_CR4_PAE | X86_CR4_PGE | X86_CR4_OSFXSR |
+                                               X86_CR4_VMXE | X86_CR4_FSGSBASE | X86_CR4_OSXSAVE);
   // Set CR3 to `user_aspace_`.
   const paddr_t table_phys = guest.user_aspace().arch_aspace().arch_table_phys();
   vmcs.Write(VmcsFieldXX::HOST_CR3, table_phys);
