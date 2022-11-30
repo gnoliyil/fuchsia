@@ -10,6 +10,8 @@
 #include <lib/syslog/cpp/macros.h>
 #include <lib/trace/event.h>
 
+#include "src/media/audio/audio_core/shared/mixer/gain.h"
+
 namespace media_audio {
 
 namespace {
@@ -435,7 +437,9 @@ void AudioRendererServer::SendPacketInternal(fuchsia_media::StreamPacket packet,
   zx::eventpair local_fence;
   zx::eventpair remote_fence;
   if (auto status = zx::eventpair::create(0, &local_fence, &remote_fence); status != ZX_OK) {
-    FX_PLOGS(FATAL, status) << "zx::eventpair::create failed";
+    FX_PLOGS(ERROR, status) << "zx::eventpair::create failed";
+    Shutdown(ZX_ERR_INTERNAL);
+    return;
   }
 
   auto status = (*stream_sink_client_)
@@ -559,7 +563,7 @@ void AudioRendererServer::PlayInternal(zx::time reference_time, int64_t media_ti
         ->SetGain(GainControlSetGainRequest::Builder(arena)
                       .how(GainUpdateMethod::WithRamped(
                           arena, RampedGain::Builder(arena)
-                                     .target_gain_db(0.0f)
+                                     .target_gain_db(kUnityGainDb)
                                      .duration(kRampUpOnPlayDuration.to_nsecs())
                                      .function(RampFunction::WithLinearSlope(
                                          arena, RampFunctionLinearSlope::Builder(arena).Build()))
@@ -599,7 +603,7 @@ void AudioRendererServer::PauseInternal(std::optional<PauseCompleter::Async> com
     // First set to 100%.
     (*play_pause_ramp_gain_control_client_)
         ->SetGain(GainControlSetGainRequest::Builder(arena)
-                      .how(GainUpdateMethod::WithGainDb(0.0f))
+                      .how(GainUpdateMethod::WithGainDb(kUnityGainDb))
                       .when(GainTimestamp::WithTimestamp(arena, reference_time.get()))
                       .Build())
         .Then([this, self = shared_from_this()](auto& result) {
@@ -699,12 +703,16 @@ void AudioRendererServer::MaybeConfigure() {
 
   auto stream_sink_endpoints = fidl::CreateEndpoints<fuchsia_audio::StreamSink>();
   if (!stream_sink_endpoints.is_ok()) {
-    FX_PLOGS(FATAL, stream_sink_endpoints.status_value()) << "fidl::CreateEndpoints failed";
+    FX_PLOGS(ERROR, stream_sink_endpoints.status_value()) << "fidl::CreateEndpoints failed";
+    Shutdown(ZX_ERR_INTERNAL);
+    return;
   }
 
   auto stream_gain_control_endpoints = fidl::CreateEndpoints<fuchsia_audio::GainControl>();
   if (!stream_gain_control_endpoints.is_ok()) {
-    FX_PLOGS(FATAL, stream_gain_control_endpoints.status_value()) << "fidl::CreateEndpoints failed";
+    FX_PLOGS(ERROR, stream_gain_control_endpoints.status_value()) << "fidl::CreateEndpoints failed";
+    Shutdown(ZX_ERR_INTERNAL);
+    return;
   }
 
   stream_sink_client_ =
@@ -787,8 +795,10 @@ void AudioRendererServer::MaybeConfigure() {
     auto play_pause_ramp_gain_control_endpoints =
         fidl::CreateEndpoints<fuchsia_audio::GainControl>();
     if (!play_pause_ramp_gain_control_endpoints.is_ok()) {
-      FX_PLOGS(FATAL, play_pause_ramp_gain_control_endpoints.status_value())
+      FX_PLOGS(ERROR, play_pause_ramp_gain_control_endpoints.status_value())
           << "fidl::CreateEndpoints failed";
+      Shutdown(ZX_ERR_INTERNAL);
+      return;
     }
 
     play_pause_ramp_gain_control_client_ = fidl::WireSharedClient(
