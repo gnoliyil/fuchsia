@@ -61,6 +61,7 @@ pub struct ThermalStateHandlerBuilder<'a, 'b> {
     outgoing_svc_dir: Option<ServiceFsDir<'a, ServiceObjLocal<'b, ()>>>,
     inspect_root: Option<&'a inspect::Node>,
     platform_metrics: Option<Rc<dyn Node>>,
+    enable_client_state_connector: bool,
 }
 
 impl<'a, 'b> ThermalStateHandlerBuilder<'a, 'b> {
@@ -74,7 +75,9 @@ impl<'a, 'b> ThermalStateHandlerBuilder<'a, 'b> {
     ) -> Self {
         #[derive(Deserialize)]
         struct Config {
-            thermal_config_path: String,
+            thermal_config_path: Option<String>,
+            /// Enable FIDL `fuchsia.thermal.ClientStateConnector` service only if true (required).
+            enable_client_state_connector: bool,
         }
 
         #[derive(Deserialize)]
@@ -86,7 +89,7 @@ impl<'a, 'b> ThermalStateHandlerBuilder<'a, 'b> {
         #[derive(Deserialize)]
         struct JsonData {
             name: String,
-            config: Option<Config>,
+            config: Config,
             dependencies: Option<Dependencies>,
         }
 
@@ -94,11 +97,11 @@ impl<'a, 'b> ThermalStateHandlerBuilder<'a, 'b> {
 
         let node_name = data.name;
 
+        let thermal_config_path = data.config.thermal_config_path;
+        let enable_client_state_connector = data.config.enable_client_state_connector;
+
         // Use `thermal_config_path` if it was provided, otherwise default to `THERMAL_CONFIG_PATH`
-        let config_path = data
-            .config
-            .map(|c| c.thermal_config_path)
-            .unwrap_or(Self::THERMAL_CONFIG_PATH.to_string());
+        let config_path = thermal_config_path.unwrap_or(Self::THERMAL_CONFIG_PATH.to_string());
 
         // Read the thermal config file from `config_path`
         let thermal_config = ThermalConfig::read(&Path::new(&config_path)).ok();
@@ -113,6 +116,7 @@ impl<'a, 'b> ThermalStateHandlerBuilder<'a, 'b> {
             outgoing_svc_dir: Some(service_fs.dir("svc")),
             inspect_root: None,
             platform_metrics,
+            enable_client_state_connector,
         }
     }
 
@@ -129,15 +133,20 @@ impl<'a, 'b> ThermalStateHandlerBuilder<'a, 'b> {
         let metrics_tracker =
             MetricsTracker::new(inspect.create_child("ThermalLoadStates"), self.platform_metrics);
 
+        let enable_client_state_connector = self.enable_client_state_connector;
+
         let node = Rc::new(ThermalStateHandler {
             client_states: ClientStates::new(thermal_config, &inspect),
             metrics_tracker: RefCell::new(metrics_tracker),
             _inspect: inspect,
         });
 
-        // Publish the Controller service only if we were provided with a ServiceFs
-        if let Some(outgoing_svc_dir) = self.outgoing_svc_dir {
-            node.clone().publish_connector_service(outgoing_svc_dir);
+        // Publish the Controller service only if both enable_client_state_connector = true
+        // and we were provided with a ServiceFs
+        if enable_client_state_connector {
+            if let Some(outgoing_svc_dir) = self.outgoing_svc_dir {
+                node.clone().publish_connector_service(outgoing_svc_dir);
+            }
         }
 
         Ok(node)
@@ -727,6 +736,9 @@ mod tests {
         let json_data = json::json!({
             "type": "ThermalStateHandler",
             "name": "thermal_state_handler",
+            "config": {
+              "enable_client_state_connector": false,
+            },
             "dependencies": {
                 "platform_metrics_node": "platform_metrics"
             }
@@ -747,6 +759,9 @@ mod tests {
         let json_data = json::json!({
             "type": "ThermalStateHandler",
             "name": "thermal_state_handler",
+            "config": {
+              "enable_client_state_connector": false,
+            },
         });
 
         let nodes: HashMap<String, Rc<dyn Node>> = HashMap::new();
@@ -782,6 +797,7 @@ mod tests {
             thermal_config: Some(thermal_config),
             outgoing_svc_dir: Some(service_fs.root_dir()),
             platform_metrics: None,
+            enable_client_state_connector: true,
         }
         .build()
         .unwrap();
@@ -869,6 +885,7 @@ mod tests {
             thermal_config: Some(thermal_config),
             outgoing_svc_dir: Some(service_fs.root_dir()),
             platform_metrics: None,
+            enable_client_state_connector: true,
         }
         .build()
         .unwrap();
@@ -911,6 +928,7 @@ mod tests {
             thermal_config: Some(ThermalConfig::new()),
             outgoing_svc_dir: Some(service_fs.root_dir()),
             platform_metrics: None,
+            enable_client_state_connector: true,
         }
         .build()
         .unwrap();
@@ -923,6 +941,39 @@ mod tests {
         assert_matches!(client.get_thermal_state(&mut executor), Err(_));
     }
 
+    /// Tests that `enable_client_state_connector` = false disables the client state connector.
+    #[test]
+    fn test_disable_client_state_connector() {
+        let mut executor = fasync::TestExecutor::new().unwrap();
+        let mut service_fs = ServiceFs::new_local();
+        let thermal_config = ThermalConfig::new().add_client_config(
+            "client1",
+            ClientConfig::new().add_thermal_state(vec![TripPoint::new("sensor1", 0, 10)]),
+        );
+
+        let node = ThermalStateHandlerBuilder {
+            node_name: "thermal_state_handler".to_string(),
+            inspect_root: None,
+            thermal_config: Some(thermal_config),
+            outgoing_svc_dir: Some(service_fs.root_dir()),
+            platform_metrics: None,
+            enable_client_state_connector: false,
+        }
+        .build()
+        .unwrap();
+
+        let test_env = TestEnv::new(service_fs);
+        let client = test_env.connect_client("client1");
+
+        // Set the initial thermal load before the client connects
+        executor
+            .run_singlethreaded(node.handle_update_thermal_load(ThermalLoad(10), "sensor1"))
+            .unwrap();
+
+        // Attempting to connect to a valid "client1" should fail.
+        assert_matches!(client.get_thermal_state(&mut executor), Err(_));
+    }
+
     /// Tests that an invalid thermal load update is met with an InvalidArgument error
     #[fasync::run_singlethreaded(test)]
     async fn test_invalid_thermal_load() {
@@ -932,6 +983,7 @@ mod tests {
             outgoing_svc_dir: None,
             inspect_root: None,
             platform_metrics: None,
+            enable_client_state_connector: false,
         }
         .build()
         .unwrap();
@@ -964,6 +1016,7 @@ mod tests {
             thermal_config: Some(thermal_config),
             outgoing_svc_dir: Some(service_fs.root_dir()),
             platform_metrics: None,
+            enable_client_state_connector: true,
         }
         .build()
         .unwrap();
@@ -1007,6 +1060,7 @@ mod tests {
             thermal_config: Some(thermal_config),
             outgoing_svc_dir: Some(service_fs.root_dir()),
             platform_metrics: None,
+            enable_client_state_connector: true,
         }
         .build()
         .unwrap();
@@ -1050,6 +1104,7 @@ mod tests {
             thermal_config: Some(ThermalConfig::new()),
             outgoing_svc_dir: None,
             platform_metrics: Some(mock_platform_metrics.clone()),
+            enable_client_state_connector: false,
         }
         .build()
         .unwrap();

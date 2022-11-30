@@ -43,6 +43,7 @@
         name: "thermal_state_handler",
         config: {
             thermal_config_path: "/pkg/thermal_client_service_test/thermal_config.json5",
+            enable_client_state_connector: true,
         },
         dependencies: {
             platform_metrics_node: "platform_metrics",

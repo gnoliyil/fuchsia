@@ -852,6 +852,21 @@
           "name": {
             "type": "string"
           },
+          "config": {
+            "type": "object",
+            "properties": {
+              "thermal_config_path": {
+                "type": "string"
+              },
+              "enable_client_state_connector": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "enable_client_state_connector"
+            ]
+          },
           "dependencies": {
             "type": "object",
             "properties": {
@@ -868,7 +883,8 @@
         "additionalProperties": false,
         "required": [
           "type",
-          "name"
+          "name",
+          "config"
         ]
       }
     ]
