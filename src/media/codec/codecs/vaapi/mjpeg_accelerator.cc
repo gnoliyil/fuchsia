@@ -4,10 +4,10 @@
 
 #include "mjpeg_accelerator.h"
 
+#include <safemath/safe_conversions.h>
 #include <va/va.h>
 
 #include "codec_adapter_vaapi_decoder.h"
-#include "safemath/safe_conversions.h"
 #include "vaapi_utils.h"
 
 VaapiJpegPicture::VaapiJpegPicture(std::shared_ptr<VASurface> va_surface)
@@ -226,11 +226,15 @@ void MJPEGAccelerator::PopulateSliceParameters(const media::JpegParseResult& par
   slice_param.restart_interval = parse_result.restart_interval;
 
   // Cast to int to prevent overflow.
-  int max_h_factor = parse_result.frame_header.components[0].horizontal_sampling_factor;
-  int max_v_factor = parse_result.frame_header.components[0].vertical_sampling_factor;
-  int mcu_cols = parse_result.frame_header.coded_width / (max_h_factor * 8);
-  FX_DCHECK(mcu_cols == 0);
-  int mcu_rows = parse_result.frame_header.coded_height / (max_v_factor * 8);
-  FX_DCHECK(mcu_rows == 0);
+  int max_h_factor = safemath::strict_cast<int>(
+      parse_result.frame_header.components[0].horizontal_sampling_factor);
+  int max_v_factor =
+      safemath::strict_cast<int>(parse_result.frame_header.components[0].vertical_sampling_factor);
+  int mcu_cols =
+      safemath::strict_cast<int>(parse_result.frame_header.coded_width) / (max_h_factor * 8);
+  int mcu_rows =
+      safemath::strict_cast<int>(parse_result.frame_header.coded_height) / (max_v_factor * 8);
+  FX_DCHECK(mcu_cols > 0);
+  FX_DCHECK(mcu_rows > 0);
   slice_param.num_mcus = mcu_rows * mcu_cols;
 }
