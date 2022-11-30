@@ -69,11 +69,6 @@ class ScreenReaderAction {
                                                      Speaker::Options options = {
                                                          .interrupt = true});
 
-  // Returns a promise that from a node_id and view_koid, builds a speech task to speak the range
-  // control's |range_value|. An error is thrown if the semantic tree or the semantic node are
-  // missing data necessary to build an utterance.
-  fpromise::promise<> BuildSpeechTaskForRangeValuePromise(zx_koid_t view_koid, uint32_t node_id);
-
   // Updates the current and previous navigation contexts based on the newly focused node.
   void UpdateNavigationContext(zx_koid_t newly_focused_view_koid, uint32_t newly_focused_node_id);
 

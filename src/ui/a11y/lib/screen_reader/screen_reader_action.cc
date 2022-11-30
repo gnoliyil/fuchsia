@@ -95,31 +95,6 @@ fpromise::promise<> ScreenReaderAction::BuildSpeechTaskFromNodePromise(zx_koid_t
       });
 }
 
-fpromise::promise<> ScreenReaderAction::BuildSpeechTaskForRangeValuePromise(zx_koid_t view_koid,
-                                                                            uint32_t node_id) {
-  return fpromise::make_promise([this, node_id, view_koid]() mutable -> fpromise::promise<> {
-    const auto* node = action_context_->semantics_source->GetSemanticNode(view_koid, node_id);
-    if (!node) {
-      FX_LOGS(INFO) << "ScreenReaderAction: No node found for node id:" << node_id;
-      return fpromise::make_error_promise();
-    }
-
-    std::string slider_value = GetSliderValue(*node);
-    if (slider_value.empty()) {
-      FX_LOGS(INFO) << "ScreenReaderAction: Slider node is missing |range_value| and |value|. "
-                       "Nothing to send to TTS.";
-      return fpromise::make_error_promise();
-    }
-
-    auto* speaker = screen_reader_context_->speaker();
-    FX_DCHECK(speaker);
-
-    Utterance utterance;
-    utterance.set_message(slider_value);
-    return speaker->SpeakMessagePromise(std::move(utterance), {.interrupt = true});
-  });
-}
-
 void ScreenReaderAction::UpdateNavigationContext(zx_koid_t newly_focused_view_koid,
                                                  uint32_t newly_focused_node_id) {
   const auto& previous_navigation_context = screen_reader_context_->previous_navigation_context();
