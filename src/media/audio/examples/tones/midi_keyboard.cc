@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include <cstdio>
+#include <filesystem>
 #include <iostream>
 
 #include "src/media/audio/examples/tones/midi.h"
@@ -21,44 +22,41 @@ namespace examples {
 
 static const char* const kDevMidiPath = "/dev/class/midi";
 
-std::unique_ptr<MidiKeyboard> MidiKeyboard::Create(Tones* owner) {
-  struct dirent* de;
-  DIR* dir = opendir(kDevMidiPath);
-  if (!dir) {
-    if (errno != ENOENT) {
-      FX_LOGS(WARNING) << "Error attempting to open \"" << kDevMidiPath << "\" (errno " << errno
-                       << ")";
+zx::result<std::unique_ptr<MidiKeyboard>> MidiKeyboard::Create(Tones* owner) {
+  for (auto const& dir_entry : std::filesystem::directory_iterator{kDevMidiPath}) {
+    const char* devname = dir_entry.path().c_str();
+    zx::result controller = component::Connect<fuchsia_hardware_midi::Controller>(devname);
+    if (controller.is_error()) {
+      return controller.take_error();
     }
-    return nullptr;
-  }
-
-  auto cleanup = fit::defer([dir]() { closedir(dir); });
-
-  while ((de = readdir(dir)) != nullptr) {
-    char devname[128];
-
-    snprintf(devname, sizeof(devname), "%s/%s", kDevMidiPath, de->d_name);
-    auto result = component::Connect<fuchsia_hardware_midi::Device>(devname);
-    if (!result.is_ok()) {
-      continue;
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_midi::Device>();
+    if (endpoints.is_error()) {
+      return endpoints.take_error();
     }
-    fidl::ClientEnd<fuchsia_hardware_midi::Device> client(std::move(result.value()));
+    auto& [client, server] = endpoints.value();
 
-    auto info_result = fidl::WireCall(client)->GetInfo();
-    if (info_result.status() != ZX_OK) {
-      FX_LOGS(WARNING) << "fuchsia.hardware.midi.Device/GetInfo failed for \"" << devname << "\"";
-      return nullptr;
+    {
+      const fidl::Status result =
+          fidl::WireCall(controller.value())->OpenSession(std::move(server));
+      if (!result.ok()) {
+        return zx::error(result.status());
+      }
     }
 
-    if (info_result.value().info.is_source) {
+    const fidl::WireResult result = fidl::WireCall(client)->GetInfo();
+    if (!result.ok()) {
+      return zx::error(result.status());
+    }
+    const fuchsia_hardware_midi::wire::Info& info = result.value().info;
+
+    if (info.is_source) {
       std::cout << "Creating MIDI source @ \"" << devname << "\"\n";
-      std::unique_ptr<MidiKeyboard> ret(new MidiKeyboard(owner, std::move(client)));
-      ret->IssueRead();
-      return ret;
+      std::unique_ptr<MidiKeyboard> keyboard(new MidiKeyboard(owner, std::move(client)));
+      keyboard->IssueRead();
+      return zx::ok(std::move(keyboard));
     }
   }
-
-  return nullptr;
+  return zx::error(ZX_ERR_NOT_FOUND);
 }
 
 void MidiKeyboard::IssueRead() {

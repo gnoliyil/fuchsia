@@ -16,7 +16,6 @@
 #include <usb/usb.h>
 
 #include "midi.h"
-#include "usb-audio.h"
 
 constexpr size_t WRITE_REQ_COUNT = 20;
 
@@ -29,60 +28,51 @@ void UsbMidiSink::WriteComplete(usb_request_t* req) {
     return;
   }
 
-  fbl::AutoLock lock(&mutex_);
-  free_write_reqs_.push(UsbRequest(req, parent_req_size_));
+  {
+    fbl::AutoLock lock(&mutex_);
+    free_write_reqs_.push(UsbRequest(req, parent_req_size_));
+  }
   sync_completion_signal(&free_write_completion_);
 }
 
 void UsbMidiSink::DdkUnbind(ddk::UnbindTxn txn) {
-  fbl::AutoLock al(&mutex_);
-  dead_ = true;
-
-  sync_completion_signal(&free_write_completion_);
-  txn.Reply();
+  if (binding_.has_value()) {
+    Binding& binding = binding_.value();
+    ZX_ASSERT(!binding.unbind_txn.has_value());
+    binding.unbind_txn.emplace(std::move(txn));
+    binding.binding.Unbind();
+  } else {
+    txn.Reply();
+  }
 }
 
 void UsbMidiSink::DdkRelease() { delete this; }
 
-zx_status_t UsbMidiSink::DdkOpen(zx_device_t** dev_out, uint32_t flags) {
-  zx_status_t result;
-
-  fbl::AutoLock lock(&mutex_);
-  if (open_) {
-    result = ZX_ERR_ALREADY_BOUND;
-  } else {
-    open_ = true;
-    result = ZX_OK;
+void UsbMidiSink::OpenSession(OpenSessionRequestView request,
+                              OpenSessionCompleter::Sync& completer) {
+  if (binding_.has_value()) {
+    request->session.Close(ZX_ERR_ALREADY_BOUND);
+    return;
   }
-
-  return result;
-}
-
-zx_status_t UsbMidiSink::DdkClose(uint32_t flags) {
-  fbl::AutoLock lock(&mutex_);
-  open_ = false;
-
-  return ZX_OK;
+  binding_ = Binding{
+      .binding = fidl::BindServer(
+          fdf::Dispatcher::GetCurrent()->async_dispatcher(), std::move(request->session), this,
+          [](UsbMidiSink* self, fidl::UnbindInfo, fidl::ServerEnd<fuchsia_hardware_midi::Device>) {
+            std::optional opt = std::exchange(self->binding_, {});
+            ZX_ASSERT(opt.has_value());
+            Binding& binding = opt.value();
+            if (binding.unbind_txn.has_value()) {
+              binding.unbind_txn.value().Reply();
+            }
+          }),
+  };
 }
 
 zx_status_t UsbMidiSink::WriteInternal(const uint8_t* src, size_t length) {
-  {
-    fbl::AutoLock al(&mutex_);
-    if (dead_) {
-      return ZX_ERR_IO_NOT_PRESENT;
-    }
-  }
-
   zx_status_t status = ZX_OK;
 
   while (length > 0) {
     sync_completion_wait(&free_write_completion_, ZX_TIME_INFINITE);
-    {
-      fbl::AutoLock al(&mutex_);
-      if (dead_) {
-        return ZX_ERR_IO_NOT_PRESENT;
-      }
-    }
 
     std::optional<UsbRequest> req;
     {
@@ -175,6 +165,7 @@ zx_status_t UsbMidiSink::Init(int index, const usb_interface_descriptor_t* intf,
       return status;
     }
     req->request()->header.length = packet_size;
+    fbl::AutoLock lock(&mutex_);
     free_write_reqs_.push(std::move(*req));
   }
   sync_completion_signal(&free_write_completion_);

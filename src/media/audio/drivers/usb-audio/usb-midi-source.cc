@@ -15,7 +15,6 @@
 #include <usb/usb.h>
 
 #include "midi.h"
-#include "usb-audio.h"
 
 namespace audio {
 namespace usb {
@@ -44,26 +43,24 @@ void UsbMidiSource::ReadComplete(usb_request_t* req) {
 }
 
 void UsbMidiSource::DdkUnbind(ddk::UnbindTxn txn) {
-  fbl::AutoLock al(&mutex_);
-  dead_ = true;
-
-  read_ready_.Signal();
-  txn.Reply();
+  if (binding_.has_value()) {
+    Binding& binding = binding_.value();
+    ZX_ASSERT(!binding.unbind_txn.has_value());
+    binding.unbind_txn.emplace(std::move(txn));
+    binding.binding.Unbind();
+  } else {
+    txn.Reply();
+  }
 }
 
 void UsbMidiSource::DdkRelease() { delete this; }
 
-zx_status_t UsbMidiSource::DdkOpen(zx_device_t** dev_out, uint32_t flags) {
-  zx_status_t result;
-
-  fbl::AutoLock lock(&mutex_);
-  if (open_) {
-    result = ZX_ERR_ALREADY_BOUND;
-  } else {
-    open_ = true;
-    result = ZX_OK;
+void UsbMidiSource::OpenSession(OpenSessionRequestView request,
+                                OpenSessionCompleter::Sync& completer) {
+  if (binding_.has_value()) {
+    request->session.Close(ZX_ERR_ALREADY_BOUND);
+    return;
   }
-
   // queue up reads, including stale completed reads
   usb_request_complete_callback_t complete = {
       .callback = [](void* ctx,
@@ -71,31 +68,31 @@ zx_status_t UsbMidiSource::DdkOpen(zx_device_t** dev_out, uint32_t flags) {
       .ctx = this,
   };
   std::optional<UsbRequest> req;
-  while ((req = completed_reads_.pop()).has_value()) {
-    usb_.RequestQueue(req->take(), &complete);
+  {
+    fbl::AutoLock lock(&mutex_);
+    while ((req = completed_reads_.pop()).has_value()) {
+      usb_.RequestQueue(req->take(), &complete);
+    }
+    while ((req = free_read_reqs_.pop()).has_value()) {
+      usb_.RequestQueue(req->take(), &complete);
+    }
   }
-  while ((req = free_read_reqs_.pop()).has_value()) {
-    usb_.RequestQueue(req->take(), &complete);
-  }
-
-  return result;
-}
-
-zx_status_t UsbMidiSource::DdkClose(uint32_t flags) {
-  fbl::AutoLock lock(&mutex_);
-  open_ = false;
-
-  return ZX_OK;
+  binding_ = Binding{
+      .binding = fidl::BindServer(fdf::Dispatcher::GetCurrent()->async_dispatcher(),
+                                  std::move(request->session), this,
+                                  [](UsbMidiSource* self, fidl::UnbindInfo,
+                                     fidl::ServerEnd<fuchsia_hardware_midi::Device>) {
+                                    std::optional opt = std::exchange(self->binding_, {});
+                                    ZX_ASSERT(opt.has_value());
+                                    Binding& binding = opt.value();
+                                    if (binding.unbind_txn.has_value()) {
+                                      binding.unbind_txn.value().Reply();
+                                    }
+                                  }),
+  };
 }
 
 zx_status_t UsbMidiSource::ReadInternal(void* data, size_t len, size_t* actual) {
-  {
-    fbl::AutoLock al(&mutex_);
-    if (dead_) {
-      return ZX_ERR_IO_NOT_PRESENT;
-    }
-  }
-
   if (len < 3) {
     return ZX_ERR_BUFFER_TOO_SMALL;
   }

@@ -19,10 +19,12 @@ namespace audio {
 namespace usb {
 
 class UsbMidiSink;
-using UsbMidiSinkBase = ddk::Device<UsbMidiSink, ddk::Unbindable, ddk::Openable, ddk::Closable,
-                                    ddk::Messageable<fuchsia_hardware_midi::Device>::Mixin>;
+using UsbMidiSinkBase = ddk::Device<UsbMidiSink, ddk::Unbindable,
+                                    ddk::Messageable<fuchsia_hardware_midi::Controller>::Mixin>;
 
-class UsbMidiSink : public UsbMidiSinkBase, public ddk::EmptyProtocol<ZX_PROTOCOL_MIDI> {
+class UsbMidiSink : public UsbMidiSinkBase,
+                    public ddk::EmptyProtocol<ZX_PROTOCOL_MIDI>,
+                    public fidl::WireServer<fuchsia_hardware_midi::Device> {
  public:
   using UsbDevice = ::usb::UsbDevice;
   using UsbRequest = ::usb::Request<>;
@@ -38,10 +40,11 @@ class UsbMidiSink : public UsbMidiSinkBase, public ddk::EmptyProtocol<ZX_PROTOCO
   // Device protocol implementation.
   void DdkUnbind(ddk::UnbindTxn txn);
   void DdkRelease();
-  zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags);
-  zx_status_t DdkClose(uint32_t flags);
 
   // FIDL methods.
+
+  void OpenSession(OpenSessionRequestView request, OpenSessionCompleter::Sync& completer) override;
+
   void GetInfo(GetInfoCompleter::Sync& completer) final;
   void Read(ReadCompleter::Sync& completer) final;
   void Write(WriteRequestView request, WriteCompleter::Sync& completer) final;
@@ -56,14 +59,17 @@ class UsbMidiSink : public UsbMidiSinkBase, public ddk::EmptyProtocol<ZX_PROTOCO
   UsbDevice usb_;
 
   // pool of free USB requests
-  UsbRequestQueue free_write_reqs_;
+  UsbRequestQueue free_write_reqs_ TA_GUARDED(mutex_);
   // mutex for synchronizing access to free_write_reqs and open
   fbl::Mutex mutex_;
   // completion signals free_write_reqs not empty
   sync_completion_t free_write_completion_;
 
-  bool open_ TA_GUARDED(mutex_) = false;
-  bool dead_ TA_GUARDED(mutex_) = false;
+  using Binding = struct {
+    fidl::ServerBindingRef<fuchsia_hardware_midi::Device> binding;
+    std::optional<ddk::UnbindTxn> unbind_txn;
+  };
+  std::optional<Binding> binding_;
 
   uint64_t parent_req_size_;
 };

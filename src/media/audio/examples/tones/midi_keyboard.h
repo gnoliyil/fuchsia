@@ -17,7 +17,7 @@ class Tones;
 class MidiKeyboard {
  public:
   // Attempt open and use the first MIDI event source we encounter.
-  static std::unique_ptr<MidiKeyboard> Create(Tones* owner);
+  static zx::result<std::unique_ptr<MidiKeyboard>> Create(Tones* owner);
 
  private:
   friend std::unique_ptr<MidiKeyboard>::deleter_type;

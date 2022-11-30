@@ -19,10 +19,12 @@ namespace audio {
 namespace usb {
 
 class UsbMidiSource;
-using UsbMidiSourceBase = ddk::Device<UsbMidiSource, ddk::Unbindable, ddk::Openable, ddk::Closable,
-                                      ddk::Messageable<fuchsia_hardware_midi::Device>::Mixin>;
+using UsbMidiSourceBase = ddk::Device<UsbMidiSource, ddk::Unbindable,
+                                      ddk::Messageable<fuchsia_hardware_midi::Controller>::Mixin>;
 
-class UsbMidiSource : public UsbMidiSourceBase, public ddk::EmptyProtocol<ZX_PROTOCOL_MIDI> {
+class UsbMidiSource : public UsbMidiSourceBase,
+                      public ddk::EmptyProtocol<ZX_PROTOCOL_MIDI>,
+                      public fidl::WireServer<fuchsia_hardware_midi::Device> {
  public:
   using UsbDevice = ::usb::UsbDevice;
   using UsbRequest = ::usb::Request<>;
@@ -38,10 +40,11 @@ class UsbMidiSource : public UsbMidiSourceBase, public ddk::EmptyProtocol<ZX_PRO
   // Device protocol implementation.
   void DdkUnbind(ddk::UnbindTxn txn);
   void DdkRelease();
-  zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags);
-  zx_status_t DdkClose(uint32_t flags);
 
   // FIDL methods.
+
+  void OpenSession(OpenSessionRequestView request, OpenSessionCompleter::Sync& completer) override;
+
   void GetInfo(GetInfoCompleter::Sync& completer) final;
   void Read(ReadCompleter::Sync& completer) final;
   void Write(WriteRequestView request, WriteCompleter::Sync& completer) final;
@@ -63,8 +66,11 @@ class UsbMidiSource : public UsbMidiSourceBase, public ddk::EmptyProtocol<ZX_PRO
   // list of received packets not yet read by upper layer
   UsbRequestQueue completed_reads_ TA_GUARDED(mutex_);
 
-  bool open_ TA_GUARDED(mutex_) = false;
-  bool dead_ TA_GUARDED(mutex_) = false;
+  using Binding = struct {
+    fidl::ServerBindingRef<fuchsia_hardware_midi::Device> binding;
+    std::optional<ddk::UnbindTxn> unbind_txn;
+  };
+  std::optional<Binding> binding_;
 
   // Signals when completed_reads_ is non-empty.
   fbl::ConditionVariable read_ready_ TA_GUARDED(mutex_);

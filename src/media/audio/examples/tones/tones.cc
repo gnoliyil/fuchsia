@@ -199,7 +199,12 @@ void Tones::OnMinLeadTimeChanged(int64_t min_lead_time_nsec) {
 
     // If operating in interactive mode, look for a midi keyboard to listen to.
     if (interactive_) {
-      midi_keyboard_ = MidiKeyboard::Create(this);
+      zx::result midi_keyboard = MidiKeyboard::Create(this);
+      if (midi_keyboard.is_error()) {
+        std::cerr << "failed to create midi keyboard: " << midi_keyboard.status_string() << "\n";
+      } else {
+        midi_keyboard_ = std::move(midi_keyboard.value());
+      }
     }
 
     if (interactive_) {
