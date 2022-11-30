@@ -7,12 +7,6 @@ using zx;
 
 alias ReportId = uint8;
 
-type BootProtocol = strict enum : uint32 {
-    NONE = 0;
-    KBD = 1;
-    MOUSE = 2;
-};
-
 const MAX_DESC_LEN uint16 = 8192;
 const MAX_REPORT_LEN uint16 = 8192;
 const MAX_REPORT_DATA uint16 = 8192;
@@ -24,36 +18,23 @@ type ReportType = strict enum : uint8 {
     FEATURE = 3;
 };
 
-/// DeviceIds lets a clients determine the vendor and product id for a device.
-/// If the device is real HID device, then the id information
-/// will come from the device itself. Mock HID devices may assign the
-/// ids in the driver. If the mock HID driver does not assign ids, zeros
-/// will be used instead.
-type DeviceIds = struct {
-    vendor_id uint32;
-    product_id uint32;
-    version uint32;
-};
-
-/// A single HID Report.
-type Report = struct {
-    /// The time the report was created, from the view of the monotonic clock.
-    time zx.time;
-    /// The HID report data. This is guaranteed to always be a full HID report.
-    data vector<uint8>:MAX_REPORT_DATA;
-};
-
 /// Each `DeviceReportsReader` has its own FIFO of reports in the driver.
-/// Calling `ReadReports` drains the Report FIFO. If the Report FIFO
-/// fills up between calls to `ReadReports` the channel will be closed.
+/// Calling `ReadReports` drains the Report FIFO. If the Report FIFO fills up
+/// between calls to `ReadReports` the channel will be closed.
 protocol DeviceReportsReader {
-    /// This is a Hanging-Get function to read the reports in the
-    /// Report FIFO. This will block until there is at least one
-    /// report available.
-    /// If there is already one outstanding Hanging-Get, calling this
-    /// again will return ZX_ERR_ALREADY_BOUND.
+    /// This is a Hanging-Get function to read the reports in the Report FIFO.
+    /// This will block until there is at least one report available.
+    /// If there is already one outstanding Hanging-Get, calling this again will
+    /// return ZX_ERR_ALREADY_BOUND.
     ReadReports() -> (struct {
-        reports vector<Report>:MAX_REPORTS_COUNT;
+        reports vector<@generated_name("Report") struct {
+            /// The time the report was created, from the view of the monotonic
+            /// clock.
+            time zx.time;
+            /// The HID report data. This is guaranteed to always be a full HID
+            /// report.
+            data vector<uint8>:MAX_REPORT_DATA;
+        }>:MAX_REPORTS_COUNT;
     }) error zx.status;
 };
 
@@ -62,13 +43,24 @@ protocol DeviceReportsReader {
 protocol Device {
     /// Get the HID boot interface protocol this device supports
     GetBootProtocol() -> (struct {
-        protocol BootProtocol;
+        protocol @generated_name("BootProtocol") strict enum : uint32 {
+            NONE = 0;
+            KBD = 1;
+            MOUSE = 2;
+        };
     });
 
-    /// Get the Device's IDs. If this is a real HID device, the IDs will come from the device.
-    /// If it is a mock HID decice, the IDs will either be 0's or user defined.
+    /// Get the Device's IDs.
+    ///
+    /// If this is a real HID device, then the id information will come from the
+    /// device itself. Mock HID devices may assign the ids in the driver. If the
+    /// mock HID driver does not assign ids, zeros will be used instead.
     GetDeviceIds() -> (struct {
-        ids DeviceIds;
+        ids @generated_name("DeviceIds") struct {
+            vendor_id uint32;
+            product_id uint32;
+            version uint32;
+        };
     });
 
     /// Get the report descriptor
