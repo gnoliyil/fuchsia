@@ -28,6 +28,7 @@ group("magma") {
 sdk_static_library("magma_client") {
   # TODO(fxbug.dev/108279): Move to partner category
   category = "experimental"
+  sdk_name = "magma_client"
   public = [
     "include/magma/magma.h",
     "include/magma/magma_common_defs.h",

@@ -29,9 +29,10 @@ import("//build/sdk/sdk_atom_alias.gni")
 #     "none" or "static".
 #     Defaults to "none".
 #
-#   sdk_name (optional)
+#   sdk_name (required for non-internal libraries)
 #     Name of the library in the SDK.
-#     Defaults to the library's output name.
+#     For internal libraries, defaults to ${fully_qualified_target_path}_${target_name}.
+#     e.g. (target) //src/lib/fxl:fxl -> (default sdk_name) //src/lib/fxl_fxl
 #
 #   include_base (optional)
 #     Path to the root directory for includes.
@@ -56,24 +57,36 @@ set_defaults("sdk_static_library") {
 
 template("sdk_static_library") {
   assert(defined(invoker.category), "Must define an SDK category")
+  is_internal = invoker.category == "internal"
 
   output_name = target_name
   if (defined(invoker.output_name)) {
     output_name = invoker.output_name
   }
 
-  if (defined(invoker.sdk_name)) {
-    atom_name = invoker.sdk_name
+  if (is_internal) {
+    # If not defined by the invoker, the sdk_name is the fully qualified target name with some tweaks. For example:
+    #    //src/lib/fxl:fxl            sdk_name = //src/lib/fxl_fxl          sdk_root_path= src/lib/fxl_fxl
+    #    //src/lib/fxl:functional     sdk_name = //src/lib/fxl_functional   sdk_root_path= src/lib/fxl_functional
+    #    //src/lib/fxl/files:files    sdk_name = //src/lib/fxl/files_files  sdk_root_path= src/lib/fxl/files_files
+    full_label = get_label_info(":${target_name}", "label_no_toolchain")
+    path = get_label_info(full_label, "dir")
+    path = "${path}_${invoker.target_name}"
+    sdk_name = path
+    sdk_root_path = string_replace(sdk_name, "//", "")
   } else {
-    atom_name = output_name
+    assert(defined(invoker.sdk_name),
+           "Non-internal sdk_static_library must define an SDK name")
+    sdk_name = invoker.sdk_name
+    sdk_root_path = "pkg/${sdk_name}"
   }
-  sdk_id = "sdk://pkg/$atom_name"
+  sdk_id = "sdk://${sdk_root_path}"
 
+  is_partner_or_public =
+      invoker.category == "partner" || invoker.category == "public"
   no_headers = defined(invoker.no_headers) && invoker.no_headers
-
-  if (!no_headers &&
-      (invoker.category == "partner" || invoker.category == "public")) {
-    api_reference = "${atom_name}.api"
+  if (is_partner_or_public && !no_headers) {
+    api_reference = "${sdk_name}.api"
     if (defined(invoker.api)) {
       api_reference = invoker.api
     }
@@ -82,10 +95,9 @@ template("sdk_static_library") {
   main_target_name = target_name
   metadata_target_name = "${target_name}_sdk_metadata"
   manifest_target_name = "${target_name}_sdk_manifest"
-  verify_pragma_target_name = "${target_name}_sdk_pragma"
   sdk_target_name = "${target_name}_sdk"
 
-  runtime_deps_file = "$target_out_dir/$target_name.runtime_deps"
+  runtime_deps_file = "${target_out_dir}/${target_name}.runtime_deps"
 
   # This is subtle: If one of the dependencies is listed in runtime_deps
   # with an _sdk suffix, assume it is a shared_library() target, and ensure
@@ -94,17 +106,19 @@ template("sdk_static_library") {
   # are in the default toolchain.
   if (current_toolchain == default_toolchain && defined(invoker.runtime_deps)) {
     _new_deps = []
-    foreach(dep, invoker.deps) {
-      _dep_label = get_label_info(dep, "label_no_toolchain")
-      _dep_sdk_label = _dep_label + "_sdk"
-      if (invoker.runtime_deps + [ _dep_sdk_label ] - [ _dep_sdk_label ] !=
-          invoker.runtime_deps) {
-        dep = _dep_label + "($shlib_toolchain_no_default_variant_redirect)"
+    if (defined(invoker.deps)) {
+      foreach(dep, invoker.deps) {
+        _dep_label = get_label_info(dep, "label_no_toolchain")
+        _dep_sdk_label = _dep_label + "_sdk"
+        if (invoker.runtime_deps + [ _dep_sdk_label ] - [ _dep_sdk_label ] !=
+            invoker.runtime_deps) {
+          dep = _dep_label + "(${shlib_toolchain_no_default_variant_redirect})"
+        }
+        _new_deps += [ dep ]
       }
-      _new_deps += [ dep ]
+      invoker.deps = []
+      invoker.deps = _new_deps
     }
-    invoker.deps = []
-    invoker.deps = _new_deps
   }
 
   static_library(main_target_name) {
@@ -118,6 +132,13 @@ template("sdk_static_library") {
                              "runtime_deps",
                              "sdk_name",
                            ])
+
+    if (!defined(sources)) {
+      sources = []
+    }
+    if (defined(invoker.private_headers)) {
+      sources += invoker.private_headers
+    }
 
     if (defined(visibility)) {
       visibility += [ ":$manifest_target_name" ]
@@ -167,21 +188,18 @@ template("sdk_static_library") {
     }
   }
 
-  # Base path for source files of this library in SDKs.
-  file_base = "pkg/$atom_name"
-
   # Base path for binaries of this library in SDKs.
   prebuilt_base = "arch/$target_cpu"
 
   # Identify dependencies and their metadata files.
   sdk_deps = []
   sdk_metas = []
-  all_deps = []
+  build_deps = []
   if (defined(invoker.deps)) {
-    all_deps += invoker.deps
+    build_deps += invoker.deps
   }
   if (defined(invoker.public_deps)) {
-    all_deps += invoker.public_deps
+    build_deps += invoker.public_deps
   }
 
   if (defined(invoker.public_deps)) {
@@ -202,43 +220,68 @@ template("sdk_static_library") {
     sdk_metas += [ "$gen_dir/$name.meta.json" ]
   }
 
-  # Process headers.
-  all_headers = []
-  if (defined(invoker.public)) {
-    all_headers += invoker.public
-  } else if (defined(invoker.sources)) {
-    foreach(source_file, invoker.sources) {
-      extension = get_path_info(source_file, "extension")
-      if (extension == "h") {
-        all_headers += [ source_file ]
+  include_dest = "${sdk_root_path}/include"
+  sdk_header_files = []
+  sdk_metadata_headers = []
+  if (!no_headers) {
+    # Process headers.
+    all_headers = []
+    if (defined(invoker.public) || defined(invoker.private_headers)) {
+      if (defined(invoker.public)) {
+        all_headers += invoker.public
+      }
+      if (defined(invoker.private_headers)) {
+        all_headers += invoker.private_headers
+      }
+    } else {
+      # If no explicit headers are defined, pick them out from sources.
+      if (defined(invoker.sources)) {
+        foreach(source_file, invoker.sources) {
+          extension = get_path_info(source_file, "extension")
+          if (extension == "h") {
+            all_headers += [ source_file ]
+          }
+        }
       }
     }
-  }
-  assert(all_headers != [], "Library does not contain any headers or sources.")
-  sdk_metadata_headers = []
-  sdk_header_files = []
-  foreach(header, all_headers) {
-    include_base = "include"
+
+    assert(
+        all_headers != [],
+        "Library does not contain any headers or sources. If this is intentional then set `no_headers = true`")
+
     if (defined(invoker.include_base)) {
       include_base = invoker.include_base
+    } else {
+      if (is_internal) {
+        # by default, we want internal SDK elements to have their include path similar when used through
+        # an SDK (eg Bazel SDk) or directly (GN/Ninja), so that source code doesn't need to be changed
+        # when switching from one to the other.
+        include_base = "//"
+      } else {
+        include_base = "include"
+      }
     }
-    destination = rebase_path(header, include_base)
-    header_dest = "$file_base/include/$destination"
-    sdk_metadata_headers += [ header_dest ]
-    sdk_header_files += [
-      {
-        source = header
-        dest = header_dest
-      },
-    ]
+
+    include_dest = "${sdk_root_path}/include"
+    foreach(header, all_headers) {
+      destination = rebase_path(header, include_base)
+      header_dest = "${include_dest}/${destination}"
+      sdk_metadata_headers += [ header_dest ]
+      sdk_header_files += [
+        {
+          source = header
+          dest = header_dest
+        },
+      ]
+    }
   }
 
   # Add binaries.
-  lib_name = "lib$output_name.a"
-  link_lib = "$prebuilt_base/lib/$lib_name"
+  lib_name = "lib${output_name}.a"
+  link_lib = "${prebuilt_base}/lib/${lib_name}"
   sdk_files = sdk_header_files + [
                 {
-                  source = "$target_out_dir/$lib_name"
+                  source = "${target_out_dir}/${lib_name}"
                   dest = link_lib
                 },
               ]
@@ -248,19 +291,17 @@ template("sdk_static_library") {
     plasa_fragment_cc(_plasa_artifacts_target_name) {
       forward_variables_from(invoker,
                              [
-                               "all_deps",
                                "all_headers",
                                "private_headers",
                                "source_dir",
                                "testonly",
                              ])
-      file_base = file_base
+      all_deps = build_deps
+      file_base = sdk_root_path
     }
-  } else {
-    not_needed(invoker, [ "private_headers" ])
   }
 
-  metadata_file = "$target_gen_dir/$metadata_target_name.sdk_meta.json"
+  metadata_file = "${target_gen_dir}/${metadata_target_name}.sdk_meta.json"
 
   action(metadata_target_name) {
     forward_variables_from(invoker, [ "testonly" ])
@@ -277,13 +318,13 @@ template("sdk_static_library") {
       "--out",
       rebase_path(metadata_file, root_build_dir),
       "--name",
-      atom_name,
+      sdk_name,
       "--format",
       "static",
       "--root",
-      file_base,
+      sdk_root_path,
       "--include-dir",
-      "$file_base/include",
+      include_dest,
       "--arch",
       target_cpu,
       "--lib-link",
@@ -292,41 +333,47 @@ template("sdk_static_library") {
     args += [ "--deps" ] + rebase_path(sdk_metas, root_build_dir)
     args += [ "--headers" ] + sdk_metadata_headers
 
-    deps = sdk_deps + [ ":$main_target_name" ]
+    deps = sdk_deps + [ ":${main_target_name}" ]
   }
 
-  verify_pragma_once(verify_pragma_target_name) {
-    headers = all_headers
+  # Exempt internal libraries from pragma verification.
+  should_verify_pragma = !is_internal && !no_headers
+  if (should_verify_pragma) {
+    verify_pragma_target_name = "${target_name}_sdk_pragma"
+    verify_pragma_once(verify_pragma_target_name) {
+      headers = all_headers
+    }
   }
 
   sdk_atom(manifest_target_name) {
-    forward_variables_from(invoker, [ "testonly" ])
+    forward_variables_from(invoker,
+                           [
+                             "testonly",
+                             "category",
+                           ])
 
     id = sdk_id
-
-    category = invoker.category
-
     if (defined(api_reference) && !no_headers) {
       api = api_reference
-
       api_contents = sdk_header_files
     }
 
     meta = {
       source = metadata_file
-      dest = "$file_base/meta.json"
+      dest = "${sdk_root_path}/meta.json"
       schema = "cc_prebuilt_library"
     }
 
     files = sdk_files
-
     deps = sdk_deps
 
     non_sdk_deps = [
-      ":$main_target_name",
-      ":$metadata_target_name",
-      ":$verify_pragma_target_name",
+      ":${main_target_name}",
+      ":${metadata_target_name}",
     ]
+    if (should_verify_pragma) {
+      non_sdk_deps += [ ":${verify_pragma_target_name}" ]
+    }
 
     # Explicitly add non-public dependencies, in case some of the source files
     # are generated.
@@ -334,11 +381,11 @@ template("sdk_static_library") {
       non_sdk_deps += invoker.deps
     }
     if (generate_plasa_artifacts) {
-      non_sdk_deps += [ ":$_plasa_artifacts_target_name" ]
+      non_sdk_deps += [ ":${_plasa_artifacts_target_name}" ]
     }
   }
 
-  sdk_manifest_file = "$target_gen_dir/$manifest_target_name.sdk"
+  sdk_manifest_file = "${target_gen_dir}/${manifest_target_name}.sdk"
   verify_target_name = "${target_name}_verify"
 
   # Verify that the SDK manifest for this target includes all of the expected
@@ -353,7 +400,7 @@ template("sdk_static_library") {
       runtime_deps_file,
     ]
 
-    stamp_file = "$target_gen_dir/$target_name.gn_stamp"
+    stamp_file = "${target_gen_dir}/${target_name}.gn_stamp"
 
     outputs = [ stamp_file ]
 
@@ -367,16 +414,14 @@ template("sdk_static_library") {
     ]
 
     deps = [
-      ":$main_target_name",
-      ":$manifest_target_name",
+      ":${main_target_name}",
+      ":${manifest_target_name}",
     ]
   }
 
   sdk_atom_alias(sdk_target_name) {
-    atom = ":$manifest_target_name"
-
-    non_sdk_deps = [ ":$verify_target_name" ]
-
+    atom = ":${manifest_target_name}"
+    non_sdk_deps = [ ":${verify_target_name}" ]
     if (generate_plasa_artifacts) {
       non_sdk_deps += [ ":$_plasa_artifacts_target_name" ]
     }
