@@ -241,11 +241,50 @@ void NetdeviceMigration::NetworkDeviceImplStart(network_device_impl_start_callba
 void NetdeviceMigration::NetworkDeviceImplStop(network_device_impl_stop_callback callback,
                                                void* cookie) __TA_EXCLUDES(rx_lock_, tx_lock_) {
   ethernet_.Stop();
+
+  std::array<rx_buffer_t, kFifoDepth> rx_buffers;
+  std::array<rx_buffer_part_t, kFifoDepth> rx_parts;
+  auto rx_buffer_iter = rx_buffers.begin();
+  auto rx_part_iter = rx_parts.begin();
+  std::array<tx_result_t, kFifoDepth> tx_return;
+  auto tx_return_iter = tx_return.begin();
   {
     std::lock_guard rx_lock(rx_lock_);
     std::lock_guard tx_lock(tx_lock_);
     rx_started_ = false;
     tx_started_ = false;
+
+    // On stop, we must return all the rx space buffers we hold.
+    while (!rx_spaces_.empty()) {
+      const rx_space_buffer_t& space = rx_spaces_.front();
+      rx_buffer_part_t& part = *rx_part_iter++;
+      part = {
+          .id = space.id,
+          .offset = 0,
+          .length = 0,
+      };
+      *rx_buffer_iter++ = {
+          .data_list = &part,
+          .data_count = 1,
+      };
+      rx_spaces_.pop();
+    }
+
+    // We already stopped Ethernet, so we must also return all the tx buffers as
+    // if they weren't transferred.
+    for (const uint32_t& id : tx_in_flight_) {
+      *tx_return_iter++ = {
+          .id = id,
+          .status = ZX_ERR_CANCELED,
+      };
+    }
+    tx_in_flight_.clear();
+  }
+  if (size_t count = std::distance(rx_buffers.begin(), rx_buffer_iter); count != 0) {
+    netdevice_.CompleteRx(rx_buffers.data(), count);
+  }
+  if (size_t count = std::distance(tx_return.begin(), tx_return_iter); count != 0) {
+    netdevice_.CompleteTx(tx_return.data(), count);
   }
   callback(cookie);
 }
@@ -326,6 +365,7 @@ void NetdeviceMigration::NetworkDeviceImplQueueTx(const tx_buffer_t* buffers_lis
       };
       *(netbuf->private_storage()) = buffer.id;
       *args_iter++ = std::move(netbuf);
+      tx_in_flight_.insert(buffer.id);
     }
   }
   for (auto arg = std::begin(args); arg != args_iter; ++arg) {
@@ -356,6 +396,7 @@ void NetdeviceMigration::NetworkDeviceImplQueueTx(const tx_buffer_t* buffers_lis
           // that arrive immediately after.
           {
             std::lock_guard tx_lock(netdev->tx_lock_);
+            netdev->tx_in_flight_.erase(result.id);
             netdev->netbuf_pool_.push(std::move(op));
           }
           netdev->netdevice_.CompleteTx(&result, 1);

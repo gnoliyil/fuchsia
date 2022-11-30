@@ -31,6 +31,7 @@ class NetdeviceMigrationTestHelper {
     std::lock_guard<std::mutex> rx_lock(netdev_.rx_lock_);
     return netdev_.rx_started_;
   }
+  size_t netbuf_size() const { return netdev_.netbuf_size_; }
   const device_info_t& Info() { return netdev_.info_; }
   const ethernet_ifc_protocol_t& EthernetIfcProto() { return netdev_.ethernet_ifc_proto_; }
   const network_device_impl_protocol_ops_t& NetworkDeviceImplProtoOps() {
@@ -917,6 +918,74 @@ TEST_F(NetdeviceMigrationDefaultSetupTest, NetworkDeviceImplProto) {
   EXPECT_EQ(Device().ddk_proto_id_, ZX_PROTOCOL_NETWORK_DEVICE_IMPL);
   netdevice_migration::NetdeviceMigrationTestHelper helper(Device());
   EXPECT_EQ(Device().ddk_proto_ops_, &helper.NetworkDeviceImplProtoOps());
+}
+
+TEST_F(NetdeviceMigrationDefaultSetupTest, ReturnsRxBuffersOnStop) {
+  constexpr uint32_t kBufId = 27;
+  constexpr rx_space_buffer_t spaces[] = {
+      {
+          .id = kBufId,
+          .region =
+              {
+                  .offset = 42,
+                  .length = ETH_MTU_SIZE,
+              },
+      },
+  };
+  ASSERT_NO_FATAL_FAILURE(NetdevImplStart(ZX_OK));
+  netdevice_migration::NetdeviceMigrationTestHelper helper(Device());
+  helper.WithRxSpaces<void>([](auto& rx_spaces) { EXPECT_TRUE(rx_spaces.empty()); });
+  Device().NetworkDeviceImplQueueRxSpace(spaces, std::size(spaces));
+  helper.WithRxSpaces<void>([&spaces, &kBufId](auto& rx_spaces) {
+    ASSERT_EQ(rx_spaces.size(), std::size(spaces));
+    EXPECT_EQ(rx_spaces.front().id, kBufId);
+  });
+  bool callback_called = false;
+  EXPECT_CALL(MockEthernet(), EthernetImplStop()).Times(1);
+  EXPECT_CALL(MockNetworkDevice(), NetworkDeviceIfcCompleteRx)
+      .WillOnce([&kBufId](const rx_buffer_t* buffers, size_t count) {
+        ASSERT_EQ(count, 1u);
+        const rx_buffer_t& buffer = buffers[0];
+        ASSERT_EQ(buffer.data_count, 1u);
+        const rx_buffer_part_t& part = buffer.data_list[0];
+        EXPECT_EQ(part.id, kBufId);
+      });
+  Device().NetworkDeviceImplStop([](void* ctx) { *static_cast<bool*>(ctx) = true; },
+                                 &callback_called);
+  EXPECT_TRUE(callback_called);
+}
+
+TEST_F(NetdeviceMigrationDefaultSetupTest, ReturnsTxBuffersOnStop) {
+  ASSERT_NO_FATAL_FAILURE(NetdevImplPrepareVmo(kVmoId));
+  ASSERT_NO_FATAL_FAILURE(NetdevImplStart(ZX_OK));
+  netdevice_migration::NetdeviceMigrationTestHelper helper(Device());
+  constexpr uint32_t kBufId = 42;
+  buffer_region_t region = {.vmo = kVmoId, .length = ETH_MTU_SIZE};
+  tx_buffer_t buf = {.id = kBufId, .data_list = &region, .data_count = 1};
+  EXPECT_CALL(MockEthernet(), EthernetImplQueueTx)
+      .WillOnce([&helper](uint32_t options, ethernet_netbuf_t* netbuf,
+                          ethernet_impl_queue_tx_callback callback, void* cookie) {
+        // We must artificially return this netbuf to the pool, otherwise its
+        // memory will leak.
+        size_t size = helper.netbuf_size();
+        helper.WithNetbufPool<void>([netbuf, &size](netdevice_migration::NetbufPool& pool) {
+          pool.push(netdevice_migration::Netbuf(netbuf, size));
+        });
+      });
+  Device().NetworkDeviceImplQueueTx(&buf, 1);
+
+  bool callback_called = false;
+  EXPECT_CALL(MockEthernet(), EthernetImplStop()).Times(1);
+  EXPECT_CALL(MockNetworkDevice(), NetworkDeviceIfcCompleteTx)
+      .WillOnce([&kBufId](const tx_result_t* buffers, size_t count) {
+        ASSERT_EQ(count, 1u);
+        const tx_result_t& result = buffers[0];
+        EXPECT_EQ(result.id, kBufId);
+        EXPECT_STATUS(result.status, ZX_ERR_CANCELED);
+      });
+  Device().NetworkDeviceImplStop([](void* ctx) { *static_cast<bool*>(ctx) = true; },
+                                 &callback_called);
+  EXPECT_TRUE(callback_called);
 }
 
 }  // namespace

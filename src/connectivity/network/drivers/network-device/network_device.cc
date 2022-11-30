@@ -53,12 +53,15 @@ zx_status_t NetworkDevice::Create(void* ctx, zx_device_t* parent, async_dispatch
 }
 
 void NetworkDevice::DdkUnbind(ddk::UnbindTxn unbindTxn) {
-  zxlogf(DEBUG, "DdkUnbind");
-  device_->Teardown([txn = std::move(unbindTxn)]() mutable { txn.Reply(); });
+  zxlogf(INFO, "%p DdkUnbind", zxdev());
+  device_->Teardown([txn = std::move(unbindTxn), this]() mutable {
+    zxlogf(INFO, "%p DdkUnbind Done", zxdev());
+    txn.Reply();
+  });
 }
 
 void NetworkDevice::DdkRelease() {
-  zxlogf(DEBUG, "DdkRelease");
+  zxlogf(INFO, "%p DdkRelease", zxdev());
   delete this;
 }
 

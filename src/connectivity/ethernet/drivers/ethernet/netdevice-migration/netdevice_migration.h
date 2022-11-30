@@ -12,6 +12,7 @@
 #include <zircon/system/public/zircon/compiler.h>
 
 #include <queue>
+#include <unordered_set>
 #include <utility>
 
 #include <ddktl/device.h>
@@ -154,6 +155,7 @@ class NetdeviceMigration
   std::mutex tx_lock_ __TA_ACQUIRED_AFTER(rx_lock_, vmo_lock_);
   bool tx_started_ __TA_GUARDED(tx_lock_) = false;
   NetbufPool netbuf_pool_ __TA_GUARDED(tx_lock_);
+  std::unordered_set<uint32_t> tx_in_flight_ __TA_GUARDED(tx_lock_);
 
   std::mutex rx_lock_ __TA_ACQUIRED_BEFORE(tx_lock_, vmo_lock_);
   bool rx_started_ __TA_GUARDED(rx_lock_) = false;
