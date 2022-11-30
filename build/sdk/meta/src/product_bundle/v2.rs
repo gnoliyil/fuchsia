@@ -4,18 +4,20 @@
 
 //! Version 2 of the Product Bundle format.
 //!
-//! This format is drastically different from Version 1 in that all the contents are expected to
-//! stay as implementation detail of ffx. The outputs of assembly are fed directly into the fields
-//! of the Product Bundle, and the flash and emulator manifests are not constructed until the
-//! Product Bundle is read by `ffx emu start` and `ffx target flash`. This makes the format
+//! This format is drastically different from Version 1 in that all the contents
+//! are expected to stay as implementation detail of ffx. The outputs of
+//! assembly are fed directly into the fields of the Product Bundle, and the
+//! flash and emulator manifests are not constructed until the Product Bundle
+//! is read by `ffx emu start` and `ffx target flash`. This makes the format
 //! simpler, and more aligned with how images are assembled.
 //!
 //! Note on paths
 //! -------------
-//! PBv2 is a directory containing images and other artifacts necessary to flash, emulator, and
-//! update a product. When a Product Bundle is written to disk, the paths inside _must_ all be
-//! relative to the Product Bundle itself, to ensure that the directory remains portable (can be
-//! moved, zipped, tarred, downloaded on another machine).
+//! PBv2 is a directory containing images and other artifacts necessary to
+//! flash, emulator, and update a product. When a Product Bundle is written to
+//! disk, the paths inside _must_ all be relative to the Product Bundle itself,
+//! to ensure that the directory remains portable (can be moved, zipped, tarred,
+//! downloaded on another machine).
 
 use anyhow::{anyhow, Context, Result};
 use assembly_manifest::AssemblyManifest;
@@ -66,12 +68,14 @@ pub struct Repository {
     /// The path to the TUF repository, relative to the product bundle directory.
     pub metadata_path: Utf8PathBuf,
 
-    /// The path to the blobs directory, relative to the product bundle directory.
+    /// The path to the blobs directory, relative to the product bundle
+    /// directory.
     pub blobs_path: Utf8PathBuf,
 }
 
 impl Repository {
-    /// Return the path to the targets.json file that contains a list of all the packages.
+    /// Return the path to the targets.json file that contains a list of all the
+    /// packages.
     pub fn targets_path(&self) -> Utf8PathBuf {
         self.metadata_path.join("targets.json")
     }
@@ -99,12 +103,12 @@ impl Repository {
 }
 
 impl ProductBundleV2 {
-    /// Convert all the paths from relative to absolute, assuming `product_bundle_dir` is the
-    /// current base all the paths are relative to.
+    /// Convert all the paths from relative to absolute, assuming
+    /// `product_bundle_dir` is the current base all the paths are relative to.
     ///
-    /// Note: This function is intentionally only accessible inside the crate to ensure this method
-    /// is only called during deserialization. Clients should not be canonicalizing their own
-    /// paths.
+    /// Note: This function is intentionally only accessible inside the crate to
+    /// ensure this method is only called during deserialization. Clients should
+    /// not be canonicalizing their own paths.
     pub(crate) fn canonicalize_paths(
         &mut self,
         product_bundle_dir: impl AsRef<Utf8Path>,
@@ -151,12 +155,13 @@ impl ProductBundleV2 {
         Ok(())
     }
 
-    /// Convert all the paths from absolute to relative, assuming `product_bundle_dir` is the
-    /// new base all the paths should be relative to.
+    /// Convert all the paths from absolute to relative, assuming
+    /// `product_bundle_dir` is the new base all the paths should be relative
+    /// to.
     ///
-    /// Note: This function is intentionally only accessible inside the crate to ensure this method
-    /// is only called during deserialization. Clients should not be canonicalizing their own
-    /// paths.
+    /// Note: This function is intentionally only accessible inside the crate to
+    /// ensure this method is only called during deserialization. Clients should
+    /// not be canonicalizing their own paths.
     pub(crate) fn relativize_paths(
         &mut self,
         product_bundle_dir: impl AsRef<Utf8Path>,

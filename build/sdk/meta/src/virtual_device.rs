@@ -17,7 +17,7 @@ use {
 };
 
 /// Specifics for a CPU.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Cpu {
     /// Target CPU architecture.
@@ -58,7 +58,7 @@ pub struct DataAmount {
 }
 
 /// Specifics for a given platform.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Hardware {
     /// Details of the Central Processing Unit (CPU).
@@ -67,7 +67,8 @@ pub struct Hardware {
     /// Details about any audio devices included in the virtual device.
     pub audio: AudioDevice,
 
-    /// The size of the disk image for the virtual device, equivalent to virtual storage capacity.
+    /// The size of the disk image for the virtual device, equivalent to virtual
+    /// storage capacity.
     pub storage: DataAmount,
 
     /// Details about any input devices, such as a mouse or touchscreen.
@@ -102,17 +103,33 @@ pub struct VirtualDeviceV1 {
     /// Details about the properties of the device.
     pub hardware: Hardware,
 
-    /// An optional path to the file containing the start-up arguments Handlebars template.
-    /// TODO(fxbug.dev/90948): Make this non-optional, as soon as the template file is included
-    /// with the SDK.
+    /// An optional path to the file containing the start-up arguments
+    /// Handlebars template.
+    /// TODO(fxbug.dev/90948): Make this non-optional, as soon as the template
+    /// file is included with the SDK.
     pub start_up_args_template: Option<String>,
 
-    /// A map of names to port numbers. These are the ports that need to be available to the
-    /// virtual device, though a given use case may not require all of them. When emulating with
-    /// user-mode networking, these must be mapped to host-side ports to allow communication into
-    /// the emulator from external tools (such as ssh and mDNS). When emulating with Tun/Tap mode
-    /// networking port mapping is superfluous, so we expect this field to be ignored.
+    /// A map of names to port numbers. These are the ports that need to be
+    /// available to the virtual device, though a given use case may not require
+    /// all of them. When emulating with user-mode networking, these must be
+    /// mapped to host-side ports to allow communication into the emulator from
+    /// external tools (such as ssh and mDNS). When emulating with Tun/Tap mode
+    /// networking port mapping is superfluous, so we expect this field to be
+    /// ignored.
     pub ports: Option<HashMap<String, u16>>,
+}
+
+impl VirtualDeviceV1 {
+    pub fn new(name: impl ToString, hardware: Hardware) -> Self {
+        Self {
+            name: name.to_string(),
+            description: None,
+            kind: ElementType::VirtualDevice,
+            hardware,
+            start_up_args_template: None,
+            ports: None,
+        }
+    }
 }
 
 impl JsonObject for Envelope<VirtualDeviceV1> {

@@ -64,18 +64,13 @@ macro_rules! display_impl {
     };
 }
 
-#[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Serialize, Default, Deserialize, Debug, Hash, Clone, PartialOrd, Ord, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum CpuArchitecture {
     Arm64,
+    #[default]
     X64,
     Unsupported,
-}
-
-impl Default for CpuArchitecture {
-    fn default() -> Self {
-        CpuArchitecture::X64
-    }
 }
 
 impl From<String> for CpuArchitecture {
@@ -100,39 +95,30 @@ impl From<&str> for CpuArchitecture {
 
 display_impl!(CpuArchitecture);
 
-#[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Default, Hash, Clone, PartialOrd, Ord, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum PointingDevice {
     Mouse,
+    #[default]
     None,
     Touch,
 }
 
-impl Default for PointingDevice {
-    fn default() -> Self {
-        PointingDevice::None
-    }
-}
-
 display_impl!(PointingDevice);
 
-#[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Serialize, Default, Deserialize, Debug, Hash, Clone, PartialOrd, Ord, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ScreenUnits {
+    #[default]
     Pixels,
-}
-
-impl Default for ScreenUnits {
-    fn default() -> Self {
-        ScreenUnits::Pixels
-    }
 }
 
 display_impl!(ScreenUnits);
 
-#[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Default, Hash, Clone, PartialOrd, Ord, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum DataUnits {
+    #[default]
     Bytes,
     Kilobytes,
     Megabytes,
@@ -140,20 +126,16 @@ pub enum DataUnits {
     Terabytes,
 }
 
-impl Default for DataUnits {
-    fn default() -> Self {
-        DataUnits::Bytes
-    }
-}
-
 display_impl!(DataUnits);
 
 impl DataUnits {
-    /// This function provides an alternative output to the full string returned by fmt::Display.
-    /// The fmt::Display version is necessary for Serialization, while the abbreviated value is
-    /// needed for certain command-line conversions. Note that this diverges from Fuchsia's
-    /// convention of using MiB, KiB, etc. because these abbreviations are intended for legacy
-    /// compatibility with the Qemu and FVM tool command lines.
+    /// This function provides an alternative output to the full string
+    /// returned by fmt::Display. The fmt::Display version is necessary for
+    /// Serialization, while the abbreviated value is needed for certain
+    /// command-line conversions. Note that this diverges from Fuchsia's
+    /// convention of using MiB, KiB, etc. because these abbreviations are
+    /// intended for legacy compatibility with the Qemu and FVM tool command
+    /// lines.
     pub fn abbreviate(&self) -> &str {
         match self {
             DataUnits::Bytes => "",
@@ -165,7 +147,7 @@ impl DataUnits {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Default, Hash, Clone, PartialOrd, Ord, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum AudioModel {
     AC97,
@@ -174,15 +156,10 @@ pub enum AudioModel {
     ES1370,
     Gus,
     Hda,
+    #[default]
     None,
     PcSpk,
     SB16,
-}
-
-impl Default for AudioModel {
-    fn default() -> Self {
-        AudioModel::None
-    }
 }
 
 display_impl!(AudioModel);
