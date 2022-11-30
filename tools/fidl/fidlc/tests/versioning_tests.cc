@@ -978,12 +978,8 @@ type Foo = struct {};
 }
 
 TEST(VersioningTests, BadUseInUnversionedLibrary) {
-  TestLibrary library(R"FIDL(
-library example;
-
-@available(added=1)
-type Foo = struct {};
-)FIDL");
+  TestLibrary library;
+  library.AddFile("bad/fi-0151.test.fidl");
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrMissingLibraryAvailability);
 }
 

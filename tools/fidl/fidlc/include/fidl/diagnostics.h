@@ -354,7 +354,7 @@ constexpr ErrorDef<149> ErrPlatformNotOnLibrary(
     "the argument 'platform' can only be used on the library's @available attribute");
 constexpr ErrorDef<150> ErrLibraryAvailabilityMissingAdded(
     "missing 'added' argument on the library's @available attribute");
-constexpr UndocumentedErrorDef<151, std::vector<std::string_view>> ErrMissingLibraryAvailability(
+constexpr ErrorDef<151, std::vector<std::string_view>> ErrMissingLibraryAvailability(
     "to use the @available attribute here, you must also annotate the "
     "`library {};` declaration in one of the library's files");
 constexpr ErrorDef<152, std::string_view> ErrInvalidPlatform(

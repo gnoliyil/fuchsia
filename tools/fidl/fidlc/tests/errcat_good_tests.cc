@@ -971,6 +971,18 @@ TEST(ErrcatTests, Good0150b) {
   ASSERT_COMPILED(library);
 }
 
+TEST(ErrcatTests, Good0151a) {
+  TestLibrary library;
+  library.AddFile("good/fi-0151-a.test.fidl");
+  ASSERT_COMPILED(library);
+}
+
+TEST(ErrcatTests, Good0151b) {
+  TestLibrary library;
+  library.AddFile("good/fi-0151-b.test.fidl");
+  ASSERT_COMPILED(library);
+}
+
 TEST(ErrcatTests, Good0152) {
   TestLibrary library;
   library.AddFile("good/fi-0152.test.fidl");
