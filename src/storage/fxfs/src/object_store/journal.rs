@@ -356,7 +356,7 @@ impl Journal {
         owner_object_id: u64,
         mutation: &Mutation,
         checksum_list: &mut ChecksumList,
-    ) {
+    ) -> Result<(), Error> {
         match mutation {
             Mutation::ObjectStore(ObjectStoreMutation {
                 item:
@@ -385,7 +385,7 @@ impl Journal {
                     owner_object_id,
                     *device_offset..*device_offset + range.length().unwrap(),
                     checksums,
-                );
+                )?;
             }
             Mutation::ObjectStore(_) => {}
             Mutation::Allocator(AllocatorMutation::Deallocate { device_range, .. }) => {
@@ -393,6 +393,7 @@ impl Journal {
             }
             _ => {}
         }
+        Ok(())
     }
 
     /// Reads the latest super-block, and then replays journaled records.
@@ -675,7 +676,7 @@ impl Journal {
                     *object_id,
                     &mutation,
                     &mut checksum_list,
-                );
+                )?;
             }
         }
 
