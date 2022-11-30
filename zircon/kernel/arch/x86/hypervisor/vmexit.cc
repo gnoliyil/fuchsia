@@ -79,7 +79,7 @@ void dump_guest_state(const GuestState& guest_state, const ExitInfo& exit_info) 
           guest_state.xcr0);
 
   dprintf(INFO, "entry failure: %d\n", exit_info.entry_failure);
-  dprintf(INFO, "exit instruction length: %#x\n", exit_info.exit_instruction_length);
+  dprintf(INFO, "exit instruction length: %u\n", exit_info.exit_instruction_length);
 }
 
 void next_rip(const ExitInfo& exit_info, AutoVmcs& vmcs) {
@@ -102,8 +102,9 @@ zx_status_t handle_exception_or_nmi(AutoVmcs& vmcs) {
       int_info.vector != X86_INT_PAGE_FAULT) {
     return ZX_ERR_BAD_STATE;
   }
+  auto thread = Thread::Current::Get();
   // Page fault resume should not end up here.
-  if (Thread::Current::Get()->arch().page_fault_resume != 0) {
+  if (thread->arch().page_fault_resume != 0) {
     return ZX_ERR_INTERNAL;
   }
 
@@ -1305,9 +1306,10 @@ zx_status_t vmexit_handler_direct(AutoVmcs& vmcs, GuestState& guest_state, uintp
     case ZX_ERR_INTERNAL_INTR_KILLED:
       break;
     default:
-      dprintf(CRITICAL, "hypervisor: VM exit handler (direct) for %s (%u) returned %d\n",
+      dprintf(CRITICAL,
+              "hypervisor: VM exit handler (direct) for %s (%u) returned %d on thread %s\n",
               exit_reason_name(exit_info.exit_reason), static_cast<uint32_t>(exit_info.exit_reason),
-              status);
+              status, Thread::Current::Get()->name());
       dump_guest_state(guest_state, exit_info);
       break;
   }
