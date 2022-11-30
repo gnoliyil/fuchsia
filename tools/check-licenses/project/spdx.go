@@ -7,6 +7,7 @@ package project
 import (
 	"fmt"
 	"log"
+	"path/filepath"
 
 	spdx_builder "github.com/spdx/tools-golang/builder/builder2v2"
 	spdx_common "github.com/spdx/tools-golang/spdx/common"
@@ -82,6 +83,9 @@ func (p *Project) setSPDXFields() error {
 			}
 		}
 		statement = fmt.Sprintf("%s)", statement)
+		if len(l.Data) > 1 {
+			plusVal("Multiple texts in a single file", fmt.Sprintf("%s,%s,%v", p.Root, filepath.Base(l.RelPath), len(l.Data)))
+		}
 
 		pkg.PackageLicenseConcluded = fmt.Sprintf("%s%s",
 			pkg.PackageLicenseConcluded, statement)
@@ -90,6 +94,13 @@ func (p *Project) setSPDXFields() error {
 			pkg.PackageLicenseConcluded = fmt.Sprintf("%s AND ",
 				pkg.PackageLicenseConcluded)
 		}
+	}
+	if len(p.LicenseFile) > 1 {
+		filenames := ""
+		for _, l := range p.LicenseFile {
+			filenames = fmt.Sprintf("%s,%s", filenames, filepath.Base(l.RelPath))
+		}
+		plusVal("Multiple files in a single package", fmt.Sprintf("%s,%v", p.Root, filenames))
 	}
 	p.Package = pkg
 
