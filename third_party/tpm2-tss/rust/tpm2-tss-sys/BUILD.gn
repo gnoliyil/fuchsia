@@ -12,5 +12,8 @@ rustc_library("tpm2-tss-sys") {
 
   non_rust_deps = [ "//third_party/boringssl" ]
 
-  sources = [ "src/lib.rs" ]
+  sources = [
+    "src/lib.rs",
+    "src/tss2_tpm2_types.rs",
+  ]
 }

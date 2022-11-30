@@ -7,6 +7,8 @@
 // library. This is a subset of the headers that are required by
 // the tpm-agent component.
 
+// Types and constants.
+#include "tss2_tpm2_types.h"
 // TPM Command Marshalling Support.
 #include "tss2_mu.h"
 // Fuchsia TCTI Interface.

@@ -8,6 +8,10 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
+mod tss2_tpm2_types;
+
+pub use crate::tss2_tpm2_types::*;
+
 pub const ESYS_TR_NONE: u32 = 4095;
 pub const ESYS_TR_PASSWORD: u32 = 255;
 pub const ESYS_TR_PCR0: u32 = 0;
@@ -51,7 +55,6 @@ pub const ESYS_TR_RH_PLATFORM_NV: u32 = 269;
 pub const ESYS_TR_RH_AUTH_FIRST: u32 = 272;
 pub const ESYS_TR_RH_ACT_FIRST: u32 = 288;
 pub const ESYS_TR_RH_ACT_LAST: u32 = 303;
-pub type size_t = ::std::os::raw::c_ulong;
 pub type __int8_t = ::std::os::raw::c_schar;
 pub type __uint8_t = ::std::os::raw::c_uchar;
 pub type __int16_t = ::std::os::raw::c_short;
@@ -976,6 +979,7 @@ pub struct TPML_AC_CAPABILITIES {
     pub count: UINT32,
     pub acCapabilities: [TPMS_AC_OUTPUT; 128usize],
 }
+pub type size_t = ::std::os::raw::c_ulong;
 extern "C" {
     pub fn Tss2_MU_INT8_Marshal(
         src: INT8,
@@ -3308,6 +3312,11 @@ extern "C" {
         tctiContext: *mut *mut TSS2_TCTI_CONTEXT,
         conf: *const ::std::os::raw::c_char,
     ) -> TSS2_RC;
+}
+extern "C" {
+    #[doc = " Finalizes and frees the underlying Fuchsia context. This symbol is exposed"]
+    #[doc = " so that Rust Bindgen can correctly include it in the Rust bindings."]
+    pub fn Tss2_Tcti_Fuchsia_Finalize(tctiContext: *mut TSS2_TCTI_CONTEXT);
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]

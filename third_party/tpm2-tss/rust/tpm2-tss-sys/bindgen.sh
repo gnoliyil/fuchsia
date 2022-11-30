@@ -26,6 +26,9 @@ readonly RAW_LINES="// Copyright 2022 The Fuchsia Authors. All rights reserved.
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
+mod tss2_tpm2_types;
+
+pub use crate::tss2_tpm2_types::*;
 "
 
 readonly OUTPUT="src/lib.rs"
