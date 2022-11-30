@@ -23,18 +23,27 @@ use {
 };
 
 /// The path of the file in bootfs that lists all the bootfs packages.
-static BOOT_PACKAGE_INDEX: &str = "data/bootfs_packages";
+const BOOT_PACKAGE_INDEX: &str = "data/bootfs_packages";
+/// The path to the unsigned fuchsia ZBI image relative to the update package root.
+const FUCHSIA_ZBI_PATH: &str = "zbi";
+/// The path to the signed fuchsia ZBI image relative to the update package root.
+const FUCHSIA_ZBI_SIGNED_PATH: &str = "zbi.signed";
+/// The path to the unsigned recovery ZBI image relative to the update package root.
+const RECOVERY_ZBI_PATH: &str = "recovery";
+/// The path to the signed recovery ZBI image relative to the update package root.
+const RECOVERY_ZBI_SIGNED_PATH: &str = "recovery.signed";
 
 /// A collector that returns the bootfs files in a product.
+//
+// TODO(fxbug.dev/98030): This collector should support the update package -> images package -> ...
+// flow.
 #[derive(Default)]
 pub struct BootFsCollector;
 
 impl DataCollector for BootFsCollector {
     fn collect(&self, model: Arc<DataModel>) -> Result<()> {
         let model_config = model.config();
-        if model_config.is_recovery() {
-            unimplemented!("bootfs data collection for recovery images");
-        }
+        let recovery = model_config.is_recovery();
         let update_package_path = model_config.update_package_path();
         let blobs_directory = model_config.blobs_directory();
 
@@ -47,9 +56,14 @@ impl DataCollector for BootFsCollector {
                 update_package_path: update_package_path.clone(),
                 io_error: format!("{:?}", err),
             })?;
-        let zbi_buffer = read_content_blob(&mut far_reader, &mut artifact_reader, "zbi.signed")
+        let (zbi_path, zbi_signed_path) = if recovery {
+            (RECOVERY_ZBI_PATH, RECOVERY_ZBI_SIGNED_PATH)
+        } else {
+            (FUCHSIA_ZBI_PATH, FUCHSIA_ZBI_SIGNED_PATH)
+        };
+        let zbi_buffer = read_content_blob(&mut far_reader, &mut artifact_reader, zbi_signed_path)
             .or_else(|signed_err| {
-                read_content_blob(&mut far_reader, &mut artifact_reader, "zbi").map_err(|err| {
+                read_content_blob(&mut far_reader, &mut artifact_reader, zbi_path).map_err(|err| {
                     ZbiError::FailedToReadZbi {
                         update_package_path: update_package_path.clone(),
                         io_error: format!("{:?}\n{:?}", signed_err, err),
@@ -123,12 +137,16 @@ impl DataCollector for BootFsCollector {
 }
 
 /// A collector that returns the kernel cmdline in a product.
+//
+// TODO(fxbug.dev/98030): This collector should support the update package -> images package -> ...
+// flow.
 #[derive(Default)]
 pub struct CmdlineCollector;
 
 impl DataCollector for CmdlineCollector {
     fn collect(&self, model: Arc<DataModel>) -> Result<()> {
         let model_config = model.config();
+        let recovery = model_config.is_recovery();
         let update_package_path = model_config.update_package_path();
         let blobs_directory = model_config.blobs_directory();
 
@@ -141,9 +159,14 @@ impl DataCollector for CmdlineCollector {
                 update_package_path: update_package_path.clone(),
                 io_error: format!("{:?}", err),
             })?;
-        let zbi_buffer = read_content_blob(&mut far_reader, &mut artifact_reader, "zbi.signed")
+        let (zbi_path, zbi_signed_path) = if recovery {
+            (RECOVERY_ZBI_PATH, RECOVERY_ZBI_SIGNED_PATH)
+        } else {
+            (FUCHSIA_ZBI_PATH, FUCHSIA_ZBI_SIGNED_PATH)
+        };
+        let zbi_buffer = read_content_blob(&mut far_reader, &mut artifact_reader, zbi_signed_path)
             .or_else(|signed_err| {
-                read_content_blob(&mut far_reader, &mut artifact_reader, "zbi").map_err(|err| {
+                read_content_blob(&mut far_reader, &mut artifact_reader, zbi_path).map_err(|err| {
                     ZbiError::FailedToReadZbi {
                         update_package_path: update_package_path.clone(),
                         io_error: format!("{:?}\n{:?}", signed_err, err),
