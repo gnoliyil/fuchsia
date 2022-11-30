@@ -522,7 +522,7 @@ impl View {
                 self.view_parameters = Some(view_parameters);
             }
             let event = self.get_mouse_report(&mouse_event);
-            match self.mouse_input_listener.get() {
+            match &self.mouse_input_listener {
                 Some(listener) => {
                     listener.report_mouse_input(event).expect("failed to send mouse input report");
                 }
