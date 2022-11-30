@@ -354,6 +354,11 @@ def main():
         help='Equivalent to `target_cpu` in GN. Defaults to host CPU.',
         choices=['arm64', 'x64'])
     parser.add_argument(
+        '--bazel-bin',
+        help=
+        'Path to bazel binary, defaults to $FUCHSIA_DIR/prebuilt/third_party/bazel/${host_platform}/bazel'
+    )
+    parser.add_argument(
         '--topdir',
         help='Top output directory. Defaults to GN_OUTPUT_DIR/gen/build/bazel')
     parser.add_argument(
@@ -411,12 +416,20 @@ def main():
     ninja_binary = os.path.join(
         fuchsia_dir, 'prebuilt', 'third_party', 'ninja', host_tag, 'ninja')
 
-    # LINT.IfChange
+    python_prebuilt_dir = os.path.join(
+        fuchsia_dir, 'prebuilt', 'third_party', 'python3', host_tag)
+
     output_base_dir = os.path.abspath(os.path.join(topdir, 'output_base'))
     output_user_root = os.path.abspath(os.path.join(topdir, 'output_user_root'))
     workspace_dir = os.path.abspath(os.path.join(topdir, 'workspace'))
+
+    if not args.bazel_bin:
+        args.bazel_bin = os.path.join(
+            fuchsia_dir, 'prebuilt', 'third_party', 'bazel', host_tag, 'bazel')
+
+    bazel_bin = os.path.abspath(args.bazel_bin)
+
     bazel_launcher = os.path.abspath(os.path.join(topdir, 'bazel'))
-    # LINT.ThenChange(/tools/devshell/bazel)
 
     def log(message, level=1):
         if verbosity >= level:
@@ -430,6 +443,7 @@ def main():
   Fuchsia:                {}
   GN build:               {}
   Ninja binary:           {}
+  Bazel source:           {}
   Topdir:                 {}
   Logs directory:         {}
   Bazel workspace:        {}
@@ -437,8 +451,8 @@ def main():
   Bazel output user root: {}
   Bazel launcher:         {}
 '''.format(
-            fuchsia_dir, gn_output_dir, ninja_binary, topdir, logs_dir,
-            workspace_dir, output_base_dir, output_user_root,
+            fuchsia_dir, gn_output_dir, ninja_binary, bazel_bin, topdir,
+            logs_dir, workspace_dir, output_base_dir, output_user_root,
             bazel_launcher))
 
     if maybe_regenerate_ninja(gn_output_dir, ninja_binary):
@@ -576,6 +590,24 @@ common --experimental_enable_bzlmod
         os.path.join(
             workspace_dir, '..',
             'legacy_ninja_build_outputs.inputs_manifest.json'))
+
+    # Generate wrapper script in topdir/bazel that invokes Bazel with the right --output_base.
+    bazel_launcher_content = expand_template_file(
+        'template.bazel.sh',
+        ninja_output_dir=os.path.abspath(gn_output_dir),
+        ninja_prebuilt=os.path.abspath(ninja_binary),
+        bazel_bin_path=os.path.abspath(bazel_bin),
+        logs_dir=os.path.abspath(logs_dir),
+        python_prebuilt_dir=os.path.abspath(python_prebuilt_dir),
+        download_config_file='download_config_file',
+        workspace=os.path.relpath(workspace_dir, topdir),
+        output_base=os.path.relpath(output_base_dir, topdir),
+        output_user_root=os.path.relpath(output_user_root, topdir),
+    )
+    generated.add_file('bazel', bazel_launcher_content, executable=True)
+
+    # Ensure regeneration when this script's content changes!
+    generated.add_file_hash(os.path.abspath(__file__))
 
     force = args.force
     generated_json = generated.to_json()
