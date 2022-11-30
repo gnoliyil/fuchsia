@@ -31,7 +31,7 @@ zx::result<> GetStatus(const T& result);
 int ParseArgs(int argc, char** argv, GpioFunc* func, uint8_t* write_value,
               fuchsia_hardware_gpio::wire::GpioFlags* in_flag, uint8_t* out_value, uint64_t* ds_ua);
 
-int ListGpios(void);
+zx::result<> ListGpios();
 
 zx::result<fidl::WireSyncClient<fuchsia_hardware_gpio::Gpio>> FindGpioClientByName(
     std::string_view name);

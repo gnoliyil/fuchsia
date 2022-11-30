@@ -21,30 +21,34 @@
 namespace gpio {
 
 class GpioDevice;
-using fuchsia_hardware_gpio::Gpio;
-using fuchsia_hardware_gpio::wire::GpioFlags;
 using GpioDeviceType =
-    ddk::Device<GpioDevice, ddk::Messageable<Gpio>::Mixin, ddk::Openable, ddk::Closable>;
+    ddk::Device<GpioDevice, ddk::Messageable<fuchsia_hardware_gpio::Device>::Mixin,
+                ddk::Unbindable>;
 
-static_assert(GPIO_PULL_DOWN == static_cast<uint32_t>(GpioFlags::kPullDown),
+static_assert(GPIO_PULL_DOWN ==
+                  static_cast<uint32_t>(fuchsia_hardware_gpio::wire::GpioFlags::kPullDown),
               "ConfigIn PULL_DOWN flag doesn't match.");
-static_assert(GPIO_PULL_UP == static_cast<uint32_t>(GpioFlags::kPullUp),
+static_assert(GPIO_PULL_UP ==
+                  static_cast<uint32_t>(fuchsia_hardware_gpio::wire::GpioFlags::kPullUp),
               "ConfigIn PULL_UP flag doesn't match.");
-static_assert(GPIO_NO_PULL == static_cast<uint32_t>(GpioFlags::kNoPull),
+static_assert(GPIO_NO_PULL ==
+                  static_cast<uint32_t>(fuchsia_hardware_gpio::wire::GpioFlags::kNoPull),
               "ConfigIn NO_PULL flag doesn't match.");
-static_assert(GPIO_PULL_MASK == static_cast<uint32_t>(GpioFlags::kPullMask),
+static_assert(GPIO_PULL_MASK ==
+                  static_cast<uint32_t>(fuchsia_hardware_gpio::wire::GpioFlags::kPullMask),
               "ConfigIn PULL_MASK flag doesn't match.");
 
-class GpioDevice : public GpioDeviceType, public ddk::GpioProtocol<GpioDevice, ddk::base_protocol> {
+class GpioDevice : public GpioDeviceType,
+                   public ddk::GpioProtocol<GpioDevice, ddk::base_protocol>,
+                   public fidl::WireServer<fuchsia_hardware_gpio::Gpio> {
  public:
   GpioDevice(zx_device_t* parent, gpio_impl_protocol_t* gpio, uint32_t pin, std::string_view name)
       : GpioDeviceType(parent), gpio_(gpio), pin_(pin), name_(name) {}
 
   static zx_status_t Create(void* ctx, zx_device_t* parent);
 
+  void DdkUnbind(ddk::UnbindTxn txn);
   void DdkRelease();
-  zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags);
-  zx_status_t DdkClose(uint32_t flags);
 
   zx_status_t GpioGetPin(uint32_t* pin);
   zx_status_t GpioGetName(char* out_name);
@@ -60,6 +64,9 @@ class GpioDevice : public GpioDeviceType, public ddk::GpioProtocol<GpioDevice, d
   zx_status_t GpioGetDriveStrength(uint64_t* ds_ua);
 
   // FIDL
+
+  void OpenSession(OpenSessionRequestView request, OpenSessionCompleter::Sync& completer) override;
+
   void GetPin(GetPinCompleter::Sync& completer) override { completer.ReplySuccess(pin_); }
   void GetName(GetNameCompleter::Sync& completer) override {
     completer.ReplySuccess(::fidl::StringView::FromExternal(name_));
@@ -139,8 +146,12 @@ class GpioDevice : public GpioDeviceType, public ddk::GpioProtocol<GpioDevice, d
   const ddk::GpioImplProtocolClient gpio_ TA_GUARDED(lock_);
   const uint32_t pin_;
   const std::string name_;
+  using Binding = struct {
+    fidl::ServerBindingRef<fuchsia_hardware_gpio::Gpio> binding;
+    std::optional<ddk::UnbindTxn> unbind_txn;
+  };
+  std::optional<Binding> binding_;
   fbl::Mutex lock_;
-  bool opened_ TA_GUARDED(lock_) = false;
 };
 
 class GpioInitDevice;

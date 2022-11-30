@@ -84,19 +84,34 @@ int main(int argc, char** argv) {
 
   // Handle functions without any parameter.
   if (func == List) {
-    return ListGpios();
+    zx::result result = ListGpios();
+    if (result.is_error()) {
+      fprintf(stderr, "Failed to list GPIOs: %s\n", result.status_string());
+      return -1;
+    }
+    return 0;
   }
 
   int ret = 0;
   if (access(argv[kArgDevice], F_OK) == 0) {
     // Access by device path
-    auto client_end = component::Connect<fuchsia_hardware_gpio::Gpio>(argv[kArgDevice]);
-
-    if (client_end.is_error()) {
-      fprintf(stderr, "Failed to get client, st = %d\n", client_end.status_value());
+    zx::result device = component::Connect<fuchsia_hardware_gpio::Device>(argv[kArgDevice]);
+    if (device.is_error()) {
+      fprintf(stderr, "Failed to connect to device: %s\n", device.status_string());
       return -1;
     }
-    fidl::WireSyncClient<fuchsia_hardware_gpio::Gpio> client(std::move(*client_end));
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_gpio::Gpio>();
+    if (endpoints.is_error()) {
+      fprintf(stderr, "Failed to create endpoints: %s\n", endpoints.status_string());
+      return -1;
+    }
+    auto& [gpio, server] = endpoints.value();
+    const fidl::Status status = fidl::WireCall(device.value())->OpenSession(std::move(server));
+    if (!status.ok()) {
+      fprintf(stderr, "Failed to open session: %s\n", status.status_string());
+      return -1;
+    }
+    fidl::WireSyncClient<fuchsia_hardware_gpio::Gpio> client(std::move(gpio));
     ret = ClientCall(std::move(client), func, write_value, in_flag, out_value, ds_ua);
   } else {
     // Access by GPIO name

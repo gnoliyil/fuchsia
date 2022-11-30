@@ -31,8 +31,10 @@ class FakeGpio : public GpioDevice {
     return device;
   }
 
-  zx_status_t Connect(async_dispatcher_t* dispatcher, zx::channel request) {
-    return fidl::BindSingleInFlightOnly(dispatcher, std::move(request), this);
+  zx_status_t Connect(async_dispatcher_t* dispatcher,
+                      fidl::ServerEnd<fuchsia_hardware_gpio::Gpio> request) {
+    return fidl::BindSingleInFlightOnly<fidl::WireServer<fuchsia_hardware_gpio::Gpio>>(
+        dispatcher, std::move(request), this);
   }
 
   explicit FakeGpio(const gpio_impl_protocol_t* gpio_impl)
@@ -46,10 +48,10 @@ class GpioTest : public zxtest::Test {
     ASSERT_NOT_NULL(gpio_);
     loop_ = std::make_unique<async::Loop>(&kAsyncLoopConfigAttachToCurrentThread);
 
-    zx::channel server;
-    ASSERT_OK(zx::channel::create(0, &client_, &server));
+    zx::result server = fidl::CreateEndpoints(&client_);
+    ASSERT_OK(server);
     ASSERT_OK(loop_->StartThread("gpio-test-loop"));
-    ASSERT_OK(gpio_->Connect(loop_->dispatcher(), std::move(server)));
+    ASSERT_OK(gpio_->Connect(loop_->dispatcher(), std::move(server.value())));
   }
 
   void TearDown() override {
@@ -62,7 +64,7 @@ class GpioTest : public zxtest::Test {
   std::unique_ptr<FakeGpio> gpio_;
   ddk::MockGpioImpl gpio_impl_;
   std::unique_ptr<async::Loop> loop_;
-  zx::channel client_;
+  fidl::ClientEnd<fuchsia_hardware_gpio::Gpio> client_;
 };
 
 TEST_F(GpioTest, TestFidlAll) {
@@ -78,7 +80,7 @@ TEST_F(GpioTest, TestFidlAll) {
   EXPECT_OK(result_write.status());
 
   gpio_impl_.ExpectConfigIn(ZX_OK, 0, 0);
-  auto result_in = client->ConfigIn(GpioFlags::kPullDown);
+  auto result_in = client->ConfigIn(fuchsia_hardware_gpio::wire::GpioFlags::kPullDown);
   EXPECT_OK(result_in.status());
 
   gpio_impl_.ExpectConfigOut(ZX_OK, 0, 5);
@@ -108,31 +110,6 @@ TEST_F(GpioTest, TestBanjoGetDriveStrength) {
   gpio_impl_.ExpectGetDriveStrength(ZX_OK, 0, 3000);
   EXPECT_OK(gpio_->GpioGetDriveStrength(&result));
   EXPECT_EQ(result, 3000);
-}
-
-TEST_F(GpioTest, TestCloseReleasesInterrupt) {
-  EXPECT_OK(gpio_->DdkOpen(nullptr, 0));
-
-  zx::interrupt interrupt;
-  gpio_impl_.ExpectReleaseInterrupt(ZX_OK, 0);
-
-  EXPECT_OK(gpio_->DdkClose(0));
-
-  ASSERT_NO_FAILURES(gpio_impl_.VerifyAndClear());
-}
-
-TEST_F(GpioTest, TestOneClient) {
-  gpio_impl_.ExpectReleaseInterrupt(ZX_OK, 0).ExpectReleaseInterrupt(ZX_OK, 0);
-
-  EXPECT_OK(gpio_->DdkOpen(nullptr, 0));
-
-  EXPECT_NOT_OK(gpio_->DdkOpen(nullptr, 0));
-
-  EXPECT_OK(gpio_->DdkClose(0));
-
-  EXPECT_OK(gpio_->DdkOpen(nullptr, 0));
-
-  EXPECT_OK(gpio_->DdkClose(0));
 }
 
 TEST_F(GpioTest, ValidateMetadataOk) {
@@ -185,8 +162,8 @@ TEST_F(GpioTest, ValidateGpioNameGeneration) {
 #define GPIO_TEST_NAME2 (6)
 #define GPIO_TEST_NAME3_OF_63_CHRS_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890 7
   constexpr uint32_t GPIO_TEST_NAME4 = 8;  // constexpr should work too
-#define GEN_GPIO0(x) (x + 1)
-#define GEN_GPIO1(x) x + 2
+#define GEN_GPIO0(x) ((x) + 1)
+#define GEN_GPIO1(x) ((x) + 2)
   constexpr gpio_pin_t pins[] = {
       DECL_GPIO_PIN(GPIO_TEST_NAME1),
       DECL_GPIO_PIN(GPIO_TEST_NAME2),

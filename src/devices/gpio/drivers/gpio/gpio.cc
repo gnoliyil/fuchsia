@@ -70,22 +70,38 @@ zx_status_t GpioDevice::GpioSetDriveStrength(uint64_t ds_ua, uint64_t* out_actua
   return gpio_.SetDriveStrength(pin_, ds_ua, out_actual_ds_ua);
 }
 
-void GpioDevice::DdkRelease() { delete this; }
-
-zx_status_t GpioDevice::DdkOpen(zx_device_t** dev_out, uint32_t flags) {
-  fbl::AutoLock lock(&lock_);
-  if (opened_) {
-    return ZX_ERR_ALREADY_BOUND;
+void GpioDevice::DdkUnbind(ddk::UnbindTxn txn) {
+  if (binding_.has_value()) {
+    Binding& binding = binding_.value();
+    ZX_ASSERT(!binding.unbind_txn.has_value());
+    binding.unbind_txn.emplace(std::move(txn));
+    binding.binding.Unbind();
+  } else {
+    txn.Reply();
   }
-  opened_ = true;
-  return ZX_OK;
 }
 
-zx_status_t GpioDevice::DdkClose(uint32_t flags) {
-  fbl::AutoLock lock(&lock_);
-  gpio_.ReleaseInterrupt(pin_);
-  opened_ = false;
-  return ZX_OK;
+void GpioDevice::DdkRelease() { delete this; }
+
+void GpioDevice::OpenSession(OpenSessionRequestView request,
+                             OpenSessionCompleter::Sync& completer) {
+  if (binding_.has_value()) {
+    request->session.Close(ZX_ERR_ALREADY_BOUND);
+    return;
+  }
+  binding_ = Binding{
+      .binding = fidl::BindServer(
+          fdf::Dispatcher::GetCurrent()->async_dispatcher(), std::move(request->session), this,
+          [](GpioDevice* self, fidl::UnbindInfo, fidl::ServerEnd<fuchsia_hardware_gpio::Gpio>) {
+            self->GpioReleaseInterrupt();
+            std::optional opt = std::exchange(self->binding_, {});
+            ZX_ASSERT(opt.has_value());
+            Binding& binding = opt.value();
+            if (binding.unbind_txn.has_value()) {
+              binding.unbind_txn.value().Reply();
+            }
+          }),
+  };
 }
 
 zx_status_t GpioDevice::Create(void* ctx, zx_device_t* parent) {
@@ -176,10 +192,9 @@ zx_status_t GpioInitDevice::ConfigureGpios(
   // Log errors but continue processing to put as many GPIOs as possible into the requested state.
   zx_status_t return_status = ZX_OK;
   for (const auto& step : metadata.steps) {
-    zx_status_t status;
-
     if (step.options.has_alt_function()) {
-      if ((status = gpio.SetAltFunction(step.index, step.options.alt_function())) != ZX_OK) {
+      if (zx_status_t status = gpio.SetAltFunction(step.index, step.options.alt_function());
+          status != ZX_OK) {
         zxlogf(ERROR, "SetAltFunction(%lu) failed for %u: %s", step.options.drive_strength_ua(),
                step.index, zx_status_get_string(status));
         return_status = status;
@@ -187,8 +202,9 @@ zx_status_t GpioInitDevice::ConfigureGpios(
     }
 
     if (step.options.has_input_flags()) {
-      status = gpio.ConfigIn(step.index, static_cast<uint32_t>(step.options.input_flags()));
-      if (status != ZX_OK) {
+      if (zx_status_t status =
+              gpio.ConfigIn(step.index, static_cast<uint32_t>(step.options.input_flags()));
+          status != ZX_OK) {
         zxlogf(ERROR, "ConfigIn(%u) failed for %u: %s",
                static_cast<uint32_t>(step.options.input_flags()), step.index,
                zx_status_get_string(status));
@@ -197,7 +213,8 @@ zx_status_t GpioInitDevice::ConfigureGpios(
     }
 
     if (step.options.has_output_value()) {
-      if ((status = gpio.ConfigOut(step.index, step.options.output_value())) != ZX_OK) {
+      if (zx_status_t status = gpio.ConfigOut(step.index, step.options.output_value());
+          status != ZX_OK) {
         zxlogf(ERROR, "ConfigOut(%u) failed for %u: %s", step.options.output_value(), step.index,
                zx_status_get_string(status));
         return_status = status;
@@ -206,8 +223,9 @@ zx_status_t GpioInitDevice::ConfigureGpios(
 
     if (step.options.has_drive_strength_ua()) {
       uint64_t actual_ds;
-      status = gpio.SetDriveStrength(step.index, step.options.drive_strength_ua(), &actual_ds);
-      if (status != ZX_OK) {
+      if (zx_status_t status =
+              gpio.SetDriveStrength(step.index, step.options.drive_strength_ua(), &actual_ds);
+          status != ZX_OK) {
         zxlogf(ERROR, "SetDriveStrength(%lu) failed for %u: %s", step.options.drive_strength_ua(),
                step.index, zx_status_get_string(status));
         return_status = status;

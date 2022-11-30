@@ -96,50 +96,60 @@ int ParseArgs(int argc, char** argv, GpioFunc* func, uint8_t* write_value,
   return 0;
 }
 
-int ListGpios(void) {
+zx::result<> ListGpios() {
   const char* dev_class_dir = kGpioDevClassNsDir;
   if (!std::filesystem::is_directory(dev_class_dir)) {
     dev_class_dir = kGpioDevClassDir;
   }
 
-  DIR* gpio_dir = opendir(dev_class_dir);
-  if (!gpio_dir) {
-    fprintf(stderr, "Failed to open GPIO device dir %s\n", dev_class_dir);
-    return -1;
-  }
-  auto cleanup = fit::defer([&gpio_dir]() { closedir(gpio_dir); });
-
-  struct dirent* dir;
-  while ((dir = readdir(gpio_dir)) != NULL) {
-    std::string gpio_path(dev_class_dir);
-    gpio_path += std::string(dir->d_name);
-    auto client_end = component::Connect<fuchsia_hardware_gpio::Gpio>(gpio_path);
-
-    if (client_end.is_error()) {
-      fprintf(stderr, "Failed to get client, st = %d\n", client_end.status_value());
-      return -1;
+  for (auto const& dir_entry : std::filesystem::directory_iterator(dev_class_dir)) {
+    const char* gpio_path = dir_entry.path().c_str();
+    zx::result device = component::Connect<fuchsia_hardware_gpio::Device>(gpio_path);
+    if (device.is_error()) {
+      fprintf(stderr, "Failed to connect to %s: %s\n", gpio_path, device.status_string());
+      return device.take_error();
     }
-    fidl::WireSyncClient<fuchsia_hardware_gpio::Gpio> client(std::move(*client_end));
-
-    auto result_pin = client->GetPin();
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_gpio::Gpio>();
+    if (endpoints.is_error()) {
+      fprintf(stderr, "Failed to create endpoints: %s\n", endpoints.status_string());
+      return endpoints.take_error();
+    }
+    auto& [gpio, server] = endpoints.value();
+    const fidl::Status status = fidl::WireCall(device.value())->OpenSession(std::move(server));
+    if (!status.ok()) {
+      fprintf(stderr, "Failed to open session on %s: %s\n", gpio_path, status.status_string());
+      return zx::error(status.status());
+    }
+    fidl::WireSyncClient<fuchsia_hardware_gpio::Gpio> client(std::move(gpio));
+    const fidl::WireResult result_pin = client->GetPin();
     if (!result_pin.ok()) {
-      fprintf(stderr, "Could not get pin from %.*s\n", static_cast<int>(gpio_path.length()),
-              gpio_path.data());
-      continue;
+      fprintf(stderr, "Could not get pin from %s: %s\n", gpio_path, result_pin.status_string());
+      return zx::error(result_pin.status());
     }
-    auto result_name = client->GetName();
+    const fit::result response_pin = result_pin.value();
+    if (response_pin.is_error()) {
+      fprintf(stderr, "Could not get pin from %s: %s\n", gpio_path,
+              zx_status_get_string(response_pin.error_value()));
+      return zx::error(result_pin.status());
+    }
+    const fidl::WireResult result_name = client->GetName();
     if (!result_name.ok()) {
-      fprintf(stderr, "Could not get name from %.*s\n", static_cast<int>(gpio_path.length()),
-              gpio_path.data());
-      continue;
+      fprintf(stderr, "Could not get name from %s: %s\n", gpio_path, result_name.status_string());
+      return zx::error(result_name.status());
+    }
+    const fit::result response_name = result_name.value();
+    if (response_name.is_error()) {
+      fprintf(stderr, "Could not get name from %s: %s\n", gpio_path,
+              zx_status_get_string(response_name.error_value()));
+      return zx::error(result_name.status());
     }
 
-    auto pin = result_pin->value()->pin;
-    auto name = result_name->value()->name.get();
+    uint32_t pin = response_pin.value()->pin;
+    std::string_view name = response_name.value()->name.get();
     printf("[gpio-%d] %.*s\n", pin, static_cast<int>(name.length()), name.data());
   }
 
-  return 0;
+  return zx::ok();
 }
 
 zx::result<fidl::WireSyncClient<fuchsia_hardware_gpio::Gpio>> FindGpioClientByName(
@@ -149,35 +159,37 @@ zx::result<fidl::WireSyncClient<fuchsia_hardware_gpio::Gpio>> FindGpioClientByNa
     dev_class_dir = kGpioDevClassDir;
   }
 
-  DIR* gpio_dir = opendir(dev_class_dir);
-  if (!gpio_dir) {
-    fprintf(stderr, "Failed to open GPIO device dir %s\n", dev_class_dir);
-    return zx::error(ZX_ERR_NOT_FOUND);
-  }
-  auto cleanup = fit::defer([&gpio_dir]() { closedir(gpio_dir); });
-
-  struct dirent* dir;
-  while ((dir = readdir(gpio_dir)) != NULL) {
-    std::string gpio_path(dev_class_dir);
-    gpio_path += std::string(dir->d_name);
-    auto client_end = component::Connect<fuchsia_hardware_gpio::Gpio>(gpio_path);
-
-    if (client_end.is_error()) {
-      // Non-fatal, try the next client.
-      fprintf(stderr, "Could not connect to client '%s', st = %d\n", gpio_path.c_str(),
-              client_end.status_value());
-      continue;
+  for (auto const& dir_entry : std::filesystem::directory_iterator(dev_class_dir)) {
+    const char* gpio_path = dir_entry.path().c_str();
+    zx::result device = component::Connect<fuchsia_hardware_gpio::Device>(gpio_path);
+    if (device.is_error()) {
+      fprintf(stderr, "Failed to connect to %s: %s\n", gpio_path, device.status_string());
+      return device.take_error();
     }
-
-    fidl::WireSyncClient<fuchsia_hardware_gpio::Gpio> client(std::move(*client_end));
-    auto result_name = client->GetName();
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_gpio::Gpio>();
+    if (endpoints.is_error()) {
+      fprintf(stderr, "Failed to create endpoints: %s\n", endpoints.status_string());
+      return endpoints.take_error();
+    }
+    auto& [gpio, server] = endpoints.value();
+    const fidl::Status status = fidl::WireCall(device.value())->OpenSession(std::move(server));
+    if (!status.ok()) {
+      fprintf(stderr, "Failed to open session on %s: %s\n", gpio_path, status.status_string());
+      return zx::error(status.status());
+    }
+    fidl::WireSyncClient<fuchsia_hardware_gpio::Gpio> client(std::move(gpio));
+    const fidl::WireResult result_name = client->GetName();
     if (!result_name.ok()) {
-      fprintf(stderr, "Could not get name from %.*s\n", static_cast<int>(gpio_path.length()),
-              gpio_path.data());
-      continue;
+      fprintf(stderr, "Could not get name from %s: %s\n", gpio_path, result_name.status_string());
+      return zx::error(result_name.status());
     }
-
-    auto gpio_name = result_name->value()->name.get();
+    const fit::result response_name = result_name.value();
+    if (response_name.is_error()) {
+      fprintf(stderr, "Could not get name from %s: %s\n", gpio_path,
+              zx_status_get_string(response_name.error_value()));
+      return zx::error(result_name.status());
+    }
+    std::string_view gpio_name = response_name.value()->name.get();
     if (name == gpio_name) {
       return zx::ok(std::move(client));
     }

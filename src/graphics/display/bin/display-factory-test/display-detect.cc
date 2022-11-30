@@ -69,25 +69,40 @@ Boards GetBoard() {
   return UNKNOWN_BOARD;
 }
 
-uint8_t GetGpioValue(const char* gpio_path) {
-  auto client_end = component::Connect<gpio::Gpio>(gpio_path);
-  if (!client_end.is_ok()) {
-    return -1;
+zx::result<uint8_t> GetGpioValue(const char* gpio_path) {
+  zx::result client_end = component::Connect<gpio::Device>(gpio_path);
+  if (client_end.is_error()) {
+    return client_end.take_error();
   }
-  fidl::WireSyncClient client{std::move(*client_end)};
-  auto res = client->Read();
-  if (!res.ok() || res->is_error()) {
-    return -1;
+  zx::result endpoints = fidl::CreateEndpoints<gpio::Gpio>();
+  if (endpoints.is_error()) {
+    return endpoints.take_error();
   }
-
-  return res->value()->value;
+  auto& [client, server] = endpoints.value();
+  const fidl::Status status = fidl::WireCall(client_end.value())->OpenSession(std::move(server));
+  if (!status.ok()) {
+    return zx::error(status.status());
+  }
+  const fidl::WireResult result = fidl::WireCall(client)->Read();
+  if (!result.ok()) {
+    return zx::error(result.status());
+  }
+  fit::result response = result.value();
+  if (response.is_error()) {
+    return response.take_error();
+  }
+  return zx::ok(response.value()->value);
 }
 
 int main(int argc, const char* argv[]) {
   if (GetBoard() == SHERLOCK) {
     const auto* path = "/dev/sys/platform/05:04:1/aml-axg-gpio/gpio-76";
-    auto val = GetGpioValue(path);
-    printf("MIPI device detect type: %s\n", val ? "Innolux" : "BOE");
+    zx::result val = GetGpioValue(path);
+    if (val.is_error()) {
+      printf("MIPI device detect failed: %s\n", val.status_string());
+      return -1;
+    }
+    printf("MIPI device detect type: %s\n", val.value() ? "Innolux" : "BOE");
   } else if (GetBoard() == LUIS) {
     printf("MIPI device detect type: BOE\n");
   } else {
