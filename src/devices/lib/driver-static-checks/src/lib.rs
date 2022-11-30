@@ -31,8 +31,13 @@ pub async fn static_checks(cmd: StaticChecksCommand, writer: &mut impl Write) ->
 
         let mut static_checker = StaticChecker::new(&mut far_reader, driver_component);
 
-        // Additional checks should be added here.
         static_checker.run_check(writer, "Bind rules are valid", checks::check_bind_rules)?;
+        static_checker.run_check(
+            writer,
+            "Device categories are valid",
+            checks::check_device_categories,
+        )?;
+        // Additional checks should be added here.
 
         if static_checker.checks_failed > 0 {
             results.push((cm_path, false));
@@ -92,12 +97,12 @@ impl<'a> StaticChecker<'a> {
         writeln!(writer, "[RUNNING]\t{}", name)?;
         let result = f(self.far_reader, &self.component)?;
         match result {
-            checks::StaticCheckResult::Pass => {
+            Ok(_) => {
                 writeln!(writer, "[PASSED]\t{}", name)?;
                 self.checks_passed += 1;
             }
-            checks::StaticCheckResult::Fail { reason } => {
-                writeln!(writer, "Error: {}", reason)?;
+            Err(checks::StaticCheckFail { reason }) => {
+                writeln!(writer, "{} {}", utils::red("Error:"), reason)?;
                 writeln!(writer, "[FAILED]\t{}", name)?;
                 self.checks_failed += 1;
             }
