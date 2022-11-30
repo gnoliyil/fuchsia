@@ -2308,72 +2308,6 @@ struct Requesting<I> {
     solicit_max_rt: Duration,
 }
 
-/// Helper function to send a request to an alternate server, or if there are no
-/// other collected servers, restart server discovery.
-///
-/// The client removes currently assigned addresses, per RFC 8415, section
-/// 18.2.10.1:
-///
-///    Whenever a client restarts the DHCP server discovery process or
-///    selects an alternate server as described in Section 18.2.9, the client
-///    SHOULD stop using all the addresses and delegated prefixes for which
-///    it has bindings and try to obtain all required leases from the new
-///    server.
-fn request_from_alternate_server_or_restart_server_discovery<I: Instant, R: Rng>(
-    client_id: [u8; CLIENT_ID_LEN],
-    non_temporary_addresses: HashMap<v6::IAID, AddressEntry<I>>,
-    delegated_prefixes: HashMap<v6::IAID, PrefixEntry<I>>,
-    options_to_request: &[v6::OptionCode],
-    mut collected_advertise: BinaryHeap<AdvertiseMessage<I>>,
-    solicit_max_rt: Duration,
-    rng: &mut R,
-    now: I,
-) -> Transition<I> {
-    let configured_non_temporary_addresses = to_configured_values(non_temporary_addresses);
-    let configured_delegated_prefixes = to_configured_values(delegated_prefixes);
-    if let Some(advertise) = collected_advertise.pop() {
-        // TODO(https://fxbug.dev/96674): Before selecting a different server,
-        // add actions to remove the existing assigned addresses, if any.
-        let AdvertiseMessage {
-            server_id,
-            non_temporary_addresses: advertised_non_temporary_addresses,
-            delegated_prefixes: advertised_delegated_prefixes,
-            dns_servers: _,
-            preference: _,
-            receive_time: _,
-            preferred_non_temporary_addresses_count: _,
-            preferred_delegated_prefixes_count: _,
-        } = advertise;
-        return Requesting::start(
-            client_id,
-            server_id,
-            advertise_to_ia_entries(
-                advertised_non_temporary_addresses,
-                configured_non_temporary_addresses,
-            ),
-            advertise_to_ia_entries(advertised_delegated_prefixes, configured_delegated_prefixes),
-            &options_to_request,
-            collected_advertise,
-            solicit_max_rt,
-            rng,
-            now,
-        );
-    }
-    // TODO(https://fxbug.dev/96674): Before restarting server discovery, add
-    // actions to remove the existing assigned addresses, if any.
-    return ServerDiscovery::start(
-        transaction_id(),
-        client_id,
-        configured_non_temporary_addresses,
-        configured_delegated_prefixes,
-        &options_to_request,
-        solicit_max_rt,
-        rng,
-        now,
-        std::iter::empty(),
-    );
-}
-
 fn compute_t(min: v6::NonZeroTimeValue, ratio: Ratio<u32>) -> v6::NonZeroTimeValue {
     match min {
         v6::NonZeroTimeValue::Finite(t) => {
@@ -3155,14 +3089,6 @@ fn process_reply_with_leases<B: ByteSlice, I: Instant>(
             }
         }
     };
-
-    // TODO(https://fxbug.dev/96674): Add actions to remove addresses.
-    // TODO(https://fxbug.dev/95265): Add action to add addresses.
-    // TODO(https://fxbug.dev/96684): add actions to schedule/cancel
-    // preferred and valid lifetime timers.
-    // TODO(https://fxbug.dev/113079): Add actions to set/cancel timers for
-    // delegated prefix.
-    // TODO(https://fxbug.dev/113080) Add actions to discover/invalidate prefix.
     let actions = match next_state {
         StateAfterReplyWithLeases::Assigned => Some(
             [
@@ -3513,40 +3439,24 @@ impl<I: Instant> Requesting<I> {
         now: I,
     ) -> Transition<I> {
         let Self {
-            client_id,
-            non_temporary_addresses,
-            delegated_prefixes,
-            server_id,
-            collected_advertise,
-            first_request_time,
-            retrans_timeout,
+            client_id: _,
+            non_temporary_addresses: _,
+            delegated_prefixes: _,
+            server_id: _,
+            collected_advertise: _,
+            first_request_time: _,
+            retrans_timeout: _,
             transmission_count,
-            solicit_max_rt,
-        } = self;
-        if transmission_count > REQUEST_MAX_RC {
-            request_from_alternate_server_or_restart_server_discovery(
-                client_id,
-                non_temporary_addresses,
-                delegated_prefixes,
-                &options_to_request,
-                collected_advertise,
-                solicit_max_rt,
+            solicit_max_rt: _,
+        } = &self;
+        if *transmission_count > REQUEST_MAX_RC {
+            self.request_from_alternate_server_or_restart_server_discovery(
+                options_to_request,
                 rng,
                 now,
             )
         } else {
-            Self {
-                client_id,
-                non_temporary_addresses,
-                delegated_prefixes,
-                server_id,
-                collected_advertise,
-                first_request_time,
-                retrans_timeout,
-                transmission_count,
-                solicit_max_rt,
-            }
-            .send_and_schedule_retransmission(
+            self.send_and_schedule_retransmission(
                 request_transaction_id,
                 options_to_request,
                 rng,
@@ -3657,10 +3567,6 @@ impl<I: Instant> Requesting<I> {
                                             .then(|| Action::IaPdUpdates(ia_pd_updates)),
                                     );
 
-                                // TODO(https://fxbug.dev/96674): append to actions to remove
-                                // assigned addresses.
-                                // TODO(https://fxbug.dev/96684): add actions to cancel
-                                // preferred and valid lifetime timers for assigned addresses.
                                 warn!(
                                     "Reply to Request: retrying Request without hints due to \
                                     NotOnLink error status code with message '{}'",
@@ -3766,11 +3672,6 @@ impl<I: Instant> Requesting<I> {
             "should be invalid to accept a reply to Request with mismatched server ID"
         );
 
-        // TODO(https://fxbug.dev/113079): Add actions to handle timers
-        // for delegated prefixes.
-        // TODO(https://fxbug.dev/113080) Add actions to
-        // discover/invalidate prefixes.
-
         match next_state {
             StateAfterReplyWithLeases::StayRenewingRebinding => {
                 unreachable!("cannot stay in Renewing/Rebinding state while in Requesting state");
@@ -3783,18 +3684,36 @@ impl<I: Instant> Requesting<I> {
             }
             StateAfterReplyWithLeases::RequestNextServer => {
                 warn!("Reply to Request: trying next server");
-                request_from_alternate_server_or_restart_server_discovery(
+                Self {
                     client_id,
-                    current_non_temporary_addresses,
-                    current_delegated_prefixes,
-                    &options_to_request,
+                    non_temporary_addresses: current_non_temporary_addresses,
+                    delegated_prefixes: current_delegated_prefixes,
+                    server_id,
                     collected_advertise,
+                    first_request_time,
+                    retrans_timeout,
+                    transmission_count,
                     solicit_max_rt,
+                }
+                .request_from_alternate_server_or_restart_server_discovery(
+                    options_to_request,
                     rng,
                     now,
                 )
             }
             StateAfterReplyWithLeases::Assigned => {
+                // Note that we drop the list of collected advertisements when
+                // we transition to Assigned to avoid picking servers using
+                // stale advertisements if we ever need to pick a new server in
+                // the future.
+                //
+                // Once we transition into the Assigned state, we will not
+                // attempt to communicate with a different server for some time
+                // before an error occurs that requires the client to pick an
+                // alternate server. In this time, the set of advertisements may
+                // have gone stale as the server may have assigned advertised
+                // IAs to some other client.
+                //
                 // TODO(https://fxbug.dev/72701) Send AddressWatcher update with
                 // assigned addresses.
                 Transition {
@@ -3842,6 +3761,102 @@ impl<I: Instant> Requesting<I> {
             now,
         )
     }
+
+    /// Helper function to send a request to an alternate server, or if there are no
+    /// other collected servers, restart server discovery.
+    ///
+    /// The client removes currently assigned addresses, per RFC 8415, section
+    /// 18.2.10.1:
+    ///
+    ///    Whenever a client restarts the DHCP server discovery process or
+    ///    selects an alternate server as described in Section 18.2.9, the client
+    ///    SHOULD stop using all the addresses and delegated prefixes for which
+    ///    it has bindings and try to obtain all required leases from the new
+    ///    server.
+    fn request_from_alternate_server_or_restart_server_discovery<R: Rng>(
+        self,
+        options_to_request: &[v6::OptionCode],
+        rng: &mut R,
+        now: I,
+    ) -> Transition<I> {
+        let Self {
+            client_id,
+            server_id: _,
+            non_temporary_addresses,
+            delegated_prefixes,
+            mut collected_advertise,
+            first_request_time: _,
+            retrans_timeout: _,
+            transmission_count: _,
+            solicit_max_rt,
+        } = self;
+
+        if let Some(advertise) = collected_advertise.pop() {
+            fn to_configured_values<V: IaValue, I: Instant>(
+                entries: HashMap<v6::IAID, IaEntry<V, I>>,
+            ) -> HashMap<v6::IAID, HashSet<V>> {
+                entries
+                    .into_iter()
+                    .map(|(iaid, entry)| {
+                        (
+                            iaid,
+                            match entry {
+                                IaEntry::Assigned(values) => unreachable!(
+                                    "should not have advertisements after an IA was assigned; \
+                         iaid={:?}, values={:?}",
+                                    iaid, values,
+                                ),
+                                IaEntry::ToRequest(values) => values,
+                            },
+                        )
+                    })
+                    .collect()
+            }
+
+            let configured_non_temporary_addresses = to_configured_values(non_temporary_addresses);
+            let configured_delegated_prefixes = to_configured_values(delegated_prefixes);
+
+            // TODO(https://fxbug.dev/96674): Before selecting a different server,
+            // add actions to remove the existing assigned addresses, if any.
+            let AdvertiseMessage {
+                server_id,
+                non_temporary_addresses: advertised_non_temporary_addresses,
+                delegated_prefixes: advertised_delegated_prefixes,
+                dns_servers: _,
+                preference: _,
+                receive_time: _,
+                preferred_non_temporary_addresses_count: _,
+                preferred_delegated_prefixes_count: _,
+            } = advertise;
+            Requesting::start(
+                client_id,
+                server_id,
+                advertise_to_ia_entries(
+                    advertised_non_temporary_addresses,
+                    configured_non_temporary_addresses,
+                ),
+                advertise_to_ia_entries(
+                    advertised_delegated_prefixes,
+                    configured_delegated_prefixes,
+                ),
+                options_to_request,
+                collected_advertise,
+                solicit_max_rt,
+                rng,
+                now,
+            )
+        } else {
+            restart_server_discovery(
+                client_id,
+                non_temporary_addresses,
+                delegated_prefixes,
+                Vec::new(), /* dns_servers */
+                options_to_request,
+                rng,
+                now,
+            )
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -3870,13 +3885,6 @@ impl<V: IaValue, I> IaEntry<V, I> {
     fn to_request(&self, without_hints: bool) -> Self {
         Self::ToRequest(if without_hints { Default::default() } else { self.value().collect() })
     }
-}
-
-/// Extracts the configured values from a map of IA entries.
-fn to_configured_values<V: IaValue, I>(
-    entries: HashMap<v6::IAID, IaEntry<V, I>>,
-) -> HashMap<v6::IAID, HashSet<V>> {
-    entries.iter().map(|(iaid, entry)| (*iaid, entry.value().collect())).collect()
 }
 
 type AddressEntry<I> = IaEntry<Ipv6Addr, I>;
@@ -3977,9 +3985,7 @@ fn restart_server_discovery<R: Rng, I: Instant>(
             Action::CancelTimer(ClientTimerType::Refresh),
             Action::CancelTimer(ClientTimerType::Renew),
             Action::CancelTimer(ClientTimerType::Rebind),
-            Action::CancelTimer(ClientTimerType::Rebind),
-            // Explicitly do not cancel `ClientTimerType::RestartServerDiscovery` since we only
-            // reach this point if the restart time was fired.
+            Action::CancelTimer(ClientTimerType::RestartServerDiscovery),
         ]
         .into_iter()
         .chain((!dns_servers.is_empty()).then(|| Action::UpdateDnsServers(Vec::new())))
@@ -4491,24 +4497,22 @@ impl<I: Instant, const IS_REBINDING: bool> RenewingOrRebinding<I, IS_REBINDING> 
         }
         let server_id = got_server_id;
 
-        // TODO(https://fxbug.dev/113079): Add actions to handle timers
-        // for delegated prefixes.
-        // TODO(https://fxbug.dev/113080) Add actions to
-        // discover/invalidate prefixes.
-
         match next_state {
-            StateAfterReplyWithLeases::RequestNextServer => {
-                request_from_alternate_server_or_restart_server_discovery(
-                    client_id,
-                    current_non_temporary_addresses,
-                    current_delegated_prefixes,
-                    &options_to_request,
-                    Default::default(), /* collected_advertise */
-                    solicit_max_rt,
-                    rng,
-                    now,
-                )
-            }
+            // We need to restart server discovery to pick the next server when
+            // we are in the Renewing/Rebinding state. Unlike Requesting (which
+            // holds collected advertisements obtained during Server Discovery),
+            // we do not know about any other servers. Note that all collected
+            // advertisements are dropped when we transition from Requesting to
+            // Assigned.
+            StateAfterReplyWithLeases::RequestNextServer => restart_server_discovery(
+                client_id,
+                current_non_temporary_addresses,
+                current_delegated_prefixes,
+                current_dns_servers,
+                &options_to_request,
+                rng,
+                now,
+            ),
             StateAfterReplyWithLeases::StayRenewingRebinding => Transition {
                 state: {
                     let inner = RenewingOrRebindingInner {
@@ -8421,7 +8425,12 @@ mod tests {
         assert_matches!(
             &client.handle_timeout(ClientTimerType::Retransmission, time)[..],
             [
-               Action::SendMessage(buf),
+                Action::CancelTimer(ClientTimerType::Retransmission),
+                Action::CancelTimer(ClientTimerType::Refresh),
+                Action::CancelTimer(ClientTimerType::Renew),
+                Action::CancelTimer(ClientTimerType::Rebind),
+                Action::CancelTimer(ClientTimerType::RestartServerDiscovery),
+                Action::SendMessage(buf),
                 Action::ScheduleTimer(ClientTimerType::Retransmission, instant)
             ] => {
                 assert_eq!(testutil::msg_type(buf), v6::MessageType::Solicit);
@@ -10984,7 +10993,7 @@ mod tests {
                 Action::CancelTimer(ClientTimerType::Refresh),
                 Action::CancelTimer(ClientTimerType::Renew),
                 Action::CancelTimer(ClientTimerType::Rebind),
-                Action::CancelTimer(ClientTimerType::Rebind),
+                Action::CancelTimer(ClientTimerType::RestartServerDiscovery),
                 Action::IaNaUpdates(ia_na_updates),
                 Action::IaPdUpdates(ia_pd_updates),
                 Action::SendMessage(buf),
