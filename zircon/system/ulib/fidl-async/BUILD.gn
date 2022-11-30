@@ -18,13 +18,6 @@ zx_library("fidl-async") {
   # This library only supports the C bindings.
   # Consider using the new C++ FIDL bindings instead of the C bindings.
   visibility = [
-    "//examples/fidl/new/canvas/add_line_metered/cpp_natural/server:*",
-    "//examples/fidl/new/canvas/add_line_metered/cpp_wire/server:*",
-    "//examples/fidl/new/canvas/add_line_metered/hlcpp/server:*",
-    "//examples/fidl/new/canvas/baseline/cpp_natural/server:*",
-    "//examples/fidl/new/canvas/baseline/hlcpp/server:*",
-    "//examples/fidl/new/canvas/client_requested_draw/cpp_natural/server:*",
-    "//examples/fidl/new/canvas/client_requested_draw/hlcpp/server:*",
     "//sdk/lib/component/tests:*",
     "//sdk/lib/fdio/tests:*",
     "//sdk/lib/sys/component/cpp/tests:*",
