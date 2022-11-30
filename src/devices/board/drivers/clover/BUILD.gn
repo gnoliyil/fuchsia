@@ -45,6 +45,7 @@ fuchsia_driver("clover-driver") {
     "clover-clk.cc",
     "clover-gpio.cc",
     "clover-i2c.cc",
+    "clover-pwm.cc",
     "clover-ram.cc",
     "clover-registers.cc",
     "clover-spi.cc",

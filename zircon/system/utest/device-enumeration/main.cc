@@ -255,7 +255,8 @@ TEST_F(DeviceEnumerationTest, CloverTest) {
       "sys/platform/05:08:24/ram",
       "sys/platform/05:00:2/aml-i2c",
       "sys/platform/05:00:19/spi-0/aml-spi-0/spi/spi-0-0",
-      "sys/platform/00:00:29",  // registers device
+      "sys/platform/00:00:29",                 // registers device
+      "sys/platform/05:08:1d/aml-pwm-device",  // pwm
   };
 
   ASSERT_NO_FATAL_FAILURE(TestRunner(kDevicePaths, std::size(kDevicePaths)));

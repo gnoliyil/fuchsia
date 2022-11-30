@@ -7,6 +7,7 @@
 #include <lib/ddk/metadata.h>
 #include <lib/device-protocol/pdev.h>
 
+#include <soc/aml-a1/a1-pwm.h>
 #include <soc/aml-a113/a113-pwm.h>
 #include <soc/aml-a5/a5-pwm.h>
 #include <soc/aml-s905d2/s905d2-pwm.h>

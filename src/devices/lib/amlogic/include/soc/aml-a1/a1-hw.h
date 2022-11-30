@@ -101,6 +101,39 @@
 #define A1_DDR_BW_IRQ 141  // 109+32
 
 // PWM
+#define A1_PWM_LENGTH 0x400  // applies to each PWM bank
+#define A1_PWM_AB_BASE 0xfe002400
+#define A1_PWM_PWM_A 0x0
+#define A1_PWM_PWM_B 0x4
+#define A1_PWM_MISC_REG_AB 0x8
+#define A1_DS_A_B 0xc
+#define A1_PWM_TIME_AB 0x10
+#define A1_PWM_A2 0x14
+#define A1_PWM_B2 0x18
+#define A1_PWM_BLINK_AB 0x1c
+#define A1_PWM_LOCK_AB 0x20
+
+#define A1_PWM_CD_BASE 0xfe002800
+#define A1_PWM_PWM_C 0x0
+#define A1_PWM_PWM_D 0x4
+#define A1_PWM_MISC_REG_CD 0x8
+#define A1_DS_C_D 0xc
+#define A1_PWM_TIME_CD 0x10
+#define A1_PWM_C2 0x14
+#define A1_PWM_D2 0x18
+#define A1_PWM_BLINK_CD 0x1c
+#define A1_PWM_LOCK_CD 0x20
+
+#define A1_PWM_EF_BASE 0xfe005400
+#define A1_PWM_PWM_E 0x0
+#define A1_PWM_PWM_F 0x4
+#define A1_PWM_MISC_REG_EF 0x8
+#define A1_DS_E_F 0xc
+#define A1_PWM_TIME_EF 0x10
+#define A1_PWM_E2 0x14
+#define A1_PWM_F2 0x18
+#define A1_PWM_BLINK_EF 0x1c
+#define A1_PWM_LOCK_EF 0x20
 
 // AUDIO
 
