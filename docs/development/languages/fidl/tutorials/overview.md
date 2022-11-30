@@ -1,10 +1,9 @@
 # Tutorials
 
-The tutorials in this section gradually walk you through how to use FIDL
-and run code on Fuchsia. There are no prerequisites other than completing the
-[Getting Started][getting-started] section and being comfortable writing code in
-your chosen language, but the tutorials build on each other. The progression of
-tutorials is as follows:
+The tutorials in this section walk you through how to use FIDL and run code on
+Fuchsia. The only prerequisites are completing the [Getting
+Started][getting-started] section and being comfortable writing code in your
+chosen language. The progression of tutorials is as follows:
 
 1. [Compiling FIDL][compiling-fidl], which is a basic introduction to writing
    and building FIDL files.
