@@ -233,11 +233,7 @@ impl EnvironmentContext {
             query("sdk.root").build(Some(BuildOverride::NoBuild)).get().await.ok();
 
         match (&self.kind, runtime_root) {
-            (EnvironmentKind::InTree { .. }, Some(manifest)) => {
-                let module = query("sdk.module").get().await.ok();
-                Ok(SdkRoot::InTree { manifest, module })
-            }
-            (EnvironmentKind::InTree { build_dir: Some(build_dir), .. }, _) => {
+            (EnvironmentKind::InTree { build_dir: Some(build_dir), .. }, None) => {
                 let manifest = build_dir.clone();
                 let module = query("sdk.module").get().await.ok();
                 Ok(SdkRoot::InTree { manifest, module })
