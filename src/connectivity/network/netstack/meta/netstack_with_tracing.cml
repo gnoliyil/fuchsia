@@ -7,11 +7,10 @@
         binary: "bin/netstack_with_tracing",
     },
     use: [
+        { protocol: "fuchsia.stash.SecureStore" },
         {
-            protocol: [
-                "fuchsia.stash.SecureStore",
-                "fuchsia.tracing.provider.Registry",
-            ],
+            protocol: "fuchsia.tracing.provider.Registry",
+            availability: "optional",
         },
     ],
 }
