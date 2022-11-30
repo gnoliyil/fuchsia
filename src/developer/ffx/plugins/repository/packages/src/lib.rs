@@ -23,7 +23,7 @@ use {
 
 const MAX_HASH: usize = 11;
 
-#[ffx_plugin("ffx_repository", RepositoryRegistryProxy = "daemon::protocol")]
+#[ffx_plugin(RepositoryRegistryProxy = "daemon::protocol")]
 pub async fn packages(
     cmd: PackagesCommand,
     repos: RepositoryRegistryProxy,
