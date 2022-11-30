@@ -40,13 +40,6 @@ inline zx_handle_t CreateEvent(zx_rights_t rights) {
 }
 #endif  // __Fuchsia__
 
-template <class Input>
-void ForgetHandles(fidl::internal::WireFormatVersion wire_format, Input input) {
-  // Encode purely for the side effect of linearizing the handles.
-  fidl::OwnedEncodeResult result = fidl::Encode(std::move(input));
-  result.message().ReleaseHandles();
-}
-
 inline fidl::WireFormatMetadata CreateWireFormatMetadata(
     fidl::internal::WireFormatVersion wire_format_version) {
   ZX_DEBUG_ASSERT(wire_format_version == fidl::internal::WireFormatVersion::kV2);
@@ -99,8 +92,6 @@ void DecodeSuccess(fidl::internal::WireFormatVersion wire_format_version,
               result.error_value().FormatDescription().c_str());
 
   equality_check(result.value());
-
-  ForgetHandles(wire_format_version, std::move(result.value()));
 }
 
 template <typename FidlType>

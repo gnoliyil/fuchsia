@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#ifndef CTS_TESTS_PKG_FIDL_CPP_TEST_TEST_UTIL_H_
-#define CTS_TESTS_PKG_FIDL_CPP_TEST_TEST_UTIL_H_
+#ifndef CTF_TESTS_PKG_FIDL_CPP_TEST_TEST_UTIL_H_
+#define CTF_TESTS_PKG_FIDL_CPP_TEST_TEST_UTIL_H_
 
 #include <lib/fidl/cpp/wire_format_metadata.h>
 #include <lib/fidl/internal.h>
@@ -137,15 +137,6 @@ Output DecodedBytes(internal::WireFormatVersion wire_format, std::vector<uint8_t
 }
 
 template <class Input>
-void ForgetHandles(internal::WireFormatVersion wire_format, Input input) {
-  // Encode purely for the side effect of linearizing the handles.
-  fidl::BodyEncoder enc(wire_format);
-  auto offset = enc.Alloc(EncodingInlineSize<Input, fidl::BodyEncoder>(&enc));
-  input.Encode(&enc, offset);
-  enc.GetBody().ClearHandlesUnsafe();
-}
-
-template <class Input>
 bool ValueToBytes(const Input& input, const std::vector<uint8_t>& expected) {
   fidl::BodyEncoder enc(::fidl::internal::WireFormatVersion::kV2);
   auto offset = enc.Alloc(EncodingInlineSize<Input, fidl::BodyEncoder>(&enc));
@@ -224,4 +215,4 @@ void CheckEncodeFailure(internal::WireFormatVersion wire_format, const Input& in
 }  // namespace test
 }  // namespace fidl
 
-#endif  // CTS_TESTS_PKG_FIDL_CPP_TEST_TEST_UTIL_H_
+#endif  // CTF_TESTS_PKG_FIDL_CPP_TEST_TEST_UTIL_H_

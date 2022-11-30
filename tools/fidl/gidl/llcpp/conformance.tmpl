@@ -56,16 +56,14 @@ TEST(Conformance, {{ .Name }}_Decode) {
   }
   {{- end }}
   [[maybe_unused]] fidl::Arena<ZX_CHANNEL_MAX_MSG_BYTES> allocator;
-  {{ .ValueBuild }}
   auto bytes = {{ .Bytes }};
   auto handles = {{ .Handles }};
-  auto obj = {{ .ValueVar }};
   auto equality_check = [&]({{ .ValueType }}& {{ .Equality.InputVar }}) -> bool {
     {{ .Equality.HelperStatements }}
     return {{ .Equality.Expr }};
   };
-  EXPECT_TRUE(llcpp_conformance_utils::DecodeSuccess(
-    {{ .WireFormatVersion }}, &obj, std::move(bytes), std::move(handles), std::move(equality_check)));
+  EXPECT_TRUE(llcpp_conformance_utils::DecodeSuccess<{{ .ValueType }}>(
+    {{ .WireFormatVersion }}, std::move(bytes), std::move(handles), std::move(equality_check)));
 }
 {{- if .FuchsiaOnly }}
 #endif  // __Fuchsia__

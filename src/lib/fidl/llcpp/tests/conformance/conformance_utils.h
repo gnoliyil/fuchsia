@@ -162,7 +162,7 @@ bool EncodeFailure(fidl::internal::WireFormatVersion wire_format_version, FidlTy
 // EqualityCheck is a callable with the signature |bool EqualityCheck(FidlType& actual)|
 // that performs deep equality and compares handles based on koid, type and rights.
 template <typename FidlType, typename EqualityCheck>
-bool DecodeSuccess(fidl::internal::WireFormatVersion wire_format_version, FidlType* value,
+bool DecodeSuccess(fidl::internal::WireFormatVersion wire_format_version,
                    std::vector<uint8_t> bytes, std::vector<zx_handle_info_t> handle_infos,
                    EqualityCheck equality_check) {
   static_assert(fidl::IsFidlType<FidlType>::value, "FIDL type required");

@@ -123,7 +123,6 @@ func decodeSuccessCases(gidlDecodeSuccesses []gidlir.DecodeSuccess, schema gidlm
 			return nil, fmt.Errorf("decode success %s: %s", decodeSuccess.Name, err)
 		}
 		handleDefs := libhlcpp.BuildHandleInfoDefs(decodeSuccess.HandleDefs)
-		valueBuild, valueVar := libllcpp.BuildValueAllocator("allocator", decodeSuccess.Value, decl, libllcpp.HandleReprInfo)
 		equalityInputVar := "actual"
 		handleKoidVectorName := "handle_koids"
 		equality := libllcpp.BuildEqualityCheck(equalityInputVar, decodeSuccess.Value, decl, handleKoidVectorName)
@@ -136,8 +135,6 @@ func decodeSuccessCases(gidlDecodeSuccesses []gidlir.DecodeSuccess, schema gidlm
 				Name:                 testCaseName(decodeSuccess.Name, encoding.WireFormat),
 				WireFormatVersion:    wireFormatVersionName(encoding.WireFormat),
 				HandleDefs:           handleDefs,
-				ValueBuild:           valueBuild,
-				ValueVar:             valueVar,
 				ValueType:            libllcpp.ConformanceType(gidlir.TypeFromValue(decodeSuccess.Value)),
 				Equality:             equality,
 				Bytes:                libhlcpp.BuildBytes(encoding.Bytes),

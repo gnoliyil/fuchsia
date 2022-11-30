@@ -58,8 +58,6 @@ TEST(Conformance, {{ .Name }}_Decode) {
   auto {{ .ActualValueVar }} =
       fidl::test::util::DecodedBytes<{{ .ValueType }}>({{ .WireFormat }}, std::move(bytes), std::move(handles));
   {{ .EqualityCheck }}
-  {{- /* The handles are closed in the destructor of .ValueVar */ -}}
-  fidl::test::util::ForgetHandles({{ .WireFormat }}, std::move(value));
 }
 {{- if .FuchsiaOnly }}
 #endif  // __Fuchsia__

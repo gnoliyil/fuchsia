@@ -471,7 +471,7 @@ TEST(Conformance, GoldenBoolStruct_V2_Decode) {
       fidl::test::util::DecodedBytes<test::conformance::GoldenBoolStruct>(fidl::internal::WireFormatVersion::kV2, std::move(bytes), std::move(handles));
   [[maybe_unused]] auto& f1 = value;
 ASSERT_EQ(f1.v, bool(true));
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 TEST(Conformance, GoldenIntStruct_V2_Decode) {
@@ -485,7 +485,7 @@ TEST(Conformance, GoldenIntStruct_V2_Decode) {
       fidl::test::util::DecodedBytes<test::conformance::GoldenIntStruct>(fidl::internal::WireFormatVersion::kV2, std::move(bytes), std::move(handles));
   [[maybe_unused]] auto& f1 = value;
 ASSERT_EQ(f1.v, int16_t(1ull));
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 TEST(Conformance, GoldenUintStruct_V2_Decode) {
@@ -499,7 +499,7 @@ TEST(Conformance, GoldenUintStruct_V2_Decode) {
       fidl::test::util::DecodedBytes<test::conformance::GoldenUintStruct>(fidl::internal::WireFormatVersion::kV2, std::move(bytes), std::move(handles));
   [[maybe_unused]] auto& f1 = value;
 ASSERT_EQ(f1.v, uint16_t(1ull));
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 TEST(Conformance, GoldenFloatStruct_V2_Decode) {
@@ -513,7 +513,7 @@ TEST(Conformance, GoldenFloatStruct_V2_Decode) {
       fidl::test::util::DecodedBytes<test::conformance::GoldenFloatStruct>(fidl::internal::WireFormatVersion::kV2, std::move(bytes), std::move(handles));
   [[maybe_unused]] auto& f1 = value;
 ASSERT_EQ(f1.v, float(0));
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 TEST(Conformance, GoldenDoubleStruct_V2_Decode) {
@@ -527,7 +527,7 @@ TEST(Conformance, GoldenDoubleStruct_V2_Decode) {
       fidl::test::util::DecodedBytes<test::conformance::GoldenDoubleStruct>(fidl::internal::WireFormatVersion::kV2, std::move(bytes), std::move(handles));
   [[maybe_unused]] auto& f1 = value;
 ASSERT_EQ(f1.v, double(0));
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 TEST(Conformance, GoldenStringStruct_V2_Decode) {
@@ -543,7 +543,7 @@ TEST(Conformance, GoldenStringStruct_V2_Decode) {
       fidl::test::util::DecodedBytes<test::conformance::GoldenStringStruct>(fidl::internal::WireFormatVersion::kV2, std::move(bytes), std::move(handles));
   [[maybe_unused]] auto& f1 = value;
 ASSERT_STREQ(f1.v, "abcd");
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 TEST(Conformance, GoldenNullableStringStructNonNull_V2_Decode) {
@@ -559,7 +559,7 @@ TEST(Conformance, GoldenNullableStringStructNonNull_V2_Decode) {
       fidl::test::util::DecodedBytes<test::conformance::GoldenNullableStringStruct>(fidl::internal::WireFormatVersion::kV2, std::move(bytes), std::move(handles));
   [[maybe_unused]] auto& f1 = value;
 ASSERT_STREQ((*f1.v), "abcd");
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 TEST(Conformance, GoldenNullableStringStructNull_V2_Decode) {
@@ -574,7 +574,7 @@ TEST(Conformance, GoldenNullableStringStructNull_V2_Decode) {
       fidl::test::util::DecodedBytes<test::conformance::GoldenNullableStringStruct>(fidl::internal::WireFormatVersion::kV2, std::move(bytes), std::move(handles));
   [[maybe_unused]] auto& f1 = value;
 ASSERT_NULL(f1.v);
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 TEST(Conformance, GoldenEnumStruct_V2_Decode) {
@@ -588,7 +588,7 @@ TEST(Conformance, GoldenEnumStruct_V2_Decode) {
       fidl::test::util::DecodedBytes<test::conformance::GoldenEnumStruct>(fidl::internal::WireFormatVersion::kV2, std::move(bytes), std::move(handles));
   [[maybe_unused]] auto& f1 = value;
 ASSERT_EQ(f1.v, test::conformance::GoldenEnum(1ull));
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 TEST(Conformance, GoldenBitsStruct_V2_Decode) {
@@ -602,7 +602,7 @@ TEST(Conformance, GoldenBitsStruct_V2_Decode) {
       fidl::test::util::DecodedBytes<test::conformance::GoldenBitsStruct>(fidl::internal::WireFormatVersion::kV2, std::move(bytes), std::move(handles));
   [[maybe_unused]] auto& f1 = value;
 ASSERT_EQ(f1.v, static_cast<test::conformance::GoldenBits>(1ull));
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 TEST(Conformance, GoldenTableStruct_V2_Decode) {
@@ -620,7 +620,7 @@ TEST(Conformance, GoldenTableStruct_V2_Decode) {
 [[maybe_unused]] auto& f2 = f1.v;
 ASSERT_TRUE(f2.has_v());
 ASSERT_EQ(f2.v(), int16_t(1ull));
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 TEST(Conformance, GoldenUnionStruct_V2_Decode) {
@@ -637,7 +637,7 @@ TEST(Conformance, GoldenUnionStruct_V2_Decode) {
 [[maybe_unused]] auto& f2 = f1.v;
 ASSERT_EQ(f2.Which(), test::conformance::GoldenUnion::Tag::kV);
 ASSERT_EQ(f2.v(), int16_t(1ull));
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 TEST(Conformance, GoldenNullableUnionStructNonNull_V2_Decode) {
@@ -654,7 +654,7 @@ TEST(Conformance, GoldenNullableUnionStructNonNull_V2_Decode) {
 [[maybe_unused]] auto& f2 = f1.v;
 ASSERT_EQ(f2->Which(), test::conformance::GoldenUnion::Tag::kV);
 ASSERT_EQ(f2->v(), int16_t(1ull));
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 TEST(Conformance, GoldenNullableUnionStructNull_V2_Decode) {
@@ -669,7 +669,7 @@ TEST(Conformance, GoldenNullableUnionStructNull_V2_Decode) {
       fidl::test::util::DecodedBytes<test::conformance::GoldenNullableUnionStruct>(fidl::internal::WireFormatVersion::kV2, std::move(bytes), std::move(handles));
   [[maybe_unused]] auto& f1 = value;
 ASSERT_NULL(f1.v);
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 TEST(Conformance, GoldenByteArrayStruct_V2_Decode) {
@@ -687,7 +687,7 @@ ASSERT_EQ(f2[0], uint8_t(1ull));
 ASSERT_EQ(f2[1], uint8_t(2ull));
 ASSERT_EQ(f2[2], uint8_t(3ull));
 ASSERT_EQ(f2[3], uint8_t(4ull));
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 TEST(Conformance, GoldenStructArrayStruct_V2_Decode) {
@@ -705,7 +705,7 @@ TEST(Conformance, GoldenStructArrayStruct_V2_Decode) {
 ASSERT_EQ(f3.v, int16_t(1ull));
 [[maybe_unused]] auto& f4 = f2[1];
 ASSERT_EQ(f4.v, int16_t(2ull));
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 TEST(Conformance, GoldenByteVectorStruct_V2_Decode) {
@@ -735,7 +735,7 @@ ASSERT_EQ(f2[8], uint8_t(1ull));
 ASSERT_EQ(f2[9], uint8_t(2ull));
 ASSERT_EQ(f2[10], uint8_t(3ull));
 ASSERT_EQ(f2[11], uint8_t(4ull));
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 TEST(Conformance, GoldenByteNullableVectorStructNonNull_V2_Decode) {
@@ -756,7 +756,7 @@ ASSERT_EQ(f2[0], uint8_t(1ull));
 ASSERT_EQ(f2[1], uint8_t(2ull));
 ASSERT_EQ(f2[2], uint8_t(3ull));
 ASSERT_EQ(f2[3], uint8_t(4ull));
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 TEST(Conformance, GoldenNullableByteVectorStructNull_V2_Decode) {
@@ -771,7 +771,7 @@ TEST(Conformance, GoldenNullableByteVectorStructNull_V2_Decode) {
       fidl::test::util::DecodedBytes<test::conformance::GoldenNullableByteVectorStruct>(fidl::internal::WireFormatVersion::kV2, std::move(bytes), std::move(handles));
   [[maybe_unused]] auto& f1 = value;
 ASSERT_FALSE(f1.v.has_value());
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 TEST(Conformance, GoldenStructVectorStruct_V2_Decode) {
@@ -792,7 +792,7 @@ ASSERT_EQ(f2.size(), 2);
 ASSERT_EQ(f3.v, int16_t(1ull));
 [[maybe_unused]] auto& f4 = f2[1];
 ASSERT_EQ(f4.v, int16_t(2ull));
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 TEST(Conformance, GoldenNullableStructNonNull_V2_Decode) {
@@ -808,7 +808,7 @@ TEST(Conformance, GoldenNullableStructNonNull_V2_Decode) {
   [[maybe_unused]] auto& f1 = value;
 [[maybe_unused]] auto& f2 = f1.v;
 ASSERT_EQ(f2->v, bool(true));
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 TEST(Conformance, GoldenNullableStructNull_V2_Decode) {
@@ -822,7 +822,7 @@ TEST(Conformance, GoldenNullableStructNull_V2_Decode) {
       fidl::test::util::DecodedBytes<test::conformance::GoldenNullableStruct>(fidl::internal::WireFormatVersion::kV2, std::move(bytes), std::move(handles));
   [[maybe_unused]] auto& f1 = value;
 ASSERT_NULL(f1.v);
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 
 #ifdef __Fuchsia__
@@ -860,7 +860,7 @@ handle_defs[0],};
 	ASSERT_EQ(f3_info.koid, handle_koids[0]);
 	ASSERT_TRUE(f3_info.type == 0 || 0 == ZX_OBJ_TYPE_NONE);
 	ASSERT_TRUE(f3_info.rights == 49155 || 49155 == ZX_RIGHT_SAME_RIGHTS);
-  fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+  
 }
 #endif  // __Fuchsia__
 
@@ -899,7 +899,7 @@ handle_defs[0],};
 	ASSERT_EQ(f3_info.koid, handle_koids[0]);
 	ASSERT_TRUE(f3_info.type == 0 || 0 == ZX_OBJ_TYPE_NONE);
 	ASSERT_TRUE(f3_info.rights == 2147483648 || 2147483648 == ZX_RIGHT_SAME_RIGHTS);
-  fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+  
 }
 #endif  // __Fuchsia__
 
@@ -915,7 +915,7 @@ TEST(Conformance, GoldenNullableHandleStructNull_V2_Decode) {
       fidl::test::util::DecodedBytes<test::conformance::GoldenNullableHandleStruct>(fidl::internal::WireFormatVersion::kV2, std::move(bytes), std::move(handles));
   [[maybe_unused]] auto& f1 = value;
 ASSERT_FALSE(f1.v.is_valid());
-fidl::test::util::ForgetHandles(fidl::internal::WireFormatVersion::kV2, std::move(value));
+
 }
 #endif  // __Fuchsia__
 
