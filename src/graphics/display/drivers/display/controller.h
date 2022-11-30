@@ -47,7 +47,7 @@ class ControllerTest;
 class DisplayConfig;
 class IntegrationTest;
 
-using ControllerParent = ddk::Device<Controller, ddk::Unbindable, ddk::Openable,
+using ControllerParent = ddk::Device<Controller, ddk::Unbindable,
                                      ddk::Messageable<fuchsia_hardware_display::Provider>::Mixin>;
 class Controller : public ControllerParent,
                    public ddk::DisplayControllerInterfaceProtocol<Controller>,
@@ -59,7 +59,6 @@ class Controller : public ControllerParent,
 
   static void PopulateDisplayMode(const edid::timing_params_t& params, display_mode_t* mode);
 
-  zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags);
   void DdkUnbind(ddk::UnbindTxn txn);
   void DdkRelease();
   zx_status_t Bind(std::unique_ptr<display::Controller>* device_ptr);

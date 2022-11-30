@@ -25,8 +25,7 @@ namespace goldfish {
 class Pipe;
 class Instance;
 using InstanceType =
-    ddk::Device<Instance, ddk::Messageable<fuchsia_hardware_goldfish::PipeDevice>::Mixin,
-                ddk::Closable>;
+    ddk::Device<Instance, ddk::Messageable<fuchsia_hardware_goldfish::PipeDevice>::Mixin>;
 
 // This class implements a pipe instance device. By opening the pipe device,
 // an instance of this class will be created to service a new channel
@@ -34,7 +33,7 @@ using InstanceType =
 class Instance : public InstanceType {
  public:
   explicit Instance(zx_device_t* parent, PipeDevice* pipe_device);
-  ~Instance();
+  ~Instance() override;
 
   zx_status_t Bind();
 
@@ -42,7 +41,6 @@ class Instance : public InstanceType {
   void OpenPipe(OpenPipeRequestView request, OpenPipeCompleter::Sync& completer) override;
 
   // Device protocol implementation.
-  zx_status_t DdkClose(uint32_t flags);
   void DdkRelease();
 
  private:

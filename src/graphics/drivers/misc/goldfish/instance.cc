@@ -82,8 +82,6 @@ void Instance::OpenPipe(OpenPipeRequestView request, OpenPipeCompleter::Sync& co
   completer.Close(ZX_OK);
 }
 
-zx_status_t Instance::DdkClose(uint32_t flags) { return ZX_OK; }
-
 void Instance::DdkRelease() { delete this; }
 
 int Instance::ClientThread() {

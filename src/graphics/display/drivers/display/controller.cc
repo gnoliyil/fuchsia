@@ -741,8 +741,6 @@ bool Controller::GetDisplayPhysicalDimensions(uint64_t display_id, uint32_t* hor
   return false;
 }
 
-zx_status_t Controller::DdkOpen(zx_device_t** dev_out, uint32_t flags) { return ZX_OK; }
-
 static void PrintChannelKoids(bool is_vc, const zx::channel& channel) {
   zx_info_handle_basic_t info{};
   size_t actual, avail;

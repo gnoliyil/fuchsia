@@ -105,7 +105,7 @@ class PipeChildDevice : public PipeChildDeviceType,
                         public fidl::WireServer<fuchsia_hardware_goldfish_pipe::GoldfishPipe> {
  public:
   explicit PipeChildDevice(PipeDevice* parent, async_dispatcher_t* dispatcher);
-  ~PipeChildDevice() = default;
+  ~PipeChildDevice() override = default;
 
   zx_status_t Bind(cpp20::span<const zx_device_prop_t> props, const char* dev_name);
 
