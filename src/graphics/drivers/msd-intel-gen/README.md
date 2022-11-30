@@ -1,6 +1,6 @@
 This repository contains the Magma Service Driver for the Intel Gen series GPUs
 
-Currently supported are the Intel HD/Iris Graphics 5xx and 6xx series:
+Currently supported are:
 
-	* Not the four digit products, which are older
-	* Some Iris Pro models not officially supported due to system stability problems (fxbug.dev/12836)
+	* Intel HD/Iris Graphics 6xx series (Gen 9.5)
+	* Intel Xe Graphics (Gen 12)

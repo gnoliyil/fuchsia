@@ -87,17 +87,14 @@ Those command buffers as well as other resources are shared with the magma syste
 
 Fuchsia supports devices with the following gpus:
 
-* Intel Gen 9 - Intel HD Graphics
+* Intel Gen 9/12 - Intel HD/Xe Graphics
 * ARM Mali - Bifrost
-* Verisilicon GC7000
 
 GPUs are complex pieces of hardware with flaws that may trigger misbehavior infrequently. There may be tests that flake rarely.  If detected these should be treated as driver bugs.
 
 ## Performance Tests
 
-* [Gfxbench](https://gfxbench.com)
-    * A large and complex performance benchmark.
-    * Fuchsia details, forthcoming.
+* TODO
 
 ## Fuzzing
 
