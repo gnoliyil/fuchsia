@@ -36,14 +36,14 @@ void GainControl::Advance(zx::time reference_time) {
   scheduled_commands_.erase(begin, end);
   AdvanceActiveGainRamp(reference_time);
 
-  // Apply immediate commands.
-  if (immediate_gain_command_) {
-    ApplyGain(reference_time, immediate_gain_command_->gain_db, immediate_gain_command_->ramp);
-    immediate_gain_command_ = std::nullopt;
+  // Apply "ASAP" commands.
+  if (asap_gain_command_) {
+    ApplyGain(reference_time, asap_gain_command_->gain_db, asap_gain_command_->ramp);
+    asap_gain_command_ = std::nullopt;
   }
-  if (immediate_mute_command_) {
-    state_.is_muted = immediate_mute_command_->is_muted;
-    immediate_mute_command_ = std::nullopt;
+  if (asap_mute_command_) {
+    state_.is_muted = asap_mute_command_->is_muted;
+    asap_mute_command_ = std::nullopt;
   }
 
   last_advanced_time_ = reference_time;
@@ -74,10 +74,10 @@ void GainControl::ScheduleMute(zx::time reference_time, bool is_muted) {
 }
 
 void GainControl::SetGain(float gain_db, std::optional<GainRamp> ramp) {
-  immediate_gain_command_ = GainCommand{gain_db, ramp};
+  asap_gain_command_ = GainCommand{gain_db, ramp};
 }
 
-void GainControl::SetMute(bool is_muted) { immediate_mute_command_ = MuteCommand{is_muted}; }
+void GainControl::SetMute(bool is_muted) { asap_mute_command_ = MuteCommand{is_muted}; }
 
 void GainControl::AdvanceActiveGainRamp(zx::time reference_time) {
   if (!active_gain_ramp_) {

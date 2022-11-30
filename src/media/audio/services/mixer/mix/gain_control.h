@@ -41,10 +41,10 @@ struct GainRamp {
 //      regardless of the order of the schedule calls.
 //
 //   2. by `SetGain` and `SetMute` functions:
-//      These functions correspond to the "immediately" GainTimestamp option in FIDL GainControl
-//      API. They can be used to directly apply a change in gain or mute. Note that, similar to
-//      scheduling gains, an optional gain ramp parameter can be used when setting a change in gain,
-//      which would start the specified ramp immediately in the next `Advance` call.
+//      These functions correspond to the "ASAP" RealTime option in FIDL GainControl API. They can
+//      be used to directly apply a change in gain or mute. Note that, similar to scheduling gains,
+//      an optional gain ramp parameter can be used when setting a change in gain, which would start
+//      the specified ramp immediately in the next `Advance` call.
 //
 // The following are guaranteed when applying gain changes:
 //
@@ -76,7 +76,7 @@ struct GainRamp {
 //
 //   * Changes can be scheduled in the past, where the guarantees above will still be preserved.
 //     That said, all the scheduled changes that were "late" to arrive will be applied before the
-//     pending "immediately" set changes in the next `Advance` call.
+//     pending "ASAP" set changes in the next `Advance` call.
 //
 //   * Likewise, `SetGain` and `SetMute` changes will typically be applied after `ScheduleGain` and
 //     `ScheduleMute` changes that are set to be applied at the same reference time. However, since
@@ -113,10 +113,10 @@ class GainControl {
   // Schedules mute at `reference_time`.
   void ScheduleMute(zx::time reference_time, bool is_muted);
 
-  // Sets gain *immediately* with an optional `ramp`.
+  // Sets gain "ASAP" with an optional `ramp`.
   void SetGain(float gain_db, std::optional<GainRamp> ramp = std::nullopt);
 
-  // Sets mute *immediately*.
+  // Sets mute "ASAP".
   void SetMute(bool is_muted);
 
   // Returns the clock used by this gain control.
@@ -155,10 +155,10 @@ class GainControl {
 
   const UnreadableClock reference_clock_;
 
-  // Commands to be applied *immediately* in the next `Advance` call. Since each consequent call to
+  // Commands to be applied "ASAP" in the next `Advance` call. Since each consequent call to
   // `SetGain` or `SetMute` will override the previous call, we only need to store the last one.
-  std::optional<GainCommand> immediate_gain_command_;
-  std::optional<MuteCommand> immediate_mute_command_;
+  std::optional<GainCommand> asap_gain_command_;
+  std::optional<MuteCommand> asap_mute_command_;
 
   // Sorted map of scheduled commands by their reference times.
   // TODO(fxbug.dev/113389): Make sure to prevent this from growing in an unbounded way.

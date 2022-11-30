@@ -6,6 +6,7 @@
 
 #include <fidl/fuchsia.audio/cpp/fidl.h>
 #include <fidl/fuchsia.media/cpp/fidl.h>
+#include <fidl/fuchsia.media2/cpp/wire_types.h>
 #include <lib/async/cpp/wait.h>
 #include <lib/syslog/cpp/macros.h>
 #include <lib/trace/event.h>
@@ -17,7 +18,6 @@ namespace media_audio {
 namespace {
 
 using ::fuchsia_audio::wire::GainControlSetGainRequest;
-using ::fuchsia_audio::wire::GainTimestamp;
 using ::fuchsia_audio::wire::GainUpdateMethod;
 using ::fuchsia_audio::wire::RampedGain;
 using ::fuchsia_audio::wire::RampFunction;
@@ -549,7 +549,8 @@ void AudioRendererServer::PlayInternal(zx::time reference_time, int64_t media_ti
     (*play_pause_ramp_gain_control_client_)
         ->SetGain(GainControlSetGainRequest::Builder(arena)
                       .how(GainUpdateMethod::WithGainDb(kMinimumGainForPlayPauseRamps))
-                      .when(GainTimestamp::WithTimestamp(arena, reference_time.get()))
+                      .when(fuchsia_media2::wire::RealTime::WithReferenceTime(arena,
+                                                                              reference_time.get()))
                       .Build())
         .Then([this, self = shared_from_this()](auto& result) {
           if (LogResultError(result, "SetGain (play ramp reset)")) {
@@ -568,7 +569,8 @@ void AudioRendererServer::PlayInternal(zx::time reference_time, int64_t media_ti
                                      .function(RampFunction::WithLinearSlope(
                                          arena, RampFunctionLinearSlope::Builder(arena).Build()))
                                      .Build()))
-                      .when(GainTimestamp::WithTimestamp(arena, reference_time.get()))
+                      .when(fuchsia_media2::wire::RealTime::WithReferenceTime(arena,
+                                                                              reference_time.get()))
                       .Build())
         .Then([this, self = shared_from_this()](auto& result) {
           if (LogResultError(result, "SetGain (play ramp start)")) {
@@ -604,7 +606,8 @@ void AudioRendererServer::PauseInternal(std::optional<PauseCompleter::Async> com
     (*play_pause_ramp_gain_control_client_)
         ->SetGain(GainControlSetGainRequest::Builder(arena)
                       .how(GainUpdateMethod::WithGainDb(kUnityGainDb))
-                      .when(GainTimestamp::WithTimestamp(arena, reference_time.get()))
+                      .when(fuchsia_media2::wire::RealTime::WithReferenceTime(arena,
+                                                                              reference_time.get()))
                       .Build())
         .Then([this, self = shared_from_this()](auto& result) {
           if (LogResultError(result, "SetGain (pause ramp reset)")) {
@@ -623,7 +626,8 @@ void AudioRendererServer::PauseInternal(std::optional<PauseCompleter::Async> com
                                      .function(RampFunction::WithLinearSlope(
                                          arena, RampFunctionLinearSlope::Builder(arena).Build()))
                                      .Build()))
-                      .when(GainTimestamp::WithTimestamp(arena, reference_time.get()))
+                      .when(fuchsia_media2::wire::RealTime::WithReferenceTime(arena,
+                                                                              reference_time.get()))
                       .Build())
         .Then([this, self = shared_from_this()](auto& result) {
           if (LogResultError(result, "SetGain (pause ramp start)")) {

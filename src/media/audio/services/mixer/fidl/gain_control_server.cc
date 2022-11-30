@@ -80,10 +80,13 @@ void GainControlServer::SetGain(SetGainRequestView request, SetGainCompleter::Sy
   }
 
   const auto& when = request->when();
-  if (when.is_immediately()) {
+  if (when.is_asap()) {
     SetGain(gain_db, ramp);
-  } else if (when.is_timestamp()) {
-    ScheduleGain(zx::time(when.timestamp()), gain_db, ramp);
+  } else if (when.is_reference_time()) {
+    ScheduleGain(zx::time(when.reference_time()), gain_db, ramp);
+  } else if (when.is_system_time()) {
+    ScheduleGain(reference_clock_->ReferenceTimeFromMonotonicTime(zx::time(when.system_time())),
+                 gain_db, ramp);
   } else {
     FX_LOGS(WARNING) << "SetGain: Unsupported option for 'when'";
     completer.ReplyError(GainError::kUnsupportedOption);
@@ -103,10 +106,13 @@ void GainControlServer::SetMute(SetMuteRequestView request, SetMuteCompleter::Sy
 
   const bool is_muted = request->muted();
   const auto& when = request->when();
-  if (when.is_immediately()) {
+  if (when.is_asap()) {
     SetMute(is_muted);
-  } else if (when.is_timestamp()) {
-    ScheduleMute(zx::time(when.timestamp()), is_muted);
+  } else if (when.is_reference_time()) {
+    ScheduleMute(zx::time(when.reference_time()), is_muted);
+  } else if (when.is_system_time()) {
+    ScheduleMute(reference_clock_->ReferenceTimeFromMonotonicTime(zx::time(when.system_time())),
+                 is_muted);
   } else {
     FX_LOGS(WARNING) << "SetMute: Unsupported option for 'when'";
     completer.ReplyError(GainError::kUnsupportedOption);

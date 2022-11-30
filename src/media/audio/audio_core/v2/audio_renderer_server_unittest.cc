@@ -586,8 +586,8 @@ void TestPlayPause(const bool with_ramp) {
     ASSERT_TRUE(call->how()->gain_db());
     EXPECT_EQ(call->how()->gain_db().value(), kMinimumGainForPlayPauseRamps);
     ASSERT_TRUE(call->when());
-    ASSERT_TRUE(call->when()->timestamp());
-    EXPECT_EQ(call->when()->timestamp().value(), kPlayReferenceTime);
+    ASSERT_TRUE(call->when()->reference_time());
+    EXPECT_EQ(call->when()->reference_time().value(), kPlayReferenceTime);
   }
   {
     auto call = std::get_if<GainControlSetGainRequest>(&ramp_gain_control_server->calls()[1]);
@@ -599,8 +599,8 @@ void TestPlayPause(const bool with_ramp) {
     ASSERT_TRUE(call->how()->ramped().value().function());
     ASSERT_TRUE(call->how()->ramped().value().function()->linear_slope());
     ASSERT_TRUE(call->when());
-    ASSERT_TRUE(call->when()->timestamp());
-    EXPECT_EQ(call->when()->timestamp().value(), kPlayReferenceTime);
+    ASSERT_TRUE(call->when()->reference_time());
+    EXPECT_EQ(call->when()->reference_time().value(), kPlayReferenceTime);
   }
 
   // Set+ramp for pause.
@@ -611,8 +611,8 @@ void TestPlayPause(const bool with_ramp) {
     ASSERT_TRUE(call->how()->gain_db());
     EXPECT_EQ(call->how()->gain_db().value(), 0.0f);
     ASSERT_TRUE(call->when());
-    ASSERT_TRUE(call->when()->timestamp());
-    EXPECT_EQ(call->when()->timestamp().value(),
+    ASSERT_TRUE(call->when()->reference_time());
+    EXPECT_EQ(call->when()->reference_time().value(),
               pause_reference_time - kRampDownOnPauseDuration.get());
   }
   {
@@ -625,8 +625,8 @@ void TestPlayPause(const bool with_ramp) {
     ASSERT_TRUE(call->how()->ramped().value().function());
     ASSERT_TRUE(call->how()->ramped().value().function()->linear_slope());
     ASSERT_TRUE(call->when());
-    ASSERT_TRUE(call->when()->timestamp());
-    EXPECT_EQ(call->when()->timestamp().value(),
+    ASSERT_TRUE(call->when()->reference_time());
+    EXPECT_EQ(call->when()->reference_time().value(),
               pause_reference_time - kRampDownOnPauseDuration.get());
   }
 }

@@ -4,6 +4,7 @@
 
 library fuchsia.audio;
 
+using fuchsia.media2;
 using zx;
 
 /// Enables control and monitoring of audio gain. This interface is typically a
@@ -39,21 +40,25 @@ protocol GainControl {
     /// Sets the gain knob.
     SetGain(table {
         /// How to update the gain knob.
+        ///
         /// Required.
         1: how GainUpdateMethod;
         /// When to apply this update.
+        ///
         /// Required.
-        2: when GainTimestamp;
+        2: when fuchsia.media2.RealTime;
     }) -> (table {}) error GainError;
 
     /// Set the mute knob.
     SetMute(table {
         /// New value of the mute knob.
+        ///
         /// Required.
         1: muted bool;
         /// When to apply this update.
+        ///
         /// Required.
-        2: when GainTimestamp;
+        2: when fuchsia.media2.RealTime;
     }) -> (table {}) error GainError;
 };
 
@@ -66,17 +71,6 @@ type GainError = flexible enum {
     /// client built with API version X+1 talks to a server built with API
     /// version X.
     UNSUPPORTED_OPTION = 2;
-};
-
-/// Timestamp of a gain command.
-type GainTimestamp = flexible union {
-    /// The command should be applied as soon as possible.
-    1: immediately struct {};
-    /// The command should be applied at the given timestamp, which is relative
-    /// to a reference clock. See discussion at [`GainControl`]. If the
-    /// timestamp occurs in the past, the command should be applied as soon as
-    /// possible.
-    2: timestamp zx.time;
 };
 
 /// Supported types of gain updates.

@@ -4,7 +4,10 @@
 
 #include "src/media/audio/services/mixer/fidl/gain_control_server.h"
 
+#include <fidl/fuchsia.audio/cpp/common_types.h>
+#include <fidl/fuchsia.audio/cpp/natural_types.h>
 #include <fidl/fuchsia.audio/cpp/wire_types.h>
+#include <fidl/fuchsia.media2/cpp/wire_types.h>
 #include <lib/fidl/cpp/wire/arena.h>
 #include <lib/fidl/cpp/wire/object_view.h>
 #include <lib/fidl/cpp/wire/wire_types.h>
@@ -16,8 +19,6 @@
 
 #include <gtest/gtest.h>
 
-#include "fidl/fuchsia.audio/cpp/common_types.h"
-#include "fidl/fuchsia.audio/cpp/natural_types.h"
 #include "src/media/audio/lib/processing/gain.h"
 #include "src/media/audio/services/common/testing/test_server_and_sync_client.h"
 #include "src/media/audio/services/mixer/common/basic_types.h"
@@ -36,14 +37,14 @@ using ::fuchsia_audio::GainError;
 fidl::WireTableBuilder<fuchsia_audio::wire::GainControlSetGainRequest> MakeDefaultSetGainRequest(
     fidl::AnyArena& arena) {
   return fuchsia_audio::wire::GainControlSetGainRequest::Builder(arena)
-      .when(fuchsia_audio::wire::GainTimestamp::WithImmediately({}))
+      .when(fuchsia_media2::wire::RealTime::WithAsap({}))
       .how(fuchsia_audio::wire::GainUpdateMethod::WithGainDb(6.0f));
 }
 
 fidl::WireTableBuilder<fuchsia_audio::wire::GainControlSetMuteRequest> MakeDefaultSetMuteRequest(
     fidl::AnyArena& arena) {
   return fuchsia_audio::wire::GainControlSetMuteRequest::Builder(arena)
-      .when(fuchsia_audio::wire::GainTimestamp::WithImmediately({}))
+      .when(fuchsia_media2::wire::RealTime::WithAsap({}))
       .muted(true);
 }
 
