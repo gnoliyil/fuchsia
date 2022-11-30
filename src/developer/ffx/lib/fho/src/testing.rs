@@ -112,3 +112,90 @@ impl Injector for FakeInjector {
         (self.writer_closure)().await
     }
 }
+
+#[cfg(test)]
+mod internal {
+    use super::*;
+    use crate::subtool::{FhoSuite, ToolCommand};
+    use crate::{self as fho, CheckEnv, FfxMain, FfxTool, FhoEnvironment, Result, TryFromEnv};
+    use argh::FromArgs;
+    use ffx_command::Ffx;
+    use std::cell::RefCell;
+
+    pub struct NewTypeString(String);
+
+    #[async_trait(?Send)]
+    impl TryFromEnv for NewTypeString {
+        async fn try_from_env(_env: &FhoEnvironment<'_>) -> Result<Self> {
+            Ok(Self(String::from("foobar")))
+        }
+    }
+
+    #[derive(Debug, FromArgs)]
+    #[argh(subcommand, name = "fake", description = "fake command")]
+    pub struct FakeCommand {
+        #[argh(positional)]
+        /// just needs a doc here so the macro doesn't complain.
+        stuff: String,
+    }
+
+    thread_local! {
+        pub static SIMPLE_CHECK_COUNTER: RefCell<u64> = RefCell::new(0);
+    }
+
+    pub struct SimpleCheck(pub bool);
+
+    #[async_trait(?Send)]
+    impl CheckEnv for SimpleCheck {
+        async fn check_env(self, _env: &FhoEnvironment<'_>) -> Result<()> {
+            SIMPLE_CHECK_COUNTER.with(|counter| *counter.borrow_mut() += 1);
+            if self.0 {
+                Ok(())
+            } else {
+                Err(anyhow::anyhow!("SimpleCheck was false").into())
+            }
+        }
+    }
+
+    #[derive(fho_macro::FfxTool)]
+    #[ffx(forces_stdout_logs)]
+    #[check(SimpleCheck(true))]
+    pub struct FakeTool {
+        from_env_string: NewTypeString,
+        #[command]
+        fake_command: FakeCommand,
+        writer: ffx_writer::Writer,
+    }
+
+    #[async_trait(?Send)]
+    impl FfxMain for FakeTool {
+        async fn main(self) -> Result<()> {
+            assert_eq!(self.from_env_string.0, "foobar");
+            assert_eq!(self.fake_command.stuff, "stuff");
+            self.writer.line("junk-line").unwrap();
+            Ok(())
+        }
+    }
+
+    pub(crate) fn setup_fho_items<T: FfxMain>() -> (Ffx, FakeInjector, ToolCommand<T>) {
+        let injector = FakeInjectorBuilder::new()
+            .writer_closure(|| async { Ok(ffx_writer::Writer::new(None)) })
+            .build();
+        // Runs the command line tool as if under ffx (first version of fho invocation).
+        let ffx_cmd_line = ffx_command::FfxCommandLine::new(
+            None,
+            vec!["ffx".to_owned(), "fake".to_owned(), "stuff".to_owned()],
+        )
+        .unwrap();
+        let ffx = ffx_cmd_line.parse::<FhoSuite<T>>().unwrap();
+
+        let tool_cmd = ToolCommand::<T>::from_args(
+            &Vec::from_iter(ffx_cmd_line.cmd_iter()),
+            &Vec::from_iter(ffx_cmd_line.args_iter()),
+        )
+        .unwrap();
+        (ffx, injector, tool_cmd)
+    }
+}
+#[cfg(test)]
+pub(crate) use internal::*;

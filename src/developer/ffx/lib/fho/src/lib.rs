@@ -4,6 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod adapters;
 mod search;
 mod subtool;
 pub mod testing;
@@ -60,9 +61,10 @@ impl FhoToolMetadata {
 
 #[doc(hidden)]
 pub mod macro_deps {
-    pub use ffx_command::{Error, Result};
-    pub use ffx_command::{FfxCommandLine, ToolRunner};
-    pub use ffx_config::EnvironmentContext;
+    pub use anyhow;
+    pub use argh;
+    pub use ffx_command::{Ffx, FfxCommandLine, ToolRunner};
+    pub use ffx_config::{global_env_context, EnvironmentContext};
     pub use ffx_core::Injector;
     pub use futures;
     pub use serde;

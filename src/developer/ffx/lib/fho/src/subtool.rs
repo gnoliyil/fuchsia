@@ -24,7 +24,7 @@ use crate::FhoToolMetadata;
 
 #[derive(FromArgs)]
 #[argh(subcommand)]
-enum FhoHandler<M: FfxMain> {
+pub(crate) enum FhoHandler<M: FfxMain> {
     //FhoVersion1(M),
     /// Run the tool as if under ffx
     Standalone(M::Command),
@@ -34,19 +34,19 @@ enum FhoHandler<M: FfxMain> {
 
 #[derive(FromArgs)]
 #[argh(subcommand, name = "metadata", description = "Print out this subtool's FHO metadata json")]
-struct MetadataCmd {
+pub(crate) struct MetadataCmd {
     #[argh(positional)]
     output_path: Option<PathBuf>,
 }
 
 #[derive(FromArgs)]
 /// Fuchsia Host Objects Runner
-struct ToolCommand<M: FfxMain> {
+pub(crate) struct ToolCommand<M: FfxMain> {
     #[argh(subcommand)]
-    subcommand: FhoHandler<M>,
+    pub(crate) subcommand: FhoHandler<M>,
 }
 
-struct FhoSuite<M> {
+pub(crate) struct FhoSuite<M> {
     ffx: Ffx,
     context: EnvironmentContext,
     _p: std::marker::PhantomData<fn(M) -> ()>,
@@ -431,93 +431,17 @@ mod tests {
     use super::*;
     // This keeps the macros from having compiler errors.
     use crate as fho;
-    use crate::testing::FakeInjector;
-    use crate::{testing, FhoVersion};
+    use crate::testing::*;
+    use crate::FhoVersion;
     use argh::FromArgs;
     use async_trait::async_trait;
     use fho_macro::FfxTool;
-    use std::cell::RefCell;
-
-    struct NewTypeString(String);
-
-    #[async_trait(?Send)]
-    impl TryFromEnv for NewTypeString {
-        async fn try_from_env(_env: &FhoEnvironment<'_>) -> Result<Self> {
-            Ok(Self(String::from("foobar")))
-        }
-    }
-
-    #[derive(Debug, FromArgs)]
-    #[argh(subcommand, name = "fake", description = "fake command")]
-    struct FakeCommand {
-        #[argh(positional)]
-        /// just needs a doc here so the macro doesn't complain.
-        stuff: String,
-    }
-
-    thread_local! {
-        static SIMPLE_CHECK_COUNTER: RefCell<u64> = RefCell::new(0);
-    }
-
-    struct SimpleCheck(bool);
-
-    #[async_trait(?Send)]
-    impl CheckEnv for SimpleCheck {
-        async fn check_env(self, _env: &FhoEnvironment<'_>) -> Result<()> {
-            SIMPLE_CHECK_COUNTER.with(|counter| *counter.borrow_mut() += 1);
-            if self.0 {
-                Ok(())
-            } else {
-                Err(anyhow::anyhow!("SimpleCheck was false").into())
-            }
-        }
-    }
-
-    #[derive(FfxTool)]
-    #[ffx(forces_stdout_logs)]
-    #[check(SimpleCheck(true))]
-    struct FakeTool {
-        from_env_string: NewTypeString,
-        #[command]
-        fake_command: FakeCommand,
-        writer: ffx_writer::Writer,
-    }
-
-    #[async_trait(?Send)]
-    impl FfxMain for FakeTool {
-        async fn main(self) -> Result<()> {
-            assert_eq!(self.from_env_string.0, "foobar");
-            assert_eq!(self.fake_command.stuff, "stuff");
-            self.writer.line("junk-line").unwrap();
-            Ok(())
-        }
-    }
-
-    fn setup_fho_items<T: FfxMain>() -> (Ffx, EnvironmentContext, FakeInjector, ToolCommand<T>) {
-        let context = ffx_config::EnvironmentContext::default();
-        let injector = testing::FakeInjectorBuilder::new()
-            .writer_closure(|| async { Ok(ffx_writer::Writer::new(None)) })
-            .build();
-        // Runs the command line tool as if under ffx (first version of fho invocation).
-        let ffx_cmd_line = ffx_command::FfxCommandLine::new(
-            None,
-            vec!["ffx".to_owned(), "fake".to_owned(), "stuff".to_owned()],
-        )
-        .unwrap();
-        let ffx = ffx_cmd_line.parse::<FhoSuite<T>>().unwrap();
-
-        let tool_cmd = ToolCommand::<T>::from_args(
-            &Vec::from_iter(ffx_cmd_line.cmd_iter()),
-            &Vec::from_iter(ffx_cmd_line.args_iter()),
-        )
-        .unwrap();
-        (ffx, context, injector, tool_cmd)
-    }
 
     // The main testing part will happen in the `main()` function of the tool.
     #[fuchsia_async::run_singlethreaded(test)]
     async fn test_run_fake_tool() {
-        let (ffx, context, injector, tool_cmd) = setup_fho_items::<FakeTool>();
+        let context = ffx_config::EnvironmentContext::default();
+        let (ffx, injector, tool_cmd) = setup_fho_items::<FakeTool>();
         let fho_env = FhoEnvironment { ffx: &ffx, context: &context, injector: &injector };
 
         assert_eq!(
@@ -552,7 +476,8 @@ mod tests {
             }
         }
 
-        let (ffx, context, injector, tool_cmd) = setup_fho_items::<FakeToolWillFail>();
+        let context = ffx_config::EnvironmentContext::default();
+        let (ffx, injector, tool_cmd) = setup_fho_items::<FakeToolWillFail>();
         let fho_env = FhoEnvironment { ffx: &ffx, context: &context, injector: &injector };
 
         assert_eq!(

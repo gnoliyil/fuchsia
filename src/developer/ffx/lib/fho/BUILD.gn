@@ -37,6 +37,7 @@ rustc_library("lib") {
   test_deps = [ "//src/lib/fuchsia-async" ]
 
   sources = [
+    "src/adapters.rs",
     "src/lib.rs",
     "src/search.rs",
     "src/subtool.rs",
