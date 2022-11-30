@@ -8,7 +8,8 @@ use {
     fidl::endpoints::create_proxy,
     fidl_fuchsia_math as fmath, fidl_fuchsia_ui_composition as ui_comp,
     fidl_fuchsia_ui_pointer::{
-        self as ui_pointer, TouchEvent, TouchInteractionId, TouchInteractionStatus, TouchResponse,
+        self as ui_pointer, MouseEvent, TouchEvent, TouchInteractionId, TouchInteractionStatus,
+        TouchResponse,
     },
     fidl_fuchsia_ui_test_input as test_input, fidl_fuchsia_ui_views as ui_views,
     fuchsia_async as fasync,
@@ -99,12 +100,19 @@ pub(super) struct View {
 
     /// Proxy to forward touch events to test.
     touch_input_listener: Option<test_input::TouchInputListenerProxy>,
+
+    /// Task to poll continuously for mouse events.
+    mouse_watched_task: OnceCell<fasync::Task<()>>,
+
+    /// Proxy to forward mouse events to test.
+    mouse_input_listener: Option<test_input::MouseInputListenerProxy>,
 }
 
 impl View {
     pub async fn new(
         mut view_creation_token: ui_views::ViewCreationToken,
         touch_input_listener: Option<test_input::TouchInputListenerProxy>,
+        mouse_input_listener: Option<test_input::MouseInputListenerProxy>,
     ) -> Rc<Mutex<Self>> {
         let (flatland, presentation_sender) = connect_to_flatland_and_presenter();
         let mut id_generator = scenic::flatland::IdGenerator::new();
@@ -115,8 +123,11 @@ impl View {
                 .expect("failed to create parent viewport watcher channel");
         let (touch_source, touch_source_request) = create_proxy::<ui_pointer::TouchSourceMarker>()
             .expect("failed to create touch source channel");
+        let (mouse_source, mouse_source_request) = create_proxy::<ui_pointer::MouseSourceMarker>()
+            .expect("failed to create touch source channel");
         let view_bound_protocols = ui_comp::ViewBoundProtocols {
             touch_source: Some(touch_source_request),
+            mouse_source: Some(mouse_source_request),
             ..ui_comp::ViewBoundProtocols::EMPTY
         };
         let mut view_identity = ui_views::ViewIdentityOnCreation::from(
@@ -170,6 +181,8 @@ impl View {
             view_parameters: None,
             touch_interactions: HashMap::new(),
             touch_input_listener,
+            mouse_watched_task: OnceCell::new(),
+            mouse_input_listener,
         }));
 
         let view_events_task = fasync::Task::local(Self::listen_for_view_events(
@@ -188,6 +201,13 @@ impl View {
             .touch_watcher_task
             .set(touch_task)
             .expect("set touch watcher task more than once");
+
+        let mouse_task =
+            fasync::Task::local(Self::listen_for_mouse_events(this.clone(), mouse_source));
+        this.lock()
+            .mouse_watched_task
+            .set(mouse_task)
+            .expect("set mouse watcher task more than once");
 
         this
     }
@@ -452,6 +472,79 @@ impl View {
                 }
                 _ => {
                     info!("TouchSource connection closed");
+                    return;
+                }
+            }
+        }
+    }
+
+    fn get_mouse_report(
+        &self,
+        mouse_event: &ui_pointer::MouseEvent,
+    ) -> test_input::MouseInputListenerReportMouseInputRequest {
+        let pointer_sample =
+            mouse_event.pointer_sample.as_ref().expect("mouse event missing pointer_sample");
+        let position_in_viewport = pointer_sample
+            .position_in_viewport
+            .expect("pointer sample missing position_in_viewport");
+        let local_position =
+            self.get_local_position(Point2D::new(position_in_viewport[0], position_in_viewport[1]));
+        let local_x: f64 = local_position.x.try_into().expect("failed to convert to f64");
+        let local_y: f64 = local_position.y.try_into().expect("failed to convert to f64");
+
+        let buttons: Option<Vec<test_input::MouseButton>> = match &pointer_sample.pressed_buttons {
+            None => None,
+            Some(buttons) => Some(
+                buttons
+                    .into_iter()
+                    .map(|button| {
+                        test_input::MouseButton::from_primitive_allow_unknown(*button as u32)
+                    })
+                    .collect(),
+            ),
+        };
+
+        test_input::MouseInputListenerReportMouseInputRequest {
+            local_x: Some(local_x),
+            local_y: Some(local_y),
+            time_received: mouse_event.timestamp,
+            buttons,
+            device_pixel_ratio: Some(self.device_pixel_ratio as f64),
+            wheel_x_physical_pixel: pointer_sample.scroll_h_physical_pixel,
+            wheel_y_physical_pixel: pointer_sample.scroll_v_physical_pixel,
+            ..test_input::MouseInputListenerReportMouseInputRequest::EMPTY
+        }
+    }
+
+    fn process_mouse_events(&mut self, events: Vec<MouseEvent>) {
+        for mouse_event in events {
+            if let Some(view_parameters) = mouse_event.view_parameters {
+                self.view_parameters = Some(view_parameters);
+            }
+            let event = self.get_mouse_report(&mouse_event);
+            match self.mouse_input_listener.get() {
+                Some(listener) => {
+                    listener.report_mouse_input(event).expect("failed to send mouse input report");
+                }
+                None => {
+                    info!("no mouse event listener");
+                }
+            }
+        }
+    }
+
+    async fn listen_for_mouse_events(
+        this: Rc<Mutex<Self>>,
+        mouse_source: ui_pointer::MouseSourceProxy,
+    ) {
+        loop {
+            let events = mouse_source.watch();
+            match events.await {
+                Ok(events) => {
+                    this.lock().process_mouse_events(events);
+                }
+                _ => {
+                    info!("MouseSource connection closed");
                     return;
                 }
             }

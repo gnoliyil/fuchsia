@@ -45,8 +45,14 @@ pub async fn run_puppet_factory(request_stream: PuppetFactoryRequestStream) {
                             Some(touch_listener.into_proxy().expect("failed to generate proxy"))
                         }
                     };
+                    let mouse_listener = match payload.mouse_listener {
+                        None => None,
+                        Some(mouse_listener) => {
+                            Some(mouse_listener.into_proxy().expect("failed to generate proxy"))
+                        }
+                    };
 
-                    let view = view::View::new(view_token, touch_listener).await;
+                    let view = view::View::new(view_token, touch_listener, mouse_listener).await;
 
                     responder
                         .send(PuppetFactoryCreateResponse {
