@@ -51,6 +51,7 @@ mod prelude {
     pub use futures::future::BoxFuture;
     pub use futures::stream::BoxStream;
     pub use log::{debug, error, info, trace, warn};
+    pub use lowpan_driver_common::pii::MarkPii;
     pub use lowpan_driver_common::ZxResult;
     pub use net_declare::{fidl_ip, fidl_ip_v6};
     pub use std::convert::TryInto;

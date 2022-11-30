@@ -54,6 +54,8 @@ pub(crate) mod prelude_internal {
     pub use fuchsia_async as fasync;
 
     pub use net_declare::{fidl_ip, fidl_ip_v6};
+
+    pub use crate::pii::MarkPii;
 }
 
 pub mod lowpan_fidl {
@@ -101,3 +103,70 @@ pub use fuchsia_zircon_status::Status as ZxStatus;
 pub type ZxResult<T = ()> = Result<T, ZxStatus>;
 
 const MAX_CONCURRENT: usize = 100;
+
+pub mod pii {
+    use core::fmt::Debug;
+    use core::fmt::Display;
+    use core::fmt::Formatter;
+    use core::fmt::Result;
+
+    fn should_display_pii() -> bool {
+        true
+    }
+
+    fn should_markup_pii() -> bool {
+        true
+    }
+
+    fn should_highlight_pii() -> bool {
+        true
+    }
+
+    pub struct MarkPii<'a, T>(pub &'a T);
+
+    impl<'a, T: Debug> Debug for MarkPii<'a, T> {
+        fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+            if should_display_pii() {
+                if should_markup_pii() {
+                    write!(f, "[PII](")?;
+                }
+                if should_highlight_pii() {
+                    write!(f, "\x1b[7m")?;
+                }
+                let ret = self.0.fmt(f);
+                if should_highlight_pii() {
+                    write!(f, "\x1b[0m")?;
+                }
+                if should_markup_pii() {
+                    write!(f, ")")?;
+                }
+                ret
+            } else {
+                write!(f, "[PII-REDACTED]")
+            }
+        }
+    }
+
+    impl<'a, T: Display> Display for MarkPii<'a, T> {
+        fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+            if should_display_pii() {
+                if should_markup_pii() {
+                    write!(f, "[PII](")?;
+                }
+                if should_highlight_pii() {
+                    write!(f, "\x1b[7m")?;
+                }
+                let ret = self.0.fmt(f);
+                if should_highlight_pii() {
+                    write!(f, "\x1b[0m")?;
+                }
+                if should_markup_pii() {
+                    write!(f, ")")?;
+                }
+                ret
+            } else {
+                write!(f, "[PII-REDACTED]")
+            }
+        }
+    }
+}
