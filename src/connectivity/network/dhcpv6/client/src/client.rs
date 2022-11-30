@@ -747,14 +747,14 @@ pub(crate) async fn serve_client(
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashSet, task::Poll};
+    use std::{collections::HashSet, pin::Pin, task::Poll};
 
     use fidl::endpoints::{
         create_proxy, create_proxy_and_stream, create_request_stream, ClientEnd,
     };
-    use fidl_fuchsia_net_dhcpv6::{ClientMarker, DEFAULT_CLIENT_PORT};
+    use fidl_fuchsia_net_dhcpv6::{self as fnet_dhcpv6, ClientProxy, DEFAULT_CLIENT_PORT};
     use fuchsia_async as fasync;
-    use futures::{channel::mpsc, join, poll, TryFutureExt as _};
+    use futures::{join, poll, TryFutureExt as _};
 
     use assert_matches::assert_matches;
     use net_declare::{
@@ -898,13 +898,13 @@ mod tests {
     }
 
     fn client_proxy_watch_servers(
-        client_proxy: &fidl_fuchsia_net_dhcpv6::ClientProxy,
+        client_proxy: &fnet_dhcpv6::ClientProxy,
     ) -> impl Future<Output = Result<(), fidl::Error>> {
         client_proxy.watch_servers().map_ok(|_: Vec<fidl_fuchsia_net_name::DnsServer_>| ())
     }
 
     fn client_proxy_watch_address(
-        client_proxy: &fidl_fuchsia_net_dhcpv6::ClientProxy,
+        client_proxy: &fnet_dhcpv6::ClientProxy,
     ) -> impl Future<Output = Result<(), fidl::Error>> {
         client_proxy.watch_address().map_ok(
             |_: (
@@ -918,9 +918,9 @@ mod tests {
     }
 
     fn client_proxy_watch_prefixes(
-        client_proxy: &fidl_fuchsia_net_dhcpv6::ClientProxy,
+        client_proxy: &fnet_dhcpv6::ClientProxy,
     ) -> impl Future<Output = Result<(), fidl::Error>> {
-        client_proxy.watch_prefixes().map_ok(|_: Vec<fidl_fuchsia_net_dhcpv6::Prefix>| ())
+        client_proxy.watch_prefixes().map_ok(|_: Vec<fnet_dhcpv6::Prefix>| ())
     }
 
     #[test_case(client_proxy_watch_servers; "watch_servers")]
@@ -930,7 +930,7 @@ mod tests {
     async fn test_client_should_return_error_on_double_watch<Fut, F>(watch: F)
     where
         Fut: Future<Output = Result<(), fidl::Error>>,
-        F: Fn(&fidl_fuchsia_net_dhcpv6::ClientProxy) -> Fut,
+        F: Fn(&fnet_dhcpv6::ClientProxy) -> Fut,
     {
         let (client_proxy, server_end) =
             create_proxy::<ClientMarker>().expect("failed to create test client proxy");
@@ -1223,54 +1223,85 @@ mod tests {
             ))
             .expect("failed to create test client");
 
-        let (mut signal_client_to_refresh, mut client_should_refresh) = mpsc::channel::<()>(1);
+        type WatchServersResponseFut = <fnet_dhcpv6::ClientProxy as fnet_dhcpv6::ClientProxyInterface>::WatchServersResponseFut;
+        type WatchServersResponse = <WatchServersResponseFut as Future>::Output;
 
-        let client_fut = async {
-            let mut buf = vec![0u8; MAX_UDP_DATAGRAM_SIZE];
-            loop {
-                select! {
-                    res = client.handle_next_event(&mut buf).fuse() => {
-                        match res.expect("test client failed to handle next event") {
-                            Some(()) => (),
-                            None => break (),
-                        };
-                    }
-                    _ = client_should_refresh.next() => {
-                        // Make the client ready for another reply immediately on signal, so it can
-                        // start receiving updates without waiting for the full refresh timeout
-                        // which is unrealistic test.
-                        if client.timer_abort_handles
-                            .contains_key(&dhcpv6_core::client::ClientTimerType::Refresh)
-                        {
-                            let () = client
-                                .handle_timeout(dhcpv6_core::client::ClientTimerType::Refresh)
-                                .await
-                                .expect("test client failed to handle timeout");
-                        } else {
-                            panic!("no refresh timer is scheduled and refresh is requested in test");
-                        }
-                    },
+        struct Test<'a> {
+            client: &'a mut Client<fasync::net::UdpSocket>,
+            buf: Vec<u8>,
+            watcher_fut: WatchServersResponseFut,
+        }
+
+        impl<'a> Test<'a> {
+            fn new(
+                client: &'a mut Client<fasync::net::UdpSocket>,
+                client_proxy: &ClientProxy,
+            ) -> Self {
+                Self {
+                    client,
+                    buf: vec![0u8; MAX_UDP_DATAGRAM_SIZE],
+                    watcher_fut: client_proxy.watch_servers(),
                 }
             }
-        }.fuse();
-        futures::pin_mut!(client_fut);
 
-        macro_rules! build_test_fut {
-            ($test_fut:ident) => {
-                let $test_fut = async {
+            async fn handle_next_event(&mut self) {
+                self.client
+                    .handle_next_event(&mut self.buf)
+                    .await
+                    .expect("test client failed to handle next event")
+                    .expect("request stream closed");
+            }
+
+            async fn refresh_client(&mut self) {
+                // Make the client ready for another reply immediately on signal, so it can
+                // start receiving updates without waiting for the full refresh timeout which is
+                // unrealistic in tests.
+                if self
+                    .client
+                    .timer_abort_handles
+                    .contains_key(&dhcpv6_core::client::ClientTimerType::Refresh)
+                {
+                    self.client
+                        .handle_timeout(dhcpv6_core::client::ClientTimerType::Refresh)
+                        .await
+                        .expect("test client failed to handle timeout");
+                } else {
+                    panic!("no refresh timer is scheduled and refresh is requested in test");
+                }
+                // Allow the client to handle the timeout-aborted event.
+                self.handle_next_event().await;
+            }
+
+            // Drive both the DHCPv6 client's event handling logic and the DNS server
+            // watcher until the DNS server watcher receives an update from the client (or
+            // the client unexpectedly exits).
+            fn run(&mut self) -> Pin<Box<dyn Future<Output = WatchServersResponse> + '_>> {
+                let Self { client, buf, watcher_fut } = self;
+                Box::pin(async move {
+                    let client_fut = async {
+                        loop {
+                            client
+                                .handle_next_event(buf)
+                                .await
+                                .expect("test client failed to handle next event")
+                                .expect("request stream closed");
+                        }
+                    }
+                    .fuse();
+                    futures::pin_mut!(client_fut);
+                    let mut watcher_fut = watcher_fut.fuse();
                     select! {
                         () = client_fut => panic!("test client returned unexpectedly"),
-                        r = client_proxy.watch_servers() => r,
+                        r = watcher_fut => r,
                     }
-                };
-                futures::pin_mut!($test_fut);
-            };
+                })
+            }
         }
 
         {
             // No DNS configurations received yet.
-            build_test_fut!(test_fut);
-            assert_matches!(exec.run_until_stalled(&mut test_fut), Poll::Pending);
+            let mut test = Test::new(&mut client, &client_proxy);
+            assert_matches!(exec.run_until_stalled(&mut test.run()), Poll::Pending);
 
             // Send an empty list to the client, should not update watcher.
             let () = exec
@@ -1282,12 +1313,16 @@ mod tests {
                     &[v6::DhcpOption::ServerId(&[1, 2, 3]), v6::DhcpOption::DnsServers(&[])],
                 ))
                 .expect("failed to send test reply");
-            assert_matches!(exec.run_until_stalled(&mut test_fut), Poll::Pending);
+            // Wait for the client to handle the next event (processing the reply we just
+            // sent). Note that it is not enough to simply drive the client future until it
+            // is stalled as we do elsewhere in the test, because we have no guarantee that
+            // the the netstack has delivered the UDP packet to the client by the time the
+            // `send_to` call returned.
+            exec.run_singlethreaded(test.handle_next_event());
+            assert_matches!(exec.run_until_stalled(&mut test.run()), Poll::Pending);
 
             // Send a list of DNS servers, the watcher should be updated accordingly.
-            let () = signal_client_to_refresh
-                .try_send(())
-                .expect("failed to signal test client to refresh");
+            exec.run_singlethreaded(test.refresh_client());
             let dns_servers = [net_ip_v6!("fe80::1:2")];
             let () = exec
                 .run_singlethreaded(send_msg_with_options(
@@ -1306,21 +1341,17 @@ mod tests {
                 1, /* source interface */
                 1, /* zone index */
             )];
-            assert_matches!(
-                exec.run_until_stalled(&mut test_fut),
-                Poll::Ready(Ok(servers)) if servers == want_servers
-            );
+            let servers = exec.run_singlethreaded(test.run()).expect("get servers");
+            assert_eq!(servers, want_servers);
         } // drop `test_fut` so `client_fut` is no longer mutably borrowed.
 
         {
             // No new changes, should not update watcher.
-            build_test_fut!(test_fut);
-            assert_matches!(exec.run_until_stalled(&mut test_fut), Poll::Pending);
+            let mut test = Test::new(&mut client, &client_proxy);
+            assert_matches!(exec.run_until_stalled(&mut test.run()), Poll::Pending);
 
             // Send the same list of DNS servers, should not update watcher.
-            let () = signal_client_to_refresh
-                .try_send(())
-                .expect("failed to signal test client to refresh");
+            exec.run_singlethreaded(test.refresh_client());
             let dns_servers = [net_ip_v6!("fe80::1:2")];
             let () = exec
                 .run_singlethreaded(send_msg_with_options(
@@ -1334,12 +1365,16 @@ mod tests {
                     ],
                 ))
                 .expect("failed to send test reply");
-            assert_matches!(exec.run_until_stalled(&mut test_fut), Poll::Pending);
+            // Wait for the client to handle the next event (processing the reply we just
+            // sent). Note that it is not enough to simply drive the client future until it
+            // is stalled as we do elsewhere in the test, because we have no guarantee that
+            // the the netstack has delivered the UDP packet to the client by the time the
+            // `send_to` call returned.
+            exec.run_singlethreaded(test.handle_next_event());
+            assert_matches!(exec.run_until_stalled(&mut test.run()), Poll::Pending);
 
             // Send a different list of DNS servers, should update watcher.
-            let () = signal_client_to_refresh
-                .try_send(())
-                .expect("failed to signal test client to refresh");
+            exec.run_singlethreaded(test.refresh_client());
             let dns_servers = [net_ip_v6!("fe80::1:2"), net_ip_v6!("1234::5:6")];
             let () = exec
                 .run_singlethreaded(send_msg_with_options(
@@ -1366,19 +1401,16 @@ mod tests {
                     0, /* zone index */
                 ),
             ];
-            assert_matches!(
-                exec.run_until_stalled(&mut test_fut),
-                Poll::Ready(Ok(servers)) if servers == want_servers
-            );
+            let servers = exec.run_singlethreaded(test.run()).expect("get servers");
+            assert_eq!(servers, want_servers);
         } // drop `test_fut` so `client_fut` is no longer mutably borrowed.
 
         {
             // Send an empty list of DNS servers, should update watcher,
             // because this is different from what the watcher has seen
             // last time.
-            let () = signal_client_to_refresh
-                .try_send(())
-                .expect("failed to signal test client to refresh");
+            let mut test = Test::new(&mut client, &client_proxy);
+            exec.run_singlethreaded(test.refresh_client());
             let () = exec
                 .run_singlethreaded(send_msg_with_options(
                     &server_socket,
@@ -1388,10 +1420,9 @@ mod tests {
                     &[v6::DhcpOption::ServerId(&[1, 2, 3]), v6::DhcpOption::DnsServers(&[])],
                 ))
                 .expect("failed to send test reply");
-            build_test_fut!(test_fut);
             let want_servers = Vec::<fnet_name::DnsServer_>::new();
             assert_matches!(
-                exec.run_until_stalled(&mut test_fut),
+                exec.run_until_stalled(&mut test.run()),
                 Poll::Ready(Ok(servers)) if servers == want_servers
             );
         } // drop `test_fut` so `client_fut` is no longer mutably borrowed.
