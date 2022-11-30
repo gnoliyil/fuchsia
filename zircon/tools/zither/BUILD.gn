@@ -22,6 +22,7 @@ group("tests") {
     ":bits",
     ":constants",
     ":enums",
+    ":experimental_zx_types",
     ":multifile",
     ":structs",
     ":syscalls",
@@ -329,10 +330,6 @@ template("zither_golden_test") {
 # FIDL: testdata/constants/
 # Goldens: testdata/constants/goldens/${backend}/
 zither_golden_test("constants") {
-  # TODO(fxbug.dev/110021): These tests reference some experimental primitive
-  # types introduced in the context of this bug.
-  experimental_flags = [ "zx_c_types" ]
-
   sources = [ "constants.test.fidl" ]
 
   cases = [
@@ -500,6 +497,25 @@ zither_golden_test("syscalls") {
         "category.inc",
         "zx-syscall-numbers.h",
       ]
+    },
+  ]
+}
+
+# TODO(fxbug.dev/110021): These tests reference some experimental built-in
+# types introduced in the context of this bug.
+zither_golden_test("experimental_zx_types") {
+  experimental_flags = [ "zx_c_types" ]
+
+  sources = [ "experimental_zx_types.test.fidl" ]
+
+  cases = [
+    {
+      backend = "c"
+      files = [ "experimental_zx_types.h" ]
+    },
+    {
+      backend = "go"
+      files = [ "experimental_zx_types.go" ]
     },
   ]
 }

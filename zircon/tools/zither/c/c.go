@@ -121,6 +121,8 @@ func StandardIncludes(summary zither.FileSummary) []string {
 			includes = append(includes, "stdint.h")
 		case zither.TypeKindBool:
 			includes = append(includes, "stdbool.h")
+		case zither.TypeKindSize:
+			includes = append(includes, "stddef.h")
 		}
 	}
 	return includes
@@ -145,11 +147,11 @@ func ConstValue(c zither.Const) string {
 	switch c.Kind {
 	case zither.TypeKindString:
 		return fmt.Sprintf("%q", c.Value)
-	case zither.TypeKindBool, zither.TypeKindInteger:
+	case zither.TypeKindBool, zither.TypeKindInteger, zither.TypeKindSize:
 		fidlType := fidlgen.PrimitiveSubtype(c.Type)
 		cType := PrimitiveTypeName(fidlType)
 		val := c.Value
-		if c.Kind == zither.TypeKindInteger {
+		if c.Kind == zither.TypeKindInteger || c.Kind == zither.TypeKindSize {
 			// In the case of an signed type, the unsigned-ness will be
 			// explicitly cast away.
 			val += "u"
@@ -203,7 +205,7 @@ func (info TypeInfo) String() string {
 
 func DescribeType(desc zither.TypeDescriptor) TypeInfo {
 	switch desc.Kind {
-	case zither.TypeKindBool, zither.TypeKindInteger:
+	case zither.TypeKindBool, zither.TypeKindInteger, zither.TypeKindSize:
 		return TypeInfo{Type: PrimitiveTypeName(fidlgen.PrimitiveSubtype(desc.Type))}
 	case zither.TypeKindEnum, zither.TypeKindBits, zither.TypeKindStruct:
 		return TypeInfo{Type: TypeName(desc.Decl)}
@@ -211,6 +213,12 @@ func DescribeType(desc zither.TypeDescriptor) TypeInfo {
 		info := DescribeType(*desc.ElementType)
 		info.ArrayCounts = append(info.ArrayCounts, *desc.ElementCount)
 		return info
+	case zither.TypeKindPointer:
+		info := DescribeType(*desc.ElementType)
+		info.Type += "*"
+		return info
+	case zither.TypeKindVoidPointer:
+		return TypeInfo{Type: "void*"}
 	default:
 		panic(fmt.Sprintf("unsupported type kind: %v", desc.Kind))
 	}

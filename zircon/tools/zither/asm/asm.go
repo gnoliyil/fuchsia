@@ -85,7 +85,7 @@ func ConstValue(cnst zither.Const) string {
 			return "(1)"
 		}
 		return "(0)"
-	case zither.TypeKindInteger:
+	case zither.TypeKindInteger, zither.TypeKindSize:
 		return fmt.Sprintf("(%s)", cnst.Value)
 	case zither.TypeKindEnum, zither.TypeKindBits:
 		// Enum and bits constants should have been handled above.

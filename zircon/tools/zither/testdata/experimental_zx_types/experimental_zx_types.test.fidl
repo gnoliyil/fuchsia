@@ -1,0 +1,27 @@
+// Copyright 2022 The Fuchsia Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+// This file excludes enum and bits constants, so that enum/bits support can be
+// tested as a whole.
+library zither.experimental.zx.types;
+
+/// 'a'
+const CHAR_CONST uchar = 97;
+const SIZE_CONST usize = 100;
+const UINTPTR_CONST uintptr = 0x1234abcd5678ffff;
+
+type StructWithPrimitives = struct {
+    char_field uchar;
+    size_field usize;
+    uintptr_field uintptr;
+};
+
+type StructWithPointers = struct {
+    u64ptr experimental_pointer<uint64>;
+    charptr experimental_pointer<uchar>;
+    usizeptr experimental_pointer<usize>;
+    byteptr experimental_pointer<byte>;
+    @voidptr
+    voidptr experimental_pointer<byte>;
+};

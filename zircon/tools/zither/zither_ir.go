@@ -410,11 +410,17 @@ type TypeKind string
 const (
 	TypeKindBool    TypeKind = "bool"
 	TypeKindInteger TypeKind = "integer"
+	TypeKindSize    TypeKind = "size"
 	TypeKindString  TypeKind = "string"
 	TypeKindEnum    TypeKind = "enum"
 	TypeKindBits    TypeKind = "bits"
 	TypeKindArray   TypeKind = "array"
 	TypeKindStruct  TypeKind = "struct"
+
+	// TODO(fxbug.dev/110021): These kinds exist only for the sake of the
+	// interim, v2 form of FIDL library zx.
+	TypeKindPointer     TypeKind = "pointer"
+	TypeKindVoidPointer TypeKind = "voidptr"
 )
 
 // Const is a representation of a constant FIDL declaration.
@@ -450,9 +456,12 @@ func newConst(c fidlgen.Const, decls declMap, members memberMap) (*Const, error)
 			return nil, fmt.Errorf("floats are unsupported")
 		}
 		typ = string(c.Type.PrimitiveSubtype)
-		if typ == string(fidlgen.Bool) {
+		switch typ {
+		case string(fidlgen.Bool):
 			kind = TypeKindBool
-		} else {
+		case string(fidlgen.ZxExperimentalUsize):
+			kind = TypeKindSize
+		default:
 			kind = TypeKindInteger
 		}
 	case fidlgen.StringType:
@@ -481,7 +490,7 @@ func newConst(c fidlgen.Const, decls declMap, members memberMap) (*Const, error)
 		// information than the equivalent decimal value: if the author
 		// intended for the number to be understood in binary or hex, then the
 		// generated code should preserve that.
-		if kind == TypeKindInteger {
+		if kind == TypeKindInteger || kind == TypeKindSize {
 			value = expr
 		}
 		expr = ""
@@ -644,7 +653,7 @@ type recursiveType interface {
 // Resolves a recursively-defined type into a type descriptor. This process
 // requires a map of previously processed declarations for consulting, as well
 // as map of type kinds to record those seen during the resolution.
-func resolveType(typ recursiveType, decls declMap, typeKinds map[TypeKind]struct{}) (*TypeDescriptor, error) {
+func resolveType(typ recursiveType, attrs fidlgen.Attributes, decls declMap, typeKinds map[TypeKind]struct{}) (*TypeDescriptor, error) {
 	desc := TypeDescriptor{}
 	switch typ.GetKind() {
 	case fidlgen.PrimitiveType:
@@ -652,9 +661,12 @@ func resolveType(typ recursiveType, decls declMap, typeKinds map[TypeKind]struct
 			return nil, fmt.Errorf("floats are unsupported")
 		}
 		desc.Type = string(typ.GetPrimitiveSubtype())
-		if desc.Type == string(fidlgen.Bool) {
+		switch desc.Type {
+		case string(fidlgen.Bool):
 			desc.Kind = TypeKindBool
-		} else {
+		case string(fidlgen.ZxExperimentalUsize):
+			desc.Kind = TypeKindSize
+		default:
 			desc.Kind = TypeKindInteger
 		}
 	case fidlgen.StringType:
@@ -676,7 +688,7 @@ func resolveType(typ recursiveType, decls declMap, typeKinds map[TypeKind]struct
 	case fidlgen.ArrayType:
 		desc.Kind = TypeKindArray
 		desc.ElementCount = typ.GetElementCount()
-		nested, err := resolveType(typ.GetElementType(), decls, typeKinds)
+		nested, err := resolveType(typ.GetElementType(), fidlgen.Attributes{}, decls, typeKinds)
 		if err != nil {
 			return nil, err
 		}
@@ -684,6 +696,23 @@ func resolveType(typ recursiveType, decls declMap, typeKinds map[TypeKind]struct
 			return nil, nil
 		}
 		desc.ElementType = nested
+	case fidlgen.ZxExperimentalPointerType:
+		desc.Kind = TypeKindPointer
+		nested, err := resolveType(typ.GetElementType(), fidlgen.Attributes{}, decls, typeKinds)
+		if err != nil {
+			return nil, err
+		}
+		if nested == nil { // TODO(fxbug.dev/106538): Skip if unknown.
+			return nil, nil
+		}
+		desc.ElementType = nested
+
+		if attrs.HasAttribute("voidptr") {
+			if nested.Type != string(fidlgen.Uint8) {
+				return nil, fmt.Errorf("@voidptr may only annotate `experimental_pointer` for a pointee type of `uint8`")
+			}
+			desc.Kind = TypeKindVoidPointer
+		}
 	default: // TODO(fxbug.dev/106538): Skip if unknown.
 		return nil, nil
 	}
@@ -705,7 +734,12 @@ func (typ fidlgenType) GetIdentifierType() fidlgen.EncodedCompoundIdentifier {
 	return typ.Identifier
 }
 
-func (typ fidlgenType) GetElementType() recursiveType { return fidlgenType(*typ.ElementType) }
+func (typ fidlgenType) GetElementType() recursiveType {
+	if typ.PointeeType != nil {
+		return fidlgenType(*typ.PointeeType)
+	}
+	return fidlgenType(*typ.ElementType)
+}
 
 func (typ fidlgenType) GetElementCount() *int { return typ.ElementCount }
 
@@ -746,14 +780,14 @@ func newStruct(strct fidlgen.Struct, decls declMap, typeKinds map[TypeKind]struc
 		Size: strct.TypeShapeV2.InlineSize,
 	}
 	for _, member := range strct.Members {
-		typ, err := resolveType(fidlgenType(member.Type), decls, typeKinds)
+		attrs := member.GetAttributes()
+		typ, err := resolveType(fidlgenType(member.Type), attrs, decls, typeKinds)
 		if err != nil {
 			return nil, fmt.Errorf("%s.%s: failed to derive type: %w", s.Name, member.Name, err)
 		}
 		if typ == nil { // TODO(fxbug.dev/106538): Skip if unknown.
 			continue
 		}
-		attrs := member.GetAttributes()
 		s.Members = append(s.Members, StructMember{
 			member: newMember(member),
 			Type:   *typ,
@@ -789,7 +823,7 @@ type Alias struct {
 
 func newAlias(alias fidlgen.Alias, decls declMap, typeKinds map[TypeKind]struct{}) (*Alias, error) {
 	unresolved := fidlgenTypeCtor(alias.PartialTypeConstructor)
-	typ, err := resolveType(unresolved, decls, typeKinds)
+	typ, err := resolveType(unresolved, alias.GetAttributes(), decls, typeKinds)
 	if err != nil {
 		return nil, err
 	}

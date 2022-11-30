@@ -9,6 +9,15 @@
 
 package {{ PackageBasename .Library }}
 
+{{ $imports := PackageImports . }}
+{{ if len $imports }}
+import (
+{{ range $import := $imports }}
+    "{{ $import }}"
+{{ end }}
+)
+{{ end }}
+
 {{ range .Decls }}
 
 {{ if .IsConst }}

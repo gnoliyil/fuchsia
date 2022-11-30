@@ -26,6 +26,7 @@ type Generator struct {
 func NewGenerator(formatter fidlgen.Formatter) *Generator {
 	gen := fidlgen.NewGenerator("GoTemplates", templates, formatter, template.FuncMap{
 		"PackageBasename": PackageBasename,
+		"PackageImports":  PackageImports,
 		"Name":            zither.UpperCamelCase,
 		"ConstMemberName": ConstMemberName,
 		"ConstType":       ConstType,
@@ -66,9 +67,31 @@ func (gen *Generator) Generate(summaries []zither.FileSummary, outputDir string)
 // Template functions.
 //
 
+func primitiveTypeName(typ fidlgen.PrimitiveSubtype) string {
+	switch typ {
+	case fidlgen.ZxExperimentalUchar:
+		return "byte"
+	case fidlgen.ZxExperimentalUsize:
+		return "uint64"
+	default:
+		return string(typ)
+	}
+}
+
 func PackageBasename(lib fidlgen.LibraryName) string {
 	parts := lib.Parts()
 	return parts[len(parts)-1]
+}
+
+func PackageImports(summary zither.FileSummary) []string {
+	var imports []string
+	for _, kind := range summary.TypeKinds() {
+		switch kind {
+		case zither.TypeKindVoidPointer:
+			imports = append(imports, "unsafe")
+		}
+	}
+	return imports
 }
 
 func ConstMemberName(parent zither.Decl, member zither.Member) string {
@@ -79,14 +102,8 @@ func ConstType(c zither.Const) string {
 	switch c.Kind {
 	case zither.TypeKindBool, zither.TypeKindString:
 		return c.Type
-	case zither.TypeKindInteger:
-		switch fidlgen.PrimitiveSubtype(c.Type) {
-		case fidlgen.ZxExperimentalUchar:
-			return "byte"
-		case fidlgen.ZxExperimentalUsize:
-			return "uint64"
-		}
-		return c.Type
+	case zither.TypeKindInteger, zither.TypeKindSize:
+		return primitiveTypeName(fidlgen.PrimitiveSubtype(c.Type))
 	case zither.TypeKindEnum, zither.TypeKindBits:
 		return zither.UpperCamelCase(c.Element.Decl)
 	default:
@@ -112,7 +129,7 @@ func ConstValue(c zither.Const) string {
 	switch c.Kind {
 	case zither.TypeKindString:
 		return fmt.Sprintf("%q", c.Value)
-	case zither.TypeKindBool, zither.TypeKindInteger:
+	case zither.TypeKindBool, zither.TypeKindInteger, zither.TypeKindSize:
 		return c.Value
 	case zither.TypeKindEnum, zither.TypeKindBits:
 		// Enum and bits constants should have been handled above.
@@ -124,13 +141,17 @@ func ConstValue(c zither.Const) string {
 
 func DescribeType(desc zither.TypeDescriptor) string {
 	switch desc.Kind {
-	case zither.TypeKindBool, zither.TypeKindInteger:
-		return desc.Type
+	case zither.TypeKindBool, zither.TypeKindInteger, zither.TypeKindSize:
+		return primitiveTypeName(fidlgen.PrimitiveSubtype(desc.Type))
 	case zither.TypeKindEnum, zither.TypeKindBits, zither.TypeKindStruct:
 		layout, _ := fidlgen.MustReadName(desc.Type).SplitMember()
 		return fidlgen.ToUpperCamelCase(layout.DeclarationName())
 	case zither.TypeKindArray:
 		return fmt.Sprintf("[%d]", *desc.ElementCount) + DescribeType(*desc.ElementType)
+	case zither.TypeKindPointer:
+		return "*" + DescribeType(*desc.ElementType)
+	case zither.TypeKindVoidPointer:
+		return "unsafe.Pointer"
 	default:
 		panic(fmt.Sprintf("unsupported type kind: %v", desc.Kind))
 	}
