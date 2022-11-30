@@ -62,9 +62,29 @@ int ConsoleMain(int argc, const char **argv) {
 
   JSContext *ctx_ptr = ctx.Get();
 
-  // TODO(jeremymanson): The second and third parameter below let you define properties on the
-  // command line, which might be nice at some point.
-  js_std_add_helpers(ctx_ptr, 0, nullptr);
+  // Pass in args after double dash ('--') as the args for the JS script, no need to
+  // copy params as js_std_add_helpers will do so.
+  //
+  // Examples of args after double dash taken as JS script args (inside `[]`)
+  //    josh --foo A B C => []
+  //    josh --foo -- A B C => [A, B, C]
+  //
+  //    josh --foo A -- B C => [B, C]
+  //    josh --foo -- A -- B C => [A, --, B, C]
+  //
+  //    josh --foo A B C -- => []
+  //    josh --foo -- A B C -- => [A, B, C, --]
+  int i = 0;
+  for (; i < argc; i++) {
+    if (strcmp("--", argv[i]) == 0) {
+      i++;
+      break;
+    }
+  }
+  int js_argv_size = argc - i;
+  // Make sure we never point to somewhere outside of the array
+  const char **js_argv = (i < argc ? &argv[i] : nullptr);
+  js_std_add_helpers(ctx_ptr, js_argv_size, const_cast<char **>(js_argv));
 
   // Finish loading everything before moving on to user's tasks
   js_std_loop(ctx_ptr);

@@ -50,6 +50,36 @@ class ConsoleTest : public ::testing::Test {
     loop_ = nullptr;
   }
 
+  void AssertJsArgsEq(int argc, const char **argv, std::string_view expect_list) {
+    // Test script
+    std::string random_script = GetRandomFile("/test_tmp/script.js.XXXXXX");
+    std::ofstream test_script;
+    test_script.open(random_script);
+    test_script << "var expectArgs = [\n"
+                << expect_list << "\n];\n"
+                << R"(
+      if (scriptArgs.length != expectArgs.length)
+        throw `*** [Error] Failed parsing all script args, expecting ${expectArgs.length}, got ${scriptArgs.length}`;
+      for (i = 0; i < expectArgs.length; i++) {
+        if (scriptArgs[i] != expectArgs[i])
+          throw `*** [Error] Failed to parse all script arg[0], expecting "${expectArgs[i]}", got "${scriptArgs[i]}"`;
+      }
+    )";
+    test_script.close();
+
+    int real_argc = argc + 3;
+    const char *real_argv[real_argc];
+    // Will run above test script
+    real_argv[0] = "test_program";
+    real_argv[1] = "-r";
+    real_argv[2] = random_script.c_str();
+    for (int i = 0; i < argc; i++) {
+      real_argv[i + 3] = argv[i];
+    }
+
+    ASSERT_EQ(0, shell::ConsoleMain(real_argc, real_argv));
+  }
+
   async::Loop *loop_;
   memfs_filesystem_t *fs_;
 };
@@ -61,14 +91,27 @@ TEST_F(ConsoleTest, Sanity) {
   // Generate the js command to run.
   std::string command;
   std::string expected = "Hello World";
-  command += "file = std.open('" + filename + "', 'rw+');";
-  command += "file.puts('" + expected + "');";
-  command += "file.flush();";
 
-  constexpr int kNumArgs = 7;
-  std::array<const char*, kNumArgs> argv = {"test_program",      "-j", "/pkg/data/lib/", "-f",
-                                            "/pkg/data/fidling", "-c", command.c_str()};
-  ASSERT_EQ(0, shell::ConsoleMain(kNumArgs, argv.data()));
+  // Write out the test file
+  command += "file = std.open('" + filename + "', 'rw+');\n";
+  command += "file.puts('" + expected + "');\n";
+  command += "file.flush();\n";
+
+  std::array argv{
+      "test_program",
+      "-j",
+      "/pkg/data/lib/",
+      "-f",
+      "/pkg/data/fidling",
+      "-c",
+      command.c_str(),
+      "--",
+      // The following are addition parameters to JS env
+      "PARAM1=AAA",
+      "PARAM2=BBB",
+      "PARAM3=CCC",
+  };
+  ASSERT_EQ(0, shell::ConsoleMain(argv.size(), argv.data()));
 
   std::ifstream in(filename.c_str());
   std::string actual((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
@@ -84,20 +127,111 @@ TEST_F(ConsoleTest, ScriptSanity) {
   std::string expected = "Hello World";
   std::ofstream test_script;
   test_script.open(random_script_name);
+
+  // Write out the test file
   test_script << "file = std.open('" + random_filename + "', 'rw+');\n";
-  test_script << "file.puts('" + expected + "');";
-  test_script << "file.flush();";
+  test_script << "file.puts('" + expected + "');\n";
+  test_script << "file.flush();\n";
   test_script.close();
 
-  constexpr int kNumArgs = 7;
-  std::array<const char *, kNumArgs> argv = {
-      "test_program",      "-j", "/pkg/data/lib/",          "-f",
-      "/pkg/data/fidling", "-r", random_script_name.c_str()};
-  ASSERT_EQ(0, shell::ConsoleMain(kNumArgs, argv.data()));
+  std::array argv{
+      "test_program",
+      "-j",
+      "/pkg/data/lib/",
+      "-f",
+      "/pkg/data/fidling",
+      "-r",
+      random_script_name.c_str(),
+      "--",
+      // The following are addition parameters to JS script
+      "PARAM1=AAA",
+      "PARAM2=BBB",
+      "PARAM3=CCC",
+  };
+  ASSERT_EQ(0, shell::ConsoleMain(argv.size(), argv.data()));
 
   std::ifstream in(random_filename.c_str());
   std::string actual((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
   ASSERT_STREQ(expected.c_str(), actual.c_str());
+}
+
+TEST_F(ConsoleTest, JsScriptArgsParsing) {
+  // No double dash
+  // josh --foo A B C => []
+  std::array argv_no_dash{
+      // The following are addition parameters to JS script
+      "AAA",
+      "BBB",
+      "CCC",
+  };
+  AssertJsArgsEq(argv_no_dash.size(), argv_no_dash.data(), R"()");
+
+  // All remaining params are js args
+  // josh --foo -- A B C => [A, B, C]
+  std::array argv_standard_dash{
+      "--",
+      // The following are addition parameters to JS script
+      "AAA",
+      "BBB",
+      "CCC",
+  };
+  AssertJsArgsEq(argv_standard_dash.size(), argv_standard_dash.data(), R"(
+    "AAA",
+    "BBB",
+    "CCC",
+  )");
+
+  // Some remaining params are js args
+  // josh --foo A -- B C => [B, C]
+  std::array argv1{
+      "AAA",
+      "--",
+      // The following are addition parameters to JS script
+      "BBB",
+      "CCC",
+  };
+  AssertJsArgsEq(argv1.size(), argv1.data(), R"(
+    "BBB",
+    "CCC",
+  )");
+
+  // Some remaining params are js args
+  // josh --foo -- A -- B C => [A, --, B, C]
+  std::array argv2{
+      "--",
+      "AAA",
+      "--",
+      // The following are addition parameters to JS script
+      "BBB",
+      "CCC",
+  };
+  AssertJsArgsEq(argv2.size(), argv2.data(), R"(
+    "AAA",
+    "--",
+    "BBB",
+    "CCC",
+  )");
+
+  // No remaining params is js arg
+  // josh --foo A B C -- => []
+  std::array argv3{
+      "AAA", "BBB", "CCC", "--",
+      // The following (none) are addition parameters to JS script
+  };
+  AssertJsArgsEq(argv3.size(), argv3.data(), R"()");
+
+  // No remaining params is js arg
+  // josh --foo -- A B C -- => [A, B, C, --]
+  std::array argv4{
+      "--", "AAA", "BBB", "CCC", "--",
+      // The following (none) are addition parameters to JS script
+  };
+  AssertJsArgsEq(argv4.size(), argv4.data(), R"(
+    "AAA",
+    "BBB",
+    "CCC",
+    "--",
+  )");
 }
 
 }  // namespace shell
