@@ -362,7 +362,7 @@ constexpr ErrorDef<152, std::string_view> ErrInvalidPlatform(
 constexpr UndocumentedErrorDef<153, uint64_t> ErrInvalidVersion(
     "invalid version '{}'; must be an integer from 1 to 2^63-1 inclusive, or "
     "the special constant `HEAD`");
-constexpr UndocumentedErrorDef<154> ErrInvalidAvailabilityOrder(
+constexpr ErrorDef<154> ErrInvalidAvailabilityOrder(
     "invalid availability; must have added <= deprecated < removed");
 constexpr ErrorDef<155, const flat::AttributeArg *, std::string_view, const flat::AttributeArg *,
                    std::string_view, SourceSpan, std::string_view, std::string_view,

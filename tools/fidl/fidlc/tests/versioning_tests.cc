@@ -1000,10 +1000,8 @@ type Foo = struct {
 }
 
 TEST(VersioningTests, BadAddedEqualsRemoved) {
-  TestLibrary library(R"FIDL(
-@available(added=1, removed=1)
-library example;
-)FIDL");
+  TestLibrary library;
+  library.AddFile("bad/fi-0154-a.test.fidl");
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrInvalidAvailabilityOrder);
 }
 
@@ -1033,10 +1031,8 @@ library example;
 }
 
 TEST(VersioningTests, BadDeprecatedEqualsRemoved) {
-  TestLibrary library(R"FIDL(
-@available(added=1, deprecated=2, removed=2)
-library example;
-)FIDL");
+  TestLibrary library;
+  library.AddFile("bad/fi-0154-b.test.fidl");
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrInvalidAvailabilityOrder);
 }
 
