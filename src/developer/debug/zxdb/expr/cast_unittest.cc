@@ -163,6 +163,19 @@ TEST_F(Cast, Implicit) {
   EXPECT_TRUE(CastNumericExprValueToBool(eval_context, float_minus_two).value());
   EXPECT_TRUE(CastNumericExprValueToBool(eval_context, double_minus_two).value());
   EXPECT_TRUE(CastNumericExprValueToBool(eval_context, ptr_value).value());
+
+  // Test the error message when doing a bad numeric cast.
+  auto collection_type =
+      MakeCollectionType(DwarfTag::kStructureType, "MyCollection", {{"a", int32_type}});
+  ExprValue collection(collection_type, {0, 0, 0, 0});
+  ErrOrValue result_val = CastNumericExprValue(eval_context, collection, int32_type);
+  ASSERT_TRUE(result_val.has_error());
+  EXPECT_EQ("Can't cast from 'MyCollection' to 'int32_t'.", result_val.err().msg());
+
+  // Same with casting to bool.
+  ErrOr<bool> result_bool = CastNumericExprValueToBool(eval_context, collection);
+  ASSERT_TRUE(result_bool.has_error());
+  EXPECT_EQ("Can't cast 'MyCollection' to bool.", result_bool.err().msg());
 }
 
 // Enums can be casted to and fro.

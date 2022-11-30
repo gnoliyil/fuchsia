@@ -68,12 +68,16 @@ void CastExprValue(const fxl::RefPtr<EvalContext>& eval_context, CastType cast_t
 
 // A numeric cast handles implicit casts of numeric types. This subset of casting can be synchronous
 // because it does not need to follow references or virtual inheritance.
+//
+// Returns an error if the input is non-numeric.
 ErrOrValue CastNumericExprValue(const fxl::RefPtr<EvalContext>& eval_context,
                                 const ExprValue& source, const fxl::RefPtr<Type>& dest_type,
                                 const ExprValueSource& dest_source = ExprValueSource());
 
 // Convience function around CastNumericExprValue() to do an implicit cast to a boolean value. Like
 // CastNumericExprValue(), this does not follow references.
+//
+// Returns an error if the input is non-numeric.
 ErrOr<bool> CastNumericExprValueToBool(const fxl::RefPtr<EvalContext>& eval_context,
                                        const ExprValue& source);
 

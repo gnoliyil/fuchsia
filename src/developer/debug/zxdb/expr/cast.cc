@@ -193,15 +193,17 @@ ErrOrValue CastNumberToBool(const ExprValue& source, const Type* concrete_from,
         break;
       }
     }
-  } else {
+  } else if (IsFloatingPointBaseType(concrete_from)) {
     // Floating-point-like sources which can't do a byte-by-byte comparison.
-    FX_DCHECK(IsFloatingPointBaseType(concrete_from));
     double double_value;
     if (Err err = source.PromoteToDouble(&double_value); err.has_error())
       return err;
 
     // Use C++ casting rules to convert to bool.
     value = !!double_value;
+  } else {
+    // All other non-numeric types.
+    return Err("Can't cast '%s' to bool.", concrete_from->GetFullName().c_str());
   }
 
   // The data buffer that will be returned, matching the size of the boolean.
