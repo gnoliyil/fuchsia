@@ -221,7 +221,7 @@ impl MessageQueue {
     }
 
     /// Reads the next message in the buffer, if such a message exists.
-    fn read_message(&mut self) -> Option<Message> {
+    pub fn read_message(&mut self) -> Option<Message> {
         self.messages.pop_front().map(|message| {
             self.length -= message.len();
             message

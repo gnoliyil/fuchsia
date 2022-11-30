@@ -9,6 +9,7 @@ use crate::fs::buffers::*;
 use crate::fs::*;
 use crate::lock::Mutex;
 use crate::logging::not_implemented;
+use crate::mm::MemoryAccessor;
 use crate::mm::MemoryAccessorExt;
 use crate::task::*;
 use crate::types::*;
@@ -48,18 +49,56 @@ impl NetlinkAddress {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub enum NetlinkFamily {
     Unsupported,
     Route,
+    Usersock,
+    Firewall,
+    SockDiag,
+    Nflog,
+    Xfrm,
+    Selinux,
+    Iscsi,
+    Audit,
+    FibLookup,
+    Connector,
+    Netfilter,
+    Ip6Fw,
+    Dnrtmsg,
     KobjectUevent,
+    Generic,
+    Scsitransport,
+    Ecryptfs,
+    Rdma,
+    Crypto,
+    Smc,
 }
 
 impl NetlinkFamily {
     pub fn from_raw(family: u32) -> Self {
         match family {
             NETLINK_ROUTE => NetlinkFamily::Route,
+            NETLINK_USERSOCK => NetlinkFamily::Usersock,
+            NETLINK_FIREWALL => NetlinkFamily::Firewall,
+            NETLINK_SOCK_DIAG => NetlinkFamily::SockDiag,
+            NETLINK_NFLOG => NetlinkFamily::Nflog,
+            NETLINK_XFRM => NetlinkFamily::Xfrm,
+            NETLINK_SELINUX => NetlinkFamily::Selinux,
+            NETLINK_ISCSI => NetlinkFamily::Iscsi,
+            NETLINK_AUDIT => NetlinkFamily::Audit,
+            NETLINK_FIB_LOOKUP => NetlinkFamily::FibLookup,
+            NETLINK_CONNECTOR => NetlinkFamily::Connector,
+            NETLINK_NETFILTER => NetlinkFamily::Netfilter,
+            NETLINK_IP6_FW => NetlinkFamily::Ip6Fw,
+            NETLINK_DNRTMSG => NetlinkFamily::Dnrtmsg,
             NETLINK_KOBJECT_UEVENT => NetlinkFamily::KobjectUevent,
+            NETLINK_GENERIC => NetlinkFamily::Generic,
+            NETLINK_SCSITRANSPORT => NetlinkFamily::Scsitransport,
+            NETLINK_ECRYPTFS => NetlinkFamily::Ecryptfs,
+            NETLINK_RDMA => NetlinkFamily::Rdma,
+            NETLINK_CRYPTO => NetlinkFamily::Crypto,
+            NETLINK_SMC => NetlinkFamily::Smc,
             _ => NetlinkFamily::Unsupported,
         }
     }
@@ -106,6 +145,63 @@ impl NetlinkSocketInner {
         let capacity = std::cmp::max(capacity, self.messages.len());
         // We have validated capacity sufficiently that set_capacity should always succeed.
         self.messages.set_capacity(capacity).unwrap();
+    }
+
+    fn read(
+        &mut self,
+        current_task: &CurrentTask,
+        user_buffers: &mut UserBufferIterator<'_>,
+        _flags: SocketMessageFlags,
+    ) -> Result<MessageReadInfo, Errno> {
+        let msg = self.messages.read_message();
+        match msg {
+            Some(message) => {
+                // Mark the message as complete and return it.
+                let mut nl_msg = nlmsghdr::read_from_prefix(message.data.bytes())
+                    .ok_or_else(|| errno!(EINVAL))?;
+                nl_msg.nlmsg_type = NLMSG_DONE as u16;
+                nl_msg.nlmsg_flags &= NLM_F_MULTI as u16;
+                let msg_bytes = nl_msg.as_bytes();
+                let mut bytes_read = 0;
+                while let Some(user_buffer) = user_buffers.next(msg_bytes.len() - bytes_read) {
+                    let bytes_chunk = &msg_bytes[bytes_read..(bytes_read + user_buffer.length)];
+                    current_task.mm.write_memory(user_buffer.address, bytes_chunk)?;
+                    bytes_read += user_buffer.length;
+                }
+
+                let info = MessageReadInfo {
+                    bytes_read,
+                    message_length: msg_bytes.len(),
+                    address: Some(SocketAddress::Netlink(NetlinkAddress::default())),
+                    ancillary_data: vec![],
+                };
+                Ok(info)
+            }
+            None => Ok(MessageReadInfo::default()),
+        }
+    }
+
+    fn write(
+        &mut self,
+        current_task: &CurrentTask,
+        user_buffers: &mut UserBufferIterator<'_>,
+        address: Option<NetlinkAddress>,
+        ancillary_data: &mut Vec<AncillaryData>,
+    ) -> Result<usize, Errno> {
+        let socket_address = match address {
+            Some(addr) => Some(SocketAddress::Netlink(addr)),
+            None => self.address.as_ref().map(|addr| SocketAddress::Netlink(addr.clone())),
+        };
+        let bytes_written = self.messages.write_datagram(
+            current_task,
+            user_buffers,
+            socket_address,
+            ancillary_data,
+        )?;
+        if bytes_written > 0 {
+            self.waiters.notify_events(FdEvents::POLLIN);
+        }
+        Ok(bytes_written)
     }
 }
 
@@ -172,37 +268,65 @@ impl SocketOps for NetlinkSocket {
     fn read(
         &self,
         _socket: &Socket,
-        _current_task: &CurrentTask,
-        _user_buffers: &mut UserBufferIterator<'_>,
-        _flags: SocketMessageFlags,
+        current_task: &CurrentTask,
+        user_buffers: &mut UserBufferIterator<'_>,
+        flags: SocketMessageFlags,
     ) -> Result<MessageReadInfo, Errno> {
-        not_implemented!("?", "NetlinkSocket::read is unsupported");
-        error!(ENOSYS)
+        self.lock().read(current_task, user_buffers, flags)
     }
 
     fn write(
         &self,
         _socket: &Socket,
-        _current_task: &CurrentTask,
+        current_task: &CurrentTask,
         user_buffers: &mut UserBufferIterator<'_>,
-        _dest_address: &mut Option<SocketAddress>,
-        _ancillary_data: &mut Vec<AncillaryData>,
+        dest_address: &mut Option<SocketAddress>,
+        ancillary_data: &mut Vec<AncillaryData>,
     ) -> Result<usize, Errno> {
-        not_implemented!("?", "NetlinkSocket::write is unsupported");
-        Ok(user_buffers.drain_to_vec().len())
+        let inner = self.lock();
+        let mut local_address = inner.address.clone();
+        drop(inner);
+
+        let destination = match dest_address {
+            Some(SocketAddress::Netlink(addr)) => addr,
+            _ => match &mut local_address {
+                Some(addr) => addr,
+                _ => {
+                    let bytes = user_buffers.drain_to_vec();
+                    return Ok(bytes.len());
+                }
+            },
+        };
+
+        if destination.groups != 0 {
+            not_implemented!("?", "NetlinkSockets multicasting is stubbed");
+            let bytes = user_buffers.drain_to_vec();
+            return Ok(bytes.len());
+        }
+
+        self.lock().write(
+            current_task,
+            user_buffers,
+            Some(NetlinkAddress::default()),
+            ancillary_data,
+        )
     }
 
     fn wait_async(
         &self,
-        _socket: &Socket,
-        _current_task: &CurrentTask,
-        _waiter: &Waiter,
-        _events: FdEvents,
-        _handler: EventHandler,
-        _options: WaitAsyncOptions,
+        socket: &Socket,
+        current_task: &CurrentTask,
+        waiter: &Waiter,
+        events: FdEvents,
+        handler: EventHandler,
+        options: WaitAsyncOptions,
     ) -> WaitKey {
-        not_implemented!("?", "NetlinkSocket::wait_async is stubbed");
-        WaitKey::empty()
+        let present_events = self.query_events(socket, current_task);
+        if events & present_events && !options.contains(WaitAsyncOptions::EDGE_TRIGGERED) {
+            waiter.wake_immediately(present_events.mask(), handler)
+        } else {
+            self.lock().waiters.wait_async_mask(waiter, events.mask(), handler)
+        }
     }
 
     fn cancel_wait(
@@ -215,8 +339,13 @@ impl SocketOps for NetlinkSocket {
     }
 
     fn query_events(&self, _socket: &Socket, _current_task: &CurrentTask) -> FdEvents {
-        not_implemented!("?", "NetlinkSocket::query_events is stubbed");
-        FdEvents::empty()
+        let mut present_events = FdEvents::empty();
+        let local_events = self.lock().messages.query_events();
+        if local_events & FdEvents::POLLIN {
+            present_events = FdEvents::POLLIN;
+        }
+
+        present_events
     }
 
     fn shutdown(&self, _socket: &Socket, _how: SocketShutdownFlags) -> Result<(), Errno> {
