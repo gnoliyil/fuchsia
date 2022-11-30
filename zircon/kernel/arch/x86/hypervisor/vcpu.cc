@@ -1198,9 +1198,8 @@ zx::result<ktl::unique_ptr<Vcpu>> DirectVcpu::Create(DirectGuest& guest, zx_vadd
   const paddr_t table_phys = guest.user_aspace().arch_aspace().arch_table_phys();
   vmcs.Write(VmcsFieldXX::HOST_CR3, table_phys);
   vmcs.Write(VmcsFieldXX::GUEST_CR3, table_phys);
-  // VM exit on double fault and page fault exceptions.
-  vmcs.Write(VmcsField32::EXCEPTION_BITMAP,
-             (1u << X86_INT_DOUBLE_FAULT) | (1u << X86_INT_PAGE_FAULT));
+  // VM exit on all exception.
+  vmcs.Write(VmcsField32::EXCEPTION_BITMAP, UINT32_MAX);
   return zx::ok(ktl::move(*vcpu));
 }
 
