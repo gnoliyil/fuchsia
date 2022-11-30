@@ -7,6 +7,7 @@ use {
     anyhow::{Context as _, Error},
     fidl::endpoints::Proxy,
     fidl_fuchsia_fshost::{BlockWatcherMarker, BlockWatcherProxy},
+    fidl_fuchsia_hardware_block::BlockMarker,
     fidl_fuchsia_hardware_block_partition::PartitionProxy,
     fidl_fuchsia_mem::Buffer,
     fidl_fuchsia_paver::{Asset, Configuration, DynamicDataSinkProxy},
@@ -16,7 +17,8 @@ use {
     payload_streamer::{BlockDevicePayloadStreamer, PayloadStreamer},
     recovery_util::block::BlockDevice,
     regex,
-    std::{fmt, fs, io::Read, path::Path, sync::Mutex},
+    remote_block_device::{BlockClient, MutableBufferSlice, RemoteBlockClient},
+    std::{cmp::min, fmt, sync::Mutex},
 };
 
 /// Number of nanoseconds in a second.
@@ -321,19 +323,34 @@ impl Partition {
         }
 
         let vmo = zx::Vmo::create_with_opts(zx::VmoOptions::RESIZABLE, rounded_size)?;
-        let mut buf: Vec<u8> = vec![0; 100 * usize::try_from(self.block_size).unwrap()];
-        let mut file = fs::File::open(Path::new(&self.src)).context("Opening partition")?;
-        let mut read: usize = 0;
-        let size: usize = self.size.try_into().unwrap();
-        while read < size {
-            let write_pos: u64 = read.try_into().unwrap();
-            read += file.read(&mut buf).context("Reading data from partition")?;
-            vmo.write(&buf, write_pos).context("Writing data to VMO")?;
-            if size - read < buf.len() {
-                buf.truncate(size - read);
+
+        let proxy =
+            fuchsia_component::client::connect_to_protocol_at_path::<BlockMarker>(&self.src)
+                .with_context(|| format!("Connecting to block device {}", &self.src))?;
+        let block_device = RemoteBlockClient::new(proxy).await?;
+        let vmo_id = block_device.attach_vmo(&vmo).await?;
+
+        // Reading too much at a time causes the UMS driver to return an error.
+        let max_read_length: u64 = self.block_size * 100;
+        let mut read: u64 = 0;
+        while read < self.size {
+            let read_size = min(self.size - read, max_read_length);
+            if let Err(e) = block_device
+                .read_at(MutableBufferSlice::new_with_vmo_id(&vmo_id, read, read_size), read)
+                .await
+                .context("Reading from partition to VMO")
+            {
+                // Need to detach before returning.
+                block_device.detach_vmo(vmo_id).await?;
+                return Err(e);
             }
+
+            read += read_size;
         }
-        Ok(Buffer { vmo: fidl::Vmo::from(vmo), size: self.size })
+
+        block_device.detach_vmo(vmo_id).await?;
+
+        return Ok(Buffer { vmo: fidl::Vmo::from(vmo), size: self.size });
     }
 
     /// Return the |Configuration| that is represented by the given

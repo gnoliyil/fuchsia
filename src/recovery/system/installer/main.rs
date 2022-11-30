@@ -703,18 +703,10 @@ async fn do_install(
         });
 
         tracing::info!("Paving partition: {:?}", part);
-        if let Err(e) = part.pave(&data_sink, progress_callback).await {
-            tracing::error!("Failed ({:?})", e);
-        } else {
-            tracing::info!("OK");
-            if part.is_ab() {
-                tracing::info!("Paving partition: {:?} [-B]", part);
-                if let Err(e) = part.pave_b(&data_sink).await {
-                    tracing::error!("Failed ({:?})", e);
-                } else {
-                    tracing::info!("OK");
-                }
-            }
+        part.pave(&data_sink, progress_callback).await?;
+        if part.is_ab() {
+            tracing::info!("Paving partition: {:?} [-B]", part);
+            part.pave_b(&data_sink).await?
         }
 
         current_partition += 1;
