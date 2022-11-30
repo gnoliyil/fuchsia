@@ -416,6 +416,7 @@ const (
 	TypeKindBits    TypeKind = "bits"
 	TypeKindArray   TypeKind = "array"
 	TypeKindStruct  TypeKind = "struct"
+	TypeKindAlias   TypeKind = "alias" // Not a type per se, but conveniently regarded as such.
 
 	// TODO(fxbug.dev/110021): These kinds exist only for the sake of the
 	// interim, v2 form of FIDL library zx.
@@ -681,6 +682,8 @@ func resolveType(typ recursiveType, attrs fidlgen.Attributes, decls declMap, typ
 			desc.Kind = TypeKindBits
 		case *Struct:
 			desc.Kind = TypeKindStruct
+		case *Alias:
+			desc.Kind = TypeKindAlias
 		default: // TODO(fxbug.dev/106538): Skip if unknown.
 			return nil, nil
 		}
@@ -698,7 +701,20 @@ func resolveType(typ recursiveType, attrs fidlgen.Attributes, decls declMap, typ
 		desc.ElementType = nested
 	case fidlgen.ZxExperimentalPointerType:
 		desc.Kind = TypeKindPointer
-		nested, err := resolveType(typ.GetElementType(), fidlgen.Attributes{}, decls, typeKinds)
+
+		// TODO(fxbug.dev/105758): Temporary contriving of alias name currently
+		// lost in the IR.
+		//
+		// See the definition of @embedded_alias in //zircon/vdso/README.md for
+		// more detail.
+		elementType := typ.GetElementType()
+		if attr, ok := attrs.LookupAttribute("embedded_alias"); ok {
+			elementType = fidlgenType(fidlgen.Type{
+				Kind:       fidlgen.IdentifierType,
+				Identifier: fidlgen.EncodedCompoundIdentifier(attr.Args[0].ValueString()),
+			})
+		}
+		nested, err := resolveType(elementType, fidlgen.Attributes{}, decls, typeKinds)
 		if err != nil {
 			return nil, err
 		}

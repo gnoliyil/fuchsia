@@ -25,10 +25,13 @@ type StructWithPrimitives struct {
 	UintptrField uintptr
 }
 
+type Uint8Alias = uint8
+
 type StructWithPointers struct {
 	U64ptr   *uint64
 	Charptr  *byte
 	Usizeptr *uint64
 	Byteptr  *uint8
 	Voidptr  unsafe.Pointer
+	Aliasptr *Uint8Alias
 }

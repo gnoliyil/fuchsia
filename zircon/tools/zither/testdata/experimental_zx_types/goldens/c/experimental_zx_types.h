@@ -30,12 +30,15 @@ typedef struct {
   uintptr_t uintptr_field;
 } zither_experimental_zx_types_struct_with_primitives_t;
 
+typedef uint8_t zither_experimental_zx_types_uint8_alias_t;
+
 typedef struct {
   uint64_t* u64ptr;
   char* charptr;
   size_t* usizeptr;
   uint8_t* byteptr;
   void* voidptr;
+  zither_experimental_zx_types_uint8_alias_t* aliasptr;
 } zither_experimental_zx_types_struct_with_pointers_t;
 
 #if defined(__cplusplus)

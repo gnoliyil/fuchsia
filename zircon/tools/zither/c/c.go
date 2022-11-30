@@ -207,7 +207,7 @@ func DescribeType(desc zither.TypeDescriptor) TypeInfo {
 	switch desc.Kind {
 	case zither.TypeKindBool, zither.TypeKindInteger, zither.TypeKindSize:
 		return TypeInfo{Type: PrimitiveTypeName(fidlgen.PrimitiveSubtype(desc.Type))}
-	case zither.TypeKindEnum, zither.TypeKindBits, zither.TypeKindStruct:
+	case zither.TypeKindEnum, zither.TypeKindBits, zither.TypeKindStruct, zither.TypeKindAlias:
 		return TypeInfo{Type: TypeName(desc.Decl)}
 	case zither.TypeKindArray:
 		info := DescribeType(*desc.ElementType)

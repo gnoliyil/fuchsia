@@ -17,6 +17,8 @@ type StructWithPrimitives = struct {
     uintptr_field uintptr;
 };
 
+alias Uint8Alias = uint8;
+
 type StructWithPointers = struct {
     u64ptr experimental_pointer<uint64>;
     charptr experimental_pointer<uchar>;
@@ -24,4 +26,6 @@ type StructWithPointers = struct {
     byteptr experimental_pointer<byte>;
     @voidptr
     voidptr experimental_pointer<byte>;
+    @embedded_alias("zither.experimental.zx.types/Uint8Alias")
+    aliasptr experimental_pointer<Uint8Alias>;
 };
