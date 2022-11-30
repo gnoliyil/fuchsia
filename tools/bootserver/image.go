@@ -28,14 +28,8 @@ func noOpClose() error { return nil }
 
 // Image is a fuchsia image as viewed by bootserver; a simplified version of build.Image.
 type Image struct {
-	// Name is an identifier for this image that usually derives from its target partition.
-	// TODO(fxbug.dev/38517): Remove when BootZedbootShim is deprecated.
-	Name string
-	// Label is the GN label of the image.
-	Label string
-	// Path is the relative location of the image with respect to the image manifest
-	// or the absolute location of the image on disk.
-	Path string
+	build.Image
+
 	// Reader is a reader to the image.
 	Reader io.ReaderAt
 	// Size is the size of the reader in bytes.
@@ -89,10 +83,9 @@ func ConvertFromBuildImages(buildImages []build.Image, bootMode Mode, imageDir s
 			closeImages(imgs)
 			return nil, closeFunc, err
 		}
+		buildImg.Name = buildImg.Type + "_" + buildImg.Name
 		imgs = append(imgs, Image{
-			Name:         buildImg.Type + "_" + buildImg.Name,
-			Label:        buildImg.Label,
-			Path:         buildImg.Path,
+			Image:        buildImg,
 			Reader:       reader,
 			Size:         fi.Size(),
 			Args:         args,
@@ -224,10 +217,9 @@ func ImagesFromGCS(ctx context.Context, manifest *url.URL, bootMode Mode) ([]Ima
 			return nil, closeFunc, fmt.Errorf("failed to get object attributes: %v", err)
 		}
 
+		buildImg.Name = buildImg.Type + "_" + buildImg.Name
 		imgs = append(imgs, Image{
-			Name:         buildImg.Type + "_" + buildImg.Name,
-			Label:        buildImg.Label,
-			Path:         buildImg.Path,
+			Image:        buildImg,
 			Reader:       &gcsReader{obj: obj},
 			Size:         objAttrs.Size,
 			Args:         args,

@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	constants "go.fuchsia.dev/fuchsia/tools/bootserver/bootserverconstants"
+	"go.fuchsia.dev/fuchsia/tools/build"
 	"go.fuchsia.dev/fuchsia/tools/lib/osmisc"
 )
 
@@ -26,14 +27,14 @@ func TestDownloadImagesToDir(t *testing.T) {
 	numImages := 4
 	for i := 0; i < numImages; i++ {
 		imgs = append(imgs, Image{
-			Name:   fmt.Sprintf("image%d", i),
+			Image:  build.Image{Name: fmt.Sprintf("image%d", i)},
 			Reader: bytes.NewReader([]byte(fmt.Sprintf("content of image%d", i))),
 			Args:   []string{"--arg"},
 		})
 	}
 	// Add another image without Args. This image should not be downloaded.
 	imgs = append(imgs, Image{
-		Name:   "noArgsImage",
+		Image:  build.Image{Name: "noArgsImage"},
 		Reader: bytes.NewReader([]byte("content of noArgsImage")),
 	})
 	newImgs, closeFunc, err := downloadImagesToDir(context.Background(), tmpDir, imgs)

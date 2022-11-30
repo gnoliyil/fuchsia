@@ -173,12 +173,10 @@ func downloadImagesToDir(ctx context.Context, dir string, imgs []Image) ([]Image
 				return err
 			}
 			mux.Lock()
-			newImgs = append(newImgs, Image{
-				Name:   img.Name,
-				Reader: f,
-				Size:   fi.Size(),
-				Args:   img.Args,
-			})
+			newImg := img
+			newImg.Reader = f
+			newImg.Size = fi.Size()
+			newImgs = append(newImgs, newImg)
 			mux.Unlock()
 			return nil
 		})

@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"go.fuchsia.dev/fuchsia/tools/bootserver"
+	"go.fuchsia.dev/fuchsia/tools/build"
 )
 
 type mockReadAtCloser struct {
@@ -39,7 +40,7 @@ func TestOverrideImage(t *testing.T) {
 	imgMap := map[string]bootserver.Image{}
 	reader := newMockReadAtCloser("contents")
 	bootloaderImg := bootserver.Image{
-		Name:   "bootloader",
+		Image:  build.Image{Name: "bootloader"},
 		Reader: reader,
 	}
 	imgMap = overrideImage(context.Background(), imgMap, bootloaderImg)
@@ -51,7 +52,7 @@ func TestOverrideImage(t *testing.T) {
 	}
 	reader2 := newMockReadAtCloser("some other contents")
 	bootloaderOverrideImg := bootserver.Image{
-		Name:   "bootloader",
+		Image:  build.Image{Name: "bootloader"},
 		Reader: reader2,
 	}
 	imgMap = overrideImage(context.Background(), imgMap, bootloaderOverrideImg)
@@ -68,24 +69,24 @@ func TestOverrideImage(t *testing.T) {
 
 func TestPopulateReaders(t *testing.T) {
 	bootloaderImage := bootserver.Image{
-		Name: "bootloader",
-		Args: []string{"--bootloader"},
+		Image: build.Image{Name: "bootloader"},
+		Args:  []string{"--bootloader"},
 	}
 	firmwareImage := bootserver.Image{
-		Name: "firmware",
-		Args: []string{"--firmware"},
+		Image: build.Image{Name: "firmware"},
+		Args:  []string{"--firmware"},
 	}
 	firmware2Image := bootserver.Image{
-		Name: "firmware_2",
-		Args: []string{"--firmware-2"},
+		Image: build.Image{Name: "firmware_2"},
+		Args:  []string{"--firmware-2"},
 	}
 	vbmetaRImage := bootserver.Image{
-		Name: "zedboot.vbmeta",
-		Args: []string{"--vbmetar"},
+		Image: build.Image{Name: "zedboot.vbmeta"},
+		Args:  []string{"--vbmetar"},
 	}
 	zedbootImage := bootserver.Image{
-		Name: "zedboot",
-		Args: []string{"--zirconr"},
+		Image: build.Image{Name: "zedboot"},
+		Args:  []string{"--zirconr"},
 	}
 
 	allImgs := []bootserver.Image{bootloaderImage, firmwareImage, firmware2Image, vbmetaRImage, zedbootImage}

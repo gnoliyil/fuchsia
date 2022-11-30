@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"go.fuchsia.dev/fuchsia/tools/bootserver"
+	"go.fuchsia.dev/fuchsia/tools/build"
 	"go.fuchsia.dev/fuchsia/tools/lib/color"
 	"go.fuchsia.dev/fuchsia/tools/lib/logger"
 	"go.fuchsia.dev/fuchsia/tools/lib/retry"
@@ -198,72 +199,92 @@ func getImages(ctx context.Context) ([]bootserver.Image, func() error, error) {
 	// images from the manifest.
 	if bootKernel != "" {
 		imgMap = overrideImage(ctx, imgMap, bootserver.Image{
-			Name: "zbi_netboot",
-			Path: bootKernel,
+			Image: build.Image{
+				Name: "zbi_netboot",
+				Path: bootKernel,
+			},
 			Args: []string{"--boot"},
 		})
 	}
 	if bootloader != "" {
 		imgMap = overrideImage(ctx, imgMap, bootserver.Image{
-			Name: "blk_efi",
-			Path: bootloader,
+			Image: build.Image{
+				Name: "blk_efi",
+				Path: bootloader,
+			},
 			Args: []string{"--bootloader"},
 		})
 	}
 	for _, fw := range firmware {
 		imgMap = overrideImage(ctx, imgMap, bootserver.Image{
 			// Trailing delimiter is OK for untyped images.
-			Name: "img_firmware_" + fw.fwType,
-			Path: fw.value,
+			Image: build.Image{
+				Name: "img_firmware_" + fw.fwType,
+				Path: fw.value,
+			},
 			Args: []string{"--firmware-" + fw.fwType},
 		})
 	}
 	if fvm != "" {
 		imgMap = overrideImage(ctx, imgMap, bootserver.Image{
-			Name: "blk_storage-sparse",
-			Path: fvm,
+			Image: build.Image{
+				Name: "blk_storage-sparse",
+				Path: fvm,
+			},
 			Args: []string{"--fvm"},
 		})
 	}
 	if zircona != "" {
 		imgMap = overrideImage(ctx, imgMap, bootserver.Image{
-			Name: "zbi_zircon-a",
-			Path: zircona,
+			Image: build.Image{
+				Name: "zbi_zircon-a",
+				Path: zircona,
+			},
 			Args: []string{"--zircona"},
 		})
 	}
 	if zirconb != "" {
 		imgMap = overrideImage(ctx, imgMap, bootserver.Image{
-			Name: "zbi_zircon-b",
-			Path: zirconb,
+			Image: build.Image{
+				Name: "zbi_zircon-b",
+				Path: zirconb,
+			},
 			Args: []string{"--zirconb"},
 		})
 	}
 	if zirconr != "" {
 		imgMap = overrideImage(ctx, imgMap, bootserver.Image{
-			Name: "zbi_zircon-r",
-			Path: zirconr,
+			Image: build.Image{
+				Name: "zbi_zircon-r",
+				Path: zirconr,
+			},
 			Args: []string{"--zirconr"},
 		})
 	}
 	if vbmetaa != "" {
 		imgMap = overrideImage(ctx, imgMap, bootserver.Image{
-			Name: "vbmeta_zircon-a",
-			Path: vbmetaa,
+			Image: build.Image{
+				Name: "vbmeta_zircon-a",
+				Path: vbmetaa,
+			},
 			Args: []string{"--vbmetaa"},
 		})
 	}
 	if vbmetab != "" {
 		imgMap = overrideImage(ctx, imgMap, bootserver.Image{
-			Name: "vbmeta_zircon-b",
-			Path: vbmetab,
+			Image: build.Image{
+				Name: "vbmeta_zircon-b",
+				Path: vbmetab,
+			},
 			Args: []string{"--vbmetab"},
 		})
 	}
 	if vbmetar != "" {
 		imgMap = overrideImage(ctx, imgMap, bootserver.Image{
-			Name: "vbmeta_zircon-r",
-			Path: vbmetar,
+			Image: build.Image{
+				Name: "vbmeta_zircon-r",
+				Path: vbmetar,
+			},
 			Args: []string{"--vbmetar"},
 		})
 	}
