@@ -109,6 +109,30 @@ class RunnerImpl extends Runner {
     }
   }
 
+  Future<TableResultClassification> callTwoWayTablePayload(
+      InterfaceHandle<ClosedTarget> targetHandle) async {
+    var target = ClosedTargetProxy();
+    target.ctrl.bind(targetHandle);
+    try {
+      TablePayload result = await target.twoWayTablePayload();
+      return TableResultClassification.withSuccess(result);
+    } catch (e) {
+      return TableResultClassification.withFidlError(classifyError(e));
+    }
+  }
+
+  Future<UnionResultClassification> callTwoWayUnionPayload(
+      InterfaceHandle<ClosedTarget> targetHandle) async {
+    var target = ClosedTargetProxy();
+    target.ctrl.bind(targetHandle);
+    try {
+      UnionPayload result = await target.twoWayUnionPayload();
+      return UnionResultClassification.withSuccess(result);
+    } catch (e) {
+      return UnionResultClassification.withFidlError(classifyError(e));
+    }
+  }
+
   Future<EmptyResultClassification> callStrictOneWay(
       InterfaceHandle<OpenTarget> targetHandle) async {
     var target = OpenTargetProxy();

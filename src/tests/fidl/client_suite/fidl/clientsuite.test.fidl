@@ -97,6 +97,41 @@ type NonEmptyResultWithErrorClassification = union {
     3: fidl_error FidlErrorKind;
 };
 
+// Table used when a method needs a table payload.
+type TablePayload = table {
+    1: some_field int32;
+};
+
+// Result classification for methods with the TablePayload and no error syntax.
+type TableResultClassification = union {
+    // This variant will be set if the method succeeded.
+    1: success TablePayload;
+    // This variant would be used for error syntax if error syntax were
+    // used.
+    2: reserved;
+    // This vairant will be set if there is any error resulting from FIDL
+    // during the call.
+    3: fidl_error FidlErrorKind;
+};
+
+// Table used when a method needs a union payload.
+type UnionPayload = flexible union {
+    1: some_variant int32;
+};
+
+// Result classification for methods with the UnionPayload and no error syntax.
+type UnionResultClassification = union {
+    // This variant will be set if the method succeeded.
+    1: success UnionPayload;
+    // This variant would be used for error syntax if error syntax were
+    // used.
+    2: reserved;
+    // This vairant will be set if there is any error resulting from FIDL
+    // during the call.
+    3: fidl_error FidlErrorKind;
+};
+
+
 // Struct used to report when the client receives an unknown event.
 type UnknownEvent = struct {
     ordinal uint64;
@@ -144,6 +179,16 @@ closed protocol Runner {
     strict CallTwoWayStructPayload(resource struct {
         target client_end:ClosedTarget;
     }) -> (NonEmptyResultClassification);
+
+    // Request that the client call the [`ClosedTarget.TwoWayTablePayload`] method.
+    strict CallTwoWayTablePayload(resource struct {
+        target client_end:ClosedTarget;
+    }) -> (TableResultClassification);
+
+    // Request that the client call the [`ClosedTarget.TwoWayUnionPayload`] method.
+    strict CallTwoWayUnionPayload(resource struct {
+        target client_end:ClosedTarget;
+    }) -> (UnionResultClassification);
 
     // Calls on the open protocol.
 
@@ -254,6 +299,8 @@ closed protocol Runner {
 closed protocol ClosedTarget {
     strict TwoWayNoPayload() -> ();
     strict TwoWayStructPayload() -> (NonEmptyPayload);
+    strict TwoWayTablePayload() -> (TablePayload);
+    strict TwoWayUnionPayload() -> (UnionPayload);
 };
 
 // An event received in the [`ClosedTarget`]. Used to report the received event
@@ -336,6 +383,8 @@ type Test = flexible enum : uint32 {
     SETUP = 1;
     TWO_WAY_NO_PAYLOAD = 2;
     TWO_WAY_STRUCT_PAYLOAD = 42;
+    TWO_WAY_TABLE_PAYLOAD = 43;
+    TWO_WAY_UNION_PAYLOAD = 44;
     GRACEFUL_FAILURE_DURING_CALL_AFTER_PEER_CLOSE = 3;
 
     // ////////////////////////////////////////////////////////////////////////
@@ -386,5 +435,5 @@ type Test = flexible enum : uint32 {
     V1_TWO_WAY_NO_PAYLOAD = 40;
     V1_TWO_WAY_STRUCT_PAYLOAD = 41;
 
-    // next available: 43
+    // next available: 45
 };

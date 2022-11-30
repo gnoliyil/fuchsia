@@ -11,7 +11,8 @@ use {
         EmptyResultClassification, EmptyResultWithErrorClassification, NonEmptyPayload,
         NonEmptyResultClassification, NonEmptyResultWithErrorClassification, OpenTargetEvent,
         OpenTargetEventReport, OpenTargetEventReporterSynchronousProxy, OpenTargetSynchronousProxy,
-        RunnerRequest, RunnerRequestStream, Test, UnknownEvent,
+        RunnerRequest, RunnerRequestStream, TableResultClassification, Test,
+        UnionResultClassification, UnknownEvent,
     },
     fidl_zx as _,
     fuchsia_component::server::ServiceFs,
@@ -62,6 +63,28 @@ async fn run_runner_server(stream: RunnerRequestStream) -> Result<(), Error> {
                             .context("sending response failed"),
                         Err(err) => responder
                             .send(&mut NonEmptyResultClassification::FidlError(classify_error(err)))
+                            .context("sending response failed"),
+                    }
+                }
+                RunnerRequest::CallTwoWayTablePayload { target, responder } => {
+                    let client = ClosedTargetSynchronousProxy::new(target.into_channel());
+                    match client.two_way_table_payload(zx::Time::INFINITE) {
+                        Ok(payload) => responder
+                            .send(&mut TableResultClassification::Success(payload))
+                            .context("sending response failed"),
+                        Err(err) => responder
+                            .send(&mut TableResultClassification::FidlError(classify_error(err)))
+                            .context("sending response failed"),
+                    }
+                }
+                RunnerRequest::CallTwoWayUnionPayload { target, responder } => {
+                    let client = ClosedTargetSynchronousProxy::new(target.into_channel());
+                    match client.two_way_union_payload(zx::Time::INFINITE) {
+                        Ok(payload) => responder
+                            .send(&mut UnionResultClassification::Success(payload))
+                            .context("sending response failed"),
+                        Err(err) => responder
+                            .send(&mut UnionResultClassification::FidlError(classify_error(err)))
                             .context("sending response failed"),
                     }
                 }

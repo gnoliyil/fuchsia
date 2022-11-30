@@ -138,6 +138,30 @@ class RunnerServer : public fidl::clientsuite::Runner {
     });
   }
 
+  void CallTwoWayTablePayload(fidl::InterfaceHandle<fidl::clientsuite::ClosedTarget> target,
+                              CallTwoWayTablePayloadCallback callback) override {
+    SharedCallbackAndClient client_callback(target.Bind(), std::move(callback));
+    client_callback.client().set_error_handler([client_callback](auto status) {
+      client_callback(fidl::clientsuite::TableResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(status)));
+    });
+    client_callback.client()->TwoWayTablePayload([client_callback](auto result) {
+      client_callback(fidl::clientsuite::TableResultClassification::WithSuccess(std::move(result)));
+    });
+  }
+
+  void CallTwoWayUnionPayload(fidl::InterfaceHandle<fidl::clientsuite::ClosedTarget> target,
+                              CallTwoWayUnionPayloadCallback callback) override {
+    SharedCallbackAndClient client_callback(target.Bind(), std::move(callback));
+    client_callback.client().set_error_handler([client_callback](auto status) {
+      client_callback(fidl::clientsuite::UnionResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(status)));
+    });
+    client_callback.client()->TwoWayUnionPayload([client_callback](auto result) {
+      client_callback(fidl::clientsuite::UnionResultClassification::WithSuccess(std::move(result)));
+    });
+  }
+
   void CallStrictOneWay(::fidl::InterfaceHandle<::fidl::clientsuite::OpenTarget> target,
                         CallStrictOneWayCallback callback) override {
     SharedCallbackAndClient client_callback(target.Bind(), std::move(callback));

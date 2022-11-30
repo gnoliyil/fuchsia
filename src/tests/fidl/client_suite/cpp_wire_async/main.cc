@@ -61,6 +61,42 @@ class RunnerServer : public fidl::WireServer<fidl_clientsuite::Runner> {
     });
   }
 
+  void CallTwoWayTablePayload(CallTwoWayTablePayloadRequestView request,
+                              CallTwoWayTablePayloadCompleter::Sync& completer) override {
+    auto client = fidl::WireSharedClient(std::move(request->target), dispatcher_);
+    client->TwoWayTablePayload().ThenExactlyOnce(
+        [completer = completer.ToAsync(), client = client.Clone()](auto& result) mutable {
+          if (result.ok()) {
+            completer.Reply(
+                fidl::WireResponse<fidl_clientsuite::Runner::CallTwoWayTablePayload>::WithSuccess(
+                    fidl::ObjectView<fidl_clientsuite::wire::TablePayload>::FromExternal(
+                        &result.value())));
+          } else {
+            completer.Reply(
+                fidl::WireResponse<fidl_clientsuite::Runner::CallTwoWayTablePayload>::WithFidlError(
+                    clienttest_util::ClassifyError(result)));
+          }
+        });
+  }
+
+  void CallTwoWayUnionPayload(CallTwoWayUnionPayloadRequestView request,
+                              CallTwoWayUnionPayloadCompleter::Sync& completer) override {
+    auto client = fidl::WireSharedClient(std::move(request->target), dispatcher_);
+    client->TwoWayUnionPayload().ThenExactlyOnce(
+        [completer = completer.ToAsync(), client = client.Clone()](auto& result) mutable {
+          if (result.ok()) {
+            completer.Reply(
+                fidl::WireResponse<fidl_clientsuite::Runner::CallTwoWayUnionPayload>::WithSuccess(
+                    fidl::ObjectView<fidl_clientsuite::wire::UnionPayload>::FromExternal(
+                        &result.value())));
+          } else {
+            completer.Reply(
+                fidl::WireResponse<fidl_clientsuite::Runner::CallTwoWayUnionPayload>::WithFidlError(
+                    clienttest_util::ClassifyError(result)));
+          }
+        });
+  }
+
   void CallStrictOneWay(CallStrictOneWayRequestView request,
                         CallStrictOneWayCompleter::Sync& completer) override {
     auto client = fidl::WireClient(std::move(request->target), dispatcher_);

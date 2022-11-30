@@ -48,6 +48,30 @@ class RunnerServer : public fidl::Server<fidl_clientsuite::Runner> {
     }
   }
 
+  void CallTwoWayTablePayload(CallTwoWayTablePayloadRequest& request,
+                              CallTwoWayTablePayloadCompleter::Sync& completer) override {
+    auto client = fidl::SyncClient(std::move(request.target()));
+    auto result = client->TwoWayTablePayload();
+    if (result.is_ok()) {
+      completer.Reply(fidl_clientsuite::TableResultClassification::WithSuccess(result.value()));
+    } else {
+      completer.Reply(fidl_clientsuite::TableResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(result.error_value())));
+    }
+  }
+
+  void CallTwoWayUnionPayload(CallTwoWayUnionPayloadRequest& request,
+                              CallTwoWayUnionPayloadCompleter::Sync& completer) override {
+    auto client = fidl::SyncClient(std::move(request.target()));
+    auto result = client->TwoWayUnionPayload();
+    if (result.is_ok()) {
+      completer.Reply(fidl_clientsuite::UnionResultClassification::WithSuccess(result.value()));
+    } else {
+      completer.Reply(fidl_clientsuite::UnionResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(result.error_value())));
+    }
+  }
+
   void CallStrictOneWay(CallStrictOneWayRequest& request,
                         CallStrictOneWayCompleter::Sync& completer) override {
     auto client = fidl::SyncClient(std::move(request.target()));

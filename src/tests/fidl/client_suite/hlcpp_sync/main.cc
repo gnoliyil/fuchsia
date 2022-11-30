@@ -77,6 +77,32 @@ class RunnerServer : public fidl::clientsuite::Runner {
     }
   }
 
+  void CallTwoWayTablePayload(fidl::InterfaceHandle<fidl::clientsuite::ClosedTarget> target,
+                              CallTwoWayTablePayloadCallback callback) override {
+    auto client = target.BindSync();
+    fidl::clientsuite::TablePayload payload;
+    auto status = client->TwoWayTablePayload(&payload);
+    if (status == ZX_OK) {
+      callback(fidl::clientsuite::TableResultClassification::WithSuccess(std::move(payload)));
+    } else {
+      callback(fidl::clientsuite::TableResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(status)));
+    }
+  }
+
+  void CallTwoWayUnionPayload(fidl::InterfaceHandle<fidl::clientsuite::ClosedTarget> target,
+                              CallTwoWayUnionPayloadCallback callback) override {
+    auto client = target.BindSync();
+    fidl::clientsuite::UnionPayload payload;
+    auto status = client->TwoWayUnionPayload(&payload);
+    if (status == ZX_OK) {
+      callback(fidl::clientsuite::UnionResultClassification::WithSuccess(std::move(payload)));
+    } else {
+      callback(fidl::clientsuite::UnionResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(status)));
+    }
+  }
+
   void CallStrictOneWay(::fidl::InterfaceHandle<::fidl::clientsuite::OpenTarget> target,
                         CallStrictOneWayCallback callback) override {
     auto client = target.BindSync();

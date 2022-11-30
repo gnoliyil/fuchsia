@@ -62,6 +62,34 @@ class RunnerServer : public fidl::Server<fidl_clientsuite::Runner> {
         });
   }
 
+  void CallTwoWayTablePayload(CallTwoWayTablePayloadRequest& request,
+                              CallTwoWayTablePayloadCompleter::Sync& completer) override {
+    auto client = fidl::SharedClient(std::move(request.target()), dispatcher_);
+    client->TwoWayTablePayload().ThenExactlyOnce([completer = completer.ToAsync(),
+                                                  client = client.Clone()](auto& result) mutable {
+      if (result.is_ok()) {
+        completer.Reply(fidl_clientsuite::TableResultClassification::WithSuccess(result.value()));
+      } else {
+        completer.Reply(fidl_clientsuite::TableResultClassification::WithFidlError(
+            clienttest_util::ClassifyError(result.error_value())));
+      }
+    });
+  }
+
+  void CallTwoWayUnionPayload(CallTwoWayUnionPayloadRequest& request,
+                              CallTwoWayUnionPayloadCompleter::Sync& completer) override {
+    auto client = fidl::SharedClient(std::move(request.target()), dispatcher_);
+    client->TwoWayUnionPayload().ThenExactlyOnce([completer = completer.ToAsync(),
+                                                  client = client.Clone()](auto& result) mutable {
+      if (result.is_ok()) {
+        completer.Reply(fidl_clientsuite::UnionResultClassification::WithSuccess(result.value()));
+      } else {
+        completer.Reply(fidl_clientsuite::UnionResultClassification::WithFidlError(
+            clienttest_util::ClassifyError(result.error_value())));
+      }
+    });
+  }
+
   void CallStrictOneWay(CallStrictOneWayRequest& request,
                         CallStrictOneWayCompleter::Sync& completer) override {
     auto client = fidl::SharedClient(std::move(request.target()), dispatcher_);
