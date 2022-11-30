@@ -71,6 +71,11 @@
             from: "parent",
             to: [ "#runners" ],
         },
+        {
+            protocol: "fuchsia.logger.LogSink",
+            from: "parent",
+            to: "#netstack",
+        },
     ],
     expose: [
         {
