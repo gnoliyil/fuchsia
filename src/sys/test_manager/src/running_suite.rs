@@ -30,8 +30,8 @@ use {
     fuchsia_async::{self as fasync, TimeoutExt},
     fuchsia_component::client::{connect_to_protocol, connect_to_protocol_at_dir_root},
     fuchsia_component_test::{
-        error::Error as RealmBuilderError, Capability, ChildOptions, Event, RealmBuilder,
-        RealmInstance, Ref, Route,
+        error::Error as RealmBuilderError, Capability, ChildOptions, RealmBuilder, RealmInstance,
+        Ref, Route,
     },
     fuchsia_url::AbsoluteComponentUrl,
     fuchsia_zircon as zx,
@@ -785,18 +785,6 @@ async fn get_realm(
         .await?;
 
     // wrapper realm to archivist
-    wrapper_realm
-        .add_route(
-            Route::new()
-                .capability(Capability::event(Event::Stopped))
-                .capability(Capability::event(Event::directory_ready("diagnostics")))
-                .capability(Capability::event(Event::capability_requested(
-                    "fuchsia.logger.LogSink",
-                )))
-                .from(Ref::framework())
-                .to(&archivist),
-        )
-        .await?;
 
     wrapper_realm
         .add_route(

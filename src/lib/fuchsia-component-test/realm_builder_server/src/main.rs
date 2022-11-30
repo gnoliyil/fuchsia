@@ -1123,8 +1123,7 @@ impl RealmNode2 {
                         ftest::Capability::Protocol(ftest::Protocol { availability, .. })
                         | ftest::Capability::Directory(ftest::Directory { availability, .. })
                         | ftest::Capability::Storage(ftest::Storage { availability, .. })
-                        | ftest::Capability::Service(ftest::Service { availability, .. })
-                        | ftest::Capability::Event(ftest::Event { availability, .. }) => {
+                        | ftest::Capability::Service(ftest::Service { availability, .. }) => {
                             match availability {
                                 Some(fcdecl::Availability::Required) | None => (),
                                 _ => {
@@ -1368,10 +1367,6 @@ fn create_capability_decl(
             let source_path = Some(try_into_service_path(&service.name, &service.path)?);
             cm_rust::CapabilityDecl::Service(cm_rust::ServiceDecl { name, source_path })
         }
-        ftest::Capability::Event(event) => {
-            let name = try_into_source_name(&event.name)?;
-            cm_rust::CapabilityDecl::Event(cm_rust::EventDecl { name })
-        }
         ftest::Capability::EventStream(event) => {
             let name = try_into_source_name(&event.name)?;
             cm_rust::CapabilityDecl::EventStream(cm_rust::EventStreamDecl { name })
@@ -1455,20 +1450,6 @@ fn create_offer_decl(
                 target_name,
                 source_instance_filter: None,
                 renamed_instances: None,
-                availability,
-            })
-        }
-        ftest::Capability::Event(event) => {
-            let source_name = try_into_source_name(&event.name)?;
-            let target_name = try_into_target_name(&event.name, &event.as_)?;
-            let filter = event.filter.as_ref().cloned().map(FidlIntoNative::fidl_into_native);
-            let availability = get_offer_availability(&event.availability);
-            cm_rust::OfferDecl::Event(cm_rust::OfferEventDecl {
-                source,
-                source_name,
-                target,
-                target_name,
-                filter,
                 availability,
             })
         }
@@ -1568,12 +1549,6 @@ fn create_expose_decl(
                 target_name,
             })
         }
-        ftest::Capability::Event(event) => {
-            let source_name = try_into_source_name(&event.name)?;
-            return Err(RealmBuilderError::CapabilityInvalid(anyhow::format_err!(
-                "Capability \"{}\" can not be exposed because it's not possible to expose event capabilities. This is most likely a bug from the Realm Builder library. Please file one at https://bugs.fuchsia.dev under the ComponentFramework>SDK component.", source_name
-            )));
-        }
         _ => {
             return Err(RealmBuilderError::CapabilityInvalid(anyhow::format_err!(
                 "Encountered unsupported capability variant: {:?}.",
@@ -1671,20 +1646,6 @@ fn create_use_decl(capability: ftest::Capability) -> Result<cm_rust::UseDecl, Re
                 target_path,
                 dependency_type: cm_rust::DependencyType::Strong,
                 availability: check_and_unwrap_use_availability(service.availability)?,
-            })
-        }
-        ftest::Capability::Event(event) => {
-            // If the capability was renamed in the parent's offer declaration, we want to use the
-            // post-rename version of it here.
-            let source_name = try_into_target_name(&event.name, &event.as_)?;
-            let filter = event.filter.as_ref().cloned().map(FidlIntoNative::fidl_into_native);
-            cm_rust::UseDecl::Event(cm_rust::UseEventDecl {
-                source: cm_rust::UseSource::Parent,
-                source_name: source_name.clone(),
-                target_name: source_name,
-                filter,
-                dependency_type: cm_rust::DependencyType::Strong,
-                availability: check_and_unwrap_use_availability(event.availability)?,
             })
         }
         ftest::Capability::EventStream(event) => {
@@ -2002,7 +1963,6 @@ mod tests {
         fidl_fuchsia_io as fio,
         fidl_fuchsia_logger::LogSinkMarker,
         fidl_fuchsia_mem as fmem, fuchsia_async as fasync, fuchsia_zircon as zx,
-        maplit::hashmap,
         std::convert::TryInto,
         test_case::test_case,
     };
@@ -4208,74 +4168,6 @@ mod tests {
                 ComponentTree { decl: a_decl, children: vec![] },
             )],
             decl: cm_rust::ComponentDecl::default(),
-        };
-        expected_tree.add_auto_decls();
-        assert_decls_eq!(tree_from_resolver, expected_tree);
-    }
-
-    #[fuchsia::test]
-    async fn route_event_to_child_component() {
-        let mut realm_and_builder_task = RealmAndBuilderTask::new();
-        realm_and_builder_task
-            .realm_proxy
-            .add_child("a", "test://a", ftest::ChildOptions::EMPTY)
-            .await
-            .expect("failed to call add_child")
-            .expect("add_child returned an error");
-        realm_and_builder_task
-            .realm_proxy
-            .add_route(
-                &mut vec![ftest::Capability::Event(ftest::Event {
-                    name: Some("directory_ready".to_string()),
-                    as_: None,
-                    filter: Some(fdata::Dictionary {
-                        entries: Some(vec![fdata::DictionaryEntry {
-                            key: "name".to_string(),
-                            value: Some(Box::new(fdata::DictionaryValue::Str(
-                                "hippos".to_string(),
-                            ))),
-                        }]),
-                        ..fdata::Dictionary::EMPTY
-                    }),
-                    ..ftest::Event::EMPTY
-                })]
-                .iter_mut(),
-                &mut fcdecl::Ref::Parent(fcdecl::ParentRef {}),
-                &mut vec![fcdecl::Ref::Child(fcdecl::ChildRef {
-                    name: "a".to_string(),
-                    collection: None,
-                })]
-                .iter_mut(),
-            )
-            .await
-            .expect("failed to call add_child")
-            .expect("add_route returned an error");
-        let tree_from_resolver = realm_and_builder_task.call_build_and_get_tree().await;
-        let mut expected_tree = ComponentTree {
-            decl: cm_rust::ComponentDecl {
-                children: vec![cm_rust::ChildDecl {
-                    name: "a".to_string(),
-                    url: "test://a".to_string(),
-                    startup: fcdecl::StartupMode::Lazy,
-                    on_terminate: None,
-                    environment: None,
-                }],
-                offers: vec![cm_rust::OfferDecl::Event(cm_rust::OfferEventDecl {
-                    source: cm_rust::OfferSource::Parent,
-                    source_name: "directory_ready".into(),
-                    target: cm_rust::OfferTarget::Child(cm_rust::ChildRef {
-                        name: "a".to_string(),
-                        collection: None,
-                    }),
-                    target_name: "directory_ready".into(),
-                    filter: Some(hashmap!(
-                        "name".to_string() => cm_rust::DictionaryValue::Str("hippos".to_string()),
-                    )),
-                    availability: cm_rust::Availability::Required,
-                })],
-                ..cm_rust::ComponentDecl::default()
-            },
-            children: vec![],
         };
         expected_tree.add_auto_decls();
         assert_decls_eq!(tree_from_resolver, expected_tree);

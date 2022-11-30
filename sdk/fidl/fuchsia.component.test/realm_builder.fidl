@@ -163,6 +163,7 @@ type Capability = flexible union {
     2: directory Directory;
     3: storage Storage;
     4: service Service;
+    @available(removed=11)
     5: event Event;
     @available(added=9)
     6: event_stream EventStream;

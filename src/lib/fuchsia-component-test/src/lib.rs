@@ -16,7 +16,6 @@ use {
     fuchsia_component::client as fclient,
     fuchsia_zircon as zx,
     futures::{future::BoxFuture, lock::Mutex, FutureExt, TryFutureExt},
-    maplit::hashmap,
     rand::Rng,
     std::{
         collections::HashMap,
@@ -279,11 +278,6 @@ impl Capability {
         ServiceCapability { name: name.into(), as_: None, path: None, availability: None }
     }
 
-    /// Creates a new event capability.
-    pub fn event(event: Event) -> EventCapability {
-        EventCapability { event }
-    }
-
     /// Creates a new event_stream capability.
     pub fn event_stream(name: impl Into<String>) -> EventStream {
         EventStream { name: name.into(), rename: None, path: None, scope: None }
@@ -526,22 +520,6 @@ impl Into<ftest::Capability> for ServiceCapability {
             path: self.path,
             availability: self.availability,
             ..ftest::Service::EMPTY
-        })
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct EventCapability {
-    event: Event,
-}
-
-impl Into<ftest::Capability> for EventCapability {
-    fn into(self) -> ftest::Capability {
-        ftest::Capability::Event(ftest::Event {
-            name: Some(self.event.name().to_string()),
-            as_: None,
-            filter: self.event.filter().map(NativeIntoFidl::native_into_fidl),
-            ..ftest::Event::EMPTY
         })
     }
 }
@@ -1852,54 +1830,6 @@ impl EventStream {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Event {
-    Started,
-    Stopped,
-    // Filter.name
-    CapabilityRequested(String),
-    // Filter.name
-    DirectoryReady(String),
-}
-
-impl Event {
-    pub fn started() -> Self {
-        Self::Started
-    }
-
-    pub fn stopped() -> Self {
-        Self::Stopped
-    }
-
-    pub fn capability_requested(filter_name: impl Into<String>) -> Self {
-        Self::CapabilityRequested(filter_name.into())
-    }
-
-    pub fn directory_ready(filter_name: impl Into<String>) -> Self {
-        Self::DirectoryReady(filter_name.into())
-    }
-
-    fn name(&self) -> &'static str {
-        match self {
-            Event::Started => "started",
-            Event::Stopped => "stopped",
-            Event::CapabilityRequested(_) => "capability_requested",
-            Event::DirectoryReady(_) => "directory_ready",
-        }
-    }
-
-    /// Returns the Event Filter that some events (like DirectoryReady and CapabilityRequested)
-    /// have.
-    fn filter(&self) -> Option<HashMap<String, cm_rust::DictionaryValue>> {
-        match self {
-            Event::CapabilityRequested(name) | Event::DirectoryReady(name) => Some(
-                hashmap!("name".to_string() => cm_rust::DictionaryValue::Str(name.to_string())),
-            ),
-            _ => None,
-        }
-    }
-}
-
 /// The properties for a child being added to a realm
 #[derive(Debug, Clone)]
 pub struct ChildOptions {
@@ -2213,12 +2143,10 @@ impl Drop for ScopedInstance {
 #[cfg(test)]
 mod tests {
     use {
-        super::Event as RbEvent, // To disambiguate with tracing::Event
         super::*,
         assert_matches::assert_matches,
         fidl::endpoints::create_proxy_and_stream,
-        fidl_fuchsia_component as fcomponent,
-        fidl_fuchsia_component_config as fconfig,
+        fidl_fuchsia_component as fcomponent, fidl_fuchsia_component_config as fconfig,
         futures::{channel::mpsc, future::pending, FutureExt, SinkExt, StreamExt, TryStreamExt},
     };
 
@@ -2621,18 +2549,6 @@ mod tests {
                 path: None,
                 availability: Some(fdecl::Availability::SameAsTarget),
             },
-        );
-    }
-
-    #[fuchsia::test]
-    async fn event_capability_construction() {
-        assert_eq!(
-            Capability::event(RbEvent::Started),
-            EventCapability { event: RbEvent::Started },
-        );
-        assert_eq!(
-            Capability::event(RbEvent::directory_ready("hippos")),
-            EventCapability { event: RbEvent::DirectoryReady("hippos".to_string()) },
         );
     }
 
