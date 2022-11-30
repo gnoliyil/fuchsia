@@ -82,9 +82,6 @@ func encodeSuccessCases(gidlEncodeSuccesses []gidlir.EncodeSuccess, schema gidlm
 		if containsUnionOrTable(decl) {
 			continue
 		}
-		if gidlir.ContainsUnknownField(encodeSuccess.Value) {
-			continue
-		}
 		handleDefs := libhlcpp.BuildHandleDefs(encodeSuccess.HandleDefs)
 		valueBuild, valueVar := libllcpp.BuildValueAllocator("allocator", encodeSuccess.Value, decl, libllcpp.HandleReprRaw)
 		fuchsiaOnly := decl.IsResourceType() || len(encodeSuccess.HandleDefs) > 0
@@ -116,9 +113,6 @@ func decodeSuccessCases(gidlDecodeSuccesses []gidlir.DecodeSuccess, schema gidlm
 			return nil, fmt.Errorf("decode success %s: %s", decodeSuccess.Name, err)
 		}
 		if containsUnionOrTable(decl) {
-			continue
-		}
-		if gidlir.ContainsUnknownField(decodeSuccess.Value) {
 			continue
 		}
 		handleDefs := libhlcpp.BuildHandleInfoDefs(decodeSuccess.HandleDefs)

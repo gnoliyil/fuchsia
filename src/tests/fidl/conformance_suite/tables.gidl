@@ -64,15 +64,33 @@ success("TableFieldInlinedHandle") {
 
 // A field that would normally be inlined is empty.
 // This tests logic checking that values are inlined in the correct situations.
-success("TableFieldInlinedReserved") {
-    // In HLCPP, unknown data is dropped from objects and can't be encoded.
-    bindings_denylist = [hlcpp],
+success("TableFieldInlinedReservedStored") {
+    // TODO(fxbug.dev/85383): Remove in favor of TableFieldInlinedReservedDropped.
+    bindings_allowlist = [dart, go, rust],
     value = TableFieldInlinedStruct{
         t: TableFieldInlined{
             2: {
                 bytes = [num(123):8],
             },
         },
+    },
+    bytes = {
+        v2 = [
+            num(2):8,
+            repeat(0xff):8,
+
+            num(0):4, num(0):2, num(0):2,
+            num(8):4, num(0):2, num(0):2,
+            num(123):8,
+        ],
+    },
+}
+
+decode_success("TableFieldInlinedReservedDropped") {
+    // TODO(fxbug.dev/85383): Drop unknown data in all bindings.
+    bindings_denylist = [dart, go, rust],
+    value = TableFieldInlinedStruct{
+        t: TableFieldInlined{},
     },
     bytes = {
         v2 = [
@@ -239,9 +257,9 @@ decode_failure("TableFieldOutOfLineBadOutlinedMarker") {
 }
 
 // Tests a table in which a value is inlined into an unknown field.
-success("TableFieldUnknownInlined") {
-    // In HLCPP, unknown data is dropped from objects and can't be encoded.
-    bindings_denylist = [hlcpp],
+success("TableFieldUnknownInlinedStored") {
+    // TODO(fxbug.dev/85383): Remove in favor of TableFieldUnknownInlinedDropped.
+    bindings_allowlist = [dart, go, rust],
     value = TableFieldUnknownStruct{
         t: TableFieldUnknown{
             1: {
@@ -259,10 +277,27 @@ success("TableFieldUnknownInlined") {
     },
 }
 
+// Tests a table in which a value is inlined into an unknown field.
+decode_success("TableFieldUnknownInlinedDropped") {
+    // TODO(fxbug.dev/85383): Drop unknown data in all bindings.
+    bindings_denylist = [dart, go, rust],
+    value = TableFieldUnknownStruct{
+        t: TableFieldUnknown{},
+    },
+    bytes = {
+        v2 = [
+            num(1):8,
+            repeat(0xff):8,
+
+            num(123):4, num(0):2, num(1):2,
+        ],
+    },
+}
+
 // Tests a table in which a handle value is inlined into an unknown field.
-success("TableFieldUnknownInlinedHandle") {
-    // In HLCPP, unknown data is dropped from objects and can't be encoded.
-    bindings_denylist = [hlcpp],
+success("TableFieldUnknownInlinedHandleStored") {
+    // TODO(fxbug.dev/85383): Remove in favor of TableFieldUnknownInlinedHandleDropped.
+    bindings_allowlist = [dart, go, rust],
     handle_defs = {
         #0 = channel(),
     },
@@ -287,16 +322,67 @@ success("TableFieldUnknownInlinedHandle") {
     },
 }
 
+// Tests a table in which a handle value is inlined into an unknown field.
+decode_success("TableFieldUnknownInlinedHandleDropped") {
+    // TODO(fxbug.dev/85383): Drop unknown data in all bindings.
+    bindings_denylist = [dart, go, rust],
+    handle_defs = {
+        #0 = channel(),
+    },
+    value = TableFieldUnknownResourceStruct{
+        t: TableFieldUnknownResource{},
+    },
+    bytes = {
+        v2 = [
+            num(1):8,
+            repeat(0xff):8,
+
+            repeat(0xff):4, num(1):2, num(1):2,
+        ],
+    },
+    handles = {
+        v2 = [#0],
+    },
+}
+
 // Tests a table in which a value is stored out of line in an unknown field.
-success("TableFieldUnknownOutOfLine") {
-    // In HLCPP, unknown data is dropped from objects and can't be encoded.
-    bindings_denylist = [hlcpp],
+success("TableFieldUnknownOutOfLineStored") {
+    // TODO(fxbug.dev/85383): Remove in favor of TableFieldUnknownOutOfLineDropped.
+    bindings_allowlist = [dart, go, rust],
     value = TableFieldUnknownStruct{
         t: TableFieldUnknown{
             1: {
                 bytes = [num(123):8],
             },
         },
+    },
+    bytes = {
+        v1 = [
+            num(1):8,
+            repeat(0xff):8,
+
+            num(8):4, num(0):4,
+            repeat(0xff):8,
+
+            num(123):8,
+        ],
+        v2 = [
+            num(1):8,
+            repeat(0xff):8,
+
+            num(8):4, num(0):2, num(0):2,
+
+            num(123):8,
+        ],
+    },
+}
+
+// Tests a table in which a value is stored out of line in an unknown field.
+decode_success("TableFieldUnknownOutOfLineDropped") {
+    // TODO(fxbug.dev/85383): Drop unknown data in all bindings.
+    bindings_denylist = [dart, go, rust],
+    value = TableFieldUnknownStruct{
+        t: TableFieldUnknown{},
     },
     bytes = {
         v1 = [
@@ -698,8 +784,8 @@ success("TableWithGaps") {
 }
 
 decode_success("ValueTableUnknownReservedDropped") {
-    // Natural C++, Wire C++, and HLCPP don't store unknowns.
-    bindings_allowlist = [cpp, llcpp, hlcpp],
+    // TODO(fxbug.dev/85383): Drop unknown data in all bindings.
+    bindings_denylist = [dart, go, rust],
     bytes = {
         v1 = [
             5, 0, 0, 0, 0, 0, 0, 0, // max ordinal
@@ -740,8 +826,8 @@ decode_success("ValueTableUnknownReservedDropped") {
 }
 
 decode_success("ResourceTableUnknownReservedDropped") {
-    // Natural C++, Wire C++, and HLCPP don't store unknowns.
-    bindings_allowlist = [cpp, llcpp, hlcpp],
+    // TODO(fxbug.dev/85383): Drop unknown data in all bindings.
+    bindings_denylist = [dart, go, rust],
     bytes = {
         v1 = [
             5, 0, 0, 0, 0, 0, 0, 0, // max ordinal
@@ -782,8 +868,8 @@ decode_success("ResourceTableUnknownReservedDropped") {
 }
 
 success("ValueTableUnknownReservedStored") {
-    // Natural C++, Wire C++, and HLCPP are tested in the ValueTableUnknownReservedDropped test
-    bindings_denylist = [cpp, llcpp, hlcpp],
+    // TODO(fxbug.dev/85383): Remove in favor of ValueTableUnknownReservedDropped.
+    bindings_allowlist = [dart, go, rust],
     bytes = {
         v1 = [
             5, 0, 0, 0, 0, 0, 0, 0, // max ordinal
@@ -827,8 +913,8 @@ success("ValueTableUnknownReservedStored") {
 }
 
 success("ResourceTableUnknownReservedStored") {
-    // Natural C++, Wire C++, and HLCPP are tested in the ResourceTableUnknownReservedDropped test
-    bindings_denylist = [cpp, llcpp, hlcpp],
+    // TODO(fxbug.dev/85383): Remove in favor of ResourceTableUnknownReservedDropped.
+    bindings_allowlist = [dart, go, rust],
     bytes = {
         v1 = [
             5, 0, 0, 0, 0, 0, 0, 0, // max ordinal
@@ -872,8 +958,8 @@ success("ResourceTableUnknownReservedStored") {
 }
 
 decode_success("ValueTableUnknownTrailingDropped") {
-    // Natural C++, Wire C++, and HLCPP don't store unknowns.
-    bindings_allowlist = [cpp, llcpp, hlcpp],
+    // TODO(fxbug.dev/85383): Drop unknown data in all bindings.
+    bindings_denylist = [dart, go, rust],
     bytes = {
         v1 = [
             6, 0, 0, 0, 0, 0, 0, 0, // max ordinal
@@ -917,8 +1003,8 @@ decode_success("ValueTableUnknownTrailingDropped") {
 }
 
 decode_success("ResourceTableUnknownTrailingDropped") {
-    // Natural C++, Wire C++, and HLCPP don't store unknowns.
-    bindings_allowlist = [cpp, llcpp, hlcpp],
+    // TODO(fxbug.dev/85383): Drop unknown data in all bindings.
+    bindings_denylist = [dart, go, rust],
     bytes = {
         v1 = [
             6, 0, 0, 0, 0, 0, 0, 0, // max ordinal
@@ -962,8 +1048,8 @@ decode_success("ResourceTableUnknownTrailingDropped") {
 }
 
 success("ValueTableUnknownTrailingStored") {
-    // Natural C++, Wire C++, and HLCPP are tested in the ValueTableUnknownTrailingDropped test
-    bindings_denylist = [cpp, llcpp, hlcpp],
+    // TODO(fxbug.dev/85383): Remove in favor of ValueTableUnknownTrailingDropped.
+    bindings_allowlist = [dart, go, rust],
     bytes = {
         v1 = [
             6, 0, 0, 0, 0, 0, 0, 0, // max ordinal
@@ -1010,8 +1096,8 @@ success("ValueTableUnknownTrailingStored") {
 }
 
 success("ResourceTableUnknownTrailingStored") {
-    // Natural C++, Wire C++, and HLCPP are tested in the ResourceTableUnknownTrailingDropped test
-    bindings_denylist = [cpp, llcpp, hlcpp],
+    // TODO(fxbug.dev/85383): Remove in favor of ResourceTableUnknownTrailingDropped.
+    bindings_allowlist = [dart, go, rust],
     bytes = {
         v1 = [
             6, 0, 0, 0, 0, 0, 0, 0, // max ordinal
@@ -1058,8 +1144,8 @@ success("ResourceTableUnknownTrailingStored") {
 }
 
 decode_success("ValueTableUnknownTrailingHandlesDropped") {
-    // Natural C++, Wire C++, and HLCPP don't store unknowns.
-    bindings_allowlist = [cpp, llcpp, hlcpp],
+    // TODO(fxbug.dev/85383): Drop unknown data in all bindings.
+    bindings_denylist = [dart, go, rust],
     handle_defs = {
         #0 = event(),
         #1 = event(),
@@ -1104,8 +1190,8 @@ decode_success("ValueTableUnknownTrailingHandlesDropped") {
 }
 
 decode_success("ResourceTableUnknownTrailingHandlesDropped") {
-    // Natural C++, Wire C++, and HLCPP don't store unknowns.
-    bindings_allowlist = [cpp, llcpp, hlcpp],
+    // TODO(fxbug.dev/85383): Drop unknown data in all bindings.
+    bindings_denylist = [dart, go, rust],
     handle_defs = {
         #0 = event(),
         #1 = event(),
@@ -1150,9 +1236,8 @@ decode_success("ResourceTableUnknownTrailingHandlesDropped") {
 }
 
 decode_failure("ValueTableUnknownTrailingHandlesRejected") {
-    // Natural C++, Wire C++, and HLCPP are tested in the
-    // ValueTableUnknownTrailingHandlesDropped test
-    bindings_denylist = [c, cpp, llcpp, hlcpp],
+    // TODO(fxbug.dev/85383): Remove in favor of ValueTableUnknownTrailingHandlesDropped.
+    bindings_allowlist = [dart, go, rust],
     handle_defs = {
         #0 = event(),
         #1 = event(),
@@ -1194,8 +1279,8 @@ decode_failure("ValueTableUnknownTrailingHandlesRejected") {
 }
 
 success("ResourceTableUnknownTrailingHandlesStored") {
-    // Natural C++, Wire C++, and HLCPP are tested in the ResourceTableUnknownTrailingHandlesDropped test
-    bindings_denylist = [cpp, llcpp, hlcpp],
+    // TODO(fxbug.dev/85383): Remove in favor of ResourceTableUnknownTrailingHandlesDropped.
+    bindings_allowlist = [dart, go, rust],
     handle_defs = {
         #0 = event(),
         #1 = event(),

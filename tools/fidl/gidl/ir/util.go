@@ -95,34 +95,6 @@ func ValidateAllType(input All, generatorType string) {
 	}
 }
 
-// ContainsUnknownField returns if the value or any subvalue contains an unknown
-// field.
-// Intended to allow bindings that don't support unknown fields to skip test
-// cases that contain them.
-func ContainsUnknownField(value Value) bool {
-	switch value := value.(type) {
-	case Record:
-		for _, f := range value.Fields {
-			if f.Key.IsUnknown() {
-				return true
-			}
-			if ContainsUnknownField(f.Value) {
-				return true
-			}
-		}
-		return false
-	case []Value:
-		for _, v := range value {
-			if ContainsUnknownField(v) {
-				return true
-			}
-		}
-		return false
-	default:
-		return false
-	}
-}
-
 func TypeFromValue(value Value) string {
 	record, ok := value.(Record)
 	if !ok {

@@ -171,7 +171,8 @@ func (a *allocatorBuilder) visitTable(value gidlir.Record, decl *gidlmixer.Table
 
 	for _, field := range value.Fields {
 		if field.Key.IsUnknown() {
-			panic("LLCPP does not support constructing unknown fields")
+			panic(fmt.Sprintf("table %s: unknown ordinal %d: LLCPP cannot construct tables with unknown fields",
+				decl.Name(), field.Key.UnknownOrdinal))
 		}
 		fieldDecl, ok := decl.Field(field.Key.Name)
 		if !ok {
@@ -200,7 +201,8 @@ func (a *allocatorBuilder) visitUnion(value gidlir.Record, decl *gidlmixer.Union
 	if len(value.Fields) == 1 {
 		field := value.Fields[0]
 		if field.Key.IsUnknown() {
-			panic("LLCPP does not support constructing unknown fields")
+			panic(fmt.Sprintf("union %s: unknown ordinal %d: LLCPP cannot construct unions with unknown fields",
+				decl.Name(), field.Key.UnknownOrdinal))
 		}
 		fieldDecl, ok := decl.Field(field.Key.Name)
 		if !ok {

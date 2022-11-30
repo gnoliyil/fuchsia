@@ -80,3 +80,20 @@ type UnknownData struct {
 	Bytes   []byte
 	Handles []Handle
 }
+
+// HasData returns true if u stores unknown data. For example, it returns true
+// in the case of `MyUnion { 123: { bytes = [ repeat(0xab):8 ] } }` representing
+// a domain object that stores unknown bytes and handles, but false in the case
+// of `MyUnion { 123: null }`.
+//
+// TODO(fxbug.dev/85383): Fully implement RFC-0137 and then remove UnknownData
+// since it should not be possible to store unknown data in any bindings.
+func (u *UnknownData) HasData() bool {
+	if u.Bytes == nil && u.Handles == nil {
+		return false
+	}
+	if u.Bytes == nil {
+		panic("UnknownData has handles but not bytes")
+	}
+	return true
+}

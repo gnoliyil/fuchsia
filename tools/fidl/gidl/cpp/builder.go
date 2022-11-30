@@ -171,7 +171,8 @@ func (a *builder) visitUnion(value gidlir.Record, decl *gidlmixer.UnionDecl, isP
 
 	field := value.Fields[0]
 	if field.Key.IsUnknown() {
-		panic("GIDL natural type backend does not support constructing unknown fields")
+		panic(fmt.Sprintf("union %s: unknown ordinal %d: C++ cannot construct unions with unknown fields",
+			decl.Name(), field.Key.UnknownOrdinal))
 	}
 	fieldDecl, ok := decl.Field(field.Key.Name)
 	if !ok {

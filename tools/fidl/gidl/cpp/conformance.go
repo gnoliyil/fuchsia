@@ -88,10 +88,6 @@ func encodeSuccessCases(gidlEncodeSuccesses []gidlir.EncodeSuccess, schema gidlm
 		if err != nil {
 			return nil, fmt.Errorf("encode success %s: %s", encodeSuccess.Name, err)
 		}
-		// TODO(fxbug.dev/111709): Translate this to GIDL denylist, or properly support the test case.
-		if gidlir.ContainsUnknownField(encodeSuccess.Value) {
-			continue
-		}
 		valueBuild, valueVar := BuildValue(encodeSuccess.Value, decl, HandleReprRaw)
 		fuchsiaOnly := decl.IsResourceType() || len(encodeSuccess.HandleDefs) > 0
 		for _, encoding := range encodeSuccess.Encodings {
@@ -151,10 +147,6 @@ func encodeFailureCases(gidlEncodeFailures []gidlir.EncodeFailure, schema gidlmi
 		decl, err := schema.ExtractDeclarationUnsafe(encodeFailure.Value)
 		if err != nil {
 			return nil, fmt.Errorf("encode failure %s: %s", encodeFailure.Name, err)
-		}
-		// TODO(fxbug.dev/111709): Translate this to GIDL denylist, or properly support the test case.
-		if gidlir.ContainsUnknownField(encodeFailure.Value) {
-			continue
 		}
 		valueBuild, valueVar := BuildValue(encodeFailure.Value, decl, HandleReprRaw)
 		fuchsiaOnly := decl.IsResourceType() || len(encodeFailure.HandleDefs) > 0

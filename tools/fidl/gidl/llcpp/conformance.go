@@ -92,10 +92,6 @@ func encodeSuccessCases(gidlEncodeSuccesses []gidlir.EncodeSuccess, schema gidlm
 		if err != nil {
 			return nil, fmt.Errorf("encode success %s: %s", encodeSuccess.Name, err)
 		}
-		// TODO(fxbug.dev/111709): Translate this to GIDL denylist, or properly support the test case.
-		if gidlir.ContainsUnknownField(encodeSuccess.Value) {
-			continue
-		}
 		handleDefs := libhlcpp.BuildHandleDefs(encodeSuccess.HandleDefs)
 		valueBuild, valueVar := libllcpp.BuildValueAllocator("allocator", encodeSuccess.Value, decl, libllcpp.HandleReprRaw)
 		fuchsiaOnly := decl.IsResourceType() || len(encodeSuccess.HandleDefs) > 0
@@ -125,10 +121,6 @@ func decodeSuccessCases(gidlDecodeSuccesses []gidlir.DecodeSuccess, schema gidlm
 		decl, err := schema.ExtractDeclaration(decodeSuccess.Value, decodeSuccess.HandleDefs)
 		if err != nil {
 			return nil, fmt.Errorf("decode success %s: %s", decodeSuccess.Name, err)
-		}
-		// TODO(fxbug.dev/111709): Translate this to GIDL denylist, or properly support the test case.
-		if gidlir.ContainsUnknownField(decodeSuccess.Value) {
-			continue
 		}
 		handleDefs := libhlcpp.BuildHandleInfoDefs(decodeSuccess.HandleDefs)
 		valueBuild, valueVar := libllcpp.BuildValueAllocator("allocator", decodeSuccess.Value, decl, libllcpp.HandleReprInfo)

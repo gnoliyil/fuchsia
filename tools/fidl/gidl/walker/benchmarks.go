@@ -47,9 +47,6 @@ func GenerateBenchmarks(gidl gidlir.All, fidl fidlgen.Root, config gidlconfig.Ge
 		if err != nil {
 			return nil, fmt.Errorf("walker benchmark %s: %s", gidlBenchmark.Name, err)
 		}
-		if gidlir.ContainsUnknownField(gidlBenchmark.Value) {
-			continue
-		}
 		valBuild, valVar := libllcpp.BuildValueUnowned(gidlBenchmark.Value, decl, libllcpp.HandleReprRaw)
 		tmplInput.Benchmarks = append(tmplInput.Benchmarks, benchmark{
 			Path:       gidlBenchmark.Name,

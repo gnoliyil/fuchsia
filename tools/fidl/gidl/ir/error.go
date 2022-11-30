@@ -11,16 +11,17 @@ const (
 	EnvelopeBytesExceedMessageLength   ErrorCode = "ENVELOPE_BYTES_EXCEED_MESSAGE_LENGTH"
 	EnvelopeHandlesExceedMessageLength ErrorCode = "ENVELOPE_HANDLES_EXCEED_MESSAGE_LENGTH"
 	ExceededMaxOutOfLineDepth          ErrorCode = "EXCEEDED_MAX_OUT_OF_LINE_DEPTH"
+	FlexibleUnionUnknownField          ErrorCode = "FLEXIBLE_UNION_UNKNOWN_FIELD"
 	IncorrectHandleType                ErrorCode = "INCORRECT_HANDLE_TYPE"
 	InvalidBoolean                     ErrorCode = "INVALID_BOOLEAN"
 	InvalidEmptyStruct                 ErrorCode = "INVALID_EMPTY_STRUCT"
+	InvalidHandlePresenceIndicator     ErrorCode = "INVALID_HANDLE_PRESENCE_INDICATOR"
 	InvalidInlineBitInEnvelope         ErrorCode = "INVALID_INLINE_BIT_IN_ENVELOPE"
 	InvalidInlineMarkerInEnvelope      ErrorCode = "INVALID_INLINE_MARKER_IN_ENVELOPE"
 	InvalidNumBytesInEnvelope          ErrorCode = "INVALID_NUM_BYTES_IN_ENVELOPE"
 	InvalidNumHandlesInEnvelope        ErrorCode = "INVALID_NUM_HANDLES_IN_ENVELOPE"
 	InvalidPaddingByte                 ErrorCode = "INVALID_PADDING_BYTE"
 	InvalidPresenceIndicator           ErrorCode = "INVALID_PRESENCE_INDICATOR"
-	InvalidHandlePresenceIndicator     ErrorCode = "INVALID_HANDLE_PRESENCE_INDICATOR"
 	MissingRequiredHandleRights        ErrorCode = "MISSING_REQUIRED_HANDLE_RIGHTS"
 	NonEmptyStringWithNullBody         ErrorCode = "NON_EMPTY_STRING_WITH_NULL_BODY"
 	NonEmptyVectorWithNullBody         ErrorCode = "NON_EMPTY_VECTOR_WITH_NULL_BODY"
@@ -48,16 +49,17 @@ var AllErrorCodes = map[ErrorCode]struct{}{
 	EnvelopeBytesExceedMessageLength:   {},
 	EnvelopeHandlesExceedMessageLength: {},
 	ExceededMaxOutOfLineDepth:          {},
+	FlexibleUnionUnknownField:          {},
 	IncorrectHandleType:                {},
 	InvalidBoolean:                     {},
 	InvalidEmptyStruct:                 {},
+	InvalidHandlePresenceIndicator:     {},
 	InvalidInlineBitInEnvelope:         {},
 	InvalidInlineMarkerInEnvelope:      {},
 	InvalidNumBytesInEnvelope:          {},
 	InvalidNumHandlesInEnvelope:        {},
 	InvalidPaddingByte:                 {},
 	InvalidPresenceIndicator:           {},
-	InvalidHandlePresenceIndicator:     {},
 	MissingRequiredHandleRights:        {},
 	NonEmptyStringWithNullBody:         {},
 	NonEmptyVectorWithNullBody:         {},

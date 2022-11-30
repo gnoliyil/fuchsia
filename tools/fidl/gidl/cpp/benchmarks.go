@@ -50,9 +50,6 @@ func GenerateBenchmarks(gidl gidlir.All, fidl fidlgen.Root, config gidlconfig.Ge
 		if err != nil {
 			return nil, fmt.Errorf("benchmark %s: %s", gidlBenchmark.Name, err)
 		}
-		if gidlir.ContainsUnknownField(gidlBenchmark.Value) {
-			continue
-		}
 		valBuild, valVar := BuildValue(gidlBenchmark.Value, decl, HandleReprRaw)
 		tmplInput.Benchmarks = append(tmplInput.Benchmarks, benchmark{
 			Path:                     gidlBenchmark.Name,

@@ -852,6 +852,14 @@ func (p *Parser) parseUnknownData() (ir.UnknownData, error) {
 	if err != nil {
 		return result, err
 	}
+	// This syntax, as in `MyUnion { 123: null }` is used to represent a domain
+	// object that only stores the unknown ordinal, not bytes and handles.
+	if bodyTok.value == "null" {
+		if _, err := p.consumeToken(tText); err != nil {
+			panic(fmt.Sprintf("consume failed after peek: %s", err))
+		}
+		return ir.UnknownData{}, nil
+	}
 	if err := p.parseCommaSeparated(tLacco, tRacco, func() error {
 		tok, err := p.consumeToken(tText)
 		if err != nil {
