@@ -143,22 +143,29 @@ config("cpu_baseline") {
   }
 }
 
+config("compiler_diagnostics") {
+  cflags = [ "-fcrash-diagnostics=all" ]
+  if (clang_enable_error_reproducers) {
+    cflags += [ "-gen-reproducer=error" ]
+  }
+  ldflags = cflags
+  asmflags = cflags
+}
+
 # These flags are enabled by default in Fuchsia's Clang toolchain, but we set
 # them explicitly to support other Clang toolchains and Clang-based tools.
 config("clang_defaults") {
-  cflags = [ "-fcrash-diagnostics=all" ]
   if (clang_embed_bitcode) {
     cflags += [
       "-Xclang",
       "-fembed-bitcode=all",
     ]
   }
-  if (clang_enable_error_reproducers) {
-    cflags += [ "-gen-reproducer=error" ]
-  }
   if (current_cpu == "x64") {
     asmflags = [ "-Wa,--mrelax-relocations=yes" ]
   }
+
+  configs = [ ":compiler_diagnostics" ]
 }
 
 config("ffp_contract") {
