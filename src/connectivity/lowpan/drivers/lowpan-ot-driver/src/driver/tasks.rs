@@ -87,10 +87,22 @@ where
         });
 
         // Stream for handling network interface events.
-        let net_if_event_stream = self
-            .net_if
-            .take_event_stream()
-            .and_then(move |event| self.on_network_interface_event(event));
+        let net_if_event_stream = self.net_if.take_event_stream().and_then(move |event| {
+            let event_copy = event.clone();
+            self.on_network_interface_event(event).or_else(move |err| async move {
+                if self.driver_state.lock().is_active_and_ready() {
+                    // If this happens while we are active and ready then we
+                    // are out of sync and will need a reset.
+                    error!("Error while processing {:?}: {:?}", event_copy, &err);
+                    Err(err)
+                } else {
+                    // If this happens while we aren't active and ready then
+                    // that is somewhat expected and we can continue after logging.
+                    warn!("Error while processing {:?}: {:?}", event_copy, &err);
+                    Ok(())
+                }
+            })
+        });
 
         let backbone_if_event_stream =
             self.backbone_if.event_stream().map(move |event| match event {
