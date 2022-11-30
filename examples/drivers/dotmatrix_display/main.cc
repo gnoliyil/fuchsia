@@ -7,7 +7,7 @@
 #include <unistd.h>
 
 int CreateLogo();
-int RunInvaders(void);
+int RunInvaders();
 
 void PrintHelp() {
   printf(

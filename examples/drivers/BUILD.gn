@@ -5,6 +5,7 @@
 group("drivers") {
   deps = [
     "bindlib_codegen",
+    "dotmatrix_display",
     "driver_test_realm/sample-driver",
     "fidl_bindlib_codegen",
     "transport",

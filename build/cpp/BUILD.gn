@@ -16,8 +16,6 @@ config("fidl-llcpp-deprecated-raw-channels") {
   #
   # and replace the contents of `visibility` with the script output.
   visibility = [
-    "//examples/drivers/dotmatrix_display:bin",
-    "//examples/drivers/dotmatrix_display:bin2",
     "//src/bringup/bin/pwrbtn-monitor",
     "//src/cobalt/bin/system-metrics:system_metrics_daemon_lib",
     "//src/connectivity/telephony/drivers/qmi-fake-transport:fake_qmi_driver-driver",

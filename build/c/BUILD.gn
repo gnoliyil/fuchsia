@@ -24,7 +24,6 @@ config("fidl-deprecated-c-bindings") {
   #
   # and replace the contents of `visibility` with the script output.
   visibility = [
-    "//examples/drivers/dotmatrix_display:bin",
     "//src/camera/drivers/controller:source",
     "//src/camera/drivers/controller/test:controller_unittest_bin",
     "//src/camera/drivers/hw_accel/gdc:gdc_task_unittest_bin",

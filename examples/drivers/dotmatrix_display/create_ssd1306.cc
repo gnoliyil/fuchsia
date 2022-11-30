@@ -2,16 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <fcntl.h>
 #include <fidl/fuchsia.hardware.ftdi/cpp/wire.h>
+#include <lib/component/incoming/cpp/service_client.h>
 #include <lib/ddk/platform-defs.h>
-#include <lib/fdio/fdio.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <zircon/syscalls.h>
 
 #include <filesystem>
-#include <iostream>
 
 void PrintHelp() {
   printf(
@@ -32,41 +27,36 @@ int main(int argc, char** argv) {
     return 0;
   }
 
-  const char* path = "/dev/class/serial-impl/";
-  int fd = -1;
-  for (const auto& entry : std::filesystem::directory_iterator(path)) {
-    fd = open(entry.path().c_str(), O_RDWR);
-    if (fd > 0) {
-      break;
+  constexpr char path[] = "/dev/class/serial-impl/";
+  for (const auto& entry : std::filesystem::directory_iterator{path}) {
+    zx::result device = component::Connect<fuchsia_hardware_ftdi::Device>(entry.path().c_str());
+    if (device.is_error()) {
+      printf("connecting to %s failed: %s\n", entry.path().c_str(), device.status_string());
+      return 1;
     }
-  }
-  if (fd <= 0) {
-    printf("Open serial-impl failed with %d\n", fd);
-    return 1;
-  }
+    fuchsia_hardware_ftdi::wire::I2cBusLayout layout = {
+        .scl = 0,
+        .sda_out = 1,
+        .sda_in = 2,
+    };
+    fuchsia_hardware_ftdi::wire::I2cDevice i2c_dev = {
+        // This is the I2C address for the SSD1306.
+        .address = 0x3c,
+        // These are the SSD1306 driver binding rules.
+        .vid = PDEV_VID_GENERIC,
+        .pid = PDEV_PID_GENERIC,
+        .did = PDEV_DID_SSD1306,
+    };
 
-  zx_handle_t handle;
-  zx_status_t status = fdio_get_service_handle(fd, &handle);
-  if (status != ZX_OK) {
-    printf("Create FIDL handle failed with %d\n", status);
-    return 1;
-  }
-
-  // This wires the 0 pin as SCL and pins 1 & 2 as SDA.
-  fuchsia_hardware_ftdi::wire::I2cBusLayout layout = {0, 1, 2};
-  fuchsia_hardware_ftdi::wire::I2cDevice i2c_dev = {// This is the I2C address for the SSD1306.
-                                                    0x3c,
-                                                    // These are the SSD1306 driver binding rules.
-                                                    PDEV_VID_GENERIC, PDEV_PID_GENERIC,
-                                                    PDEV_DID_SSD1306};
-
-  auto resp = fidl::WireCall<fuchsia_hardware_ftdi::Device>(zx::unowned_channel(handle))
-                  ->CreateI2C(layout, i2c_dev);
-  status = resp.status();
-  if (status != ZX_OK) {
-    printf("Create I2C device failed with %d\n", status);
-    return 1;
+    const fidl::Status status = fidl::WireCall(device.value())->CreateI2C(layout, i2c_dev);
+    if (!status.ok()) {
+      printf("CreateI2C on %s failed: %s\n", entry.path().c_str(),
+             status.FormatDescription().c_str());
+      return 1;
+    }
+    return 0;
   }
 
-  return 0;
+  printf("%s contained no entries\n", path);
+  return 1;
 }
