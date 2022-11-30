@@ -22,6 +22,9 @@ import("//src/developer/ffx/build/ffx_action.gni")
 #     one for the old golden file, one for the new golden file during a soft
 #     transition.
 #
+#   recovery (optional)
+#     [bool] Analyze recovery images rather than default fuchsia images.
+#
 #   deps, public_deps, data_deps (optional)
 #     Usual GN meaning.
 
@@ -65,10 +68,18 @@ template("verify_static_pkgs") {
       rebase_path(stamp_file, root_build_dir),
       "--tmp-dir",
       rebase_path(tmp_dir, root_build_dir),
+    ]
+
+    if (defined(invoker.recovery) && invoker.recovery) {
+      args += [ "--recovery" ]
+    }
+
+    args += [
       "static-pkgs",
       "--product-bundle",
       rebase_path(pb_dir, root_build_dir),
     ]
+
     foreach(golden, invoker.goldens) {
       args += [
         "--golden",

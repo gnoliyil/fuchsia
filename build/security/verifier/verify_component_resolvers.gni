@@ -17,6 +17,9 @@ import("//src/developer/ffx/build/ffx_action.gni")
 #     [string] Path to the allowlist defining which component resolvers are
 #     privileged and which components are allowed to be resolved by them.
 #
+#   recovery (optional)
+#     [bool] Analyze recovery images rather than default fuchsia images.
+#
 #   deps, public_deps, data_deps (optional)
 #       Usual GN meaning.
 
@@ -61,13 +64,19 @@ template("verify_component_resolvers") {
       rebase_path(stamp_file, root_build_dir),
       "--tmp-dir",
       rebase_path(tmp_dir, root_build_dir),
+    ]
+
+    if (defined(invoker.recovery) && invoker.recovery) {
+      args += [ "--recovery" ]
+    }
+
+    args += [
       "component-resolvers",
       "--product-bundle",
       rebase_path(pb_dir, root_build_dir),
       "--allowlist",
       rebase_path(invoker.allowlist, root_build_dir),
     ]
-
     if (!defined(invoker.deps)) {
       deps = []
     }

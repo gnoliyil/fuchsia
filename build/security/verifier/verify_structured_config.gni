@@ -15,6 +15,9 @@ import("//src/developer/ffx/build/ffx_action.gni")
 #   output (required)
 #     [path] The JSON file to which to write the extracted values.
 #
+#   recovery (optional)
+#     [bool] Analyze recovery images rather than default fuchsia images.
+#
 #   deps, public_deps, data_deps (optional)
 #     Usual GN meaning.
 template("extract_assembled_structured_config") {
@@ -56,6 +59,10 @@ template("extract_assembled_structured_config") {
       rebase_path(invoker.output, root_build_dir),
     ]
 
+    if (defined(invoker.recovery) && invoker.recovery) {
+      args += [ "--recovery" ]
+    }
+
     if (!defined(invoker.deps)) {
       deps = []
     }
@@ -73,6 +80,9 @@ template("extract_assembled_structured_config") {
 #
 #   policy (required)
 #     [path] The JSON policy file containing allowed configuration values for the build.
+#
+#   recovery (optional)
+#     [bool] Analyze recovery images rather than default fuchsia images.
 #
 #   deps, public_deps, data_deps (optional)
 #     Usual GN meaning.
@@ -119,6 +129,13 @@ template("verify_assembled_structured_config") {
       rebase_path(stamp_file, root_build_dir),
       "--tmp-dir",
       rebase_path(tmp_dir, root_build_dir),
+    ]
+
+    if (defined(invoker.recovery) && invoker.recovery) {
+      args += [ "--recovery" ]
+    }
+
+    args += [
       "structured-config",
       "--policy",
       rebase_path(invoker.policy, root_build_dir),

@@ -44,6 +44,10 @@ import("//build/security/verifier/verify_structured_config.gni")
 #     system. Usually derived from the global gn arg
 #     fuchsia_product_assembly_config_label (defined in //build/product.gni).
 #
+#   recovery (optional)
+#     [bool] Instructs verifiers to analyze recovery images rather than default
+#     fuchsia images.
+#
 # Global GN arg-based parameters
 #
 # These parameters are documented in //build/security.gni under
@@ -152,6 +156,7 @@ template("scrutiny_verifiers") {
                                  "deps",
                                  "testonly",
                                  "visiblity",
+                                 "recovery",
                                ])
         product_bundle = invoker.product_bundle
         goldens = invoker.zbi_bootfs_filelist_goldens
@@ -168,6 +173,7 @@ template("scrutiny_verifiers") {
                                  "deps",
                                  "testonly",
                                  "visiblity",
+                                 "recovery",
                                ])
         product_bundle = invoker.product_bundle
         goldens = invoker.zbi_kernel_cmdline_goldens
@@ -182,6 +188,7 @@ template("scrutiny_verifiers") {
                                [
                                  "testonly",
                                  "visiblity",
+                                 "recovery",
                                ])
         product_bundle = invoker.product_bundle
         config_path = invoker.route_sources_config
@@ -196,6 +203,7 @@ template("scrutiny_verifiers") {
                                [
                                  "testonly",
                                  "visiblity",
+                                 "recovery",
                                ])
         product_bundle = invoker.product_bundle
         allowlist = invoker.verify_component_resolvers_allowlist
@@ -212,6 +220,7 @@ template("scrutiny_verifiers") {
                                [
                                  "testonly",
                                  "visiblity",
+                                 "recovery",
                                ])
         product_bundle = invoker.product_bundle
         allowlist = []
@@ -240,6 +249,7 @@ template("scrutiny_verifiers") {
                                [
                                  "testonly",
                                  "visiblity",
+                                 "recovery",
                                ])
         product_bundle = invoker.product_bundle
         goldens = invoker.static_pkgs_goldens
@@ -254,6 +264,7 @@ template("scrutiny_verifiers") {
                                [
                                  "testonly",
                                  "visiblity",
+                                 "recovery",
                                ])
         product_bundle = invoker.product_bundle
         policy = invoker.structured_config_policy
@@ -269,6 +280,7 @@ template("scrutiny_verifiers") {
                              [
                                "testonly",
                                "visiblity",
+                               "recovery",
                              ])
       product_bundle = invoker.product_bundle
       output = "$target_out_dir/${invoker.assembly_image_name}.structured_config.json"
@@ -280,18 +292,19 @@ template("scrutiny_verifiers") {
     not_needed(invoker,
                [
                  "product_bundle",
-                 "zbi",
+                 "recovery",
                  "route_sources_config",
                  "static_pkgs_goldens",
                  "structured_config_policy",
                  "verify_component_resolvers_allowlist",
                  "verify_routes_component_tree_config",
-                 "verify_routes_exceptions_allowlist",
                  "verify_routes_exceptions_allowlist_bootfs",
                  "verify_routes_exceptions_allowlist_product",
+                 "verify_routes_exceptions_allowlist",
                  "zbi_bootfs_filelist_goldens",
                  "zbi_bootfs_packages_goldens",
                  "zbi_kernel_cmdline_goldens",
+                 "zbi",
                ])
   }
 

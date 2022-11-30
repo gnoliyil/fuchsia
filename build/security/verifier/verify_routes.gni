@@ -22,6 +22,9 @@ import("//src/developer/ffx/build/ffx_action.gni")
 #     [string] paths to component tree configuration file to be passed to
 #     `ffx scrutiny verify routes`.
 #
+#   recovery (optional)
+#     [bool] Analyze recovery images rather than default fuchsia images.
+#
 #   testonly, deps, public_deps, data_deps, visibility (optional)
 #     Usual GN meaning.
 
@@ -63,10 +66,18 @@ template("verify_routes") {
       rebase_path(stamp_file, root_build_dir),
       "--tmp-dir",
       rebase_path(tmp_dir, root_build_dir),
+    ]
+
+    if (defined(invoker.recovery) && invoker.recovery) {
+      args += [ "--recovery" ]
+    }
+
+    args += [
       "routes",
       "--product-bundle",
       rebase_path(pb_dir, root_build_dir),
     ]
+
     if (defined(invoker.component_tree_config)) {
       inputs += [ invoker.component_tree_config ]
       args += [
@@ -74,6 +85,7 @@ template("verify_routes") {
         rebase_path(invoker.component_tree_config, root_build_dir),
       ]
     }
+
     foreach(allowlist, invoker.allowlist) {
       args += [
         "--allowlist",

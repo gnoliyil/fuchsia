@@ -27,6 +27,9 @@ import("//src/developer/ffx/build/ffx_action.gni")
 #     one for the old golden file, one for the new golden file during a soft
 #     transition.
 #
+#   recovery (optional)
+#     [bool] Analyze recovery images rather than default fuchsia images.
+#
 #   deps, public_deps, data_deps (optional)
 #     Usual GN meaning.
 
@@ -70,6 +73,13 @@ template("verify_bootfs_filelist") {
       rebase_path(depfile, root_build_dir),
       "--stamp",
       rebase_path(stamp_file, root_build_dir),
+    ]
+
+    if (defined(invoker.recovery) && invoker.recovery) {
+      args += [ "--recovery" ]
+    }
+
+    args += [
       "bootfs",
       "--product-bundle",
       rebase_path(pb_dir, root_build_dir),

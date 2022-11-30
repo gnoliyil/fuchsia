@@ -17,6 +17,9 @@ import("//src/developer/ffx/build/ffx_action.gni")
 #     [string] Path to a configuration file that specifies the full set of
 #     routes of zero or more component instances to verify.
 #
+#   recovery (optional)
+#     [bool] Analyze recovery images rather than default fuchsia images.
+#
 #   deps, public_deps, data_deps (optional)
 #     Usual GN meaning.
 
@@ -64,6 +67,13 @@ template("verify_route_sources") {
       rebase_path(stamp_file, root_build_dir),
       "--tmp-dir",
       rebase_path(tmp_dir, root_build_dir),
+    ]
+
+    if (defined(invoker.recovery) && invoker.recovery) {
+      args += [ "--recovery" ]
+    }
+
+    args += [
       "route-sources",
       "--product-bundle",
       rebase_path(pb_dir, root_build_dir),
