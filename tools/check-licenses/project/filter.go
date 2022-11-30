@@ -6,6 +6,7 @@ package project
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -39,7 +40,7 @@ func FilterProjects() error {
 	}
 
 	// Find Projects that match each target in the dependency tree.
-	_, err = processGenOutput(gen, fileMap)
+	RootProject, err = processGenOutput(gen, fileMap)
 	if err != nil {
 		return err
 	}
@@ -53,6 +54,10 @@ func processGenOutput(gen *util.Gen, fileMap map[string]*Project) (*Project, err
 		var ok bool
 		for _, possibleProjectName := range t.CleanNames {
 			if project, ok = fileMap[possibleProjectName]; ok {
+				if _, ok := FilteredProjects[project.Root]; !ok {
+					plusVal(FilteredProjectReasons, fmt.Sprintf("Adding %s because of %s\n", project.Root, possibleProjectName))
+				}
+
 				// Project 'project' represents GN target 't'.
 				// Break out of this loop and proceed.
 				break
@@ -72,6 +77,11 @@ func processGenOutput(gen *util.Gen, fileMap map[string]*Project) (*Project, err
 		for _, d := range t.CleanDeps {
 			if child, ok := fileMap[d]; ok && child.Root != project.Root {
 				project.Children[child.Root] = child
+				if _, ok := FilteredProjects[child.Root]; !ok {
+					plusVal(
+						FilteredProjectReasons,
+						fmt.Sprintf("Adding %s because of %s\n", child.Root, d))
+				}
 				FilteredProjects[child.Root] = child
 			}
 		}
@@ -79,7 +89,14 @@ func processGenOutput(gen *util.Gen, fileMap map[string]*Project) (*Project, err
 		FilteredProjects[project.Root] = project
 	}
 
-	return nil, nil
+	rootProject := fileMap[Config.Target]
+	if rootProject == nil {
+		// TODO(fxbug.dev/115657): Understand why sometimes //:default is not found in the fileMap
+		//return nil, fmt.Errorf("failed to find root project using target [%s]", Config.Target)
+		rootProject = AllProjects["."]
+	}
+
+	return rootProject, nil
 }
 
 func getFileMap() (map[string]*Project, error) {

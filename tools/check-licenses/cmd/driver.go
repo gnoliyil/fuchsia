@@ -67,6 +67,7 @@ func Execute(ctx context.Context) error {
 		r.End()
 	} else {
 		project.FilteredProjects = project.AllProjects
+		project.RootProject = project.AllProjects["."]
 	}
 
 	// Analyze the remaining projects, and keep track of all found license texts.

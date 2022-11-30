@@ -15,6 +15,7 @@ import (
 )
 
 var (
+	RootProject      *Project
 	AllProjects      map[string]*Project
 	FilteredProjects map[string]*Project
 

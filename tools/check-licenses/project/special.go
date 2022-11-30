@@ -39,6 +39,14 @@ func NewSpecialProject(projectRootPath string) (*Project, error) {
 			continue
 		}
 
+		// Skip lists are defined in the Directory package.
+		// That package depends on this one, so I cannot access
+		// that list from this package (dependency cycle).
+		// TODO(jcecil): Move the skip list into a location that both packages can access.
+		if strings.Contains(item.Name(), "other_license.go") { // spdx/tools-golang/spdx/v2_2/other_license.go
+			continue
+		}
+
 		if strings.Contains(strings.ToLower(item.Name()), "licen") &&
 			!strings.Contains(strings.ToLower(item.Name()), "tmpl") &&
 			filepath.Ext(item.Name()) != ".go" {
@@ -111,6 +119,10 @@ func NewSpecialProject(projectRootPath string) (*Project, error) {
 	plusVal(NumProjects, p.Root)
 	plusVal(ProjectURLs, fmt.Sprintf("%v - %v", p.Root, p.URL))
 	AllProjects[p.Root] = p
+
+	if err := p.setSPDXFields(); err != nil {
+		return nil, err
+	}
 
 	return p, nil
 }

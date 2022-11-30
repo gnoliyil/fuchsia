@@ -139,6 +139,15 @@
       },
       {
         "paths": [
+          "third_party/golibs/vendor/github.com/spdx/tools-golang/spdx/v2_1/other_license.go",
+          "third_party/golibs/vendor/github.com/spdx/tools-golang/spdx/v2_2/other_license.go"
+        ],
+        "notes": [
+          "These files don't hold license texts. They're used to process license files."
+        ]
+      },
+      {
+        "paths": [
           "build/bazel/local_repositories"
         ],
         "notes": [

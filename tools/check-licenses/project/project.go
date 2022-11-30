@@ -13,6 +13,8 @@ import (
 
 	"go.fuchsia.dev/fuchsia/tools/check-licenses/file"
 	"go.fuchsia.dev/fuchsia/tools/check-licenses/license"
+
+	spdx "github.com/spdx/tools-golang/spdx/v2_2"
 )
 
 // Project struct follows the format of README.fuchsia files.
@@ -20,7 +22,7 @@ import (
 //
 //	https://fuchsia.dev/fuchsia-src/development/source_code/third-party-metadata
 type Project struct {
-	Root               string
+	Root               string `json:"root"`
 	ReadmePath         string
 	Files              []*file.File
 	SearchableFiles    []*file.File
@@ -35,7 +37,7 @@ type Project struct {
 	URL                string
 	Version            string
 	License            string
-	LicenseFile        []*file.File
+	LicenseFile        []*file.File `json:"licenseFile"`
 	UpstreamGit        string
 	Description        string
 	LocalModifications string
@@ -47,6 +49,9 @@ type Project struct {
 	// Projects that this project depends on.
 	// Constructed from the GN dependency tree.
 	Children map[string]*Project
+
+	// SPDX fields
+	Package *spdx.Package "json:'package'"
 }
 
 // Order implements sort.Interface for []*Project based on the Root field.
@@ -254,6 +259,10 @@ func NewProject(readmePath string, projectRootPath string) (*Project, error) {
 	plusVal(NumProjects, p.Root)
 	AllProjects[p.Root] = p
 	plusVal(ProjectURLs, fmt.Sprintf("%v - %v", p.Root, p.URL))
+
+	if err := p.setSPDXFields(); err != nil {
+		return nil, err
+	}
 
 	return p, nil
 }

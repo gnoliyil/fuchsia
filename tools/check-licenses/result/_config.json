@@ -1,8 +1,10 @@
 {
   "result": {
+    "outputLicenseFile": {OUTPUT_LICENSE_FILE},
     "fuchsiaDir": "{FUCHSIA_DIR}",
     "rootOutDir": "{ROOT_OUT_DIR}",
     "outDir": "{OUT_DIR}",
+    "spdxDocName": "{SPDX_DOC_NAME}",
     "licenseOutDir": "{LICENSES_OUT_DIR}",
     "buildInfoVersion": "{BUILD_INFO_VERSION}",
     "buildInfoProduct": "{BUILD_INFO_PRODUCT}",

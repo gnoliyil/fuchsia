@@ -1,0 +1,115 @@
+{
+  "spdxVersion": "SPDX-2.2",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "documentNamespace": "fuchsia--{da39a3ee5e6b4b0d3255bfef95601890afd80709 []}",
+  "DocumentComment": "",
+  "creationInfo": {
+    "creators": [
+      "Tool: github.com/spdx/tools-golang/builder",
+      "Tool: fuchsia.googlesource.com/fuchsia/+/refs/head/main/tools/check-licenses"
+    ],
+    "created": "SKIP ME"
+  },
+  "packages": [
+    {
+      "name": "PackageA",
+      "SPDXID": "SPDXRef-Package-PackageA",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": true,
+      "PackageVerificationCode": {
+        "packageVerificationCodeValue": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+        "packageVerificationCodeExcludedFiles": [
+          ""
+        ]
+      },
+      "checksums": [],
+      "licenseConcluded": "(testing123)",
+      "licenseInfoFromFiles": [],
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "Files": [],
+      "annotations": []
+    },
+    {
+      "name": "PackageB",
+      "SPDXID": "SPDXRef-Package-PackageB",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": true,
+      "PackageVerificationCode": {
+        "packageVerificationCodeValue": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+        "packageVerificationCodeExcludedFiles": [
+          ""
+        ]
+      },
+      "checksums": [],
+      "licenseConcluded": "",
+      "licenseInfoFromFiles": [],
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "Files": [],
+      "annotations": []
+    },
+    {
+      "name": "PackageC",
+      "SPDXID": "SPDXRef-Package-PackageC",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": true,
+      "PackageVerificationCode": {
+        "packageVerificationCodeValue": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+        "packageVerificationCodeExcludedFiles": [
+          ""
+        ]
+      },
+      "checksums": [],
+      "licenseConcluded": "",
+      "licenseInfoFromFiles": [],
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "Files": [],
+      "annotations": []
+    }
+  ],
+  "files": [],
+  "hasExtractedLicensingInfos": [
+    {
+      "name": "Example License File for ProjectA",
+      "licenseId": "testing123",
+      "extractedText": "Example license text",
+      "seeAlsos": [
+        "www.google.com"
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": {
+        "ElementRefID": "SPDXRef-DOCUMENT"
+      },
+      "relatedSpdxElement": {
+        "ElementRefID": "SPDXRef-Package-PackageA"
+      },
+      "relationshipType": "DESCRIBES"
+    },
+    {
+      "spdxElementId": {
+        "ElementRefID": "SPDXRef-Package-PackageA"
+      },
+      "relatedSpdxElement": {
+        "ElementRefID": "SPDXRef-Package-PackageB"
+      },
+      "relationshipType": "CONTAINS"
+    },
+    {
+      "spdxElementId": {
+        "ElementRefID": "SPDXRef-Package-PackageA"
+      },
+      "relatedSpdxElement": {
+        "ElementRefID": "SPDXRef-Package-PackageC"
+      },
+      "relationshipType": "CONTAINS"
+    }
+  ],
+  "annotations": [],
+  "snippets": []
+}

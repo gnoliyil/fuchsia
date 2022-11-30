@@ -95,6 +95,26 @@ func SaveResults(cmdConfig interface{}, cmdMetrics MetricsInterface) (string, er
 		b.WriteString("Not expanding templates.\n")
 	}
 
+	projectList := make([]*project.Project, 0)
+	for _, p := range project.FilteredProjects {
+		projectList = append(projectList, p)
+	}
+	sort.Sort(project.Order(projectList))
+
+	if Config.OutputLicenseFile {
+		s, err := generateSPDXDoc(
+			Config.SPDXDocName,
+			projectList,
+			project.RootProject,
+		)
+		if err != nil {
+			return "", err
+		}
+		b.WriteString(s)
+	} else {
+		b.WriteString("Not generating SPDX doc.\n")
+	}
+
 	if err = writeFile("summary", []byte(b.String())); err != nil {
 		return "", err
 	}
@@ -134,7 +154,7 @@ func savePackageInfo(pkgName string, c interface{}, m MetricsInterface) (string,
 		if _, err := os.Stat(Config.OutDir); os.IsNotExist(err) {
 			err := os.MkdirAll(Config.OutDir, 0755)
 			if err != nil {
-				return "", fmt.Errorf("Failed to make directory %v: %v", Config.OutDir, err)
+				return "", fmt.Errorf("failed to make directory %s: %w", Config.OutDir, err)
 			}
 		}
 
@@ -161,11 +181,11 @@ func saveMetrics(pkg string, m MetricsInterface) error {
 		if Config.LicenseOutDir != "" && strings.HasPrefix(path, "license/matches/") {
 			path = strings.TrimPrefix(path, "license/matches/")
 			if err := writeFileRoot(path, bytes, Config.LicenseOutDir); err != nil {
-				return fmt.Errorf("Failed to write Files file %v: %v", path, err)
+				return fmt.Errorf("failed to write Files file %s: %w", path, err)
 			}
 		} else {
 			if err := writeFile(path, bytes); err != nil {
-				return fmt.Errorf("Failed to write Files file %v: %v", path, err)
+				return fmt.Errorf("failed to write Files file %s: %w", path, err)
 			}
 		}
 	}
@@ -173,12 +193,12 @@ func saveMetrics(pkg string, m MetricsInterface) error {
 	for k, v := range m.Values() {
 		sort.Strings(v)
 		if bytes, err := json.MarshalIndent(v, "", "  "); err != nil {
-			return fmt.Errorf("Failed to marshal indent for key %v: %v", k, err)
+			return fmt.Errorf("failed to marshal indent for key %s: %w", k, err)
 		} else {
 			k = strings.Replace(k, " ", "_", -1)
 			path := filepath.Join(pkg, k)
 			if err := writeFile(path, bytes); err != nil {
-				return fmt.Errorf("Failed to write Values file %v: %v", path, err)
+				return fmt.Errorf("failed to write Values file %s: %w", path, err)
 			}
 		}
 	}
@@ -195,10 +215,10 @@ func writeFileRoot(path string, data []byte, root string) error {
 	path = filepath.Join(root, path)
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("Failed to make directory %v: %v", dir, err)
+		return fmt.Errorf("failed to make directory %s: %w", dir, err)
 	}
 	if err := os.WriteFile(path, data, 0666); err != nil {
-		return fmt.Errorf("Failed to write file %v: %v", path, err)
+		return fmt.Errorf("failed to write file %s: %w", path, err)
 	}
 	return nil
 }
@@ -206,16 +226,16 @@ func writeFileRoot(path string, data []byte, root string) error {
 func compressGZ(path string) error {
 	d, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("Failed to read file %v: %v", path, err)
+		return fmt.Errorf("failed to read file %s: %w", path, err)
 	}
 
 	buf := bytes.Buffer{}
 	zw := gzip.NewWriter(&buf)
 	if _, err := zw.Write(d); err != nil {
-		return fmt.Errorf("Failed to write zipped file %v", err)
+		return fmt.Errorf("failed to write zipped file %w", err)
 	}
 	if err := zw.Close(); err != nil {
-		return fmt.Errorf("Failed to close zipped file %v", err)
+		return fmt.Errorf("failed to close zipped file %w", err)
 	}
 	path, err = filepath.Rel(Config.OutDir, path)
 	if err != nil {

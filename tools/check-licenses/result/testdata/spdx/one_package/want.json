@@ -1,0 +1,50 @@
+{
+  "spdxVersion": "SPDX-2.2",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "documentNamespace": "fuchsia--{da39a3ee5e6b4b0d3255bfef95601890afd80709 []}",
+  "DocumentComment": "",
+  "creationInfo": {
+    "creators": [
+      "Tool: github.com/spdx/tools-golang/builder",
+      "Tool: fuchsia.googlesource.com/fuchsia/+/refs/head/main/tools/check-licenses"
+    ],
+    "created": "SKIP ME"
+  },
+  "packages": [
+    {
+      "name": "Fuchsia",
+      "SPDXID": "SPDXRef-Package-Fuchsia",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": true,
+      "PackageVerificationCode": {
+        "packageVerificationCodeValue": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+        "packageVerificationCodeExcludedFiles": [
+          ""
+        ]
+      },
+      "checksums": [],
+      "licenseConcluded": "",
+      "licenseInfoFromFiles": [],
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "Files": [],
+      "annotations": []
+    }
+  ],
+  "files": [],
+  "hasExtractedLicensingInfos": [],
+  "relationships": [
+    {
+      "spdxElementId": {
+        "ElementRefID": "SPDXRef-DOCUMENT"
+      },
+      "relatedSpdxElement": {
+        "ElementRefID": "SPDXRef-Package-Fuchsia"
+      },
+      "relationshipType": "DESCRIBES"
+    }
+  ],
+  "annotations": [],
+  "snippets": []
+}

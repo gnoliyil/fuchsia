@@ -6,6 +6,8 @@ package result
 
 type ResultConfig struct {
 	FuchsiaDir        string      `json:"fuchsiaDir"`
+	Target            string      `json:"target"`
+	SPDXDocName       string      `json:"spdxDocName"`
 	OutDir            string      `json:"outDir"`
 	RootOutDir        string      `json:"rootOutDir"`
 	LicenseOutDir     string      `json:"licenseOutDir"`
@@ -49,6 +51,9 @@ func (c *ResultConfig) Merge(other *ResultConfig) {
 	if c.FuchsiaDir == "" {
 		c.FuchsiaDir = other.FuchsiaDir
 	}
+	if c.Target == "" {
+		c.Target = other.Target
+	}
 	if c.RootOutDir == "" {
 		c.RootOutDir = other.RootOutDir
 	}
@@ -77,6 +82,9 @@ func (c *ResultConfig) Merge(other *ResultConfig) {
 	}
 	if c.BuildInfoBoard == "" {
 		c.BuildInfoBoard = other.BuildInfoBoard
+	}
+	if c.SPDXDocName == "" {
+		c.SPDXDocName = other.SPDXDocName
 	}
 	c.Checks = append(c.Checks, other.Checks...)
 }

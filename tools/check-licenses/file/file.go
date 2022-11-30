@@ -13,10 +13,10 @@ import (
 // of a file in the fuchsia tree.
 type File struct {
 	Name    string
-	AbsPath string `json:"absPath"`
-	RelPath string `json:"relPath"`
-	URL     string `json:"url"`
-	Data    []*FileData
+	AbsPath string      `json:"absPath"`
+	RelPath string      `json:"relPath"`
+	URL     string      `json:"url"`
+	Data    []*FileData `json:"data"`
 	Text    []byte
 }
 

@@ -15,6 +15,7 @@ require (
 	github.com/kr/pretty v0.3.0
 	github.com/pkg/sftp v1.13.5
 	github.com/sasha-s/go-deadlock v0.3.1
+	github.com/spdx/tools-golang v0.3.1-0.20221108182156-8a01147e6342
 	github.com/spf13/pflag v1.0.5
 	github.com/theupdateframework/go-tuf v0.0.0-20211108161206-fc0190d925a5
 	github.com/ulikunitz/xz v0.5.10

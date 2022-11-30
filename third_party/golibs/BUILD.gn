@@ -522,6 +522,62 @@ go_library("github.com/sasha-s/go-deadlock") {
   ]
 }
 
+go_library("github.com/spdx/tools-golang") {
+  name = "github.com/spdx/tools-golang/..."
+  source_dir = "vendor/github.com/spdx/tools-golang"
+  sources = [
+    "builder/build.go",
+    "builder/builder2v1/build_creation_info.go",
+    "builder/builder2v1/build_file.go",
+    "builder/builder2v1/build_package.go",
+    "builder/builder2v1/build_relationship.go",
+    "builder/builder2v2/build_creation_info.go",
+    "builder/builder2v2/build_file.go",
+    "builder/builder2v2/build_package.go",
+    "builder/builder2v2/build_relationship.go",
+    "builder/builder2v3/build_creation_info.go",
+    "builder/builder2v3/build_file.go",
+    "builder/builder2v3/build_package.go",
+    "builder/builder2v3/build_relationship.go",
+    "spdx/common/annotation.go",
+    "spdx/common/checksum.go",
+    "spdx/common/creation_info.go",
+    "spdx/common/external.go",
+    "spdx/common/identifier.go",
+    "spdx/common/package.go",
+    "spdx/common/snippet.go",
+    "spdx/v2_1/annotation.go",
+    "spdx/v2_1/creation_info.go",
+    "spdx/v2_1/document.go",
+    "spdx/v2_1/file.go",
+    "spdx/v2_1/other_license.go",
+    "spdx/v2_1/package.go",
+    "spdx/v2_1/relationship.go",
+    "spdx/v2_1/review.go",
+    "spdx/v2_1/snippet.go",
+    "spdx/v2_2/annotation.go",
+    "spdx/v2_2/creation_info.go",
+    "spdx/v2_2/document.go",
+    "spdx/v2_2/file.go",
+    "spdx/v2_2/other_license.go",
+    "spdx/v2_2/package.go",
+    "spdx/v2_2/relationship.go",
+    "spdx/v2_2/review.go",
+    "spdx/v2_2/snippet.go",
+    "spdx/v2_3/annotation.go",
+    "spdx/v2_3/creation_info.go",
+    "spdx/v2_3/document.go",
+    "spdx/v2_3/file.go",
+    "spdx/v2_3/other_license.go",
+    "spdx/v2_3/package.go",
+    "spdx/v2_3/relationship.go",
+    "spdx/v2_3/review.go",
+    "spdx/v2_3/snippet.go",
+    "utils/filesystem.go",
+    "utils/verification.go",
+  ]
+}
+
 go_library("github.com/spf13/pflag") {
   name = "github.com/spf13/pflag/..."
   source_dir = "vendor/github.com/spf13/pflag"

@@ -16,6 +16,7 @@ import (
 
 const (
 	defaultConfigFile = "{FUCHSIA_DIR}/tools/check-licenses/cmd/_config.json"
+	defaultTarget     = "//:default"
 )
 
 var (
@@ -89,6 +90,7 @@ func mainImpl() error {
 
 	// outDir
 	rootOutDir := *outDir
+	productBoard := ""
 	if *outDir != "" {
 		*outDir, err = filepath.Abs(*outDir)
 		if err != nil {
@@ -97,7 +99,7 @@ func mainImpl() error {
 		rootOutDir = *outDir
 
 		if *outputLicenseFile {
-			productBoard := fmt.Sprintf("%v.%v", *buildInfoProduct, *buildInfoBoard)
+			productBoard = fmt.Sprintf("%v.%v", *buildInfoProduct, *buildInfoBoard)
 			*outDir = filepath.Join(*outDir, *buildInfoVersion, productBoard)
 		} else {
 			*outDir = filepath.Join(*outDir, *buildInfoVersion, "everything")
@@ -111,6 +113,7 @@ func mainImpl() error {
 	}
 	ConfigVars["{OUT_DIR}"] = *outDir
 	ConfigVars["{ROOT_OUT_DIR}"] = rootOutDir
+	ConfigVars["{PRODUCT_BOARD}"] = productBoard
 
 	// licensesOutDir
 	if *licensesOutDir != "" {
@@ -155,6 +158,12 @@ func mainImpl() error {
 		target = flag.Arg(0)
 	}
 	ConfigVars["{TARGET}"] = target
+
+	spdxDocName := productBoard
+	if target != defaultTarget {
+		spdxDocName = target
+	}
+	ConfigVars["{SPDX_DOC_NAME}"] = spdxDocName
 
 	// diffTarget
 	if *diffTarget != "" {

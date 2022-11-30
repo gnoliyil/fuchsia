@@ -93,6 +93,17 @@ github.com/rogpeppe/go-internal/fmtsort
 # github.com/sasha-s/go-deadlock v0.3.1
 ## explicit
 github.com/sasha-s/go-deadlock
+# github.com/spdx/tools-golang v0.3.1-0.20221108182156-8a01147e6342
+## explicit; go 1.13
+github.com/spdx/tools-golang/builder
+github.com/spdx/tools-golang/builder/builder2v1
+github.com/spdx/tools-golang/builder/builder2v2
+github.com/spdx/tools-golang/builder/builder2v3
+github.com/spdx/tools-golang/spdx/common
+github.com/spdx/tools-golang/spdx/v2_1
+github.com/spdx/tools-golang/spdx/v2_2
+github.com/spdx/tools-golang/spdx/v2_3
+github.com/spdx/tools-golang/utils
 # github.com/spf13/pflag v1.0.5
 ## explicit; go 1.12
 github.com/spf13/pflag
