@@ -83,6 +83,11 @@ source_set("decoder_fuzzer") {
   deps = [ "//sdk/fidl/fuchsia.sysmem:fuchsia.sysmem_hlcpp" ]
 }
 
+fuchsia_library_fuzzer("vaapi_mjpeg_decode_fuzzer") {
+  sources = [ "mjpeg_decode_fuzzer.cc" ]
+  deps = [ ":decoder_fuzzer" ]
+}
+
 fuchsia_library_fuzzer("vaapi_h264_decode_fuzzer") {
   sources = [ "h264_decode_fuzzer.cc" ]
   deps = [ ":decoder_fuzzer" ]
@@ -91,6 +96,12 @@ fuchsia_library_fuzzer("vaapi_h264_decode_fuzzer") {
 fuchsia_library_fuzzer("vaapi_vp9_decode_fuzzer") {
   sources = [ "vp9_decode_fuzzer.cc" ]
   deps = [ ":decoder_fuzzer" ]
+}
+
+fuchsia_fuzzer_component("vaapi_mjpeg_decode_fuzzer_component") {
+  component_name = "vaapi_mjpeg_decode_fuzzer"
+  manifest = "meta/vaapi_mjpeg_decode_fuzzer.cml"
+  deps = [ ":vaapi_mjpeg_decode_fuzzer" ]
 }
 
 fuchsia_fuzzer_component("vaapi_h264_decode_fuzzer_component") {
@@ -107,6 +118,7 @@ fuchsia_fuzzer_component("vaapi_vp9_decode_fuzzer_component") {
 
 fuchsia_fuzzer_package("vaapi-fuzzers") {
   cpp_fuzzer_components = [
+    ":vaapi_mjpeg_decode_fuzzer_component",
     ":vaapi_h264_decode_fuzzer_component",
     ":vaapi_vp9_decode_fuzzer_component",
   ]
