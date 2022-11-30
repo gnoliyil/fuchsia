@@ -230,6 +230,54 @@ pub fn sys_getresgid(
     Ok(())
 }
 
+pub fn sys_setreuid(current_task: &CurrentTask, ruid: uid_t, euid: uid_t) -> Result<(), Errno> {
+    let mut creds = current_task.creds();
+    let allowed = |uid| uid == u32::MAX || new_uid_allowed(&creds, uid);
+    if !allowed(ruid) || !allowed(euid) {
+        return error!(EPERM);
+    }
+    let previous_ruid = creds.uid;
+    let mut is_ruid_set = false;
+    if ruid != u32::MAX {
+        creds.uid = ruid;
+        is_ruid_set = true;
+    }
+    if euid != u32::MAX {
+        creds.euid = euid;
+    }
+
+    if is_ruid_set || previous_ruid != euid {
+        creds.saved_uid = creds.euid;
+    }
+
+    current_task.set_creds(creds);
+    Ok(())
+}
+
+pub fn sys_setregid(current_task: &CurrentTask, rgid: gid_t, egid: gid_t) -> Result<(), Errno> {
+    let mut creds = current_task.creds();
+    let allowed = |gid| gid == u32::MAX || new_gid_allowed(&creds, gid);
+    if !allowed(rgid) || !allowed(egid) {
+        return error!(EPERM);
+    }
+    let previous_rgid = creds.gid;
+    let mut is_rgid_set = false;
+    if rgid != u32::MAX {
+        creds.gid = rgid;
+        is_rgid_set = true;
+    }
+    if egid != u32::MAX {
+        creds.egid = egid;
+    }
+
+    if is_rgid_set || previous_rgid != egid {
+        creds.saved_gid = creds.egid;
+    }
+
+    current_task.set_creds(creds);
+    Ok(())
+}
+
 pub fn sys_setresuid(
     current_task: &CurrentTask,
     ruid: uid_t,
@@ -859,6 +907,9 @@ pub fn sys_getgroups(
     size: usize,
     groups_addr: UserAddress,
 ) -> Result<usize, Errno> {
+    if size > NGROUPS_MAX as usize {
+        return error!(EINVAL);
+    }
     let creds = current_task.creds();
     if size != 0 {
         if size < creds.groups.len() {

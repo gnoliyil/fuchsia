@@ -5,7 +5,7 @@
     include: [ "//src/proc/tests/android/gvisor/meta/gvisor.shard.cml" ],
     program: {
         binary: "data/tests/uidgid_test",
-        args: [ "--gunit_filter=-*.Getgroups:*.Setuid*:*.SetgidNotFromThreadGroupLeader:*.Setreuid:*.Setregid" ],
+        args: [ "--gunit_filter=-*.SetgidNotFromThreadGroupLeader" ],
         user: "root:x:0:0",
     },
 }

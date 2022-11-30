@@ -208,6 +208,8 @@ pub fn dispatch_syscall(
         setpriority[3],
         setresgid[3],
         setresuid[3],
+        setregid[2],
+        setreuid[2],
         setrlimit[2],
         setsid[0],
         setsockopt[5],
