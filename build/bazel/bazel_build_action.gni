@@ -4,6 +4,7 @@
 
 import("//build/bazel/bazel_workspace.gni")
 import("//build/bazel/legacy_ninja_build_outputs.gni")
+import("//build/config/compiler.gni")
 
 # Run a Bazel build action, which is run in the special workspace
 # setup by `//build/bazel:bazel_workspace`.
@@ -169,7 +170,9 @@ template("bazel_build_action") {
       args += invoker.extra_bazel_args
     }
 
-    # Additional extra args to bazel
+    # Below are extra args to Bazel
+
+    # Forward GN sanitizer configuration to Bazel
     if (is_asan) {
       args += [ "--config=asan" ]
     }
@@ -185,8 +188,23 @@ template("bazel_build_action") {
     if (is_ubsan) {
       args += [ "--config=ubsan" ]
     }
+
+    # Forward GN test coverage configuration to Bazel
     if (is_coverage) {
       args += [ "--collect_code_coverage" ]
+    }
+
+    # Forward GN C/C++ compiler optimization configuration to Bazel
+    if (optimize == "none" || optimize == "default" ||
+        optimize == "sanitizer" || optimize == "coverage") {
+      args += [ "--compilation_mode=fastbuild" ]
+    } else if (optimize == "debug") {
+      args += [ "--compilation_mode=dbg" ]
+    } else if (optimize == "size" || optimize == "speed" ||
+               optimize == "profile") {
+      args += [ "--compilation_mode=opt" ]
+    } else {
+      assert("Unsupported mode optimize = $optimize")
     }
 
     deps = _bazel_inputs +
