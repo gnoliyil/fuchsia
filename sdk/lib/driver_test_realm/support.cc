@@ -22,8 +22,6 @@
 #include <lib/component/incoming/cpp/service_client.h>
 #include <lib/ddk/platform-defs.h>
 #include <lib/fdio/directory.h>
-#include <lib/fidl-async/bind.h>
-#include <lib/fidl-async/cpp/bind.h>
 #include <lib/fidl/cpp/wire/vector_view.h>
 #include <lib/stdcompat/string_view.h>
 #include <lib/svc/dir.h>
