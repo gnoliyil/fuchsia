@@ -19,13 +19,9 @@
 #include <string_view>
 #include <type_traits>
 
-#include <lib/elfldltl/internal/byte.h> // TODO(fxbug.dev/115994)
-
 namespace zxdump {
 
-// TODO(fxbug.dev/115994): This should change to cpp20::span probably, but
-// everything relying on e.g. operator== behavior needs to be updated.
-using ByteView = std::basic_string_view<std::byte, elfldltl::internal::ByteCharTraits>;
+using ByteView = cpp20::span<const std::byte>;
 
 // fit::result<zxdump::Error> is used as the return type of many operations.
 // It carries a zx_status_t and a string describing what operation failed.

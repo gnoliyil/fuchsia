@@ -1226,7 +1226,7 @@ class ProcessDumpBase::Collector {
       if (vaddr >= buffer_vaddr_ && vaddr - buffer_vaddr_ < valid_size_) {
         ZX_DEBUG_ASSERT(buffer_data().data());
         // There is some cached data already covering the address.
-        ByteView data = buffer_data().substr(vaddr - buffer_vaddr_, max_bytes);
+        ByteView data = buffer_data().subspan(vaddr - buffer_vaddr_, max_bytes);
         if (data.size() >= min_bytes) {
           ZX_DEBUG_ASSERT(data.data());
           return fit::ok(data);
@@ -1283,7 +1283,7 @@ class ProcessDumpBase::Collector {
       ZX_DEBUG_ASSERT(buffer_);
       ZX_DEBUG_ASSERT(buffer_->data());
       ZX_DEBUG_ASSERT(buffer_data().data());
-      ByteView data = buffer_data().substr(0, max_bytes);
+      ByteView data = buffer_data().subspan(0, max_bytes);
       ZX_DEBUG_ASSERT(data.data());
       return fit::ok(data);
     }

@@ -76,7 +76,8 @@ fit::result<Error, DumpFile::Buffer> DumpFile::Stdio::Read(FileRange where) {
     if (where.offset >= ephemeral_buffer_range_.offset) {
       size_t ofs = where.offset - ephemeral_buffer_range_.offset;
       if (ofs < old_data.size()) {
-        size_t copied = old_data.copy(data, where.size, ofs);
+        size_t copied = std::min(old_data.size() - ofs, static_cast<size_t>(where.size));
+        std::copy(old_data.begin() + ofs, old_data.begin() + ofs + copied, data);
         data += copied;
         where.offset += copied;
         where.size -= copied;

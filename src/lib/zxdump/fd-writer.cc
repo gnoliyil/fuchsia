@@ -95,7 +95,7 @@ fit::result<FdWriter::error_type> FdWriter::Write(size_t offset, ByteView data) 
       }
       const size_t wrote = static_cast<size_t>(n);
       ZX_ASSERT(wrote <= data.size());
-      data.remove_prefix(wrote);
+      data = data.subspan(wrote);
       total_ += wrote;
     } while (!data.empty());
     return fit::ok();

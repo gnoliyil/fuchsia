@@ -23,7 +23,7 @@ fit::result<Error, ByteView> DumpFile::Mmap::ReadPermanent(FileRange where) {
 // least until shrink_to_fit is called.
 fit::result<Error, ByteView> DumpFile::Mmap::ReadEphemeral(FileRange where) {
   ByteView data{reinterpret_cast<std::byte*>(data_), size_};
-  data = data.substr(where.offset, where.size);
+  data = data.subspan(where.offset, std::min(data.size() - where.offset, where.size));
   if (data.empty()) {
     return TruncatedDump();
   }

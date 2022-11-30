@@ -849,20 +849,20 @@ fit::result<Error> TaskHolder::JobTree::ReadElf(DumpFile& file, FileRange where,
     Elf::Nhdr nhdr;
     while (bytes.size() >= sizeof(nhdr)) {
       memcpy(&nhdr, bytes.data(), sizeof(nhdr));
-      bytes.remove_prefix(sizeof(nhdr));
-      auto name_bytes = bytes.substr(0, nhdr.namesz);
+      bytes = bytes.subspan(sizeof(nhdr));
+      auto name_bytes = bytes.subspan(0, nhdr.namesz);
       if (bytes.size() < NoteAlign(nhdr.namesz)) {
         break;
       }
-      bytes.remove_prefix(NoteAlign(nhdr.namesz));
+      bytes = bytes.subspan(NoteAlign(nhdr.namesz));
       if (bytes.size() < NoteAlign(nhdr.namesz)) {
         break;
       }
-      auto desc = bytes.substr(0, nhdr.descsz);
+      auto desc = bytes.subspan(0, nhdr.descsz);
       if (bytes.size() < NoteAlign(nhdr.descsz)) {
         break;
       }
-      bytes.remove_prefix(NoteAlign(nhdr.descsz));
+      bytes = bytes.subspan(NoteAlign(nhdr.descsz));
 
       // All valid note names end with a NUL terminator.
       std::string_view name{
@@ -1034,7 +1034,7 @@ fit::result<Error> TaskHolder::JobTree::ReadElf(DumpFile& file, FileRange where,
       return TruncatedDump();
     }
     memcpy(&phdr, phdrs_bytes.data(), sizeof(phdr));
-    phdrs_bytes.remove_prefix(sizeof(phdr));
+    phdrs_bytes = phdrs_bytes.subspan(sizeof(phdr));
     if (phdr.type == elfldltl::ElfPhdrType::kNote && phdr.memsz() == 0 && phdr.filesz > 0) {
       // A non-allocated note segment should hold core notes.
       auto result = parse_notes({phdr.offset, phdr.filesz});
@@ -1065,7 +1065,7 @@ fit::result<Error> TaskHolder::JobTree::ReadArchive(DumpFile& file, FileRange ar
                                                     ByteView header, bool read_memory) {
   // The first member's header comes immediately after kArchiveMagic.
   archive %= kArchiveMagic.size();
-  header.remove_prefix(kArchiveMagic.size());
+  header = header.subspan(kArchiveMagic.size());
 
   if (archive.empty()) {
     return fit::ok();

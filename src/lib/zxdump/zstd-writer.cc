@@ -53,7 +53,7 @@ fit::result<FdError> ZstdWriter::Flush() {
     if (n == 0) {
       return ErrnoError("write returned zero"sv, EAGAIN);
     }
-    out.remove_prefix(n);
+    out = out.subspan(n);
   }
   return fit::ok();
 }
@@ -66,7 +66,7 @@ fit::result<FdError> ZstdWriter::Write(size_t offset, ByteView data) {
   // If there are holes we have to feed zero bytes to the compressor.
   while (offset > offset_) {
     static constexpr std::byte kZero[32] = {};
-    auto pad = ByteView{kZero, sizeof(kZero)}.substr(0, offset - offset_);
+    auto pad = ByteView{kZero, sizeof(kZero)}.subspan(0, offset - offset_);
     auto result = Write(offset_, pad);
     if (result.is_error()) {
       return result.take_error();

@@ -116,7 +116,8 @@ fit::result<Error, ByteView> DumpFile::Zstd::Read(FileRange where, bool permanen
     if (buffer_.size() < new_size) {
       buffer_ = Buffer{new_size};
       if (!buffered.empty()) {
-        buffered.copy(buffer_.data(), buffer_.size());
+        size_t count = std::min(buffered.size(), buffer_.size());
+        std::copy(buffered.begin(), buffered.begin() + count, buffer_.data());
       }
     } else {
       // The old buffer is actually big enough already.
@@ -141,7 +142,9 @@ fit::result<Error, ByteView> DumpFile::Zstd::Read(FileRange where, bool permanen
       } else {
         // Copy into a new permanent buffer.
         saved = Buffer{where.size};
-        buffered = {saved.data(), buffered.copy(saved.data(), saved.size())};
+        size_t count = std::min(buffered.size(), saved.size());
+        std::copy(buffered.begin(), buffered.begin() + count, saved.data());
+        buffered = {saved.data(), count};
       }
       keepalive_.push_front(std::move(saved));
     }
@@ -150,7 +153,7 @@ fit::result<Error, ByteView> DumpFile::Zstd::Read(FileRange where, bool permanen
 
   if (size_t ofs = where.offset - buffer_range_.offset; ofs < buffered.size()) {
     // Some of the data we need is in the buffer we already have.
-    buffered = buffered.substr(ofs, where.size);
+    buffered = buffered.subspan(ofs, where.size);
     if (buffered.size() == where.size) {
       return ok();
     }
@@ -199,7 +202,7 @@ fit::result<Error, ByteView> DumpFile::Zstd::Read(FileRange where, bool permanen
   }
 
   ZX_DEBUG_ASSERT(buffer_range_.offset == where.offset);
-  buffered = buffered.substr(0, where.size);
+  buffered = buffered.subspan(0, where.size);
   return ok();
 }
 
