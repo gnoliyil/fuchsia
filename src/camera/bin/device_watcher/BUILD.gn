@@ -31,6 +31,7 @@ source_set("lib") {
     "//sdk/fidl/fuchsia.component:fuchsia.component_hlcpp",
     "//sdk/fidl/fuchsia.hardware.camera:fuchsia.hardware.camera_hlcpp",
     "//sdk/fidl/fuchsia.io:fuchsia.io_hlcpp",
+    "//sdk/fidl/fuchsia.process:fuchsia.process_hlcpp",
     "//sdk/lib/fidl/cpp",
     "//sdk/lib/fit-promise",
     "//sdk/lib/sys/cpp",

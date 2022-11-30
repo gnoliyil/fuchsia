@@ -19,6 +19,7 @@
 #include <lib/syslog/cpp/log_settings.h>
 #include <lib/syslog/cpp/macros.h>
 #include <lib/zx/result.h>
+#include <zircon/processargs.h>
 
 #include <string>
 
@@ -28,30 +29,32 @@
 // TODO(ernesthua) - Need to dynamically determine the path name!
 std::string camera_path("/dev/class/camera/000");
 
-zx::result<fuchsia::camera::ControlSyncPtr> OpenCamera(std::string path) {
-  fbl::unique_fd fd(open(path.c_str(), O_RDWR));
-  if (fd.get() < 0) {
-    FX_PLOGS(ERROR, fd.get()) << "Failed to open sensor at " << path;
-    return zx::error(ZX_ERR_INTERNAL);
+zx::result<fuchsia::camera::ControlSyncPtr> OpenCamera(zx::channel camera_channel) {
+  int fd;
+  zx_status_t status = fdio_fd_create(camera_channel.get(), &fd);
+  if (status != ZX_OK) {
+    FX_PLOGS(ERROR, status) << "Failed to create fd from channel";
+    return zx::error(status);
   }
-  FX_LOGS(INFO) << "opened " << path;
 
+  fbl::unique_fd camera_device_fd(fd);
   fuchsia::camera::ControlSyncPtr ctrl;
   fdio_cpp::UnownedFdioCaller caller(fd);
-  auto status = fidl::WireCall(caller.borrow_as<fuchsia_hardware_camera::Device>())
-                    ->GetChannel(ctrl.NewRequest().TakeChannel())
-                    .status();
+  status = fidl::WireCall(caller.borrow_as<fuchsia_hardware_camera::Device>())
+           ->GetChannel(ctrl.NewRequest().TakeChannel())
+           .status();
   if (status != ZX_OK) {
-    FX_PLOGS(INFO, status) << "Couldn't GetChannel from " << path;
+    FX_PLOGS(ERROR, status) << "Call to GetChannel failed";
     return zx::error(status);
   }
 
   fuchsia::camera::DeviceInfo info_return;
   status = ctrl->GetDeviceInfo(&info_return);
   if (status != ZX_OK) {
-    FX_PLOGS(ERROR, status) << "Could not get Device Info";
+    FX_PLOGS(ERROR, status) << "Call to GetDeviceInfo failed";
     return zx::error(status);
   }
+
   FX_LOGS(INFO) << "Got Device Info:";
   FX_LOGS(INFO) << "Vendor: " << info_return.vendor_name << " (" << info_return.vendor_id << ")";
   return zx::ok(std::move(ctrl));
@@ -68,8 +71,16 @@ int main(int argc, char* argv[]) {
   // TODO(ernesthua) - Need to bring back argument parsing on merge back.
   std::string outgoing_service_name("fuchsia.camera3.Device");
 
-  // Connect to hard coded usb camera device.
-  zx::result<fuchsia::camera::ControlSyncPtr> status_or = OpenCamera(camera_path);
+  // We receive a channel that we interpret as a fuchsia.camera.Control
+  // connection.
+  zx::channel camera_channel(zx_take_startup_handle(PA_HND(PA_USER0, 0)));
+  if (!camera_channel.is_valid()) {
+    FX_LOGS(FATAL) << "Received invalid camera handle";
+    return EXIT_FAILURE;
+  }
+
+  // Connect to USB camera device.
+  zx::result<fuchsia::camera::ControlSyncPtr> status_or = OpenCamera(std::move(camera_channel));
   if (status_or.is_error()) {
     FX_PLOGS(FATAL, status_or.error_value())
         << "Failed to request camera device: error: " << status_or.error_value();

@@ -6,9 +6,11 @@
 
 #include <fuchsia/camera2/hal/cpp/fidl.h>
 #include <fuchsia/component/cpp/fidl.h>
+#include <fuchsia/process/cpp/fidl.h>
 #include <lib/sys/service/cpp/service.h>
 #include <lib/syslog/cpp/macros.h>
 #include <zircon/errors.h>
+#include <zircon/processargs.h>
 
 #include "fuchsia/io/cpp/fidl.h"
 #include "lib/fit/function.h"
@@ -25,17 +27,6 @@ fpromise::result<std::unique_ptr<DeviceInstance>, zx_status_t> DeviceInstance::C
   instance->name_ = child_name;
   instance->collection_name_ = collection_name;
 
-  // Bind the camera channel.
-  zx_status_t status = instance->camera_.Bind(std::move(camera), instance->dispatcher_);
-  if (status != ZX_OK) {
-    FX_PLOGS(ERROR, status);
-    return fpromise::error(status);
-  }
-  instance->camera_.set_error_handler([instance = instance.get()](zx_status_t status) {
-    FX_PLOGS(WARNING, status) << "Camera device server disconnected.";
-    instance->camera_ = nullptr;
-  });
-
   // Launch the child device.
   fuchsia::component::decl::CollectionRef collection;
   collection.name = collection_name;
@@ -44,6 +35,19 @@ fpromise::result<std::unique_ptr<DeviceInstance>, zx_status_t> DeviceInstance::C
   child.set_url(url);
   child.set_startup(fuchsia::component::decl::StartupMode::LAZY);
   fuchsia::component::CreateChildArgs args;
+
+  // Pass the camera DeviceHandle to the child so the child can communicate with the correct
+  // instance.
+  fuchsia::process::HandleInfo handle_info;
+  auto channel = camera.TakeChannel();
+  zx::handle handle(channel.release());
+  ZX_ASSERT(handle.is_valid());
+  handle_info.handle = std::move(handle);
+  handle_info.id = PA_HND(PA_USER0, 0);
+  std::vector<fuchsia::process::HandleInfo> numbered_handles;
+  numbered_handles.push_back(std::move(handle_info));
+  args.set_numbered_handles(std::move(numbered_handles));
+
   fuchsia::component::Realm::CreateChildCallback cb =
       [child_name](fuchsia::component::Realm_CreateChild_Result result) {
         if (result.is_err()) {
