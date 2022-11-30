@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//boards/arm64.gni")
+import("//boards/common/arm64-common.gni")
 
 board_name = "as370"
 board_description = "as370"
