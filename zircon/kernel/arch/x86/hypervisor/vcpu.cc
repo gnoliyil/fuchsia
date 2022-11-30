@@ -1055,7 +1055,7 @@ zx::result<ktl::unique_ptr<Vcpu>> NormalVcpu::Create(NormalGuest& guest, zx_vadd
   auto vcpu = Vcpu::Create<NormalVcpu>(guest, *vpid, entry);
   if (vcpu.is_error()) {
     auto result = guest.FreeVpid(*vpid);
-    ASSERT(result.is_ok());
+    DEBUG_ASSERT(result.is_ok());
     return vcpu.take_error();
   }
   // Setup PV clock state.
