@@ -226,7 +226,9 @@ impl RecordBuilder {
         }
 
         if severity >= Severity::Error {
-            if let Some(file) = file {
+            if let Some(mut file) = file {
+                let split = file.split("../");
+                file = split.last().unwrap();
                 arguments.push(arg!("file", Text(file)));
             }
 

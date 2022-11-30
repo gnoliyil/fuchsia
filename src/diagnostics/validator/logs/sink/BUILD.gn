@@ -63,6 +63,11 @@ rustc_binary("bin-e2e-test") {
 }
 
 fuchsia_unittest_package("sink-validator-tests") {
+  test_specs = {
+    log_settings = {
+      max_severity = "ERROR"
+    }
+  }
   deps = [ ":bin_test" ]
 }
 
@@ -77,6 +82,11 @@ fuchsia_component("sink-validator-for-sdk") {
 fuchsia_test_package("log-sink-validator-sdk") {
   deps = [ "puppet/sdk:component" ]
   test_components = [ ":sink-validator-for-sdk" ]
+  test_specs = {
+    log_settings = {
+      max_severity = "ERROR"
+    }
+  }
 }
 
 ### C++ ###
@@ -90,6 +100,11 @@ fuchsia_component("sink-validator-for-cpp") {
 fuchsia_test_package("log-sink-validator-cpp") {
   deps = [ "puppet/cpp:component" ]
   test_components = [ ":sink-validator-for-cpp" ]
+  test_specs = {
+    log_settings = {
+      max_severity = "ERROR"
+    }
+  }
 }
 
 ### E2E C++ ###
@@ -103,6 +118,11 @@ fuchsia_component("sink-validator-for-cpp-e2e") {
 fuchsia_test_package("log-sink-validator-cpp-e2e") {
   deps = [ "puppet/cpp:component" ]
   test_components = [ ":sink-validator-for-cpp-e2e" ]
+  test_specs = {
+    log_settings = {
+      max_severity = "ERROR"
+    }
+  }
 }
 
 ### Rust ###
@@ -116,6 +136,11 @@ fuchsia_component("sink-validator-for-rust") {
 fuchsia_test_package("log-sink-validator-rust") {
   deps = [ "puppet/rust:component" ]
   test_components = [ ":sink-validator-for-rust" ]
+  test_specs = {
+    log_settings = {
+      max_severity = "ERROR"
+    }
+  }
 }
 
 group("tests") {

@@ -477,6 +477,13 @@ const char kDroppedLogsFieldName[] = "dropped_logs";
 const char kFileFieldName[] = "file";
 const char kLineFieldName[] = "line";
 
+cpp17::string_view StripDots(cpp17::string_view path) {
+  while (strncmp(path.data(), "../", 3) == 0) {
+    path = path.substr(3);
+  }
+  return path;
+}
+
 void BeginRecordInternal(fuchsia_syslog_log_buffer_t* buffer, FuchsiaLogSeverity severity,
                          cpp17::optional<cpp17::string_view> file_name, unsigned int line,
                          cpp17::optional<cpp17::string_view> msg,
@@ -530,7 +537,7 @@ void BeginRecordInternal(fuchsia_syslog_log_buffer_t* buffer, FuchsiaLogSeverity
   }
   if (file_name) {
     encoder.AppendArgumentKey(record, SliceFromString(kFileFieldName));
-    encoder.AppendArgumentValue(record, SliceFromString(*file_name));
+    encoder.AppendArgumentValue(record, SliceFromString(StripDots(*file_name)));
   }
   encoder.AppendArgumentKey(record, SliceFromString(kLineFieldName));
   encoder.AppendArgumentValue(record, static_cast<uint64_t>(line));

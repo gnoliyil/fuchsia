@@ -114,6 +114,11 @@ async fn demux_fidl(
     }
 }
 
+struct ReadRecordArgs {
+    new_file_line_rules: bool,
+    override_file_line: bool,
+}
+
 async fn wait_for_severity(
     stream: &mut LogSinkRequestStream,
 ) -> Result<LogSinkWaitForInterestChangeResponder, Error> {
@@ -212,7 +217,7 @@ impl Puppet {
         if test_invalid_unicode {
             info!("Testing invalid unicode.");
             assert_eq!(
-                    puppet.read_record(new_file_line_rules).await?.unwrap(),
+                    puppet.read_record(ReadRecordArgs{new_file_line_rules, override_file_line: true}).await?.unwrap(),
                     RecordAssertion::new(&puppet.info, Severity::Info, new_file_line_rules)
                         .add_string("message", "INVALID UTF-8 SEE https://fxbug.dev/88259, message may be corrupted: Puppet started.�(")
                         .build(puppet.start_time..zx::Time::get_monotonic())
@@ -220,12 +225,17 @@ impl Puppet {
         } else {
             info!("Reading regular record.");
             assert_eq!(
-                puppet.read_record(new_file_line_rules).await?.unwrap(),
+                puppet
+                    .read_record(ReadRecordArgs { new_file_line_rules, override_file_line: true })
+                    .await?
+                    .unwrap(),
                 RecordAssertion::new(&puppet.info, Severity::Info, new_file_line_rules)
                     .add_string("message", "Puppet started.")
                     .build(puppet.start_time..zx::Time::get_monotonic())
             );
         }
+        info!("Testing dot removal.");
+        assert_dot_removal(&mut puppet, new_file_line_rules).await?;
         if has_structured_printf {
             info!("Asserting printf record.");
             assert_printf_record(&mut puppet, new_file_line_rules).await?;
@@ -243,14 +253,19 @@ impl Puppet {
         return Ok(puppet);
     }
 
-    async fn read_record(&self, new_file_line_rules: bool) -> Result<Option<TestRecord>, Error> {
+    async fn read_record(&self, args: ReadRecordArgs) -> Result<Option<TestRecord>, Error> {
         loop {
             let mut buf: Vec<u8> = vec![];
             let bytes_read = self.socket.read_datagram(&mut buf).await.unwrap();
             if bytes_read == 0 {
                 continue;
             }
-            return TestRecord::parse(&buf[0..bytes_read], new_file_line_rules, &self.ignored_tags);
+            return TestRecord::parse(TestRecordParseArgs {
+                buf: &buf[0..bytes_read],
+                new_file_line_rules: args.new_file_line_rules,
+                ignored_tags: &self.ignored_tags,
+                override_file_line: args.override_file_line,
+            });
         }
     }
 
@@ -263,11 +278,12 @@ impl Puppet {
             if bytes_read == 0 {
                 continue;
             }
-            let mut record = TestRecord::parse(
-                &buf[0..bytes_read],
-                self.new_file_line_rules,
-                &self.ignored_tags,
-            )?;
+            let mut record = TestRecord::parse(TestRecordParseArgs {
+                buf: &buf[0..bytes_read],
+                new_file_line_rules: self.new_file_line_rules,
+                ignored_tags: &self.ignored_tags,
+                override_file_line: true,
+            })?;
             if let Some(record) = record.as_mut() {
                 record.arguments.remove("tid");
                 record.arguments.insert("tid".to_string(), Value::UnsignedInt(expected_tid));
@@ -339,7 +355,10 @@ impl Puppet {
 
         // read until we get to a non-ignored record
         let record = loop {
-            if let Some(r) = self.read_record(new_file_line_rules).await? {
+            if let Some(r) = self
+                .read_record(ReadRecordArgs { new_file_line_rules, override_file_line: true })
+                .await?
+            {
                 break r;
             };
         };
@@ -497,6 +516,36 @@ where
     Ok(())
 }
 
+async fn assert_dot_removal(puppet: &mut Puppet, new_file_line_rules: bool) -> Result<(), Error> {
+    let mut record = RecordSpec {
+        file: "../../test_file.cc".to_string(),
+        line: 9001,
+        record: Record {
+            arguments: vec![Argument {
+                name: "key".to_string(),
+                value: diagnostics_log_encoding::Value::Text("value".to_string()),
+            }],
+            severity: Severity::Error,
+            timestamp: 0,
+        },
+    };
+    puppet.proxy.emit_log(&mut record).await?;
+    info!("Waiting for dot message");
+    assert_eq!(
+        puppet
+            .read_record(ReadRecordArgs { new_file_line_rules, override_file_line: false })
+            .await?
+            .unwrap(),
+        RecordAssertion::new(&puppet.info, Severity::Error, false)
+            .add_string("file", "test_file.cc")
+            .add_string("key", "value")
+            .add_unsigned("line", 9001)
+            .build(puppet.start_time..zx::Time::get_monotonic())
+    );
+    info!("Dot removed");
+    Ok(())
+}
+
 async fn assert_printf_record(puppet: &mut Puppet, new_file_line_rules: bool) -> Result<(), Error> {
     let args = vec![
         PrintfValue::IntegerValue(5),
@@ -523,7 +572,10 @@ async fn assert_printf_record(puppet: &mut Puppet, new_file_line_rules: bool) ->
     puppet.proxy.emit_printf_log(&mut spec).await?;
     info!("Waiting for printf");
     assert_eq!(
-        puppet.read_record(new_file_line_rules).await?.unwrap(),
+        puppet
+            .read_record(ReadRecordArgs { new_file_line_rules, override_file_line: true })
+            .await?
+            .unwrap(),
         RecordAssertion::new(&puppet.info, Severity::Info, new_file_line_rules)
             .add_string("message", "Test printf int %i string %s double %f")
             .add_printf(Value::SignedInt(5))
@@ -640,13 +692,16 @@ enum StateMachine {
     PrintfArgs,
 }
 
+struct TestRecordParseArgs<'a> {
+    buf: &'a [u8],
+    new_file_line_rules: bool,
+    ignored_tags: &'a [Value],
+    override_file_line: bool,
+}
+
 impl TestRecord {
-    fn parse(
-        buf: &[u8],
-        new_file_line_rules: bool,
-        ignored_tags: &[Value],
-    ) -> Result<Option<Self>, Error> {
-        let Record { timestamp, severity, arguments } = parse_record(buf)?.0;
+    fn parse(args: TestRecordParseArgs<'_>) -> Result<Option<Self>, Error> {
+        let Record { timestamp, severity, arguments } = parse_record(args.buf)?.0;
 
         let mut sorted_args = BTreeMap::new();
         let mut printf_arguments = vec![];
@@ -654,13 +709,15 @@ impl TestRecord {
         let mut state = StateMachine::Init;
         for Argument { name, value } in arguments {
             // check for ignored tags
-            if name == "tag" && ignored_tags.iter().any(|t| t == &value) {
+            if name == "tag" && args.ignored_tags.iter().any(|t| t == &value) {
                 return Ok(None);
             }
 
             macro_rules! insert_normal {
                 () => {
-                    if severity >= Severity::Error || new_file_line_rules {
+                    if (severity >= Severity::Error || args.new_file_line_rules)
+                        && args.override_file_line
+                    {
                         if name == "file" {
                             sorted_args.insert(name, Value::Text(STUB_ERROR_FILENAME.to_owned()));
                             continue;

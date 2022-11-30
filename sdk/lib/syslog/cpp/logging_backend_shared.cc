@@ -10,6 +10,13 @@
 
 namespace syslog_backend {
 
+const char* StripDots(const char* path) {
+  while (strncmp(path, "../", 3) == 0) {
+    path += 3;
+  }
+  return path;
+}
+
 void BeginRecordLegacy(LogBuffer* buffer, syslog::LogSeverity severity, const char* file,
                        unsigned int line, const char* msg, const char* condition) {
   auto header = MsgHeader::CreatePtr(buffer);
@@ -21,7 +28,7 @@ void BeginRecordLegacy(LogBuffer* buffer, syslog::LogSeverity severity, const ch
   header->WriteString(": ");
 #endif
   header->WriteChar('[');
-  header->WriteString(file);
+  header->WriteString(StripDots(file));
   header->WriteChar('(');
   char a_buffer[128];
   snprintf(a_buffer, 128, "%i", line);

@@ -520,6 +520,13 @@ void SetInterestChangedListener(void (*callback)(void* context, syslog::LogSever
   log_state->set_severity_handler(callback, context);
 }
 
+cpp17::string_view StripDots(cpp17::string_view path) {
+  while (strncmp(path.data(), "../", 3) == 0) {
+    path = path.substr(3);
+  }
+  return path;
+}
+
 void BeginRecordInternal(LogBuffer* buffer, syslog::LogSeverity severity, const char* file_name,
                          unsigned int line, const char* msg, const char* condition, bool is_printf,
                          zx_handle_t socket) {
@@ -597,7 +604,7 @@ void BeginRecordInternal(LogBuffer* buffer, syslog::LogSeverity severity, const 
   }
   if (file_name) {
     encoder.AppendArgumentKey(record, SliceFromString(kFileFieldName));
-    encoder.AppendArgumentValue(record, SliceFromString(file_name));
+    encoder.AppendArgumentValue(record, SliceFromString(StripDots(file_name).data()));
   }
   encoder.AppendArgumentKey(record, SliceFromString(kLineFieldName));
   encoder.AppendArgumentValue(record, static_cast<uint64_t>(line));

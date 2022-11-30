@@ -553,20 +553,25 @@ TEST_F(LoggingFixture, SLog) {
   std::string log;
   ASSERT_TRUE(files::ReadFileToString(new_settings.log_file, &log));
 #endif
-  EXPECT_THAT(log, testing::HasSubstr("ERROR: [" + std::string(__FILE__) + "(" +
-                                      std::to_string(line1) + ")] some_msg=\"String log\""));
-  EXPECT_THAT(log, testing::HasSubstr("ERROR: [" + std::string(__FILE__) + "(" +
-                                      std::to_string(line2) + ")] some_msg=42"));
-  EXPECT_THAT(log, testing::HasSubstr("ERROR: [" + std::string(__FILE__) + "(" +
-                                      std::to_string(line4) + ")] msg first=42 second=\"string\""));
-  EXPECT_THAT(log, testing::HasSubstr("ERROR: [" + std::string(__FILE__) + "(" +
-                                      std::to_string(line5) + ")] String log"));
-  EXPECT_THAT(log, testing::HasSubstr("ERROR: [" + std::string(__FILE__) + "(" +
-                                      std::to_string(line6) + ")] float=0.250000"));
+  EXPECT_THAT(
+      log, testing::HasSubstr("ERROR: [" + std::string("sdk/lib/syslog/cpp/logging_unittest.cc") +
+                              "(" + std::to_string(line1) + ")] some_msg=\"String log\""));
+  EXPECT_THAT(
+      log, testing::HasSubstr("ERROR: [" + std::string("sdk/lib/syslog/cpp/logging_unittest.cc") +
+                              "(" + std::to_string(line2) + ")] some_msg=42"));
+  EXPECT_THAT(
+      log, testing::HasSubstr("ERROR: [" + std::string("sdk/lib/syslog/cpp/logging_unittest.cc") +
+                              "(" + std::to_string(line4) + ")] msg first=42 second=\"string\""));
+  EXPECT_THAT(
+      log, testing::HasSubstr("ERROR: [" + std::string("sdk/lib/syslog/cpp/logging_unittest.cc") +
+                              "(" + std::to_string(line5) + ")] String log"));
+  EXPECT_THAT(
+      log, testing::HasSubstr("ERROR: [" + std::string("sdk/lib/syslog/cpp/logging_unittest.cc") +
+                              "(" + std::to_string(line6) + ")] float=0.250000"));
 
-  EXPECT_THAT(log,
-              testing::HasSubstr("ERROR: [" + std::string(__FILE__) + "(" + std::to_string(line7) +
-                                 ")] String with quotes value=\"char is '\\\"'\""));
+  EXPECT_THAT(log, testing::HasSubstr(
+                       "ERROR: [" + std::string("sdk/lib/syslog/cpp/logging_unittest.cc") + "(" +
+                       std::to_string(line7) + ")] String with quotes value=\"char is '\\\"'\""));
 }
 
 TEST_F(LoggingFixture, BackendDirect) {

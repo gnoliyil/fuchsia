@@ -247,9 +247,10 @@ mod tests {
                 severity: Severity::Error,
                 arguments: arg_prefix(),
             };
-            expected_error
-                .arguments
-                .push(Argument { name: "file".into(), value: Value::Text(file!().into()) });
+            expected_error.arguments.push(Argument {
+                name: "file".into(),
+                value: Value::Text("src/lib/diagnostics/log/rust/src/sink.rs".into()),
+            });
             expected_error
                 .arguments
                 .push(Argument { name: "line".into(), value: Value::UnsignedInt(error_line as _) });
