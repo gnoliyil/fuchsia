@@ -132,7 +132,6 @@ config("fidl-llcpp-deprecated-raw-channels") {
     "//src/ui/bin/hardware_display_controller_provider/fake/tests:unittests",
     "//src/ui/input/drivers/hid-buttons:common",
     "//src/ui/input/drivers/hid-buttons:hid-buttons-test",
-    "//src/ui/input/drivers/usb-hid:usb-hid-test",
     "//src/ui/light/drivers/aml-light:aml-light-test",
     "//src/virtualization/bin/guest_runner:bin",
     "//zircon/system/ulib/fdio-caller/test:fdio-caller",

@@ -9,7 +9,9 @@
 #include <fidl/fuchsia.hardware.input/cpp/wire.h>
 #include <fidl/fuchsia.hardware.usb.peripheral/cpp/wire.h>
 #include <fidl/fuchsia.hardware.usb.virtual.bus/cpp/wire.h>
+#include <lib/component/incoming/cpp/service_client.h>
 #include <lib/ddk/platform-defs.h>
+#include <lib/fdio/cpp/caller.h>
 #include <lib/fdio/fdio.h>
 #include <lib/fdio/watcher.h>
 #include <lib/fit/function.h>
@@ -38,13 +40,11 @@ class UsbHidTest : public zxtest::Test {
     auto usb_hid_function_desc = GetConfigDescriptor();
     ASSERT_NO_FATAL_FAILURE(InitUsbHid(&devpath_, usb_hid_function_desc));
 
-    fbl::unique_fd fd_input(openat(bus_->GetRootFd(), devpath_.c_str(), O_RDWR));
-    ASSERT_GT(fd_input.get(), 0);
-
-    zx::channel input_channel;
-    ASSERT_OK(fdio_get_service_handle(fd_input.release(), input_channel.reset_and_get_address()));
-
-    sync_client_ = fidl::WireSyncClient<fuchsia_hardware_input::Device>(std::move(input_channel));
+    fdio_cpp::UnownedFdioCaller caller(bus_->GetRootFd());
+    zx::result device =
+        component::ConnectAt<fuchsia_hardware_input::Device>(caller.directory(), devpath_);
+    ASSERT_OK(device);
+    sync_client_ = fidl::WireSyncClient<fuchsia_hardware_input::Device>(std::move(device.value()));
   }
 
   void TearDown() override {
@@ -80,40 +80,34 @@ class UsbHidTest : public zxtest::Test {
     fbl::unique_fd fd(openat(bus_->GetRootFd(), "class/input", O_RDONLY));
     while (fdio_watch_directory(fd.get(), WaitForAnyFile, ZX_TIME_INFINITE, devpath) !=
            ZX_ERR_STOP) {
-      continue;
     }
     *devpath = fbl::String::Concat({fbl::String("class/input/"), *devpath});
   }
 
   // Unbinds Usb HID driver from host.
-  void Unbind(fbl::String devpath) {
-    fbl::unique_fd fd_input(openat(bus_->GetRootFd(), devpath.c_str(), O_RDWR));
-    ASSERT_GE(fd_input.get(), 0);
-    zx::channel input_channel;
-    ASSERT_OK(fdio_get_service_handle(fd_input.release(), input_channel.reset_and_get_address()));
-    auto hid_device_path_response =
-        fidl::WireCall<fuchsia_device::Controller>(zx::unowned_channel(input_channel))
-            ->GetTopologicalPath();
+  void Unbind(const fbl::String& devpath) {
+    fdio_cpp::UnownedFdioCaller caller(bus_->GetRootFd());
+    zx::result input_controller =
+        component::ConnectAt<fuchsia_device::Controller>(caller.directory(), devpath_);
+    ASSERT_OK(input_controller);
+    auto hid_device_path_response = fidl::WireCall(input_controller.value())->GetTopologicalPath();
     ASSERT_OK(hid_device_path_response.status());
-    zx::channel usbhid_channel;
     std::string hid_device_path = hid_device_path_response->value()->path.data();
     std::string DEV_CONST = "@/dev/";
     std::string usb_hid_path = hid_device_path.substr(
-        DEV_CONST.length(), hid_device_path.find_last_of("/") - DEV_CONST.length());
+        DEV_CONST.length(), hid_device_path.find_last_of('/') - DEV_CONST.length());
 
-    fbl::unique_fd fd_usb_hid(openat(bus_->GetRootFd(), usb_hid_path.c_str(), O_RDONLY));
-    ASSERT_GE(fd_usb_hid.get(), 0);
+    zx::result usb_hid_controller =
+        component::ConnectAt<fuchsia_device::Controller>(caller.directory(), usb_hid_path);
+    ASSERT_OK(usb_hid_controller);
 
-    ASSERT_OK(
-        fdio_get_service_handle(fd_usb_hid.release(), usbhid_channel.reset_and_get_address()));
     std::string ifc_path = usb_hid_path.substr(0, usb_hid_path.find_last_of('/'));
     fbl::unique_fd fd_usb_hid_parent(
         openat(bus_->GetRootFd(), ifc_path.c_str(), O_DIRECTORY | O_RDONLY));
     ASSERT_GE(fd_usb_hid_parent.get(), 0);
     std::unique_ptr<device_watcher::DirWatcher> watcher;
     ASSERT_OK(device_watcher::DirWatcher::Create(std::move(fd_usb_hid_parent), &watcher));
-    auto result = fidl::WireCall<fuchsia_device::Controller>(zx::unowned_channel(usbhid_channel))
-                      ->ScheduleUnbind();
+    auto result = fidl::WireCall(usb_hid_controller.value())->ScheduleUnbind();
     ASSERT_OK(result.status());
     ASSERT_OK(watcher->WaitForRemoval("usb-hid", zx::duration::infinite()));
   }
