@@ -5,6 +5,7 @@
 //! Core DHCPv6 client state transitions.
 
 use assert_matches::assert_matches;
+use derivative::Derivative;
 use net_types::ip::{Ipv6Addr, Subnet};
 use num::{rational::Ratio, CheckedMul};
 use packet::serialize::InnerPacketBuilder;
@@ -232,6 +233,7 @@ pub enum ClientTimerType {
     Refresh,
     Renew,
     Rebind,
+    RestartServerDiscovery,
 }
 
 /// Possible actions that need to be taken for a state transition to happen successfully.
@@ -1695,6 +1697,7 @@ impl<I: Instant> ServerDiscovery<I> {
         solicit_max_rt: Duration,
         rng: &mut R,
         now: I,
+        initial_actions: impl Iterator<Item = Action<I>>,
     ) -> Transition<I> {
         Self {
             client_id,
@@ -1706,7 +1709,13 @@ impl<I: Instant> ServerDiscovery<I> {
             collected_advertise: BinaryHeap::new(),
             collected_sol_max_rt: Vec::new(),
         }
-        .send_and_schedule_retransmission(transaction_id, options_to_request, rng, now)
+        .send_and_schedule_retransmission(
+            transaction_id,
+            options_to_request,
+            rng,
+            now,
+            initial_actions,
+        )
     }
 
     /// Calculates timeout for retransmitting solicits using parameters
@@ -1734,6 +1743,7 @@ impl<I: Instant> ServerDiscovery<I> {
         options_to_request: &[v6::OptionCode],
         rng: &mut R,
         now: I,
+        initial_actions: impl Iterator<Item = Action<I>>,
     ) -> Transition<I> {
         let Self {
             client_id,
@@ -1823,10 +1833,15 @@ impl<I: Instant> ServerDiscovery<I> {
                 collected_advertise,
                 collected_sol_max_rt,
             }),
-            actions: vec![
-                Action::SendMessage(buf),
-                Action::ScheduleTimer(ClientTimerType::Retransmission, now.add(retrans_timeout)),
-            ],
+            actions: initial_actions
+                .chain([
+                    Action::SendMessage(buf),
+                    Action::ScheduleTimer(
+                        ClientTimerType::Retransmission,
+                        now.add(retrans_timeout),
+                    ),
+                ])
+                .collect(),
             transaction_id: None,
         }
     }
@@ -1897,7 +1912,13 @@ impl<I: Instant> ServerDiscovery<I> {
             collected_advertise,
             collected_sol_max_rt,
         }
-        .send_and_schedule_retransmission(transaction_id, options_to_request, rng, now)
+        .send_and_schedule_retransmission(
+            transaction_id,
+            options_to_request,
+            rng,
+            now,
+            std::iter::empty(),
+        )
     }
 
     fn advertise_message_received<R: Rng, B: ByteSlice>(
@@ -2349,6 +2370,7 @@ fn request_from_alternate_server_or_restart_server_discovery<I: Instant, R: Rng>
         solicit_max_rt,
         rng,
         now,
+        std::iter::empty(),
     );
 }
 
@@ -2637,6 +2659,13 @@ struct ComputeNewEntriesWithCurrentIasAndReplyResult<V: IaValue, I> {
     go_to_requesting: bool,
     missing_ias_in_reply: bool,
     updates: HashMap<v6::IAID, HashMap<V, IaValueUpdateKind>>,
+    all_ias_invalidates_at: Option<AllIasInvalidatesAt<I>>,
+}
+
+#[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
+enum AllIasInvalidatesAt<I> {
+    At(I),
+    Never,
 }
 
 fn compute_new_entries_with_current_ias_and_reply<V: IaValue, I: Instant>(
@@ -2647,6 +2676,23 @@ fn compute_new_entries_with_current_ias_and_reply<V: IaValue, I: Instant>(
     now: I,
 ) -> ComputeNewEntriesWithCurrentIasAndReplyResult<V, I> {
     let mut go_to_requesting = false;
+    let mut all_ias_invalidates_at = None;
+
+    let mut update_all_ias_invalidates_at = |LifetimesInfo::<I> {
+                                                 lifetimes:
+                                                     Lifetimes { valid_lifetime, preferred_lifetime: _ },
+                                                 updated_at,
+                                             }| {
+        all_ias_invalidates_at = core::cmp::max(
+            all_ias_invalidates_at,
+            Some(match valid_lifetime {
+                v6::NonZeroTimeValue::Finite(lifetime) => AllIasInvalidatesAt::At(
+                    updated_at.add(Duration::from_secs(lifetime.get().into())),
+                ),
+                v6::NonZeroTimeValue::Infinity => AllIasInvalidatesAt::Never,
+            }),
+        );
+    };
 
     // As per RFC 8415 section 18.2.10.1:
     //
@@ -2777,9 +2823,12 @@ fn compute_new_entries_with_current_ias_and_reply<V: IaValue, I: Instant>(
                                 None
                             );
 
+                            let lifetimes_info = LifetimesInfo { lifetimes, updated_at: now };
+                            update_all_ias_invalidates_at(lifetimes_info);
+
                             Some((
                                 value,
-                                LifetimesInfo { lifetimes, updated_at: now }
+                                lifetimes_info,
                             ))
                         },
                         Err(LifetimesError::PreferredLifetimeGreaterThanValidLifetime(Lifetimes {
@@ -2858,7 +2907,9 @@ fn compute_new_entries_with_current_ias_and_reply<V: IaValue, I: Instant>(
                                 // The Reply is missing this value so we just copy
                                 // it into the new set of values.
                                 None => {
-                                    let _: &mut LifetimesInfo<_> = e.insert(lifetimes.clone());
+                                    let lifetimes = lifetimes.clone();
+                                    update_all_ias_invalidates_at(lifetimes);
+                                    let _: &mut LifetimesInfo<_> = e.insert(lifetimes);
                                 }
                             }
 
@@ -2913,6 +2964,7 @@ fn compute_new_entries_with_current_ias_and_reply<V: IaValue, I: Instant>(
         go_to_requesting,
         missing_ias_in_reply,
         updates,
+        all_ias_invalidates_at,
     }
 }
 
@@ -3013,12 +3065,14 @@ fn process_reply_with_leases<B: ByteSlice, I: Instant>(
         ia_pd_updates,
         go_to_requesting,
         missing_ias_in_reply,
+        all_ias_invalidates_at,
     ) = {
         let ComputeNewEntriesWithCurrentIasAndReplyResult {
             new_entries: non_temporary_addresses,
             go_to_requesting: go_to_requesting_iana,
             missing_ias_in_reply: missing_ias_in_reply_iana,
             updates: ia_na_updates,
+            all_ias_invalidates_at: all_ia_nas_invalidates_at,
         } = compute_new_entries_with_current_ias_and_reply(
             IA_NA_NAME,
             request_type,
@@ -3031,6 +3085,7 @@ fn process_reply_with_leases<B: ByteSlice, I: Instant>(
             go_to_requesting: go_to_requesting_iapd,
             missing_ias_in_reply: missing_ias_in_reply_iapd,
             updates: ia_pd_updates,
+            all_ias_invalidates_at: all_ia_pds_invalidates_at,
         } = compute_new_entries_with_current_ias_and_reply(
             IA_PD_NAME,
             request_type,
@@ -3045,6 +3100,7 @@ fn process_reply_with_leases<B: ByteSlice, I: Instant>(
             ia_pd_updates,
             go_to_requesting_iana || go_to_requesting_iapd,
             missing_ias_in_reply_iana || missing_ias_in_reply_iapd,
+            core::cmp::max(all_ia_nas_invalidates_at, all_ia_pds_invalidates_at),
         )
     };
 
@@ -3199,6 +3255,16 @@ fn process_reply_with_leases<B: ByteSlice, I: Instant>(
     .flatten()
     .chain((!ia_na_updates.is_empty()).then(|| Action::IaNaUpdates(ia_na_updates)))
     .chain((!ia_pd_updates.is_empty()).then(|| Action::IaPdUpdates(ia_pd_updates)))
+    .chain(all_ias_invalidates_at.into_iter().map(|all_ias_invalidates_at| {
+        match all_ias_invalidates_at {
+            AllIasInvalidatesAt::At(instant) => {
+                Action::ScheduleTimer(ClientTimerType::RestartServerDiscovery, instant)
+            }
+            AllIasInvalidatesAt::Never => {
+                Action::CancelTimer(ClientTimerType::RestartServerDiscovery)
+            }
+        }
+    }))
     .collect();
 
     Ok(ProcessedReplyWithLeases {
@@ -3747,9 +3813,38 @@ impl<I: Instant> Requesting<I> {
             }
         }
     }
+
+    fn restart_server_discovery<R: Rng>(
+        self,
+        options_to_request: &[v6::OptionCode],
+        rng: &mut R,
+        now: I,
+    ) -> Transition<I> {
+        let Self {
+            client_id,
+            non_temporary_addresses,
+            delegated_prefixes,
+            server_id: _,
+            collected_advertise: _,
+            first_request_time: _,
+            retrans_timeout: _,
+            transmission_count: _,
+            solicit_max_rt: _,
+        } = self;
+
+        restart_server_discovery(
+            client_id,
+            non_temporary_addresses,
+            delegated_prefixes,
+            Vec::new(),
+            options_to_request,
+            rng,
+            now,
+        )
+    }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 struct LifetimesInfo<I> {
     lifetimes: Lifetimes,
     updated_at: I,
@@ -3810,6 +3905,93 @@ struct Assigned<I> {
     /// used by the client.
     solicit_max_rt: Duration,
     _marker: PhantomData<I>,
+}
+
+fn restart_server_discovery<R: Rng, I: Instant>(
+    client_id: [u8; CLIENT_ID_LEN],
+    non_temporary_addresses: HashMap<v6::IAID, AddressEntry<I>>,
+    delegated_prefixes: HashMap<v6::IAID, PrefixEntry<I>>,
+    dns_servers: Vec<Ipv6Addr>,
+    options_to_request: &[v6::OptionCode],
+    rng: &mut R,
+    now: I,
+) -> Transition<I> {
+    #[derive(Derivative)]
+    #[derivative(Default(bound = ""))]
+    struct ClearValuesResult<V: IaValue> {
+        updates: HashMap<v6::IAID, HashMap<V, IaValueUpdateKind>>,
+        entries: HashMap<v6::IAID, HashSet<V>>,
+    }
+
+    fn clear_values<V: IaValue, I: Instant>(
+        values: HashMap<v6::IAID, IaEntry<V, I>>,
+    ) -> ClearValuesResult<V> {
+        values.into_iter().fold(
+            ClearValuesResult::default(),
+            |ClearValuesResult { mut updates, mut entries }, (iaid, entry)| {
+                match entry {
+                    IaEntry::Assigned(values) => {
+                        assert_matches!(
+                            updates.insert(
+                                iaid,
+                                values
+                                    .keys()
+                                    .copied()
+                                    .map(|value| (value, IaValueUpdateKind::Removed))
+                                    .collect()
+                            ),
+                            None
+                        );
+
+                        assert_matches!(entries.insert(iaid, values.into_keys().collect()), None);
+                    }
+                    IaEntry::ToRequest(values) => {
+                        assert_matches!(entries.insert(iaid, values), None);
+                    }
+                }
+
+                ClearValuesResult { updates, entries }
+            },
+        )
+    }
+
+    let ClearValuesResult {
+        updates: non_temporary_address_updates,
+        entries: non_temporary_address_entries,
+    } = clear_values(non_temporary_addresses);
+
+    let ClearValuesResult { updates: delegated_prefix_updates, entries: delegated_prefix_entries } =
+        clear_values(delegated_prefixes);
+
+    ServerDiscovery::start(
+        transaction_id(),
+        client_id,
+        non_temporary_address_entries,
+        delegated_prefix_entries,
+        &options_to_request,
+        MAX_SOLICIT_TIMEOUT,
+        rng,
+        now,
+        [
+            Action::CancelTimer(ClientTimerType::Retransmission),
+            Action::CancelTimer(ClientTimerType::Refresh),
+            Action::CancelTimer(ClientTimerType::Renew),
+            Action::CancelTimer(ClientTimerType::Rebind),
+            Action::CancelTimer(ClientTimerType::Rebind),
+            // Explicitly do not cancel `ClientTimerType::RestartServerDiscovery` since we only
+            // reach this point if the restart time was fired.
+        ]
+        .into_iter()
+        .chain((!dns_servers.is_empty()).then(|| Action::UpdateDnsServers(Vec::new())))
+        .chain(
+            (!non_temporary_address_updates.is_empty())
+                .then(|| Action::IaNaUpdates(non_temporary_address_updates)),
+        )
+        .chain(
+            (!delegated_prefix_updates.is_empty())
+                .then(|| Action::IaPdUpdates(delegated_prefix_updates)),
+        ),
+    )
 }
 
 impl<I: Instant> Assigned<I> {
@@ -3880,6 +4062,33 @@ impl<I: Instant> Assigned<I> {
             options_to_request,
             dns_servers,
             solicit_max_rt,
+            rng,
+            now,
+        )
+    }
+
+    fn restart_server_discovery<R: Rng>(
+        self,
+        options_to_request: &[v6::OptionCode],
+        rng: &mut R,
+        now: I,
+    ) -> Transition<I> {
+        let Self {
+            client_id,
+            non_temporary_addresses,
+            delegated_prefixes,
+            server_id: _,
+            dns_servers,
+            solicit_max_rt: _,
+            _marker,
+        } = self;
+
+        restart_server_discovery(
+            client_id,
+            non_temporary_addresses,
+            delegated_prefixes,
+            dns_servers,
+            options_to_request,
             rng,
             now,
         )
@@ -4352,6 +4561,34 @@ impl<I: Instant, const IS_REBINDING: bool> RenewingOrRebinding<I, IS_REBINDING> 
             ),
         }
     }
+
+    fn restart_server_discovery<R: Rng>(
+        self,
+        options_to_request: &[v6::OptionCode],
+        rng: &mut R,
+        now: I,
+    ) -> Transition<I> {
+        let Self(RenewingOrRebindingInner {
+            client_id,
+            non_temporary_addresses,
+            delegated_prefixes,
+            server_id: _,
+            dns_servers,
+            start_time: _,
+            retrans_timeout: _,
+            solicit_max_rt: _,
+        }) = self;
+
+        restart_server_discovery(
+            client_id,
+            non_temporary_addresses,
+            delegated_prefixes,
+            dns_servers,
+            options_to_request,
+            rng,
+            now,
+        )
+    }
 }
 
 /// All possible states of a DHCPv6 client.
@@ -4531,6 +4768,25 @@ impl<I: Instant> ClientState<I> {
         }
     }
 
+    fn restart_server_discovery<R: Rng>(
+        self,
+        options_to_request: &[v6::OptionCode],
+        rng: &mut R,
+        now: I,
+    ) -> Transition<I> {
+        match self {
+            ClientState::Requesting(s) => s.restart_server_discovery(options_to_request, rng, now),
+            ClientState::Assigned(s) => s.restart_server_discovery(options_to_request, rng, now),
+            ClientState::Renewing(s) => s.restart_server_discovery(options_to_request, rng, now),
+            ClientState::Rebinding(s) => s.restart_server_discovery(options_to_request, rng, now),
+            ClientState::InformationRequesting(_)
+            | ClientState::InformationReceived(_)
+            | ClientState::ServerDiscovery(_) => {
+                unreachable!("received unexpected rebind timeout in state {:?}.", self);
+            }
+        }
+    }
+
     /// Returns the DNS servers advertised by the server.
     fn get_dns_servers(&self) -> Vec<Ipv6Addr> {
         match self {
@@ -4674,6 +4930,7 @@ impl<I: Instant, R: Rng> ClientStateMachine<I, R> {
                 MAX_SOLICIT_TIMEOUT,
                 &mut rng,
                 now,
+                std::iter::empty(),
             );
         (
             Self {
@@ -4715,6 +4972,9 @@ impl<I: Instant, R: Rng> ClientStateMachine<I, R> {
                 }
                 ClientTimerType::Rebind => {
                     old_state.rebind_timer_expired(&options_to_request, rng, now)
+                }
+                ClientTimerType::RestartServerDiscovery => {
+                    old_state.restart_server_discovery(&options_to_request, rng, now)
                 }
             };
         *state = Some(new_state);
@@ -4899,6 +5159,57 @@ pub(crate) mod testutil {
             .collect()
     }
 
+    pub(super) fn assert_server_discovery(
+        state: &Option<ClientState<Instant>>,
+        client_id: [u8; CLIENT_ID_LEN],
+        configured_non_temporary_addresses: HashMap<v6::IAID, HashSet<Ipv6Addr>>,
+        configured_delegated_prefixes: HashMap<v6::IAID, HashSet<Subnet<Ipv6Addr>>>,
+        first_solicit_time: Instant,
+        buf: &[u8],
+        options_to_request: &[v6::OptionCode],
+    ) {
+        assert_matches!(
+            state,
+            Some(ClientState::ServerDiscovery(ServerDiscovery {
+                client_id: got_client_id,
+                configured_non_temporary_addresses: got_configured_non_temporary_addresses,
+                configured_delegated_prefixes: got_configured_delegated_prefixes,
+                first_solicit_time: got_first_solicit_time,
+                retrans_timeout: INITIAL_SOLICIT_TIMEOUT,
+                solicit_max_rt: MAX_SOLICIT_TIMEOUT,
+                collected_advertise,
+                collected_sol_max_rt,
+            })) => {
+                assert_eq!(got_client_id, &client_id);
+                assert_eq!(
+                    got_configured_non_temporary_addresses,
+                    &configured_non_temporary_addresses,
+                );
+                assert_eq!(
+                    got_configured_delegated_prefixes,
+                    &configured_delegated_prefixes,
+                );
+                assert!(
+                    collected_advertise.is_empty(),
+                    "collected_advertise={:?}",
+                    collected_advertise,
+                );
+                assert_eq!(collected_sol_max_rt, &[]);
+                assert_eq!(*got_first_solicit_time, first_solicit_time);
+            }
+        );
+
+        assert_outgoing_stateful_message(
+            buf,
+            v6::MessageType::Solicit,
+            &client_id,
+            None,
+            &options_to_request,
+            &configured_non_temporary_addresses,
+            &configured_delegated_prefixes,
+        );
+    }
+
     /// Creates a stateful client and asserts that:
     ///    - the client is started in ServerDiscovery state
     ///    - the state contain the expected value
@@ -4925,36 +5236,18 @@ pub(crate) mod testutil {
             now,
         );
 
-        assert_matches!(
-            &client,
-            ClientStateMachine {
-                transaction_id: got_transaction_id,
-                options_to_request: got_options_to_request,
-                state: Some(ClientState::ServerDiscovery(ServerDiscovery {
-                    client_id: got_client_id,
-                    configured_non_temporary_addresses: got_configured_non_temporary_addresses,
-                    configured_delegated_prefixes: got_configured_delegated_prefixes,
-                    first_solicit_time: _,
-                    retrans_timeout: INITIAL_SOLICIT_TIMEOUT,
-                    solicit_max_rt: MAX_SOLICIT_TIMEOUT,
-                    collected_advertise,
-                    collected_sol_max_rt,
-                })),
-                rng: _,
-            } => {
-                assert_eq!(got_transaction_id, &transaction_id);
-                assert_eq!(got_options_to_request, &options_to_request);
-                assert_eq!(got_client_id, &client_id);
-                assert_eq!(got_configured_non_temporary_addresses, &configured_non_temporary_addresses);
-                assert_eq!(got_configured_delegated_prefixes, &configured_delegated_prefixes);
-                assert!(collected_advertise.is_empty(), "collected_advertise={:?}", collected_advertise);
-                assert_eq!(collected_sol_max_rt, &[]);
-            }
-        );
+        let ClientStateMachine {
+            transaction_id: got_transaction_id,
+            options_to_request: got_options_to_request,
+            state,
+            rng: _,
+        } = &client;
+        assert_eq!(got_transaction_id, &transaction_id);
+        assert_eq!(got_options_to_request, &options_to_request);
 
         // Start of server discovery should send a solicit and schedule a
         // retransmission timer.
-        let mut buf = assert_matches!( &actions[..],
+        let buf = assert_matches!( &actions[..],
             [
                 Action::SendMessage(buf),
                 Action::ScheduleTimer(ClientTimerType::Retransmission, instant)
@@ -4964,14 +5257,14 @@ pub(crate) mod testutil {
             }
         );
 
-        assert_outgoing_stateful_message(
-            &mut buf,
-            v6::MessageType::Solicit,
-            &client_id,
-            None,
+        assert_server_discovery(
+            state,
+            client_id,
+            configured_non_temporary_addresses,
+            configured_delegated_prefixes,
+            now,
+            buf,
             &options_to_request,
-            &configured_non_temporary_addresses,
-            &configured_delegated_prefixes,
         );
 
         client
@@ -5592,6 +5885,7 @@ pub(crate) mod testutil {
         expected_dns_servers: Option<&[Ipv6Addr]>,
         expected_t1_secs: v6::NonZeroOrMaxU32,
         expected_t2_secs: v6::NonZeroOrMaxU32,
+        max_valid_lifetime: v6::NonZeroTimeValue,
         rng: R,
         now: Instant,
     ) -> ClientStateMachine<Instant, R> {
@@ -5671,6 +5965,15 @@ pub(crate) mod testutil {
         .chain(maybe_dns_server_action)
         .chain((!iana_updates.is_empty()).then(|| Action::IaNaUpdates(iana_updates)))
         .chain((!iapd_updates.is_empty()).then(|| Action::IaPdUpdates(iapd_updates)))
+        .chain([match max_valid_lifetime {
+            v6::NonZeroTimeValue::Finite(max_valid_lifetime) => Action::ScheduleTimer(
+                ClientTimerType::RestartServerDiscovery,
+                now.add(Duration::from_secs(max_valid_lifetime.get().into())),
+            ),
+            v6::NonZeroTimeValue::Infinity => {
+                Action::CancelTimer(ClientTimerType::RestartServerDiscovery)
+            }
+        }])
         .collect::<Vec<_>>();
         assert_eq!(actions, expected_actions);
 
@@ -5813,6 +6116,7 @@ pub(crate) mod testutil {
         expected_dns_servers: Option<&[Ipv6Addr]>,
         expected_t1_secs: v6::NonZeroOrMaxU32,
         expected_t2_secs: v6::NonZeroOrMaxU32,
+        max_valid_lifetime: v6::NonZeroTimeValue,
         rng: R,
         now: Instant,
     ) -> ClientStateMachine<Instant, R> {
@@ -5824,6 +6128,7 @@ pub(crate) mod testutil {
             expected_dns_servers,
             expected_t1_secs,
             expected_t2_secs,
+            max_valid_lifetime,
             rng,
             now,
         );
@@ -7466,9 +7771,14 @@ mod tests {
                 Action::ScheduleTimer(ClientTimerType::Renew, t1),
                 Action::ScheduleTimer(ClientTimerType::Rebind, t2),
                 Action::IaNaUpdates(iana_updates),
+                Action::ScheduleTimer(ClientTimerType::RestartServerDiscovery, restart_time),
             ] => {
                 assert_eq!(*t1, time.add(Duration::from_secs(T1.get().into())));
                 assert_eq!(*t2, time.add(Duration::from_secs(T2.get().into())));
+                assert_eq!(
+                    *restart_time,
+                    time.add(Duration::from_secs(VALID_LIFETIME.get().into())),
+                );
                 assert_eq!(
                     iana_updates,
                     &HashMap::from([(
@@ -7731,6 +8041,13 @@ mod tests {
                 v6::NonZeroTimeValue::Infinity => Action::CancelTimer(timer),
             };
 
+            let non_zero_time_value = |v| {
+                assert_matches!(
+                    v6::TimeValue::new(v),
+                    v6::TimeValue::NonZero(v) => v
+                )
+            };
+
             assert!(expected_t1 <= expected_t2);
             assert_eq!(
                 actions,
@@ -7741,6 +8058,13 @@ mod tests {
                 ]
                 .into_iter()
                 .chain(update_actions)
+                .chain([timer_action(
+                    ClientTimerType::RestartServerDiscovery,
+                    std::cmp::max(
+                        non_zero_time_value(ia1_valid_lifetime),
+                        non_zero_time_value(ia2_valid_lifetime),
+                    ),
+                )])
                 .collect::<Vec<_>>(),
             );
         }
@@ -8163,9 +8487,14 @@ mod tests {
                 Action::ScheduleTimer(ClientTimerType::Rebind, t2),
                 Action::IaNaUpdates(iana_updates),
                 Action::IaPdUpdates(iapd_updates),
+                Action::ScheduleTimer(ClientTimerType::RestartServerDiscovery, restart_time),
             ] => {
                 assert_eq!(*t1, now.add(Duration::from_secs(T1.get().into())));
                 assert_eq!(*t2, now.add(Duration::from_secs(T2.get().into())));
+                assert_eq!(
+                    *restart_time,
+                    now.add(Duration::from_secs(VALID_LIFETIME.get().into())),
+                );
                 assert_eq!(
                     iana_updates,
                     &(0..).map(v6::IAID::new)
@@ -8210,10 +8539,15 @@ mod tests {
                 Action::ScheduleTimer(ClientTimerType::Rebind, t2),
                 Action::UpdateDnsServers(dns_servers),
                 Action::IaNaUpdates(iana_updates),
+                Action::ScheduleTimer(ClientTimerType::RestartServerDiscovery, restart_time),
             ] => {
                 assert_eq!(dns_servers[..], DNS_SERVERS);
                 assert_eq!(*t1, now.add(Duration::from_secs(T1.get().into())));
                 assert_eq!(*t2, now.add(Duration::from_secs(T2.get().into())));
+                assert_eq!(
+                    *restart_time,
+                    now.add(Duration::from_secs(VALID_LIFETIME.get().into())),
+                );
                 assert_eq!(
                     iana_updates,
                     &HashMap::from([
@@ -8392,6 +8726,7 @@ mod tests {
             Option<&[Ipv6Addr]>,
             v6::NonZeroOrMaxU32,
             v6::NonZeroOrMaxU32,
+            v6::NonZeroTimeValue,
             StepRng,
             Instant,
         ) -> ClientStateMachine<Instant, StepRng>,
@@ -8494,6 +8829,7 @@ mod tests {
             None,
             T1,
             T2,
+            v6::NonZeroTimeValue::Finite(VALID_LIFETIME),
             StepRng::new(std::u64::MAX / 2, 0),
             Instant::now(),
         );
@@ -8521,6 +8857,7 @@ mod tests {
             Some(&DNS_SERVERS),
             T1,
             T2,
+            v6::NonZeroTimeValue::Finite(VALID_LIFETIME),
             StepRng::new(std::u64::MAX / 2, 0),
             Instant::now(),
         );
@@ -8710,6 +9047,10 @@ mod tests {
                 .chain(expected_timer_actions(now))
                 .chain((!iana_updates.is_empty()).then(|| Action::IaNaUpdates(iana_updates)))
                 .chain((!iapd_updates.is_empty()).then(|| Action::IaPdUpdates(iapd_updates)))
+                .chain([Action::ScheduleTimer(
+                    ClientTimerType::RestartServerDiscovery,
+                    now.add(Duration::from_secs(VALID_LIFETIME.get().into())),
+                ),])
                 .collect::<Vec<_>>()
         );
 
@@ -8759,6 +9100,7 @@ mod tests {
             None,
             T1,
             T2,
+            v6::NonZeroTimeValue::Finite(VALID_LIFETIME),
             StepRng::new(std::u64::MAX / 2, 0),
             time,
         );
@@ -8902,6 +9244,7 @@ mod tests {
             None,
             T1,
             T2,
+            v6::NonZeroTimeValue::Finite(VALID_LIFETIME),
             StepRng::new(std::u64::MAX / 2, 0),
             time,
         );
@@ -9039,10 +9382,14 @@ mod tests {
                 Action::ScheduleTimer(ClientTimerType::Rebind, t2),
                 Action::IaNaUpdates(iana_updates),
                 Action::IaPdUpdates(iapd_updates),
+                Action::ScheduleTimer(ClientTimerType::RestartServerDiscovery, restart_time),
             ] => {
                 assert_eq!(*t1, time.add(Duration::from_secs(RENEWED_T1.get().into())));
                 assert_eq!(*t2, time.add(Duration::from_secs(RENEWED_T2.get().into())));
-
+                assert_eq!(
+                    *restart_time,
+                    time.add(Duration::from_secs(RENEWED_VALID_LIFETIME.get().into()))
+                );
 
                 fn get_updates<V: IaValue>(ias: Vec<TestIa<V>>) -> HashMap<v6::IAID, HashMap<V, IaValueUpdateKind>> {
                     (0..).map(v6::IAID::new).zip(ias.into_iter().map(
@@ -9097,6 +9444,7 @@ mod tests {
             None,
             T1,
             T2,
+            v6::NonZeroTimeValue::Finite(VALID_LIFETIME),
             StepRng::new(std::u64::MAX / 2, 0),
             time,
         );
@@ -9231,6 +9579,7 @@ mod tests {
             None,
             T1,
             T2,
+            v6::NonZeroTimeValue::Finite(VALID_LIFETIME),
             StepRng::new(std::u64::MAX / 2, 0),
             time,
         );
@@ -9348,6 +9697,7 @@ mod tests {
             None,
             T1,
             T2,
+            v6::NonZeroTimeValue::Finite(VALID_LIFETIME),
             StepRng::new(std::u64::MAX / 2, 0),
             time,
         );
@@ -9478,9 +9828,17 @@ mod tests {
                 Action::ScheduleTimer(ClientTimerType::Rebind, t2),
                 Action::IaNaUpdates(iana_updates),
                 Action::IaPdUpdates(iapd_updates),
+                 Action::ScheduleTimer(ClientTimerType::RestartServerDiscovery, restart_time),
             ] => {
                 assert_eq!(*t1, time.add(Duration::from_secs(RENEWED_T1.get().into())));
                 assert_eq!(*t2, time.add(Duration::from_secs(RENEWED_T2.get().into())));
+                assert_eq!(
+                    *restart_time,
+                    time.add(Duration::from_secs(std::cmp::max(
+                        VALID_LIFETIME,
+                        RENEWED_VALID_LIFETIME,
+                    ).get().into()))
+                );
 
                 fn get_updates<V: IaValue>(
                     values: &[V],
@@ -9534,6 +9892,7 @@ mod tests {
             None,
             T1,
             T2,
+            v6::NonZeroTimeValue::Finite(VALID_LIFETIME),
             StepRng::new(std::u64::MAX / 2, 0),
             time,
         );
@@ -9653,9 +10012,14 @@ mod tests {
                 Action::ScheduleTimer(ClientTimerType::Rebind, t2),
                 Action::IaNaUpdates(iana_updates),
                 Action::IaPdUpdates(iapd_updates),
+                Action::ScheduleTimer(ClientTimerType::RestartServerDiscovery, restart_time),
             ] => {
                 assert_eq!(*t1, time.add(Duration::from_secs(RENEWED_T1.get().into())));
                 assert_eq!(*t2, time.add(Duration::from_secs(RENEWED_T2.get().into())));
+                assert_eq!(
+                    *restart_time,
+                    time.add(Duration::from_secs(RENEWED_VALID_LIFETIME.get().into()))
+                );
 
                 fn get_updates<V: IaValue>(
                     values: &[V],
@@ -9714,6 +10078,7 @@ mod tests {
             None,
             T1,
             T2,
+            v6::NonZeroTimeValue::Finite(VALID_LIFETIME),
             StepRng::new(std::u64::MAX / 2, 0),
             time,
         );
@@ -9825,9 +10190,17 @@ mod tests {
                 Action::ScheduleTimer(ClientTimerType::Rebind, t2),
                 Action::IaNaUpdates(iana_updates),
                 Action::IaPdUpdates(iapd_updates),
+                Action::ScheduleTimer(ClientTimerType::RestartServerDiscovery, restart_time),
             ] => {
                 assert_eq!(*t1, time.add(Duration::from_secs(RENEWED_T1.get().into())));
                 assert_eq!(*t2, time.add(Duration::from_secs(RENEWED_T2.get().into())));
+                assert_eq!(
+                    *restart_time,
+                    time.add(Duration::from_secs(std::cmp::max(
+                        VALID_LIFETIME,
+                        RENEWED_VALID_LIFETIME,
+                    ).get().into()))
+                );
 
                 fn get_updates<V: IaValue>(
                     iaid: v6::IAID,
@@ -9922,73 +10295,68 @@ mod tests {
         NoBindingTestCase { ia_na_no_binding, ia_pd_no_binding }: NoBindingTestCase,
     ) {
         const NUM_IAS: u32 = 2;
+        const NO_BINDING_IA_IDX: usize = (NUM_IAS - 1) as usize;
 
+        fn to_assign<V: IaValueTestExt>() -> Vec<TestIa<V>> {
+            V::CONFIGURED[0..usize::try_from(NUM_IAS).unwrap()]
+                .iter()
+                .copied()
+                .map(TestIa::new_default)
+                .collect()
+        }
         let time = Instant::now();
+        let non_temporary_addresses_to_assign = to_assign::<Ipv6Addr>();
+        let delegated_prefixes_to_assign = to_assign::<Subnet<Ipv6Addr>>();
         let mut client = send_and_assert(
             CLIENT_ID,
             SERVER_ID[0],
-            CONFIGURED_NON_TEMPORARY_ADDRESSES[0..usize::try_from(NUM_IAS).unwrap()]
-                .iter()
-                .copied()
-                .map(TestIaNa::new_default)
-                .collect(),
-            CONFIGURED_DELEGATED_PREFIXES[0..usize::try_from(NUM_IAS).unwrap()]
-                .iter()
-                .copied()
-                .map(TestIaPd::new_default)
-                .collect(),
+            non_temporary_addresses_to_assign.clone(),
+            delegated_prefixes_to_assign.clone(),
             None,
             T1,
             T2,
+            v6::NonZeroTimeValue::Finite(VALID_LIFETIME),
             StepRng::new(std::u64::MAX / 2, 0),
             time,
         );
         let ClientStateMachine { transaction_id, options_to_request: _, state: _, rng: _ } =
             &client;
 
-        // Build a reply with NoBinding status in one of the IA options.
-        let iaaddr_opts = [
-            [v6::DhcpOption::IaAddr(v6::IaAddrSerializer::new(
-                CONFIGURED_NON_TEMPORARY_ADDRESSES[0],
-                RENEWED_PREFERRED_LIFETIME.get(),
-                RENEWED_VALID_LIFETIME.get(),
-                &[],
-            ))],
-            [if ia_na_no_binding {
-                v6::DhcpOption::StatusCode(
-                    v6::ErrorStatusCode::NoBinding.into(),
-                    "Binding not found.",
-                )
-            } else {
-                v6::DhcpOption::IaAddr(v6::IaAddrSerializer::new(
-                    CONFIGURED_NON_TEMPORARY_ADDRESSES[1],
-                    RENEWED_PREFERRED_LIFETIME.get(),
-                    RENEWED_VALID_LIFETIME.get(),
-                    &[],
-                ))
-            }],
-        ];
-        let iaprefix_opts = [
-            [v6::DhcpOption::IaPrefix(v6::IaPrefixSerializer::new(
-                RENEWED_PREFERRED_LIFETIME.get(),
-                RENEWED_VALID_LIFETIME.get(),
-                CONFIGURED_DELEGATED_PREFIXES[0],
-                &[],
-            ))],
-            [if ia_pd_no_binding {
-                v6::DhcpOption::StatusCode(
-                    v6::ErrorStatusCode::NoBinding.into(),
-                    "Binding not found.",
-                )
-            } else {
-                v6::DhcpOption::IaPrefix(v6::IaPrefixSerializer::new(
-                    RENEWED_PREFERRED_LIFETIME.get(),
-                    RENEWED_VALID_LIFETIME.get(),
-                    CONFIGURED_DELEGATED_PREFIXES[1],
-                    &[],
-                ))
-            }],
-        ];
+        // Build a reply with NoBinding status..
+        let iaaddr_opts = (0..usize::try_from(NUM_IAS).unwrap())
+            .map(|i| {
+                if i == NO_BINDING_IA_IDX && ia_na_no_binding {
+                    [v6::DhcpOption::StatusCode(
+                        v6::ErrorStatusCode::NoBinding.into(),
+                        "Binding not found.",
+                    )]
+                } else {
+                    [v6::DhcpOption::IaAddr(v6::IaAddrSerializer::new(
+                        CONFIGURED_NON_TEMPORARY_ADDRESSES[i],
+                        RENEWED_PREFERRED_LIFETIME.get(),
+                        RENEWED_VALID_LIFETIME.get(),
+                        &[],
+                    ))]
+                }
+            })
+            .collect::<Vec<_>>();
+        let iaprefix_opts = (0..usize::try_from(NUM_IAS).unwrap())
+            .map(|i| {
+                if i == NO_BINDING_IA_IDX && ia_pd_no_binding {
+                    [v6::DhcpOption::StatusCode(
+                        v6::ErrorStatusCode::NoBinding.into(),
+                        "Binding not found.",
+                    )]
+                } else {
+                    [v6::DhcpOption::IaPrefix(v6::IaPrefixSerializer::new(
+                        RENEWED_PREFERRED_LIFETIME.get(),
+                        RENEWED_VALID_LIFETIME.get(),
+                        CONFIGURED_DELEGATED_PREFIXES[i],
+                        &[],
+                    ))]
+                }
+            })
+            .collect::<Vec<_>>();
         let options =
             [v6::DhcpOption::ClientId(&CLIENT_ID), v6::DhcpOption::ServerId(&SERVER_ID[0])]
                 .into_iter()
@@ -10039,30 +10407,23 @@ mod tests {
                 no_binding: bool,
                 time: Instant,
             ) -> HashMap<v6::IAID, IaEntry<V, Instant>> {
-                HashMap::from([
-                    (
-                        v6::IAID::new(0),
-                        IaEntry::new_assigned(
-                            V::CONFIGURED[0],
-                            RENEWED_PREFERRED_LIFETIME,
-                            RENEWED_VALID_LIFETIME,
-                            time,
-                        ),
-                    ),
-                    (
-                        v6::IAID::new(1),
-                        if no_binding {
-                            IaEntry::ToRequest(HashSet::from([V::CONFIGURED[1]]))
-                        } else {
-                            IaEntry::new_assigned(
-                                V::CONFIGURED[1],
-                                RENEWED_PREFERRED_LIFETIME,
-                                RENEWED_VALID_LIFETIME,
-                                time,
-                            )
-                        },
-                    ),
-                ])
+                (0..NUM_IAS)
+                    .map(|i| {
+                        (v6::IAID::new(i), {
+                            let i = usize::try_from(i).unwrap();
+                            if i == NO_BINDING_IA_IDX && no_binding {
+                                IaEntry::ToRequest(HashSet::from([V::CONFIGURED[i]]))
+                            } else {
+                                IaEntry::new_assigned(
+                                    V::CONFIGURED[i],
+                                    RENEWED_PREFERRED_LIFETIME,
+                                    RENEWED_VALID_LIFETIME,
+                                    time,
+                                )
+                            }
+                        })
+                    })
+                    .collect()
             }
             assert_eq!(
                 *non_temporary_addresses,
@@ -10105,6 +10466,18 @@ mod tests {
                 .zip(CONFIGURED_DELEGATED_PREFIXES.into_iter().map(|p| HashSet::from([p])))
                 .collect(),
         );
+
+        // While we are in requesting state after being in Assigned, make sure
+        // all addresses may be invalidated.
+        handle_all_leases_invalidated(
+            client,
+            CLIENT_ID,
+            non_temporary_addresses_to_assign,
+            delegated_prefixes_to_assign,
+            ia_na_no_binding.then_some(NO_BINDING_IA_IDX),
+            ia_pd_no_binding.then_some(NO_BINDING_IA_IDX),
+            &[],
+        )
     }
 
     struct ReceiveReplyCalculateT1T2 {
@@ -10244,6 +10617,7 @@ mod tests {
             None,
             T1,
             T2,
+            v6::NonZeroTimeValue::Finite(VALID_LIFETIME),
             StepRng::new(std::u64::MAX / 2, 0),
             time,
         );
@@ -10382,6 +10756,12 @@ mod tests {
                     no_value_avail_iaid,
                     CONFIGURED_DELEGATED_PREFIXES[1],
                 )),
+                Action::ScheduleTimer(
+                    ClientTimerType::RestartServerDiscovery,
+                    time.add(Duration::from_secs(
+                        std::cmp::max(VALID_LIFETIME, RENEWED_VALID_LIFETIME,).get().into()
+                    )),
+                ),
             ],
         );
     }
@@ -10577,12 +10957,173 @@ mod tests {
             None,
             T1,
             T2,
+            v6::NonZeroTimeValue::Finite(VALID_LIFETIME),
             StepRng::new(std::u64::MAX / 2, 0),
             time,
         );
 
         // Should panic if Refresh is received while in Renewing state.
         let _actions = client.handle_timeout(ClientTimerType::Refresh, time);
+    }
+
+    fn handle_all_leases_invalidated<R: Rng>(
+        mut client: ClientStateMachine<Instant, R>,
+        client_id: [u8; CLIENT_ID_LEN],
+        non_temporary_addresses_to_assign: Vec<TestIaNa>,
+        delegated_prefixes_to_assign: Vec<TestIaPd>,
+        skip_removed_event_for_test_iana_idx: Option<usize>,
+        skip_removed_event_for_test_iapd_idx: Option<usize>,
+        options_to_request: &[v6::OptionCode],
+    ) {
+        let time = Instant::now();
+        let actions = client.handle_timeout(ClientTimerType::RestartServerDiscovery, time);
+        let buf = assert_matches!(
+            &actions[..],
+            [
+                Action::CancelTimer(ClientTimerType::Retransmission),
+                Action::CancelTimer(ClientTimerType::Refresh),
+                Action::CancelTimer(ClientTimerType::Renew),
+                Action::CancelTimer(ClientTimerType::Rebind),
+                Action::CancelTimer(ClientTimerType::Rebind),
+                Action::IaNaUpdates(ia_na_updates),
+                Action::IaPdUpdates(ia_pd_updates),
+                Action::SendMessage(buf),
+                Action::ScheduleTimer(ClientTimerType::Retransmission, instant)
+            ] => {
+                fn get_updates<V: IaValue>(
+                    to_assign: &Vec<TestIa<V>>,
+                    skip_idx: Option<usize>,
+                ) -> HashMap<v6::IAID, HashMap<V, IaValueUpdateKind>> {
+                    (0..).zip(to_assign.iter())
+                        .filter_map(|(iaid, TestIa { values, t1: _, t2: _})| {
+                            skip_idx
+                                .map_or(true, |skip_idx| skip_idx != iaid)
+                                .then(|| (
+                                    v6::IAID::new(iaid.try_into().unwrap()),
+                                    values.keys().copied().map(|value| (
+                                        value,
+                                        IaValueUpdateKind::Removed,
+                                    )).collect(),
+                                ))
+                        })
+                        .collect()
+                }
+                assert_eq!(
+                    ia_na_updates,
+                    &get_updates(
+                        &non_temporary_addresses_to_assign,
+                        skip_removed_event_for_test_iana_idx
+                    ),
+                );
+                assert_eq!(
+                    ia_pd_updates,
+                    &get_updates(
+                        &delegated_prefixes_to_assign,
+                        skip_removed_event_for_test_iapd_idx,
+                    ),
+                );
+                assert_eq!(*instant, time.add(INITIAL_SOLICIT_TIMEOUT));
+                buf
+            }
+        );
+
+        let ClientStateMachine { transaction_id: _, options_to_request: _, state, rng: _ } =
+            &client;
+        testutil::assert_server_discovery(
+            state,
+            client_id,
+            testutil::to_configured_addresses(
+                non_temporary_addresses_to_assign.len(),
+                non_temporary_addresses_to_assign
+                    .iter()
+                    .map(|TestIaNa { values, t1: _, t2: _ }| values.keys().cloned().collect()),
+            ),
+            testutil::to_configured_prefixes(
+                delegated_prefixes_to_assign.len(),
+                delegated_prefixes_to_assign
+                    .iter()
+                    .map(|TestIaPd { values, t1: _, t2: _ }| values.keys().cloned().collect()),
+            ),
+            time,
+            buf,
+            options_to_request,
+        )
+    }
+
+    #[test]
+    fn assigned_handle_all_leases_invalidated() {
+        let non_temporary_addresses_to_assign = CONFIGURED_NON_TEMPORARY_ADDRESSES
+            .iter()
+            .copied()
+            .map(TestIaNa::new_default)
+            .collect::<Vec<_>>();
+        let delegated_prefixes_to_assign = CONFIGURED_DELEGATED_PREFIXES
+            .iter()
+            .copied()
+            .map(TestIaPd::new_default)
+            .collect::<Vec<_>>();
+        let (client, _actions) = testutil::assign_and_assert(
+            CLIENT_ID,
+            SERVER_ID[0],
+            non_temporary_addresses_to_assign.clone(),
+            delegated_prefixes_to_assign.clone(),
+            &[],
+            StepRng::new(std::u64::MAX / 2, 0),
+            Instant::now(),
+        );
+
+        handle_all_leases_invalidated(
+            client,
+            CLIENT_ID,
+            non_temporary_addresses_to_assign,
+            delegated_prefixes_to_assign,
+            None,
+            None,
+            &[],
+        )
+    }
+
+    #[test_case(RENEW_TEST)]
+    #[test_case(REBIND_TEST)]
+    fn renew_rebind_handle_all_leases_invalidated(
+        RenewRebindTest {
+            send_and_assert,
+            message_type: _,
+            expect_server_id: _,
+            with_state: _,
+            allow_response_from_any_server: _,
+        }: RenewRebindTest,
+    ) {
+        let non_temporary_addresses_to_assign = CONFIGURED_NON_TEMPORARY_ADDRESSES[0..2]
+            .into_iter()
+            .map(|&addr| TestIaNa::new_default(addr))
+            .collect::<Vec<_>>();
+        let delegated_prefixes_to_assign = CONFIGURED_DELEGATED_PREFIXES[0..2]
+            .into_iter()
+            .map(|&addr| TestIaPd::new_default(addr))
+            .collect::<Vec<_>>();
+        let client = send_and_assert(
+            CLIENT_ID,
+            SERVER_ID[0],
+            non_temporary_addresses_to_assign.clone(),
+            delegated_prefixes_to_assign.clone(),
+            None,
+            T1,
+            T2,
+            v6::NonZeroTimeValue::Finite(VALID_LIFETIME),
+            StepRng::new(std::u64::MAX / 2, 0),
+            Instant::now(),
+        );
+
+        handle_all_leases_invalidated(
+            client,
+            CLIENT_ID,
+            non_temporary_addresses_to_assign,
+            delegated_prefixes_to_assign,
+            None,
+            None,
+            &[],
+        )
     }
 
     // NOTE: All comparisons are done on millisecond, so this test is not affected by precision
