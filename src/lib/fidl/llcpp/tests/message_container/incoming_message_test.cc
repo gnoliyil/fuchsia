@@ -85,6 +85,16 @@ TEST_F(IncomingMessageWithHandlesTest, AdoptHandlesWithRegularConstructor) {
   EXPECT_EQ(ZX_OK, incoming.status());
 }
 
+TEST_F(IncomingMessageWithHandlesTest, NotEnoughBytes) {
+  uint8_t bytes[sizeof(fidl_message_header_t) - 1] = {};
+
+  auto incoming = fidl::IncomingHeaderAndMessage::Create(
+      bytes, static_cast<uint32_t>(std::size(bytes)), handles_, handle_metadata_,
+      static_cast<uint32_t>(std::size(handles_)));
+  EXPECT_EQ(ZX_ERR_INVALID_ARGS, incoming.status());
+  EXPECT_EQ(ZX_OK, zx_handle_close_many(handles_, std::size(handles_)));
+}
+
 TEST_F(IncomingMessageWithHandlesTest, ReleaseHandles) {
   fidl_incoming_msg c_msg = {};
 
