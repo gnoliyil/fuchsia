@@ -13,6 +13,9 @@ namespace dap {
 class AttachRequestZxdb : public AttachRequest {
  public:
   dap::string process;
+  optional<dap::string> command;
+  // Current working directory for running the shell command.
+  optional<string> cwd;
 };
 DAP_DECLARE_STRUCT_TYPEINFO(AttachRequestZxdb);
 }  // namespace dap

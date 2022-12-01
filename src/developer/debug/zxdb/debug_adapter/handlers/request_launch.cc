@@ -20,7 +20,7 @@ DAP_IMPLEMENT_STRUCT_TYPEINFO_EXT(LaunchRequestZxdb, LaunchRequest, "launch",
 
 namespace zxdb {
 
-void GetCommandArray(const dap::string& cmd_string, dap::array<dap::string>& cmd) {
+void SplitDapCommand(const dap::string& cmd_string, dap::array<dap::string>& cmd) {
   // Split command string at whitespaces to an array of strings.
   // This is required by RunInTerminal request.
   size_t split_pos = cmd_string.find(' ');
@@ -49,7 +49,7 @@ dap::ResponseOrError<dap::LaunchResponse> OnRequestLaunch(DebugAdapterContext* c
   dap::RunInTerminalRequest run_request;
   run_request.title = "zxdb launch";
   run_request.kind = "integrated";
-  GetCommandArray(req.launchCommand, run_request.args);
+  SplitDapCommand(req.launchCommand, run_request.args);
   if (req.cwd) {
     run_request.cwd = req.cwd.value();
   }

@@ -29,6 +29,10 @@ DAP_DECLARE_STRUCT_TYPEINFO(LaunchRequestZxdb);
 
 namespace zxdb {
 
+// Split a command string separated by whitespaces into an array of strings (required by
+// RunInTerminal request).
+void SplitDapCommand(const dap::string& cmd_string, dap::array<dap::string>& cmd);
+
 dap::ResponseOrError<dap::LaunchResponse> OnRequestLaunch(DebugAdapterContext* context,
                                                           const dap::LaunchRequestZxdb& req);
 }  // namespace zxdb

@@ -132,7 +132,7 @@ void DebugAdapterServer::ConnectionResolvedMainThread(fbl::unique_fd client) {
   context_ = std::make_unique<DebugAdapterContext>(console_, &buffer_->stream());
   buffer_->set_data_available_callback(
       [context = context_.get()]() { context->OnStreamReadable(); });
-  context_->set_destroy_connection_callback([this]() { OnDisconnect(); });
+  context_->set_destroy_connection_callback([this]() { context_->console()->Quit(); });
 
   // Reset the client connection on error.
   buffer_->set_error_callback([this]() {
@@ -141,6 +141,8 @@ void DebugAdapterServer::ConnectionResolvedMainThread(fbl::unique_fd client) {
   });
 }
 
+// Connect again if the IDE client disconnects (we are expecting 1 disconnection).
+// TODO(fxbug.dev/116308): Differentiate behavior between use cases.
 void DebugAdapterServer::OnDisconnect() {
   ResetClientConnection();
   for (auto& observer : observers_) {
