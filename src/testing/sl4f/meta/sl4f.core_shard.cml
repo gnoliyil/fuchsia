@@ -109,16 +109,19 @@
             ],
             from: "#setui_service",
             to: "#sl4f",
+            source_availability: "unknown",
         },
         {
             protocol: "fuchsia.media.sounds.Player",
             from: "#soundplayer",
             to: "#sl4f",
+            source_availability: "unknown",
         },
         {
             protocol: "fuchsia.metricslogger.test.MetricsLogger",
             from: "#metrics-logger",
             to: "#sl4f",
+            source_availability: "unknown",
         },
         {
             protocol: [
@@ -201,6 +204,7 @@
             protocol: [ "fuchsia.media.ProfileProvider" ],
             from: "#audio_core",
             to: "#sl4f",
+            source_availability: "unknown",
         },
         {
             protocol: [
