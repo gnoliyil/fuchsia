@@ -768,6 +768,11 @@ type Struct struct {
 
 	// Members is the list of the members of the layout.
 	Members []StructMember
+
+	// Whether the struct was formally declared; if false, it was synthesized
+	// or implicitly declared (as is in the case of a protocol method
+	// request/response payload).
+	synthesized bool
 }
 
 // StructMember represents a FIDL struct member.
@@ -792,8 +797,9 @@ type StructMember struct {
 
 func newStruct(strct fidlgen.Struct, decls declMap, typeKinds map[TypeKind]struct{}) (*Struct, error) {
 	s := &Struct{
-		decl: newDecl(strct),
-		Size: strct.TypeShapeV2.InlineSize,
+		decl:        newDecl(strct),
+		Size:        strct.TypeShapeV2.InlineSize,
+		synthesized: strct.IsAnonymous(),
 	}
 	for _, member := range strct.Members {
 		attrs := member.GetAttributes()
@@ -817,11 +823,11 @@ func newStruct(strct fidlgen.Struct, decls declMap, typeKinds map[TypeKind]struc
 		})
 	}
 
-	// Syscall parameters are encoded in anonymous structs. While we do not
-	// want conventional bindings for these structs, we do want to make them
-	// available to later syscall processing: record them here but return
-	// nothing.
-	if strct.IsAnonymous() {
+	// Syscall parameters are encoded in synthesized/anonymous structs. While
+	// we do not want conventional bindings for these structs, we do want to
+	// make them available to later syscall processing: record them here but
+	// return nothing.
+	if s.synthesized {
 		decls[s.Name.String()] = s
 		return nil, nil
 	}
@@ -995,6 +1001,9 @@ type Syscall struct {
 	// Parameters gives the list of parameters in the C vDSO signature of the
 	// syscall in order.
 	Parameters []SyscallParameter
+
+	// ReturnType gives the return type of the C vDSO signature.
+	ReturnType *TypeDescriptor
 }
 
 func (syscall Syscall) IsInternal() bool      { return syscall.Category == SyscallCategoryInternal }
@@ -1076,15 +1085,41 @@ func newSyscallFamily(protocol fidlgen.Protocol, decls declMap) (*SyscallFamily,
 			return nil, fmt.Errorf("annotation @%s on syscall %s must be paired with @testonly", syscall.Category, syscall.Name)
 		}
 
+		// If the method declares an error type, then that must be our C return
+		// type.
+		if method.ErrorType != nil {
+			var err error
+			syscall.ReturnType, err = resolveType(fidlgenType(*method.ErrorType), fidlgen.Attributes{}, decls, make(map[TypeKind]struct{}))
+			if err != nil {
+				return nil, err
+			}
+
+			// TODO(fxbug.dev/105758, fxbug.dev/113897): The name of an aliased
+			// error type does not yet survive into the IR (just the full
+			// resolution). So, to account for the major case of wanting to use
+			// `zx/status` as an error type - while in its alias form - we
+			// hackily replace any int32 error specifications with a `zx/status`
+			// int32 alias if present in the library.
+			//
+			// Once one of these bugs is fixed, this workaround can be removed.
+			if syscall.ReturnType.Kind == TypeKindInteger && syscall.ReturnType.Type == string(fidlgen.Int32) {
+				if status, ok := decls["zx/status"]; ok { // TODO(fxbug.dev/109734): Should be "zx/Status".
+					int32Type := TypeDescriptor{Type: string(fidlgen.Int32), Kind: TypeKindInteger}
+					if alias, ok := status.(*Alias); ok && alias.Value == int32Type {
+						syscall.ReturnType = &TypeDescriptor{
+							Type: "zx/status",
+							Kind: TypeKindAlias,
+						}
+					}
+				}
+			}
+		}
+
 		// Aggregate parameters from both the request and response structs, as
 		// 'out' parameters may appear in the request struct. With request
 		// struct members first, the default ordering results in the desired
 		// order of parameters in the vDSO intertace.
-		processParams := func(typ *fidlgen.Type, request bool) {
-			if typ == nil {
-				return
-			}
-
+		processParams := func(typ fidlgen.Type, request bool) {
 			what := "request"
 			if !request {
 				what = "response"
@@ -1100,6 +1135,19 @@ func newSyscallFamily(protocol fidlgen.Protocol, decls declMap) (*SyscallFamily,
 			if !ok {
 				panic(fmt.Sprintf("method %s type %s is not a struct", what, typ.Identifier))
 			}
+
+			// If we are (a) processing the outputs, (b) the syscall has no
+			// return error type, and (c) we have formally declared the struct
+			// of outputs as a proper declaration, then that declared output
+			// struct should be regarded as the syscall's return type.
+			if !request && syscall.ReturnType == nil && !s.synthesized {
+				syscall.ReturnType = &TypeDescriptor{
+					Type: string(typ.Identifier),
+					Kind: TypeKindStruct,
+				}
+				return
+			}
+
 			for _, m := range s.Members {
 				param := SyscallParameter{
 					member: m.member,
@@ -1116,8 +1164,18 @@ func newSyscallFamily(protocol fidlgen.Protocol, decls declMap) (*SyscallFamily,
 			}
 
 		}
-		processParams(method.RequestPayload, true)
-		processParams(method.ResponsePayload, false)
+
+		if method.RequestPayload != nil {
+			processParams(*method.RequestPayload, true)
+		}
+		// `ValueType` gives the desired output struct when `error` is
+		// specified (with `ResponsePayload` giving a union of both that and
+		// the error type).
+		if method.ValueType != nil {
+			processParams(*method.ValueType, false)
+		} else if method.ResponsePayload != nil {
+			processParams(*method.ResponsePayload, false)
+		}
 
 		family.Syscalls = append(family.Syscalls, syscall)
 	}

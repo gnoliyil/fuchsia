@@ -1020,6 +1020,15 @@ protocol Category {
     Test2();
 };
 
+type StatusEnum = enum : uint32 {
+	OK = 0;
+	ERROR = 1;
+};
+
+type StructReturnType = struct {
+	value uint64;
+};
+
 @no_protocol_prefix
 @transport("Syscall")
 protocol SyscallWithParameters {
@@ -1042,9 +1051,33 @@ protocol SyscallWithParameters {
 	}) -> (struct{
 		out2 int8;
 	});
+
+	SyscallWithError(struct {
+		in bool;
+	}) -> (struct{
+		out bool;
+	}) error StatusEnum;
+
+	SyscallWithStructReturnType() -> (StructReturnType);
 };
 
 `)
+
+	statusEnum := Enum{
+		decl:    decl{Name: fidlgen.MustReadName("example/StatusEnum")},
+		Subtype: "uint32",
+		Members: []EnumMember{
+			{
+				member: member{Name: "OK"},
+				Value:  "0",
+			},
+			{
+				member: member{Name: "ERROR"},
+				Value:  "1",
+			},
+		},
+	}
+
 	summaries, err := Summarize(ir, wd, SourceDeclOrder)
 	if err != nil {
 		t.Fatal(err)
@@ -1139,6 +1172,32 @@ protocol SyscallWithParameters {
 			decl: decl{Name: fidlgen.MustReadName("example/SyscallWithParameters")},
 			Syscalls: []Syscall{
 				{
+					member: member{Name: "SyscallWithError"},
+					Parameters: []SyscallParameter{
+						{
+							member: member{Name: "in"},
+							Type: TypeDescriptor{
+								Type: "bool",
+								Kind: TypeKindBool,
+							},
+							Orientation: ParameterOrientationIn,
+						},
+						{
+							member: member{Name: "out"},
+							Type: TypeDescriptor{
+								Type: "bool",
+								Kind: TypeKindBool,
+							},
+							Orientation: ParameterOrientationOut,
+						},
+					},
+					ReturnType: &TypeDescriptor{
+						Type: "example/StatusEnum",
+						Kind: TypeKindEnum,
+						Decl: &statusEnum,
+					},
+				},
+				{
 					member: member{Name: "SyscallWithInputs"},
 					Parameters: []SyscallParameter{
 						{
@@ -1215,6 +1274,82 @@ protocol SyscallWithParameters {
 							},
 							Orientation: ParameterOrientationOut,
 						},
+					},
+				},
+				{
+					member: member{Name: "SyscallWithStructReturnType"},
+					ReturnType: &TypeDescriptor{
+						Type: "example/StructReturnType",
+						Kind: TypeKindStruct,
+					},
+				},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(expected, actual, cmpOpt); diff != "" {
+		t.Error(diff)
+	}
+}
+
+// TODO(fxbug.dev/105758, fxbug.dev/113897): Tests a workaround for these bugs,
+// needed until one of them is fixed.
+func TestCanSummarizeSyscallsWithZxStatusErrors(t *testing.T) {
+	wd := t.TempDir()
+	ir := fidlgentest.EndToEndTest{T: t}.WithWorkingDirectory(wd).Single(`
+library zx;
+
+alias status = int32;
+
+@transport("Syscall")
+protocol Foo {
+	WithStatus(struct {
+		in bool;
+	}) -> (struct{
+		out bool;
+	}) error status;
+};
+`)
+
+	summaries, err := Summarize(ir, wd, SourceDeclOrder)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var actual []SyscallFamily
+	for _, decl := range summaries[0].Decls {
+		if decl.IsSyscallFamily() {
+			actual = append(actual, decl.AsSyscallFamily())
+		}
+	}
+
+	expected := []SyscallFamily{
+		{
+			decl: decl{Name: fidlgen.MustReadName("zx/Foo")},
+			Syscalls: []Syscall{
+				{
+					member: member{Name: "FooWithStatus"},
+					Parameters: []SyscallParameter{
+						{
+							member: member{Name: "in"},
+							Type: TypeDescriptor{
+								Type: "bool",
+								Kind: TypeKindBool,
+							},
+							Orientation: ParameterOrientationIn,
+						},
+						{
+							member: member{Name: "out"},
+							Type: TypeDescriptor{
+								Type: "bool",
+								Kind: TypeKindBool,
+							},
+							Orientation: ParameterOrientationOut,
+						},
+					},
+					ReturnType: &TypeDescriptor{
+						Type: "zx/status",
+						Kind: TypeKindAlias,
 					},
 				},
 			},
