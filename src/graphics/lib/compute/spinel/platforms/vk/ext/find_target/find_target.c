@@ -26,6 +26,9 @@
 #ifdef SPN_VK_TARGET_INTEL_GEN8
 #include "spinel_vk_intel_gen8_linkable.h"
 #endif
+#ifdef SPN_VK_TARGET_MESA_LAVAPIPE
+#include "spinel_vk_mesa_lavapipe_linkable.h"
+#endif
 #ifdef SPN_VK_TARGET_NVIDIA_SM35
 #include "spinel_vk_nvidia_sm35_linkable.h"
 #endif
@@ -243,6 +246,15 @@ spinel_vk_find_target(uint32_t vendor_id, uint32_t device_id)
               break;
           }
         break;
+
+#ifdef SPN_VK_TARGET_MESA_LAVAPIPE
+      case 0x10005:
+        //
+        // MESA
+        //
+        SPN_VK_TARGET_ASSIGN(header_target, spinel_vk_mesa_lavapipe);
+        break;
+#endif
 
       default:
         break;

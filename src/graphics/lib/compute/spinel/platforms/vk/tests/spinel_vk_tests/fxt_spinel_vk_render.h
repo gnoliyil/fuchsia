@@ -102,6 +102,7 @@ struct param_spinel_vk_render
     NVIDIA = 0x10DE,
     AMD    = 0x1002,
     ARM    = 0x13B5,
+    MESA   = 0x10005,
   };
 
   enum devices
@@ -111,6 +112,7 @@ struct param_spinel_vk_render
     ARM_MALI_G52  = 0x72120000,
     NVIDIA_PASCAL = 0x1D7F,  // <= Pascal : full-rate fp32
     NVIDIA_VOLTA  = 0x1D81,  // >= Volta  : full-rate fp16
+    MESA_LAVAPIPE = 0x0,
   };
 
   //

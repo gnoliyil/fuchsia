@@ -141,6 +141,7 @@ param const params[] = {
           { param::ARM,    { { param::ARM_MALI_G52, param::ARM_MALI_G52 } } },
           { param::INTEL,  {} },
           { param::NVIDIA, {} },
+          { param::MESA,   {} },
         }
       },
     },
@@ -203,10 +204,14 @@ param const params[] = {
         }
       },
       { 0xEE9E0BBE, {
-          { param::AMD,  {} },
+          { param::AMD,    {} },
           { param::ARM,    { { param::ARM_MALI_G52, param::ARM_MALI_G52 } } },
           { param::INTEL,  {} },
           { param::NVIDIA, {} },
+        }
+      },
+      { 0xEEA613C6, {
+          { param::MESA,   {} },
         }
       },
     },
@@ -237,6 +242,7 @@ param const params[] = {
           { param::ARM,    { { param::ARM_MALI_G52, param::ARM_MALI_G52 } } },
           { param::INTEL,  {} },
           { param::NVIDIA, {} },
+          { param::MESA,   {} },
         }
       },
     },
@@ -272,8 +278,9 @@ param const params[] = {
         }
       },
       { 0xF994BD80, {
-          { param::AMD, {} },
+          { param::AMD,    {} },
           { param::NVIDIA, { { 0, param::NVIDIA_PASCAL } } },
+          { param::MESA,   {} },
         }
       },
     },
@@ -344,7 +351,8 @@ param const params[] = {
       },
       { 0xC5127B22, {
           { param::AMD,    {} },
-          { param::NVIDIA, { { 0, param::NVIDIA_PASCAL } } }
+          { param::NVIDIA, { { 0, param::NVIDIA_PASCAL } } },
+          { param::MESA,   {} },
         }
       },
     },
@@ -407,6 +415,10 @@ param const params[] = {
       },
       { 0xB783CBA6, {
           { param::NVIDIA, { { param::NVIDIA_VOLTA, UINT32_MAX } } }
+        }
+      },
+      { 0xB783C0B0, {
+          { param::MESA,   {} }
         }
       },
     },
@@ -483,6 +495,10 @@ param const params[] = {
           { param::NVIDIA, { { 0, param::NVIDIA_PASCAL } } },
         }
       },
+      { 0x138093C3, {
+          { param::MESA,   {} },
+        }
+      },
     },
     .test = std::make_shared<test>(
       "<svg xmlns=\"http://www.w3.org/2000/svg\">\n"
@@ -532,6 +548,10 @@ param const params[] = {
           { param::NVIDIA, {} },
         }
       },
+      { 0xE866A18A, {
+          { param::MESA,   {} },
+        }
+      },
     },
     .test = std::make_shared<test>(
       "<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\">\n"
@@ -562,6 +582,10 @@ param const params[] = {
       },
       { 0xCB21875E, {
           { param::NVIDIA, {} },
+        }
+      },
+      { 0xCB379D74, {
+          { param::MESA,   {} },
         }
       },
     },
@@ -605,6 +629,10 @@ param const params[] = {
       { 0xC2E7CDA9, {
           { param::AMD,    {} },
           { param::NVIDIA, { { 0, param::NVIDIA_PASCAL } } },
+        }
+      },
+      { 0xC2F1D7B3, {
+          { param::MESA,   {} },
         }
       },
     },
@@ -668,6 +696,7 @@ param const params[] = {
           { param::ARM,    { { param::ARM_MALI_G52, param::ARM_MALI_G52 } } },
           { param::INTEL,  {} },
           { param::NVIDIA, {} },
+          { param::MESA,   {} },
         }
       },
     },
