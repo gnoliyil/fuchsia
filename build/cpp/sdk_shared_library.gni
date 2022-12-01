@@ -66,6 +66,7 @@ set_defaults("sdk_shared_library") {
 
 template("sdk_shared_library") {
   assert(defined(invoker.category), "Must define an SDK category")
+  is_internal = invoker.category == "internal"
 
   output_name = target_name
   if (defined(invoker.output_name)) {
@@ -78,7 +79,7 @@ template("sdk_shared_library") {
     atom_name = output_name
   }
 
-  if (invoker.category != "internal") {
+  if (!is_internal) {
     sdk_root_path = "pkg/${atom_name}"
   } else {
     # For internal SDK libraries, the sdk_name is the fully qualified target name with some tweaks. For example:
@@ -115,7 +116,6 @@ template("sdk_shared_library") {
   main_target_name = target_name
   metadata_target_name = "${target_name}_sdk_metadata"
   manifest_target_name = "${target_name}_sdk_manifest"
-  verify_pragma_target_name = "${target_name}_sdk_pragma"
   sdk_target_name = "${target_name}_sdk"
 
   shared_library(main_target_name) {
@@ -150,8 +150,8 @@ template("sdk_shared_library") {
     }
     if (libcxx_linkage == "static") {
       configs += [ "//build/config/fuchsia:static_cpp_standard_library" ]
-    } else if (invoker.category != "internal") {
-      # Adding this linker flag keeps us honest about not commiting to a
+    } else if (!is_internal) {
+      # Adding this linker flag keeps us honest about not committing to a
       # specific C++ ABI. If this flag is causing your library to not
       # compile, consider whether your library really ought to be in the SDK.
       # If so, consider including your library in the SDK as source rather than
@@ -230,7 +230,7 @@ template("sdk_shared_library") {
       #
       # NOTE: If this is an internal SDK library, headers from `sources` are
       # always made available so Bazel can find them.
-      if (invoker.category == "internal" || !defined(invoker.public)) {
+      if (is_internal || !defined(invoker.public)) {
         foreach(source_file, invoker.sources) {
           extension = get_path_info(source_file, "extension")
           if (extension == "h") {
@@ -247,7 +247,7 @@ template("sdk_shared_library") {
   if (defined(invoker.include_base)) {
     include_base = invoker.include_base
   } else {
-    if (invoker.category == "internal") {
+    if (is_internal) {
       # by default, we want internal SDK elements to have their include path similar when used through
       # an SDK (eg Bazel SDk) or directly (GN/Ninja), so that source code doesn't need to be changed
       # when switching from one to the other.
@@ -365,8 +365,13 @@ template("sdk_shared_library") {
     deps = sdk_deps + [ shared_lib_target ]
   }
 
-  verify_pragma_once(verify_pragma_target_name) {
-    headers = all_headers
+  # Exempt internal libraries from pragma verification.
+  should_verify_pragma = !is_internal && !no_headers
+  if (should_verify_pragma) {
+    verify_pragma_target_name = "${target_name}_sdk_pragma"
+    verify_pragma_once(verify_pragma_target_name) {
+      headers = all_headers
+    }
   }
 
   # Don't verify the public symbols for non-publicized APIs.
@@ -415,9 +420,11 @@ template("sdk_shared_library") {
 
     non_sdk_deps = [
       ":${metadata_target_name}",
-      ":${verify_pragma_target_name}",
       shared_lib_target,
     ]
+    if (should_verify_pragma) {
+      non_sdk_deps += [ ":${verify_pragma_target_name}" ]
+    }
     if (generate_plasa_artifacts) {
       non_sdk_deps += [ ":${_plasa_artifacts_target_name}" ]
     }

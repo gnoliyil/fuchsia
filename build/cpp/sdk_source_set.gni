@@ -53,7 +53,9 @@ import("//build/sdk/sdk_atom.gni")
 #     if they are already mentioned in 'sources').
 template("sdk_source_set") {
   assert(defined(invoker.category), "Must define an SDK category")
-  assert(invoker.category == "internal" || defined(invoker.sdk_name),
+  is_internal = invoker.category == "internal"
+
+  assert(is_internal || defined(invoker.sdk_name),
          "Non-internal sdk_source_set must define an SDK name")
 
   if (defined(invoker.sdk_name)) {
@@ -158,7 +160,7 @@ template("sdk_source_set") {
     #
     # NOTE: If this is an internal SDK library, headers from `sources` are
     # always made available so Bazel can find them.
-    if (invoker.category == "internal" || !defined(invoker.public)) {
+    if (is_internal || !defined(invoker.public)) {
       foreach(source_file, invoker.sources) {
         extension = get_path_info(source_file, "extension")
         if (extension == "h") {
@@ -181,7 +183,7 @@ template("sdk_source_set") {
   if (defined(invoker.include_base)) {
     include_base = invoker.include_base
   } else {
-    if (invoker.category == "internal") {
+    if (is_internal) {
       # by default, we want internal SDK elements to have their include path similar when used through
       # an SDK (eg Bazel SDk) or directly (GN/Ninja), so that source code doesn't need to be changed
       # when switching from one to the other.
@@ -218,10 +220,12 @@ template("sdk_source_set") {
     ]
   }
 
-  verify_pragma_target_name = "${target_name}_sdk_pragma"
-
-  verify_pragma_once(verify_pragma_target_name) {
-    headers = all_headers
+  should_verify_pragma = !is_internal
+  if (should_verify_pragma) {
+    verify_pragma_target_name = "${target_name}_sdk_pragma"
+    verify_pragma_once(verify_pragma_target_name) {
+      headers = all_headers
+    }
   }
 
   if (generate_plasa_artifacts) {
@@ -298,8 +302,10 @@ template("sdk_source_set") {
     non_sdk_deps = [
       ":$main_target_name",
       ":$metadata_target_name",
-      ":$verify_pragma_target_name",
     ]
+    if (should_verify_pragma) {
+      non_sdk_deps += [ ":$verify_pragma_target_name" ]
+    }
     if (generate_plasa_artifacts) {
       non_sdk_deps += [ ":$_plasa_artifacts_target_name" ]
     }
