@@ -11,6 +11,12 @@ namespace a11y {
 FlatlandConnection::FlatlandConnection(fuchsia::ui::composition::FlatlandPtr flatland,
                                        const std::string& debug_name)
     : flatland_(std::move(flatland)) {
+  flatland_.set_error_handler([](auto status) {
+    if (status == ZX_ERR_PEER_CLOSED) {
+      FX_LOGS(ERROR) << "Flatland connection closed; exiting";
+      exit(0);
+    }
+  });
   flatland_->SetDebugName(debug_name);
   flatland_.events().OnError = fit::bind_member(this, &FlatlandConnection::OnError);
   flatland_.events().OnFramePresented =
