@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <lib/driver/component/cpp/driver.h>
+#include <lib/driver/component/cpp/driver_cpp.h>
 
 namespace fragment_irq {
 
