@@ -5,7 +5,7 @@
 use {
     anyhow::{anyhow, Context, Result},
     async_trait::async_trait,
-    fidl_fuchsia_virtualization::{GuestManagerProxy, GuestMarker, GuestProxy},
+    fidl_fuchsia_virtualization::{GuestManagerProxy, GuestMarker, GuestProxy, LinuxManagerProxy},
     guest_cli_args::GuestType,
 };
 
@@ -21,6 +21,8 @@ pub use host::*;
 
 #[async_trait(?Send)]
 pub trait PlatformServices {
+    async fn connect_to_linux_manager(&self) -> Result<LinuxManagerProxy>;
+
     async fn connect_to_manager(&self, guest_type: GuestType) -> Result<GuestManagerProxy>;
 
     async fn connect_to_guest(&self, guest_type: GuestType) -> Result<GuestProxy> {

@@ -17,11 +17,11 @@ pub struct GuestOptions {
 #[argh(subcommand)]
 pub enum SubCommands {
     Launch(LaunchArgs),
-    Stop(StopArgs),
+    Stop(stop_args::StopArgs),
     Balloon(BalloonArgs),
     BalloonStats(BalloonStatsArgs),
     Serial(SerialArgs),
-    List(ListArgs),
+    List(list_args::ListArgs),
     Socat(SocatArgs),
     SocatListen(SocatListenArgs),
     Vsh(VshArgs),

@@ -4,4 +4,4 @@
 
 use {argh as _, ffx_core as _};
 
-pub use guest_cli_args::{FfxPluginCommand, ListArgs};
+pub use guest_cli_args::list_args::{FfxPluginCommand, ListArgs};

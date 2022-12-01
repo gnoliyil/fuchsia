@@ -8,7 +8,9 @@ use {
     async_trait::async_trait,
     fidl::endpoints::create_proxy,
     fidl_fuchsia_developer_remotecontrol::RemoteControlProxy,
-    fidl_fuchsia_virtualization::{GuestManagerMarker, GuestManagerProxy},
+    fidl_fuchsia_virtualization::{
+        GuestManagerMarker, GuestManagerProxy, LinuxManagerMarker, LinuxManagerProxy,
+    },
     guest_cli_args::GuestType,
 };
 
@@ -32,5 +34,15 @@ impl PlatformServices for HostPlatformServices {
         // This may fail, but we report the error when we later try to use the GuestManagerProxy.
         let _ = self.remote_control.connect(selector, server_end.into_channel()).await?;
         Ok(guest_manager)
+    }
+
+    async fn connect_to_linux_manager(&self) -> Result<LinuxManagerProxy> {
+        let (linux_manager, server_end) = create_proxy::<LinuxManagerMarker>()?;
+        let selector =
+            format!("{}:expose:fuchsia.virtualization.LinuxManager", GuestType::Termina.moniker());
+        let selector = selectors::parse_selector::<selectors::VerboseError>(&selector)?;
+        // This may fail, but we report the error when we later try to use the LinuxManagerProxy.
+        let _ = self.remote_control.connect(selector, server_end.into_channel()).await?;
+        Ok(linux_manager)
     }
 }

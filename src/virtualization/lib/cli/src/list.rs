@@ -250,7 +250,7 @@ impl fmt::Display for GuestList {
 
 pub async fn handle_list<P: PlatformServices>(
     services: &P,
-    args: &arguments::ListArgs,
+    args: &arguments::list_args::ListArgs,
 ) -> Result<GuestList, Error> {
     match args.guest_type {
         Some(guest_type) => {

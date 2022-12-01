@@ -14,7 +14,6 @@ mod launch;
 mod serial;
 mod services;
 mod socat;
-mod stop;
 mod vsh;
 mod vsockperf;
 mod wipe;
@@ -30,7 +29,11 @@ async fn main() -> Result<(), Error> {
             let guest = launch::GuestLaunch::new(launch_args.guest_type, guest_config).await?;
             guest.run().await
         }
-        SubCommands::Stop(stop_args) => stop::handle_stop(&stop_args).await,
+        SubCommands::Stop(stop_args) => {
+            let output = guest_cli::stop::handle_stop(&services, &stop_args).await?;
+            println!("{}", output);
+            Ok(())
+        }
         SubCommands::Balloon(balloon_args) => {
             let balloon_controller =
                 balloon::connect_to_balloon_controller(balloon_args.guest_type).await?;

@@ -8,6 +8,9 @@ ffx_plugin("ffx_guest") {
   version = "0.1.0"
   edition = "2021"
 
-  plugin_deps = [ "list:ffx_guest_list" ]
+  plugin_deps = [
+    "list:ffx_guest_list",
+    "stop:ffx_guest_stop",
+  ]
   args_sources = [ "src/args.rs" ]
 }

@@ -99,11 +99,11 @@ pub struct GuestOptions {
 #[argh(subcommand)]
 pub enum SubCommands {
     Launch(LaunchArgs),
-    Stop(StopArgs),
+    Stop(crate::stop_args::StopArgs),
     Balloon(BalloonArgs),
     BalloonStats(BalloonStatsArgs),
     Serial(SerialArgs),
-    List(ListArgs),
+    List(crate::list_args::ListArgs),
     Socat(SocatArgs),
     SocatListen(SocatListenArgs),
     Vsh(VshArgs),
@@ -141,14 +141,17 @@ pub struct SerialArgs {
     pub guest_type: GuestType,
 }
 
-#[derive(FromArgs, PartialEq, Debug)]
-/// List available guest environments.
-#[argh(subcommand, name = "list")]
-#[cfg_attr(not(target_os = "fuchsia"), ffx_command())]
-pub struct ListArgs {
-    #[argh(positional)]
-    /// optional guest type to get detailed information about
-    pub guest_type: Option<GuestType>,
+pub mod list_args {
+    use super::*;
+    #[derive(FromArgs, PartialEq, Debug)]
+    /// List available guest environments.
+    #[argh(subcommand, name = "list")]
+    #[cfg_attr(not(target_os = "fuchsia"), ffx_command())]
+    pub struct ListArgs {
+        #[argh(positional)]
+        /// optional guest type to get detailed information about
+        pub guest_type: Option<GuestType>,
+    }
 }
 
 #[derive(FromArgs, PartialEq, Debug)]
@@ -250,14 +253,18 @@ pub struct LaunchArgs {
     pub virtio_vsock: Option<bool>,
 }
 
-#[derive(FromArgs, PartialEq, Debug)]
-/// Stop a running guest. Usage: guest stop guest_type [-f]
-#[argh(subcommand, name = "stop")]
-pub struct StopArgs {
-    /// guest type to launch e.g. 'zircon'
-    #[argh(positional)]
-    pub guest_type: GuestType,
-    /// force stop the guest
-    #[argh(switch, short = 'f')]
-    pub force: bool,
+pub mod stop_args {
+    use super::*;
+    #[derive(FromArgs, PartialEq, Debug)]
+    /// Stop a running guest. Usage: guest stop guest_type [-f]
+    #[argh(subcommand, name = "stop")]
+    #[cfg_attr(not(target_os = "fuchsia"), ffx_command())]
+    pub struct StopArgs {
+        /// guest type to launch e.g. 'zircon'
+        #[argh(positional)]
+        pub guest_type: GuestType,
+        /// force stop the guest
+        #[argh(switch, short = 'f')]
+        pub force: bool,
+    }
 }

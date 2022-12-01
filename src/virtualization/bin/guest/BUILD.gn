@@ -44,7 +44,6 @@ rustc_binary("bin") {
   ]
 
   test_deps = [
-    "//src/lib/async-utils",
     "//third_party/alacritty/alacritty_terminal:term_model",
     "//third_party/rust_crates:assert_matches",
     "//third_party/rust_crates:pretty_assertions",
@@ -61,7 +60,6 @@ rustc_binary("bin") {
     "src/serial.rs",
     "src/services.rs",
     "src/socat.rs",
-    "src/stop.rs",
     "src/vsh.rs",
     "src/vsh/pty.rs",
     "src/vsh/termina.rs",
