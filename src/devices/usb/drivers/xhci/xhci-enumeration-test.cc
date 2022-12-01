@@ -432,10 +432,6 @@ TEST_F(EnumerationTests, EnableSlotCommandSetsDeviceInformationOnSuccess) {
   controller().RunUntilIdle(0);
   auto address_device_op = FakeTRB::FromTRB(state().pending_operations.pop_front()->trb);
   ASSERT_EQ(address_device_op->Op, FakeTRB::Op::AddressDevice);
-  controller().RunUntilIdle(0);
-  auto disable_trb = FakeTRB::FromTRB(state().pending_operations.pop_front()->trb);
-  ASSERT_EQ(disable_trb->Op, FakeTRB::Op::DisableSlot);
-  ASSERT_EQ(disable_trb->slot, 1);
 }
 
 TEST_F(EnumerationTests, AddressDeviceCommandPassesThroughFailureCode) {
@@ -883,6 +879,90 @@ TEST_F(EnumerationTests, AddressDeviceCommandShouldOnlineDeviceAfterSuccessfulRe
   controller().RunUntilIdle(0);
   ASSERT_EQ(completion_code, ZX_OK);
   ASSERT_TRUE(state().pending_operations.is_empty());
+}
+
+TEST_F(EnumerationTests, DisableSlotAfterFailedRetry) {
+  constexpr usb_speed_t kSpeed = USB_SPEED_FULL;
+  state().speeds[0] = kSpeed;
+  state().speeds[1] = kSpeed;
+  std::optional<HubInfo> hub_info;
+  hub_info->hub_depth = 52;
+  hub_info->hub_id = 28;
+  hub_info->hub_speed = kSpeed;
+  hub_info->multi_tt = false;
+  zx_status_t completion_code = ZX_OK;
+  auto enumeration_task = EnumerateDevice(&controller(), 5, std::move(hub_info))
+                              .then([&](fpromise::result<TRB*, zx_status_t>& result) {
+                                if (result.is_ok()) {
+                                  completion_code = ZX_OK;
+                                } else {
+                                  completion_code = result.error();
+                                }
+                                return result;
+                              });
+
+  // Enable slot.
+  auto enable_slot_task = state().pending_operations.pop_front();
+  auto enum_slot_trb = FakeTRB::FromTRB(enable_slot_task->trb);
+  ASSERT_EQ(enum_slot_trb->Op, FakeTRB::Op::EnableSlot);
+  reinterpret_cast<CommandCompletionEvent*>(enum_slot_trb.get())
+      ->set_CompletionCode(CommandCompletionEvent::Success);
+  reinterpret_cast<CommandCompletionEvent*>(enum_slot_trb.get())->set_SlotID(1);
+  enable_slot_task->completer->complete_ok(enum_slot_trb.get());
+  controller().ScheduleTask(0, std::move(enumeration_task));
+  controller().RunUntilIdle(0);
+
+  auto device_information = FakeTRB::FromTRB(state().pending_operations.pop_front()->trb);
+  ASSERT_EQ(device_information->Op, FakeTRB::Op::SetDeviceInformation);
+  ASSERT_EQ(device_information->slot, 1);
+
+  // AddressDevice. Return USB Transaction Error to force a retry.
+  auto address_device = state().pending_operations.pop_front();
+  auto address_device_op = FakeTRB::FromTRB(address_device->trb);
+  ASSERT_EQ(address_device_op->Op, FakeTRB::Op::AddressDevice);
+  reinterpret_cast<CommandCompletionEvent*>(address_device_op.get())
+      ->set_CompletionCode(CommandCompletionEvent::UsbTransactionError);
+  address_device->completer->complete_ok(address_device_op.get());
+  controller().RunUntilIdle(0);
+
+  // DisableSlot
+  auto disable_op = state().pending_operations.pop_front();
+  auto disable_trb = FakeTRB::FromTRB(disable_op->trb);
+  ASSERT_EQ(disable_trb->Op, FakeTRB::Op::DisableSlot);
+  ASSERT_EQ(disable_trb->slot, 1);
+  reinterpret_cast<CommandCompletionEvent*>(disable_trb.get())
+      ->set_CompletionCode(CommandCompletionEvent::UsbTransactionError);
+  disable_op->completer->complete_ok(disable_trb.get());
+  controller().RunUntilIdle(0);
+
+  // EnableSlot
+  enable_slot_task = state().pending_operations.pop_front();
+  enum_slot_trb = FakeTRB::FromTRB(enable_slot_task->trb);
+  ASSERT_EQ(enum_slot_trb->Op, FakeTRB::Op::EnableSlot);
+  reinterpret_cast<CommandCompletionEvent*>(enum_slot_trb.get())
+      ->set_CompletionCode(CommandCompletionEvent::Success);
+  reinterpret_cast<CommandCompletionEvent*>(enum_slot_trb.get())->set_SlotID(2);
+  enable_slot_task->completer->complete_ok(enum_slot_trb.get());
+  controller().RunUntilIdle(0);
+
+  // Set device information
+  device_information = FakeTRB::FromTRB(state().pending_operations.pop_front()->trb);
+  ASSERT_EQ(device_information->slot, 2);
+  controller().RunUntilIdle(0);
+
+  // AddressDevice. Return a failure to trigger DisableSlot.
+  address_device = state().pending_operations.pop_front();
+  address_device_op = FakeTRB::FromTRB(address_device->trb);
+  reinterpret_cast<CommandCompletionEvent*>(address_device_op.get())
+      ->set_CompletionCode(CommandCompletionEvent::CommandAborted);
+  address_device->completer->complete_ok(address_device_op.get());
+  controller().RunUntilIdle(0);
+
+  // DisableSlot
+  disable_trb = FakeTRB::FromTRB(state().pending_operations.pop_front()->trb);
+  ASSERT_EQ(disable_trb->Op, FakeTRB::Op::DisableSlot);
+  ASSERT_EQ(disable_trb->slot, 2);
+  EXPECT_NOT_OK(completion_code);
 }
 
 }  // namespace usb_xhci
