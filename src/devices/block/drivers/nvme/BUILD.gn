@@ -33,6 +33,7 @@ fuchsia_driver("nvme-driver") {
     "//build/config/fuchsia:enable_zircon_asserts",
   ]
   sources = [
+    "namespace.cc",
     "nvme.cc",
     "queue-pair.cc",
     "queue.cc",

@@ -5,24 +5,25 @@
 #ifndef SRC_DEVICES_BLOCK_DRIVERS_NVME_NVME_H_
 #define SRC_DEVICES_BLOCK_DRIVERS_NVME_NVME_H_
 
-#include <fuchsia/hardware/block/c/banjo.h>
-#include <fuchsia/hardware/block/cpp/banjo.h>
 #include <lib/device-protocol/pci.h>
 #include <lib/mmio/mmio-buffer.h>
-#include <lib/zircon-internal/thread_annotations.h>
+#include <lib/sync/completion.h>
+#include <threads.h>
+#include <zircon/types.h>
 
 #include <ddktl/device.h>
 
+#include "src/devices/block/drivers/nvme/commands.h"
 #include "src/devices/block/drivers/nvme/queue-pair.h"
+#include "src/devices/block/drivers/nvme/registers.h"
 
 namespace nvme {
 
-struct nvme_device_t;
-struct IoCommand;
+class Namespace;
 
 class Nvme;
 using DeviceType = ddk::Device<Nvme, ddk::Initializable>;
-class Nvme : public DeviceType, public ddk::BlockImplProtocol<Nvme, ddk::base_protocol> {
+class Nvme : public DeviceType {
  public:
   explicit Nvme(zx_device_t* parent) : DeviceType(parent) {}
   ~Nvme() = default;
@@ -33,31 +34,21 @@ class Nvme : public DeviceType, public ddk::BlockImplProtocol<Nvme, ddk::base_pr
   void DdkInit(ddk::InitTxn txn);
   void DdkRelease();
 
-  // BlockImpl implementations
-  void BlockImplQuery(block_info_t* out_info, uint64_t* out_block_op_size);
-  void BlockImplQueue(block_op_t* txn, block_impl_queue_callback callback, void* cookie);
-
- private:
-  static int IoThread(void* arg) { return static_cast<Nvme*>(arg)->IoLoop(); }
-  static int IrqThread(void* arg) { return static_cast<Nvme*>(arg)->IrqLoop(); }
-  int IoLoop();
-  int IrqLoop();
-
-  // Main driver initialization.
-  zx_status_t Init();
-
   // Perform an admin command synchronously (i.e., blocks for the command to complete or timeout).
   zx_status_t DoAdminCommandSync(Submission& submission,
                                  std::optional<zx::unowned_vmo> admin_data = std::nullopt);
 
-  // Attempt to submit NVMe transactions for an IoCommand. Returns false if this could not be
-  // completed due to temporary lack of resources, or true if either it succeeded or errored out.
-  bool SubmitAllTxnsForIoCommand(IoCommand* io_cmd);
+  QueuePair* io_queue() const { return io_queue_.get(); }
+  uint32_t max_data_transfer_bytes() const { return max_data_transfer_bytes_; }
+  uint16_t atomic_write_unit_normal() const { return atomic_write_unit_normal_; }
+  uint16_t atomic_write_unit_power_fail() const { return atomic_write_unit_power_fail_; }
 
-  // Process pending IO commands. Called in the IoLoop().
-  void ProcessIoSubmissions();
-  // Process pending IO completions. Called in the IoLoop().
-  void ProcessIoCompletions();
+ private:
+  static int IrqThread(void* arg) { return static_cast<Nvme*>(arg)->IrqLoop(); }
+  int IrqLoop();
+
+  // Main driver initialization.
+  zx_status_t Init();
 
   pci_protocol_t pci_;
   std::unique_ptr<fdf::MmioBuffer> mmio_;
@@ -65,15 +56,6 @@ class Nvme : public DeviceType, public ddk::BlockImplProtocol<Nvme, ddk::base_pr
   zx::bti bti_;
   CapabilityReg caps_;
   VersionReg version_;
-
-  fbl::Mutex commands_lock_;
-  // The pending list consists of commands that have been received via BlockImplQueue() and are
-  // waiting for IO to start. The exception is the head of the pending list which may be partially
-  // started, waiting for more txn slots to become available.
-  list_node_t pending_commands_ TA_GUARDED(commands_lock_);  // Inbound commands to process.
-  // The active list consists of commands where all txns have been created and we're waiting for
-  // them to complete or error out.
-  list_node_t active_commands_ TA_GUARDED(commands_lock_);  // Commands in flight.
 
   // Admin submission and completion queues.
   std::unique_ptr<QueuePair> admin_queue_;
@@ -83,20 +65,16 @@ class Nvme : public DeviceType, public ddk::BlockImplProtocol<Nvme, ddk::base_pr
 
   // IO submission and completion queues.
   std::unique_ptr<QueuePair> io_queue_;
-  // Notifies IoThread() that it has work to do. Signaled from BlockImplQueue() or IrqThread().
-  sync_completion_t io_signal_;
 
-  // Interrupt and IO threads.
   thrd_t irq_thread_;
-  thrd_t io_thread_;
   bool irq_thread_started_ = false;
-  bool io_thread_started_ = false;
 
+  uint32_t max_data_transfer_bytes_;
   bool volatile_write_cache_ = false;
-  bool driver_shutdown_ = false;
+  uint16_t atomic_write_unit_normal_;
+  uint16_t atomic_write_unit_power_fail_;
 
-  block_info_t block_info_;
-  uint32_t max_transfer_blocks_;
+  std::vector<Namespace*> namespaces_;
 };
 
 }  // namespace nvme
