@@ -112,6 +112,48 @@ static bool add_basic_policy_no_widening_with_any() {
   END_TEST;
 }
 
+// Verify that AddBasicPolicy fails if we use an invalid value for flags.
+static bool add_basic_policy_invalid_override_fails_with_any() {
+  BEGIN_TEST;
+
+  auto p = JobPolicy::CreateRootPolicy();
+
+  // Deny creating new kernel objects, but allow override.
+  zx_policy_basic_v2_t policy{ZX_POL_NEW_ANY, ZX_POL_ACTION_DENY, ZX_POL_OVERRIDE_ALLOW};
+  ASSERT_EQ(ZX_OK, p.AddBasicPolicy(ZX_JOB_POL_ABSOLUTE, &policy, 1));
+
+  // Override works.
+  policy = {ZX_POL_NEW_ANY, ZX_POL_ACTION_ALLOW, ZX_POL_OVERRIDE_ALLOW};
+  ASSERT_EQ(ZX_OK, p.AddBasicPolicy(ZX_JOB_POL_ABSOLUTE, &policy, 1));
+
+  // Using an invalid override should not work.
+  policy = {ZX_POL_NEW_ANY, ZX_POL_ACTION_ALLOW, ZX_POL_OVERRIDE_DENY + 1};
+  EXPECT_EQ(ZX_ERR_INVALID_ARGS, p.AddBasicPolicy(ZX_JOB_POL_ABSOLUTE, &policy, 1));
+
+  END_TEST;
+}
+
+// Verify that AddBasicPolicy fails if we use an invalid value for flags.
+static bool add_basic_policy_invalid_override_fails() {
+  BEGIN_TEST;
+
+  auto p = JobPolicy::CreateRootPolicy();
+
+  // Deny creating new vmos, but allow override.
+  zx_policy_basic_v2_t policy{ZX_POL_NEW_VMO, ZX_POL_ACTION_DENY, ZX_POL_OVERRIDE_ALLOW};
+  ASSERT_EQ(ZX_OK, p.AddBasicPolicy(ZX_JOB_POL_ABSOLUTE, &policy, 1));
+
+  // Override works.
+  policy = {ZX_POL_NEW_VMO, ZX_POL_ACTION_ALLOW, ZX_POL_OVERRIDE_ALLOW};
+  ASSERT_EQ(ZX_OK, p.AddBasicPolicy(ZX_JOB_POL_ABSOLUTE, &policy, 1));
+
+  // Using an invalid override should not work.
+  policy = {ZX_POL_NEW_VMO, ZX_POL_ACTION_ALLOW, ZX_POL_OVERRIDE_DENY + 1};
+  EXPECT_EQ(ZX_ERR_INVALID_ARGS, p.AddBasicPolicy(ZX_JOB_POL_ABSOLUTE, &policy, 1));
+
+  END_TEST;
+}
+
 static bool add_basic_policy_allow_widening_with_any() {
   BEGIN_TEST;
 
@@ -291,6 +333,9 @@ UNITTEST("add_basic_policy_no_widening", add_basic_policy_no_widening)
 UNITTEST("add_basic_policy_allow_widening", add_basic_policy_allow_widening)
 UNITTEST("add_basic_policy_no_widening_with_any", add_basic_policy_no_widening_with_any)
 UNITTEST("add_basic_policy_allow_widening_with_any", add_basic_policy_allow_widening_with_any)
+UNITTEST("add_basic_policy_invalid_override_fails", add_basic_policy_invalid_override_fails)
+UNITTEST("add_basic_policy_invalid_override_fails_with_any",
+         add_basic_policy_invalid_override_fails_with_any)
 UNITTEST("add_basic_policy_absolute", add_basic_policy_absolute)
 UNITTEST("add_basic_policy_relative", add_basic_policy_relative)
 UNITTEST("add_basic_policy_unmodified_on_error_no_override",

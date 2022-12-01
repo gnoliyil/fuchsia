@@ -116,12 +116,21 @@ FIELD_SELECTOR_DEF(ZX_POL_AMBIENT_MARK_VMO_EXEC, ambient_mark_vmo_exec);
     break;                                                                                 \
   }
 
+bool PolicyOverrideIsValid(uint32_t override) {
+  switch (override) {
+    case ZX_POL_OVERRIDE_DENY:
+    case ZX_POL_OVERRIDE_ALLOW:
+      return true;
+    default:
+      return false;
+  }
+}
 zx_status_t AddPartial(uint32_t mode, uint32_t condition, uint32_t action, uint32_t override,
                        JobPolicyBits* bits) {
   if (action >= ZX_POL_ACTION_MAX)
     return ZX_ERR_NOT_SUPPORTED;
 
-  if (override > ZX_POL_OVERRIDE_DENY)
+  if (!PolicyOverrideIsValid(override))
     return ZX_ERR_INVALID_ARGS;
 
   switch (condition) {
@@ -149,6 +158,9 @@ zx_status_t AddPartial(uint32_t mode, uint32_t condition, uint32_t action, uint3
 }
 
 zx_status_t SetOverride(JobPolicyBits* policy, uint32_t condition, uint32_t override) {
+  if (!PolicyOverrideIsValid(override))
+    return ZX_ERR_INVALID_ARGS;
+
   switch (condition) {
     CASE_SET_OVERRIDE(ZX_POL_BAD_HANDLE, policy, override);
     CASE_SET_OVERRIDE(ZX_POL_WRONG_OBJECT, policy, override);
