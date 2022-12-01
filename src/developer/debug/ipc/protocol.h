@@ -63,8 +63,19 @@ constexpr uint32_t kCurrentProtocolVersion = 54;
 #define CURRENT_SUPPORTED_API_LEVEL 10
 
 #if !defined(FUCHSIA_API_LEVEL)
-#error FUCHSIA_API_LEVEL must be defined
-#elif FUCHSIA_API_LEVEL == CURRENT_SUPPORTED_API_LEVEL
+// This is a workaround when using this library in the @internal_sdk, as the SDK
+// metadata surface has no way to indicate that a library requires a specific
+// compilation define.
+// When building for host using the @internal_sdk, if __Fuchsia_API_level__ is
+// not defined, the user of this library will need to explicitly define
+// FUCHSIA_API_LEVEL.
+#if !defined(__Fuchsia_API_level__)
+#error FUCHSIA_API_LEVEL or __Fuchsia_API_level__ must be defined
+#endif
+#define FUCHSIA_API_LEVEL __Fuchsia_API_level__
+#endif
+
+#if FUCHSIA_API_LEVEL == CURRENT_SUPPORTED_API_LEVEL
 constexpr uint32_t kMinimumProtocolVersion = INITIAL_VERSION_FOR_API_LEVEL_MINUS_2;
 #else
 // If this branch is chosen, please update as above.
