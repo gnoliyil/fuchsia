@@ -389,30 +389,53 @@ mod tests {
         super::*,
         crate::test_utils::{
             populate_host_with_file_contents, read_data_from_namespace, serve_realm_query,
-            serve_realm_query_with_namespace, set_path_to_read_only,
+            serve_realm_query_with_namespace, File,
         },
         fidl::endpoints::{create_endpoints, create_proxy, ClientEnd, Proxy},
         fidl_fuchsia_io as fio,
-        std::collections::HashMap,
-        std::fs::read,
-        std::path::Path,
+        std::{iter::zip, path::Path},
         tempfile::tempdir,
         test_case::test_case,
     };
 
+    const FOO_MONIKER: &'static str = "/foo/bar";
+    const RELATIVE_FOO_MONIKER: &'static str = "./foo/bar";
+    const BAR_MONIKER: &'static str = "/bar/foo";
+    const RELATIVE_BAR_MONIKER: &'static str = "./bar/foo";
     const CHANNEL_SIZE_LIMIT: u64 = 64 * 1024;
     const LARGE_FILE_ARRAY: [u8; CHANNEL_SIZE_LIMIT as usize] = [b'a'; CHANNEL_SIZE_LIMIT as usize];
     const OVER_LIMIT_FILE_ARRAY: [u8; (CHANNEL_SIZE_LIMIT + 1) as usize] =
         [b'a'; (CHANNEL_SIZE_LIMIT + 1) as usize];
-    const SAMPLE_NAME: &str = "./core/appmgr";
-    const SAMPLE_MONIKER: &str = "./core/appmgr";
-    const SAMPLE_FILE_NAME: &str = "foo.txt";
-    const SAMPLE_FILE_NAME_2: &str = "bar.txt";
-    const SAMPLE_FILE_CONTENTS: &str = "Lorem Ipsum";
-    const SAMPLE_FILE_CONTENTS_2: &str = "New Data";
-    const BLANK_FILE_CONTENTS: &str = "";
     const READ_WRITE: bool = false;
     const READ_ONLY: bool = true;
+    // We can call from_utf8_unchecked as the file arrays only contain the character 'a' which is safe to unwrap.
+    const LARGE_FILE_DATA: &str = unsafe { std::str::from_utf8_unchecked(&LARGE_FILE_ARRAY) };
+    const OVER_LIMIT_FILE_DATA: &str =
+        unsafe { std::str::from_utf8_unchecked(&OVER_LIMIT_FILE_ARRAY) };
+
+    struct Component {
+        name: &'static str,
+        moniker: &'static str,
+        seed_files: Vec<File>,
+    }
+
+    #[derive(Clone)]
+    struct Input {
+        source: String,
+        destination: String,
+    }
+
+    #[derive(Clone)]
+    struct Inputs {
+        sources: Vec<String>,
+        destination: String,
+    }
+
+    #[derive(Clone)]
+    struct Expectation {
+        path: &'static str,
+        data: &'static str,
+    }
 
     fn create_resolved_state(
         exposed_dir: ClientEnd<fio::DirectoryMarker>,
@@ -453,181 +476,417 @@ mod tests {
         )])
     }
 
-    fn create_realm_query(
-        seed_files: Vec<(&'static str, &'static str)>,
-        is_read_only: bool,
-    ) -> fsys::RealmQueryProxy {
+    fn create_realm_query(mut seed_files: Vec<File>, is_read_only: bool) -> fsys::RealmQueryProxy {
+        seed_files.retain(|file| !file.on_host);
         let (ns_dir, ns_server) = create_endpoints::<fio::DirectoryMarker>().unwrap();
-        let seed_files =
-            HashMap::from(seed_files.into_iter().collect::<HashMap<&'static str, &'static str>>());
         let () = serve_realm_query_with_namespace(ns_server, seed_files, is_read_only).unwrap();
-        let query_instance = create_hashmap_of_instance_info(SAMPLE_NAME, SAMPLE_MONIKER, ns_dir);
+        let query_instance =
+            create_hashmap_of_instance_info(RELATIVE_FOO_MONIKER, RELATIVE_FOO_MONIKER, ns_dir);
         serve_realm_query(query_instance)
     }
 
     fn create_realm_query_with_ns_client(
-        seed_files: Vec<(&'static str, &'static str)>,
+        mut seed_files: Vec<File>,
         is_read_only: bool,
     ) -> (fsys::RealmQueryProxy, fio::DirectoryProxy) {
+        seed_files.retain(|file| !file.on_host);
         let (ns_dir, ns_server) = create_proxy::<fio::DirectoryMarker>().unwrap();
         let dup_client = duplicate_namespace_client(&ns_dir).unwrap();
-        let seed_files =
-            HashMap::from(seed_files.into_iter().collect::<HashMap<&'static str, &'static str>>());
         let () = serve_realm_query_with_namespace(ns_server, seed_files, is_read_only).unwrap();
         let ns_dir = ClientEnd::<fio::DirectoryMarker>::new(ns_dir.into_channel().unwrap().into());
-        let query_instance = create_hashmap_of_instance_info(SAMPLE_NAME, SAMPLE_MONIKER, ns_dir);
+        let query_instance =
+            create_hashmap_of_instance_info(RELATIVE_FOO_MONIKER, RELATIVE_FOO_MONIKER, ns_dir);
         let realm_query = serve_realm_query(query_instance);
 
         (realm_query, dup_client)
     }
 
-    #[test_case("/core/appmgr::/data/foo.txt", "/foo.txt", vec![], vec![(SAMPLE_FILE_NAME, SAMPLE_FILE_CONTENTS)], "/foo.txt", SAMPLE_FILE_CONTENTS; "device_to_host")]
-    #[test_case("/core/appmgr::/data/foo.txt", "/foo.txt", vec![(SAMPLE_FILE_NAME, SAMPLE_FILE_CONTENTS)], vec![(SAMPLE_FILE_NAME, SAMPLE_FILE_CONTENTS_2)], "/foo.txt", SAMPLE_FILE_CONTENTS_2; "device_to_host_overwrite_file")]
-    #[test_case("/core/appmgr::/data/foo.txt", "/foo.txt", vec![], vec![(SAMPLE_FILE_NAME, BLANK_FILE_CONTENTS)], "/foo.txt", BLANK_FILE_CONTENTS; "device_to_host_blank_file")]
-    #[test_case("/core/appmgr::/data/foo.txt", "/bar.txt", vec![],  vec![(SAMPLE_FILE_NAME, SAMPLE_FILE_CONTENTS)], "/bar.txt", SAMPLE_FILE_CONTENTS; "device_to_host_different_name")]
-    #[test_case("/core/appmgr::/data/foo.txt", "", vec![],  vec![(SAMPLE_FILE_NAME, SAMPLE_FILE_CONTENTS)], "/foo.txt", SAMPLE_FILE_CONTENTS; "device_to_host_infer_path")]
-    #[test_case("/core/appmgr::/data/foo.txt", "/", vec![],  vec![(SAMPLE_FILE_NAME, SAMPLE_FILE_CONTENTS)], "/foo.txt", SAMPLE_FILE_CONTENTS; "device_to_host_infer_slash_path")]
-    #[test_case("/core/appmgr::/data/foo.txt", "/foo.txt", vec![],  vec![(SAMPLE_FILE_NAME, SAMPLE_FILE_CONTENTS),(SAMPLE_FILE_NAME_2, SAMPLE_FILE_CONTENTS)],
-    "/foo.txt", SAMPLE_FILE_CONTENTS; "device_to_host_populated_directory")]
-    #[test_case("/core/appmgr::/data/foo.txt", "/foo.txt", vec![],  vec![(SAMPLE_FILE_NAME, std::str::from_utf8(&LARGE_FILE_ARRAY).unwrap())], "/foo.txt", std::str::from_utf8(&LARGE_FILE_ARRAY).unwrap(); "device_to_host_large_file")]
-    #[test_case("/core/appmgr::/data/foo.txt", "/foo.txt", vec![],  vec![(SAMPLE_FILE_NAME, std::str::from_utf8(&OVER_LIMIT_FILE_ARRAY).unwrap())], "/foo.txt", std::str::from_utf8(&OVER_LIMIT_FILE_ARRAY).unwrap(); "device_to_host_over_file_limit")]
+    fn create_realm_query_with_multiple_components(
+        components: Vec<Component>,
+        is_read_only: bool,
+    ) -> (fsys::RealmQueryProxy, fio::DirectoryProxy) {
+        let mut instances = HashMap::new();
+        let mut proxies = Vec::new();
+
+        for component in components {
+            let (ns_dir, ns_server) = create_proxy::<fio::DirectoryMarker>().unwrap();
+            let dup_client = duplicate_namespace_client(&ns_dir).unwrap();
+            let () =
+                serve_realm_query_with_namespace(ns_server, component.seed_files, is_read_only)
+                    .unwrap();
+            proxies.push(dup_client);
+            let ns_dir =
+                ClientEnd::<fio::DirectoryMarker>::new(ns_dir.into_channel().unwrap().into());
+            let query_instance =
+                create_hashmap_of_instance_info(component.name, component.moniker, ns_dir);
+            instances.extend(query_instance);
+        }
+
+        let realm_query = serve_realm_query(instances);
+        (realm_query, proxies.last().unwrap().to_owned())
+    }
+
+    fn path_for_foo_moniker(path: &str) -> String {
+        format!("{}::{}", FOO_MONIKER, path)
+    }
+
+    fn path_for_bar_moniker(path: &str) -> String {
+        format!("{}::{}", BAR_MONIKER, path)
+    }
+
+    #[test_case(Input{source: path_for_foo_moniker("/data/foo.txt"), destination: "/foo.txt".to_string()},
+                vec![File{on_host: false, name: "foo.txt", data: "Hello"}],
+                Expectation{path: "/foo.txt", data: "Hello"}; "single_file")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/foo.txt"), destination: "/foo.txt".to_string()},
+                vec![File{on_host: false, name: "foo.txt", data: "Hello"}, File{on_host: true, name: "foo.txt", data: "World"}],
+                Expectation{path: "/foo.txt", data: "Hello"}; "overwrite_file")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/foo.txt"), destination: "/bar.txt".to_string()},
+                vec![File{on_host: false, name: "foo.txt", data: "Hello"}],
+                Expectation{path: "/bar.txt", data: "Hello"}; "different_file_name")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/foo.txt"), destination: "".to_string()},
+                vec![File{on_host: false, name: "foo.txt", data: "Hello"}],
+                Expectation{path: "/foo.txt", data: "Hello"}; "infer_path")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/foo.txt"), destination: "/".to_string()},
+                vec![File{on_host: false, name: "foo.txt", data: "Hello"}],
+                Expectation{path: "/foo.txt", data: "Hello"}; "infer_path_slash")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/foo.txt"), destination: "/foo.txt".to_string()},
+                vec![File{on_host: false, name: "foo.txt", data: "Hello"}, File{on_host: false, name: "bar.txt", data: "World"}],
+                Expectation{path: "/foo.txt", data: "Hello"}; "populated_directory")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/foo.txt"), destination: "/foo.txt".to_string()},
+                vec![File{on_host: false, name: "foo.txt", data: LARGE_FILE_DATA}],
+                Expectation{path: "/foo.txt", data: LARGE_FILE_DATA}; "large_file")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/foo.txt"), destination: "/foo.txt".to_string()},
+                vec![File{on_host: false, name: "foo.txt", data: OVER_LIMIT_FILE_DATA}],
+                Expectation{path: "/foo.txt", data: OVER_LIMIT_FILE_DATA}; "over_limit_file")]
     #[fuchsia::test]
-    async fn copy_device_to_host(
-        source_path: &'static str,
-        destination_path: &'static str,
-        host_seed_files: Vec<(&'static str, &'static str)>,
-        device_seed_files: Vec<(&'static str, &'static str)>,
-        actual_data_path: &'static str,
-        expected_data: &'static str,
-    ) {
+    async fn copy_device_to_host(input: Input, seed_files: Vec<File>, expectation: Expectation) {
         let root = tempdir().unwrap();
         let root_path = root.path().to_str().unwrap();
-        let destination_path = format!("{}{}", root_path, destination_path);
-        populate_host_with_file_contents(&root_path, host_seed_files).unwrap();
-        let realm_query = create_realm_query(device_seed_files, READ_ONLY);
+        let destination_path = format!("{}{}", root_path, input.destination);
+        populate_host_with_file_contents(&root_path, seed_files.clone()).unwrap();
+        let realm_query = create_realm_query(seed_files, READ_ONLY);
 
-        copy(&realm_query, vec![source_path.to_owned(), destination_path.to_owned()])
-            .await
-            .unwrap();
+        copy(&realm_query, vec![input.source, destination_path]).await.unwrap();
 
-        let expected_data = expected_data.to_owned().into_bytes();
-        let actual_data_path_string = format!("{}{}", root_path, actual_data_path);
+        let expected_data = expectation.data.to_owned().into_bytes();
+        let actual_data_path_string = format!("{}{}", root_path, expectation.path);
         let actual_data_path = Path::new(&actual_data_path_string);
         let actual_data = read(actual_data_path).unwrap();
         assert_eq!(actual_data, expected_data);
     }
 
-    #[test_case("wrong_moniker/core/appmgr::/data/foo.txt", "/foo.txt", vec![(SAMPLE_FILE_NAME, SAMPLE_FILE_CONTENTS)]; "bad_moniker")]
-    #[test_case("/core/appmgr::/data/foo.txt", "/core/appmgr::/data/foo.txt",  vec![(SAMPLE_FILE_NAME, SAMPLE_FILE_CONTENTS)]; "device_to_device_not_supported")]
-    #[test_case("/core/appmgr::/data/bar.txt", "/foo.txt", vec![(SAMPLE_FILE_NAME, SAMPLE_FILE_CONTENTS)]; "bad_file")]
-    #[test_case("/core/appmgr::/data/foo.txt", "/bar/foo.txt", vec![(SAMPLE_FILE_NAME, SAMPLE_FILE_CONTENTS)]; "bad_directory")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/*"), destination: "/foo.txt".to_string()},
+                vec![File{on_host: false, name: "foo.txt", data: "Hello"}],
+                vec![Expectation{path: "/foo.txt", data: "Hello"}]; "all_matches")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/*"), destination: "/foo.txt".to_string()},
+                vec![File{on_host: false, name: "foo.txt", data: "Hello"}, File{on_host: true, name: "foo.txt", data: "World"}],
+                vec![Expectation{path: "/foo.txt", data: "Hello"}]; "all_matches_overwrite")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/*.txt"), destination: "/foo.txt".to_string()},
+                vec![File{on_host: false, name: "foo.txt", data: "Hello"}],
+                vec![Expectation{path: "/foo.txt", data: "Hello"}]; "file_extension")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/foo.*"), destination: "/foo.txt".to_string()},
+                vec![File{on_host: false, name: "foo.txt", data: "Hello"}],
+                vec![Expectation{path: "/foo.txt", data: "Hello"}]; "file_extension_2")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/fo*.txt"), destination: "/foo.txt".to_string()},
+                vec![File{on_host: false, name: "foo.txt", data: "Hello"}],
+                vec![Expectation{path: "/foo.txt", data: "Hello"}]; "file_substring_match")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/*"), destination: "/".to_string()},
+                vec![File{on_host: false, name: "foo.txt", data: "Hello"}, File{on_host: false, name: "bar.txt", data: "World"}],
+                vec![Expectation{path: "/foo.txt", data: "Hello"}, Expectation{path: "/bar.txt", data: "World"}]; "multi_file")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/*fo*.txt"), destination: "/".to_string()},
+                vec![File{on_host: false, name: "foo.txt", data: "Hello"}, File{on_host: false, name: "foobar.txt", data: "World"}],
+                vec![Expectation{path: "/foo.txt", data: "Hello"}, Expectation{path: "/foobar.txt", data: "World"}]; "multi_wildcard")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/*"), destination: "/".to_string()},
+                vec![File{on_host: false, name: "foo.txt", data: "Hello"}, File{on_host: false, name: "foobar.txt", data: "World"},
+                     File{on_host: true, name: "foo.txt", data: "World"}, File{on_host: true , name: "foobar.txt", data: "Hello"}],
+                vec![Expectation{path: "/foo.txt", data: "Hello"}, Expectation{path: "/foobar.txt", data: "World"}]; "multi_file_overwrite")]
     #[fuchsia::test]
-    async fn copy_device_to_host_fails(
-        source_path: &'static str,
-        destination_path: &'static str,
-        seed_files: Vec<(&'static str, &'static str)>,
+    async fn copy_device_to_host_wildcard(
+        input: Input,
+        seed_files: Vec<File>,
+        expectation: Vec<Expectation>,
     ) {
         let root = tempdir().unwrap();
         let root_path = root.path().to_str().unwrap();
-        let destination_path = format!("{}{}", root_path, destination_path);
+        let destination_path = format!("{}{}", root_path, input.destination);
+        populate_host_with_file_contents(&root_path, seed_files.clone()).unwrap();
         let realm_query = create_realm_query(seed_files, READ_ONLY);
-        let result =
-            copy(&realm_query, vec![source_path.to_owned(), destination_path.to_owned()]).await;
+
+        copy(&realm_query, vec![input.source, destination_path]).await.unwrap();
+
+        for expected in expectation {
+            let expected_data = expected.data.to_owned().into_bytes();
+            let actual_data_path_string = format!("{}{}", &root_path, expected.path);
+            let actual_data = read(Path::new(&actual_data_path_string)).unwrap();
+            assert_eq!(actual_data, expected_data);
+        }
+    }
+
+    #[test_case(Input{source: "wrong_moniker/foo/bar::/data/foo.txt".to_string(), destination: "/foo.txt".to_string()},
+                vec![File{on_host: false, name: "foo.txt", data: "Hello"}]; "bad_moniker")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/bar.txt"), destination: "/foo.txt".to_string()},
+                vec![File{on_host: false, name: "foo.txt", data: "Hello"}]; "bad_file")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/foo.txt"), destination: "/bar/foo.txt".to_string()},
+                vec![File{on_host: false, name: "foo.txt", data: "Hello"}]; "bad_directory")]
+    #[fuchsia::test]
+    async fn copy_device_to_host_fails(input: Input, seed_files: Vec<File>) {
+        let root = tempdir().unwrap();
+        let root_path = root.path().to_str().unwrap();
+        let destination_path = format!("{}{}", root_path, input.destination);
+        let realm_query = create_realm_query(seed_files, READ_ONLY);
+        let result = copy(&realm_query, vec![input.source, destination_path]).await;
 
         assert!(result.is_err());
     }
 
-    #[test_case("/core/appmgr::/data/foo.txt", "/"; "read_only_root")]
+    #[test_case(Input{source: "/foo.txt".to_string(), destination: path_for_foo_moniker("/data/foo.txt")},
+                vec![],
+                Expectation{path: "/data/foo.txt", data: "Hello"}; "single_file")]
+    #[test_case(Input{source: "/foo.txt".to_string(), destination: path_for_foo_moniker("/data/bar.txt")},
+                vec![],
+                Expectation{path: "/data/bar.txt", data: "Hello"}; "different_file_name")]
+    #[test_case(Input{source: "/foo.txt".to_string(), destination: path_for_foo_moniker("/data/foo.txt")},
+                vec![File{on_host: false, name: "foo.txt", data: "World"}],
+                Expectation{path: "/data/foo.txt", data: "Hello"}; "overwrite_file")]
+    #[test_case(Input{source: "/foo.txt".to_string(), destination: path_for_foo_moniker("/data")},
+                vec![File{on_host: false, name: "foo.txt", data: "Hello"}],
+                Expectation{path: "/data/foo.txt", data: "Hello"}; "infer_path")]
+    #[test_case(Input{source: "/foo.txt".to_string(), destination: path_for_foo_moniker("/data/")},
+                vec![File{on_host: false, name: "foo.txt", data: "Hello"}],
+                Expectation{path: "/data/foo.txt", data: "Hello"}; "infer_slash_path")]
+    #[test_case(Input{source: "/foo.txt".to_string(), destination: path_for_foo_moniker("/data/")},
+                vec![],
+                Expectation{path: "/data/foo.txt", data: LARGE_FILE_DATA}; "large_file")]
+    #[test_case(Input{source: "/foo.txt".to_string(), destination: path_for_foo_moniker("/data/")},
+                vec![],
+                Expectation{path: "/data/foo.txt", data: OVER_LIMIT_FILE_DATA}; "over_channel_limit_file")]
     #[fuchsia::test]
-    async fn copy_device_to_host_fails_read_only(
-        source_path: &'static str,
-        destination_path: &'static str,
-    ) {
+    async fn copy_host_to_device(input: Input, seed_files: Vec<File>, expectation: Expectation) {
         let root = tempdir().unwrap();
         let root_path = root.path().to_str().unwrap();
-        let destination_path = format!("{}{}", root_path, destination_path);
-        set_path_to_read_only(PathBuf::from(&destination_path)).unwrap();
-        let realm_query = create_realm_query(vec![], READ_ONLY);
-
-        let result =
-            copy(&realm_query, vec![source_path.to_owned(), destination_path.to_owned()]).await;
-
-        assert!(result.is_err());
-    }
-
-    #[test_case("/foo.txt", "/core/appmgr::/data/foo.txt", vec![],  "/data/foo.txt", SAMPLE_FILE_CONTENTS; "host_to_device")]
-    #[test_case("/foo.txt", "/core/appmgr::/data/bar.txt", vec![],  "/data/bar.txt", SAMPLE_FILE_CONTENTS; "host_to_device_different_name")]
-    #[test_case("/foo.txt", "/core/appmgr::/data/foo.txt", vec![(SAMPLE_FILE_NAME, SAMPLE_FILE_CONTENTS_2)],  "/data/foo.txt", SAMPLE_FILE_CONTENTS; "host_to_device_overwrite_file")]
-    #[test_case("/foo.txt", "/core/appmgr::/data/foo.txt", vec![],  "/data/foo.txt", BLANK_FILE_CONTENTS; "host_to_device_blank_file")]
-    #[test_case("/foo.txt", "/core/appmgr::/data", vec![], "/data/foo.txt", SAMPLE_FILE_CONTENTS; "host_to_device_inferred_path")]
-    #[test_case("/foo.txt", "/core/appmgr::/data/", vec![], "/data/foo.txt", SAMPLE_FILE_CONTENTS; "host_to_device_inferred_slash_path")]
-    #[test_case("/foo.txt", "/core/appmgr::/data/", vec![], "/data/foo.txt", std::str::from_utf8(&LARGE_FILE_ARRAY).unwrap(); "host_to_device_large_file")]
-    #[test_case("/foo.txt", "/core/appmgr::/data/", vec![], "/data/foo.txt", std::str::from_utf8(&OVER_LIMIT_FILE_ARRAY).unwrap(); "host_to_device_over_limit_file")]
-    #[fuchsia::test]
-    async fn copy_host_to_device(
-        source_path: &'static str,
-        destination_path: &'static str,
-        seed_files: Vec<(&'static str, &'static str)>,
-        actual_data_path: &'static str,
-        expected_data: &'static str,
-    ) {
-        let root = tempdir().unwrap();
-        let root_path = root.path().to_str().unwrap();
-        let source_path = format!("{}{}", root_path, source_path);
-        write(&source_path, expected_data.to_owned().into_bytes()).unwrap();
+        let source_path = format!("{}{}", root_path, &input.source);
+        write(&source_path, expectation.data.to_owned().into_bytes()).unwrap();
         let (realm_query, ns_dir) = create_realm_query_with_ns_client(seed_files, READ_WRITE);
 
-        copy(&realm_query, vec![source_path.to_owned(), destination_path.to_owned()])
-            .await
-            .unwrap();
+        copy(&realm_query, vec![source_path, input.destination]).await.unwrap();
 
-        let actual_data = read_data_from_namespace(&ns_dir, actual_data_path).await.unwrap();
-        let expected_data = expected_data.to_owned().into_bytes();
+        let actual_data = read_data_from_namespace(&ns_dir, expectation.path).await.unwrap();
+        let expected_data = expectation.data.to_owned().into_bytes();
         assert_eq!(actual_data, expected_data);
     }
 
-    #[test_case("/foo.txt", "/core/appmgr::/foo.txt", SAMPLE_FILE_CONTENTS; "root_dir")]
-    #[test_case("/foo.txt", "/core/appmgr::", SAMPLE_FILE_CONTENTS; "root_dir_infer_path")]
-    #[test_case("/foo.txt", "/core/appmgr::/", SAMPLE_FILE_CONTENTS; "root_dir_infer_path_slash")]
-    #[test_case("/foo.txt", "wrong_moniker/core/appmgr::/data/foo.txt", SAMPLE_FILE_CONTENTS; "bad_moniker")]
-    #[test_case("/foo.txt", "/core/appmgr::/bar/foo.txt", SAMPLE_FILE_CONTENTS; "bad_directory")]
-    #[test_case("/foo.txt", "/core/appmgr/data/foo.txt", SAMPLE_FILE_CONTENTS; "host_to_host_not_supported")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/foo.txt"), destination: path_for_bar_moniker("/data/foo.txt")},
+                vec![Component{name: RELATIVE_FOO_MONIKER, moniker: RELATIVE_FOO_MONIKER, seed_files: vec![File{on_host: false, name: "foo.txt", data: "Hello"}, File{on_host: false, name: "bar.txt", data: "World"}]},
+                     Component{name: RELATIVE_BAR_MONIKER, moniker: RELATIVE_BAR_MONIKER, seed_files: vec![]}],
+                vec![Expectation{path: "/data/foo.txt", data: "Hello"}]; "single_file")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/foo.txt"), destination: path_for_bar_moniker("/data/bar.txt")},
+                vec![Component{name: RELATIVE_FOO_MONIKER, moniker: RELATIVE_FOO_MONIKER, seed_files: vec![File{on_host: false, name: "foo.txt", data: "Hello"}, File{on_host: false, name: "bar.txt", data: "World"}]},
+                     Component{name: RELATIVE_BAR_MONIKER, moniker: RELATIVE_BAR_MONIKER, seed_files: vec![]}],
+                vec![Expectation{path: "/data/bar.txt", data: "Hello"}]; "different_file_name")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/foo.txt"), destination: path_for_bar_moniker("/data/foo.txt")},
+                vec![Component{name: RELATIVE_FOO_MONIKER, moniker: RELATIVE_FOO_MONIKER, seed_files: vec![File{on_host: false, name: "foo.txt", data: "Hello"}, File{on_host: false, name: "bar.txt", data: "World"}]},
+                     Component{name: RELATIVE_BAR_MONIKER, moniker: RELATIVE_BAR_MONIKER, seed_files: vec![File{on_host: false, name: "foo.txt", data: "Hello"}]}],
+                vec![Expectation{path: "/data/foo.txt", data: "Hello"}]; "overwrite_file")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/foo.txt"), destination: path_for_foo_moniker("/data/foo.txt")},
+                vec![Component{name: RELATIVE_FOO_MONIKER, moniker: RELATIVE_FOO_MONIKER, seed_files: vec![File{on_host: false, name: "foo.txt", data: "Hello"}, File{on_host: false, name: "bar.txt", data: "World"}]}],
+                vec![Expectation{path: "/data/foo.txt", data: "Hello"}]; "same_component")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/*"), destination: path_for_bar_moniker("/data")},
+                vec![Component{name: RELATIVE_FOO_MONIKER, moniker: RELATIVE_FOO_MONIKER, seed_files: vec![File{on_host: false, name: "foo.txt", data: "Hello"}, File{on_host: false, name: "bar.txt", data: "World"}]},
+                     Component{name: RELATIVE_BAR_MONIKER, moniker: RELATIVE_BAR_MONIKER, seed_files: vec![]}],
+                vec![Expectation{path: "/data/foo.txt", data: "Hello"}, Expectation{path: "/data/bar.txt", data: "World"}]; "wildcard_match_all_multi_file")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/*.txt"), destination: path_for_bar_moniker("/data")},
+                vec![Component{name: RELATIVE_FOO_MONIKER, moniker: RELATIVE_FOO_MONIKER, seed_files: vec![File{on_host: false, name: "foo.txt", data: "Hello"}, File{on_host: false, name: "bar.txt", data: "World"}]},
+                     Component{name: RELATIVE_BAR_MONIKER, moniker: RELATIVE_BAR_MONIKER, seed_files: vec![]}],
+                vec![Expectation{path: "/data/foo.txt", data: "Hello"}, Expectation{path: "/data/bar.txt", data: "World"}]; "wildcard_match_files_extensions_multi_file")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/*"), destination: path_for_bar_moniker("/data")},
+                vec![Component{name: RELATIVE_FOO_MONIKER, moniker: RELATIVE_FOO_MONIKER, seed_files: vec![File{on_host: false, name: "foo.txt", data: "Hello"}, File{on_host: false, name: "bar.txt", data: "World"}]},
+                     Component{name: RELATIVE_BAR_MONIKER, moniker: RELATIVE_BAR_MONIKER, seed_files: vec![File{on_host: false, name: "foo.txt", data: "World"}, File{on_host: false, name: "bar.txt", data: "Hello"}]}],
+                vec![Expectation{path: "/data/foo.txt", data: "Hello"}, Expectation{path: "/data/bar.txt", data: "World"}]; "wildcard_match_all_multi_file_overwrite")]
     #[fuchsia::test]
-    async fn copy_host_to_device_fails(
-        source_path: &'static str,
-        destination_path: &'static str,
-        source_data: &'static str,
+    async fn copy_device_to_device(
+        input: Input,
+        components: Vec<Component>,
+        expectation: Vec<Expectation>,
     ) {
-        let root = tempdir().unwrap();
-        let root_path = root.path().to_str().unwrap();
-        let source_path = format!("{}{}", root_path, source_path);
-        write(&source_path, source_data.to_owned().into_bytes()).unwrap();
-        let realm_query = create_realm_query(vec![], READ_WRITE);
+        let (realm_query, destination_namespace) =
+            create_realm_query_with_multiple_components(components, READ_WRITE);
 
-        let result =
-            copy(&realm_query, vec![source_path.to_owned(), destination_path.to_owned()]).await;
+        copy(&realm_query, vec![input.source, input.destination]).await.unwrap();
+
+        for expected in expectation {
+            let actual_data =
+                read_data_from_namespace(&destination_namespace, expected.path).await.unwrap();
+            let expected_data = expected.data.to_owned().into_bytes();
+            assert_eq!(actual_data, expected_data);
+        }
+    }
+
+    #[test_case(Input{source: path_for_foo_moniker("/data/"), destination: path_for_bar_moniker("/data/foo.txt")}; "no_source_file")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/cat.txt"), destination: path_for_bar_moniker("/data/foo.txt")}; "bad_file")]
+    #[test_case(Input{source: path_for_foo_moniker("/foo.txt"), destination: path_for_bar_moniker("/data/foo.txt")}; "bad_source_folder")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/foo.txt"), destination: path_for_bar_moniker("/file.txt")}; "bad_destination_folder")]
+    #[test_case(Input{source: "/hello/world::/data/foo.txt".to_string(), destination: path_for_bar_moniker("/data/file.txt")}; "bad_source_moniker")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/foo.txt"), destination: path_for_bar_moniker("/data/file.txt")}; "bad_destination_moniker")]
+    #[fuchsia::test]
+    async fn copy_device_to_device_fails(input: Input) {
+        let components = vec![
+            Component {
+                name: RELATIVE_FOO_MONIKER,
+                moniker: RELATIVE_FOO_MONIKER,
+                seed_files: vec![
+                    File { on_host: false, name: "foo.txt", data: "Hello" },
+                    File { on_host: false, name: "bar.txt", data: "World" },
+                ],
+            },
+            Component { name: RELATIVE_FOO_MONIKER, moniker: FOO_MONIKER, seed_files: vec![] },
+        ];
+        let (realm_query, _) = create_realm_query_with_multiple_components(components, READ_WRITE);
+
+        let result = copy(&realm_query, vec![input.source, input.destination]).await;
 
         assert!(result.is_err());
     }
 
-    #[test_case("/foo.txt", "/core/appmgr::/read_only/foo.txt", SAMPLE_FILE_CONTENTS; "read_only_folder")]
-    #[test_case("/foo.txt", "/core/appmgr::/read_only", SAMPLE_FILE_CONTENTS; "read_only_folder_infer_path")]
-    #[test_case("/foo.txt", "/core/appmgr::/read_only/", SAMPLE_FILE_CONTENTS; "read_only_folder_infer_path_slash")]
+    #[test_case(Inputs{sources: vec!["/foo.txt".to_string()], destination: path_for_foo_moniker("/data/")},
+                vec![],
+                vec![Expectation{path: "/data/foo.txt", data: "Hello"}]; "single_file_wildcard")]
+    #[test_case(Inputs{sources: vec!["/foo.txt".to_string()], destination: path_for_foo_moniker("/data/")},
+                vec![File{on_host: false, name: "foo.txt", data: "World"}],
+                vec![Expectation{path: "/data/foo.txt", data: "Hello"}]; "single_file_wildcard_overwrite")]
+    #[test_case(Inputs{sources: vec!["/foo.txt".to_string(), "/bar.txt".to_string()], destination: path_for_foo_moniker("/data/")},
+                vec![],
+                vec![Expectation{path: "/data/foo.txt", data: "Hello"}, Expectation{path: "/data/bar.txt", data: "World"}]; "multi_file_wildcard")]
+    #[test_case(Inputs{sources: vec!["/foo.txt".to_string(), "/bar.txt".to_string()], destination: path_for_foo_moniker("/data/")},
+                vec![File{on_host: false, name: "foo.txt", data: "World"}, File{on_host: false, name: "bar.txt", data: "World"}],
+                vec![Expectation{path: "/data/foo.txt", data: "Hello"}, Expectation{path: "/data/bar.txt", data: "World"}]; "multi_wildcard_file_overwrite")]
     #[fuchsia::test]
-    async fn copy_host_to_device_fails_read_only(
-        source_path: &'static str,
-        destination_path: &'static str,
-        source_data: &'static str,
+    async fn copy_host_to_device_wildcard(
+        input: Inputs,
+        seed_files: Vec<File>,
+        expectation: Vec<Expectation>,
     ) {
         let root = tempdir().unwrap();
         let root_path = root.path().to_str().unwrap();
-        let source_path = format!("{}{}", root_path, source_path);
-        write(&source_path, source_data.to_owned().into_bytes()).unwrap();
+
+        for (path, expected) in zip(input.sources.clone(), expectation.clone()) {
+            let source_path = format!("{}{}", root_path, path);
+            write(&source_path, expected.data.to_owned().into_bytes()).unwrap();
+        }
+
+        let (realm_query, ns_dir) = create_realm_query_with_ns_client(seed_files, READ_WRITE);
+        let mut paths: Vec<String> =
+            input.sources.into_iter().map(|path| format!("{}{}", root_path, path)).collect();
+        paths.push(input.destination.to_string());
+
+        copy(&realm_query, paths).await.unwrap();
+
+        for expected in expectation {
+            let actual_data = read_data_from_namespace(&ns_dir, expected.path).await.unwrap();
+            let expected_data = expected.data.to_owned().into_bytes();
+            assert_eq!(actual_data, expected_data);
+        }
+    }
+
+    #[test_case(Input{source: "/foo.txt".to_string(), destination: path_for_foo_moniker("/foo.txt")}, "Hello"; "root_dir")]
+    #[test_case(Input{source: "/foo.txt".to_string(), destination: path_for_foo_moniker("")}, "Hello"; "root_dir_infer_path")]
+    #[test_case(Input{source: "/foo.txt".to_string(), destination: path_for_foo_moniker("/")}, "Hello"; "root_dir_infer_path_slash")]
+    #[test_case(Input{source: "/foo.txt".to_string(), destination: "wrong_moniker/foo/bar::/data/foo.txt".to_string()}, "Hello"; "bad_moniker")]
+    #[test_case(Input{source: "/foo.txt".to_string(), destination: path_for_foo_moniker("//bar/foo.txt")}, "Hello"; "bad_directory")]
+    #[fuchsia::test]
+    async fn copy_host_to_device_fails(input: Input, seed_data: &'static str) {
+        let root = tempdir().unwrap();
+        let root_path = root.path().to_str().unwrap();
+        let source_path = format!("{}{}", root_path, input.source);
+        write(&source_path, seed_data.to_owned().into_bytes()).unwrap();
+        let realm_query = create_realm_query(vec![], READ_WRITE);
+
+        let result =
+            copy(&realm_query, vec![source_path.to_owned(), input.destination.to_owned()]).await;
+
+        assert!(result.is_err());
+    }
+
+    #[test_case(Input{source: "/foo.txt".to_string(), destination: path_for_foo_moniker("/data/foo.txt")},
+                "Hello"; "file_in_read_only_dir")]
+    #[test_case(Input{source: "/foo.txt".to_string(), destination: path_for_foo_moniker("/data")},
+                "Hello"; "infer_path_read_only_dir")]
+    #[test_case(Input{source: "/foo.txt".to_string(), destination: path_for_foo_moniker("/data/")},
+                "Hello"; "infer_path_slash_read_only_dir")]
+    #[fuchsia::test]
+    async fn copy_host_to_device_fails_read_only(input: Input, seed_data: &'static str) {
+        let root = tempdir().unwrap();
+        let root_path = root.path().to_str().unwrap();
+        let source_path = format!("{}{}", root_path, input.source);
+        write(&source_path, seed_data.to_owned().into_bytes()).unwrap();
         let realm_query = create_realm_query(vec![], READ_ONLY);
 
         let result =
-            copy(&realm_query, vec![source_path.to_owned(), destination_path.to_owned()]).await;
+            copy(&realm_query, vec![source_path.to_owned(), input.destination.to_owned()]).await;
 
         assert!(result.is_err());
+    }
+
+    #[test_case(vec![]; "no_wildcard_matches")]
+    #[test_case(vec!["/foo.txt".to_string()]; "not_enough_args")]
+    #[test_case(vec![path_for_foo_moniker("/data/*"), path_for_foo_moniker("/data/*")]; "remote_wildcard_destination")]
+    #[test_case(vec![path_for_foo_moniker("/data/*"), path_for_foo_moniker("/data/*"), "/".to_string()]; "multi_wildcards_remote")]
+    #[test_case(vec!["/*".to_string(), "/*".to_string()]; "host_wildcard_destination")]
+    #[fuchsia::test]
+    async fn copy_wildcard_fails(paths: Vec<String>) {
+        let (realm_query, _) = create_realm_query_with_ns_client(
+            vec![File { on_host: false, name: "foo.txt", data: "Hello" }],
+            READ_WRITE,
+        );
+        let result = copy(&realm_query, paths).await;
+
+        assert!(result.is_err());
+    }
+
+    #[test_case(Inputs{sources: vec![path_for_foo_moniker("/data/foo.txt"), "/bar.txt".to_string()], destination: path_for_bar_moniker("/data/")},
+                vec![File{on_host: true, name: "bar.txt", data: "World"}],
+                vec![Component{name: RELATIVE_FOO_MONIKER, moniker: RELATIVE_FOO_MONIKER, seed_files: vec![File{on_host: false, name: "foo.txt", data: "Hello"}, File{on_host: false, name: "bar.txt", data: "World"}]},
+                     Component{name: RELATIVE_BAR_MONIKER, moniker: RELATIVE_BAR_MONIKER, seed_files: vec![]}],
+                vec![Expectation{path: "/data/foo.txt", data: "Hello"}, Expectation{path: "/data/bar.txt", data: "World"}]; "no_wildcard_mix")]
+    #[test_case(Inputs{sources: vec![path_for_foo_moniker("/data/foo.txt"), path_for_foo_moniker("/data/*"), "/foobar.txt".to_string()], destination: path_for_bar_moniker("/data/")},
+                vec![File{on_host: true, name: "foobar.txt", data: "World"}],
+                vec![Component{name: RELATIVE_FOO_MONIKER, moniker: RELATIVE_FOO_MONIKER, seed_files: vec![File{on_host: false, name: "foo.txt", data: "Hello"}, File{on_host: false, name: "bar.txt", data: "World"}]},
+                     Component{name: RELATIVE_BAR_MONIKER, moniker: RELATIVE_BAR_MONIKER, seed_files: vec![]}],
+                vec![Expectation{path: "/data/foo.txt", data: "Hello"}, Expectation{path: "/data/bar.txt", data: "World"}, Expectation{path: "/data/foobar.txt", data: "World"}]; "wildcard_mix")]
+    #[test_case(Inputs{sources: vec![path_for_foo_moniker("/data/*"), path_for_foo_moniker("/data/*"), "/foobar.txt".to_string()], destination: path_for_bar_moniker("/data/")},
+                vec![File{on_host: true, name: "foobar.txt", data: "World"}],
+                vec![Component{name: RELATIVE_FOO_MONIKER, moniker: RELATIVE_FOO_MONIKER, seed_files: vec![File{on_host: false, name: "foo.txt", data: "Hello"}, File{on_host: false, name: "bar.txt", data: "World"}]},
+                     Component{name: RELATIVE_BAR_MONIKER, moniker: RELATIVE_BAR_MONIKER, seed_files: vec![]}],
+                vec![Expectation{path: "/data/foo.txt", data: "Hello"}, Expectation{path: "/data/bar.txt", data: "World"}, Expectation{path: "/data/foobar.txt", data: "World"}]; "double_wildcard")]
+    #[fuchsia::test]
+    async fn copy_mixed_tests_remote_destination(
+        input: Inputs,
+        seed_files: Vec<File>,
+        components: Vec<Component>,
+        expectation: Vec<Expectation>,
+    ) {
+        let root = tempdir().unwrap();
+        let root_path = root.path().to_str().unwrap();
+        populate_host_with_file_contents(&root_path, seed_files.clone()).unwrap();
+        let (realm_query, destination_namespace) =
+            create_realm_query_with_multiple_components(components, READ_WRITE);
+        let mut paths: Vec<String> = input
+            .sources
+            .clone()
+            .into_iter()
+            .map(|path| match HostOrRemotePath::parse(&path) {
+                HostOrRemotePath::Remote(_) => path.to_string(),
+                HostOrRemotePath::Host(_) => format!("{}{}", root_path, path),
+            })
+            .collect();
+        paths.push(input.destination.to_owned());
+
+        copy(&realm_query, paths).await.unwrap();
+
+        for expected in expectation {
+            let actual_data =
+                read_data_from_namespace(&destination_namespace, expected.path).await.unwrap();
+            let expected_data = expected.data.to_owned().into_bytes();
+            assert_eq!(actual_data, expected_data);
+        }
     }
 }

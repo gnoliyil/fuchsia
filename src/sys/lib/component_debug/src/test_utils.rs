@@ -16,6 +16,13 @@ use {
     tempfile::tempdir,
 };
 
+#[derive(Clone)]
+pub struct File {
+    pub on_host: bool,
+    pub name: &'static str,
+    pub data: &'static str,
+}
+
 // Setup |RealmQuery| server with the given component instances.
 pub fn serve_realm_query(
     mut instances: HashMap<String, (fsys::InstanceInfo, Option<Box<fsys::ResolvedState>>)>,
@@ -48,7 +55,7 @@ pub fn set_path_to_read_only(path: PathBuf) -> Result<()> {
         Ok(metadata) => {
             let mut perm = metadata.permissions();
             perm.set_readonly(true);
-            set_permissions(path, perm)?;
+            set_permissions(path, perm).unwrap();
             Ok(())
         }
         Err(e) => panic!("Could not set path to read only: {}", e),
@@ -65,16 +72,16 @@ pub fn create_tmp_path() -> String {
 // Create a new temporary directory to serve as the mock namespace.
 pub fn serve_realm_query_with_namespace(
     server: ServerEnd<fio::DirectoryMarker>,
-    seed_files: HashMap<&'static str, &'static str>,
+    seed_files: Vec<File>,
     is_read_only: bool,
 ) -> Result<()> {
     let tmp_path = create_tmp_path();
     let () = create_dir(&tmp_path).unwrap();
     let () = create_dir(format!("{}/data", &tmp_path)).unwrap();
 
-    for (new_file, new_file_contents) in seed_files.iter() {
-        let other_file_path = format!("{}/data/{}", &tmp_path, &new_file);
-        write(&other_file_path, &new_file_contents).unwrap();
+    for file in seed_files {
+        let other_file_path = format!("{}/data/{}", &tmp_path, &file.name);
+        write(&other_file_path, &file.data).unwrap();
     }
 
     let flags = if is_read_only {
@@ -93,13 +100,14 @@ pub fn serve_realm_query_with_namespace(
 }
 
 // Creates files with specified contents within a host directory.
-pub fn populate_host_with_file_contents(
-    path: &str,
-    seed_files: Vec<(&'static str, &'static str)>,
-) -> Result<()> {
-    for (new_file, new_file_contents) in seed_files.iter() {
-        let new_file_path = format!("{}/{}", path, new_file);
-        write(&new_file_path, new_file_contents.as_bytes().to_vec()).unwrap();
+pub fn populate_host_with_file_contents(path: &str, mut seed_files: Vec<File>) -> Result<()> {
+    seed_files.retain(|file| file.on_host);
+
+    for file in seed_files.iter() {
+        if file.on_host {
+            let new_file_path = format!("{}/{}", path, &file.name);
+            write(&new_file_path, file.data.as_bytes().to_vec()).unwrap();
+        }
     }
     Ok(())
 }
