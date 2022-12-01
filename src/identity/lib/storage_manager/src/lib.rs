@@ -7,6 +7,7 @@
 #![allow(clippy::let_unit_value)]
 #![allow(clippy::type_complexity)]
 
+pub mod fxfs;
 pub mod minfs;
 mod state;
 mod volume;

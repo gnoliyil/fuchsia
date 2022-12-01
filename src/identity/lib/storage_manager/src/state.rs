@@ -4,7 +4,6 @@
 
 use thiserror::Error;
 
-#[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq)]
 /// A state machine representing one of three states for a directory protected
 /// by a key. The three states are uninitialized, locked, and available. It is
@@ -65,7 +64,6 @@ impl<T> From<&State<T>> for StateName {
 
 #[derive(Debug, Error)]
 pub enum StateTransitionError {
-    #[allow(dead_code)]
     #[error("Wrong precondition for this action; found state '{:?}'", _0)]
     WrongPrecondition(StateName),
 }
@@ -87,7 +85,6 @@ impl<T> State<T> {
     ///
     /// If the state is not currently AVAILABLE, returns
     /// Err(StateTransitionError).
-    #[allow(dead_code)]
     pub fn try_lock(&mut self) -> Result<T, StateTransitionError> {
         match std::mem::replace(self, State::Locked) {
             State::Available { internals } => Ok(internals),
@@ -106,7 +103,6 @@ impl<T> State<T> {
     ///
     /// If the state is not currently UNINITIALIZED, returns
     /// Err(StateTransitionError).
-    #[allow(dead_code)]
     pub fn try_provision(&mut self, internals: T) -> Result<(), StateTransitionError> {
         // from UNINITIALIZED to AVAILABLE.
         match *self {
@@ -126,7 +122,6 @@ impl<T> State<T> {
     ///
     /// If the state is not already one of LOCKED or UNINITIALIZED, returns
     /// Err(StateTransitionError).
-    #[allow(dead_code)]
     pub fn try_unlock(&mut self, internals: T) -> Result<(), StateTransitionError> {
         // from LOCKED or UNINITIALIZED to AVAILABLE
         match *self {
@@ -149,7 +144,6 @@ impl<T> State<T> {
     ///
     /// If the state is already UNINITIALIZED, returns
     /// Err(StateTransitionError).
-    #[allow(dead_code)]
     pub fn try_destroy(&mut self) -> Result<Option<T>, StateTransitionError> {
         // from AVAILABLE or LOCKED to UNINITIALIZED.
         match std::mem::replace(self, State::Uninitialized) {
