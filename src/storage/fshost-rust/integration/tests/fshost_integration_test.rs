@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 use {
-    device_watcher::recursive_wait_and_open_node,
     fidl::endpoints::create_proxy,
     fidl_fuchsia_fshost as fshost,
     fidl_fuchsia_hardware_block_partition::Guid,
@@ -296,6 +295,8 @@ async fn partition_max_size_set() {
         fvm_proxy.get_partition_limit(data_instance_guid.as_mut()).await.unwrap();
     assert!(zx::Status::ok(status).is_ok());
     assert_eq!(data_slice_count, DATA_MAX_BYTES / FVM_SLICE_SIZE);
+
+    fixture.tear_down().await;
 }
 
 #[fuchsia::test]
@@ -356,19 +357,76 @@ async fn fvm_within_gpt() {
     let mut builder = new_builder();
     builder.with_disk().with_gpt().format_data(DATA_FILESYSTEM_FORMAT);
     let fixture = builder.build().await;
+    let dev = fixture.dir("dev-topological/class/block");
 
     // Ensure we bound the GPT by checking the relevant partitions exist under the ramdisk path.
-    let fvm_partition_path =
-        format!("{}/part-000/block", fixture.ramdisk.as_ref().unwrap().get_path());
+    let fvm_partition_path = device_watcher::wait_for_device_with(&dev, |info| {
+        info.topological_path.ends_with("/part-000/block").then(|| info.topological_path)
+    })
+    .await
+    .unwrap();
     let blobfs_path = format!("{}/fvm/blobfs-p-1/block", fvm_partition_path);
-    recursive_wait_and_open_node(&fixture.dir("dev-topological"), &blobfs_path).await.unwrap();
+    device_watcher::wait_for_device_with(&dev, |info| {
+        (info.topological_path == blobfs_path).then_some(())
+    })
+    .await
+    .unwrap();
     let data_path = format!("{}/fvm/data-p-2/block", fvm_partition_path);
-    recursive_wait_and_open_node(&fixture.dir("dev-topological"), &data_path).await.unwrap();
+    device_watcher::wait_for_device_with(&dev, |info| {
+        (info.topological_path == data_path).then_some(())
+    })
+    .await
+    .unwrap();
 
     // Make sure we can access the blob/data partitions within the FVM.
     fixture.check_fs_type("blob", VFS_TYPE_BLOBFS).await;
     fixture.check_fs_type("data", data_fs_type()).await;
 
+    let (file, server) = create_proxy::<fio::NodeMarker>().unwrap();
+    fixture
+        .dir("data")
+        .open(fio::OpenFlags::RIGHT_READABLE, 0, "foo", server)
+        .expect("open failed");
+    file.get_attr().await.expect("get_attr failed");
+
+    fixture.tear_down().await;
+}
+
+#[fuchsia::test]
+async fn pausing_block_watcher_ignores_devices() {
+    // The first disk has a blank data filesystem
+    let disk_vmo = fshost_test_fixture::disk_builder::DiskBuilder::new().build().await;
+
+    // The second disk has a formatted data filesystem with a test file inside it.
+    let mut disk_builder2 = fshost_test_fixture::disk_builder::DiskBuilder::new();
+    disk_builder2.format_data(DATA_FILESYSTEM_FORMAT);
+    let disk_vmo2 = disk_builder2.build().await;
+
+    let mut fixture = new_builder().build().await;
+    let pauser = fixture
+        .realm
+        .root
+        .connect_to_protocol_at_exposed_dir::<fshost::BlockWatcherMarker>()
+        .unwrap();
+    let dev = fixture.dir("dev-topological/class/block");
+
+    // A block device added when the block watcher is paused doesn't do anything.
+    assert_eq!(pauser.pause().await.unwrap(), zx::Status::OK.into_raw());
+    fixture.add_ramdisk(disk_vmo).await;
+    // Wait for the block device entry to appear in devfs before resuming.
+    device_watcher::wait_for_device_with(&dev, |info| {
+        info.topological_path.ends_with("ramdisk-0/block").then_some(())
+    })
+    .await
+    .unwrap();
+
+    // A block device added after the block watcher is resumed is processed.
+    assert_eq!(pauser.resume().await.unwrap(), zx::Status::OK.into_raw());
+    fixture.add_ramdisk(disk_vmo2).await;
+    fixture.check_fs_type("blob", VFS_TYPE_BLOBFS).await;
+    fixture.check_fs_type("data", data_fs_type()).await;
+    // Only the second disk we attached has a file inside. We use it as a proxy for testing that
+    // only the second one was processed.
     let (file, server) = create_proxy::<fio::NodeMarker>().unwrap();
     fixture
         .dir("data")

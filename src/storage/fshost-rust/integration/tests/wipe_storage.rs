@@ -7,13 +7,13 @@
 
 use {
     crate::{new_builder, DATA_FILESYSTEM_FORMAT},
-    device_watcher::recursive_wait_and_open_node,
     fidl::endpoints::{create_proxy, Proxy as _},
     fidl_fuchsia_fshost as fshost,
     fidl_fuchsia_hardware_block::BlockProxy,
-    fidl_fuchsia_hardware_block_partition::PartitionProxy,
+    fidl_fuchsia_hardware_block_partition::PartitionMarker,
     fidl_fuchsia_io as fio,
     fs_management::{filesystem::Filesystem, Blobfs},
+    fuchsia_component::client::connect_to_named_protocol_at_dir_root,
     fuchsia_zircon as zx,
     remote_block_device::{BlockClient, MutableBufferSlice, RemoteBlockClient},
 };
@@ -97,17 +97,23 @@ async fn blobfs_formatted() {
     builder.fshost().set_fvm_ramdisk().set_ramdisk_prefix("/nada/zip/zilch");
     builder.with_disk();
     let fixture = builder.build().await;
+    let dev = fixture.dir("dev-topological/class/block");
 
     // Mount Blobfs and write a blob.
     {
-        let blobfs_dev_path =
-            format!("{}/fvm/blobfs-p-1/block", fixture.ramdisk.as_ref().unwrap().get_path());
-        let blobfs_dev_node =
-            recursive_wait_and_open_node(&fixture.dir("dev-topological"), &blobfs_dev_path)
-                .await
-                .unwrap();
-        let blobfs = Filesystem::from_node(
-            blobfs_dev_node,
+        let block = device_watcher::wait_for_device_with(&dev, |info| {
+            info.topological_path.ends_with("/fvm/blobfs-p-1/block").then(|| {
+                connect_to_named_protocol_at_dir_root::<fidl_fuchsia_hardware_block::BlockMarker>(
+                    &dev,
+                    info.filename,
+                )
+                .unwrap()
+            })
+        })
+        .await
+        .unwrap();
+        let blobfs = Filesystem::from_channel(
+            block.into_channel().unwrap().into(),
             Blobfs {
                 verbose: false,
                 readonly: false,
@@ -115,11 +121,12 @@ async fn blobfs_formatted() {
                 ..Default::default()
             },
         )
+        .unwrap()
         .serve()
         .await
         .unwrap();
 
-        let blobfs_root = &blobfs.root();
+        let blobfs_root = blobfs.root();
         write_test_blob(blobfs_root).await;
         assert!(fuchsia_fs::directory::dir_contains(blobfs_root, TEST_BLOB_NAME).await.unwrap());
     }
@@ -149,17 +156,18 @@ async fn data_unformatted() {
     builder.fshost().set_fvm_ramdisk().set_ramdisk_prefix("/nada/zip/zilch");
     builder.with_disk().format_data(DATA_FILESYSTEM_FORMAT);
     let fixture = builder.build().await;
-
-    let data_dev_path =
-        format!("{}/fvm/data-p-2/block", fixture.ramdisk.as_ref().unwrap().get_path());
+    let dev = fixture.dir("dev-topological/class/block");
 
     let orig_instance_guid;
     {
-        let data_dev_node =
-            recursive_wait_and_open_node(&fixture.dir("dev-topological"), &data_dev_path)
-                .await
-                .unwrap();
-        let data_partition = PartitionProxy::from_channel(data_dev_node.into_channel().unwrap());
+        let data_partition = device_watcher::wait_for_device_with(&dev, |info| {
+            info.topological_path.ends_with("/fvm/data-p-2/block").then(|| {
+                connect_to_named_protocol_at_dir_root::<PartitionMarker>(&dev, info.filename)
+                    .unwrap()
+            })
+        })
+        .await
+        .unwrap();
         let (status, guid) = data_partition.get_instance_guid().await.unwrap();
         assert_eq!(zx::Status::from_raw(status), zx::Status::OK);
         orig_instance_guid = guid.unwrap();
@@ -178,10 +186,13 @@ async fn data_unformatted() {
     // TODO(fxbug.dev/112142): Due to a race between the block watcher and WipeStorage, we have to
     // wait for zxcrypt to be unsealed to ensure all child drivers of the FVM device are bound.
     if DATA_FILESYSTEM_FORMAT != "fxfs" {
-        let zxcrypt_dev_path = format!("{}/zxcrypt/unsealed/block", &data_dev_path);
-        recursive_wait_and_open_node(&fixture.dir("dev-topological"), &zxcrypt_dev_path)
-            .await
-            .unwrap();
+        device_watcher::wait_for_device_with(&dev, |info| {
+            info.topological_path
+                .ends_with("/fvm/data-p-2/block/zxcrypt/unsealed/block")
+                .then_some(())
+        })
+        .await
+        .unwrap();
     }
 
     // Invoke WipeStorage.
@@ -191,11 +202,13 @@ async fn data_unformatted() {
     admin.wipe_storage(blobfs_server).await.unwrap().expect("WipeStorage unexpectedly failed");
 
     // Ensure the data partition was assigned a new instance GUID.
-    let data_dev_node =
-        recursive_wait_and_open_node(&fixture.dir("dev-topological"), &data_dev_path)
-            .await
-            .unwrap();
-    let data_partition = PartitionProxy::from_channel(data_dev_node.into_channel().unwrap());
+    let data_partition = device_watcher::wait_for_device_with(&dev, |info| {
+        info.topological_path.ends_with("/fvm/data-p-2/block").then(|| {
+            connect_to_named_protocol_at_dir_root::<PartitionMarker>(&dev, info.filename).unwrap()
+        })
+    })
+    .await
+    .unwrap();
     let (status, guid) = data_partition.get_instance_guid().await.unwrap();
     assert_eq!(zx::Status::from_raw(status), zx::Status::OK);
     assert_ne!(guid.unwrap(), orig_instance_guid);

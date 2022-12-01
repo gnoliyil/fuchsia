@@ -260,7 +260,7 @@ impl DiskBuilder {
         self
     }
 
-    pub(crate) async fn build(self) -> zx::Vmo {
+    pub async fn build(self) -> zx::Vmo {
         let (dev, server) = create_proxy::<fio::DirectoryMarker>().unwrap();
         fdio::open(
             "/dev",

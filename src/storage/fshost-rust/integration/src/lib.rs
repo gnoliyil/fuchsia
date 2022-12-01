@@ -112,26 +112,18 @@ impl TestFixtureBuilder {
             .await
             .unwrap();
 
-        let mut fixture =
-            TestFixture { realm: builder.build().await.unwrap(), ramdisk: None, ramdisk_vmo: None };
+        let mut fixture = TestFixture {
+            realm: builder.build().await.unwrap(),
+            ramdisks: Vec::new(),
+            ramdisk_vmo: None,
+        };
 
         if let Some(disk) = self.disk {
             let vmo = disk.get_vmo().await;
             let vmo_clone =
                 vmo.create_child(zx::VmoChildOptions::SLICE, 0, vmo.get_size().unwrap()).unwrap();
 
-            let dev = fixture.dir("dev-topological");
-
-            recursive_wait_and_open_node(&dev, "sys/platform/00:00:2d/ramctl")
-                .await
-                .expect("recursive_wait_and_open_node failed");
-
-            let dev_fd =
-                fdio::create_fd(dev.into_channel().unwrap().into_zx_channel().into()).unwrap();
-
-            fixture.ramdisk = Some(
-                VmoRamdiskClientBuilder::new(vmo).dev_root(dev_fd).block_size(512).build().unwrap(),
-            );
+            fixture.add_ramdisk(vmo).await;
             fixture.ramdisk_vmo = Some(vmo_clone);
         }
 
@@ -141,7 +133,7 @@ impl TestFixtureBuilder {
 
 pub struct TestFixture {
     pub realm: RealmInstance,
-    pub ramdisk: Option<RamdiskClient>,
+    pub ramdisks: Vec<RamdiskClient>,
     pub ramdisk_vmo: Option<zx::Vmo>,
 }
 
@@ -174,5 +166,19 @@ impl TestFixture {
 
     pub fn ramdisk_vmo(&self) -> Option<&zx::Vmo> {
         self.ramdisk_vmo.as_ref()
+    }
+
+    pub async fn add_ramdisk(&mut self, vmo: zx::Vmo) {
+        let dev = self.dir("dev-topological");
+
+        recursive_wait_and_open_node(&dev, "sys/platform/00:00:2d/ramctl")
+            .await
+            .expect("recursive_wait_and_open_node failed");
+
+        let dev_fd = fdio::create_fd(dev.into_channel().unwrap().into_zx_channel().into()).unwrap();
+
+        let ramdisk =
+            VmoRamdiskClientBuilder::new(vmo).dev_root(dev_fd).block_size(512).build().unwrap();
+        self.ramdisks.push(ramdisk);
     }
 }

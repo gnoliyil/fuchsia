@@ -105,6 +105,7 @@ impl FshostBuilder {
             .add_route(
                 Route::new()
                     .capability(Capability::protocol::<ffshost::AdminMarker>())
+                    .capability(Capability::protocol::<ffshost::BlockWatcherMarker>())
                     .capability(Capability::directory("blob").rights(fio::RW_STAR_DIR))
                     .capability(Capability::directory("data").rights(fio::RW_STAR_DIR))
                     .capability(Capability::directory("tmp").rights(fio::RW_STAR_DIR))
