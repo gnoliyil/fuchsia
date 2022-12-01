@@ -20,9 +20,11 @@ namespace {
 class InspectServiceTest : public gtest::RealLoopFixture {
  public:
   InspectServiceTest()
-      : executor_(dispatcher()),
-        inspector_(),
+      : inspector_(),
+        executor_(dispatcher()),
         handler_(inspect::MakeTreeHandler(&inspector_, dispatcher())) {}
+
+  Inspector inspector_;
 
  protected:
   inspect::Node& root() { return inspector_.GetRoot(); }
@@ -33,25 +35,169 @@ class InspectServiceTest : public gtest::RealLoopFixture {
     return ret;
   }
 
-  void MakePrivateSnapshotHandler() {
+  fuchsia::inspect::TreePtr ConnectFrozenThenLive() {
+    handler_ = inspect::MakeTreeHandler(
+        &inspector_, dispatcher(),
+        inspect::TreeHandlerSettings{.snapshot_behavior = inspect::TreeServerSendPreference::Frozen(
+                                         inspect::TreeServerSendPreference::Type::Live)});
+
+    return Connect();
+  }
+
+  fuchsia::inspect::TreePtr ConnectFrozenThenDeepCopy() {
     handler_ = inspect::MakeTreeHandler(
         &inspector_, dispatcher(),
         inspect::TreeHandlerSettings{.snapshot_behavior = inspect::TreeServerSendPreference::Frozen(
                                          inspect::TreeServerSendPreference::Type::DeepCopy)});
+
+    return Connect();
+  }
+
+  fuchsia::inspect::TreePtr ConnectPrivate() {
+    handler_ = inspect::MakeTreeHandler(
+        &inspector_, dispatcher(),
+        inspect::TreeHandlerSettings{.snapshot_behavior =
+                                         inspect::TreeServerSendPreference::DeepCopy()});
+
+    return Connect();
+  }
+
+  fuchsia::inspect::TreePtr ConnectLive() {
+    handler_ = inspect::MakeTreeHandler(
+        &inspector_, dispatcher(),
+        inspect::TreeHandlerSettings{.snapshot_behavior =
+                                         inspect::TreeServerSendPreference::Live()});
+
+    return Connect();
+  }
+
+  void MakeHandler(inspect::TreeHandlerSettings settings) {
+    handler_ = inspect::MakeTreeHandler(&inspector_, dispatcher(), settings);
   }
 
   async::Executor executor_;
 
  private:
-  Inspector inspector_;
   fidl::InterfaceRequestHandler<fuchsia::inspect::Tree> handler_;
 };
+
+// The failure tests below are not perfect. They don't make any assertions
+// about the the type fallback behavior that is specified. This is because
+// triggering the failure of the primary behavior also causes the failure
+// of DeepCopy fallback behavior, meaning that all the tests bottom out in
+// Live duplicates (Live duplicate is the only behavior that never fails).
+// Still, the tests demonstrate that even on failure, data is served via
+// fallback.
+
+TEST_F(InspectServiceTest, SingleTreeFailLive) {
+  auto val = root().CreateInt("val", 1);
+
+  auto ptr = ConnectLive();
+  ptr.set_error_handler(
+      [](zx_status_t status) { ASSERT_TRUE(false) << "Error detected on connection"; });
+
+  fpromise::result<fuchsia::inspect::TreeContent> content;
+
+  inspector_.AtomicUpdate([&](inspect::Node& n) {
+    ptr->GetContent([&](fuchsia::inspect::TreeContent returned_content) {
+      content = fpromise::ok(std::move(returned_content));
+    });
+
+    RunLoopUntil([&] { return !!content; });
+  });
+
+  auto hierarchy = inspect::ReadFromVmo(std::move(content.take_value().buffer().vmo));
+  ASSERT_TRUE(hierarchy.is_ok());
+
+  const inspect::IntPropertyValue* val_prop =
+      hierarchy.value().node().get_property<inspect::IntPropertyValue>("val");
+  ASSERT_NE(nullptr, val_prop);
+  EXPECT_EQ(1, val_prop->value());
+}
+
+TEST_F(InspectServiceTest, SingleTreeFailDeepCopy) {
+  auto val = root().CreateInt("val", 1);
+
+  auto ptr = ConnectPrivate();
+  ptr.set_error_handler(
+      [](zx_status_t status) { ASSERT_TRUE(false) << "Error detected on connection"; });
+
+  fpromise::result<fuchsia::inspect::TreeContent> content;
+
+  inspector_.AtomicUpdate([&](inspect::Node& n) {
+    ptr->GetContent([&](fuchsia::inspect::TreeContent returned_content) {
+      content = fpromise::ok(std::move(returned_content));
+    });
+
+    RunLoopUntil([&] { return !!content; });
+  });
+
+  auto hierarchy = inspect::ReadFromVmo(std::move(content.take_value().buffer().vmo));
+  ASSERT_TRUE(hierarchy.is_ok());
+
+  const inspect::IntPropertyValue* val_prop =
+      hierarchy.value().node().get_property<inspect::IntPropertyValue>("val");
+  ASSERT_NE(nullptr, val_prop);
+  EXPECT_EQ(1, val_prop->value());
+}
+
+TEST_F(InspectServiceTest, SingleTreeFailFrozenThenDeep) {
+  auto val = root().CreateInt("val", 1);
+
+  auto ptr = ConnectFrozenThenDeepCopy();
+  ptr.set_error_handler(
+      [](zx_status_t status) { ASSERT_TRUE(false) << "Error detected on connection"; });
+
+  fpromise::result<fuchsia::inspect::TreeContent> content;
+
+  inspector_.AtomicUpdate([&](inspect::Node& n) {
+    ptr->GetContent([&](fuchsia::inspect::TreeContent returned_content) {
+      content = fpromise::ok(std::move(returned_content));
+    });
+
+    RunLoopUntil([&] { return !!content; });
+  });
+
+  auto hierarchy = inspect::ReadFromVmo(std::move(content.take_value().buffer().vmo));
+  ASSERT_TRUE(hierarchy.is_ok());
+
+  const inspect::IntPropertyValue* val_prop =
+      hierarchy.value().node().get_property<inspect::IntPropertyValue>("val");
+  ASSERT_NE(nullptr, val_prop);
+  EXPECT_EQ(1, val_prop->value());
+}
+
+TEST_F(InspectServiceTest, SingleTreeFailFrozenThenLive) {
+  auto val = root().CreateInt("val", 1);
+
+  auto ptr = ConnectFrozenThenLive();
+  ptr.set_error_handler(
+      [](zx_status_t status) { ASSERT_TRUE(false) << "Error detected on connection"; });
+
+  fpromise::result<fuchsia::inspect::TreeContent> content;
+
+  inspector_.AtomicUpdate([&](inspect::Node& n) {
+    ptr->GetContent([&](fuchsia::inspect::TreeContent returned_content) {
+      content = fpromise::ok(std::move(returned_content));
+    });
+
+    RunLoopUntil([&] { return !!content; });
+  });
+
+  auto hierarchy = inspect::ReadFromVmo(std::move(content.take_value().buffer().vmo));
+  ASSERT_TRUE(hierarchy.is_ok());
+
+  const inspect::IntPropertyValue* val_prop =
+      hierarchy.value().node().get_property<inspect::IntPropertyValue>("val");
+  ASSERT_NE(nullptr, val_prop);
+  EXPECT_EQ(1, val_prop->value());
+}
 
 TEST_F(InspectServiceTest, SingleTree) {
   inspect::ValueList values;
   root().CreateInt("val", 1, &values);
 
-  auto ptr = Connect();
+  auto ptr = ConnectFrozenThenLive();
   ptr.set_error_handler(
       [](zx_status_t status) { ASSERT_TRUE(false) << "Error detected on connection"; });
 
@@ -74,7 +220,7 @@ TEST_F(InspectServiceTest, SingleTree) {
 TEST_F(InspectServiceTest, SingleTreeGetContentCoW) {
   auto val = root().CreateInt("val", 1);
 
-  auto ptr = Connect();
+  auto ptr = ConnectFrozenThenLive();
   ptr.set_error_handler(
       [](zx_status_t status) { ASSERT_TRUE(false) << "Error detected on connection"; });
 
@@ -101,8 +247,7 @@ TEST_F(InspectServiceTest, SingleTreeGetContentCoW) {
 TEST_F(InspectServiceTest, SingleTreeGetContentPrivate) {
   auto val = root().CreateInt("val", 1);
 
-  MakePrivateSnapshotHandler();
-  auto ptr = Connect();
+  auto ptr = ConnectPrivate();
   ptr.set_error_handler(
       [](zx_status_t status) { ASSERT_TRUE(false) << "Error detected on connection"; });
 
@@ -132,7 +277,7 @@ TEST_F(InspectServiceTest, ListChildNames) {
   root().CreateLazyNode(
       "b", []() { return fpromise::make_result_promise<Inspector>(fpromise::error()); }, &values);
 
-  auto ptr = Connect();
+  auto ptr = ConnectFrozenThenLive();
   ptr.set_error_handler(
       [](zx_status_t status) { ASSERT_TRUE(false) << "Error detected on connection"; });
 
@@ -168,7 +313,7 @@ TEST_F(InspectServiceTest, OpenChild) {
       "invalid", [] { return fpromise::make_result_promise<Inspector>(fpromise::error()); },
       &values);
 
-  auto ptr = Connect();
+  auto ptr = ConnectFrozenThenLive();
   ptr.set_error_handler(
       [](zx_status_t status) { ASSERT_TRUE(false) << "Error detected on connection"; });
 
