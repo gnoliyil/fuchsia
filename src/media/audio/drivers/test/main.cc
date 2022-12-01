@@ -8,7 +8,8 @@
 
 #include <set>
 
-#include "gtest/gtest.h"
+#include <gtest/gtest.h>
+
 #include "src/lib/fsl/io/device_watcher.h"
 #include "src/lib/fxl/command_line.h"
 #include "src/lib/fxl/test/test_settings.h"

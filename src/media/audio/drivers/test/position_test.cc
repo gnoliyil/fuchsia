@@ -12,7 +12,7 @@
 #include <algorithm>
 #include <cstring>
 
-#include "gtest/gtest.h"
+#include <gtest/gtest.h>
 
 namespace media::audio::drivers::test {
 

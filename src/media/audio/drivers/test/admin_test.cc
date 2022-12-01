@@ -13,7 +13,7 @@
 #include <cstring>
 #include <optional>
 
-#include "gtest/gtest.h"
+#include <gtest/gtest.h>
 
 namespace media::audio::drivers::test {
 
@@ -271,24 +271,38 @@ void AdminTest::ExpectRingBufferPropsMatchesDelayInfo() {
   }
 
   if (ring_buffer_props_->has_external_delay()) {
-    ASSERT_TRUE(delay_info_->has_external_delay())
-        << "GetProperties returned external_delay, so WatchDelayInfo external_delay is required";
-    EXPECT_EQ(ring_buffer_props_->external_delay(), delay_info_->external_delay())
-        << "WatchDelayInfo `external_delay` must match GetProperties `external_delay`";
+    if (delay_info_->has_external_delay()) {
+      EXPECT_EQ(ring_buffer_props_->external_delay(), delay_info_->external_delay())
+          << "WatchDelayInfo `external_delay` must match GetProperties `external_delay`";
+    } else {
+      EXPECT_EQ(ring_buffer_props_->external_delay(), 0ll)
+          << "GetProperties returned non-zero `external_delay`, so WatchDelayInfo `external_delay`"
+          << " is required";
+    }
   }
 
   if (ring_buffer_props_->has_fifo_depth()) {
     ASSERT_TRUE(delay_info_->has_internal_delay())
-        << "GetProperties returned fifo_depth, so WatchDelayInfo internal_delay is required";
+        << "GetProperties returned `fifo_depth`, so WatchDelayInfo `internal_delay` is required";
+
+    const auto kOneFrameInNs = (ZX_SEC(1) + pcm_format().frame_rate - 1) / pcm_format().frame_rate;
 
     // nsec = bytes * nsec/sec * sec/frame * frames/byte
-    int64_t fifo_delay_nsec =
-        ring_buffer_props_->fifo_depth() * ZX_SEC(1) / frame_size_ / pcm_format().frame_rate;
+    int64_t fifo_delay_ns =
+        ring_buffer_props_->fifo_depth() * ZX_SEC(1) / pcm_format().frame_rate / frame_size_;
 
-    // This calculation could differ by one, depending on how the driver floors/rounds/ceilings.
-    EXPECT_NEAR(static_cast<double>(delay_info_->internal_delay()),
-                static_cast<double>(fifo_delay_nsec), 1)
-        << "WatchDelayInfo `internal_delay` must match GetProperties `fifo_depth`";
+    // This calculation could differ slightly, depending on how a driver floors/rounds/ceilings.
+    // Accurate internal delays can exceed a size-based calculation by nearly a frame duration,
+    // depending on how FIFO depth aligns with frame size.
+
+    std::ostringstream oss;
+    oss << "WatchDelayInfo `internal_delay` (" << delay_info_->internal_delay()
+        << ") must equal (or exceed by less than a frame) GetProperties `fifo_depth` ("
+        << fifo_delay_ns << ").  fifo_depth " << ring_buffer_props_->fifo_depth() << ", frame_size "
+        << frame_size_ << ", frame_rate " << pcm_format().frame_rate
+        << " (1 frame = " << kOneFrameInNs << " nsec)";
+    EXPECT_GE(delay_info_->internal_delay(), fifo_delay_ns) << oss.str();
+    EXPECT_LT(delay_info_->internal_delay(), fifo_delay_ns + kOneFrameInNs) << oss.str();
   }
 }
 

@@ -12,7 +12,8 @@
 #include <cmath>
 #include <utility>
 
-#include "gtest/gtest.h"
+#include <gtest/gtest.h>
+
 #include "src/media/audio/audio_core/testing/integration/hermetic_audio_test.h"
 #include "src/media/audio/lib/clock/clone_mono.h"
 #include "src/media/audio/lib/clock/testing/clock_test.h"

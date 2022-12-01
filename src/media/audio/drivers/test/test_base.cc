@@ -18,8 +18,8 @@
 #include <string>
 
 #include <fbl/unique_fd.h>
+#include <gtest/gtest.h>
 
-#include "gtest/gtest.h"
 #include "src/media/audio/drivers/test/audio_device_enumerator_stub.h"
 
 namespace media::audio::drivers::test {
