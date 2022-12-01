@@ -15,14 +15,14 @@ import os
 import pathlib
 import shutil
 import json
-from typing import Any, Dict, List, Optional, Set, TextIO, Tuple
+from typing import Any, Dict, List, ItemsView, Optional, Set, TextIO, Tuple
 
 import serialization
 from serialization import json_dump, json_load, serialize_json
 
 from .image_assembly_config import ImageAssemblyConfig, KernelInfo
 from .common import FileEntry, FilePath, fast_copy
-from .package_manifest import BlobEntry, PackageManifest
+from .package_manifest import BlobEntry, PackageManifest, SubpackageEntry
 
 __all__ = [
     "AssemblyInputBundle", "AIBCreator", "ConfigDataEntries", "DriverDetails"
@@ -36,6 +36,7 @@ PackageManifestList = List[FilePath]
 PackageName = str
 Merkle = str
 BlobList = List[Tuple[Merkle, FilePath]]
+SubpackageManifests = Dict[Merkle, FilePath]
 ConfigDataEntries = Dict[PackageName, Set[FileEntry]]
 
 
@@ -71,7 +72,7 @@ class AssemblyInputBundle(ImageAssemblyConfig):
 
         ./
         assembly_config.json
-        package_manifests/
+        packages/
             base/
                 <package name>
             base_drivers/
@@ -82,6 +83,8 @@ class AssemblyInputBundle(ImageAssemblyConfig):
                 <package name>
         blobs/
             <merkle>
+        subpackages/
+            <merkle>
         bootfs/
             path/to/file/in/bootfs
         config_data/
@@ -91,13 +94,28 @@ class AssemblyInputBundle(ImageAssemblyConfig):
             kernel.zbi
             multiboot.bin
 
+    Files matching the patterns `packages/*/<package name>` and
+    `subpackages/<merkle>` are JSON representations of the
+    `PackageManifest` type (see `package_manifest.py`). (The `<merkle>` in
+    `subpackages/` is the merkle of the subpackage's metafar.) A named package
+    that is also referenced as a subpackage will have a copy of its manifest in
+    both directories. (This is an intentional duplication to allow the
+    simplification of the creation and use of the AIBs.)
+
+    Each `PackageManifest` contains a `blobs` list of `BlobEntry` and an
+    optional `subpackages` list of `SubpackageEntry`. The `source_path` of a
+    `BlobEntry` references a file containing the blob bytes, in the `blobs/`
+    directory. The `manifest_path` of a `SubpackageEntry` references another
+    `PackageManifest` file in `subpackages/<merkle>`.
+
     assembly_config.json schema::
 
         {
             "base": [ "package1", "package2" ],
             "cache": [ "package3", ... ],
-            "system": [ "packageN", ... ],
-            "bootfs_packages": [ "packageB", ... ],
+            "base_drivers": [ "packageD1", ... ],
+            "system": [ "packageS1", ... ],
+            "bootfs_packages": [ "packageB1", ... ],
             "bootfs_files": [
                 { "destination": "path/in/bootfs", source: "path/in/layout" },
                 ...
@@ -110,6 +128,7 @@ class AssemblyInputBundle(ImageAssemblyConfig):
                 ],
                 ...
             },
+            "blobs": [ "blobs/<hash1>", "blobs/<hash2>", ... ],
             "kernel": {
                 "path": "kernel/kernel.zbi",
                 "args": [ "arg1", "arg2", ... ],
@@ -281,6 +300,10 @@ class AIBCreator:
         # A set containing all the unique packageUrls seen by the AIBCreator instance
         self.package_urls: Set[str] = set()
 
+        # A set containing the unique subpackage merkles, used to keep track of
+        # which subpackages have already been copied.
+        self.subpackages: Set[Merkle] = set()
+
     def build(self) -> Tuple[AssemblyInputBundle, FilePath, DepSet]:
         """
         Copy all the artifacts from the ImageAssemblyConfig into an AssemblyInputBundle that is in
@@ -292,10 +315,11 @@ class AIBCreator:
             - the return value contains a list of all files read/written by the
             copying operation (ie. depfile contents)
         """
-        # Remove the existing <outdir>, and recreate it
+        # Remove the existing <outdir>, and recreate it and the "subpackages"
+        # subdirectory.
         if os.path.exists(self.outdir):
             shutil.rmtree(self.outdir)
-        os.makedirs(self.outdir)
+        os.makedirs(os.path.join(self.outdir, "subpackages"))
 
         # Track all files we read
         deps: DepSet = set()
@@ -481,7 +505,7 @@ class AIBCreator:
     ) -> Tuple[PackageManifestList, BlobList, DepSet]:
         """Copy package manifests to the assembly bundle outdir, returning the set of blobs
         that need to be copied as well (so that they blob copying can be done in a
-        single, deduplicated step.)
+        single, deduplicated step).
         """
 
         def validate_unique_packages(package_url, package_path):
@@ -514,7 +538,7 @@ class AIBCreator:
 
         # Create the directory for the packages, now that we know it will exist
         packages_dir = os.path.join("packages", set_name)
-        os.makedirs(os.path.join(self.outdir, packages_dir), exist_ok=True)
+        os.makedirs(os.path.join(self.outdir, packages_dir))
 
         # Open each manifest, record the blobs, and then copy it to its destination,
         # sorted by path to the package manifest.
@@ -544,45 +568,92 @@ class AIBCreator:
             if "config-data" == package_name:
                 continue
 
-            # Instead of copying the package manifest itself, the contents of the
-            # manifest needs to be rewritten to reflect the new location of the
-            # blobs within it.
-            new_manifest = PackageManifest(manifest.package, [])
-            new_manifest.repository = manifest.repository
-
-            # For each blob in the manifest:
-            #  1) add it to set of all blobs
-            #  2) add it to the PackageManifest that will be written to the Assembly
-            #     Input Bundle, using the correct source path for within the
-            #     Assembly Input Bundle.
-            for blob in manifest.blobs:
-                source = blob.source_path
-                if source is None:
-                    raise ValueError(
-                        f"Found a blob with no source path: {package_name}::{blob.path} in {package_manifest_path}"
-                    )
-                merkle = blob.merkle
-                blobs.append((merkle, source))
-
-                blob_destination = os.path.relpath(
-                    _make_internal_blob_path(blob.merkle), packages_dir)
-                new_manifest.blobs.append(
-                    BlobEntry(
-                        blob.path,
-                        blob.merkle,
-                        blob.size,
-                        source_path=blob_destination))
-            new_manifest.set_blob_sources_relative(True)
-
-            package_manifest_destination = os.path.join(
-                self.outdir, rebased_destination)
-            with open(package_manifest_destination, 'w') as new_manifest_file:
-                json_dump(new_manifest, new_manifest_file)
+            self._copy_package(manifest, rebased_destination, blobs, deps)
 
             # Track the package manifest in our set of packages
             packages.append(rebased_destination)
 
         return (packages, blobs, deps)
+
+    def _copy_package(
+        self,
+        manifest: PackageManifest,
+        rebased_destination: FilePath,
+        blobs: BlobList,
+        deps: DepSet,
+    ):
+        """Copy a package manifest to the assembly bundle outdir, adding its
+        blobs to the set of blobs that need to be copied as well. If the package
+        has subpackages, recursively copy those as well, skipping any
+        subpackages that have already been copied.
+        """
+
+        # Instead of copying the package manifest itself, the contents of the
+        # manifest needs to be rewritten to reflect the new location of the
+        # blobs within it.
+        new_manifest = PackageManifest(manifest.package, [])
+        new_manifest.repository = manifest.repository
+        new_manifest.set_paths_relative(True)
+
+        # For each blob in the manifest:
+        #  1) add it to set of all blobs
+        #  2) add it to the PackageManifest that will be written to the Assembly
+        #     Input Bundle, using the correct source path for within the
+        #     Assembly Input Bundle.
+        for blob in manifest.blobs:
+            source = blob.source_path
+            if source is None:
+                raise ValueError(
+                    f"Found a blob with no source path: {package_name}::{blob.path} in {package_manifest_path}"
+                )
+            blobs.append((blob.merkle, source))
+
+            blob_destination = _make_internal_blob_path(blob.merkle)
+            relative_blob_destination = os.path.relpath(
+                blob_destination, os.path.dirname(rebased_destination))
+            new_manifest.blobs.append(
+                BlobEntry(
+                    blob.path,
+                    blob.merkle,
+                    blob.size,
+                    source_path=relative_blob_destination))
+
+        for subpackage in manifest.subpackages:
+            # Copy the SubpackageEntry to the new_manifest, with the
+            # updated `subpackages/<merkle>` path
+            subpackage_destination = _make_internal_subpackage_path(
+                subpackage.merkle)
+            relative_subpackage_destination = os.path.relpath(
+                subpackage_destination, os.path.dirname(rebased_destination))
+            new_manifest.subpackages.append(
+                SubpackageEntry(
+                    subpackage.name,
+                    subpackage.merkle,
+                    manifest_path=relative_subpackage_destination))
+
+            if subpackage.merkle not in self.subpackages:
+                # This is a new subpackage. Track it and copy it and any of its
+                # subpackages, recursively.
+                self.subpackages.add(subpackage.merkle)
+
+                with open(subpackage.manifest_path, 'r') as file:
+                    try:
+                        subpackage_manifest = json_load(PackageManifest, file)
+                    except Exception as exc:
+                        raise PackageManifestParsingException(
+                            f"loading PackageManifest from {subpackage.manifest_path}"
+                        ) from exc
+
+                    # Track in deps, since it was opened.
+                    deps.add(subpackage.manifest_path)
+
+                self._copy_package(
+                    subpackage_manifest, subpackage_destination, blobs, deps)
+
+        package_manifest_destination = os.path.join(
+            self.outdir, rebased_destination)
+        with open(package_manifest_destination, 'w') as new_manifest_file:
+            json_dump(new_manifest, new_manifest_file)
 
     def _copy_blobs(
             self, blobs: Dict[Merkle,
@@ -693,3 +764,10 @@ def _make_internal_blob_path(merkle: str) -> FilePath:
     AssemblyInputBundle's folder hierarchy.
     """
     return os.path.join("blobs", merkle)
+
+
+def _make_internal_subpackage_path(merkle: str) -> FilePath:
+    """Common function to compute the destination path to a subpackage within
+    the AssemblyInputBundle's folder hierarchy.
+    """
+    return os.path.join("subpackages", merkle)

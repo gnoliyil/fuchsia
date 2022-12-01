@@ -71,7 +71,7 @@ async fn resolve_relative_impl(
     context: &fpkg::ResolutionContext,
     dir: fidl::endpoints::ServerEnd<fio::DirectoryMarker>,
     pkg_cache: &pkg::cache::Client,
-    base_package_index: &pkg::BasePackageIndex,
+    _base_package_index: &pkg::BasePackageIndex,
 ) -> Result<pkg::ResolutionContext, ResolveWithContextError> {
     let context: pkg::ResolutionContext = context.try_into()?;
     let super_blob = if let Some(blob) = context.blob_id() {
@@ -97,17 +97,11 @@ async fn resolve_relative_impl(
         .await
         .map_err(ResolveWithContextError::MissingSubpackage)?;
 
-    // If the superpackage is in base, the subpackage must also be in base.
-    // Note that if the superpackage is _not_ in base, it may still depend on
-    // a subpackage in base. For example, if two superpackages include the same
-    // subpackage, but one superpackage is in base, and the other is not, the
-    // subpackage must be added to base, so it can be resolved from either
-    // superpackage.
-    if base_package_index.contains_package(super_blob)
-        && !base_package_index.contains_package(&subpackage)
-    {
-        return Err(ResolveWithContextError::PackageSetMismatch);
-    }
+    // The subpackages are implicitly in the same package set as their
+    // superpackage. But like blobs, may be present in the system due to
+    // different packages in different package sets.  They inherit their package
+    // set membership from their superpackage.
+
     let () = pkg_dir.reopen(dir).map_err(ResolveWithContextError::Reopen)?;
     Ok(subpackage.into())
 }
@@ -129,11 +123,6 @@ enum ResolveWithContextError {
     #[error("the relative url is not a subpackage of the superpackage indicated by the context")]
     NotASubpackage,
 
-    #[error(
-        "if either the superpackage or subpackage is a base package, then so must the other be"
-    )]
-    PackageSetMismatch,
-
     #[error("the subpackage was not cached")]
     MissingSubpackage(#[source] pkg::cache::GetAlreadyCachedError),
 
@@ -150,7 +139,6 @@ impl ResolveWithContextError {
             MissingSuperpackage(_) => pkg::ResolveError::Internal,
             SubpackageManifest(_) => pkg::ResolveError::Io,
             NotASubpackage => pkg::ResolveError::PackageNotFound,
-            PackageSetMismatch => pkg::ResolveError::Internal,
             MissingSubpackage(_) => pkg::ResolveError::Internal,
             Reopen(_) => pkg::ResolveError::Internal,
         }

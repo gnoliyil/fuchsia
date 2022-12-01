@@ -9,7 +9,7 @@ import tempfile
 from typing import List, Optional
 import unittest
 
-from assembly import AssemblyInputBundle, AIBCreator, BlobEntry
+from assembly import AssemblyInputBundle, AIBCreator, BlobEntry, SubpackageEntry
 from assembly import FileEntry, FilePath, PackageManifest, PackageMetaData
 from assembly.assembly_input_bundle import DriverDetails
 import assembly
@@ -42,6 +42,13 @@ raw_package_manifest_json = """{
         }
     ],
     "version": "1",
+    "subpackages": [
+        {
+            "name": "my_subpackage",
+            "merkle": "23456789abcdef0123456789ABCDEF0123456789abcdef0123456789ABCDEF01",
+            "manifest_path": "subpackages/15ec7bf0b50732b49f8228e07d24365338f9e3ab994b00af08e5a3bffe55fd8b"
+        }
+    ],
     "repository": "some_repo"
 }"""
 
@@ -81,7 +88,15 @@ class PackageManifestTest(unittest.TestCase):
                         "15ec7bf0b50732b49f8228e07d24365338f9e3ab994b00af08e5a3bffe55fd8b",
                         size=0,
                         source_path="source/path/to/an/empty/file"),
-                ], "1", None, "some_repo"))
+                ], "1", None, [
+                    SubpackageEntry(
+                        name="my_subpackage",
+                        merkle=
+                        "23456789abcdef0123456789ABCDEF0123456789abcdef0123456789ABCDEF01",
+                        manifest_path=
+                        "subpackages/15ec7bf0b50732b49f8228e07d24365338f9e3ab994b00af08e5a3bffe55fd8b"
+                    ),
+                ], "some_repo"))
 
     def test_serialize_json(self):
         manifest = PackageManifest(
@@ -104,7 +119,15 @@ class PackageManifestTest(unittest.TestCase):
                     "15ec7bf0b50732b49f8228e07d24365338f9e3ab994b00af08e5a3bffe55fd8b",
                     size=0,
                     source_path="source/path/to/an/empty/file"),
-            ], "1", None, "some_repo")
+            ], "1", None, [
+                SubpackageEntry(
+                    name="my_subpackage",
+                    merkle=
+                    "23456789abcdef0123456789ABCDEF0123456789abcdef0123456789ABCDEF01",
+                    manifest_path=
+                    "subpackages/15ec7bf0b50732b49f8228e07d24365338f9e3ab994b00af08e5a3bffe55fd8b"
+                ),
+            ], "some_repo")
 
         serialized_json = serialization.json_dumps(manifest, indent=4)
         self.maxDiff = None

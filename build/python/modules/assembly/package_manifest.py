@@ -2,11 +2,11 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 from serialization import serialize_fields_as
 
-__all__ = ['PackageManifest', 'PackageMetaData', 'BlobEntry']
+__all__ = ['PackageManifest', 'PackageMetaData', 'BlobEntry', 'SubpackageEntry']
 
 from .common import FilePath
 
@@ -73,15 +73,31 @@ class BlobEntry:
 
 
 @dataclass
+class SubpackageEntry:
+    """A subpackage dependency that is directly referenced by the package.
+
+    name - The parent-package-scoped subpackage name
+    merkle - The subpackage's package hash
+    manifest_path - The filesystem path to the subpackage PackageManifest
+    """
+    name: str
+    merkle: str
+    manifest_path: FilePath
+
+
+@dataclass
 class PackageManifest:
     """The output manifest for a Fuchsia package."""
     package: PackageMetaData
     blobs: List[BlobEntry]
     version: str = "1"
+    # TODO(fxbug.dev/114780): Change this to `paths_relative`, because it
+    # applies to both blob source and subpackage manifest.
     blob_sources_relative: Optional[str] = None
+    subpackages: List[SubpackageEntry] = field(default_factory=list)
     repository: Optional[str] = None
 
-    def set_blob_sources_relative(self, relative_to_file: bool):
+    def set_paths_relative(self, relative_to_file: bool):
         self.blob_sources_relative = "file" if relative_to_file else "working_dir"
 
     def blobs_by_path(self) -> Dict[FilePath, BlobEntry]:

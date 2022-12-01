@@ -77,12 +77,8 @@ impl<'de> Deserialize<'de> for SubpackagesBuildManifestV0 {
         struct Helper {
             #[serde(flatten)]
             helper_kind: HelperKind,
-
             merkle_file: Utf8PathBuf,
-
-            // TODO(fxrev.dev/755942): remove Option<> after landing the product
-            // assembly changes in the CL that immediately follows this one.
-            package_manifest_file: Option<Utf8PathBuf>,
+            package_manifest_file: Utf8PathBuf,
         }
 
         #[derive(Deserialize)]
@@ -106,11 +102,7 @@ impl<'de> Deserialize<'de> for SubpackagesBuildManifestV0 {
             entries.push(SubpackagesBuildManifestEntry {
                 kind,
                 merkle_file,
-                // TODO(fxrev.dev/755942): remove Option<> after landing the
-                // product assembly changes in the CL that immediately follows
-                // this one.
-                package_manifest_file: package_manifest_file
-                    .unwrap_or_else(|| Utf8PathBuf::from("tbd_subpackage/package_manifest.json")),
+                package_manifest_file,
             });
         }
 

@@ -332,11 +332,6 @@ template("fuchsia_package") {
         meta_subpackages = ":$meta_subpackages_target"
       }
       metadata = {
-        # TODO(fxbug.dev/113190): There should be a metadata barrier on
-        # package_manifests, to stop the subpackages from being published as
-        # "real" packages, but to do so requires adding the packages to the
-        # build output (and/or product image) based on the parent package's
-        # metadata.
         if (defined(invoker.metadata)) {
           forward_variables_from(invoker.metadata, "*")
         }

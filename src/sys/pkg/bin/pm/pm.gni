@@ -216,14 +216,6 @@ template("pm_build") {
         forward_variables_from(invoker.metadata, "*")
       }
       package_barrier = [ ":$metadata_target_name" ]
-
-      # TODO(fxrev.dev/755942): When product assembly automatically assembles
-      # subpackages (whether they are named or anonymous) in the product,
-      # remove the next 3 lines so `invoker.meta_subpackages` are NOT, by
-      # default, included as named top-level packages.
-      if (defined(invoker.meta_subpackages)) {
-        package_barrier += [ invoker.meta_subpackages ]
-      }
     }
     deps += [ ":$metadata_target_name" ]
 

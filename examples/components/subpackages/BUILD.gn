@@ -49,12 +49,21 @@ fuchsia_package_with_default_component("echo_server") {
   deps = [ "//examples/components/routing/rust/echo_server:bin" ]
 }
 
+fuchsia_package_with_default_component("echo_client_with_subpackaged_server") {
+  manifest = "meta/echo_client_with_subpackaged_server.cml"
+  deps = [ "//examples/components/routing/rust/echo_client:bin" ]
+  subpackages = [ ":echo_server" ]
+}
+
 # Run with `fx test subpackage-examples`.
 fuchsia_test_package("package-with-subs") {
   package_name = "subpackage-examples"
   test_components = [ ":parent-component" ]
 
-  subpackages = [ ":echo_client" ]
+  subpackages = [
+    ":echo_client",
+    ":echo_client_with_subpackaged_server",
+  ]
   renameable_subpackages = [
     {
       name = "my-echo-server"

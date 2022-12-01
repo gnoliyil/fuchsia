@@ -35,3 +35,11 @@ Run the tests for all languages using the `subpackage-examples` package.
 ```bash
 $ fx test subpackage-examples
 ```
+
+When successfully executed, the test output should include something similar to
+the following:
+
+```
+[00028.249197][echo_client] INFO: Server response: Hello Fuchsia!
+[00028.249630][echo_client] INFO: Server response: Hello subpackaged server!
+```

@@ -235,39 +235,6 @@ async fn base_superpackage_base_subpackage_succeeds() {
 }
 
 #[fuchsia::test]
-async fn base_superpackage_non_base_subpackage_fails() {
-    let subpackage = PackageBuilder::new("subpackage")
-        .add_resource_at("subpackage-blob", "subpackage-blob-contents".as_bytes())
-        .build()
-        .await
-        .unwrap();
-    let superpackage = PackageBuilder::new("superpackage")
-        .add_subpackage("my-subpackage", &subpackage)
-        .build()
-        .await
-        .unwrap();
-    let system_image_package =
-        SystemImageBuilder::new().static_packages(&[&superpackage]).build().await;
-    let env = TestEnvBuilder::new()
-        // Still write the subpackage to blobfs, resolve should fail due to validation, not because
-        // the blobs are missing.
-        .system_image_and_extra_packages(&system_image_package, &[&superpackage, &subpackage])
-        .build()
-        .await;
-    let (_, context) = env
-        .resolve_package("fuchsia-pkg://fuchsia.com/superpackage")
-        .await
-        .expect("package to resolve without error");
-
-    assert_matches!(
-        env.resolve_with_context("my-subpackage", context).await,
-        Err(fpkg::ResolveError::Internal)
-    );
-
-    env.stop().await;
-}
-
-#[fuchsia::test]
 async fn non_base_superpackage_base_subpackage_succeeds() {
     let subpackage = PackageBuilder::new("subpackage")
         .add_resource_at("subpackage-blob", "subpackage-blob-contents".as_bytes())

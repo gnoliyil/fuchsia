@@ -217,15 +217,8 @@ def intersect_bundles(args: argparse.Namespace) -> None:
 def find_blob(args: argparse.Namespace) -> None:
     bundle = AssemblyInputBundle.json_load(args.bundle_config)
     bundle_dir = os.path.dirname(args.bundle_config.name)
-    found_at: List[Tuple[FilePath, FilePath]] = []
-    for pkg_set in [bundle.base, bundle.cache, bundle.system]:
-        for pkg_manifest_path in pkg_set:
-            with open(os.path.join(bundle_dir, pkg_manifest_path),
-                      'r') as pkg_manifest_file:
-                manifest = json_load(PackageManifest, pkg_manifest_file)
-                for blob in manifest.blobs:
-                    if blob.merkle == args.blob:
-                        found_at.append((pkg_manifest_path, blob.path))
+    manifests: List[FilePath] = [*bundle.base, *bundle.cache, *bundle.system]
+    found_at = find_blob_in_manifests(args.blob, bundle_dir, manifests)
     if found_at:
         pkg_header = "Package"
         path_header = "Path"
@@ -239,6 +232,40 @@ def find_blob(args: argparse.Namespace) -> None:
         print("=" * len(header))
         for pkg, path in found_at:
             print(formatter.format(pkg, path))
+
+
+def find_blob_in_manifests(
+        blob_to_find: str, bundle_dir: str,
+        manifests_to_search: List[FilePath]) -> List[Tuple[FilePath, FilePath]]:
+    found_at: List[Tuple[FilePath, FilePath]] = []
+    known_manifests = set(manifests_to_search)
+
+    i = 0
+    while i < len(manifests_to_search):
+        pkg_manifest_path = manifests_to_search[i]
+        i += 1
+        with open(os.path.join(bundle_dir, pkg_manifest_path),
+                  'r') as pkg_manifest_file:
+            manifest = json_load(PackageManifest, pkg_manifest_file)
+            if not manifest.blob_sources_relative:
+                raise ValueError(
+                    f"Unexpected non-relative paths in AIB package manifest: {pkg_manifest_path}"
+                )
+            for blob in manifest.blobs:
+                if blob.merkle == blob_to_find:
+                    found_at.append((pkg_manifest_path, blob.path))
+            for subpackage in manifest.subpackages:
+                subpackage_manifest_path = os.path.join(
+                    os.path.dirname(pkg_manifest_path),
+                    subpackage.manifest_path)
+                # remove `<dir>/../` sequences if present
+                subpackage_manifest_path = os.path.relpath(
+                    subpackage_manifest_path)
+                if subpackage_manifest_path not in known_manifests:
+                    manifests_to_search.append(subpackage_manifest_path)
+                    known_manifests.add(subpackage_manifest_path)
+
+    return found_at
 
 
 def main():

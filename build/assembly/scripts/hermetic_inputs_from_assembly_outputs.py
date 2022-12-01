@@ -8,9 +8,44 @@ import json
 import sys
 import os
 
-from assembly import PackageManifest
+from assembly import FilePath, PackageManifest
 from depfile import DepFile
 from serialization import json_load
+from typing import List, Set
+
+
+def get_relative_path(relative_path: str, relative_to_file: str) -> str:
+    file_parent = os.path.dirname(relative_to_file)
+    path = os.path.join(file_parent, relative_path)
+    path = os.path.realpath(path)
+    path = os.path.relpath(path, os.getcwd())
+    return path
+
+
+def add_inputs_from_packages(
+        package_paths: Set[FilePath], all_manifest_paths: Set[FilePath],
+        inputs: List[FilePath]):
+    anonymous_subpackages: Set[FilePath] = set()
+    for manifest_path in package_paths:
+        inputs.append(manifest_path)
+        with open(manifest_path, 'r') as f:
+            package_manifest = json_load(PackageManifest, f)
+            for blob in package_manifest.blobs:
+                blob_source = blob.source_path
+                if package_manifest.blob_sources_relative:
+                    blob_source = get_relative_path(blob_source, manifest_path)
+                inputs.append(blob_source)
+            for subpackage in package_manifest.subpackages:
+                subpackage_path = subpackage.manifest_path
+                if package_manifest.blob_sources_relative:
+                    subpackage_path = get_relative_path(
+                        subpackage_path, manifest_path)
+                if not subpackage_path in all_manifest_paths:
+                    anonymous_subpackages.add(subpackage_path)
+                    all_manifest_paths.add(subpackage_path)
+    if anonymous_subpackages:
+        add_inputs_from_packages(
+            anonymous_subpackages, all_manifest_paths, inputs)
 
 
 def main():
@@ -60,10 +95,10 @@ def main():
         inputs.append(credential)
 
     # Add all the system images as inputs.
-    manifests = []
-    for manifest_file in args.system:
-        manifest = json.load(manifest_file)
-        for image in manifest:
+    package_manifest_paths: Set[FilePath] = set()
+    for image_manifest_file in args.system:
+        image_manifest = json.load(image_manifest_file)
+        for image in image_manifest:
             inputs.append(image['path'])
             if not args.include_blobs:
                 continue
@@ -74,27 +109,21 @@ def main():
                 packages = []
                 packages.extend(image['contents']['packages'].get('base', []))
                 packages.extend(image['contents']['packages'].get('cache', []))
-                manifests.extend([package['manifest'] for package in packages])
+                package_manifest_paths.update(
+                    [package['manifest'] for package in packages])
 
     # If we collected any package manifests, include all the blobs referenced
     # by them.
-    for manifest_path in manifests:
-        inputs.append(manifest_path)
-        with open(manifest_path, 'r') as f:
-            package_manifest = json_load(PackageManifest, f)
-            for blob in package_manifest.blobs:
-                blob_source = blob.source_path
-                if package_manifest.blob_sources_relative:
-                    blob_source = os.path.join(
-                        os.path.dirname(manifest_path), blob_source)
-                inputs.append(blob_source)
+    all_manifest_paths: Set[FilePath] = set(package_manifest_paths)
+    add_inputs_from_packages(package_manifest_paths, all_manifest_paths, inputs)
 
     # Write the hermetic inputs file.
     args.output.writelines(f"{input}\n" for input in sorted(inputs))
 
     # Write the depfile.
     if args.depfile:
-        DepFile.from_deps(args.output.name, manifests).write_to(args.depfile)
+        DepFile.from_deps(args.output.name,
+                          all_manifest_paths).write_to(args.depfile)
 
 
 if __name__ == '__main__':

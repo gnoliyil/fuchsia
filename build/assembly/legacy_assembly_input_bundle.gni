@@ -207,6 +207,7 @@ template("legacy_assembly_input_bundle") {
     # each incremental build.
     hermetic_action_ignored_prefixes = [
       "${files.assembly_input_bundle_dir}/packages",
+      "${files.assembly_input_bundle_dir}/subpackages",
       "${files.assembly_input_bundle_dir}/blobs",
       "${files.assembly_input_bundle_dir}/config_data",
       "${files.assembly_input_bundle_dir}/bootfs",

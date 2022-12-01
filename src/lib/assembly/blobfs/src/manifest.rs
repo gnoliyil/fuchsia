@@ -23,8 +23,15 @@ pub struct BlobManifest {
 impl BlobManifest {
     /// Add all the files from the `package` on the host.
     pub fn add_package(&mut self, package: PackageManifest) -> Result<()> {
-        for blob in package.into_blobs() {
+        let (blobs, subpackages) = package.into_blobs_and_subpackages();
+        for blob in blobs {
             self.add_file_with_merkle(blob.source_path, blob.merkle);
+        }
+        for subpackage in subpackages {
+            let subpackage_manifest = PackageManifest::try_load_from(subpackage.manifest_path)?;
+            if !self.packages.contains_key(&subpackage_manifest.hash()) {
+                self.add_package(subpackage_manifest)?;
+            }
         }
         Ok(())
     }
