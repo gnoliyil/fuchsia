@@ -77,6 +77,7 @@ pub enum HostPipeErr {
     NoRouteToHost,
     NetworkUnreachable,
     InvalidArgument,
+    TargetIncompatible,
 }
 
 impl From<String> for HostPipeErr {
@@ -104,6 +105,9 @@ impl From<String> for HostPipeErr {
         }
         if s.contains("Invalid argument") {
             return Self::InvalidArgument;
+        }
+        if s.contains("not compatible") {
+            return Self::TargetIncompatible;
         }
         return Self::Unknown(s);
     }
@@ -233,6 +237,7 @@ mod tests {
             HostPipeErr::NetworkUnreachable
         );
         assert_eq!(HostPipeErr::from("Invalid argument"), HostPipeErr::InvalidArgument);
+        assert_eq!(HostPipeErr::from("ABI 123 is not compatible"), HostPipeErr::TargetIncompatible);
 
         let unknown_str = "OIHWOFIHOIWHFW";
         assert_eq!(HostPipeErr::from(unknown_str), HostPipeErr::Unknown(String::from(unknown_str)));

@@ -223,6 +223,7 @@ fn host_pipe_err_to_fidl(h: HostPipeErr) -> ffx::TargetConnectionError {
         HostPipeErr::KeyVerificationFailure => ffx::TargetConnectionError::KeyVerificationFailure,
         HostPipeErr::NoRouteToHost => ffx::TargetConnectionError::NoRouteToHost,
         HostPipeErr::InvalidArgument => ffx::TargetConnectionError::InvalidArgument,
+        HostPipeErr::TargetIncompatible => ffx::TargetConnectionError::TargetIncompatible,
     }
 }
 
@@ -278,6 +279,10 @@ mod tests {
         assert_eq!(
             host_pipe_err_to_fidl(HostPipeErr::NetworkUnreachable),
             ffx::TargetConnectionError::NetworkUnreachable
+        );
+        assert_eq!(
+            host_pipe_err_to_fidl(HostPipeErr::TargetIncompatible),
+            ffx::TargetConnectionError::TargetIncompatible
         );
     }
 

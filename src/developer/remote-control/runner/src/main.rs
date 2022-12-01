@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 use {
-    anyhow::{Context as _, Result},
+    anyhow::{anyhow, Context as _, Result},
     argh::FromArgs,
     fidl_fuchsia_developer_remotecontrol::{RemoteControlMarker, RemoteControlProxy},
     fuchsia_async as fasync,
@@ -15,6 +15,11 @@ use {
     std::os::unix::io::{AsRawFd, FromRawFd},
 };
 
+const VERSION_HISTORY_LEN: usize = version_history::VERSION_HISTORY.len();
+const COMPATIBLE_ABIS: [u64; 2] = [
+    version_history::VERSION_HISTORY[(VERSION_HISTORY_LEN - 1)].abi_revision.0,
+    version_history::VERSION_HISTORY[(VERSION_HISTORY_LEN - 2)].abi_revision.0,
+];
 const BUFFER_SIZE: usize = 65536;
 
 async fn buffered_copy<R, W>(mut from: R, mut to: W, buffer_size: usize) -> std::io::Result<u64>
@@ -64,6 +69,21 @@ struct Args {
 #[fasync::run_singlethreaded]
 async fn main() -> Result<()> {
     let args: Args = argh::from_env();
+
+    // Ensure the invoking version of ffx supports compatibility checks.
+    let daemon_abi_revision = match std::env::var("FFX_DAEMON_ABI_REVISION") {
+        Ok(val) => val.parse::<u64>()?,
+        Err(_) => 0,
+    };
+
+    if daemon_abi_revision != 0 && !COMPATIBLE_ABIS.contains(&daemon_abi_revision) {
+        let error = format!(
+            "ffx revision {:#X} is not compatible with the target. The target is compatible with ABIs [ {:#X}, {:#X} ]",
+            daemon_abi_revision, COMPATIBLE_ABIS[0], COMPATIBLE_ABIS[1]
+        );
+        return Err(anyhow!(error));
+    }
+
     let rcs_proxy = connect_to_protocol::<RemoteControlMarker>()?;
     let (local_socket, remote_socket) = fidl::Socket::create(fidl::SocketOpts::STREAM)?;
 

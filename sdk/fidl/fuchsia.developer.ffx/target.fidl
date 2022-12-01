@@ -185,6 +185,8 @@ type TargetConnectionError = strict enum {
     /// On attempting to 'knock' a service connection, the service dropped the
     /// channel prematurely, closing the connection.
     FAILED_TO_KNOCK_SERVICE = 12;
+    /// Daemon's ABI does not match the target's.
+    TARGET_INCOMPATIBLE = 13;
 };
 
 // TODO(https://fxbug.dev/94680): Migrate the method specifc error enums to use
