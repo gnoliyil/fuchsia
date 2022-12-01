@@ -83,6 +83,13 @@ class VkRenderer final : public Renderer {
   // Only called from the main thread.
   bool WaitIdle();
 
+  // |Renderer|.
+  void WarmPipelineCache(zx_pixel_format_t pixel_format) override;
+
+  // Determines whether |CommandBuffer::DisableLazyPipelineCreation()| is invoked on the command
+  // buffers created within |Render()|.
+  void set_disable_lazy_pipeline_creation(bool b) { disable_lazy_pipeline_creation_ = b; }
+
  private:
   // Wrapper struct to contain the sysmem collection handle, the vulkan
   // buffer collection.
@@ -92,7 +99,7 @@ class VkRenderer final : public Renderer {
   };
 
   // The function ExtractImage() creates an escher Image from a sysmem collection vmo.
-  escher::ImagePtr ExtractImage(const ImageMetadata& metadata,
+  escher::ImagePtr ExtractImage(const ImageMetadata& metadata, BufferCollectionUsage bc_usage,
                                 vk::BufferCollectionFUCHSIA collection, vk::ImageUsageFlags usage,
                                 bool readback = false);
 
@@ -130,6 +137,7 @@ class VkRenderer final : public Renderer {
   std::unordered_map<GlobalImageId, escher::ImagePtr> readback_image_map_ FXL_GUARDED_BY(lock_);
   std::set<GlobalImageId> pending_textures_ FXL_GUARDED_BY(lock_);
   std::set<GlobalImageId> pending_render_targets_ FXL_GUARDED_BY(lock_);
+  bool disable_lazy_pipeline_creation_ = false;
 
   uint32_t frame_number_ = 0;
 

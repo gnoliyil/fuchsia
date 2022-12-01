@@ -11,6 +11,7 @@
 #include <thread>
 
 #include "src/lib/fsl/handles/object_info.h"
+#include "src/ui/lib/escher/vk/pipeline_builder.h"
 #include "src/ui/scenic/lib/allocation/buffer_collection_importer.h"
 #include "src/ui/scenic/lib/allocation/id.h"
 #include "src/ui/scenic/lib/flatland/buffers/util.h"
@@ -657,90 +658,95 @@ TEST_F(NullRendererTest, AsyncEventSignalTest) {
   AsyncEventSignalTest(&loop, &renderer, sysmem_allocator_.get(), /*use_vulkan*/ false);
 }
 
-VK_TEST_F(VulkanRendererTest, ImportCollectionTest) {
+std::pair<std::unique_ptr<escher::Escher>, std::unique_ptr<VkRenderer>>
+CreateEscherAndPrewarmedRenderer(bool use_protected_memory = false) {
   auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
-  auto unique_escher = std::make_unique<escher::Escher>(
-      env->GetVulkanDevice(), env->GetFilesystem(), /*gpu_allocator*/ nullptr);
-  VkRenderer renderer(unique_escher->GetWeakPtr());
-  ImportCollectionTest(&renderer, sysmem_allocator_.get());
+  std::unique_ptr<escher::Escher> escher;
+  if (use_protected_memory) {
+    escher = escher::test::CreateEscherWithProtectedMemoryEnabled();
+    if (!escher) {
+      return {nullptr, nullptr};
+    }
+  } else {
+    escher = std::make_unique<escher::Escher>(env->GetVulkanDevice(), env->GetFilesystem(),
+                                              /*gpu_allocator*/ nullptr);
+  }
+
+  {
+    auto pipeline_builder = std::make_unique<escher::PipelineBuilder>(escher->vk_device());
+    pipeline_builder->set_log_pipeline_creation_callback(
+        [](const vk::GraphicsPipelineCreateInfo* graphics_info,
+           const vk::ComputePipelineCreateInfo* compute_info) {
+          if (compute_info) {
+            FX_CHECK(false) << "Unexpected lazy creation of Vulkan compute pipeline.";
+          }
+          if (graphics_info) {
+            FX_CHECK(false) << "Unexpected lazy creation of Vulkan graphics pipeline.";
+          }
+        });
+    escher->set_pipeline_builder(std::move(pipeline_builder));
+  }
+  auto renderer = std::make_unique<VkRenderer>(escher->GetWeakPtr());
+  renderer->WarmPipelineCache(ZX_PIXEL_FORMAT_ARGB_8888);
+  renderer->set_disable_lazy_pipeline_creation(true);
+
+  return {std::move(escher), std::move(renderer)};
+}
+
+VK_TEST_F(VulkanRendererTest, ImportCollectionTest) {
+  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
+  ImportCollectionTest(renderer.get(), sysmem_allocator_.get());
 }
 
 VK_TEST_F(VulkanRendererTest, SameTokenTwiceTest) {
-  auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
-  auto unique_escher = std::make_unique<escher::Escher>(
-      env->GetVulkanDevice(), env->GetFilesystem(), /*gpu_allocator*/ nullptr);
-  VkRenderer renderer(unique_escher->GetWeakPtr());
-  SameTokenTwiceTest(&renderer, sysmem_allocator_.get());
+  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
+  SameTokenTwiceTest(renderer.get(), sysmem_allocator_.get());
 }
 
 VK_TEST_F(VulkanRendererTest, BadTokenTest) {
-  auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
-  auto unique_escher = std::make_unique<escher::Escher>(
-      env->GetVulkanDevice(), env->GetFilesystem(), /*gpu_allocator*/ nullptr);
-  VkRenderer renderer(unique_escher->GetWeakPtr());
-  BadTokenTest(&renderer, sysmem_allocator_.get());
+  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
+  BadTokenTest(renderer.get(), sysmem_allocator_.get());
 }
 
 VK_TEST_F(VulkanRendererTest, BadImageInputTest) {
-  auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
-  auto unique_escher = std::make_unique<escher::Escher>(
-      env->GetVulkanDevice(), env->GetFilesystem(), /*gpu_allocator*/ nullptr);
-  VkRenderer renderer(unique_escher->GetWeakPtr());
-  BadImageInputTest(&renderer, sysmem_allocator_.get());
+  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
+  BadImageInputTest(renderer.get(), sysmem_allocator_.get());
 }
 
 VK_TEST_F(VulkanRendererTest, ImportImageTest) {
-  auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
-  auto unique_escher = std::make_unique<escher::Escher>(
-      env->GetVulkanDevice(), env->GetFilesystem(), /*gpu_allocator*/ nullptr);
-  VkRenderer renderer(unique_escher->GetWeakPtr());
-  ImportImageTest(&renderer, sysmem_allocator_.get());
+  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
+  ImportImageTest(renderer.get(), sysmem_allocator_.get());
 }
 
 VK_TEST_F(VulkanRendererTest, DeregistrationTest) {
-  auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
-  auto unique_escher = std::make_unique<escher::Escher>(
-      env->GetVulkanDevice(), env->GetFilesystem(), /*gpu_allocator*/ nullptr);
-  VkRenderer renderer(unique_escher->GetWeakPtr());
-  DeregistrationTest(&renderer, sysmem_allocator_.get());
+  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
+  DeregistrationTest(renderer.get(), sysmem_allocator_.get());
 }
 
-// TODO(fx.bug/dev:66216) This test is flaking on FEMU.
+// TODO(fxbug.dev/66216) This test is flaking on FEMU.
 VK_TEST_F(VulkanRendererTest, DISABLED_RenderImageAfterBufferCollectionReleasedTest) {
-  auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
-  auto unique_escher = std::make_unique<escher::Escher>(
-      env->GetVulkanDevice(), env->GetFilesystem(), /*gpu_allocator*/ nullptr);
-  VkRenderer renderer(unique_escher->GetWeakPtr());
-  RenderImageAfterBufferCollectionReleasedTest(&renderer, sysmem_allocator_.get(),
+  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
+  RenderImageAfterBufferCollectionReleasedTest(renderer.get(), sysmem_allocator_.get(),
                                                /*use_vulkan*/ true);
 }
 
 VK_TEST_F(VulkanRendererTest, RenderAfterImageReleasedTest) {
   // TODO(fxbug.dev/96541): Re-enable on FEMU once it doesn't flake.
   SKIP_TEST_IF_ESCHER_USES_DEVICE(VirtualGpu);
-  auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
-  auto unique_escher = std::make_unique<escher::Escher>(
-      env->GetVulkanDevice(), env->GetFilesystem(), /*gpu_allocator*/ nullptr);
-  VkRenderer renderer(unique_escher->GetWeakPtr());
-  RenderAfterImageReleasedTest(&renderer, sysmem_allocator_.get());
+  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
+  RenderAfterImageReleasedTest(renderer.get(), sysmem_allocator_.get());
 }
 
 VK_TEST_F(VulkanRendererTest, DISABLED_MultithreadingTest) {
-  auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
-  auto unique_escher = std::make_unique<escher::Escher>(
-      env->GetVulkanDevice(), env->GetFilesystem(), /*gpu_allocator*/ nullptr);
-  VkRenderer renderer(unique_escher->GetWeakPtr());
-  MultithreadingTest(&renderer);
+  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
+  MultithreadingTest(renderer.get());
 }
 
 VK_TEST_F(VulkanRendererTest, AsyncEventSignalTest) {
   SKIP_TEST_IF_ESCHER_USES_DEVICE(VirtualGpu);
-  auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
-  auto unique_escher = std::make_unique<escher::Escher>(
-      env->GetVulkanDevice(), env->GetFilesystem(), /*gpu_allocator*/ nullptr);
   async::TestLoop loop;
-  VkRenderer renderer(unique_escher->GetWeakPtr());
-  AsyncEventSignalTest(&loop, &renderer, sysmem_allocator_.get(), /*use_vulkan*/ true);
+  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
+  AsyncEventSignalTest(&loop, renderer.get(), sysmem_allocator_.get(), /*use_vulkan*/ true);
 }
 
 // This test actually renders a rectangle using the VKRenderer. We create a single rectangle,
@@ -771,23 +777,21 @@ VK_TEST_F(VulkanRendererTest, AsyncEventSignalTest) {
 //
 VK_TEST_F(VulkanRendererTest, RenderTest) {
   SKIP_TEST_IF_ESCHER_USES_DEVICE(VirtualGpu);
-  auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
-  auto unique_escher = std::make_unique<escher::Escher>(
-      env->GetVulkanDevice(), env->GetFilesystem(), /*gpu_allocator*/ nullptr);
-  VkRenderer renderer(unique_escher->GetWeakPtr());
+  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
 
   // Setup renderable texture collection.
   fuchsia::sysmem::BufferCollectionInfo_2 client_collection_info;
   fuchsia::sysmem::BufferCollectionSyncPtr collection_ptr;
   auto collection_id =
-      SetupBufferCollection(1, 60, 40, BufferCollectionUsage::kClientImage, &renderer,
+      SetupBufferCollection(1, 60, 40, BufferCollectionUsage::kClientImage, renderer.get(),
                             sysmem_allocator_.get(), &client_collection_info, collection_ptr);
 
   // Setup the render target collection.
   fuchsia::sysmem::BufferCollectionInfo_2 client_target_info;
   fuchsia::sysmem::BufferCollectionSyncPtr target_ptr;
-  auto target_id = SetupBufferCollection(1, 60, 40, BufferCollectionUsage::kRenderTarget, &renderer,
-                                         sysmem_allocator_.get(), &client_target_info, target_ptr);
+  auto target_id =
+      SetupBufferCollection(1, 60, 40, BufferCollectionUsage::kRenderTarget, renderer.get(),
+                            sysmem_allocator_.get(), &client_target_info, target_ptr);
 
   const uint32_t kTargetWidth = 16;
   const uint32_t kTargetHeight = 8;
@@ -810,10 +814,11 @@ VK_TEST_F(VulkanRendererTest, RenderTest) {
                                       .width = static_cast<uint32_t>(w),
                                       .height = static_cast<uint32_t>(h)};
 
-  auto import_res = renderer.ImportBufferImage(render_target, BufferCollectionUsage::kRenderTarget);
+  auto import_res =
+      renderer->ImportBufferImage(render_target, BufferCollectionUsage::kRenderTarget);
   EXPECT_TRUE(import_res);
 
-  import_res = renderer.ImportBufferImage(renderable_texture, BufferCollectionUsage::kClientImage);
+  import_res = renderer->ImportBufferImage(renderable_texture, BufferCollectionUsage::kClientImage);
   EXPECT_TRUE(import_res);
 
   // Create a renderable where the upper-left hand corner should be at position (6,3)
@@ -841,8 +846,8 @@ VK_TEST_F(VulkanRendererTest, RenderTest) {
                  });
 
   // Render the renderable to the render target.
-  renderer.Render(render_target, {renderable}, {renderable_texture});
-  renderer.WaitIdle();
+  renderer->Render(render_target, {renderable}, {renderable_texture});
+  renderer->WaitIdle();
 
   // Get a raw pointer from the client collection's vmo that represents the render target
   // and read its values. This should show that the renderable was rendered to the center
@@ -877,8 +882,8 @@ VK_TEST_F(VulkanRendererTest, RenderTest) {
                 Orientation::CCW_0_DEGREES);
 
   // Render the renderable to the render target.
-  renderer.Render(render_target, {renderable2}, {renderable_texture});
-  renderer.WaitIdle();
+  renderer->Render(render_target, {renderable2}, {renderable_texture});
+  renderer->WaitIdle();
 
   // Get a raw pointer from the client collection's vmo that represents the render target
   // and read its values. This should show that the renderable was rendered to the center
@@ -948,22 +953,20 @@ VK_TEST_F(VulkanRendererTest, RenderTest) {
 //
 VK_TEST_F(VulkanRendererTest, RotationRenderTest) {
   SKIP_TEST_IF_ESCHER_USES_DEVICE(VirtualGpu);
-  auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
-  auto unique_escher = std::make_unique<escher::Escher>(
-      env->GetVulkanDevice(), env->GetFilesystem(), /*gpu_allocator*/ nullptr);
-  VkRenderer renderer(unique_escher->GetWeakPtr());
+  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
 
   fuchsia::sysmem::BufferCollectionInfo_2 client_collection_info;
   fuchsia::sysmem::BufferCollectionSyncPtr collection_ptr;
   auto collection_id =
-      SetupBufferCollection(1, 60, 40, BufferCollectionUsage::kClientImage, &renderer,
+      SetupBufferCollection(1, 60, 40, BufferCollectionUsage::kClientImage, renderer.get(),
                             sysmem_allocator_.get(), &client_collection_info, collection_ptr);
 
   // Setup the render target collection.
   fuchsia::sysmem::BufferCollectionInfo_2 client_target_info;
   fuchsia::sysmem::BufferCollectionSyncPtr target_ptr;
-  auto target_id = SetupBufferCollection(2, 60, 40, BufferCollectionUsage::kRenderTarget, &renderer,
-                                         sysmem_allocator_.get(), &client_target_info, target_ptr);
+  auto target_id =
+      SetupBufferCollection(2, 60, 40, BufferCollectionUsage::kRenderTarget, renderer.get(),
+                            sysmem_allocator_.get(), &client_target_info, target_ptr);
 
   const uint32_t kTargetWidth = 32;
   const uint32_t kTargetHeight = 16;
@@ -996,13 +999,14 @@ VK_TEST_F(VulkanRendererTest, RotationRenderTest) {
                                       .width = static_cast<uint32_t>(w),
                                       .height = static_cast<uint32_t>(h)};
 
-  auto import_res = renderer.ImportBufferImage(render_target, BufferCollectionUsage::kRenderTarget);
+  auto import_res =
+      renderer->ImportBufferImage(render_target, BufferCollectionUsage::kRenderTarget);
   EXPECT_TRUE(import_res);
   import_res =
-      renderer.ImportBufferImage(render_target_flipped, BufferCollectionUsage::kRenderTarget);
+      renderer->ImportBufferImage(render_target_flipped, BufferCollectionUsage::kRenderTarget);
   EXPECT_TRUE(import_res);
 
-  import_res = renderer.ImportBufferImage(renderable_texture, BufferCollectionUsage::kClientImage);
+  import_res = renderer->ImportBufferImage(renderable_texture, BufferCollectionUsage::kClientImage);
   EXPECT_TRUE(import_res);
 
   // Create a renderable where the upper-left hand corner should be at position (5,3)
@@ -1030,8 +1034,8 @@ VK_TEST_F(VulkanRendererTest, RotationRenderTest) {
                  });
 
   // Render the renderable to the render target.
-  renderer.Render(render_target, {renderable}, {renderable_texture});
-  renderer.WaitIdle();
+  renderer->Render(render_target, {renderable}, {renderable_texture});
+  renderer->WaitIdle();
 
   // Get a raw pointer from the client collection's vmo that represents the render target
   // and read its values. This should show that the renderable was rendered to the center
@@ -1073,8 +1077,8 @@ VK_TEST_F(VulkanRendererTest, RotationRenderTest) {
       {renderable}, fuchsia::ui::composition::Rotation::CW_90_DEGREES, kTargetWidthFlipped,
       kTargetHeightFlipped);
   // Render the renderable to the render target.
-  renderer.Render(render_target_flipped, std::move(renderables_90deg), {renderable_texture});
-  renderer.WaitIdle();
+  renderer->Render(render_target_flipped, std::move(renderables_90deg), {renderable_texture});
+  renderer->WaitIdle();
 
   // Get a raw pointer from the client collection's vmo that represents the render target
   // and read its values. This should show that the renderable was rendered to the center
@@ -1116,8 +1120,8 @@ VK_TEST_F(VulkanRendererTest, RotationRenderTest) {
   auto renderables_180deg = screen_capture::ScreenCapture::RotateRenderables(
       {renderable}, fuchsia::ui::composition::Rotation::CW_180_DEGREES, 16, 8);
   // Render the renderable to the render target.
-  renderer.Render(render_target, std::move(renderables_180deg), {renderable_texture});
-  renderer.WaitIdle();
+  renderer->Render(render_target, std::move(renderables_180deg), {renderable_texture});
+  renderer->WaitIdle();
 
   // Get a raw pointer from the client collection's vmo that represents the render target
   // and read its values. This should show that the renderable was rendered to the center
@@ -1159,8 +1163,8 @@ VK_TEST_F(VulkanRendererTest, RotationRenderTest) {
       {renderable}, fuchsia::ui::composition::Rotation::CW_270_DEGREES, kTargetWidthFlipped,
       kTargetHeightFlipped);
   // Render the renderable to the render target.
-  renderer.Render(render_target_flipped, std::move(renderables_270deg), {renderable_texture});
-  renderer.WaitIdle();
+  renderer->Render(render_target_flipped, std::move(renderables_270deg), {renderable_texture});
+  renderer->WaitIdle();
 
   // Get a raw pointer from the client collection's vmo that represents the render target
   // and read its values. This should show that the renderable was rendered to the center
@@ -1561,16 +1565,14 @@ VK_TEST_F(VulkanRendererTest, FlipUpDownAndRotate90RenderTest) {
 // renderable in this test, only the render target).
 VK_TEST_F(VulkanRendererTest, SolidColorTest) {
   SKIP_TEST_IF_ESCHER_USES_DEVICE(VirtualGpu);
-  auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
-  auto unique_escher = std::make_unique<escher::Escher>(
-      env->GetVulkanDevice(), env->GetFilesystem(), /*gpu_allocator*/ nullptr);
-  VkRenderer renderer(unique_escher->GetWeakPtr());
+  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
 
   // Setup the render target collection.
   fuchsia::sysmem::BufferCollectionInfo_2 client_target_info;
   fuchsia::sysmem::BufferCollectionSyncPtr target_ptr;
-  auto target_id = SetupBufferCollection(1, 60, 40, BufferCollectionUsage::kRenderTarget, &renderer,
-                                         sysmem_allocator_.get(), &client_target_info, target_ptr);
+  auto target_id =
+      SetupBufferCollection(1, 60, 40, BufferCollectionUsage::kRenderTarget, renderer.get(),
+                            sysmem_allocator_.get(), &client_target_info, target_ptr);
 
   // Create the render_target image metadata.
   const uint32_t kTargetWidth = 16;
@@ -1587,7 +1589,7 @@ VK_TEST_F(VulkanRendererTest, SolidColorTest) {
       .multiply_color = {1.f, 0.4f, 0.f, 1.f},
       .blend_mode = fuchsia::ui::composition::BlendMode::SRC_OVER};
 
-  renderer.ImportBufferImage(render_target, BufferCollectionUsage::kRenderTarget);
+  renderer->ImportBufferImage(render_target, BufferCollectionUsage::kRenderTarget);
 
   // Create the two renderables.
   const uint32_t kRenderableWidth = 4;
@@ -1595,8 +1597,8 @@ VK_TEST_F(VulkanRendererTest, SolidColorTest) {
   ImageRect renderable(glm::vec2(6, 3), glm::vec2(kRenderableWidth, kRenderableHeight));
 
   // Render the renderable to the render target.
-  renderer.Render(render_target, {renderable}, {renderable_image_data});
-  renderer.WaitIdle();
+  renderer->Render(render_target, {renderable}, {renderable_image_data});
+  renderer->WaitIdle();
 
   // Get a raw pointer from the client collection's vmo that represents the render target
   // and read its values. This should show that the renderable was rendered to the center
@@ -1631,10 +1633,7 @@ VK_TEST_F(VulkanRendererTest, SolidColorTest) {
 // Test that colors change properly when we apply a color correction matrix.
 VK_TEST_F(VulkanRendererTest, ColorCorrectionTest) {
   SKIP_TEST_IF_ESCHER_USES_DEVICE(VirtualGpu);
-  auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
-  auto unique_escher = std::make_unique<escher::Escher>(
-      env->GetVulkanDevice(), env->GetFilesystem(), /*gpu_allocator*/ nullptr);
-  VkRenderer renderer(unique_escher->GetWeakPtr());
+  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
 
   // Set the color correction data on the renderer.
   static const std::array<float, 3> preoffsets = {0, 0, 0};
@@ -1642,13 +1641,14 @@ VK_TEST_F(VulkanRendererTest, ColorCorrectionTest) {
                                               0.711701f, 0.947291f,  0.257912f,
                                               0.000000f, -0.000000f, 1.000000f};
   static const std::array<float, 3> postoffsets = {0, 0, 0};
-  renderer.SetColorConversionValues(matrix, preoffsets, postoffsets);
+  renderer->SetColorConversionValues(matrix, preoffsets, postoffsets);
 
   // Setup the render target collection.
   fuchsia::sysmem::BufferCollectionInfo_2 client_target_info;
   fuchsia::sysmem::BufferCollectionSyncPtr target_ptr;
-  auto target_id = SetupBufferCollection(1, 60, 40, BufferCollectionUsage::kRenderTarget, &renderer,
-                                         sysmem_allocator_.get(), &client_target_info, target_ptr);
+  auto target_id =
+      SetupBufferCollection(1, 60, 40, BufferCollectionUsage::kRenderTarget, renderer.get(),
+                            sysmem_allocator_.get(), &client_target_info, target_ptr);
 
   // Create the render_target image metadata.
   const uint32_t kTargetWidth = 16;
@@ -1665,7 +1665,7 @@ VK_TEST_F(VulkanRendererTest, ColorCorrectionTest) {
       .multiply_color = {1, 0, 0, 1},
       .blend_mode = fuchsia::ui::composition::BlendMode::SRC_OVER};
 
-  renderer.ImportBufferImage(render_target, BufferCollectionUsage::kRenderTarget);
+  renderer->ImportBufferImage(render_target, BufferCollectionUsage::kRenderTarget);
 
   // Create the two renderables.
   const uint32_t kRenderableWidth = 4;
@@ -1673,9 +1673,9 @@ VK_TEST_F(VulkanRendererTest, ColorCorrectionTest) {
   ImageRect renderable(glm::vec2(6, 3), glm::vec2(kRenderableWidth, kRenderableHeight));
 
   // Render the renderable to the render target.
-  renderer.Render(render_target, {renderable}, {renderable_image_data}, /*fences*/ {},
-                  /*color_conversion*/ true);
-  renderer.WaitIdle();
+  renderer->Render(render_target, {renderable}, {renderable_image_data}, /*fences*/ {},
+                   /*color_conversion*/ true);
+  renderer->WaitIdle();
 
   // Calculate expected color.
   float values[16] = {matrix[0], matrix[3], matrix[6], 0, matrix[1], matrix[4], matrix[7], 0,
@@ -1728,16 +1728,14 @@ VK_TEST_F(VulkanRendererTest, ColorCorrectionTest) {
 // this tests to make sure that there aren't any problems that arise from this sharing.
 VK_TEST_F(VulkanRendererTest, MultipleSolidColorTest) {
   SKIP_TEST_IF_ESCHER_USES_DEVICE(VirtualGpu);
-  auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
-  auto unique_escher = std::make_unique<escher::Escher>(
-      env->GetVulkanDevice(), env->GetFilesystem(), /*gpu_allocator*/ nullptr);
-  VkRenderer renderer(unique_escher->GetWeakPtr());
+  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
 
   // Setup the render target collection.
   fuchsia::sysmem::BufferCollectionInfo_2 client_target_info;
   fuchsia::sysmem::BufferCollectionSyncPtr target_ptr;
-  auto target_id = SetupBufferCollection(1, 60, 40, BufferCollectionUsage::kRenderTarget, &renderer,
-                                         sysmem_allocator_.get(), &client_target_info, target_ptr);
+  auto target_id =
+      SetupBufferCollection(1, 60, 40, BufferCollectionUsage::kRenderTarget, renderer.get(),
+                            sysmem_allocator_.get(), &client_target_info, target_ptr);
 
   // Create the render_target image metadata.
   const uint32_t kTargetWidth = 16;
@@ -1760,7 +1758,7 @@ VK_TEST_F(VulkanRendererTest, MultipleSolidColorTest) {
       .multiply_color = {0, 0, 1, 1},
       .blend_mode = fuchsia::ui::composition::BlendMode::SRC_OVER};
 
-  renderer.ImportBufferImage(render_target, BufferCollectionUsage::kRenderTarget);
+  renderer->ImportBufferImage(render_target, BufferCollectionUsage::kRenderTarget);
 
   // Create the two renderables.
   const uint32_t kRenderableWidth = 4;
@@ -1769,9 +1767,9 @@ VK_TEST_F(VulkanRendererTest, MultipleSolidColorTest) {
   ImageRect renderable_2(glm::vec2(6, 5), glm::vec2(kRenderableWidth, kRenderableHeight));
 
   // Render the renderable to the render target.
-  renderer.Render(render_target, {renderable, renderable_2},
-                  {renderable_image_data, renderable_image_data_2});
-  renderer.WaitIdle();
+  renderer->Render(render_target, {renderable, renderable_2},
+                   {renderable_image_data, renderable_image_data_2});
+  renderer->WaitIdle();
 
   // Get a raw pointer from the client collection's vmo that represents the render target
   // and read its values. This should show that the renderable was rendered to the center
@@ -1810,10 +1808,7 @@ VK_TEST_F(VulkanRendererTest, MultipleSolidColorTest) {
 // dimensions, occupy the exact same number of pixels.
 VK_TEST_F(VulkanRendererTest, MixSolidColorAndImageTest) {
   SKIP_TEST_IF_ESCHER_USES_DEVICE(VirtualGpu);
-  auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
-  auto unique_escher = std::make_unique<escher::Escher>(
-      env->GetVulkanDevice(), env->GetFilesystem(), /*gpu_allocator*/ nullptr);
-  VkRenderer renderer(unique_escher->GetWeakPtr());
+  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
 
   // Both renderables should be the same size.
   const uint32_t kRenderableWidth = 93;
@@ -1821,7 +1816,7 @@ VK_TEST_F(VulkanRendererTest, MixSolidColorAndImageTest) {
   fuchsia::sysmem::BufferCollectionInfo_2 client_collection_info;
   fuchsia::sysmem::BufferCollectionSyncPtr collection_ptr;
   auto collection_id =
-      SetupBufferCollection(1, 100, 100, BufferCollectionUsage::kClientImage, &renderer,
+      SetupBufferCollection(1, 100, 100, BufferCollectionUsage::kClientImage, renderer.get(),
                             sysmem_allocator_.get(), &client_collection_info, collection_ptr);
 
   // Setup the render target collection.
@@ -1830,7 +1825,7 @@ VK_TEST_F(VulkanRendererTest, MixSolidColorAndImageTest) {
   fuchsia::sysmem::BufferCollectionInfo_2 client_target_info;
   fuchsia::sysmem::BufferCollectionSyncPtr target_ptr;
   auto target_id =
-      SetupBufferCollection(1, 200, 100, BufferCollectionUsage::kRenderTarget, &renderer,
+      SetupBufferCollection(1, 200, 100, BufferCollectionUsage::kRenderTarget, renderer.get(),
                             sysmem_allocator_.get(), &client_target_info, target_ptr);
 
   // Create the render_target image metadata.
@@ -1872,8 +1867,8 @@ VK_TEST_F(VulkanRendererTest, MixSolidColorAndImageTest) {
                                             ZX_CACHE_FLUSH_DATA | ZX_CACHE_FLUSH_INVALIDATE));
                  });
 
-  renderer.ImportBufferImage(renderable_image_data_2, BufferCollectionUsage::kClientImage);
-  renderer.ImportBufferImage(render_target, BufferCollectionUsage::kRenderTarget);
+  renderer->ImportBufferImage(renderable_image_data_2, BufferCollectionUsage::kClientImage);
+  renderer->ImportBufferImage(render_target, BufferCollectionUsage::kRenderTarget);
 
   // Create the two renderables.
   ImageRect renderable(glm::vec2(0, 0), glm::vec2(kRenderableWidth, kRenderableHeight));
@@ -1881,9 +1876,9 @@ VK_TEST_F(VulkanRendererTest, MixSolidColorAndImageTest) {
                          glm::vec2(kRenderableWidth, kRenderableHeight));
 
   // Render the renderable to the render target.
-  renderer.Render(render_target, {renderable, renderable_2},
-                  {renderable_image_data, renderable_image_data_2});
-  renderer.WaitIdle();
+  renderer->Render(render_target, {renderable, renderable_2},
+                   {renderable_image_data, renderable_image_data_2});
+  renderer->WaitIdle();
 
   // Get a raw pointer from the client collection's vmo that represents the render target
   // and read its values. This should show that the two renderables were rendered side by
@@ -1931,22 +1926,20 @@ VK_TEST_F(VulkanRendererTest, MixSolidColorAndImageTest) {
 // ----------------
 VK_TEST_F(VulkanRendererTest, TransparencyTest) {
   SKIP_TEST_IF_ESCHER_USES_DEVICE(VirtualGpu);
-  auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
-  auto unique_escher = std::make_unique<escher::Escher>(
-      env->GetVulkanDevice(), env->GetFilesystem(), /*gpu_allocator*/ nullptr);
-  VkRenderer renderer(unique_escher->GetWeakPtr());
+  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
 
   fuchsia::sysmem::BufferCollectionInfo_2 client_collection_info;
   fuchsia::sysmem::BufferCollectionSyncPtr collection_ptr;
   auto collection_id =
-      SetupBufferCollection(2, 60, 40, BufferCollectionUsage::kClientImage, &renderer,
+      SetupBufferCollection(2, 60, 40, BufferCollectionUsage::kClientImage, renderer.get(),
                             sysmem_allocator_.get(), &client_collection_info, collection_ptr);
 
   // Setup the render target collection.
   fuchsia::sysmem::BufferCollectionInfo_2 client_target_info;
   fuchsia::sysmem::BufferCollectionSyncPtr target_ptr;
-  auto target_id = SetupBufferCollection(1, 60, 40, BufferCollectionUsage::kRenderTarget, &renderer,
-                                         sysmem_allocator_.get(), &client_target_info, target_ptr);
+  auto target_id =
+      SetupBufferCollection(1, 60, 40, BufferCollectionUsage::kRenderTarget, renderer.get(),
+                            sysmem_allocator_.get(), &client_target_info, target_ptr);
 
   const uint32_t kTargetWidth = 16;
   const uint32_t kTargetHeight = 8;
@@ -1974,9 +1967,9 @@ VK_TEST_F(VulkanRendererTest, TransparencyTest) {
                                        .blend_mode = fuchsia::ui::composition::BlendMode::SRC_OVER};
 
   // Import all the images.
-  renderer.ImportBufferImage(render_target, BufferCollectionUsage::kRenderTarget);
-  renderer.ImportBufferImage(renderable_texture, BufferCollectionUsage::kClientImage);
-  renderer.ImportBufferImage(transparent_texture, BufferCollectionUsage::kClientImage);
+  renderer->ImportBufferImage(render_target, BufferCollectionUsage::kRenderTarget);
+  renderer->ImportBufferImage(renderable_texture, BufferCollectionUsage::kClientImage);
+  renderer->ImportBufferImage(transparent_texture, BufferCollectionUsage::kClientImage);
 
   // Create the two renderables.
   const uint32_t kRenderableWidth = 4;
@@ -2012,9 +2005,9 @@ VK_TEST_F(VulkanRendererTest, TransparencyTest) {
                  });
 
   // Render the renderable to the render target.
-  renderer.Render(render_target, {renderable, transparent_renderable},
-                  {renderable_texture, transparent_texture});
-  renderer.WaitIdle();
+  renderer->Render(render_target, {renderable, transparent_renderable},
+                   {renderable_texture, transparent_texture});
+  renderer->WaitIdle();
 
   // Get a raw pointer from the client collection's vmo that represents the render target
   // and read its values. This should show that the renderable was rendered to the center
@@ -2069,22 +2062,20 @@ MATCHER_P2(InRange, low, high, "") { return low <= arg && arg <= high; }
 // ----------------
 VK_TEST_F(VulkanRendererTest, MultiplyColorTest) {
   SKIP_TEST_IF_ESCHER_USES_DEVICE(VirtualGpu);
-  auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
-  auto unique_escher = std::make_unique<escher::Escher>(
-      env->GetVulkanDevice(), env->GetFilesystem(), /*gpu_allocator*/ nullptr);
-  VkRenderer renderer(unique_escher->GetWeakPtr());
+  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
 
   fuchsia::sysmem::BufferCollectionInfo_2 client_collection_info;
   fuchsia::sysmem::BufferCollectionSyncPtr collection_ptr;
   auto collection_id =
-      SetupBufferCollection(1, 1, 1, BufferCollectionUsage::kClientImage, &renderer,
+      SetupBufferCollection(1, 1, 1, BufferCollectionUsage::kClientImage, renderer.get(),
                             sysmem_allocator_.get(), &client_collection_info, collection_ptr);
 
   // Setup the render target collection.
   fuchsia::sysmem::BufferCollectionInfo_2 client_target_info;
   fuchsia::sysmem::BufferCollectionSyncPtr target_ptr;
-  auto target_id = SetupBufferCollection(1, 60, 40, BufferCollectionUsage::kRenderTarget, &renderer,
-                                         sysmem_allocator_.get(), &client_target_info, target_ptr);
+  auto target_id =
+      SetupBufferCollection(1, 60, 40, BufferCollectionUsage::kRenderTarget, renderer.get(),
+                            sysmem_allocator_.get(), &client_target_info, target_ptr);
 
   const uint32_t kTargetWidth = 16;
   const uint32_t kTargetHeight = 8;
@@ -2115,9 +2106,9 @@ VK_TEST_F(VulkanRendererTest, MultiplyColorTest) {
                                        .blend_mode = fuchsia::ui::composition::BlendMode::SRC_OVER};
 
   // Import all the images.
-  renderer.ImportBufferImage(render_target, BufferCollectionUsage::kRenderTarget);
-  renderer.ImportBufferImage(renderable_texture, BufferCollectionUsage::kClientImage);
-  renderer.ImportBufferImage(transparent_texture, BufferCollectionUsage::kClientImage);
+  renderer->ImportBufferImage(render_target, BufferCollectionUsage::kRenderTarget);
+  renderer->ImportBufferImage(renderable_texture, BufferCollectionUsage::kClientImage);
+  renderer->ImportBufferImage(transparent_texture, BufferCollectionUsage::kClientImage);
 
   // Create the two renderables.
   const uint32_t kRenderableWidth = 4;
@@ -2141,9 +2132,9 @@ VK_TEST_F(VulkanRendererTest, MultiplyColorTest) {
                  });
 
   // Render the renderable to the render target.
-  renderer.Render(render_target, {renderable, transparent_renderable},
-                  {renderable_texture, transparent_texture});
-  renderer.WaitIdle();
+  renderer->Render(render_target, {renderable, transparent_renderable},
+                   {renderable_texture, transparent_texture});
+  renderer->WaitIdle();
 
   // Get a raw pointer from the client collection's vmo that represents the render target
   // and read its values. This should show that the renderable was rendered to the center
@@ -2194,19 +2185,16 @@ class VulkanRendererParameterizedYuvTest
 // rectangle, with a fuchsia texture. The render target and the rectangle are 32x32.
 VK_TEST_P(VulkanRendererParameterizedYuvTest, YuvTest) {
   SKIP_TEST_IF_ESCHER_USES_DEVICE(VirtualGpu);
-  auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
-  auto unique_escher = std::make_unique<escher::Escher>(
-      env->GetVulkanDevice(), env->GetFilesystem(), /*gpu_allocator*/ nullptr);
-  VkRenderer renderer(unique_escher->GetWeakPtr());
+  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
 
   // Create a pair of tokens for the Image allocation.
   auto image_tokens = flatland::SysmemTokens::Create(sysmem_allocator_.get());
 
   // Register the Image token with the renderer.
   auto image_collection_id = allocation::GenerateUniqueBufferCollectionId();
-  auto result = renderer.ImportBufferCollection(image_collection_id, sysmem_allocator_.get(),
-                                                std::move(image_tokens.dup_token),
-                                                BufferCollectionUsage::kClientImage, std::nullopt);
+  auto result = renderer->ImportBufferCollection(image_collection_id, sysmem_allocator_.get(),
+                                                 std::move(image_tokens.dup_token),
+                                                 BufferCollectionUsage::kClientImage, std::nullopt);
   EXPECT_TRUE(result);
 
   const uint32_t kTargetWidth = 32;
@@ -2239,7 +2227,8 @@ VK_TEST_P(VulkanRendererParameterizedYuvTest, YuvTest) {
                                   .vmo_index = 0,
                                   .width = kTargetWidth,
                                   .height = kTargetHeight};
-  auto import_res = renderer.ImportBufferImage(image_metadata, BufferCollectionUsage::kClientImage);
+  auto import_res =
+      renderer->ImportBufferImage(image_metadata, BufferCollectionUsage::kClientImage);
   EXPECT_TRUE(import_res);
 
   // Create a pair of tokens for the render target allocation.
@@ -2247,9 +2236,9 @@ VK_TEST_P(VulkanRendererParameterizedYuvTest, YuvTest) {
 
   // Register the render target tokens with the renderer.
   auto render_target_collection_id = allocation::GenerateUniqueBufferCollectionId();
-  result = renderer.ImportBufferCollection(render_target_collection_id, sysmem_allocator_.get(),
-                                           std::move(render_target_tokens.dup_token),
-                                           BufferCollectionUsage::kRenderTarget, std::nullopt);
+  result = renderer->ImportBufferCollection(render_target_collection_id, sysmem_allocator_.get(),
+                                            std::move(render_target_tokens.dup_token),
+                                            BufferCollectionUsage::kRenderTarget, std::nullopt);
   EXPECT_TRUE(result);
 
   // Create a client-side handle to the render target's buffer collection and set the client
@@ -2278,7 +2267,7 @@ VK_TEST_P(VulkanRendererParameterizedYuvTest, YuvTest) {
                                           .width = kTargetWidth,
                                           .height = kTargetHeight};
   import_res =
-      renderer.ImportBufferImage(render_target_metadata, BufferCollectionUsage::kRenderTarget);
+      renderer->ImportBufferImage(render_target_metadata, BufferCollectionUsage::kRenderTarget);
   EXPECT_TRUE(import_res);
 
   // Create a renderable where the upper-left hand corner should be at position (0,0) with a
@@ -2321,8 +2310,8 @@ VK_TEST_P(VulkanRendererParameterizedYuvTest, YuvTest) {
       });
 
   // Render the renderable to the render target.
-  renderer.Render(render_target_metadata, {image_renderable}, {image_metadata});
-  renderer.WaitIdle();
+  renderer->Render(render_target_metadata, {image_renderable}, {image_metadata});
+  renderer->WaitIdle();
 
   // Get a raw pointer from the client collection's vmo that represents the render target and read
   // its values. This should show that the renderable was rendered with expected BGRA colors.
@@ -2351,22 +2340,21 @@ INSTANTIATE_TEST_SUITE_P(YuvPixelFormats, VulkanRendererParameterizedYuvTest,
 // This test actually renders a protected memory backed image using the VKRenderer.
 VK_TEST_F(VulkanRendererTest, ProtectedMemoryTest) {
   SKIP_TEST_IF_ESCHER_USES_DEVICE(VirtualGpu);
-  auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
-  auto unique_escher = escher::test::CreateEscherWithProtectedMemoryEnabled();
-  if (!unique_escher) {
+
+  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer(/*use_protected_memory=*/true);
+  if (!escher) {
     FX_LOGS(WARNING) << "Protected memory not supported. Test skipped.";
     GTEST_SKIP();
   }
-  VkRenderer renderer(unique_escher->GetWeakPtr());
 
   // Create a pair of tokens for the Image allocation.
   auto image_tokens = flatland::SysmemTokens::Create(sysmem_allocator_.get());
 
   // Register the Image token with the renderer.
   auto image_collection_id = allocation::GenerateUniqueBufferCollectionId();
-  auto result = renderer.ImportBufferCollection(image_collection_id, sysmem_allocator_.get(),
-                                                std::move(image_tokens.dup_token),
-                                                BufferCollectionUsage::kClientImage, std::nullopt);
+  auto result = renderer->ImportBufferCollection(image_collection_id, sysmem_allocator_.get(),
+                                                 std::move(image_tokens.dup_token),
+                                                 BufferCollectionUsage::kClientImage, std::nullopt);
   EXPECT_TRUE(result);
 
   const uint32_t kTargetWidth = 32;
@@ -2406,7 +2394,8 @@ VK_TEST_F(VulkanRendererTest, ProtectedMemoryTest) {
                                   .vmo_index = 0,
                                   .width = kTargetWidth,
                                   .height = kTargetHeight};
-  auto import_res = renderer.ImportBufferImage(image_metadata, BufferCollectionUsage::kClientImage);
+  auto import_res =
+      renderer->ImportBufferImage(image_metadata, BufferCollectionUsage::kClientImage);
   EXPECT_TRUE(import_res);
 
   // Create a pair of tokens for the render target allocation.
@@ -2414,9 +2403,9 @@ VK_TEST_F(VulkanRendererTest, ProtectedMemoryTest) {
 
   // Register the render target tokens with the renderer.
   auto render_target_collection_id = allocation::GenerateUniqueBufferCollectionId();
-  result = renderer.ImportBufferCollection(render_target_collection_id, sysmem_allocator_.get(),
-                                           std::move(render_target_tokens.dup_token),
-                                           BufferCollectionUsage::kRenderTarget, std::nullopt);
+  result = renderer->ImportBufferCollection(render_target_collection_id, sysmem_allocator_.get(),
+                                            std::move(render_target_tokens.dup_token),
+                                            BufferCollectionUsage::kRenderTarget, std::nullopt);
   EXPECT_TRUE(result);
 
   // Create a client-side handle to the render target's buffer collection and set the client
@@ -2446,15 +2435,15 @@ VK_TEST_F(VulkanRendererTest, ProtectedMemoryTest) {
                                           .width = kTargetWidth,
                                           .height = kTargetHeight};
   import_res =
-      renderer.ImportBufferImage(render_target_metadata, BufferCollectionUsage::kRenderTarget);
+      renderer->ImportBufferImage(render_target_metadata, BufferCollectionUsage::kRenderTarget);
   EXPECT_TRUE(import_res);
 
   // Create a renderable where the upper-left hand corner should be at position (0,0) with a
   // width/height of (32,32).
   ImageRect image_renderable(glm::vec2(0, 0), glm::vec2(kTargetWidth, kTargetHeight));
   // Render the renderable to the render target.
-  renderer.Render(render_target_metadata, {image_renderable}, {image_metadata});
-  renderer.WaitIdle();
+  renderer->Render(render_target_metadata, {image_renderable}, {image_metadata});
+  renderer->WaitIdle();
 
   // Note that we cannot read pixel values from either buffer because protected memory does not
   // allow that.
@@ -2462,17 +2451,14 @@ VK_TEST_F(VulkanRendererTest, ProtectedMemoryTest) {
 
 // Tests VkRenderer's readback path. This test is enabled on virtual gpu.
 VK_TEST_F(VulkanRendererTest, ReadbackTest) {
-  auto env = escher::test::EscherEnvironment::GetGlobalTestEnvironment();
-  auto unique_escher = std::make_unique<escher::Escher>(
-      env->GetVulkanDevice(), env->GetFilesystem(), /*gpu_allocator*/ nullptr);
-  VkRenderer renderer(unique_escher->GetWeakPtr());
+  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
 
   // Setup the render target collection.
   allocation::GlobalBufferCollectionId target_id = allocation::GenerateUniqueBufferCollectionId();
   auto tokens = flatland::SysmemTokens::Create(sysmem_allocator_.get());
-  auto result = renderer.ImportBufferCollection(target_id, sysmem_allocator_.get(),
-                                                std::move(tokens.dup_token),
-                                                BufferCollectionUsage::kRenderTarget, std::nullopt);
+  bool result = renderer->ImportBufferCollection(
+      target_id, sysmem_allocator_.get(), std::move(tokens.dup_token),
+      BufferCollectionUsage::kRenderTarget, std::nullopt);
   ASSERT_TRUE(result);
   fuchsia::sysmem::BufferCollectionSyncPtr target_ptr;
   zx_status_t status = sysmem_allocator_->BindSharedCollection(std::move(tokens.local_token),
@@ -2492,7 +2478,7 @@ VK_TEST_F(VulkanRendererTest, ReadbackTest) {
   fuchsia::sysmem::BufferCollectionInfo_2 readback_info;
   fuchsia::sysmem::BufferCollectionSyncPtr readback_ptr;
   auto readback_id =
-      SetupBufferCollection(1, 60, 40, BufferCollectionUsage::kReadback, &renderer,
+      SetupBufferCollection(1, 60, 40, BufferCollectionUsage::kReadback, renderer.get(),
                             sysmem_allocator_.get(), &readback_info, readback_ptr, target_id);
   EXPECT_EQ(target_id, readback_id);
 
@@ -2504,9 +2490,9 @@ VK_TEST_F(VulkanRendererTest, ReadbackTest) {
                                  .vmo_index = 0,
                                  .width = kTargetWidth,
                                  .height = kTargetHeight};
-  result = renderer.ImportBufferImage(render_target, BufferCollectionUsage::kRenderTarget);
+  result = renderer->ImportBufferImage(render_target, BufferCollectionUsage::kRenderTarget);
   ASSERT_TRUE(result);
-  result = renderer.ImportBufferImage(render_target, BufferCollectionUsage::kReadback);
+  result = renderer->ImportBufferImage(render_target, BufferCollectionUsage::kReadback);
   ASSERT_TRUE(result);
 
   // Create the image metadata for the solid color renderable.
@@ -2517,8 +2503,8 @@ VK_TEST_F(VulkanRendererTest, ReadbackTest) {
   ImageRect renderable(glm::vec2(0, 0), glm::vec2(kTargetWidth, kTargetHeight));
 
   // Render the renderable to the render target.
-  renderer.Render(render_target, {renderable}, {renderable_image_data});
-  renderer.WaitIdle();
+  renderer->Render(render_target, {renderable}, {renderable_image_data});
+  renderer->WaitIdle();
 
   // Get a raw pointer from the readback collection's vmo that represents the copied render target
   // and read its values.

@@ -477,7 +477,7 @@ fuchsia_test_package("gfx_integration_tests") {
     log_settings = {
       max_severity = "ERROR"
     }
-    timeout_secs = 420  # More generous timeout for scenic_pixeltest
+    timeout_secs = 600  # More generous timeout for scenic_pixeltest
   }
 }
 

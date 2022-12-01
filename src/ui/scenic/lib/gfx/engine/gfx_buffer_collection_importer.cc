@@ -16,14 +16,7 @@
 #include "src/ui/scenic/lib/gfx/engine/session.h"
 #include "src/ui/scenic/lib/gfx/resources/gpu_image.h"
 #include "src/ui/scenic/lib/gfx/resources/memory.h"
-
-namespace {
-
-// Image formats supported by Scenic in a priority order.
-const vk::Format kPreferredImageFormats[] = {vk::Format::eR8G8B8A8Srgb, vk::Format::eB8G8R8A8Srgb,
-                                             vk::Format::eG8B8R83Plane420Unorm,
-                                             vk::Format::eG8B8R82Plane420Unorm};
-}  // namespace
+#include "src/ui/scenic/lib/utils/shader_warmup.h"
 
 namespace scenic_impl {
 namespace gfx {
@@ -87,7 +80,7 @@ bool GfxBufferCollectionImporter::ImportBufferCollection(
   vk::BufferCollectionFUCHSIA vk_buffer_collection;
   {
     std::vector<vk::ImageFormatConstraintsInfoFUCHSIA> format_constraints;
-    for (const auto& format : kPreferredImageFormats) {
+    for (const auto& format : utils::SupportedClientImageFormats()) {
       format_constraints.push_back(escher::GetDefaultImageFormatConstraintsInfo(
           escher::image_utils::GetDefaultImageConstraints(format)));
     }
@@ -218,7 +211,7 @@ fxl::RefPtr<GpuImage> GfxBufferCollectionImporter::ExtractImage(
   collection_image_info.collection = vk_buffer_collection;
   collection_image_info.index = metadata.vmo_index;
   vk::ImageCreateInfo create_info = escher::image_utils::GetDefaultImageConstraints(
-      kPreferredImageFormats[properties.createInfoIndex]);
+      utils::SupportedClientImageFormats()[properties.createInfoIndex]);
   create_info.setPNext(&collection_image_info);
   create_info.extent = vk::Extent3D{metadata.width, metadata.height, 1};
   if (is_protected)
