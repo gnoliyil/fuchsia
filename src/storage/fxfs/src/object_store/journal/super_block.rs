@@ -2,10 +2,31 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+//! We currently store two of these super-blocks (A/B) located in two logical consecutive
+//! 512kiB extents at the start of the device.
+//!
+//! Immediately following the serialized `SuperBlockHeader` structure below is a stream of
+//! serialized operations that are replayed into the root parent `ObjectStore`. Note that the root
+//! parent object store exists entirely in RAM until serialized back into the super-block.
+//!
+//! Super-blocks are updated alternately with a monotonically increasing generation number.
+//! At mount time, the super-block used is the valid `SuperBlock` with the highest generation
+//! number.
+//!
+//! Note the asymmetry here regarding load/save:
+//!   * We load a superblock from a Device/SuperBlockInstance and return a
+//!     (SuperBlockHeader, ObjectStore) pair. The ObjectStore is populated directly from device.
+//!   * We save a superblock from a (SuperBlockHeader, Vec<ObjectItem>) pair to a WriteObjectHandle.
+//!
+//! This asymmetry is required for consistency.
+//! The Vec<ObjectItem> is produced by scanning the root_parent_store. This is the responsibility
+//! of the journal code, which must hold a lock to avoid concurrent updates. However, this lock
+//! must NOT be held when saving the superblock as additional extents may need to be allocated as
+//! part of the save process.
 use {
     crate::{
         errors::FxfsError,
-        filesystem::{ApplyContext, ApplyMode, JournalingObject},
+        filesystem::{ApplyContext, ApplyMode, Filesystem, JournalingObject},
         log::*,
         lsm_tree::types::LayerIterator,
         metrics::{traits::Metric as _, UintMetric},
@@ -56,9 +77,9 @@ const MIN_SUPER_BLOCK_SIZE: u64 = 524_288;
 /// All superblocks start with the magic bytes "FxfsSupr".
 const SUPER_BLOCK_MAGIC: &[u8; 8] = b"FxfsSupr";
 
-/// An enum representing one of our super block instances.
+/// An enum representing one of our super-block instances.
 ///
-/// This provides hard-coded constants related to the location and properties of the super blocks
+/// This provides hard-coded constants related to the location and properties of the super-blocks
 /// that are required to bootstrap the filesystem.
 #[derive(Copy, Clone, Debug)]
 pub enum SuperBlockInstance {
@@ -92,18 +113,6 @@ impl SuperBlockInstance {
     }
 }
 
-/// A super-block structure describing the filesystem.
-///
-/// We currently store two of these super blocks (A/B) located in two logical consecutive
-/// 512kiB extents at the start of the device.
-///
-/// Immediately following the serialized `SuperBlockHeader` structure below is a stream of serialized
-/// operations that are replayed into the root parent `ObjectStore`. Note that the root parent
-/// object store exists entirely in RAM until serialized back into the super-block.
-///
-/// Super blocks are updated alternately with a monotonically increasing generation number.
-/// At mount time, the super block used is the valid `SuperBlock` with the highest generation
-/// number.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize, TypeHash, Versioned)]
 pub struct SuperBlockHeader {
     /// The globally unique identifier for the filesystem.
@@ -217,8 +226,112 @@ impl Default for SuperBlockMetrics {
     }
 }
 
-/// This encapsulates the A/B alternating super block logic.
-/// All super block load/save operations should be via the methods on this type.
+/// Reads an individual (A/B) super-block instance and root_parent_store from device.
+/// Users should use SuperBlockManager::load() instead.
+async fn read(
+    device: Arc<dyn Device>,
+    block_size: u64,
+    instance: SuperBlockInstance,
+) -> Result<(SuperBlockHeader, SuperBlockInstance, ObjectStore), Error> {
+    let (super_block_header, mut reader) = SuperBlockHeader::read_header(device.clone(), instance)
+        .await
+        .context("Failed to read superblocks")?;
+    let root_parent = ObjectStore::new_root_parent(
+        device,
+        block_size,
+        super_block_header.root_parent_store_object_id,
+    );
+    root_parent.set_graveyard_directory_object_id(
+        super_block_header.root_parent_graveyard_directory_object_id,
+    );
+
+    loop {
+        // TODO: Flatten a layer and move reader here?
+        let (mutation, sequence) = match reader.next_item().await? {
+            // RecordReader should filter out extent records.
+            SuperBlockRecord::Extent(_) => bail!("Unexpected extent record"),
+            SuperBlockRecord::ObjectItem(item) => {
+                (Mutation::insert_object(item.key, item.value), item.sequence)
+            }
+            SuperBlockRecord::End => break,
+        };
+        root_parent
+            .apply_mutation(
+                mutation,
+                &ApplyContext {
+                    mode: ApplyMode::Replay,
+                    checkpoint: JournalCheckpoint { file_offset: sequence, ..Default::default() },
+                },
+                AssocObj::None,
+            )
+            .await?;
+    }
+    Ok((super_block_header, instance, root_parent))
+}
+
+/// Write a super-block to the given file handle.
+/// Requires that the filesystem is fully loaded and writable as this may require allocation.
+async fn write<S: AsRef<ObjectStore> + Send + Sync + 'static>(
+    super_block_header: &SuperBlockHeader,
+    items: Vec<ObjectItem>,
+    handle: StoreObjectHandle<S>,
+) -> Result<(), Error> {
+    let object_manager = handle.store().filesystem().object_manager().clone();
+    // TODO(fxbug.dev/95404): Don't use the same code here for Journal and SuperBlock. They
+    // aren't the same things and it is already getting convoluted. e.g of diff stream content:
+    //   Superblock:  (Magic, Ver, Header(Ver), SuperBlockRecord(Ver)*, ...)
+    //   Journal:     (Ver, JournalRecord(Ver)*, RESET, Ver2, JournalRecord(Ver2)*, ...)
+    // We should abstract away the checksum code and implement these separately.
+    let mut writer = SuperBlockWriter::new(handle, object_manager.metadata_reservation());
+
+    writer.writer.write_all(SUPER_BLOCK_MAGIC)?;
+    super_block_header.serialize_with_version(&mut writer.writer)?;
+    for item in items.into_iter() {
+        writer.maybe_extend().await?;
+        SuperBlockRecord::ObjectItem(item).serialize_into(&mut writer.writer)?;
+    }
+    SuperBlockRecord::End.serialize_into(&mut writer.writer)?;
+    writer.writer.pad_to_block()?;
+    writer.flush_buffer().await?;
+    let len =
+        std::cmp::max(MIN_SUPER_BLOCK_SIZE, writer.writer.journal_file_checkpoint().file_offset);
+    writer
+        .handle
+        .truncate_with_options(
+            Options {
+                skip_journal_checks: true,
+                borrow_metadata_space: true,
+                ..Default::default()
+            },
+            len,
+        )
+        .await?;
+    Ok(())
+}
+
+// Reads and returns a snapshot of the root_parent store.
+// Must be performed whilst holding a writer lock.
+pub async fn object_store_to_vec(
+    root_parent_store: &ObjectStore,
+) -> Result<Vec<ObjectItem>, Error> {
+    let tree = root_parent_store.tree();
+    let layer_set = tree.layer_set();
+    let mut merger = layer_set.merger();
+    let mut iter = merger.seek(Bound::Unbounded).await?;
+    let mut items = vec![];
+    while let Some(item_ref) = iter.get() {
+        let item = item_ref.cloned();
+        // TODO(fxbug.dev/116388): There shouldn't be tombstones here to begin with.
+        if !item.is_tombstone() {
+            items.push(item);
+        }
+        iter.advance().await?;
+    }
+    Ok(items)
+}
+
+/// This encapsulates the A/B alternating super-block logic.
+/// All super-block load/save operations should be via the methods on this type.
 pub struct SuperBlockManager {
     next_instance: Arc<Mutex<SuperBlockInstance>>,
     metrics: SuperBlockMetrics,
@@ -232,11 +345,7 @@ impl SuperBlockManager {
         }
     }
 
-    // TODO(ripper): It would be nice to move create_objects here as well but for now our
-    // transaction code requires handles to outlive transactions and so moving it here would
-    // likely require us to split the single filesystem creation transaction into several.
-
-    /// Loads both A/B super blocks and root_parent ObjectStores and and returns the newest valid
+    /// Loads both A/B super-blocks and root_parent ObjectStores and and returns the newest valid
     /// pair. Also ensures the next superblock updated via |save| will be the other instance.
     pub async fn load(
         &self,
@@ -244,8 +353,8 @@ impl SuperBlockManager {
         block_size: u64,
     ) -> Result<(SuperBlockHeader, ObjectStore), Error> {
         let (super_block, current_super_block, root_parent) = match futures::join!(
-            SuperBlockHeader::read(device.clone(), block_size, SuperBlockInstance::A),
-            SuperBlockHeader::read(device.clone(), block_size, SuperBlockInstance::B)
+            read(device.clone(), block_size, SuperBlockInstance::A),
+            read(device.clone(), block_size, SuperBlockInstance::B)
         ) {
             (Err(e1), Err(e2)) => {
                 bail!("Failed to load both superblocks due to {:?}\nand\n{:?}", e1, e2)
@@ -270,10 +379,10 @@ impl SuperBlockManager {
     /// Requires that the filesystem is fully loaded and writable as this may require allocation.
     pub async fn save(
         &self,
-        super_block_header: &SuperBlockHeader,
-        root_parent: Arc<ObjectStore>,
+        super_block_header: SuperBlockHeader,
+        filesystem: Arc<dyn Filesystem>,
+        root_parent: Vec<ObjectItem>,
     ) -> Result<(), Error> {
-        let filesystem = root_parent.filesystem();
         let root_store = filesystem.root_store();
         let object_id = {
             let mut next_instance = self.next_instance.lock().unwrap();
@@ -288,7 +397,7 @@ impl SuperBlockManager {
             None,
         )
         .await?;
-        super_block_header.write(&root_parent, handle).await?;
+        write(&super_block_header, root_parent, handle).await?;
         self.metrics
             .last_super_block_offset
             .set(super_block_header.super_block_journal_file_offset);
@@ -327,51 +436,6 @@ impl SuperBlockHeader {
             earliest_version,
             ..Default::default()
         }
-    }
-
-    /// Reads a SuperBlock instance and root_parent ObjectStore from a device.
-    async fn read(
-        device: Arc<dyn Device>,
-        block_size: u64,
-        instance: SuperBlockInstance,
-    ) -> Result<(SuperBlockHeader, SuperBlockInstance, ObjectStore), Error> {
-        let (super_block_header, mut reader) =
-            SuperBlockHeader::read_header(device.clone(), instance)
-                .await
-                .context("Failed to read superblocks")?;
-        let root_parent = ObjectStore::new_root_parent(
-            device,
-            block_size,
-            super_block_header.root_parent_store_object_id,
-        );
-        root_parent.set_graveyard_directory_object_id(
-            super_block_header.root_parent_graveyard_directory_object_id,
-        );
-
-        loop {
-            let (mutation, sequence) = match reader.next_item().await? {
-                SuperBlockRecord::Extent(_) => bail!("Unexpected extent record"),
-                SuperBlockRecord::ObjectItem(item) => {
-                    (Mutation::insert_object(item.key, item.value), item.sequence)
-                }
-                SuperBlockRecord::End => break,
-            };
-            root_parent
-                .apply_mutation(
-                    mutation,
-                    &ApplyContext {
-                        mode: ApplyMode::Replay,
-                        checkpoint: JournalCheckpoint {
-                            file_offset: sequence,
-                            ..Default::default()
-                        },
-                    },
-                    AssocObj::None,
-                )
-                .await?;
-        }
-
-        Ok((super_block_header, instance, root_parent))
     }
 
     /// Shreds the super-block, rendering it unreadable.  This is used in mkfs to ensure that we
@@ -444,41 +508,6 @@ impl SuperBlockHeader {
         }
         reader.set_version(super_block_version);
         Ok((super_block_header, RecordReader { reader }))
-    }
-
-    /// Writes the super-block and the records from the root parent store to |handle|.
-    async fn write<'a, S: AsRef<ObjectStore> + Send + Sync + 'static>(
-        &self,
-        root_parent_store: &'a ObjectStore,
-        handle: StoreObjectHandle<S>,
-    ) -> Result<(), Error> {
-        assert_eq!(root_parent_store.store_object_id(), self.root_parent_store_object_id);
-
-        let object_manager = root_parent_store.filesystem().object_manager().clone();
-        // TODO(fxbug.dev/95404): Don't use the same code here for Journal and SuperBlock. They
-        // aren't the same things and it is already getting convoluted. e.g of diff stream content:
-        //   Superblock:  (Magic, Ver, Header(Ver), SuperBlockRecord(Ver)*, ...)
-        //   Journal:     (Ver, JournalRecord(Ver)*, RESET, Ver2, JournalRecord(Ver2)*, ...)
-        // We should abstract away the checksum code and implement these separately.
-        let mut writer = SuperBlockWriter::new(handle, object_manager.metadata_reservation());
-
-        writer.writer.write_all(SUPER_BLOCK_MAGIC)?;
-        self.serialize_with_version(&mut writer.writer)?;
-
-        let tree = root_parent_store.tree();
-        let layer_set = tree.layer_set();
-        let mut merger = layer_set.merger();
-        let mut iter = merger.seek(Bound::Unbounded).await?;
-
-        while let Some(item_ref) = iter.get() {
-            writer.maybe_extend().await?;
-            SuperBlockRecord::ObjectItem(item_ref.cloned()).serialize_into(&mut writer.writer)?;
-            iter.advance().await?;
-        }
-
-        SuperBlockRecord::End.serialize_into(&mut writer.writer)?;
-        writer.writer.pad_to_block()?;
-        writer.flush_buffer().await
     }
 }
 
@@ -559,183 +588,228 @@ impl RecordReader {
 mod tests {
     use {
         super::{
-            SuperBlockHeader, SuperBlockInstance, SuperBlockRecord, UuidWrapper,
+            object_store_to_vec, write, SuperBlockHeader, SuperBlockInstance, UuidWrapper,
             MIN_SUPER_BLOCK_SIZE,
         },
         crate::{
-            filesystem::{Filesystem, FxFilesystem},
-            lsm_tree::types::LayerIterator,
+            filesystem::{Filesystem, FxFilesystem, OpenFxFilesystem},
             object_store::{
-                allocator::{Allocator, SimpleAllocator},
-                journal::{journal_handle_options, JournalCheckpoint},
-                testing::fake_filesystem::FakeFilesystem,
+                allocator::Allocator,
+                journal::JournalCheckpoint,
                 transaction::{Options, TransactionHandler},
-                HandleOptions, NewChildStoreOptions, ObjectHandle, ObjectStore, StoreObjectHandle,
+                HandleOptions, ObjectHandle, ObjectStore, StoreObjectHandle,
             },
             serialized_types::LATEST_VERSION,
         },
-        std::{ops::Bound, sync::Arc},
         storage_device::{fake_device::FakeDevice, DeviceHolder},
         uuid::Uuid,
     };
 
+    // We require 512kiB each for A/B super-blocks, 256kiB for the journal (128kiB before flush)
+    // and compactions require double the layer size to complete.
     const TEST_DEVICE_BLOCK_SIZE: u32 = 512;
+    const TEST_DEVICE_BLOCK_COUNT: u64 = 16384;
 
     async fn filesystem_and_super_block_handles(
-    ) -> (Arc<FakeFilesystem>, StoreObjectHandle<ObjectStore>, StoreObjectHandle<ObjectStore>) {
-        let device = DeviceHolder::new(FakeDevice::new(8192, TEST_DEVICE_BLOCK_SIZE));
-        let fs = FakeFilesystem::new(device);
-        let allocator = Arc::new(SimpleAllocator::new(fs.clone(), 2));
-        fs.object_manager().set_allocator(allocator.clone());
-        fs.object_manager().init_metadata_reservation().expect("init_metadata_reservation failed");
-        let root_parent_store = ObjectStore::new_empty(None, 3, fs.clone());
-        fs.object_manager().set_root_parent_store(root_parent_store.clone());
-        let root_store;
-        let handle_a; // extend will borrow handle and needs to outlive transaction.
-        let handle_b; // extend will borrow handle and needs to outlive transaction.
-        let mut transaction = fs
-            .clone()
-            .new_transaction(&[], Options::default())
-            .await
-            .expect("new_transaction failed");
-        root_store = root_parent_store
-            .new_child_store(
-                &mut transaction,
-                NewChildStoreOptions { object_id: 4, ..Default::default() },
-            )
-            .await
-            .expect("new_child_store failed");
-        fs.object_manager().set_root_store(root_store.clone());
-        allocator.create(&mut transaction).await.expect("allocator create failed");
-        root_store.create(&mut transaction).await.expect("create failed");
-        handle_a = ObjectStore::create_object_with_id(
-            &root_store,
-            &mut transaction,
+    ) -> (OpenFxFilesystem, StoreObjectHandle<ObjectStore>, StoreObjectHandle<ObjectStore>) {
+        let device =
+            DeviceHolder::new(FakeDevice::new(TEST_DEVICE_BLOCK_COUNT, TEST_DEVICE_BLOCK_SIZE));
+        let fs = FxFilesystem::new_empty(device).await.expect("new_empty failed");
+        fs.close().await.expect("Close failed");
+        let device = fs.take_device().await;
+        device.reopen(false);
+        let fs = FxFilesystem::open(device).await.expect("open failed");
+
+        let handle_a = ObjectStore::open_object(
+            &fs.object_manager().root_store(),
             SuperBlockInstance::A.object_id(),
-            journal_handle_options(),
+            HandleOptions { ..Default::default() },
             None,
         )
         .await
-        .expect("create_object_with_id failed");
-        handle_a
-            .extend(&mut transaction, super::SuperBlockInstance::A.first_extent())
-            .await
-            .expect("extend failed");
-        handle_b = ObjectStore::create_object_with_id(
-            &root_store,
-            &mut transaction,
+        .expect("open superblock failed");
+
+        let handle_b = ObjectStore::open_object(
+            &fs.object_manager().root_store(),
             SuperBlockInstance::B.object_id(),
-            journal_handle_options(),
+            HandleOptions { ..Default::default() },
             None,
         )
         .await
-        .expect("create_object_with_id failed");
-        handle_b
-            .extend(&mut transaction, super::SuperBlockInstance::B.first_extent())
-            .await
-            .expect("extend failed");
-
-        transaction.commit().await.expect("commit failed");
-
+        .expect("open superblock failed");
         (fs, handle_a, handle_b)
     }
 
     #[fuchsia::test]
     async fn test_read_written_super_block() {
-        let (fs, handle_a, handle_b) = filesystem_and_super_block_handles().await;
+        let (fs, _handle_a, _handle_b) = filesystem_and_super_block_handles().await;
         const JOURNAL_OBJECT_ID: u64 = 5;
 
-        // Create a large number of objects in the root parent store so that we test handling of
-        // extents.
-        let mut journal_offset = 0;
-        for _ in 0..32000 {
+        // Confirm that the (first) super-block is minimum sized to start with.
+        assert_eq!(
+            ObjectStore::open_object(
+                &fs.root_store(),
+                SuperBlockInstance::A.object_id(),
+                HandleOptions::default(),
+                None,
+            )
+            .await
+            .expect("open_object failed")
+            .get_size(),
+            MIN_SUPER_BLOCK_SIZE
+        );
+
+        // Create a large number of objects in the root parent store so that we test growing
+        // of the super-block file, requiring us to add extents.
+        let mut created_object_ids = vec![];
+        const NUM_ENTRIES: u64 = MIN_SUPER_BLOCK_SIZE / 16;
+        for _ in 0..NUM_ENTRIES {
+            let mut transaction = fs
+                .clone()
+                .new_transaction(&[], Options::default())
+                .await
+                .expect("new_transaction failed");
+            created_object_ids.push(
+                ObjectStore::create_object(
+                    &fs.object_manager().root_parent_store(),
+                    &mut transaction,
+                    HandleOptions::default(),
+                    None,
+                )
+                .await
+                .expect("create_object failed")
+                .object_id(),
+            );
+            transaction.commit().await.expect("commit failed");
+        }
+
+        // Note here that StoreObjectHandle caches the size given to it at construction.
+        // If we want to know the true size after a super-block has been written, we need
+        // a new handle.
+        assert!(
+            ObjectStore::open_object(
+                &fs.root_store(),
+                SuperBlockInstance::A.object_id(),
+                HandleOptions::default(),
+                None,
+            )
+            .await
+            .expect("open_object failed")
+            .get_size()
+                > MIN_SUPER_BLOCK_SIZE
+        );
+
+        let written_super_block_a =
+            SuperBlockHeader::read_header(fs.device(), SuperBlockInstance::A)
+                .await
+                .expect("read failed");
+        let written_super_block_b =
+            SuperBlockHeader::read_header(fs.device(), SuperBlockInstance::B)
+                .await
+                .expect("read failed");
+
+        // Check that a non-zero GUID has been assigned.
+        assert!(!written_super_block_a.0.guid.0.is_nil());
+
+        // Depending on specific offsets is fragile so we just validate the fields we believe
+        // to be stable.
+        assert_eq!(written_super_block_a.0.guid, written_super_block_b.0.guid);
+        assert_eq!(written_super_block_a.0.guid, written_super_block_b.0.guid);
+        assert!(written_super_block_a.0.generation != written_super_block_b.0.generation);
+        assert_eq!(
+            written_super_block_a.0.root_parent_store_object_id,
+            written_super_block_b.0.root_parent_store_object_id
+        );
+        assert_eq!(
+            written_super_block_a.0.root_parent_graveyard_directory_object_id,
+            written_super_block_b.0.root_parent_graveyard_directory_object_id
+        );
+        assert_eq!(written_super_block_a.0.root_store_object_id, fs.root_store().store_object_id());
+        assert_eq!(
+            written_super_block_a.0.root_store_object_id,
+            written_super_block_b.0.root_store_object_id
+        );
+        assert_eq!(written_super_block_a.0.allocator_object_id, fs.allocator().object_id());
+        assert_eq!(
+            written_super_block_a.0.allocator_object_id,
+            written_super_block_b.0.allocator_object_id
+        );
+        assert_eq!(written_super_block_a.0.journal_object_id, JOURNAL_OBJECT_ID);
+        assert_eq!(
+            written_super_block_a.0.journal_object_id,
+            written_super_block_b.0.journal_object_id
+        );
+        assert!(
+            written_super_block_a.0.journal_checkpoint.file_offset
+                != written_super_block_b.0.journal_checkpoint.file_offset
+        );
+        assert!(
+            written_super_block_a.0.super_block_journal_file_offset
+                != written_super_block_b.0.super_block_journal_file_offset
+        );
+        // Nb: We skip journal_file_offsets and borrowed metadata space checks.
+        assert_eq!(written_super_block_a.0.earliest_version, LATEST_VERSION);
+        assert_eq!(
+            written_super_block_a.0.earliest_version,
+            written_super_block_b.0.earliest_version
+        );
+
+        // Nb: Skip comparison of root_parent store contents because we have no way of anticipating
+        // the extent offsets and it is reasonable that a/b differ.
+
+        // Delete all the objects we just made.
+        for object_id in created_object_ids {
+            let mut transaction = fs
+                .clone()
+                .new_transaction(&[], Options::default())
+                .await
+                .expect("new_transaction failed");
+            fs.object_manager()
+                .root_parent_store()
+                .adjust_refs(&mut transaction, object_id, -1)
+                .await
+                .expect("adjust_refs failed");
+            transaction.commit().await.expect("commit failed");
+            fs.object_manager()
+                .root_parent_store()
+                .tombstone(object_id, Options::default())
+                .await
+                .expect("tombstone failed");
+        }
+        // Write some stuff to the root store to ensure we rotate the journal and produce new
+        // super blocks.
+        for _ in 0..NUM_ENTRIES {
             let mut transaction = fs
                 .clone()
                 .new_transaction(&[], Options::default())
                 .await
                 .expect("new_transaction failed");
             ObjectStore::create_object(
-                &fs.object_manager().root_parent_store(),
+                &fs.object_manager().root_store(),
                 &mut transaction,
                 HandleOptions::default(),
                 None,
             )
             .await
             .expect("create_object failed");
-            journal_offset = transaction.commit().await.expect("commit failed");
+            transaction.commit().await.expect("commit failed");
         }
 
-        let mut super_block_header_a = SuperBlockHeader::new(
-            fs.object_manager().root_parent_store().store_object_id(),
-            /* root_parent_graveyard_directory_object_id: */ 1000,
-            fs.root_store().store_object_id(),
-            fs.allocator().object_id(),
-            JOURNAL_OBJECT_ID,
-            JournalCheckpoint { file_offset: 1234, checksum: 5678, version: LATEST_VERSION },
-            /* earliest_version: */ LATEST_VERSION,
+        // TODO(ripper): Bug! We somehow get existing objects remaining. My suspicion is that we've
+        // unlocked super-block writing so this code may induce out-of-order writes.
+
+        assert_eq!(
+            ObjectStore::open_object(
+                &fs.root_store(),
+                SuperBlockInstance::A.object_id(),
+                HandleOptions::default(),
+                None,
+            )
+            .await
+            .expect("open_object failed")
+            .get_size(),
+            MIN_SUPER_BLOCK_SIZE
         );
-        super_block_header_a.super_block_journal_file_offset = journal_offset + 1;
-        let mut super_block_b = super_block_header_a.clone();
-        super_block_b.journal_file_offsets.insert(1, 2);
-        super_block_b.generation += 1;
-
-        // Check that a non-zero GUID has been assigned.
-        assert!(!super_block_header_a.guid.0.is_nil());
-
-        let layer_set = fs.object_manager().root_parent_store().tree().layer_set();
-        let mut merger = layer_set.merger();
-
-        super_block_header_a
-            .write(fs.object_manager().root_parent_store().as_ref(), handle_a)
-            .await
-            .expect("write failed");
-        super_block_b
-            .write(fs.object_manager().root_parent_store().as_ref(), handle_b)
-            .await
-            .expect("write failed");
-
-        // Make sure we did actually extend the super block.
-        let handle = ObjectStore::open_object(
-            &fs.root_store(),
-            SuperBlockInstance::A.object_id(),
-            HandleOptions::default(),
-            None,
-        )
-        .await
-        .expect("open_object failed");
-        assert!(handle.get_size() > MIN_SUPER_BLOCK_SIZE);
-
-        let mut written_super_block_a =
-            SuperBlockHeader::read_header(fs.device(), SuperBlockInstance::A)
-                .await
-                .expect("read failed");
-
-        assert_eq!(written_super_block_a.0, super_block_header_a);
-        let written_super_block_b =
-            SuperBlockHeader::read_header(fs.device(), SuperBlockInstance::B)
-                .await
-                .expect("read failed");
-        assert_eq!(written_super_block_b.0, super_block_b);
-
-        // Check that the records match what we expect in the root parent store.
-        let mut iter = merger.seek(Bound::Unbounded).await.expect("seek failed");
-
-        let mut written_item = written_super_block_a.1.next_item().await.expect("next_item failed");
-
-        while let Some(item) = iter.get() {
-            if let SuperBlockRecord::ObjectItem(i) = written_item {
-                assert_eq!(i.as_item_ref(), item);
-            } else {
-                panic!("missing item: {:?}", item);
-            }
-            iter.advance().await.expect("advance failed");
-            written_item = written_super_block_a.1.next_item().await.expect("next_item failed");
-        }
-
-        if let SuperBlockRecord::End = written_item {
-        } else {
-            panic!("unexpected extra item: {:?}", written_item);
-        }
     }
 
     #[fuchsia::test]
@@ -753,10 +827,15 @@ mod tests {
         );
         // Ensure the superblock has no set GUID.
         super_block_header_a.guid = UuidWrapper(Uuid::nil());
-        super_block_header_a
-            .write(fs.object_manager().root_parent_store().as_ref(), handle_a)
-            .await
-            .expect("write failed");
+        write(
+            &super_block_header_a,
+            object_store_to_vec(fs.object_manager().root_parent_store().as_ref())
+                .await
+                .expect("scan failed"),
+            handle_a,
+        )
+        .await
+        .expect("write failed");
         let super_block_header = SuperBlockHeader::read_header(fs.device(), SuperBlockInstance::A)
             .await
             .expect("read failed");

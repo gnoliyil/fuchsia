@@ -984,6 +984,8 @@ impl Journal {
         journal_file_checkpoint.file_offset >= offset
     }
 
+    /// Flushes previous writes to the device and then writes out a new super-block.
+    /// Callers must ensure that we do not make concurrent calls.
     async fn write_super_block(&self) -> Result<(), Error> {
         let root_parent_store = self.objects.root_parent_store();
 
@@ -991,31 +993,42 @@ impl Journal {
         // relies on written data being observable, and we also need to lock the root parent store
         // so that no new entries are written to it whilst we are writing the super-block, and for
         // that we use the write lock.
-        let _write_guard;
-        let (checkpoint, borrowed) = {
-            let _sync_guard = debug_assert_not_too_long!(self.sync_mutex.lock());
-            _write_guard = debug_assert_not_too_long!(self.writer_mutex.lock());
-            let result = self.pad_to_block()?;
-            self.flush_device(result.0.file_offset).await?;
-            result
-        };
+        let items;
+        let old_super_block_offset;
+        let mut new_super_block_header;
+        {
+            let _write_guard;
+            let (checkpoint, borrowed) = {
+                let _sync_guard = debug_assert_not_too_long!(self.sync_mutex.lock());
+                _write_guard = debug_assert_not_too_long!(self.writer_mutex.lock());
+                let result = self.pad_to_block()?;
+                self.flush_device(result.0.file_offset).await?;
+                result
+            };
 
-        let mut new_super_block_header = self.inner.lock().unwrap().super_block_header.clone();
+            new_super_block_header = self.inner.lock().unwrap().super_block_header.clone();
 
-        let old_super_block_offset = new_super_block_header.journal_checkpoint.file_offset;
+            old_super_block_offset = new_super_block_header.journal_checkpoint.file_offset;
 
-        let (journal_file_offsets, min_checkpoint) = self.objects.journal_file_offsets();
+            let (journal_file_offsets, min_checkpoint) = self.objects.journal_file_offsets();
 
-        new_super_block_header.generation =
-            new_super_block_header.generation.checked_add(1).ok_or(FxfsError::Inconsistent)?;
-        new_super_block_header.super_block_journal_file_offset = checkpoint.file_offset;
-        new_super_block_header.journal_checkpoint = min_checkpoint.unwrap_or(checkpoint);
-        new_super_block_header.journal_checkpoint.version = LATEST_VERSION;
-        new_super_block_header.journal_file_offsets = journal_file_offsets;
-        new_super_block_header.borrowed_metadata_space = borrowed;
+            new_super_block_header.generation =
+                new_super_block_header.generation.checked_add(1).ok_or(FxfsError::Inconsistent)?;
+            new_super_block_header.super_block_journal_file_offset = checkpoint.file_offset;
+            new_super_block_header.journal_checkpoint = min_checkpoint.unwrap_or(checkpoint);
+            new_super_block_header.journal_checkpoint.version = LATEST_VERSION;
+            new_super_block_header.journal_file_offsets = journal_file_offsets;
+            new_super_block_header.borrowed_metadata_space = borrowed;
 
-        self.super_block_manager.save(&new_super_block_header, root_parent_store).await?;
-
+            items = super_block::object_store_to_vec(&*root_parent_store).await?;
+        }
+        self.super_block_manager
+            .save(
+                new_super_block_header.clone(),
+                self.objects.root_parent_store().filesystem(),
+                items,
+            )
+            .await?;
         {
             let mut inner = self.inner.lock().unwrap();
             inner.super_block_header = new_super_block_header;

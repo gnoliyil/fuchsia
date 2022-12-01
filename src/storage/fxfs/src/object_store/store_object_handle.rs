@@ -1139,6 +1139,53 @@ impl<S: AsRef<ObjectStore> + Send + Sync + 'static> StoreObjectHandle<S> {
         }
         Ok(())
     }
+
+    /// Truncates a file to a given size (growing/shrinking as required).
+    ///
+    /// Nb: Most code will want to call truncate() instead. This method is used
+    /// to update the super block -- a case where we must borrow metadata space.
+    pub async fn truncate_with_options(
+        &self,
+        options: Options<'_>,
+        size: u64,
+    ) -> Result<(), Error> {
+        let mut transaction = self.new_transaction_with_options(options).await?;
+        let old_size = self.get_size();
+        if size == old_size {
+            return Ok(());
+        }
+        if size < old_size {
+            if self.shrink(&mut transaction, size).await?.0 {
+                // The file needs to be trimmed.
+                transaction.commit_and_continue().await?;
+                let store = self.store();
+                while matches!(
+                    store
+                        .trim_some(
+                            &mut transaction,
+                            self.object_id,
+                            self.attribute_id,
+                            TrimMode::FromOffset(size)
+                        )
+                        .await?,
+                    TrimResult::Incomplete
+                ) {
+                    if let Err(error) = transaction.commit_and_continue().await {
+                        warn!(?error, "Failed to trim after truncate");
+                        return Ok(());
+                    }
+                }
+                if let Err(error) = transaction.commit().await {
+                    warn!(?error, "Failed to trim after truncate");
+                }
+                return Ok(());
+            }
+        } else {
+            self.grow(&mut transaction, old_size, size).await?;
+        }
+        transaction.commit().await?;
+        Ok(())
+    }
 }
 
 impl<S: AsRef<ObjectStore> + Send + Sync + 'static> AssociatedObject for StoreObjectHandle<S> {
@@ -1346,42 +1393,11 @@ impl<S: AsRef<ObjectStore> + Send + Sync + 'static> WriteObjectHandle for StoreO
     }
 
     async fn truncate(&self, size: u64) -> Result<(), Error> {
-        let mut transaction = self.new_transaction().await?;
-        let old_size = self.get_size();
-        if size == old_size {
-            return Ok(());
-        }
-        if size < old_size {
-            if self.shrink(&mut transaction, size).await?.0 {
-                // The file needs to be trimmed.
-                transaction.commit_and_continue().await?;
-                let store = self.store();
-                while matches!(
-                    store
-                        .trim_some(
-                            &mut transaction,
-                            self.object_id,
-                            self.attribute_id,
-                            TrimMode::FromOffset(size)
-                        )
-                        .await?,
-                    TrimResult::Incomplete
-                ) {
-                    if let Err(error) = transaction.commit_and_continue().await {
-                        warn!(?error, "Failed to trim after truncate");
-                        return Ok(());
-                    }
-                }
-                if let Err(error) = transaction.commit().await {
-                    warn!(?error, "Failed to trim after truncate");
-                }
-                return Ok(());
-            }
-        } else {
-            self.grow(&mut transaction, old_size, size).await?;
-        }
-        transaction.commit().await?;
-        Ok(())
+        self.truncate_with_options(
+            Options { skip_journal_checks: self.options.skip_journal_checks, ..Default::default() },
+            size,
+        )
+        .await
     }
 
     async fn write_timestamps(
