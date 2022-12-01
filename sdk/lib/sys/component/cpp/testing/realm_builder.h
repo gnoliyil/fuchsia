@@ -32,6 +32,9 @@ namespace component_testing {
 // Default child options provided to all components.
 const ChildOptions kDefaultChildOptions{.startup_mode = StartupMode::LAZY, .environment = ""};
 
+// Default child collection name for constructed root.
+constexpr char kDefaultCollection[] = "realm_builder";
+
 // Root of a constructed Realm. This object can not be instantiated directly.
 // Instead, it can only be constructed with the Realm::Builder/Build().
 class RealmRoot final {
@@ -367,6 +370,22 @@ class RealmBuilder final {
   /// Fetches the Component decl of this root realm.
   fuchsia::component::decl::Component GetRealmDecl();
 
+#if __Fuchsia_API_level__ >= 10
+  // Set the name of the collection that the realm will be added to.
+  // By default this is set to |kDefaultCollection|.
+  //
+  // Note that this collection name is referenced in the Realm Builder
+  // shard (//sdk/lib/sys/component/realm_builder_base.shard.cml) under the
+  // collection name |kDefaultCollection|. To retain the same routing, component
+  // authors that override the collection name should make the appropriate
+  // changes in the test component's manifest.
+  RealmBuilder& SetRealmCollection(const std::string& collection);
+
+  // Set the name for the constructed realm. By default, a randomly
+  // generated string is used.
+  RealmBuilder& SetRealmName(const std::string& name);
+#endif
+
   // Build the realm root prepared by the associated builder methods, e.g. |AddComponent|.
   // |dispatcher| must be non-null, or |async_get_default_dispatcher| must be
   // configured to return a non-null value
@@ -387,6 +406,8 @@ class RealmBuilder final {
                                  std::shared_ptr<sys::ServiceDirectory> svc = nullptr);
 
   bool realm_commited_ = false;
+  std::string realm_collection_ = kDefaultCollection;
+  cpp17::optional<std::string> realm_name_ = cpp17::nullopt;
   std::shared_ptr<sys::ServiceDirectory> svc_;
   fuchsia::component::test::BuilderSyncPtr builder_proxy_;
   std::shared_ptr<internal::LocalComponentRunner::Builder> runner_builder_;

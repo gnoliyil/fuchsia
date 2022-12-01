@@ -34,7 +34,6 @@
 
 namespace component_testing {
 namespace {
-constexpr char kCollectionName[] = "realm_builder";
 constexpr char kFrameworkIntermediaryChildName[] = "realm_builder_server";
 constexpr char kChildPathSeparator[] = "/";
 
@@ -354,6 +353,16 @@ fuchsia::component::decl::Component RealmBuilder::GetComponentDecl(const std::st
 
 fuchsia::component::decl::Component RealmBuilder::GetRealmDecl() { return root_.GetRealmDecl(); }
 
+RealmBuilder& RealmBuilder::SetRealmCollection(const std::string& collection) {
+  realm_collection_ = collection;
+  return *this;
+}
+
+RealmBuilder& RealmBuilder::SetRealmName(const std::string& name) {
+  realm_name_ = name;
+  return *this;
+}
+
 RealmRoot RealmBuilder::Build(async_dispatcher_t* dispatcher) {
   ZX_ASSERT_MSG(!realm_commited_, "Builder::Build() called after Realm already created");
   if (dispatcher == nullptr) {
@@ -367,7 +376,12 @@ RealmRoot RealmBuilder::Build(async_dispatcher_t* dispatcher) {
       result);
   realm_commited_ = true;
 
-  auto scoped_child = ScopedChild::New(kCollectionName, result.response().root_component_url, svc_);
+  auto scoped_child =
+      realm_name_.has_value()
+          ? ScopedChild::New(realm_collection_, realm_name_.value(),
+                             result.response().root_component_url, svc_)
+          : ScopedChild::New(realm_collection_, result.response().root_component_url, svc_);
+
   // Connect to fuchsia.component.Binder to automatically start Realm.
   scoped_child.ConnectSync<fuchsia::component::Binder>();
 
