@@ -10,20 +10,21 @@ use {
 
 // Helper for getting information about the child component using event_stream.
 pub struct AppMonitor {
-    moniker: String,
+    pub moniker: String,
+    stopped: Arc<Mutex<bool>>,
 }
 
 impl AppMonitor {
     pub fn new(moniker: String) -> Self {
-        Self { moniker: moniker }
+        Self { moniker: moniker, stopped: Arc::new(Mutex::new(false)) }
     }
 
     // Non-blocking. Starts a separate process that waits for a Stopped event from the moniker.
     // Note: this is a best effort check, the stopped event is only being observed while the
     // system validation test is running.
-    pub fn monitor_for_stop_event(&self, stopped: &Arc<Mutex<bool>>) {
-        *stopped.lock().unwrap() = false;
-        let stopped_clone = stopped.clone();
+    pub fn add_monitor_for_stop_event(&self) {
+        *self.stopped.lock().unwrap() = false;
+        let stopped_clone = self.stopped.clone();
         let moniker_clone = self.moniker.clone();
         fasync::Task::spawn(async move {
             let mut event_stream = EventStream::open().await.unwrap();
@@ -35,6 +36,10 @@ impl AppMonitor {
             *stopped_clone.lock().unwrap() = true;
         })
         .detach();
+    }
+
+    pub fn has_seen_stop_event(&self) -> bool {
+        *self.stopped.lock().unwrap()
     }
 
     // Blocking. Waits for event matcher to report that app is running.
