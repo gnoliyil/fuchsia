@@ -10,7 +10,7 @@ use fidl_fuchsia_diagnostics_stream::Record;
 use fidl_fuchsia_logger::{LogSinkProxy, MAX_DATAGRAM_LEN_BYTES};
 use fuchsia_runtime as rt;
 use fuchsia_zircon::{self as zx, AsHandleRef};
-use once_cell::sync::Lazy;
+use lazy_static::lazy_static;
 use std::{
     collections::HashSet,
     io::Cursor,
@@ -19,8 +19,10 @@ use std::{
 use tracing::{subscriber::Subscriber, Event};
 use tracing_subscriber::layer::{Context, Layer};
 
-static PROCESS_ID: Lazy<zx::Koid> =
-    Lazy::new(|| rt::process_self().get_koid().expect("couldn't read our own process koid"));
+lazy_static! {
+    static ref PROCESS_ID: zx::Koid =
+        rt::process_self().get_koid().expect("couldn't read our own process koid");
+}
 
 thread_local! {
     static THREAD_ID: zx::Koid = rt::thread_self()
