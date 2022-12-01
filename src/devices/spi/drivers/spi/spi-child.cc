@@ -211,7 +211,7 @@ void SpiChild::SpiConnectServer(zx::channel server) {
   }
 }
 
-zx_status_t SpiChild::Open() {
+zx_status_t SpiChild::DdkOpen(zx_device_t** dev_out, uint32_t flags) {
   fbl::AutoLock lock(&lock_);
   if (connected_) {
     return ZX_ERR_ALREADY_BOUND;
@@ -220,7 +220,7 @@ zx_status_t SpiChild::Open() {
   return ZX_OK;
 }
 
-zx_status_t SpiChild::Close() {
+zx_status_t SpiChild::DdkClose(uint32_t flags) {
   fbl::AutoLock lock(&lock_);
   spi_.ReleaseRegisteredVmos(cs_);
   connected_ = false;
@@ -298,9 +298,16 @@ zx_status_t SpiFidlChild::SetUpOutgoingDirectory(
 
 void SpiBanjoChild::DdkUnbind(ddk::UnbindTxn txn) { txn.Reply(); }
 
-zx_status_t SpiBanjoChild::DdkOpen(zx_device_t** dev_out, uint32_t flags) { return spi_->Open(); }
+zx_status_t SpiBanjoChild::DdkGetProtocol(uint32_t proto_id, void* out_protocol) {
+  if (proto_id != ZX_PROTOCOL_SPI) {
+    return ZX_ERR_NOT_SUPPORTED;
+  }
 
-zx_status_t SpiBanjoChild::DdkClose(uint32_t flags) { return spi_->Close(); }
+  spi_protocol_t* spi_proto = static_cast<spi_protocol_t*>(out_protocol);
+  spi_proto->ops = &spi_protocol_ops_;
+  spi_proto->ctx = this;
+  return ZX_OK;
+}
 
 zx_status_t SpiBanjoChild::SpiTransmit(const uint8_t* txdata_list, size_t txdata_count) {
   return spi_->SpiTransmit(txdata_list, txdata_count);
@@ -320,53 +327,6 @@ zx_status_t SpiBanjoChild::SpiExchange(const uint8_t* txdata_list, size_t txdata
 
 void SpiBanjoChild::SpiConnectServer(zx::channel server) {
   spi_->SpiConnectServer(std::move(server));
-}
-
-void SpiBanjoChild::TransmitVector(TransmitVectorRequestView request,
-                                   TransmitVectorCompleter::Sync& completer) {
-  spi_->TransmitVector(request, completer);
-}
-
-void SpiBanjoChild::ReceiveVector(ReceiveVectorRequestView request,
-                                  ReceiveVectorCompleter::Sync& completer) {
-  spi_->ReceiveVector(request, completer);
-}
-
-void SpiBanjoChild::ExchangeVector(ExchangeVectorRequestView request,
-                                   ExchangeVectorCompleter::Sync& completer) {
-  spi_->ExchangeVector(request, completer);
-}
-
-void SpiBanjoChild::RegisterVmo(RegisterVmoRequestView request,
-                                RegisterVmoCompleter::Sync& completer) {
-  spi_->RegisterVmo(request, completer);
-}
-
-void SpiBanjoChild::UnregisterVmo(UnregisterVmoRequestView request,
-                                  UnregisterVmoCompleter::Sync& completer) {
-  spi_->UnregisterVmo(request, completer);
-}
-
-void SpiBanjoChild::Transmit(TransmitRequestView request, TransmitCompleter::Sync& completer) {
-  spi_->Transmit(request, completer);
-}
-
-void SpiBanjoChild::Receive(ReceiveRequestView request, ReceiveCompleter::Sync& completer) {
-  spi_->Receive(request, completer);
-}
-
-void SpiBanjoChild::Exchange(ExchangeRequestView request, ExchangeCompleter::Sync& completer) {
-  spi_->Exchange(request, completer);
-}
-
-void SpiBanjoChild::CanAssertCs(CanAssertCsCompleter::Sync& completer) {
-  spi_->CanAssertCs(completer);
-}
-
-void SpiBanjoChild::AssertCs(AssertCsCompleter::Sync& completer) { spi_->AssertCs(completer); }
-
-void SpiBanjoChild::DeassertCs(DeassertCsCompleter::Sync& completer) {
-  spi_->DeassertCs(completer);
 }
 
 }  // namespace spi

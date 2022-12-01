@@ -26,18 +26,15 @@
 //
 // SpiDevice and SpiChild implement the actual SPI logic; SpiFidlChild and SpiBanjoChild serve the
 // fuchsia.hardware.spi protocols over FIDL and Banjo, respectively, but delegate to their SpiChild
-// parent for the SPI operations.
-//
-// SpiBanjoChild also implements ddk::Messageable for the FIDL protocol so that it can be connected
-// to via devfs, but it does not expose the protocol to its device children.
+// parent for the SPI operations. SpiChild also exposes a /dev/class/spi entry.
 
 namespace spi {
 
 class SpiDevice;
 
 class SpiChild;
-using SpiChildType =
-    ddk::Device<SpiChild, ddk::Messageable<fuchsia_hardware_spi::Device>::Mixin, ddk::Unbindable>;
+using SpiChildType = ddk::Device<SpiChild, ddk::Messageable<fuchsia_hardware_spi::Device>::Mixin,
+                                 ddk::Unbindable, ddk::Openable, ddk::Closable>;
 
 class SpiChild : public SpiChildType, public fbl::RefCounted<SpiChild> {
  public:
@@ -78,8 +75,8 @@ class SpiChild : public SpiChildType, public fbl::RefCounted<SpiChild> {
                           size_t rxdata_count, size_t* out_rxdata_actual);
   void SpiConnectServer(zx::channel server);
 
-  zx_status_t Open();
-  zx_status_t Close();
+  zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags);
+  zx_status_t DdkClose(uint32_t flags);
 
  private:
   const ddk::SpiImplProtocolClient spi_;
@@ -144,19 +141,15 @@ class SpiFidlChild : public SpiFidlChildType {
 };
 
 class SpiBanjoChild;
-using SpiBanjoChildType =
-    ddk::Device<SpiBanjoChild, ddk::Messageable<fuchsia_hardware_spi::Device>::Mixin,
-                ddk::Unbindable, ddk::Openable, ddk::Closable>;
+using SpiBanjoChildType = ddk::Device<SpiBanjoChild, ddk::GetProtocolable, ddk::Unbindable>;
 
-class SpiBanjoChild : public SpiBanjoChildType,
-                      public ddk::SpiProtocol<SpiBanjoChild, ddk::base_protocol> {
+class SpiBanjoChild : public SpiBanjoChildType, public ddk::SpiProtocol<SpiBanjoChild> {
  public:
   SpiBanjoChild(zx_device_t* parent, SpiChild* spi) : SpiBanjoChildType(parent), spi_(spi) {}
 
   void DdkUnbind(ddk::UnbindTxn txn);
   void DdkRelease() { delete this; }
-  zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags);
-  zx_status_t DdkClose(uint32_t flags);
+  zx_status_t DdkGetProtocol(uint32_t proto_id, void* out_protocol);
 
   // Banjo implementation
   zx_status_t SpiTransmit(const uint8_t* txdata_list, size_t txdata_count);
@@ -165,26 +158,6 @@ class SpiBanjoChild : public SpiBanjoChildType,
   zx_status_t SpiExchange(const uint8_t* txdata_list, size_t txdata_count, uint8_t* out_rxdata_list,
                           size_t rxdata_count, size_t* out_rxdata_actual);
   void SpiConnectServer(zx::channel server);
-
-  // FIDL implementation. Only for devfs, not for the device's children.
-  void TransmitVector(TransmitVectorRequestView request,
-                      TransmitVectorCompleter::Sync& completer) override;
-  void ReceiveVector(ReceiveVectorRequestView request,
-                     ReceiveVectorCompleter::Sync& completer) override;
-  void ExchangeVector(ExchangeVectorRequestView request,
-                      ExchangeVectorCompleter::Sync& completer) override;
-
-  void RegisterVmo(RegisterVmoRequestView request, RegisterVmoCompleter::Sync& completer) override;
-  void UnregisterVmo(UnregisterVmoRequestView request,
-                     UnregisterVmoCompleter::Sync& completer) override;
-
-  void Transmit(TransmitRequestView request, TransmitCompleter::Sync& completer) override;
-  void Receive(ReceiveRequestView request, ReceiveCompleter::Sync& completer) override;
-  void Exchange(ExchangeRequestView request, ExchangeCompleter::Sync& completer) override;
-
-  void CanAssertCs(CanAssertCsCompleter::Sync& completer) override;
-  void AssertCs(AssertCsCompleter::Sync& completer) override;
-  void DeassertCs(DeassertCsCompleter::Sync& completer) override;
 
  private:
   // SpiChild is the parent of SpiBanjoChild so it is guaranteed to outlive it,

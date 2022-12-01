@@ -609,20 +609,20 @@ TEST_F(SpiDeviceTest, OneClient) {
 
   ASSERT_EQ(spi_bus->children().front()->child_count(), 2);
 
-  SpiBanjoChild* banjo_child = nullptr;
-  for (auto& child : spi_bus->children().front()->children()) {
-    if (std::string_view(child->name()) == "spi-banjo-0-0") {
-      banjo_child = child->GetDeviceContext<SpiBanjoChild>();
+  SpiChild* spi_child = nullptr;
+  for (auto& child : spi_bus->children()) {
+    if (std::string_view(child->name()) == "spi-0-0") {
+      spi_child = child->GetDeviceContext<SpiChild>();
       break;
     }
   }
-  ASSERT_NOT_NULL(banjo_child);
+  ASSERT_NOT_NULL(spi_child);
 
   // Establish a FIDL connection and verify that it works.
   {
     zx::channel client, server;
     ASSERT_OK(zx::channel::create(0, &client, &server));
-    banjo_child->SpiConnectServer(std::move(server));
+    spi_child->SpiConnectServer(std::move(server));
     cs0_client = fidl::WireSyncClient<fuchsia_hardware_spi::Device>(std::move(client));
   }
 
@@ -636,7 +636,7 @@ TEST_F(SpiDeviceTest, OneClient) {
   {
     zx::channel client, server;
     ASSERT_OK(zx::channel::create(0, &client, &server));
-    banjo_child->SpiConnectServer(std::move(server));
+    spi_child->SpiConnectServer(std::move(server));
     fidl::WireSyncClient<fuchsia_hardware_spi::Device> cs0_client_1(std::move(client));
 
     auto result = cs0_client_1->CanAssertCs();
@@ -653,7 +653,7 @@ TEST_F(SpiDeviceTest, OneClient) {
   for (;;) {
     zx::channel client, server;
     ASSERT_OK(zx::channel::create(0, &client, &server));
-    banjo_child->SpiConnectServer(std::move(server));
+    spi_child->SpiConnectServer(std::move(server));
     cs0_client = fidl::WireSyncClient<fuchsia_hardware_spi::Device>(std::move(client));
 
     auto result = cs0_client->CanAssertCs();
@@ -665,12 +665,12 @@ TEST_F(SpiDeviceTest, OneClient) {
   EXPECT_TRUE(spi_impl_.vmos_released_since_last_call());
 
   // DdkOpen should fail when another client is connected
-  EXPECT_NOT_OK(banjo_child->DdkOpen(nullptr, 0));
+  EXPECT_NOT_OK(spi_child->DdkOpen(nullptr, 0));
 
   // Close the first client and make sure DdkOpen now works
   cs0_client = {};
 
-  while (banjo_child->DdkOpen(nullptr, 0) != ZX_OK) {
+  while (spi_child->DdkOpen(nullptr, 0) != ZX_OK) {
   }
 
   EXPECT_TRUE(spi_impl_.vmos_released_since_last_call());
@@ -680,7 +680,7 @@ TEST_F(SpiDeviceTest, OneClient) {
   {
     zx::channel client, server;
     ASSERT_OK(zx::channel::create(0, &client, &server));
-    banjo_child->SpiConnectServer(std::move(server));
+    spi_child->SpiConnectServer(std::move(server));
 
     fidl::WireSyncClient<fuchsia_hardware_spi::Device> cs0_client_1(std::move(client));
 
@@ -688,15 +688,15 @@ TEST_F(SpiDeviceTest, OneClient) {
     EXPECT_FALSE(result.ok());
   }
 
-  EXPECT_NOT_OK(banjo_child->DdkOpen(nullptr, 0));
+  EXPECT_NOT_OK(spi_child->DdkOpen(nullptr, 0));
 
   // Call DdkClose and make sure that a new client can now connect.
-  banjo_child->DdkClose(0);
+  spi_child->DdkClose(0);
 
   for (;;) {
     zx::channel client, server;
     ASSERT_OK(zx::channel::create(0, &client, &server));
-    banjo_child->SpiConnectServer(std::move(server));
+    spi_child->SpiConnectServer(std::move(server));
 
     cs0_client = fidl::WireSyncClient<fuchsia_hardware_spi::Device>(std::move(client));
 

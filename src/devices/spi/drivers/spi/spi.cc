@@ -115,7 +115,10 @@ void SpiDevice::AddChildren(const ddk::SpiImplProtocolClient& spi, async_dispatc
 
     // The SpiChild device is non-bindable and exists to serve as the parent of the FIDL and Banjo
     // children, which are bindable.
-    zx_status_t status = dev->DdkAdd(ddk::DeviceAddArgs(name).set_flags(DEVICE_ADD_NON_BINDABLE));
+    //
+    // Setting the proto ID to ZX_PROTOCOL_SPI creates an entry for this device in /dev/class/spi.
+    zx_status_t status = dev->DdkAdd(
+        ddk::DeviceAddArgs(name).set_flags(DEVICE_ADD_NON_BINDABLE).set_proto_id(ZX_PROTOCOL_SPI));
     if (status != ZX_OK) {
       zxlogf(ERROR, "DdkAdd failed for SPI child device: %s", zx_status_get_string(status));
       return;
@@ -156,22 +159,24 @@ void SpiDevice::AddChildren(const ddk::SpiImplProtocolClient& spi, async_dispatc
     // Create the Banjo child.
     auto banjo_dev = std::make_unique<SpiBanjoChild>(dev->zxdev(), dev.get());
     if (vid || pid || did) {
+      // BIND_PROTOCOL is manually specified in the bind properties instead of using the proto_id
+      // arg to DdkAdd to avoid creating a /dev/class/spi entry for this node; instead, the
+      // /dev/class/spi entry is backed by the SpiChild class.
       zx_device_prop_t props[] = {
-          {BIND_SPI_BUS_ID, 0, bus_id},    {BIND_SPI_CHIP_SELECT, 0, cs},
-          {BIND_PLATFORM_DEV_VID, 0, vid}, {BIND_PLATFORM_DEV_PID, 0, pid},
-          {BIND_PLATFORM_DEV_DID, 0, did},
+          {BIND_PROTOCOL, 0, ZX_PROTOCOL_SPI}, {BIND_SPI_BUS_ID, 0, bus_id},
+          {BIND_SPI_CHIP_SELECT, 0, cs},       {BIND_PLATFORM_DEV_VID, 0, vid},
+          {BIND_PLATFORM_DEV_PID, 0, pid},     {BIND_PLATFORM_DEV_DID, 0, did},
       };
 
-      status = banjo_dev->DdkAdd(
-          ddk::DeviceAddArgs(banjo_name).set_props(props).set_proto_id(ZX_PROTOCOL_SPI));
+      status = banjo_dev->DdkAdd(ddk::DeviceAddArgs(banjo_name).set_props(props));
     } else {
       zx_device_prop_t props[] = {
+          {BIND_PROTOCOL, 0, ZX_PROTOCOL_SPI},
           {BIND_SPI_BUS_ID, 0, bus_id},
           {BIND_SPI_CHIP_SELECT, 0, cs},
       };
 
-      status = banjo_dev->DdkAdd(
-          ddk::DeviceAddArgs(banjo_name).set_props(props).set_proto_id(ZX_PROTOCOL_SPI));
+      status = banjo_dev->DdkAdd(ddk::DeviceAddArgs(banjo_name).set_props(props));
     }
 
     if (status != ZX_OK) {
@@ -213,7 +218,7 @@ void SpiDevice::ConnectServer(zx::channel server, fbl::RefPtr<SpiChild> child) {
       [](SpiChild* ref_counted_child, fidl::UnbindInfo info,
          fidl::ServerEnd<fuchsia_hardware_spi::Device> server) {
         fbl::RefPtr<SpiChild> child_ref_ptr = fbl::ImportFromRawPtr(ref_counted_child);
-        child_ref_ptr->Close();
+        child_ref_ptr->DdkClose(0);
       });
 }
 
