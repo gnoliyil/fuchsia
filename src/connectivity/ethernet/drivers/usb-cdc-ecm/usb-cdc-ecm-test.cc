@@ -13,6 +13,7 @@
 #include <lib/async-loop/cpp/loop.h>
 #include <lib/async-loop/default.h>
 #include <lib/async-loop/testing/cpp/real_loop.h>
+#include <lib/component/incoming/cpp/service_client.h>
 #include <lib/driver-integration-test/fixture.h>
 #include <lib/fdio/cpp/caller.h>
 #include <lib/fdio/fdio.h>
@@ -106,10 +107,15 @@ zx_status_t WaitForDevice(int dirfd, int event, const char* name, void* cookie) 
 
 class EthernetInterface {
  public:
-  explicit EthernetInterface(fbl::unique_fd fd) {
-    zx::result client_end = fdio_cpp::FdioCaller(std::move(fd)).take_as<ethernet::Device>();
-    ASSERT_OK(client_end.status_value());
-    ethernet_client_.Bind(std::move(*client_end));
+  explicit EthernetInterface(fidl::UnownedClientEnd<fuchsia_io::Directory> directory,
+                             fbl::String path) {
+    zx::result controller = component::ConnectAt<ethernet::Controller>(directory, path);
+    ASSERT_OK(controller);
+    zx::result endpoints = fidl::CreateEndpoints<ethernet::Device>();
+    ASSERT_OK(endpoints);
+    auto& [client, server] = endpoints.value();
+    ASSERT_OK(fidl::WireCall(controller.value())->OpenSession(std::move(server)).status());
+    ethernet_client_.Bind(std::move(client));
     // Get device information
     {
       const fidl::WireResult result = ethernet_client_->GetInfo();
@@ -222,17 +228,17 @@ class EthernetInterface {
 
 class NetworkDeviceInterface : public ::loop_fixture::RealLoop {
  public:
-  explicit NetworkDeviceInterface(fbl::unique_fd fd) {
+  explicit NetworkDeviceInterface(fidl::UnownedClientEnd<fuchsia_io::Directory> directory,
+                                  fbl::String path) {
+    zx::result controller =
+        component::ConnectAt<fuchsia_hardware_network::DeviceInstance>(directory, path);
+    ASSERT_OK(controller);
     zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_network::Device>();
     ASSERT_OK(endpoints.status_value());
-    auto [client_end, server_end] = *std::move(endpoints);
+    auto& [client_end, server_end] = endpoints.value();
 
-    zx::result<fidl::ClientEnd<fuchsia_hardware_network::DeviceInstance>> status =
-        fdio_cpp::FdioCaller(std::move(fd)).take_as<fuchsia_hardware_network::DeviceInstance>();
-    ASSERT_OK(status.status_value());
-    fidl::WireClient<fuchsia_hardware_network::DeviceInstance> wire_client(
-        std::move(status.value()), dispatcher());
-    fidl::Status device_status = wire_client->GetDevice(std::move(server_end));
+    fidl::Status device_status =
+        fidl::WireCall(controller.value())->GetDevice(std::move(server_end));
     ASSERT_OK(device_status.status());
 
     netdevice_client_.emplace(std::move(client_end), dispatcher());
@@ -444,10 +450,9 @@ class UsbCdcEcmTest : public zxtest::Test {
 };
 
 TEST_F(UsbCdcEcmTest, PeripheralTransmitsToHost) {
-  EthernetInterface peripheral(
-      fbl::unique_fd(openat(bus_->GetRootFd(), peripheral_path_.c_str(), O_RDWR)));
-  NetworkDeviceInterface host(
-      fbl::unique_fd(openat(bus_->GetRootFd(), host_path_.c_str(), O_RDWR)));
+  fdio_cpp::UnownedFdioCaller caller(bus_->GetRootFd());
+  EthernetInterface peripheral(caller.directory(), peripheral_path_);
+  NetworkDeviceInterface host(caller.directory(), host_path_);
 
   const uint32_t fifo_depth = std::min(peripheral.tx_depth(), host.rx_depth());
   ASSERT_EQ(peripheral.mtu(), kEthernetMtu);
@@ -478,10 +483,9 @@ TEST_F(UsbCdcEcmTest, PeripheralTransmitsToHost) {
 }
 
 TEST_F(UsbCdcEcmTest, HostTransmitsToPeripheral) {
-  EthernetInterface peripheral(
-      fbl::unique_fd(openat(bus_->GetRootFd(), peripheral_path_.c_str(), O_RDWR)));
-  NetworkDeviceInterface host(
-      fbl::unique_fd(openat(bus_->GetRootFd(), host_path_.c_str(), O_RDWR)));
+  fdio_cpp::UnownedFdioCaller caller(bus_->GetRootFd());
+  EthernetInterface peripheral(caller.directory(), peripheral_path_);
+  NetworkDeviceInterface host(caller.directory(), host_path_);
 
   const uint32_t fifo_depth = std::min(peripheral.rx_depth(), host.tx_depth());
   ASSERT_EQ(peripheral.mtu(), kEthernetMtu);

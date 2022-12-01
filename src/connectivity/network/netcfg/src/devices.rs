@@ -132,14 +132,14 @@ pub(super) trait Device {
 pub(super) enum EthernetDevice {}
 
 pub(super) struct EthernetInstance {
-    device: feth::DeviceProxy,
+    controller: feth::ControllerProxy,
     topological_path: String,
     file_path: String,
 }
 
 impl std::fmt::Debug for EthernetInstance {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let EthernetInstance { device: _, topological_path, file_path } = self;
+        let EthernetInstance { controller: _, topological_path, file_path } = self;
         write!(
             f,
             "EthernetInstance{{topological_path={}, file_path={}}}",
@@ -160,12 +160,13 @@ impl Device for EthernetDevice {
         _installer: &fidl_fuchsia_net_interfaces_admin::InstallerProxy,
         path: &std::path::PathBuf,
     ) -> Result<Self::InstanceStream, errors::Error> {
-        let (topological_path, file_path, device) =
-            get_topo_path_and_device::<feth::DeviceMarker>(path)
+        let (topological_path, file_path, controller) =
+            get_topo_path_and_device::<feth::ControllerMarker>(path)
                 .await
                 .context("error getting topological path and device")?;
+
         Ok(futures::stream::once(futures::future::ok(EthernetInstance {
-            device,
+            controller,
             topological_path,
             file_path,
         })))
@@ -174,7 +175,14 @@ impl Device for EthernetDevice {
     async fn get_device_info(
         device_instance: &self::EthernetInstance,
     ) -> Result<DeviceInfo, errors::Error> {
-        let EthernetInstance { device, topological_path, file_path: _ } = device_instance;
+        let EthernetInstance { controller, topological_path, file_path: _ } = device_instance;
+        let (device, server_end) = fidl::endpoints::create_proxy()
+            .context("error creating proxy")
+            .map_err(errors::Error::Fatal)?;
+        let () = controller
+            .open_session(server_end)
+            .context("error calling open_session")
+            .map_err(errors::Error::Fatal)?;
         let feth_ext::EthernetInfo { features, mac: feth_ext::MacAddress { octets }, mtu: _ } =
             device
                 .get_info()
@@ -205,24 +213,16 @@ impl Device for EthernetDevice {
         config: crate::InterfaceConfig,
         device_instance: &Self::DeviceInstance,
     ) -> Result<(u64, fidl_fuchsia_net_interfaces_ext::admin::Control), AddDeviceError> {
-        let EthernetInstance { device: _, topological_path, file_path } = device_instance;
+        let EthernetInstance { controller, topological_path, file_path } = device_instance;
         let crate::InterfaceConfig { name, metric } = config;
 
-        // NB: We have to reach out into devfs again to get a new instance of
-        // the Ethernet device because:
-        // - We can't `Clone` the instance, that's not supported by the FIDL
-        // protocol.
-        // - We can't hand out our instance, since this method is retried on
-        // name collisions.
-        let (client_end, server_end) = fidl::endpoints::create_endpoints::<feth::DeviceMarker>()
-            .context("create ethdev endpoints")
-            .map_err(errors::Error::NonFatal)?;
-        let () = fuchsia_component::client::connect_channel_to_protocol_at_path(
-            server_end.into_channel(),
-            file_path,
-        )
-        .with_context(|| format!("connect ethdev at {}", file_path))
-        .map_err(errors::Error::NonFatal)?;
+        let (client_end, server_end) = fidl::endpoints::create_endpoints()
+            .context("error creating endpoints")
+            .map_err(errors::Error::Fatal)?;
+        let () = controller
+            .open_session(server_end)
+            .context("error calling open_session")
+            .map_err(errors::Error::Fatal)?;
 
         // NB: We create control ahead of time to prevent fallible operations
         // after we have installed the device.
@@ -508,7 +508,7 @@ async fn get_topo_path_and_device<S: fidl::endpoints::ProtocolMarker>(
         .context("error getting topological path")
         .map_err(errors::Error::NonFatal)?;
 
-    // The same channel is expeceted to implement `S`.
+    // The same channel is expected to implement `S`.
     let ch = controller
         .into_channel()
         .map_err(|_: fdev::ControllerProxy| anyhow::anyhow!("failed to get controller's channel"))

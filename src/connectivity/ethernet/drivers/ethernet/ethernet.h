@@ -14,7 +14,6 @@
 #include <lib/fidl-utils/bind.h>
 #include <lib/fzl/vmo-mapper.h>
 #include <lib/operation/ethernet.h>
-#include <lib/sync/completion.h>
 #include <lib/zircon-internal/thread_annotations.h>
 #include <lib/zx/fifo.h>
 #include <limits.h>
@@ -56,7 +55,9 @@ struct TransmitInfo {
 using TransmitBuffer = eth::Operation<TransmitInfo>;
 using TransmitBufferPool = eth::OperationPool<TransmitInfo>;
 
-using EthDev0Type = ddk::Device<EthDev0, ddk::Openable, ddk::Unbindable>;
+using EthDev0Type =
+    ddk::Device<EthDev0, ddk::Messageable<fuchsia_hardware_ethernet::Controller>::Mixin,
+                ddk::Unbindable>;
 
 class EthDev0 : public EthDev0Type, public ddk::EmptyProtocol<ZX_PROTOCOL_ETHERNET> {
  public:
@@ -67,10 +68,11 @@ class EthDev0 : public EthDev0Type, public ddk::EmptyProtocol<ZX_PROTOCOL_ETHERN
   EthDev0& operator=(const EthDev0&) = delete;
   EthDev0& operator=(EthDev0&&) = delete;
 
-  ~EthDev0();
+  ~EthDev0() override;
+
+  void OpenSession(OpenSessionRequestView request, OpenSessionCompleter::Sync& completer) override;
 
   static zx_status_t EthBind(void* ctx, zx_device_t* dev);
-  zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags);
   void DdkUnbind(ddk::UnbindTxn txn);
   void DdkRelease();
 
@@ -103,27 +105,24 @@ class EthDev0 : public EthDev0Type, public ddk::EmptyProtocol<ZX_PROTOCOL_ETHERN
   // Active and idle instances (EthDev).
   fbl::DoublyLinkedList<fbl::RefPtr<EthDev>> list_active_ __TA_GUARDED(ethdev_lock_);
   fbl::DoublyLinkedList<fbl::RefPtr<EthDev>> list_idle_ __TA_GUARDED(ethdev_lock_);
+
+  fidl::ServerBindingGroup<fuchsia_hardware_ethernet::Device> bindings_;
+  std::optional<ddk::UnbindTxn> unbind_txn_;
 };
 
-using EthDevType = ddk::Device<EthDev, ddk::Openable, ddk::Closable,
-                               ddk::Messageable<fuchsia_hardware_ethernet::Device>::Mixin>;
-
-class EthDev : public EthDevType,
-               public ddk::EmptyProtocol<ZX_PROTOCOL_ETHERNET>,
-               public fbl::DoublyLinkedListable<fbl::RefPtr<EthDev>>,
-               public fbl::RefCounted<EthDev> {
+class EthDev : public fidl::WireServer<fuchsia_hardware_ethernet::Device>,
+               public fbl::RefCounted<EthDev>,
+               public fbl::DoublyLinkedListable<fbl::RefPtr<EthDev>,
+                                                fbl::NodeOptions::AllowRemoveFromContainer> {
  public:
-  EthDev(zx_device_t* parent, EthDev0* edev0) : EthDevType(parent), edev0_(edev0), open_count_(1) {}
+  explicit EthDev(EthDev0* edev0) : edev0_(edev0) {}
 
   EthDev(const EthDev&) = delete;
   EthDev(EthDev&&) = delete;
   EthDev& operator=(const EthDev&) = delete;
   EthDev& operator=(EthDev&&) = delete;
 
-  zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags);
-  zx_status_t DdkClose(uint32_t flags);
-  void DdkRelease();
-  zx_status_t AddDevice(zx_device_t** out);
+  zx_status_t Init();
 
   // These methods are guarded by EthDev0's ethdev_lock_.
   void GetInfo(GetInfoCompleter::Sync& completer) override;
@@ -205,7 +204,7 @@ class EthDev : public EthDevType,
   void PutTransmitBuffer(TransmitBuffer buffer);
 
   int Send(eth_fifo_entry_t* entries, size_t count);
-  void StopAndKill();
+  fbl::RefPtr<EthDev> StopAndKill();
 
   // These methods are guarded by EthDev0's ethdev_lock_.
   void RecvLocked(const void* data, size_t len, uint32_t extra) __TA_REQUIRES(edev0_->ethdev_lock_);
@@ -248,9 +247,6 @@ class EthDev : public EthDevType,
 
   TransmitBufferPool free_transmit_buffers_;
 
-  fbl::Mutex lock_;  // Protects free_tx_bufs.
-  uint64_t open_count_ __TA_GUARDED(lock_) = 0;
-
   // fifo transmit thread.
   thrd_t transmit_thread_ = {};
 
@@ -258,7 +254,6 @@ class EthDev : public EthDevType,
   uint32_t fail_receive_write_ = 0;
   uint32_t ethernet_request_count_ = 0;
   uint32_t ethernet_response_count_ = 0;
-  // sync_completion_t* completion_ = nullptr;
 };
 
 }  // namespace eth

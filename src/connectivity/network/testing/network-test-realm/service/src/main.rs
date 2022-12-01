@@ -340,16 +340,18 @@ async fn try_install_eth_device(
 ) -> Result<bool, fntr::Error> {
     const ETHERNET_DIRECTORY_PATH: &'static str = "/dev/class/ethernet";
 
-    let results = file_proxies::<fethernet::DeviceMarker>(ETHERNET_DIRECTORY_PATH)
+    let results = file_proxies::<fethernet::ControllerMarker>(ETHERNET_DIRECTORY_PATH)
         .await?
-        .filter_map(|device_proxy| async move {
+        .filter_map(|controller| async move {
             // Note that errors are logged, but not propagated. In the event of
             // an error, this ensures that other devices can be searched for the
             // `expected_mac_address`.
 
-            device_proxy.get_info().await.ok_or_log_err("get_info failed").and_then(|info| {
-                (info.mac.octets == expected_mac_address.octets).then(|| device_proxy)
-            })
+            let (device, server_end) =
+                fidl::endpoints::create_proxy().ok_or_log_err("create_proxy failed")?;
+            let () = controller.open_session(server_end).ok_or_log_err("open_session failed")?;
+            let info = device.get_info().await.ok_or_log_err("get_info failed")?;
+            (info.mac.octets == expected_mac_address.octets).then(|| device)
         });
     futures::pin_mut!(results);
 
@@ -465,7 +467,7 @@ async fn connect_to_interface_admin_control(
     let debug_interfaces_proxy = connector.connect_to_protocol::<fnet_debug::InterfacesMarker>()?;
     let (control, server) =
         fnet_interfaces_ext::admin::Control::create_endpoints().map_err(|e| {
-            error!("create_proxy failure: {:?}", e);
+            error!("create_endpoints failure: {:?}", e);
             fntr::Error::Internal
         })?;
     debug_interfaces_proxy.get_admin(id, server).map_err(|e| {

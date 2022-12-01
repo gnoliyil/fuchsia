@@ -10,6 +10,7 @@
 #include <inttypes.h>
 #include <lib/async/cpp/wait.h>
 #include <lib/async/default.h>
+#include <lib/fdio/cpp/caller.h>
 #include <lib/fdio/directory.h>
 #include <lib/fdio/fd.h>
 #include <lib/fdio/fdio.h>
@@ -24,6 +25,7 @@
 #include <fbl/intrusive_single_list.h>
 
 namespace netemul {
+using ZController = fuchsia::hardware::ethernet::Controller;
 using ZDevice = fuchsia::hardware::ethernet::Device;
 using ZFifos = fuchsia::hardware::ethernet::Fifos;
 using ZFifoEntry = eth_fifo_entry_t;
@@ -273,27 +275,25 @@ static zx_status_t WatchCb(int dirfd, int event, const char* fn, void* cookie) {
 
   auto args = reinterpret_cast<WatchCbArgs*>(cookie);
 
-  zx::channel svc;
+  fidl::SynchronousInterfacePtr<ZDevice> device;
   {
-    int devfd = openat(dirfd, fn, O_RDONLY);
-    if (devfd < 0) {
-      return ZX_OK;
+    fdio_cpp::UnownedFdioCaller caller(dirfd);
+    fidl::SynchronousInterfacePtr<ZController> controller;
+    if (zx_status_t status =
+            fdio_service_connect_at(caller.directory().channel()->get(), fn,
+                                    controller.NewRequest().TakeChannel().release());
+        status != ZX_OK) {
+      return status;
     }
-
-    zx_status_t status = fdio_get_service_handle(devfd, svc.reset_and_get_address());
-    if (status != ZX_OK) {
+    if (zx_status_t status = controller->OpenSession(device.NewRequest()); status != ZX_OK) {
       return status;
     }
   }
 
   // See if this device is our ethertap device
 
-  fidl::InterfaceHandle<ZDevice> handle;
-  handle.set_channel(std::move(svc));
-  fidl::SynchronousInterfacePtr<ZDevice> iface = handle.BindSync();
-
   fuchsia::hardware::ethernet::Info info;
-  zx_status_t status = iface->GetInfo(&info);
+  zx_status_t status = device->GetInfo(&info);
   if (status != ZX_OK) {
     fprintf(stderr, "could not get ethernet info for %s/%s: %s\n", args->base_dir.c_str(), fn,
             zx_status_get_string(status));
@@ -349,7 +349,6 @@ void EthernetClient::Setup(const EthernetConfig& config,
 }
 
 EthernetClient::EthernetClient(async_dispatcher_t* dispatcher,
-
                                fidl::InterfacePtr<fuchsia::hardware::ethernet::Device> ptr)
     : dispatcher_(dispatcher), online_(false), device_(std::move(ptr)) {
   device_.set_error_handler([this](zx_status_t status) {
@@ -436,25 +435,30 @@ std::string EthernetClientFactory::MountPointWithMAC(const EthernetClient::Mac& 
 }
 
 zx_status_t EthernetClientFactory::Connect(
-    const std::string& path, fidl::InterfaceRequest<fuchsia::hardware::ethernet::Device> req) {
+    const std::string& path, fidl::InterfaceRequest<fuchsia::hardware::ethernet::Controller> req) {
   if (devfs_root_.is_valid()) {
     return fdio_service_connect_at(devfs_root_.get(), path.c_str(), req.TakeChannel().release());
-  } else {
-    return fdio_service_connect(path.c_str(), req.TakeChannel().release());
   }
+  return fdio_service_connect(path.c_str(), req.TakeChannel().release());
 }
 
 EthernetClient::Ptr EthernetClientFactory::Create(const std::string& path,
                                                   async_dispatcher_t* dispatcher) {
-  fidl::InterfaceHandle<ZDevice> handle;
-
   if (dispatcher == nullptr) {
     dispatcher = async_get_default_dispatcher();
   }
 
-  auto status = Connect(path, handle.NewRequest());
+  fidl::SynchronousInterfacePtr<ZController> controller;
+  auto status = Connect(path, controller.NewRequest());
   if (status != ZX_OK) {
     fprintf(stderr, "could not open %s: %s\n", path.c_str(), zx_status_get_string(status));
+    return nullptr;
+  }
+
+  fidl::InterfaceHandle<ZDevice> handle;
+  if (zx_status_t status = controller->OpenSession(handle.NewRequest()); status != ZX_OK) {
+    fprintf(stderr, "could not open session on %s: %s\n", path.c_str(),
+            zx_status_get_string(status));
     return nullptr;
   }
 

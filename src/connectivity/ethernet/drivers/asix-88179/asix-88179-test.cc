@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <fidl/fuchsia.hardware.ax88179/cpp/wire.h>
 #include <fidl/fuchsia.hardware.ethernet/cpp/wire.h>
+#include <lib/component/incoming/cpp/service_client.h>
 #include <lib/fdio/cpp/caller.h>
 #include <lib/fdio/fdio.h>
 #include <lib/fdio/watcher.h>
@@ -86,11 +87,15 @@ class UsbAx88179Test : public zxtest::Test {
   }
 
   void ConnectEthernetClient() {
-    fbl::unique_fd fd(openat(bus_->GetRootFd(), dev_path_.c_str(), O_RDWR));
-    zx::result ethernet_client_end =
-        fdio_cpp::FdioCaller(std::move(fd)).take_as<ethernet::Device>();
-    ASSERT_OK(ethernet_client_end.status_value());
-    ethernet_client_.Bind(std::move(*ethernet_client_end));
+    fdio_cpp::UnownedFdioCaller caller(bus_->GetRootFd());
+    zx::result controller =
+        component::ConnectAt<ethernet::Controller>(caller.directory(), dev_path_);
+    ASSERT_OK(controller);
+    zx::result endpoints = fidl::CreateEndpoints<ethernet::Device>();
+    ASSERT_OK(endpoints);
+    auto& [client, server] = endpoints.value();
+    ASSERT_OK(fidl::WireCall(controller.value())->OpenSession(std::move(server)).status());
+    ethernet_client_.Bind(std::move(client));
 
     // Get device information
     const fidl::WireResult info_result = ethernet_client_->GetInfo();

@@ -96,7 +96,10 @@ impl Client {
         name: &str,
     ) -> Result<Self, anyhow::Error> {
         let client = fdio::get_service_handle(dev)?;
-        let dev = fidl::endpoints::ClientEnd::<sys::DeviceMarker>::new(client).into_proxy()?;
+        let controller =
+            fidl::endpoints::ClientEnd::<sys::ControllerMarker>::new(client).into_proxy()?;
+        let (dev, server_end) = fidl::endpoints::create_proxy()?;
+        let () = controller.open_session(server_end)?;
         Client::new(dev, buf, buf_size, name).await
     }
 

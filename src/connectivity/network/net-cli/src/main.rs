@@ -156,7 +156,11 @@ impl net_cli::NetCliDepsConnector for Connector {
         let topological_path =
             fdio::device_get_topo_path(&dev).context("failed to get topological path")?;
         let client = fdio::get_service_handle(dev)?;
-        let dev = fidl::endpoints::ClientEnd::<fethernet::DeviceMarker>::new(client);
+        let controller = fidl::endpoints::ClientEnd::<fethernet::ControllerMarker>::new(client);
+        let controller = controller.into_proxy().context("failed to create proxy")?;
+        let (dev, server_end) =
+            fidl::endpoints::create_endpoints().context("failed to create endpoints")?;
+        let () = controller.open_session(server_end).context("failed to open session")?;
         Ok(net_cli::Device { topological_path, dev })
     }
 }

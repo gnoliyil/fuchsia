@@ -29,20 +29,9 @@ TEST(EthernetTest, DdkLifecycleTest) {
   mock_ddk::ReleaseFlaggedDevices(tester.parent().get());
 }
 
-TEST(EthernetTest, OpenTest) {
-  EthernetTester tester;
-  eth::EthDev0* eth(new eth::EthDev0(tester.parent().get()));
-  EXPECT_OK(eth->AddDevice(), "AddDevice Failed");
-  zx_device_t* eth_instance;
-  EXPECT_OK(eth->DdkOpen(&eth_instance, 0), "Open Failed");
-
-  device_async_remove(eth->zxdev());
-  mock_ddk::ReleaseFlaggedDevices(tester.parent().get());
-}
-
 class EthDev0ForTest : public eth::EthDev0 {
  public:
-  EthDev0ForTest(zx_device_t* parent) : eth::EthDev0(parent) {}
+  explicit EthDev0ForTest(zx_device_t* parent) : eth::EthDev0(parent) {}
   using eth::EthDev0::DestroyAllEthDev;
 };
 
@@ -96,25 +85,24 @@ class EthernetDeviceTest {
   zx::fifo& ReceiveFifo() { return rx_fifo_; }
 
   EthernetTester tester;
-  // Unowned references as mock-ddk owns the devices through tester.parent().
+  // Unowned reference as mock-ddk owns the device through tester.parent().
   EthDev0ForTest* edev0;
-  eth::EthDev* edev;
+
+  fbl::RefPtr<eth::EthDev> edev;
 
  private:
   void Initialize() {
     edev0 = new EthDev0ForTest(tester.parent().get());
     ASSERT_OK(edev0->AddDevice());
 
-    edev = new eth::EthDev(tester.parent().get(), edev0);
-    edev->Adopt();
-    // mock-ddk now takes ownership of the device and will release edev.
-    ASSERT_OK(edev->AddDevice(nullptr));
+    edev = fbl::MakeRefCounted<eth::EthDev>(edev0);
+    ASSERT_OK(edev->Init());
 
     auto endpoints = fidl::CreateEndpoints<fuchsia_hardware_ethernet::Device>();
     ASSERT_OK(endpoints.status_value());
 
     ASSERT_OK(loop_.StartThread("ethernet-thread"));
-    binding_ = fidl::BindServer(loop_.dispatcher(), std::move(endpoints->server), edev);
+    binding_ = fidl::BindServer(loop_.dispatcher(), std::move(endpoints->server), edev.get());
     client_.Bind(std::move(endpoints->client), loop_.dispatcher());
   }
 
@@ -128,15 +116,6 @@ class EthernetDeviceTest {
   fidl::WireSharedClient<fuchsia_hardware_ethernet::Device> client_;
   std::optional<fidl::ServerBindingRef<fuchsia_hardware_ethernet::Device>> binding_;
 };
-
-TEST(EthernetTest, MultipleOpenTest) {
-  EthernetDeviceTest test;
-  EXPECT_OK(test.edev->DdkOpen(nullptr, 0), "Instance 1 open failed");
-  EXPECT_OK(test.edev->DdkOpen(nullptr, 0), "Instance 2 open failed");
-  EXPECT_OK(test.edev->DdkClose(0), "Instance 0 close failed");
-  EXPECT_OK(test.edev->DdkClose(0), "Instance 1 close failed");
-  EXPECT_OK(test.edev->DdkClose(0), "Instance 2 close failed");
-}
 
 TEST(EthernetTest, SetClientNameTest) {
   EthernetDeviceTest test;

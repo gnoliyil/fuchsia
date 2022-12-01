@@ -91,7 +91,7 @@ class EthernetClientFactory {
                                       async_dispatcher_t* dispatcher = nullptr);
 
   zx_status_t Connect(const std::string& path,
-                      fidl::InterfaceRequest<fuchsia::hardware::ethernet::Device> req);
+                      fidl::InterfaceRequest<fuchsia::hardware::ethernet::Controller> req);
   EthernetClient::Ptr Create(const std::string& path, async_dispatcher_t* dispatcher = nullptr);
 
  private:

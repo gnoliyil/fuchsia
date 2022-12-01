@@ -150,3 +150,13 @@ protocol Device {
         status zx.status;
     });
 };
+
+/// The protocol exposed by ethernet drivers. It is distinct from [`Device`] to
+/// allow per-connection state, which is not otherwise available due to
+/// limitations of the driver framework.
+protocol Controller {
+    /// Opens a new session on the device.
+    OpenSession(resource struct {
+        session server_end:Device;
+    });
+};

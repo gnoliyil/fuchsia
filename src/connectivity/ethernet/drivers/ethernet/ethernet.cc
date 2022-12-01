@@ -516,8 +516,7 @@ zx_status_t EthDev::StartLocked() TA_NO_THREAD_SAFETY_ANALYSIS {
 
   if (status == ZX_OK) {
     state_ |= kStateRunning;
-    edev0_->list_idle_.erase(*this);
-    edev0_->list_active_.push_back(fbl::RefPtr(this));
+    edev0_->list_active_.push_back(RemoveFromContainer());
     // Trigger the status signal so the client will query the status at the start.
     receive_fifo_.signal_peer(0, fuchsia_hardware_ethernet::wire::kSignalStatus);
   } else {
@@ -541,8 +540,7 @@ void EthDev::ClearFilteringLocked() {
 zx_status_t EthDev::StopLocked() TA_NO_THREAD_SAFETY_ANALYSIS {
   if (state_ & kStateRunning) {
     state_ &= (~kStateRunning);
-    edev0_->list_active_.erase(*this);
-    edev0_->list_idle_.push_back(fbl::RefPtr(this));
+    edev0_->list_idle_.push_back(RemoveFromContainer());
     if (edev0_->list_active_.is_empty()) {
       if (!(state_ & kStateDead)) {
         // Release the lock to allow other device operations in callback routine.
@@ -757,7 +755,7 @@ void EthDev::KillLocked() {
   zxlogf(DEBUG, "eth [%s]: all resources released", name_);
 }
 
-void EthDev::StopAndKill() {
+fbl::RefPtr<EthDev> EthDev::StopAndKill() {
   fbl::AutoLock lock(&edev0_->ethdev_lock_);
   StopLocked();
   ClearFilteringLocked();
@@ -771,29 +769,7 @@ void EthDev::StopAndKill() {
     thrd_join(transmit_thread_, &ret);
     zxlogf(DEBUG, "eth [%s]: kill: tx thread exited", name_);
   }
-  // Check if it is part of the idle list and remove.
-  // It will not be part of active list as StopLocked() would have moved it to Idle.
-  if (InContainer()) {
-    edev0_->list_idle_.erase(*this);
-  }
-}
-
-void EthDev::DdkRelease() {
-  // Release the device (and wait for completion)!
-  if (Release()) {
-    delete this;
-  } else {
-    // TODO (fxbug.dev/33720): It is not presently safe to block here.
-    // So we cannot satisfy the assumptions of the DDK.
-    // If we block here, we will deadlock the entire system
-    // due to the virtual bus's control channel being controlled via FIDL.
-    // as well as its need to issue lifecycle events to the main event loop
-    // in order to remove the bus during shutdown.
-    // Uncomment the lines below when we can do so safely.
-    // sync_completion_t completion;
-    // completion_ = &completion;
-    // sync_completion_wait(&completion, ZX_TIME_INFINITE);
-  }
+  return RemoveFromContainer();
 }
 
 EthDev::~EthDev() {
@@ -807,57 +783,15 @@ EthDev::~EthDev() {
     thrd_join(transmit_thread_, &ret);
     zxlogf(DEBUG, "eth [%s]: kill: tx thread exited", name_);
   }
-  // sync_completion_signal(completion_);
 }
 
-zx_status_t EthDev::DdkOpen(zx_device_t** out, uint32_t flags) {
-  {
-    fbl::AutoLock lock(&lock_);
-    open_count_++;
-  }
-  if (out) {
-    *out = nullptr;
-  }
-  return ZX_OK;
-}
-
-zx_status_t EthDev::DdkClose(uint32_t flags) {
-  bool destroy = false;
-  {
-    fbl::AutoLock lock(&lock_);
-    open_count_--;
-    if (open_count_ == 0) {
-      destroy = true;
-    }
-  }
-
-  if (!destroy) {
-    return ZX_OK;
-  }
-
-  // No more users. Can stop the thread and kill the instance.
-  StopAndKill();
-
-  return ZX_OK;
-}
-
-zx_status_t EthDev::AddDevice(zx_device_t** out) {
+zx_status_t EthDev::Init() {
   for (size_t ndx = 0; ndx < kFifoDepth; ndx++) {
     std::optional buffer = TransmitBuffer::Alloc(edev0_->info_.netbuf_size);
     if (!buffer.has_value()) {
       return ZX_ERR_NO_MEMORY;
     }
     free_transmit_buffers_.push(std::move(buffer.value()));
-  }
-
-  if (zx_status_t status = DdkAdd(ddk::DeviceAddArgs("ethernet")
-                                      .set_flags(DEVICE_ADD_INSTANCE)
-                                      .set_proto_id(ZX_PROTOCOL_ETHERNET));
-      status != ZX_OK) {
-    return status;
-  }
-  if (out) {
-    *out = zxdev_;
   }
 
   {
@@ -874,23 +808,20 @@ EthDev0::~EthDev0() {
   ZX_DEBUG_ASSERT(list_idle_.is_empty());
 }
 
-zx_status_t EthDev0::DdkOpen(zx_device_t** out, uint32_t flags) {
+void EthDev0::OpenSession(OpenSessionRequestView request, OpenSessionCompleter::Sync& completer) {
   fbl::AllocChecker ac;
-  auto edev = fbl::MakeRefCountedChecked<EthDev>(&ac, this->zxdev_, this);
-  // Hold a second reference to the device to prevent a use-after-free
-  // in the case where DdkRelease is called immediately after AddDevice.
-  fbl::RefPtr<EthDev> dev_ref_2 = edev;
+  fbl::RefPtr edev = fbl::MakeRefCountedChecked<EthDev>(&ac, this);
   if (!ac.check()) {
-    return ZX_ERR_NO_MEMORY;
+    request->session.Close(ZX_ERR_NO_MEMORY);
+    return;
   }
-  // Add a reference for the devhost handle.
-  // This will be removed in DdkRelease.
-  if (zx_status_t status = edev->AddDevice(out); status != ZX_OK) {
-    return status;
+  if (zx_status_t status = edev->Init(); status != ZX_OK) {
+    request->session.Close(status);
+    return;
   }
-
-  [[maybe_unused]] auto dev = fbl::ExportToRawPtr(&edev);
-  return ZX_OK;
+  bindings_.AddBinding(fdf::Dispatcher::GetCurrent()->async_dispatcher(),
+                       std::move(request->session), edev.get(),
+                       [](EthDev* edev, fidl::UnbindInfo) { edev->StopAndKill(); });
 }
 
 // The thread safety analysis cannot reason through the aliasing of
@@ -913,11 +844,19 @@ void EthDev0::DestroyAllEthDev() TA_NO_THREAD_SAFETY_ANALYSIS {
 }
 
 void EthDev0::DdkUnbind(ddk::UnbindTxn txn) {
-  // Tear down shared memory, fifos, and threads
-  // to encourage any open instances to close.
-  DestroyAllEthDev();
-  // This will trigger DdkCLose() and DdkRelease() of all EthDev.
-  txn.Reply();
+  ZX_ASSERT(!unbind_txn_.has_value());
+  ddk::UnbindTxn& unbind_txn = unbind_txn_.emplace(std::move(txn));
+  auto cleanup = [this, &unbind_txn]() {
+    // Tear down shared memory, fifos, and threads
+    // to encourage any open instances to close.
+    DestroyAllEthDev();
+    unbind_txn.Reply();
+  };
+  bindings_.set_empty_set_handler(cleanup);
+  if (!bindings_.CloseAll(ZX_OK)) {
+    // Binding set was already empty.
+    cleanup();
+  }
 }
 
 void EthDev0::DdkRelease() {

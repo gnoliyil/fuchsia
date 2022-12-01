@@ -28,13 +28,28 @@ cpp17::string_view SkipInstanceSigil(cpp17::string_view v) {
 }
 
 struct Ethernet {
-  using Instance = fuchsia_hardware_ethernet::Device;
+  using Instance = fuchsia_hardware_ethernet::Controller;
   using Info = DiscoveredInterface;
   static constexpr const char* kDirectory = "/class/ethernet";
 
   static std::optional<Info> get_interface_if_matching(fidl::ClientEnd<Instance> dev,
                                                        const std::string& filename) {
-    fidl::WireResult result = fidl::WireCall(dev)->GetInfo();
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_ethernet::Device>();
+    if (endpoints.is_error()) {
+      printf("netifc: failed to create ethernet endpoints %s: %s\n", filename.c_str(),
+             endpoints.status_string());
+      return std::nullopt;
+    }
+    auto& [client, server] = endpoints.value();
+    {
+      fidl::Status result = fidl::WireCall(dev)->OpenSession(std::move(server));
+      if (!result.ok()) {
+        printf("netifc: failed to get Ethernet device info %s: %s\n", filename.c_str(),
+               result.status_string());
+        return std::nullopt;
+      }
+    }
+    fidl::WireResult result = fidl::WireCall(client)->GetInfo();
     if (!result.ok()) {
       printf("netifc: failed to get Ethernet device info %s: %s\n", filename.c_str(),
              result.status_string());
@@ -44,7 +59,7 @@ struct Ethernet {
     if (resp.info.features & fuchsia_hardware_ethernet::wire::Features::kWlan) {
       return std::nullopt;
     }
-    DiscoveredInterface ret = {.device = std::move(dev)};
+    DiscoveredInterface ret = {.device = std::move(client)};
     static_assert(sizeof(resp.info.mac.octets) == sizeof(ret.mac.x));
     std::copy(resp.info.mac.octets.begin(), resp.info.mac.octets.end(), std::begin(ret.mac.x));
     return ret;

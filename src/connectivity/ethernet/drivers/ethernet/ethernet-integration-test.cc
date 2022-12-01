@@ -451,13 +451,23 @@ static void AddClientHelper(EthertapClient& tap, EthernetClient& client,
             }
 
             fdio_cpp::UnownedFdioCaller caller(dirfd);
-            zx::result device =
-                component::ConnectAt<fuchsia_hardware_ethernet::Device>(caller.directory(), fn);
-            if (device.is_error()) {
-              return device.error_value();
+            zx::result controller =
+                component::ConnectAt<fuchsia_hardware_ethernet::Controller>(caller.directory(), fn);
+            if (controller.is_error()) {
+              return controller.error_value();
+            }
+            zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_ethernet::Device>();
+            if (endpoints.is_error()) {
+              return endpoints.error_value();
+            }
+            auto& [client, server] = endpoints.value();
+            if (fidl::Status status =
+                    fidl::WireCall(controller.value())->OpenSession(std::move(server));
+                !status.ok()) {
+              return status.status();
             }
             // See if this device is our ethertap device
-            const fidl::WireResult result = fidl::WireCall(device.value())->GetInfo();
+            const fidl::WireResult result = fidl::WireCall(client)->GetInfo();
             if (!result.ok()) {
               fprintf(stderr, "could not get ethernet info for %s/%s: %s\n", kEthernetDir, fn,
                       result.FormatDescription().c_str());
@@ -481,7 +491,7 @@ static void AddClientHelper(EthertapClient& tap, EthernetClient& client,
             }
 
             // Found it!
-            watch_request.device = std::move(device.value());
+            watch_request.device = std::move(client);
             return ZX_ERR_STOP;
           },
           zx_deadline_after(ZX_SEC(30)), reinterpret_cast<void*>(&cookie)),

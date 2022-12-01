@@ -162,21 +162,25 @@ class EthertapImpl : public EndpointImpl {
   }
 
   fuchsia::netemul::network::DeviceConnection GetDevice() override {
-    fidl::InterfaceHandle<fuchsia::hardware::ethernet::Device> ret;
-    if (ethernet_factory_) {
-      if (ethernet_factory_->Connect(ethernet_mount_path_, ret.NewRequest()) != ZX_OK) {
-        // if it didn't succeed, release the request and reset:
-        ret = nullptr;
-      }
+    if (ethernet_factory_ == nullptr) {
+      return fuchsia::netemul::network::DeviceConnection::WithEthernet({});
     }
-    return fuchsia::netemul::network::DeviceConnection::WithEthernet(std::move(ret));
+    fidl::SynchronousInterfacePtr<fuchsia::hardware::ethernet::Controller> controller;
+    if (ethernet_factory_->Connect(ethernet_mount_path_, controller.NewRequest()) != ZX_OK) {
+      return fuchsia::netemul::network::DeviceConnection::WithEthernet({});
+    }
+    fidl::InterfaceHandle<fuchsia::hardware::ethernet::Device> device;
+    if (zx_status_t status = controller->OpenSession(device.NewRequest()); status != ZX_OK) {
+      return fuchsia::netemul::network::DeviceConnection::WithEthernet({});
+    }
+    return fuchsia::netemul::network::DeviceConnection::WithEthernet(std::move(device));
   }
 
   void ServeDevice(zx::channel channel) override {
     if (ethernet_factory_) {
       ethernet_factory_->Connect(
           ethernet_mount_path_,
-          fidl::InterfaceRequest<fuchsia::hardware::ethernet::Device>(std::move(channel)));
+          fidl::InterfaceRequest<fuchsia::hardware::ethernet::Controller>(std::move(channel)));
     }
   }
 
