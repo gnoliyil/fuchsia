@@ -11,7 +11,7 @@
 
 #include <utility>
 
-#include "xdc-init.h"
+#include "src/devices/usb/bin/xdc-test/xdc-init.h"
 
 static const char* const DEV_XDC_DIR = "/dev/class/usb-dbc";
 

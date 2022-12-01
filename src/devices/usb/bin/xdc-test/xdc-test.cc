@@ -18,7 +18,7 @@
 
 #include <fbl/unique_fd.h>
 
-#include "xdc-init.h"
+#include "src/devices/usb/bin/xdc-test/xdc-init.h"
 
 // TODO(jocelyndang): investigate issue with larger buffer sizes.
 static constexpr uint32_t BUFFER_SIZE = 8 * 1024;
