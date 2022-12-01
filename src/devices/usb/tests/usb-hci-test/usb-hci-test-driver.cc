@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "usb-hci-test-driver.h"
+#include "src/devices/usb/tests/usb-hci-test/usb-hci-test-driver.h"
 
 #include <fuchsia/hardware/usb/c/banjo.h>
 #include <lib/ddk/debug.h>
