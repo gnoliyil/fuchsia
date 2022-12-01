@@ -50,9 +50,17 @@ inferior("inlined_crasher") {
   sources = [ "inlined_crasher.cc" ]
 }
 
+inferior("loop") {
+  sources = [ "loop.cc" ]
+
+  # Ensure std::ostream << doesn't get inlined.
+  cflags = [ "-fno-inline-functions" ]
+}
+
 fuchsia_package("zxdb_e2e_inferiors") {
   deps = [
     ":inlined_crasher",
+    ":loop",
     ":step_plt",
     ":wait_for_debugger",
   ]

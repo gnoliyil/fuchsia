@@ -155,9 +155,13 @@ TEST_F(FrameImplRegisterTest, UpdateRegister) {
   constexpr uint64_t kThreadKoid = 5678;
   Thread* thread = InjectThread(kProcessKoid, kThreadKoid);
 
+  debug_ipc::BreakpointStats stats{
+      .id = static_cast<uint32_t>(register_remote_api()->last_breakpoint_id()), .hit_count = 1};
+
   // Notify of thread stop.
   debug_ipc::NotifyException break_notification;
   break_notification.type = debug_ipc::ExceptionType::kSoftwareBreakpoint;
+  break_notification.hit_breakpoints.push_back(stats);
   break_notification.thread.id = {.process = kProcessKoid, .thread = kThreadKoid};
   break_notification.thread.state = debug_ipc::ThreadRecord::State::kBlocked;
   break_notification.thread.frames.emplace_back(0x1234, 0x1000);
@@ -199,9 +203,13 @@ TEST_F(FrameImplRegisterTest, AlwaysRequest) {
   constexpr uint64_t kThreadKoid = 5678;
   Thread* thread = InjectThread(kProcessKoid, kThreadKoid);
 
+  debug_ipc::BreakpointStats stats{
+      .id = static_cast<uint32_t>(register_remote_api()->last_breakpoint_id()), .hit_count = 1};
+
   // Notify of thread stop.
   debug_ipc::NotifyException break_notification;
   break_notification.type = debug_ipc::ExceptionType::kSoftwareBreakpoint;
+  break_notification.hit_breakpoints.push_back(stats);
   break_notification.thread.id = {.process = kProcessKoid, .thread = kThreadKoid};
   break_notification.thread.state = debug_ipc::ThreadRecord::State::kBlocked;
   break_notification.thread.frames.emplace_back(0x1234, 0x1000);

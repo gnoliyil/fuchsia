@@ -79,14 +79,15 @@ struct BreakpointSettings {
   // When set, this breakpoint will be automatically deleted when it's hit.
   bool one_shot = false;
 
-  // Break every hit_mult times the breakpoint gets hit. Must be positive.
-  // The breakpoint will become conditional if hit_mult is greater than 1.
-  int hit_mult = 1;
-
   // Handles the automatic collection of memory if it's requested.
   bool has_automation = false;
 
   std::vector<debug_ipc::AutomationInstruction> instructions;
+
+  // A conditional expression that will evaluate each time this breakpoint location is hit. The
+  // result of the expression evaluation will determine if program execution will actually stop
+  // here.
+  std::string condition;
 };
 
 }  // namespace zxdb

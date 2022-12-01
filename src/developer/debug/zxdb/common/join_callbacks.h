@@ -34,6 +34,10 @@
 //       auto join = fxl::MakeRefCounted<JoinCallbacks<int>>(
 //           [](std::vector<int> params) { ... });
 //
+//  Note: All of the variants are allowed to be default constructed with no callback given. This
+//        allows you to do things with local variables while you add callbacks from one of these
+//        types and then move the local variables into the final callback at the end. If you use the
+//        default constructor you MUST use the Ready(..) overload that takes a callback parameter.
 //
 //  2. Create any sub-callbacks and schedule them to be executed.
 //
@@ -183,10 +187,20 @@ class JoinCallbacks : public JoinCallbacksBase {
     };
   }
 
+  // Use this with the default constructor to defer the definition of the main callback until all
+  // the callbacks had been added with |AddCallback|. This is useful if you cannot capture a value
+  // by reference at the time you construct the JoinCallback object. Instead this allows you to move
+  // the variable into the main callback after it's been modified by the surrounding code.
+  void ReadyWithCallback(MainCallbackType cb) {
+    cb_ = std::move(cb);
+    JoinCallbacksBase::Ready();
+  }
+
  private:
   FRIEND_REF_COUNTED_THREAD_SAFE(JoinCallbacks);
   FRIEND_MAKE_REF_COUNTED(JoinCallbacks);
 
+  JoinCallbacks() = default;
   explicit JoinCallbacks(MainCallbackType cb) : cb_(std::move(cb)) {}
 
   void Issue() override { cb_(std::move(params_)); }
@@ -205,10 +219,17 @@ class JoinCallbacks<void> : public JoinCallbacksBase {
     return [ref = RefPtrTo(this)]() mutable { ref->TrackGotCallback(); };
   }
 
+  // See the comment above in JoinCallbacks<T>.
+  void ReadyWithCallback(fit::callback<void()> cb) {
+    cb_ = std::move(cb);
+    Ready();
+  }
+
  private:
   FRIEND_REF_COUNTED_THREAD_SAFE(JoinCallbacks);
   FRIEND_MAKE_REF_COUNTED(JoinCallbacks);
 
+  JoinCallbacks() = default;
   explicit JoinCallbacks(fit::callback<void()> cb) : cb_(std::move(cb)) {}
 
   void Issue() override { cb_(); }
@@ -233,10 +254,17 @@ class JoinErrCallbacks : public JoinCallbacksBase {
     };
   }
 
+  // See the comment above in JoinCallbacks<T>.
+  void ReadyWithCallback(fit::callback<void(const Err&)> cb) {
+    cb_ = std::move(cb);
+    Ready();
+  }
+
  private:
   FRIEND_REF_COUNTED_THREAD_SAFE(JoinErrCallbacks);
   FRIEND_MAKE_REF_COUNTED(JoinErrCallbacks);
 
+  JoinErrCallbacks() = default;
   explicit JoinErrCallbacks(fit::callback<void(const Err&)> cb) : cb_(std::move(cb)) {}
 
   void Issue() override {

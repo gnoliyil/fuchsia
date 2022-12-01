@@ -82,10 +82,10 @@ const char* ClientSettings::Breakpoint::kStopMode_All = "all";
 const char* ClientSettings::Breakpoint::kHitCount = "hit-count";
 const char* ClientSettings::Breakpoint::kHitCountDescription =
     R"(  Number of times the breakpoint gets triggered.)";
-const char* ClientSettings::Breakpoint::kHitMult = "hit-mult";
-const char* ClientSettings::Breakpoint::kHitMultDescription =
-    R"(  The breakpoint will only stop the execution when the hit-count is a multiple
-  of the hit-mult)";
+
+const char* ClientSettings::Breakpoint::kCondition = "condition";
+const char* ClientSettings::Breakpoint::kConditionDescription =
+    R"(  An expression that determines when to trigger the breakpoint.)";
 
 namespace {
 
@@ -112,8 +112,8 @@ fxl::RefPtr<SettingSchema> CreateSchema() {
        ClientSettings::Breakpoint::kStopMode_Process, ClientSettings::Breakpoint::kStopMode_All});
   schema->AddInt(ClientSettings::Breakpoint::kHitCount,
                  ClientSettings::Breakpoint::kHitCountDescription);
-  schema->AddInt(ClientSettings::Breakpoint::kHitMult,
-                 ClientSettings::Breakpoint::kHitMultDescription, 1);
+  schema->AddString(ClientSettings::Breakpoint::kCondition,
+                    ClientSettings::Breakpoint::kConditionDescription);
   return schema;
 }
 
@@ -139,8 +139,8 @@ SettingValue Breakpoint::Settings::GetStorageValue(const std::string& key) const
     return SettingValue(static_cast<int64_t>(settings.byte_size));
   } else if (key == ClientSettings::Breakpoint::kHitCount) {
     return SettingValue(static_cast<int64_t>(bp_->GetStats().hit_count));
-  } else if (key == ClientSettings::Breakpoint::kHitMult) {
-    return SettingValue(static_cast<int64_t>(settings.hit_mult));
+  } else if (key == ClientSettings::Breakpoint::kCondition) {
+    return SettingValue(settings.condition);
   }
   FX_NOTREACHED();
   return SettingValue();
@@ -176,12 +176,8 @@ Err Breakpoint::Settings::SetStorageValue(const std::string& key, SettingValue v
       return err;
 
     settings.byte_size = value.get_int();
-  } else if (key == ClientSettings::Breakpoint::kHitMult) {
-    int64_t hit_mult = value.get_int();
-    if (hit_mult <= 0)
-      return Err("hit-mult must be positive.");
-
-    settings.hit_mult = hit_mult;
+  } else if (key == ClientSettings::Breakpoint::kCondition) {
+    settings.condition = value.get_string();
   } else {
     return Err(fxl::StringPrintf("Setting \"%s\" is currently not supported.", key.c_str()));
   }

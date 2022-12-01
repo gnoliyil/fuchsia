@@ -188,4 +188,50 @@ TEST(JoinCallbacks, NoParam) {
   EXPECT_EQ(1, called);
 }
 
+// Tests default constructing JoinCallbacks and then passing the main callback in
+// ReadyWithCallback after passing out callbacks from AddCallback.
+TEST(JoinCallbacks, DeferMainCallback) {
+  int called = 0;
+  auto join = fxl::MakeRefCounted<JoinCallbacks<bool>>();
+
+  auto cb1 = join->AddCallback();
+  auto cb2 = join->AddCallback();
+
+  join->ReadyWithCallback([&called](const std::vector<bool>& b) {
+    EXPECT_EQ(called, 0);
+    called++;
+    EXPECT_FALSE(b.empty());
+    EXPECT_EQ(b.size(), 2u);
+    EXPECT_EQ(b[0], true);
+    EXPECT_EQ(b[1], false);
+  });
+
+  cb2(false);
+  cb1(true);
+  EXPECT_EQ(called, 1);
+}
+
+// Tests setting the main callback after all callbacks from |AddCallback| have already returned.
+TEST(JoinCallbacks, DeferMainCallbackLast) {
+  int called = 0;
+  auto join = fxl::MakeRefCounted<JoinCallbacks<bool>>();
+
+  auto cb1 = join->AddCallback();
+  auto cb2 = join->AddCallback();
+
+  cb2(false);
+  cb1(true);
+
+  join->ReadyWithCallback([&called](const std::vector<bool>& b) {
+    EXPECT_EQ(called, 0);
+    called++;
+    EXPECT_FALSE(b.empty());
+    EXPECT_EQ(b.size(), 2u);
+    EXPECT_EQ(b[0], true);
+    EXPECT_EQ(b[1], false);
+  });
+
+  EXPECT_EQ(called, 1);
+}
+
 }  // namespace zxdb

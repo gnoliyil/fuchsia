@@ -392,6 +392,11 @@ OutputBuffer FormatBreakpoint(const ConsoleContext* context, const Breakpoint* b
     result.Append(std::string("=") + BoolToString(settings.one_shot) + " ");
   }
 
+  if (!settings.condition.empty()) {
+    result.Append(Syntax::kVariable, ClientSettings::Breakpoint::kCondition);
+    result.Append("=\"" + breakpoint->GetSettings().condition + "\" ");
+  }
+
   bool show_location_details = !settings.locations.empty() && show_context;
 
   size_t matched_locs = breakpoint->GetLocations().size();

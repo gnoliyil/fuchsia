@@ -10,6 +10,8 @@
 
 #include "gtest/gtest_prod.h"
 #include "src/developer/debug/zxdb/client/thread.h"
+#include "src/developer/debug/zxdb/common/join_callbacks.h"
+#include "src/developer/debug/zxdb/expr/eval_context.h"
 #include "src/lib/fxl/memory/weak_ptr.h"
 
 namespace zxdb {
@@ -73,6 +75,9 @@ class ThreadImpl final : public Thread, public Stack::Delegate {
   // completed. This will have the effect of sequentially running all of the post-stop tasks and
   // then dispatching the stop notification or continuing the program (as per |should_stop|).
   void RunNextPostStopTaskOrNotify(const StopInfo& info, bool should_stop);
+
+  void ResolveConditionalBreakpoint(const std::string& cond, Breakpoint* bp,
+                                    fit::callback<void(bool)> cb);
 
   ProcessImpl* const process_;
   uint64_t koid_;

@@ -15,6 +15,7 @@
 #include "src/developer/debug/shared/message_loop.h"
 #include "src/developer/debug/shared/zx_status.h"
 #include "src/developer/debug/zxdb/client/breakpoint.h"
+#include "src/developer/debug/zxdb/client/breakpoint_observer.h"
 #include "src/developer/debug/zxdb/client/frame_impl.h"
 #include "src/developer/debug/zxdb/client/process_impl.h"
 #include "src/developer/debug/zxdb/client/remote_api.h"
@@ -22,6 +23,9 @@
 #include "src/developer/debug/zxdb/client/setting_schema_definition.h"
 #include "src/developer/debug/zxdb/client/target_impl.h"
 #include "src/developer/debug/zxdb/client/thread_controller.h"
+#include "src/developer/debug/zxdb/common/join_callbacks.h"
+#include "src/developer/debug/zxdb/expr/cast.h"
+#include "src/developer/debug/zxdb/expr/expr.h"
 #include "src/developer/debug/zxdb/symbols/process_symbols.h"
 
 namespace zxdb {
@@ -344,38 +348,116 @@ void ThreadImpl::OnException(const StopInfo& info) {
   handling_on_stop_ = false;
   nested_stop_future_completion_ = 0;
 
-  if (!have_continue) {
-    // No controller voted to continue (maybe all active controllers reported "unexpected") or there
-    // was no controller. Such cases should stop.
+  if (!have_continue && !controllers_.empty()) {
+    // No controller voted to continue (maybe all active controllers reported "unexpected"). Such
+    // cases should stop.
     should_stop = true;
   }
 
-  // The existence of any non-internal breakpoints being hit means the thread should always stop.
-  // This check happens after notifying the controllers so if a controller triggers, it's counted as
-  // a "hit" (otherwise, doing "run until" to a line with a normal breakpoint on it would keep the
-  // "run until" operation active even after it was hit).
+  // This joiner is responsible for collecting all of the conditional breakpoint evaluation results
+  // at this location. Only a single conditional breakpoint needs to evaluate to true to trigger a
+  // stop. Unconditional breakpoints will always stop, and if there are only unconditional
+  // breakpoints at this location, then this evaluation will happen synchronously.
+  auto conditional_breakpoints_callback = fxl::MakeRefCounted<JoinCallbacks<bool>>();
+
+  StopInfo external_info = info;
+
+  // The existence of any non-internal, unconditional breakpoints being hit means the thread should
+  // always stop. Breakpoints that have conditional expressions will be evaluated and stop only if
+  // the condition is true. This check happens after notifying the controllers so if a controller
+  // triggers, it's counted as a "hit" (otherwise, doing "run until" to a line with a normal
+  // breakpoint on it would keep the "run until" operation active even after it was hit).
   //
   // Also, filter out internal breakpoints in the notification sent to the observers.
-  StopInfo external_info = info;
-  for (size_t i = 0; i < external_info.hit_breakpoints.size(); /* nothing */) {
-    if (external_info.hit_breakpoints[i] && !external_info.hit_breakpoints[i]->IsInternal()) {
-      should_stop = true;
-      i++;
+  for (auto it = external_info.hit_breakpoints.begin(); it != external_info.hit_breakpoints.end();
+       /* nothing */) {
+    if (*it && !it->get()->IsInternal()) {
+      auto bp = it->get();
+
+      if (const auto& cond = bp->GetSettings().condition; !cond.empty()) {
+        ResolveConditionalBreakpoint(cond, bp, conditional_breakpoints_callback->AddCallback());
+      } else {
+        // Non-internal, unconditional breakpoints should always stop. Conditional breakpoints will
+        // evaluate their expressions (there could be multiple, but only one has to vote to stop)
+        // and then decide to stop or not.
+        should_stop = true;
+      }
+      ++it;
     } else {
-      // Erase all deleted weak pointers and internal breakpoints.
-      external_info.hit_breakpoints.erase(external_info.hit_breakpoints.begin() + i);
+      // Remove deleted weak pointers and internal breakpoints.
+      it = external_info.hit_breakpoints.erase(it);
     }
   }
 
-  // Non-debug exceptions also mean the thread should always stop (check this after running the
-  // controllers for the same reason as the breakpoint check above).
-  if (info.exception_type != debug_ipc::ExceptionType::kNone &&
-      !debug_ipc::IsDebug(info.exception_type))
-    should_stop = true;
+  // If there are any conditional breakpoints that need to evaluate an expression, the callback(s)
+  // will be issued asynchronously and collected into a vector. In the case no asynchronous
+  // evaluations need to occur, this will return immediately and issue the callback above.
+  conditional_breakpoints_callback->ReadyWithCallback(
+      [weak_this = weak_factory_.GetWeakPtr(), should_stop,
+       external_info](std::vector<bool> results) mutable {
+        if (weak_this) {
+          // Non-debug exceptions (most likely a crash is happening) also mean the thread should
+          // always stop (check this after running the controllers for the same reason as the
+          // breakpoint check above).
+          if (external_info.exception_type != debug_ipc::ExceptionType::kNone &&
+              !debug_ipc::IsDebug(external_info.exception_type))
+            should_stop = true;
 
-  // Execute the chain of post-stop tasks (may be asynchronous) and then dispatch the stop
-  // notification or continue operation.
-  RunNextPostStopTaskOrNotify(external_info, should_stop);
+          if (std::any_of(results.cbegin(), results.cend(), [](bool result) { return result; }))
+            should_stop = true;
+
+          // If there are no conditional breakpoints installed here, and there are no running
+          // controllers, we should stop. This case catches things like __builtin_debugtrap() or
+          // "int 3" on x86_64 architectures.
+          if (!should_stop && results.empty() && weak_this->controllers_.empty())
+            should_stop = true;
+
+          // Execute the chain of post-stop tasks (may be asynchronous) and then dispatch the stop
+          // notification or continue operation.
+          weak_this->RunNextPostStopTaskOrNotify(external_info, should_stop);
+        }
+      });
+}
+
+void ThreadImpl::ResolveConditionalBreakpoint(const std::string& cond, Breakpoint* bp,
+                                              fit::callback<void(bool)> cb) {
+  // Update the evaluation context to the current stack frame and schedule the expression
+  // evaluation.
+  auto ctx = GetStack()[0]->GetEvalContext();
+  EvalExpression(cond, ctx, true, [this, ctx, bp, cb = std::move(cb)](ErrOrValue val) mutable {
+    std::string_view msg;
+
+    if (val.ok()) {
+      if (auto cast_result = CastNumericExprValueToBool(ctx, val.value()); cast_result.ok()) {
+        // This is the normal good case. The expression resolved to a value that successfully
+        // casted to a boolean. We're done.
+        cb(cast_result.value());
+        return;
+      } else {
+        // The expression evaluated successfully, but couldn't be cast to a bool.
+        msg = cast_result.err().msg();
+      }
+    } else {
+      // The expression couldn't be evaluated.
+      msg = val.err().msg();
+    }
+
+    // If we get here, the conditional expression failed to evaluate somehow. Show a warning message
+    // if the expression resolution fails for some reason. Note: we still want to stop execution
+    // here so the user can fix whatever went wrong.
+    Err err(
+        "Hit conditional breakpoint, but expression evaluation failed:\n%s\nThis location "
+        "could have been optimized out, or this variable might not exist in the current scope."
+        "\nCheck the expression with `bp <id> get condition`, or modify the expression with "
+        "`bp <id> set condition <expr>`.",
+        msg.data());
+
+    for (auto& observer : session()->breakpoint_observers()) {
+      observer.OnBreakpointUpdateFailure(bp, err);
+    }
+
+    cb(true);
+  });
 }
 
 void ThreadImpl::SyncFramesForStack(fit::callback<void(const Err&)> callback) {
@@ -424,13 +506,13 @@ void ThreadImpl::ClearState() {
 }
 
 void ThreadImpl::RunNextPostStopTaskOrNotify(const StopInfo& info, bool should_stop) {
-  // It's possible that the user is typing "pause" or "continue" during any asynchronous tasks so
-  // the thread state doesn't match what we thought it was. Even though we haven't sent the
+  // It's possible that the user is typing "pause" or "continue" during any asynchronous tasks
+  // so the thread state doesn't match what we thought it was. Even though we haven't sent the
   // notifications, things still could have happened.
   //
-  // Therefore, we don't do anything if the thread has started running from underneath us (it should
-  // always be stopped when the thread controllers are notified unless the user has done something),
-  // and cancel other pending stop tasks.
+  // Therefore, we don't do anything if the thread has started running from underneath us (it
+  // should always be stopped when the thread controllers are notified unless the user has done
+  // something), and cancel other pending stop tasks.
   //
   // The other half of the race condition is user has requested a manual stop while we were
   // processing these post-stop tasks and we shouldn't continue it. This needs extra logic to

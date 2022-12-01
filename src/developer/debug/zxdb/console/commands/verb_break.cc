@@ -4,6 +4,9 @@
 
 #include "src/developer/debug/zxdb/console/commands/verb_break.h"
 
+#include <iterator>
+#include <memory>
+
 #include "src/developer/debug/zxdb/client/breakpoint.h"
 #include "src/developer/debug/zxdb/client/breakpoint_location.h"
 #include "src/developer/debug/zxdb/client/breakpoint_settings.h"
@@ -17,6 +20,8 @@
 #include "src/developer/debug/zxdb/console/input_location_parser.h"
 #include "src/developer/debug/zxdb/console/output_buffer.h"
 #include "src/developer/debug/zxdb/console/verbs.h"
+#include "src/developer/debug/zxdb/expr/expr.h"
+#include "src/lib/fxl/strings/trim.h"
 
 namespace zxdb {
 
@@ -27,11 +32,10 @@ constexpr int kStopSwitch = 2;
 constexpr int kDisabledSwitch = 3;
 constexpr int kTypeSwitch = 4;
 constexpr int kOneShotSwitch = 5;
-constexpr int kMultSwitch = 6;
 
 const char kBreakShortHelp[] = "break / b: Create a breakpoint.";
 const char kBreakHelp[] =
-    R"(break [ <location> ]
+    R"(break [ <location> ] [ if <expr> ]
 
   Alias: "b"
 
@@ -58,10 +62,6 @@ Options
   -d
       Creates the breakpoint as initially disabled. Otherwise, it will be
       enabled.
-
-  --hit-mult=<count>
-  -m <count>
-      Only breaks the execution every <count> times the breakpoint is hit.
 
   --one-shot
   -o
@@ -142,6 +142,22 @@ Breakpoints on overloaded functions
   or by address. To get the addresses of each overload, use the command
   "sym-info FunctionName".
 
+Breakpoint Conditions
+
+  Breakpoints can optionally have conditions attached to them to catch specific
+  situations. The condition takes the form of an binary expression, which can
+  include variables at the specific breakpoint location.
+
+  To set a conditional breakpoint on line 100 that will only stop execution if a
+  local variable `i` is greater than 10:
+
+    [zxdb] break my_file:100 if i > 10
+
+  You can also set a breakpoint at the current location if some variable `x` is
+  less than or equal to 5:
+
+    [zxdb] break if x <= 5
+
 Editing breakpoint attributes
 
   Individual breakpoint attributes can be accessed with the "get" and "set"
@@ -198,6 +214,10 @@ Examples
   break --type execute 23
       Break at line 23 of the file referenced by the current frame and use a
       hardware execution breakpoint.
+
+  break bar.cc:89 if i > 5
+      Set a breakpoint at line 89 of the file bar.cc, but only stop execution if
+      the local variable `i` is greater than 5.
 )";
 
 void OutputCreatedMessage(Breakpoint* breakpoint, fxl::RefPtr<CommandContext> cmd_context) {
@@ -267,19 +287,18 @@ void RunVerbBreak(const Command& cmd, fxl::RefPtr<CommandContext> cmd_context) {
   // Scope.
   settings.scope = ExecutionScopeForCommand(cmd);
 
-  // Hit mult.
-  if (cmd.HasSwitch(kMultSwitch)) {
-    int hit_mult;
-    if (Err err = StringToInt(cmd.GetSwitchValue(kMultSwitch), &hit_mult); err.has_error())
-      return cmd_context->ReportError(err);
-    // TODO(dangyi): Unify validation logics with settings.
-    if (hit_mult <= 0)
-      return cmd_context->ReportError(Err("hit-mult must be positive."));
+  // Breakpoint condition.
+  std::string args = cmd.args()[0];
+  if (size_t if_pos = args.find(" if "); if_pos != std::string::npos) {
+    // Take out the literal " if" to get the actual expression.
+    std::string condition_input = args.substr(if_pos + 3);
+    args.erase(if_pos);
+    std::string_view condition = fxl::TrimString(condition_input, " ");
 
-    settings.hit_mult = hit_mult;
+    settings.condition = condition;
   }
 
-  if (cmd.args().empty()) {
+  if (cmd.args().empty() || args.empty()) {
     // Creating a breakpoint with no location implicitly uses the current frame's current
     // location.
     if (!cmd.frame()) {
@@ -308,7 +327,7 @@ void RunVerbBreak(const Command& cmd, fxl::RefPtr<CommandContext> cmd_context) {
 
   // Parse the given input location in args[0]. This may require async evaluation.
   EvalLocalInputLocation(
-      GetEvalContextForCommand(cmd), cmd.frame(), cmd.args()[0],
+      GetEvalContextForCommand(cmd), cmd.frame(), args,
       [settings, has_explicit_size, cmd_context](ErrOr<std::vector<InputLocation>> locs,
                                                  std::optional<uint32_t> expr_size) mutable {
         if (locs.has_error())
@@ -339,7 +358,6 @@ VerbRecord GetBreakVerbRecord() {
   SwitchRecord size_switch(kSizeSwitch, true, ClientSettings::Breakpoint::kSize, 's');
   SwitchRecord stop_switch(kStopSwitch, true, ClientSettings::Breakpoint::kStopMode, 'p');
   SwitchRecord type_switch(kTypeSwitch, true, ClientSettings::Breakpoint::kType, 't');
-  SwitchRecord mult_switch(kMultSwitch, true, ClientSettings::Breakpoint::kHitMult, 'm');
 
   VerbRecord break_record(&RunVerbBreak, &CompleteInputLocation, {"break", "b"}, kBreakShortHelp,
                           kBreakHelp, CommandGroup::kBreakpoint);
@@ -350,7 +368,6 @@ VerbRecord GetBreakVerbRecord() {
   break_record.switches.push_back(size_switch);
   break_record.switches.push_back(stop_switch);
   break_record.switches.push_back(type_switch);
-  break_record.switches.push_back(mult_switch);
   return break_record;
 }
 

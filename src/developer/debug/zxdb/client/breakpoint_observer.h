@@ -32,6 +32,9 @@ class BreakpointObserver {
   // processes or dynamically loaded shared libraries can always be added that this breakpoint
   // could apply to.
   //
+  // This callback can also be issued from host-side actions, such as putting a condition on a
+  // breakpoint. Cases such as invalid conditional expressions will also issue this callback.
+  //
   // This will get issued for all breakpoints including internal ones.
   //
   // The implementation should not delete the breakpoint from within this callback as other

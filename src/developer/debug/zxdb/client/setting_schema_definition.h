@@ -111,8 +111,9 @@ struct ClientSettings {
 
     static const char* kHitCount;
     static const char* kHitCountDescription;
-    static const char* kHitMult;
-    static const char* kHitMultDescription;
+
+    static const char* kCondition;
+    static const char* kConditionDescription;
   };
 
   struct Filter {

@@ -156,4 +156,35 @@ TEST_F(VerbBreak, BackendError) {
       event.output.AsString());
 }
 
+// This is exactly the same as the "Break" test in this file, but adds conditional expressions on
+// the end of the break commands and verifies the output matches expectations.
+TEST_F(VerbBreak, Conditional) {
+  // Process starts out as running. Make an expression breakpoint.
+  console().ProcessInputLine("break *0x1230 + 4 if i >= 2");
+
+  // The breakpoint info should be immediately printed even though the backend has not replied.
+  auto event = console().GetOutputEvent();
+  ASSERT_EQ(MockConsole::OutputEvent::Type::kOutput, event.type);
+  EXPECT_EQ("Created Breakpoint 1 condition=\"i >= 2\" @ 0x1234\n", event.output.AsString());
+
+  // Issue the success callback from the backend. Nothing should be printed.
+  ASSERT_TRUE(breakpoint_remote_api()->last_cb);
+  breakpoint_remote_api()->last_cb(Err(), debug_ipc::AddOrChangeBreakpointReply());
+  EXPECT_FALSE(console().HasOutputEvent());
+
+  // Make a new process that's not running and then a breakpoint with a different condition.
+  console().ProcessInputLine("process new");
+  console().FlushOutputEvents();
+  console().ProcessInputLine("break SomePendingFunc if x == 42");
+
+  // It should give a pending message.
+  event = console().GetOutputEvent();
+  ASSERT_EQ(MockConsole::OutputEvent::Type::kOutput, event.type);
+  EXPECT_EQ(
+      "Created Breakpoint 2 condition=\"x == 42\" @ SomePendingFunc\n"
+      "Pending: No current matches for location. It will be matched against new\n"
+      "         processes and shared libraries.\n",
+      event.output.AsString());
+}
+
 }  // namespace zxdb

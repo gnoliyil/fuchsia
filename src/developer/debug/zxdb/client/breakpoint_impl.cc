@@ -10,6 +10,7 @@
 #include <map>
 #include <sstream>
 
+#include "src/developer/debug/shared/logging/logging.h"
 #include "src/developer/debug/shared/message_loop.h"
 #include "src/developer/debug/shared/zx_status.h"
 #include "src/developer/debug/zxdb/client/breakpoint_location_impl.h"

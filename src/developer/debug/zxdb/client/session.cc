@@ -79,9 +79,6 @@ bool FilterApplicableBreakpoints(StopInfo* info) {
       // debug agent which will give better performance, but in the future we likely want to
       // add some kind of logging features that will require evaluation in the client.
       breakpoint_iter = info->hit_breakpoints.erase(breakpoint_iter);
-    } else if (breakpoint->GetStats().hit_count % settings.hit_mult != 0) {
-      // Hit-count mismatch, auto-resume.
-      breakpoint_iter = info->hit_breakpoints.erase(breakpoint_iter);
     } else {
       skip = false;
       breakpoint_iter++;
