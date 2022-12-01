@@ -826,6 +826,9 @@ See the FIDL [bindings spec](/docs/reference/fidl/language/bindings-spec.md)
 or [RFC-0028](/docs/contribute/governance/rfcs/0028_handle_rights.md) for more
 details on how rights are used in bindings.
 
+For the zircon rights definitions, see [kernel rights](/docs/concepts/kernel/rights.md).
+FIDL uses [rights.fidl](/zircon/vdso/rights.fidl) to resolve rights constraints.
+
 #### Always specify rights on handles
 
 All handles should specify rights to favor being explicit about the intended
