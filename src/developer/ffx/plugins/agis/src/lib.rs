@@ -194,7 +194,6 @@ mod test {
                         global_id: Some(GLOBAL_ID),
                         process_koid: Some(PROCESS_KOID),
                         process_name: Some(PROCESS_NAME.to_string()),
-                        unknown_data: None,
                         ..fidl_fuchsia_gpu_agis::Vtc::EMPTY
                     });
                     let mut result = Ok(vtcs);

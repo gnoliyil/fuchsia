@@ -157,9 +157,6 @@ fidl_struct_copy! {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TableLargeArray {
     pub a: Option<[u32; 100]>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..TableLargeArray::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -168,7 +165,7 @@ pub struct TableLargeArray {
 impl TableLargeArray {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { a: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { a: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for TableLargeArray {}
@@ -183,15 +180,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TableSmallArray {
     pub a: Option<[u32; 2]>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..TableSmallArray::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -200,7 +193,7 @@ pub struct TableSmallArray {
 impl TableSmallArray {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { a: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { a: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for TableSmallArray {}
@@ -215,5 +208,4 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }

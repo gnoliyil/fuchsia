@@ -14,11 +14,6 @@ fn use_table(profile: &fidl_lib::Profile) {
     if let Some(unit) = &profile.temperature_unit {
         println!("preferred unit: {:?}", unit);
     }
-    if let Some(data) = &profile.unknown_data {
-        for (ordinal, bytes) in data.iter() {
-            println!("unknown ordinal {} with bytes {:?}", ordinal, bytes);
-        }
-    }
 }
 // [END contents]
 

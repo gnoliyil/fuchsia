@@ -124,7 +124,7 @@ mod tests {
         // let version_info =  VersionInfo {commit_hash: None,
         //     commit_timestamp: None, build_version: None,
         //     abi_revision: None, api_level: None,
-        //     exec_path: None, build_id: None, unknown_data: None,
+        //     exec_path: None, build_id: None,
         //     __non_exhaustive: ()};
         let version_info = VersionInfo::EMPTY;
         init_metrics_svc(version_info, None).await;

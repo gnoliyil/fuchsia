@@ -179,10 +179,7 @@ fn flexible_resource_union() {
 
 #[test]
 fn value_table() {
-    assert_matches!(
-        ValueRecord::EMPTY,
-        ValueRecord { name: None, age: None, unknown_data: None, .. }
-    );
+    assert_matches!(ValueRecord::EMPTY, ValueRecord { name: None, age: None, .. });
 
     let table = ValueRecord { age: Some(30), ..ValueRecord::EMPTY };
     assert_eq!(table.name, None);
@@ -192,22 +189,11 @@ fn value_table() {
     assert_eq!(name, None);
     let ValueRecord { age, .. } = table;
     assert_eq!(age, Some(30));
-
-    let bytes = vec![1, 2, 3, 4, 5, 6, 7, 8];
-    let unknown =
-        ValueRecord { unknown_data: Some([(123, bytes.clone())].into()), ..ValueRecord::EMPTY };
-    let unknown_data = unknown.unknown_data.as_ref().unwrap();
-    assert_eq!(unknown_data.len(), 1);
-    assert_eq!(unknown_data.get(&123), Some(&bytes));
-    assert_eq!(unknown_data.get(&456), None);
 }
 
 #[test]
 fn resource_table() {
-    assert_matches!(
-        ResourceRecord::EMPTY,
-        ResourceRecord { name: None, age: None, unknown_data: None, .. }
-    );
+    assert_matches!(ResourceRecord::EMPTY, ResourceRecord { name: None, age: None, .. });
 
     let table = ResourceRecord { age: Some(30), ..ResourceRecord::EMPTY };
     assert_eq!(table.name, None);
@@ -217,23 +203,4 @@ fn resource_table() {
     assert_eq!(name, None);
     let ResourceRecord { age, .. } = table;
     assert_eq!(age, Some(30));
-
-    let bytes = vec![1, 2, 3, 4, 5, 6, 7, 8];
-    let unknown = ResourceRecord {
-        unknown_data: Some(
-            [(
-                123,
-                fidl::UnknownData { bytes: bytes.clone(), handles: vec![fidl::Handle::invalid()] },
-            )]
-            .into(),
-        ),
-        ..ResourceRecord::EMPTY
-    };
-    let unknown_data = unknown.unknown_data.as_ref().unwrap();
-    assert_eq!(unknown_data.len(), 1);
-    assert_eq!(
-        unknown_data.get(&123),
-        Some(&fidl::UnknownData { bytes, handles: vec![fidl::Handle::invalid()] })
-    );
-    assert_eq!(unknown_data.get(&456), None);
 }

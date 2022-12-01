@@ -25,7 +25,6 @@ fn get_no_protocol_dfv2_property_list() -> Option<[fdf::NodeProperty; 2]> {
         fdf::NodeProperty {
             key: Some(fdf::NodePropertyKey::IntValue(bind::ddk_bind_constants::BIND_PROTOCOL)),
             value: Some(fdf::NodePropertyValue::IntValue(28)), // ZX_PROTOCOL_MISC
-            unknown_data: None,
             ..fdf::NodeProperty::EMPTY
         },
         fdf::NodeProperty {
@@ -33,7 +32,6 @@ fn get_no_protocol_dfv2_property_list() -> Option<[fdf::NodeProperty; 2]> {
                 "fuchsia.driver.framework.dfv2",
             ))),
             value: Some(fdf::NodePropertyValue::BoolValue(true)),
-            unknown_data: None,
             ..fdf::NodeProperty::EMPTY
         },
     ])
@@ -44,7 +42,6 @@ fn get_test_parent_dfv2_property_list() -> Option<[fdf::NodeProperty; 2]> {
         fdf::NodeProperty {
             key: Some(fdf::NodePropertyKey::IntValue(bind::ddk_bind_constants::BIND_PROTOCOL)),
             value: Some(fdf::NodePropertyValue::IntValue(bind_fuchsia_test::BIND_PROTOCOL_PARENT)),
-            unknown_data: None,
             ..fdf::NodeProperty::EMPTY
         },
         fdf::NodeProperty {
@@ -52,7 +49,6 @@ fn get_test_parent_dfv2_property_list() -> Option<[fdf::NodeProperty; 2]> {
                 "fuchsia.driver.framework.dfv2",
             ))),
             value: Some(fdf::NodePropertyValue::BoolValue(true)),
-            unknown_data: None,
             ..fdf::NodeProperty::EMPTY
         },
     ])

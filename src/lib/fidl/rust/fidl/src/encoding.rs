@@ -2977,53 +2977,21 @@ pub fn decode_envelope_header(
     }
 }
 
-/// Decodes a FIDL envelope, returning the unknown bytes or `None` if the
-/// envelope is absent. Fails if there are any handles.
+/// Decodes a FIDL envelope and skips over any out-of-line bytes and handles.
 #[doc(hidden)] // only exported for macro use
 #[inline]
-pub fn decode_unknown_bytes(decoder: &mut Decoder<'_>, offset: usize) -> Result<Option<Vec<u8>>> {
-    match decode_envelope_header(decoder, offset)? {
-        Some((inlined, num_bytes, num_handles)) => {
-            if num_handles != 0 {
-                for _ in 0..num_handles {
-                    decoder.drop_next_handle()?;
-                }
-                return Err(Error::CannotStoreUnknownHandles);
-            }
-            let decode_inner = |decoder: &mut Decoder<'_>, offset: usize| {
-                Ok(Some(decoder.buffer()[offset..offset + (num_bytes as usize)].to_vec()))
-            };
-            if inlined {
-                decode_inner(decoder, offset)
-            } else {
-                decoder.read_out_of_line(num_bytes as usize, decode_inner)
+pub fn decode_unknown_envelope(decoder: &mut Decoder<'_>, offset: usize) -> Result<()> {
+    if let Some((inlined, num_bytes, num_handles)) = decode_envelope_header(decoder, offset)? {
+        if !inlined {
+            decoder.read_out_of_line(num_bytes as usize, |_decoder, _offset| Ok(()))?;
+        }
+        if num_handles != 0 {
+            for _ in 0..num_handles {
+                decoder.drop_next_handle()?;
             }
         }
-        None => Ok(None),
     }
-}
-
-/// Decodes a FIDL envelope, returning the unknown bytes and handles, or `None`
-/// if the envelope is absent.
-#[doc(hidden)] // only exported for macro use
-#[inline]
-pub fn decode_unknown_data(
-    decoder: &mut Decoder<'_>,
-    offset: usize,
-) -> Result<Option<UnknownData>> {
-    match decode_envelope_header(decoder, offset)? {
-        Some((inlined, num_bytes, num_handles)) => {
-            let decode_inner = |decoder: &mut Decoder<'_>, offset: usize| {
-                decode_unknown_data_contents(decoder, offset, num_bytes, num_handles).map(Some)
-            };
-            if inlined {
-                decode_inner(decoder, offset)
-            } else {
-                decoder.read_out_of_line(num_bytes as usize, decode_inner)
-            }
-        }
-        None => Ok(None),
-    }
+    Ok(())
 }
 
 /// Returns the unknown bytes and handles directly from an envelope's out of line data.
@@ -3065,43 +3033,16 @@ macro_rules! fidl_table {
                 )?
             },
         )*],
-        // The resource_unknown_member and value_unknown_member represent the
-        // name of the unknown variant for resource types and value types
-        // respectively. Exactly one of the two fields must be set.
-        $( resource_unknown_member: $resource_unknown_name:ident, )?
-        $( value_unknown_member: $value_unknown_name:ident, )?
     ) => {
         impl $name {
             #[inline(always)]
-            fn find_max_ordinal(&self) -> u64 {
-                std::cmp::max(self.find_max_known_ordinal(), self.find_max_unknown_ordinal())
-            }
-
-            #[inline(always)]
-            fn find_max_known_ordinal(&self) -> u64 {
+            fn max_ordinal_present(&self) -> u64 {
                 $crate::fidl_reverse_blocks!{$({
                     if let Some(_) = self.$member_name {
                         return $ordinal;
                     }
                 })*}
                 0
-            }
-
-            #[inline(always)]
-            fn find_max_unknown_ordinal(&self) -> u64 {
-                // unknown data must either be None or Some of a non-empty map (i.e. it cannot
-                // have an additional empty state of Some of an empty map), so we can unwrap the
-                // result of .max()
-                $(
-                    // TODO: When https://github.com/rust-lang/rust/issues/62924 is fixed,
-                    // change this to data.keys().last_key_value().unwrap().0.
-                    self.$value_unknown_name.as_ref().map_or(0, |data| *data.keys().next_back().unwrap())
-                )?
-                $(
-                    // TODO: When https://github.com/rust-lang/rust/issues/62924 is fixed,
-                    // change this to data.keys().last_key_value().unwrap().0.
-                    self.$resource_unknown_name.as_ref().map_or(0, |data| *data.keys().next_back().unwrap())
-                )?
             }
         }
 
@@ -3116,7 +3057,7 @@ macro_rules! fidl_table {
             fn encode(&mut self, encoder: &mut $crate::encoding::Encoder<'_, '_>, offset: usize, recursion_depth: usize) -> $crate::Result<()> {
                 encoder.debug_check_bounds::<Self>(offset);
                 // Vector header
-                let max_ordinal = self.find_max_ordinal();
+                let max_ordinal = self.max_ordinal_present();
                 (max_ordinal as u64).encode(encoder, offset, recursion_depth)?;
                 $crate::encoding::ALLOC_PRESENT_U64.clone().encode(encoder, offset + 8, recursion_depth)?;
                 // write_out_of_line must not be called with a zero-sized out-of-line block.
@@ -3129,35 +3070,8 @@ macro_rules! fidl_table {
                 };
                 let bytes_len = (max_ordinal as usize) * envelope_size;
                 encoder.write_out_of_line(bytes_len, recursion_depth, |_encoder, _offset, _recursion_depth| {
-                    $(
-                        let mut _unknown_fields = self.$value_unknown_name.iter().flatten();
-                        let mut _next_unknown = _unknown_fields.next();
-                        let _unknown_encoder_func = $crate::encoding::encode_unknown_bytes;
-                    )?
-                    $(
-                        let mut _unknown_fields = self.$resource_unknown_name.iter_mut().flatten();
-                        let mut _next_unknown = _unknown_fields.next();
-                        let _unknown_encoder_func = $crate::encoding::encode_unknown_data;
-                    )?
                     let mut _prev_end_offset: usize = 0;
                     $(
-                        // Encode unknown envelopes for gaps in ordinals
-                        while let Some((ordinal, data)) = _next_unknown.as_mut() {
-                            if **ordinal > $ordinal {
-                                break;
-                            }
-                            let cur_offset: usize = (**ordinal as usize - 1) * envelope_size;
-                            // Zero reserved fields.
-                            _encoder.padding(_offset + _prev_end_offset, cur_offset - _prev_end_offset);
-
-                            // Safety:
-                            // - bytes_len is calculated to fit envelope_size*max(member.ordinal).
-                            // - Since cur_offset is envelope_size*(member.ordinal - 1) and the envelope takes
-                            //   envelope_size bytes, there is always sufficient room.
-                            _unknown_encoder_func(*data, _encoder, _offset + cur_offset, _recursion_depth)?;
-                            _next_unknown = _unknown_fields.next();
-                            _prev_end_offset = cur_offset + envelope_size;
-                        }
                         if $ordinal > max_ordinal {
                             return Ok(());
                         }
@@ -3184,23 +3098,6 @@ macro_rules! fidl_table {
                         _prev_end_offset = cur_offset + envelope_size;
                     )*
 
-                    // Encode the remaining unknown envelopes. We use a while loop here instead of
-                    // a for loop on `_unknown_fields`, because there might be a remaining unknown
-                    // field stored in `_next_unknown`.
-                    while let Some((ordinal, data)) = _next_unknown.as_mut() {
-                        let cur_offset: usize = (**ordinal as usize - 1) * envelope_size;
-                        // Zero reserved fields.
-                        _encoder.padding(_offset + _prev_end_offset, cur_offset - _prev_end_offset);
-
-                        // Safety:
-                        // - bytes_len is calculated to fit envelope_size*max(member.ordinal).
-                        // - Since cur_offset is envelope_size*(member.ordinal - 1) and the envelope takes
-                        //   envelope_size bytes, there is always sufficient room.
-                        _unknown_encoder_func(data, _encoder, _offset + cur_offset, _recursion_depth)?;
-                        _next_unknown = _unknown_fields.next();
-                        _prev_end_offset = cur_offset + envelope_size;
-                    }
-
                     Ok(())
                 })
             }
@@ -3224,22 +3121,9 @@ macro_rules! fidl_table {
                 let bytes_len = len * envelope_size;
                 decoder.read_out_of_line(bytes_len, |decoder, offset| {
                     // Decode the envelope for each type.
-                    // u32 num_bytes
-                    // u32_num_handles
-                    // 64-bit presence indicator
                     let mut _next_ordinal_to_read = 0;
                     let mut next_offset = offset;
                     let end_offset = offset + bytes_len;
-                    $(
-                        stringify!($value_unknown_name); // placeholder use for expansion
-                        let mut _unknown_data = std::collections::BTreeMap::<u64, Vec<u8>>::new();
-                        let _unknown_decoder_func = $crate::encoding::decode_unknown_bytes;
-                    )?
-                    $(
-                        stringify!($resource_unknown_name); // placeholder use for expansion
-                        let mut _unknown_data = std::collections::BTreeMap::<u64, $crate::encoding::UnknownData>::new();
-                        let _unknown_decoder_func = $crate::encoding::decode_unknown_data;
-                    )?
                     $(
                         _next_ordinal_to_read += 1;
                         if next_offset >= end_offset {
@@ -3248,9 +3132,7 @@ macro_rules! fidl_table {
 
                         // Decode unknown envelopes for gaps in ordinals.
                         while _next_ordinal_to_read < $ordinal {
-                            if let Some(field) = _unknown_decoder_func(decoder, next_offset)? {
-                                _unknown_data.insert(_next_ordinal_to_read, field);
-                            }
+                            $crate::encoding::decode_unknown_envelope(decoder, next_offset)?;
                             _next_ordinal_to_read += 1;
                             next_offset += envelope_size;
                         }
@@ -3297,20 +3179,10 @@ macro_rules! fidl_table {
                     // Decode the remaining unknown envelopes.
                     while next_offset < end_offset {
                         _next_ordinal_to_read += 1;
-                        if let Some(field) = _unknown_decoder_func(decoder, next_offset)? {
-                            _unknown_data.insert(_next_ordinal_to_read, field);
-                        }
+                        $crate::encoding::decode_unknown_envelope(decoder, next_offset)?;
                         next_offset += envelope_size;
                     }
 
-                    if !_unknown_data.is_empty() {
-                        $(
-                            self.$value_unknown_name = Some(_unknown_data);
-                        )?
-                        $(
-                            self.$resource_unknown_name = Some(_unknown_data);
-                        )?
-                    }
                     Ok(())
                 })
             }

@@ -237,13 +237,10 @@ func onStruct(value gidlir.Record, decl *gidlmixer.StructDecl) string {
 
 func onTable(value gidlir.Record, decl *gidlmixer.TableDecl) string {
 	var tableFields []string
-	var unknownTuples []string
 	for _, field := range value.Fields {
 		if field.Key.IsUnknown() {
-			unknownTuples = append(unknownTuples, fmt.Sprintf("(%d, %s)",
-				field.Key.UnknownOrdinal,
-				buildUnknownData(field.Value.(gidlir.UnknownData), decl.IsResourceType())))
-			continue
+			panic(fmt.Sprintf("table %s: unknown ordinal %d: Rust cannot construct tables with unknown fields",
+				decl.Name(), field.Key.UnknownOrdinal))
 		}
 		fieldName := fidlgen.ToSnakeCase(field.Key.Name)
 		fieldDecl, ok := decl.Field(field.Key.Name)
@@ -253,19 +250,6 @@ func onTable(value gidlir.Record, decl *gidlmixer.TableDecl) string {
 		fieldValueStr := visit(field.Value, fieldDecl)
 		tableFields = append(tableFields, fmt.Sprintf("%s: Some(%s)", fieldName, fieldValueStr))
 	}
-	unknownData := func() string {
-		if len(unknownTuples) == 0 {
-			return "None"
-		}
-		var b strings.Builder
-		b.WriteString("Some([")
-		for _, tuple := range unknownTuples {
-			b.WriteString(tuple)
-		}
-		b.WriteString("].into())")
-		return b.String()
-	}
-	tableFields = append(tableFields, fmt.Sprintf("unknown_data: %s", unknownData()))
 	tableName := declName(decl)
 	tableFields = append(tableFields, fmt.Sprintf("..%s::EMPTY", tableName))
 	valueStr := fmt.Sprintf("%s { %s }", tableName, strings.Join(tableFields, ", "))

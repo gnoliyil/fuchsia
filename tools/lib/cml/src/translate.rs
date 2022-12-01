@@ -1814,7 +1814,6 @@ mod tests {
                         target_name: Some("LogSink2".into()),
                         dependency_type: Some(fdecl::DependencyType::Strong),
                         availability: Some(fdecl::Availability::Required),
-                        unknown_data: None,
                         ..fdecl::OfferProtocol::EMPTY
                     }),
                     fdecl::Offer::Protocol(fdecl::OfferProtocol {
@@ -1827,7 +1826,6 @@ mod tests {
                         target_name: Some("fuchsia.logger.LogSink".into()),
                         dependency_type: Some(fdecl::DependencyType::Strong),
                         availability: Some(fdecl::Availability::Required),
-                        unknown_data: None,
                         ..fdecl::OfferProtocol::EMPTY
                     }),
                     fdecl::Offer::Protocol(fdecl::OfferProtocol {
@@ -1839,7 +1837,6 @@ mod tests {
                         target_name: Some("fuchsia.logger.LogSink".into()),
                         dependency_type: Some(fdecl::DependencyType::Strong),
                         availability: Some(fdecl::Availability::Required),
-                        unknown_data: None,
                         ..fdecl::OfferProtocol::EMPTY
                     }),
                 ]),
@@ -1906,7 +1903,6 @@ mod tests {
                         target_name: Some("fuchsia.logger.LegacyLog".into()),
                         dependency_type: Some(fdecl::DependencyType::Strong),
                         availability: Some(fdecl::Availability::Required),
-                        unknown_data: None,
                         ..fdecl::OfferProtocol::EMPTY
                     }),
                     fdecl::Offer::Protocol(fdecl::OfferProtocol {
@@ -1919,7 +1915,6 @@ mod tests {
                         target_name: Some("fuchsia.logger.LogSink".into()),
                         dependency_type: Some(fdecl::DependencyType::Strong),
                         availability: Some(fdecl::Availability::Required),
-                        unknown_data: None,
                         ..fdecl::OfferProtocol::EMPTY
                     }),
                     fdecl::Offer::Protocol(fdecl::OfferProtocol {
@@ -1932,7 +1927,6 @@ mod tests {
                         target_name: Some("fuchsia.logger.LogSink".into()),
                         dependency_type: Some(fdecl::DependencyType::Strong),
                         availability: Some(fdecl::Availability::Required),
-                        unknown_data: None,
                         ..fdecl::OfferProtocol::EMPTY
                     }),
                     fdecl::Offer::Protocol(fdecl::OfferProtocol {
@@ -1944,7 +1938,6 @@ mod tests {
                         target_name: Some("fuchsia.logger.LogSink".into()),
                         dependency_type: Some(fdecl::DependencyType::Strong),
                         availability: Some(fdecl::Availability::Required),
-                        unknown_data: None,
                         ..fdecl::OfferProtocol::EMPTY
                     }),
                     fdecl::Offer::Protocol(fdecl::OfferProtocol {
@@ -1957,7 +1950,6 @@ mod tests {
                         target_name: Some("fuchsia.inspect.InspectSink".into()),
                         dependency_type: Some(fdecl::DependencyType::Strong),
                         availability: Some(fdecl::Availability::Required),
-                        unknown_data: None,
                         ..fdecl::OfferProtocol::EMPTY
                     }),
                     fdecl::Offer::Protocol(fdecl::OfferProtocol {
@@ -1970,7 +1962,6 @@ mod tests {
                         target_name: Some("fuchsia.inspect.InspectSink".into()),
                         dependency_type: Some(fdecl::DependencyType::Strong),
                         availability: Some(fdecl::Availability::Required),
-                        unknown_data: None,
                         ..fdecl::OfferProtocol::EMPTY
                     }),
                     fdecl::Offer::Protocol(fdecl::OfferProtocol {
@@ -1982,7 +1973,6 @@ mod tests {
                         target_name: Some("fuchsia.inspect.InspectSink".into()),
                         dependency_type: Some(fdecl::DependencyType::Strong),
                         availability: Some(fdecl::Availability::Required),
-                        unknown_data: None,
                         ..fdecl::OfferProtocol::EMPTY
                     }),
                 ]),
@@ -2072,7 +2062,6 @@ mod tests {
                         target_name: Some("fuchsia.logger.LogSink".into()),
                         dependency_type: Some(fdecl::DependencyType::Strong),
                         availability: Some(fdecl::Availability::Required),
-                        unknown_data: None,
                         ..fdecl::OfferProtocol::EMPTY
                     }),
                     fdecl::Offer::Protocol(fdecl::OfferProtocol {
@@ -2085,7 +2074,6 @@ mod tests {
                         target_name: Some("fuchsia.logger.LogSink".into()),
                         dependency_type: Some(fdecl::DependencyType::Strong),
                         availability: Some(fdecl::Availability::Required),
-                        unknown_data: None,
                         ..fdecl::OfferProtocol::EMPTY
                     }),
                     fdecl::Offer::Protocol(fdecl::OfferProtocol {
@@ -2097,7 +2085,6 @@ mod tests {
                         target_name: Some("fuchsia.logger.LogSink".into()),
                         dependency_type: Some(fdecl::DependencyType::Strong),
                         availability: Some(fdecl::Availability::Required),
-                        unknown_data: None,
                         ..fdecl::OfferProtocol::EMPTY
                     }),
                     fdecl::Offer::Protocol(fdecl::OfferProtocol {
@@ -2109,7 +2096,6 @@ mod tests {
                         target_name: Some("fuchsia.logger.LogSink".into()),
                         dependency_type: Some(fdecl::DependencyType::Strong),
                         availability: Some(fdecl::Availability::Required),
-                        unknown_data: None,
                         ..fdecl::OfferProtocol::EMPTY
                     }),
                     fdecl::Offer::Protocol(fdecl::OfferProtocol {
@@ -2122,7 +2108,6 @@ mod tests {
                         target_name: Some("fuchsia.logger.LogSink".into()),
                         dependency_type: Some(fdecl::DependencyType::Strong),
                         availability: Some(fdecl::Availability::Required),
-                        unknown_data: None,
                         ..fdecl::OfferProtocol::EMPTY
                     }),
                 ]),
@@ -2191,7 +2176,6 @@ mod tests {
                         target_name: Some("fuchsia.logger.LogSink".into()),
                         dependency_type: Some(fdecl::DependencyType::Strong),
                         availability: Some(fdecl::Availability::Required),
-                        unknown_data: None,
                         ..fdecl::OfferProtocol::EMPTY
                     }),
                     fdecl::Offer::Protocol(fdecl::OfferProtocol {
@@ -2204,7 +2188,6 @@ mod tests {
                         target_name: Some("fuchsia.inspect.InspectSink".into()),
                         dependency_type: Some(fdecl::DependencyType::Strong),
                         availability: Some(fdecl::Availability::Required),
-                        unknown_data: None,
                         ..fdecl::OfferProtocol::EMPTY
                     }),
                 ]),

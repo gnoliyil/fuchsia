@@ -332,9 +332,6 @@ fidl_union! {
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocalTablePayload {
     pub a: Option<u16>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..LocalTablePayload::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -343,7 +340,7 @@ pub struct LocalTablePayload {
 impl LocalTablePayload {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { a: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { a: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for LocalTablePayload {}
@@ -358,15 +355,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MainProtocolOneWayAnonRequest {
     pub a: Option<u16>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..MainProtocolOneWayAnonRequest::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -375,7 +368,7 @@ pub struct MainProtocolOneWayAnonRequest {
 impl MainProtocolOneWayAnonRequest {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { a: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { a: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for MainProtocolOneWayAnonRequest {}
@@ -390,15 +383,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MainProtocolTwoWayAnonResponse {
     pub a: Option<u16>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..MainProtocolTwoWayAnonResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -407,7 +396,7 @@ pub struct MainProtocolTwoWayAnonResponse {
 impl MainProtocolTwoWayAnonResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { a: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { a: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for MainProtocolTwoWayAnonResponse {}
@@ -422,15 +411,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MainProtocolTwoWayAnonWithErrorRequest {
     pub a: Option<u16>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..MainProtocolTwoWayAnonWithErrorRequest::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -439,7 +424,7 @@ pub struct MainProtocolTwoWayAnonWithErrorRequest {
 impl MainProtocolTwoWayAnonWithErrorRequest {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { a: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { a: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for MainProtocolTwoWayAnonWithErrorRequest {}
@@ -454,15 +439,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MainProtocolOnAnonWithErrorResponse {
     pub a: Option<u16>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..MainProtocolOnAnonWithErrorResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -471,7 +452,7 @@ pub struct MainProtocolOnAnonWithErrorResponse {
 impl MainProtocolOnAnonWithErrorResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { a: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { a: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for MainProtocolOnAnonWithErrorResponse {}
@@ -486,7 +467,6 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]

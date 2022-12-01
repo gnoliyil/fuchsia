@@ -17,11 +17,6 @@ fn use_table(profile: &fidl_lib::Profile) {
     if let Some(is_on) = &profile.dark_mode {
         println!("dark mode on: {}", is_on);
     }
-    if let Some(data) = &profile.unknown_data {
-        for (ordinal, bytes) in data.iter() {
-            println!("unknown ordinal {} with bytes {:?}", ordinal, bytes);
-        }
-    }
 }
 // [END contents]
 

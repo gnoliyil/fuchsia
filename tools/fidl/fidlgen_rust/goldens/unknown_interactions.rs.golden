@@ -2256,9 +2256,6 @@ fidl_union! {
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsAjarDriverProtocolStrictTwoWayTableResponse {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsAjarDriverProtocolStrictTwoWayTableResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2267,7 +2264,7 @@ pub struct UnknownInteractionsAjarDriverProtocolStrictTwoWayTableResponse {
 impl UnknownInteractionsAjarDriverProtocolStrictTwoWayTableResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsAjarDriverProtocolStrictTwoWayTableResponse {}
@@ -2285,15 +2282,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsAjarDriverProtocolStrictTwoWayTableErrResponse {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsAjarDriverProtocolStrictTwoWayTableErrResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2302,7 +2295,7 @@ pub struct UnknownInteractionsAjarDriverProtocolStrictTwoWayTableErrResponse {
 impl UnknownInteractionsAjarDriverProtocolStrictTwoWayTableErrResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel
@@ -2323,15 +2316,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsAjarProtocolFlexibleEventTableRequest {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsAjarProtocolFlexibleEventTableRequest::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2340,7 +2329,7 @@ pub struct UnknownInteractionsAjarProtocolFlexibleEventTableRequest {
 impl UnknownInteractionsAjarProtocolFlexibleEventTableRequest {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsAjarProtocolFlexibleEventTableRequest {}
@@ -2355,15 +2344,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsAjarProtocolStrictEventTableRequest {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsAjarProtocolStrictEventTableRequest::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2372,7 +2357,7 @@ pub struct UnknownInteractionsAjarProtocolStrictEventTableRequest {
 impl UnknownInteractionsAjarProtocolStrictEventTableRequest {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsAjarProtocolStrictEventTableRequest {}
@@ -2387,15 +2372,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsAjarProtocolStrictTwoWayTableResponse {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsAjarProtocolStrictTwoWayTableResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2404,7 +2385,7 @@ pub struct UnknownInteractionsAjarProtocolStrictTwoWayTableResponse {
 impl UnknownInteractionsAjarProtocolStrictTwoWayTableResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsAjarProtocolStrictTwoWayTableResponse {}
@@ -2419,15 +2400,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsAjarProtocolFlexibleEventTableErrResponse {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsAjarProtocolFlexibleEventTableErrResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2436,7 +2413,7 @@ pub struct UnknownInteractionsAjarProtocolFlexibleEventTableErrResponse {
 impl UnknownInteractionsAjarProtocolFlexibleEventTableErrResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsAjarProtocolFlexibleEventTableErrResponse {}
@@ -2451,15 +2428,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsAjarProtocolStrictEventTableErrResponse {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsAjarProtocolStrictEventTableErrResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2468,7 +2441,7 @@ pub struct UnknownInteractionsAjarProtocolStrictEventTableErrResponse {
 impl UnknownInteractionsAjarProtocolStrictEventTableErrResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsAjarProtocolStrictEventTableErrResponse {}
@@ -2483,15 +2456,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsAjarProtocolStrictTwoWayTableErrResponse {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsAjarProtocolStrictTwoWayTableErrResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2500,7 +2469,7 @@ pub struct UnknownInteractionsAjarProtocolStrictTwoWayTableErrResponse {
 impl UnknownInteractionsAjarProtocolStrictTwoWayTableErrResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsAjarProtocolStrictTwoWayTableErrResponse {}
@@ -2515,15 +2484,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsClosedDriverProtocolStrictTwoWayTableResponse {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsClosedDriverProtocolStrictTwoWayTableResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2532,7 +2497,7 @@ pub struct UnknownInteractionsClosedDriverProtocolStrictTwoWayTableResponse {
 impl UnknownInteractionsClosedDriverProtocolStrictTwoWayTableResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsClosedDriverProtocolStrictTwoWayTableResponse {}
@@ -2550,15 +2515,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsClosedDriverProtocolStrictTwoWayTableErrResponse {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsClosedDriverProtocolStrictTwoWayTableErrResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2567,7 +2528,7 @@ pub struct UnknownInteractionsClosedDriverProtocolStrictTwoWayTableErrResponse {
 impl UnknownInteractionsClosedDriverProtocolStrictTwoWayTableErrResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel
@@ -2588,15 +2549,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsClosedProtocolStrictEventTableRequest {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsClosedProtocolStrictEventTableRequest::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2605,7 +2562,7 @@ pub struct UnknownInteractionsClosedProtocolStrictEventTableRequest {
 impl UnknownInteractionsClosedProtocolStrictEventTableRequest {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsClosedProtocolStrictEventTableRequest {}
@@ -2620,15 +2577,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsClosedProtocolStrictTwoWayTableResponse {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsClosedProtocolStrictTwoWayTableResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2637,7 +2590,7 @@ pub struct UnknownInteractionsClosedProtocolStrictTwoWayTableResponse {
 impl UnknownInteractionsClosedProtocolStrictTwoWayTableResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsClosedProtocolStrictTwoWayTableResponse {}
@@ -2652,15 +2605,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsClosedProtocolStrictEventTableErrResponse {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsClosedProtocolStrictEventTableErrResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2669,7 +2618,7 @@ pub struct UnknownInteractionsClosedProtocolStrictEventTableErrResponse {
 impl UnknownInteractionsClosedProtocolStrictEventTableErrResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsClosedProtocolStrictEventTableErrResponse {}
@@ -2684,15 +2633,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsClosedProtocolStrictTwoWayTableErrResponse {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsClosedProtocolStrictTwoWayTableErrResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2701,7 +2646,7 @@ pub struct UnknownInteractionsClosedProtocolStrictTwoWayTableErrResponse {
 impl UnknownInteractionsClosedProtocolStrictTwoWayTableErrResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsClosedProtocolStrictTwoWayTableErrResponse {}
@@ -2716,15 +2661,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsDriverProtocolStrictTwoWayTableResponse {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsDriverProtocolStrictTwoWayTableResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2733,7 +2674,7 @@ pub struct UnknownInteractionsDriverProtocolStrictTwoWayTableResponse {
 impl UnknownInteractionsDriverProtocolStrictTwoWayTableResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsDriverProtocolStrictTwoWayTableResponse {}
@@ -2748,15 +2689,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsDriverProtocolFlexibleTwoWayTableErrResponse {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsDriverProtocolFlexibleTwoWayTableErrResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2765,7 +2702,7 @@ pub struct UnknownInteractionsDriverProtocolFlexibleTwoWayTableErrResponse {
 impl UnknownInteractionsDriverProtocolFlexibleTwoWayTableErrResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsDriverProtocolFlexibleTwoWayTableErrResponse {}
@@ -2783,15 +2720,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsDriverProtocolFlexibleTwoWayTableResponse {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsDriverProtocolFlexibleTwoWayTableResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2800,7 +2733,7 @@ pub struct UnknownInteractionsDriverProtocolFlexibleTwoWayTableResponse {
 impl UnknownInteractionsDriverProtocolFlexibleTwoWayTableResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsDriverProtocolFlexibleTwoWayTableResponse {}
@@ -2815,15 +2748,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsDriverProtocolStrictTwoWayTableErrResponse {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsDriverProtocolStrictTwoWayTableErrResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2832,7 +2761,7 @@ pub struct UnknownInteractionsDriverProtocolStrictTwoWayTableErrResponse {
 impl UnknownInteractionsDriverProtocolStrictTwoWayTableErrResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsDriverProtocolStrictTwoWayTableErrResponse {}
@@ -2847,15 +2776,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsProtocolFlexibleEventTableRequest {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsProtocolFlexibleEventTableRequest::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2864,7 +2789,7 @@ pub struct UnknownInteractionsProtocolFlexibleEventTableRequest {
 impl UnknownInteractionsProtocolFlexibleEventTableRequest {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsProtocolFlexibleEventTableRequest {}
@@ -2879,15 +2804,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsProtocolStrictEventTableRequest {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsProtocolStrictEventTableRequest::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2896,7 +2817,7 @@ pub struct UnknownInteractionsProtocolStrictEventTableRequest {
 impl UnknownInteractionsProtocolStrictEventTableRequest {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsProtocolStrictEventTableRequest {}
@@ -2911,15 +2832,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsProtocolStrictTwoWayTableResponse {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsProtocolStrictTwoWayTableResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2928,7 +2845,7 @@ pub struct UnknownInteractionsProtocolStrictTwoWayTableResponse {
 impl UnknownInteractionsProtocolStrictTwoWayTableResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsProtocolStrictTwoWayTableResponse {}
@@ -2943,15 +2860,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsProtocolFlexibleEventTableErrResponse {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsProtocolFlexibleEventTableErrResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2960,7 +2873,7 @@ pub struct UnknownInteractionsProtocolFlexibleEventTableErrResponse {
 impl UnknownInteractionsProtocolFlexibleEventTableErrResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsProtocolFlexibleEventTableErrResponse {}
@@ -2975,15 +2888,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsProtocolFlexibleTwoWayTableErrResponse {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsProtocolFlexibleTwoWayTableErrResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -2992,7 +2901,7 @@ pub struct UnknownInteractionsProtocolFlexibleTwoWayTableErrResponse {
 impl UnknownInteractionsProtocolFlexibleTwoWayTableErrResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsProtocolFlexibleTwoWayTableErrResponse {}
@@ -3007,15 +2916,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsProtocolFlexibleTwoWayTableResponse {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsProtocolFlexibleTwoWayTableResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -3024,7 +2929,7 @@ pub struct UnknownInteractionsProtocolFlexibleTwoWayTableResponse {
 impl UnknownInteractionsProtocolFlexibleTwoWayTableResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsProtocolFlexibleTwoWayTableResponse {}
@@ -3039,15 +2944,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsProtocolStrictEventTableErrResponse {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsProtocolStrictEventTableErrResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -3056,7 +2957,7 @@ pub struct UnknownInteractionsProtocolStrictEventTableErrResponse {
 impl UnknownInteractionsProtocolStrictEventTableErrResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsProtocolStrictEventTableErrResponse {}
@@ -3071,15 +2972,11 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnknownInteractionsProtocolStrictTwoWayTableErrResponse {
     pub some_field: Option<i32>,
-    /// (FIDL-generated) Unknown fields encountered during decoding, stored as a
-    /// map from ordinals to raw data. The `Some` case is always nonempty.
-    pub unknown_data: Option<std::collections::BTreeMap<u64, Vec<u8>>>,
     #[deprecated = "Use `..UnknownInteractionsProtocolStrictTwoWayTableErrResponse::EMPTY` to construct and `..` to match."]
     #[doc(hidden)]
     pub __non_exhaustive: (),
@@ -3088,7 +2985,7 @@ pub struct UnknownInteractionsProtocolStrictTwoWayTableErrResponse {
 impl UnknownInteractionsProtocolStrictTwoWayTableErrResponse {
     /// An empty table with every field set to `None`.
     #[allow(deprecated)]
-    pub const EMPTY: Self = Self { some_field: None, unknown_data: None, __non_exhaustive: () };
+    pub const EMPTY: Self = Self { some_field: None, __non_exhaustive: () };
 }
 
 impl fidl::encoding::TopLevel for UnknownInteractionsProtocolStrictTwoWayTableErrResponse {}
@@ -3103,7 +3000,6 @@ fidl_table! {
             ordinal: 1,
         },
     ],
-    value_unknown_member: unknown_data,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]

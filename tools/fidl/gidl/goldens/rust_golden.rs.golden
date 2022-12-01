@@ -288,7 +288,7 @@ fn test_golden_bits_struct_v2_encode() {
 
 #[test]
 fn test_golden_table_struct_v1_encode() {
-    let value = &mut test_conformance::GoldenTableStruct { v: test_conformance::GoldenTable { v: Some(1i16), unknown_data: None, ..test_conformance::GoldenTable::EMPTY } };
+    let value = &mut test_conformance::GoldenTableStruct { v: test_conformance::GoldenTable { v: Some(1i16), ..test_conformance::GoldenTable::EMPTY } };
     let bytes = &mut Vec::new();
     let handle_dispositions = &mut Vec::new();
     bytes.resize(65536, 0xcd); // fill with junk data
@@ -305,7 +305,7 @@ fn test_golden_table_struct_v1_encode() {
 
 #[test]
 fn test_golden_table_struct_v2_encode() {
-    let value = &mut test_conformance::GoldenTableStruct { v: test_conformance::GoldenTable { v: Some(1i16), unknown_data: None, ..test_conformance::GoldenTable::EMPTY } };
+    let value = &mut test_conformance::GoldenTableStruct { v: test_conformance::GoldenTable { v: Some(1i16), ..test_conformance::GoldenTable::EMPTY } };
     let bytes = &mut Vec::new();
     let handle_dispositions = &mut Vec::new();
     bytes.resize(65536, 0xcd); // fill with junk data
@@ -1250,7 +1250,7 @@ fn test_golden_table_struct_v1_decode() {
     }).collect();
     let value = &mut test_conformance::GoldenTableStruct::new_empty();
     Decoder::decode_with_context(_V1_CONTEXT, bytes, &mut handle_infos, value).unwrap();
-    assert_eq!(value, &test_conformance::GoldenTableStruct { v: test_conformance::GoldenTable { v: Some(1i16), unknown_data: None, ..test_conformance::GoldenTable::EMPTY } });
+    assert_eq!(value, &test_conformance::GoldenTableStruct { v: test_conformance::GoldenTable { v: Some(1i16), ..test_conformance::GoldenTable::EMPTY } });
 }
 
 #[test]
@@ -1274,7 +1274,7 @@ fn test_golden_table_struct_v2_decode() {
     }).collect();
     let value = &mut test_conformance::GoldenTableStruct::new_empty();
     Decoder::decode_with_context(_V2_CONTEXT, bytes, &mut handle_infos, value).unwrap();
-    assert_eq!(value, &test_conformance::GoldenTableStruct { v: test_conformance::GoldenTable { v: Some(1i16), unknown_data: None, ..test_conformance::GoldenTable::EMPTY } });
+    assert_eq!(value, &test_conformance::GoldenTableStruct { v: test_conformance::GoldenTable { v: Some(1i16), ..test_conformance::GoldenTable::EMPTY } });
 }
 
 #[test]

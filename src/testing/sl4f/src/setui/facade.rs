@@ -426,12 +426,10 @@ mod tests {
                             toggle_flags: Some(fsettings::ToggleStateFlags::AVAILABLE),
                             ..DeviceState::EMPTY
                         }),
-                        unknown_data: None,
                         ..InputDevice::EMPTY
                     };
                     let settings = fsettings::InputSettings {
                         devices: Some(vec![device]),
-                        unknown_data: None,
                         ..fsettings::InputSettings::EMPTY
                     };
                     responder.send(settings).unwrap();
@@ -490,12 +488,10 @@ mod tests {
                             toggle_flags: Some(fsettings::ToggleStateFlags::MUTED),
                             ..DeviceState::EMPTY
                         }),
-                        unknown_data: None,
                         ..InputDevice::EMPTY
                     };
                     let settings = fsettings::InputSettings {
                         devices: Some(vec![device]),
-                        unknown_data: None,
                         ..fsettings::InputSettings::EMPTY
                     };
                     responder.send(settings).unwrap();
@@ -539,12 +535,10 @@ mod tests {
                             toggle_flags: Some(fsettings::ToggleStateFlags::MUTED),
                             ..DeviceState::EMPTY
                         }),
-                        unknown_data: None,
                         ..InputDevice::EMPTY
                     };
                     let settings = fsettings::InputSettings {
                         devices: Some(vec![device]),
-                        unknown_data: None,
                         ..fsettings::InputSettings::EMPTY
                     };
                     responder.send(settings).unwrap();
