@@ -8,9 +8,7 @@
 
 int main(int argc, char** argv) {
   syslog::SetTags({"adb"});
-  std::optional<std::string> default_component;
-  if (argc == 1) {
-    default_component = argv[0];
-  }
-  return adb_file_sync::AdbFileSync::StartService(std::move(default_component));
+
+  return adb_file_sync::AdbFileSync::StartService(
+      adb_file_sync_config::Config::TakeFromStartupHandle());
 }

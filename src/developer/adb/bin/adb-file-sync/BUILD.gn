@@ -6,12 +6,33 @@ import("//build/components.gni")
 import("//build/test.gni")
 import("//src/sys/core/build/core_shard.gni")
 
+fuchsia_component_manifest("manifest") {
+  component_name = "adb-file-sync"
+  manifest = "meta/adb-file-sync.cml"
+}
+
+fuchsia_structured_config_cpp_elf_lib("adb-file-sync-config") {
+  cm_label = ":manifest"
+}
+
+fuchsia_structured_config_values("adb-file-sync-config-default-values") {
+  cm_label = ":manifest"
+  values = {
+    filesync_moniker = ""
+  }
+}
+
 core_shard("adb-file-sync-shard") {
   shard_file = "meta/adb-file-sync.core_shard.cml"
 }
 
-group("common") {
-  public_deps = [
+executable("adb-file-sync") {
+  sources = [
+    "adb-file-sync.cc",
+    "main.cc",
+  ]
+  deps = [
+    ":adb-file-sync-config",
     "//sdk/fidl/fuchsia.hardware.adb:fuchsia.hardware.adb_cpp",
     "//sdk/fidl/fuchsia.sys2:fuchsia.sys2_cpp",
     "//sdk/lib/fdio",
@@ -26,17 +47,8 @@ group("common") {
   ]
 }
 
-executable("adb-file-sync") {
-  sources = [
-    "adb-file-sync.cc",
-    "main.cc",
-  ]
-  deps = [ ":common" ]
-}
-
 fuchsia_component("adb-file-sync-component") {
-  component_name = "adb-file-sync"
-  manifest = "meta/adb-file-sync.cml"
+  cm_label = ":manifest"
   deps = [ ":adb-file-sync" ]
 }
 
@@ -64,7 +76,10 @@ fuchsia_component("adb-file-sync-test-component") {
 
 fuchsia_test_package("adb-file-sync-test") {
   test_components = [ ":adb-file-sync-test-component" ]
-  deps = [ ":adb-file-sync-component" ]
+  deps = [
+    ":adb-file-sync-component",
+    ":adb-file-sync-config-default-values",
+  ]
 }
 
 group("tests") {

@@ -6,7 +6,7 @@
     program: {
         runner: "elf",
         binary: "bin/adb-file-sync",
-        args: [], // Default component goes here
+        args: [],
     },
     capabilities: [
         { protocol: "fuchsia.hardware.adb.Provider" },
@@ -26,4 +26,10 @@
             from: "self",
         },
     ],
+    config: {
+        filesync_moniker: {
+            type: "string",
+            max_size: 256,
+        },
+    },
 }

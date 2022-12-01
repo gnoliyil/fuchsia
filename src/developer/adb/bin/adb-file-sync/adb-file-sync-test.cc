@@ -218,7 +218,7 @@ class AdbFileSyncTest : public gtest::RealLoopFixture {
  public:
   AdbFileSyncTest() : directory_(dispatcher()) {}
 
-  void SetUp() override {
+  void Build(std::string default_moniker = "") {
     using namespace component_testing;
     auto builder = RealmBuilder::Create();
     builder.AddLocalChild("realm_query", [&]() {
@@ -239,6 +239,8 @@ class AdbFileSyncTest : public gtest::RealLoopFixture {
     builder.AddRoute(Route{.capabilities = {Protocol{fuchsia::hardware::adb::Provider::Name_}},
                            .source = ChildRef{"adb-file-sync"},
                            .targets = {ParentRef()}});
+    builder.InitMutableConfigToEmpty("adb-file-sync");
+    builder.SetConfigValue("adb-file-sync", "filesync_moniker", std::move(default_moniker));
     realm_ = std::make_unique<RealmRoot>(builder.Build(dispatcher()));
 
     ASSERT_EQ(
@@ -286,6 +288,7 @@ class AdbFileSyncTest : public gtest::RealLoopFixture {
 };
 
 TEST_F(AdbFileSyncTest, BadPathLengthConnectTest) {
+  Build();
   SyncRequest request{.id = ID_LIST, .path_length = 1025};
   size_t actual;
   EXPECT_EQ(adb_.write(0, &request, sizeof(request), &actual), ZX_OK);
@@ -294,6 +297,7 @@ TEST_F(AdbFileSyncTest, BadPathLengthConnectTest) {
 }
 
 TEST_F(AdbFileSyncTest, BadIDConnectTest) {
+  Build();
   std::string filename = "filename";
 
   SyncRequest request{.id = MKID('B', 'A', 'D', 'D'),
@@ -308,6 +312,7 @@ TEST_F(AdbFileSyncTest, BadIDConnectTest) {
 }
 
 TEST_F(AdbFileSyncTest, HandleListTest) {
+  Build();
   directory_.ExpectRewind();
   directory_.ExpectReadDirents({0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 'a', 'b'});
   std::string path = "./" + kComponent + "::/" + kTest;
@@ -346,7 +351,60 @@ TEST_F(AdbFileSyncTest, HandleListTest) {
   EXPECT_EQ(msg.dent.time, 0U);
 }
 
+TEST_F(AdbFileSyncTest, HandleListTestWithDefault) {
+  Build("/" + kComponent);
+  directory_.ExpectRewind();
+  directory_.ExpectReadDirents({0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 'a', 'b'});
+  std::string path = "/" + kTest;
+  SyncRequest request{.id = ID_LIST, .path_length = static_cast<uint32_t>(path.length())};
+  size_t actual;
+  EXPECT_EQ(adb_.write(0, &request, sizeof(request), &actual), ZX_OK);
+  EXPECT_EQ(actual, sizeof(request));
+
+  EXPECT_EQ(adb_.write(0, path.c_str(), path.size(), &actual), ZX_OK);
+  EXPECT_EQ(actual, path.size());
+
+  // Read dirent
+  RunLoopUntil([&] {
+    return adb_.wait_one(ZX_SOCKET_READABLE | ZX_SOCKET_PEER_CLOSED,
+                         zx::deadline_after(zx::msec(10)), nullptr) == ZX_OK;
+  });
+  syncmsg msg;
+  EXPECT_EQ(adb_.read(0, &(msg.dent), sizeof(msg.dent), &actual), ZX_OK);
+  EXPECT_EQ(actual, sizeof(msg.dent));
+  EXPECT_EQ(static_cast<int32_t>(msg.dent.id), ID_DENT);
+  EXPECT_EQ(msg.dent.mode, 1U);
+  EXPECT_EQ(msg.dent.namelen, 2U);
+  EXPECT_EQ(msg.dent.size, 20U);
+  EXPECT_EQ(msg.dent.time, 5U);
+
+  // Read name
+  RunLoopUntil([&] {
+    return adb_.wait_one(ZX_SOCKET_READABLE | ZX_SOCKET_PEER_CLOSED,
+                         zx::deadline_after(zx::msec(10)), nullptr) == ZX_OK;
+  });
+  char name[2];
+  EXPECT_EQ(adb_.read(0, name, sizeof(name), &actual), ZX_OK);
+  EXPECT_EQ(actual, sizeof(name));
+  EXPECT_EQ(name[0], 'a');
+  EXPECT_EQ(name[1], 'b');
+
+  // Read done
+  RunLoopUntil([&] {
+    return adb_.wait_one(ZX_SOCKET_READABLE | ZX_SOCKET_PEER_CLOSED,
+                         zx::deadline_after(zx::msec(10)), nullptr) == ZX_OK;
+  });
+  EXPECT_EQ(adb_.read(0, &(msg.dent), sizeof(msg.dent), &actual), ZX_OK);
+  EXPECT_EQ(actual, sizeof(msg.dent));
+  EXPECT_EQ(static_cast<int32_t>(msg.dent.id), ID_DONE);
+  EXPECT_EQ(msg.dent.mode, 0U);
+  EXPECT_EQ(msg.dent.namelen, 0U);
+  EXPECT_EQ(msg.dent.size, 0U);
+  EXPECT_EQ(msg.dent.time, 0U);
+}
+
 TEST_F(AdbFileSyncTest, HandleStatTest) {
+  Build();
   directory_.ExpectGetAttr(fuchsia_io::wire::NodeAttributes{
       .mode = 5,
       .storage_size = 15,
@@ -372,6 +430,7 @@ TEST_F(AdbFileSyncTest, HandleStatTest) {
 }
 
 TEST_F(AdbFileSyncTest, HandleSendTest) {
+  Build();
   std::string path = "./" + kComponent + "::/" + kTest + "/tmp.txt,0755";
   SyncRequest request{.id = ID_SEND, .path_length = static_cast<uint32_t>(path.length())};
   size_t actual;
@@ -416,6 +475,7 @@ TEST_F(AdbFileSyncTest, HandleSendTest) {
 }
 
 TEST_F(AdbFileSyncTest, HandleReceiveTest) {
+  Build();
   directory_.file_.set_data(std::vector<uint8_t>{4, 3, 2, 1});
 
   std::string path = "./" + kComponent + "::/" + kTest + "/tmp.txt";

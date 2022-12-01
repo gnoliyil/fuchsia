@@ -17,9 +17,9 @@
 
 namespace adb_file_sync {
 
-zx_status_t AdbFileSync::StartService(std::optional<std::string> default_component) {
+zx_status_t AdbFileSync::StartService(adb_file_sync_config::Config config) {
   FX_LOGS(DEBUG) << "Starting ADB File Sync Service";
-  std::unique_ptr file_sync = std::make_unique<AdbFileSync>(std::move(default_component));
+  std::unique_ptr file_sync = std::make_unique<AdbFileSync>(std::move(config));
 
   auto endpoints = fidl::CreateEndpoints<fuchsia_sys2::RealmQuery>();
   if (endpoints.is_error()) {
@@ -102,7 +102,7 @@ zx::result<zx::channel> AdbFileSync::ConnectToComponent(std::string name,
   std::string component_moniker;
   std::string path;
   if (component_path.size() == 1) {
-    component_moniker = default_component().value_or("");
+    component_moniker = config_.filesync_moniker();
     path = component_path[0];
   } else if (component_path.size() == 2) {
     component_moniker = component_path[0];

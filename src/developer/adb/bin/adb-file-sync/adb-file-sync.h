@@ -11,6 +11,7 @@
 #include <lib/sys/cpp/component_context.h>
 #include <lib/zx/result.h>
 
+#include "src/developer/adb/bin/adb-file-sync/adb_file_sync_config.h"
 #include "src/developer/adb/third_party/adb-file-sync/adb-file-sync-base.h"
 
 namespace adb_file_sync {
@@ -18,14 +19,14 @@ namespace adb_file_sync {
 class AdbFileSync : public AdbFileSyncBase,
                     public fidl::WireServer<fuchsia_hardware_adb::Provider> {
  public:
-  explicit AdbFileSync(std::optional<std::string> default_component)
+  explicit AdbFileSync(adb_file_sync_config::Config config)
       : context_(std::make_unique<sys::ComponentContext>(
             sys::ServiceDirectory::CreateFromNamespace(), loop_.dispatcher())),
-        default_component_(std::move(default_component)) {
+        config_(std::move(config)) {
     loop_.StartThread("adb-file-sync-thread");
   }
 
-  static zx_status_t StartService(std::optional<std::string> default_component);
+  static zx_status_t StartService(adb_file_sync_config::Config config);
   void OnUnbound(fidl::UnbindInfo info, fidl::ServerEnd<fuchsia_hardware_adb::Provider> server_end);
 
   void ConnectToService(fuchsia_hardware_adb::wire::ProviderConnectToServiceRequest* request,
@@ -35,7 +36,6 @@ class AdbFileSync : public AdbFileSyncBase,
                                              std::vector<std::string>* out_path) override;
 
   async_dispatcher_t* dispatcher() { return loop_.dispatcher(); }
-  const std::optional<std::string>& default_component() { return default_component_; }
 
  private:
   friend class AdbFileSyncTest;
@@ -45,7 +45,7 @@ class AdbFileSync : public AdbFileSyncBase,
   async::Loop loop_ = async::Loop(&kAsyncLoopConfigNeverAttachToThread);
   std::unique_ptr<sys::ComponentContext> context_;
   std::optional<fidl::ServerBindingRef<fuchsia_hardware_adb::Provider>> binding_ref_;
-  const std::optional<std::string> default_component_;
+  adb_file_sync_config::Config config_;
   fidl::SyncClient<fuchsia_sys2::RealmQuery> realm_query_;
   fidl::SyncClient<fuchsia_sys2::LifecycleController> lifecycle_;
 };
