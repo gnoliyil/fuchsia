@@ -127,6 +127,7 @@ executable("mix_unittests") {
     "//src/media/audio/lib/format2",
     "//src/media/audio/lib/processing",
     "//src/media/audio/lib/processing:prebuilt_coefficient_tables",
+    "//src/media/audio/services/common/testing",
     "//src/media/audio/services/mixer/mix/testing",
     "//third_party/googletest:gmock",
   ]

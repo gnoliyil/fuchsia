@@ -14,12 +14,12 @@
 
 #include "src/media/audio/lib/format2/format.h"
 #include "src/media/audio/lib/processing/gain.h"
+#include "src/media/audio/services/common/testing/test_fence.h"
 #include "src/media/audio/services/mixer/common/basic_types.h"
 #include "src/media/audio/services/mixer/mix/packet_view.h"
 #include "src/media/audio/services/mixer/mix/simple_packet_queue_producer_stage.h"
 #include "src/media/audio/services/mixer/mix/testing/defaults.h"
 #include "src/media/audio/services/mixer/mix/testing/fake_pipeline_thread.h"
-#include "src/media/audio/services/mixer/mix/testing/test_fence.h"
 
 namespace media_audio {
 namespace {

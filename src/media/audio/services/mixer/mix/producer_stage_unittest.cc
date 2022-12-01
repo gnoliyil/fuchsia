@@ -15,13 +15,13 @@
 
 #include "src/media/audio/lib/format2/fixed.h"
 #include "src/media/audio/lib/format2/format.h"
+#include "src/media/audio/services/common/testing/test_fence.h"
 #include "src/media/audio/services/mixer/mix/mix_job_context.h"
 #include "src/media/audio/services/mixer/mix/packet_view.h"
 #include "src/media/audio/services/mixer/mix/simple_packet_queue_producer_stage.h"
 #include "src/media/audio/services/mixer/mix/simple_ring_buffer_producer_stage.h"
 #include "src/media/audio/services/mixer/mix/testing/defaults.h"
 #include "src/media/audio/services/mixer/mix/testing/fake_pipeline_thread.h"
-#include "src/media/audio/services/mixer/mix/testing/test_fence.h"
 
 namespace media_audio {
 namespace {

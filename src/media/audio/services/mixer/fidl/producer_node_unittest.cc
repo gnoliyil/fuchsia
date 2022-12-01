@@ -12,12 +12,12 @@
 #include "src/media/audio/lib/clock/real_clock.h"
 #include "src/media/audio/lib/clock/unreadable_clock.h"
 #include "src/media/audio/services/common/memory_mapped_buffer.h"
+#include "src/media/audio/services/common/testing/test_fence.h"
 #include "src/media/audio/services/mixer/fidl/testing/fake_graph.h"
 #include "src/media/audio/services/mixer/fidl/testing/test_stream_sink_server_and_client.h"
 #include "src/media/audio/services/mixer/mix/ring_buffer.h"
 #include "src/media/audio/services/mixer/mix/ring_buffer_consumer_writer.h"
 #include "src/media/audio/services/mixer/mix/testing/defaults.h"
-#include "src/media/audio/services/mixer/mix/testing/test_fence.h"
 
 namespace media_audio {
 namespace {

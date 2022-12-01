@@ -15,9 +15,9 @@
 #include <gtest/gtest.h>
 
 #include "src/media/audio/services/common/logging.h"
+#include "src/media/audio/services/common/testing/test_fence.h"
 #include "src/media/audio/services/mixer/fidl/testing/test_stream_sink_server_and_client.h"
 #include "src/media/audio/services/mixer/mix/simple_packet_queue_producer_stage.h"
-#include "src/media/audio/services/mixer/mix/testing/test_fence.h"
 
 namespace media_audio {
 namespace {

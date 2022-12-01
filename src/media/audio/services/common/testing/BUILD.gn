@@ -9,6 +9,7 @@ source_set("testing") {
   visibility = [ "../../*" ]
 
   sources = [
+    "test_fence.h",
     "test_server_and_async_client.h",
     "test_server_and_sync_client.h",
   ]
@@ -19,5 +20,6 @@ source_set("testing") {
     "//src/lib/fidl/cpp",
     "//src/media/audio/services/common",
     "//zircon/system/ulib/async-testing",
+    "//zircon/system/ulib/zx",
   ]
 }
