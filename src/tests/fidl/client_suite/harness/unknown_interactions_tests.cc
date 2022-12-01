@@ -13,13 +13,6 @@ using namespace channel_util;
 
 namespace client_suite {
 
-// Value set in the header for txid when using read_and_check_unknown_txid.
-const zx_txid_t kTxidNotKnown = 0;
-
-const fidl_xunion_tag_t kResultUnionSuccess = 1;
-const fidl_xunion_tag_t kResultUnionError = 2;
-const fidl_xunion_tag_t kResultUnionTransportError = 3;
-
 CLIENT_TEST(OneWayStrictSend) {
   runner()->CallStrictOneWay({{.target = TakeOpenClient()}}).ThenExactlyOnce([&](auto result) {
     MarkCallbackRun();

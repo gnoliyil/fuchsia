@@ -22,6 +22,13 @@ namespace channel_util {
 using HandleDispositions = std::vector<zx_handle_disposition_t>;
 using HandleInfos = std::vector<zx_handle_info_t>;
 
+// Value that can be set in the header as a placeholder when passing Bytes to
+// read_and_check_unknown_txid. When using unknown_txid mode, the txid in the
+// expected bytes is ignored; this constant can be used to document the fact
+// that the txid value used in the expected bytes is a marker for an unknown
+// value.
+static const zx_txid_t kTxidNotKnown = 0;
+
 class Channel {
  public:
   Channel() = default;

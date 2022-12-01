@@ -133,6 +133,23 @@ class RunnerImpl extends Runner {
     }
   }
 
+  Future<NonEmptyResultWithErrorClassification> callTwoWayStructPayloadErr(
+      InterfaceHandle<ClosedTarget> targetHandle) async {
+    var target = ClosedTargetProxy();
+    target.ctrl.bind(targetHandle);
+    try {
+      int result = await target.twoWayStructPayloadErr();
+      return NonEmptyResultWithErrorClassification.withSuccess(
+          NonEmptyPayload(someField: result));
+    } on MethodException<int> catch (e) {
+      return NonEmptyResultWithErrorClassification.withApplicationError(
+          e.value);
+    } catch (e) {
+      return NonEmptyResultWithErrorClassification.withFidlError(
+          classifyError(e));
+    }
+  }
+
   Future<EmptyResultClassification> callStrictOneWay(
       InterfaceHandle<OpenTarget> targetHandle) async {
     var target = OpenTargetProxy();

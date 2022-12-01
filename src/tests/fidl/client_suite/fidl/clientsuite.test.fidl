@@ -190,6 +190,11 @@ closed protocol Runner {
         target client_end:ClosedTarget;
     }) -> (UnionResultClassification);
 
+    // Request that the client call the [`ClosedTarget.TwoWayStructPayloadErr`] method.
+    strict CallTwoWayStructPayloadErr(resource struct {
+        target client_end:ClosedTarget;
+    }) -> (NonEmptyResultWithErrorClassification);
+
     // Calls on the open protocol.
 
     // Request that the client call the [`OpenTarget.StrictOneWay`] method.
@@ -301,6 +306,7 @@ closed protocol ClosedTarget {
     strict TwoWayStructPayload() -> (NonEmptyPayload);
     strict TwoWayTablePayload() -> (TablePayload);
     strict TwoWayUnionPayload() -> (UnionPayload);
+    strict TwoWayStructPayloadErr() -> (NonEmptyPayload) error int32;
 };
 
 // An event received in the [`ClosedTarget`]. Used to report the received event
@@ -385,6 +391,8 @@ type Test = flexible enum : uint32 {
     TWO_WAY_STRUCT_PAYLOAD = 42;
     TWO_WAY_TABLE_PAYLOAD = 43;
     TWO_WAY_UNION_PAYLOAD = 44;
+    TWO_WAY_RESULT_WITH_PAYLOAD = 45;
+    TWO_WAY_RESULT_WITH_ERROR = 46;
     GRACEFUL_FAILURE_DURING_CALL_AFTER_PEER_CLOSE = 3;
 
     // ////////////////////////////////////////////////////////////////////////
@@ -435,5 +443,5 @@ type Test = flexible enum : uint32 {
     V1_TWO_WAY_NO_PAYLOAD = 40;
     V1_TWO_WAY_STRUCT_PAYLOAD = 41;
 
-    // next available: 45
+    // next available: 47
 };

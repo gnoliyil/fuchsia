@@ -158,6 +158,21 @@ func (*runnerImpl) CallTwoWayUnionPayload(ctx fidl.Context, target clientsuite.C
 	return clientsuite.UnionResultClassificationWithSuccess(unionPayload), nil
 }
 
+func (*runnerImpl) CallTwoWayStructPayloadErr(ctx fidl.Context, target clientsuite.ClosedTargetWithCtxInterface) (clientsuite.NonEmptyResultWithErrorClassification, error) {
+	payload, err := target.TwoWayStructPayloadErr(ctx)
+	if err != nil {
+		return clientsuite.NonEmptyResultWithErrorClassificationWithFidlError(classifyErr(err)), nil
+	}
+	switch payload.Which() {
+	case clientsuite.ClosedTargetTwoWayStructPayloadErrResultResponse:
+		return clientsuite.NonEmptyResultWithErrorClassificationWithSuccess(payload.Response), nil
+	case clientsuite.ClosedTargetTwoWayStructPayloadErrResultErr:
+		return clientsuite.NonEmptyResultWithErrorClassificationWithApplicationError(payload.Err), nil
+	default:
+		return clientsuite.NonEmptyResultWithErrorClassification{}, errors.New("Unexpected payload variant")
+	}
+}
+
 func (*runnerImpl) CallStrictOneWay(_ fidl.Context, target clientsuite.OpenTargetWithCtxInterface) (clientsuite.EmptyResultClassification, error) {
 	return clientsuite.EmptyResultClassification{}, errors.New("Go Bindings do not support Open protocols")
 }

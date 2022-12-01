@@ -85,6 +85,26 @@ async fn run_runner_server(stream: RunnerRequestStream) -> Result<(), Error> {
                             .context("sending response failed"),
                     }
                 }
+                RunnerRequest::CallTwoWayStructPayloadErr { target, responder } => {
+                    let client = target.into_proxy().context("creating proxy failed")?;
+                    match client.two_way_struct_payload_err().await {
+                        Ok(Ok(some_field)) => responder
+                            .send(&mut NonEmptyResultWithErrorClassification::Success(
+                                NonEmptyPayload { some_field },
+                            ))
+                            .context("sending response failed"),
+                        Ok(Err(application_err)) => responder
+                            .send(&mut NonEmptyResultWithErrorClassification::ApplicationError(
+                                application_err,
+                            ))
+                            .context("sending response failed"),
+                        Err(err) => responder
+                            .send(&mut NonEmptyResultWithErrorClassification::FidlError(
+                                classify_error(err),
+                            ))
+                            .context("sending response failed"),
+                    }
+                }
                 // Open target methods
                 RunnerRequest::CallStrictOneWay { target, responder } => {
                     let client = target.into_proxy().context("creating proxy failed")?;

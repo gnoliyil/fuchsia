@@ -4,6 +4,7 @@
 
 #include "fidl/fidl.clientsuite/cpp/natural_types.h"
 #include "src/tests/fidl/channel_util/bytes.h"
+#include "src/tests/fidl/channel_util/channel.h"
 #include "src/tests/fidl/client_suite/harness/harness.h"
 #include "src/tests/fidl/client_suite/harness/ordinals.h"
 
@@ -23,7 +24,7 @@ CLIENT_TEST(TwoWayNoPayload) {
   ASSERT_OK(server_end().wait_for_signal(ZX_CHANNEL_READABLE));
 
   Bytes bytes_out = {
-      header(0, kOrdinalTwoWayNoPayload, fidl::MessageDynamicFlags::kStrictMethod),
+      header(kTxidNotKnown, kOrdinalTwoWayNoPayload, fidl::MessageDynamicFlags::kStrictMethod),
   };
   zx_txid_t txid;
   ASSERT_OK(server_end().read_and_check_unknown_txid(&txid, bytes_out));
@@ -53,7 +54,7 @@ CLIENT_TEST(TwoWayStructPayload) {
   ASSERT_OK(server_end().wait_for_signal(ZX_CHANNEL_READABLE));
 
   Bytes bytes_out = {
-      header(0, kOrdinalTwoWayStructPayload, fidl::MessageDynamicFlags::kStrictMethod),
+      header(kTxidNotKnown, kOrdinalTwoWayStructPayload, fidl::MessageDynamicFlags::kStrictMethod),
   };
   zx_txid_t txid;
   ASSERT_OK(server_end().read_and_check_unknown_txid(&txid, bytes_out));
@@ -84,7 +85,7 @@ CLIENT_TEST(TwoWayTablePayload) {
   ASSERT_OK(server_end().wait_for_signal(ZX_CHANNEL_READABLE));
 
   Bytes bytes_out = {
-      header(0, kOrdinalTwoWayTablePayload, fidl::MessageDynamicFlags::kStrictMethod),
+      header(kTxidNotKnown, kOrdinalTwoWayTablePayload, fidl::MessageDynamicFlags::kStrictMethod),
   };
   zx_txid_t txid;
   ASSERT_OK(server_end().read_and_check_unknown_txid(&txid, bytes_out));
@@ -115,7 +116,7 @@ CLIENT_TEST(TwoWayUnionPayload) {
   ASSERT_OK(server_end().wait_for_signal(ZX_CHANNEL_READABLE));
 
   Bytes bytes_out = {
-      header(0, kOrdinalTwoWayUnionPayload, fidl::MessageDynamicFlags::kStrictMethod),
+      header(kTxidNotKnown, kOrdinalTwoWayUnionPayload, fidl::MessageDynamicFlags::kStrictMethod),
   };
   zx_txid_t txid;
   ASSERT_OK(server_end().read_and_check_unknown_txid(&txid, bytes_out));
@@ -124,6 +125,72 @@ CLIENT_TEST(TwoWayUnionPayload) {
   Bytes bytes_in = {
       header(txid, kOrdinalTwoWayUnionPayload, fidl::MessageDynamicFlags::kStrictMethod),
       encode(kPayload),
+  };
+  ASSERT_OK(server_end().write(bytes_in));
+
+  WAIT_UNTIL_CALLBACK_RUN();
+}
+
+CLIENT_TEST(TwoWayResultWithPayload) {
+  static const fidl_clientsuite::NonEmptyPayload kPayload{{.some_field = 390023}};
+
+  runner()
+      ->CallTwoWayStructPayloadErr({{.target = TakeClosedClient()}})
+      .ThenExactlyOnce(
+          [&](fidl::Result<fidl_clientsuite::Runner::CallTwoWayStructPayloadErr>& result) {
+            MarkCallbackRun();
+            ASSERT_TRUE(result.is_ok()) << result.error_value();
+            ASSERT_TRUE(result.value().success().has_value());
+            ASSERT_EQ(result.value().success().value(), kPayload);
+          });
+
+  ASSERT_OK(server_end().wait_for_signal(ZX_CHANNEL_READABLE));
+
+  Bytes bytes_out = {
+      header(kTxidNotKnown, kOrdinalTwoWayStructPayloadErr,
+             fidl::MessageDynamicFlags::kStrictMethod),
+  };
+  zx_txid_t txid;
+  ASSERT_OK(server_end().read_and_check_unknown_txid(&txid, bytes_out));
+  ASSERT_NE(0u, txid);
+
+  Bytes bytes_in = {
+      header(txid, kOrdinalTwoWayStructPayloadErr, fidl::MessageDynamicFlags::kStrictMethod),
+      union_ordinal(kResultUnionSuccess),
+      inline_envelope({i32(kPayload.some_field())}, false),
+  };
+  ASSERT_OK(server_end().write(bytes_in));
+
+  WAIT_UNTIL_CALLBACK_RUN();
+}
+
+CLIENT_TEST(TwoWayResultWithError) {
+  static const int32_t kError = 90240;
+
+  runner()
+      ->CallTwoWayStructPayloadErr({{.target = TakeClosedClient()}})
+      .ThenExactlyOnce(
+          [&](fidl::Result<fidl_clientsuite::Runner::CallTwoWayStructPayloadErr>& result) {
+            MarkCallbackRun();
+            ASSERT_TRUE(result.is_ok()) << result.error_value();
+            ASSERT_TRUE(result.value().application_error().has_value());
+            ASSERT_EQ(result.value().application_error().value(), kError);
+          });
+
+  ASSERT_OK(server_end().wait_for_signal(ZX_CHANNEL_READABLE));
+
+  Bytes bytes_out = {
+      header(kTxidNotKnown, kOrdinalTwoWayStructPayloadErr,
+             fidl::MessageDynamicFlags::kStrictMethod),
+  };
+  zx_txid_t txid;
+  ASSERT_OK(server_end().read_and_check_unknown_txid(&txid, bytes_out));
+  ASSERT_NE(0u, txid);
+
+  Bytes bytes_in = {
+      header(txid, kOrdinalTwoWayStructPayloadErr, fidl::MessageDynamicFlags::kStrictMethod),
+      union_ordinal(kResultUnionError),
+      inline_envelope({i32(kError)}, false),
   };
   ASSERT_OK(server_end().write(bytes_in));
 

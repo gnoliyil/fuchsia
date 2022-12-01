@@ -5,9 +5,15 @@
 #ifndef SRC_TESTS_FIDL_CLIENT_SUITE_HARNESS_ORDINALS_H_
 #define SRC_TESTS_FIDL_CLIENT_SUITE_HARNESS_ORDINALS_H_
 
+#include <zircon/fidl.h>
+
 #include <cstdint>
 
 namespace client_suite {
+
+static const fidl_xunion_tag_t kResultUnionSuccess = 1;
+static const fidl_xunion_tag_t kResultUnionError = 2;
+static const fidl_xunion_tag_t kResultUnionTransportError = 3;
 
 // To find all ordinals:
 //
@@ -26,6 +32,7 @@ static const uint64_t kOrdinalTwoWayNoPayload = 8823160117673072416lu;
 static const uint64_t kOrdinalTwoWayStructPayload = 4197391242806919613lu;
 static const uint64_t kOrdinalTwoWayTablePayload = 6034278263774013116lu;
 static const uint64_t kOrdinalTwoWayUnionPayload = 2303581613023334284lu;
+static const uint64_t kOrdinalTwoWayStructPayloadErr = 7112457167486827531lu;
 
 // Open Target Ordinals
 static const uint64_t kOrdinalStrictOneWay = 7904024199254697828lu;

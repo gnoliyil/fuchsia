@@ -85,6 +85,26 @@ class RunnerServer : public fidl::WireServer<fidl_clientsuite::Runner> {
     }
   }
 
+  void CallTwoWayStructPayloadErr(CallTwoWayStructPayloadErrRequestView request,
+                                  CallTwoWayStructPayloadErrCompleter::Sync& completer) override {
+    fidl::WireSyncClient client{std::move(request->target)};
+    auto result = client->TwoWayStructPayloadErr();
+    if (result.ok()) {
+      if (result.value().is_ok()) {
+        completer.Reply(
+            fidl::WireResponse<fidl_clientsuite::Runner::CallTwoWayStructPayloadErr>::WithSuccess(
+                *result.value().value()));
+      } else {
+        completer.Reply(fidl::WireResponse<fidl_clientsuite::Runner::CallTwoWayStructPayloadErr>::
+                            WithApplicationError(result.value().error_value()));
+      }
+    } else {
+      completer.Reply(
+          fidl::WireResponse<fidl_clientsuite::Runner::CallTwoWayStructPayloadErr>::WithFidlError(
+              clienttest_util::ClassifyError(result)));
+    }
+  }
+
   void CallStrictOneWay(CallStrictOneWayRequestView request,
                         CallStrictOneWayCompleter::Sync& completer) override {
     fidl::WireSyncClient client{std::move(request->target)};
