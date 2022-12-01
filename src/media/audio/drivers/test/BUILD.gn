@@ -9,12 +9,11 @@ import("//src/media/audio/hardware.gni")
 group("test") {
   testonly = true
 
-  # These tests must run in release builds because they have hard realtime constraints.
-  # Debug builds are too slow.
-  # TODO(fxbug.dev/65608): Split into tests that have realtime constraints and tests that do not.
-  if (!is_debug) {
-    deps = [ ":audio_driver_tests" ]
-  }
+  deps = [ ":audio_driver_tests" ]
+
+  # Certain test cases (e.g. position accuracy) are disabled by default (enabled by cmdline flag).
+  # They have hard realtime constraints; debug builds are too slow.
+  # TODO(fxbug.dev/65608): Enable these cases in a new suite that runs only in realtime envs.
 }
 
 fuchsia_unittest_package("audio_driver_tests") {
