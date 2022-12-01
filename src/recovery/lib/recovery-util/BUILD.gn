@@ -24,16 +24,18 @@ rustc_library("recovery-util") {
     "//src/lib/fuchsia-async",
     "//src/lib/fuchsia-component",
     "//src/lib/zircon/rust:fuchsia-zircon",
+    "//src/recovery/system:ota_lib",
     "//third_party/rust_crates:anyhow",
     "//third_party/rust_crates:async-trait",
     "//third_party/rust_crates:futures",
+    "//third_party/rust_crates:mockall",
     "//third_party/rust_crates:thiserror",
   ]
   test_deps = [
     "//src/lib/fuchsia",
     "//third_party/rust_crates:assert_matches",
+    "//third_party/rust_crates:async-trait",
     "//third_party/rust_crates:lazy_static",
-    "//third_party/rust_crates:mockall",
   ]
   sources = [
     "src/block.rs",
@@ -43,6 +45,7 @@ rustc_library("recovery-util") {
     "src/ota/actions/factory_reset.rs",
     "src/ota/actions/get_wifi_networks.rs",
     "src/ota/actions/mod.rs",
+    "src/ota/actions/ota_reinstall.rs",
     "src/ota/actions/set_sharing_consent.rs",
     "src/ota/actions/wifi_connect.rs",
     "src/ota/controller.rs",

@@ -7,7 +7,6 @@ use fuchsia_async::{self as fasync, Task};
 use futures::channel::mpsc;
 use futures::SinkExt;
 use futures::StreamExt;
-#[cfg(test)]
 use mockall::automock;
 
 #[derive(Clone)]
@@ -15,14 +14,13 @@ pub struct EventSender {
     sender: mpsc::Sender<Event>,
 }
 
-#[cfg_attr(test, automock)]
 impl EventSender {
     pub fn new(sender: mpsc::Sender<Event>) -> Self {
         Self { sender }
     }
 }
 
-#[cfg_attr(test, automock)]
+#[automock]
 pub trait SendEvent {
     fn send(&mut self, event: Event);
 }
@@ -40,29 +38,38 @@ impl SendEvent for EventSender {
     }
 }
 
-pub struct Controller {
+#[automock]
+pub trait Controller {
+    fn add_state_handler(&mut self, handler: Box<dyn StateHandler>);
+    fn get_event_sender(&self) -> EventSender;
+    fn start(&mut self, state_machine: Box<dyn EventProcessor>);
+}
+
+pub struct ControllerImpl {
     sender: mpsc::Sender<Event>,
     receiver: Option<mpsc::Receiver<Event>>,
     state_handlers: Option<Vec<Box<dyn StateHandler>>>,
 }
 
-impl Controller {
+impl ControllerImpl {
     pub fn new() -> Self {
         let (sender, receiver) = mpsc::channel::<Event>(10);
         Self { sender, receiver: Some(receiver), state_handlers: Some(Vec::new()) }
     }
+}
 
-    pub fn add_state_handler(&mut self, handler: Box<dyn StateHandler>) {
+impl Controller for ControllerImpl {
+    fn add_state_handler(&mut self, handler: Box<dyn StateHandler>) {
         if let Some(ref mut state_handlers) = self.state_handlers {
             state_handlers.push(handler);
         }
     }
 
-    pub fn get_event_sender(&self) -> EventSender {
+    fn get_event_sender(&self) -> EventSender {
         EventSender::new(self.sender.clone())
     }
 
-    pub fn start(&mut self, mut state_machine: Box<dyn EventProcessor>) {
+    fn start(&mut self, mut state_machine: Box<dyn EventProcessor>) {
         let mut receiver = self.receiver.take().unwrap();
         let mut state_handlers = self.state_handlers.take().unwrap();
         let main_loop = async move {
@@ -90,7 +97,7 @@ impl Controller {
 
 #[cfg(test)]
 mod test {
-    use crate::ota::controller::{Controller, SendEvent};
+    use crate::ota::controller::{Controller, ControllerImpl, SendEvent};
     use crate::ota::state_machine::{
         Event, MockEventProcessor, MockStateHandler, State, StateHandler,
     };
@@ -110,9 +117,9 @@ mod test {
         state_handler.expect_handle_state().with(eq(State::Home)).times(1).return_const(());
         let state_handler: Box<dyn StateHandler> = Box::new(state_handler);
 
-        let mut controller = Controller::new();
+        let mut controller = ControllerImpl::new();
         controller.add_state_handler(state_handler);
-        let mut event_sender = controller.get_event_sender();
+        let mut event_sender: Box<dyn SendEvent> = Box::new(controller.get_event_sender());
         controller.start(Box::new(state_machine));
         event_sender.send(Event::Cancel);
 

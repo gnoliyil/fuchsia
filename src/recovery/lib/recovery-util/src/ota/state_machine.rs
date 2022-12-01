@@ -4,8 +4,8 @@
 
 use crate::ota::state_machine::DataSharingConsent::{DontAllow, Unknown};
 use crate::wlan::NetworkInfo;
-#[cfg(test)]
-use mockall::*;
+use mockall::automock;
+pub use ota_lib::OtaStatus;
 
 // This component maps the current state with a new event to produce a
 // new state. The states, events and state logic have all ben derived
@@ -21,10 +21,10 @@ pub enum Operation {
 pub(crate) type Network = String;
 pub(crate) type NetworkInfos = Vec<NetworkInfo>;
 pub(crate) type Password = String;
+pub(crate) type PercentProgress = u8;
 
 type Text = String;
 type ErrorMessage = String;
-type PercentProgress = i32;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DataSharingConsent {
@@ -50,7 +50,7 @@ pub enum State {
     Done(Operation),
     EnterPassword(Network),
     EnterWiFi,
-    ExecuteReinstall(PercentProgress),
+    ExecuteReinstall(Option<OtaStatus>),
     FactoryReset,
     Failed(Operation, Option<ErrorMessage>),
     Home,
@@ -72,17 +72,18 @@ pub enum Event {
     Cancel,
     ChooseNetwork,
     Error(ErrorMessage),
-    WiFiConnected,
     Networks(NetworkInfos),
+    OtaStatusReceived(OtaStatus),
     Progress(PercentProgress),
     Reinstall,
     SystemPrivacySetting(DataSharingConsent),
     SendReports(DataSharingConsent),
     StartFactoryReset,
-    TryAnotherWay,
     TryAgain,
+    TryAnotherWay,
     UserInput(Text),
     UserInputUnsecuredNetwork(Network),
+    WiFiConnected,
 }
 
 // This tests only for enum entry not the value contained in the enum.
@@ -97,7 +98,7 @@ pub trait StateHandler {
     fn handle_state(&mut self, event: State);
 }
 
-#[cfg_attr(test, automock)]
+#[automock]
 pub trait EventProcessor {
     fn process_event(&mut self, event: Event) -> Option<State>;
 }
@@ -181,15 +182,14 @@ impl StateMachine {
                 desired: desired_setting,
                 reported: reported.clone(),
             }),
-            (State::ReinstallConfirm { desired: _, reported: _ }, Event::Reinstall) => {
-                Some(State::ExecuteReinstall(0))
+            (State::ReinstallConfirm { .. }, Event::Reinstall) => {
+                Some(State::ExecuteReinstall(None))
             }
-
+            (State::ExecuteReinstall(_), Event::OtaStatusReceived(status)) => {
+                Some(State::ExecuteReinstall(Some(status)))
+            }
             (State::ExecuteReinstall(_), Event::Progress(100)) => {
                 Some(State::Done(Operation::Reinstall))
-            }
-            (State::ExecuteReinstall(_), Event::Progress(percent)) => {
-                Some(State::ExecuteReinstall(percent))
             }
             (State::ExecuteReinstall(_), Event::Error(error)) => {
                 Some(State::Failed(Operation::Reinstall, Some(error)))
@@ -210,7 +210,7 @@ impl StateMachine {
     }
 }
 
-#[cfg_attr(test, automock)]
+#[automock]
 impl EventProcessor for StateMachine {
     fn process_event(&mut self, event: Event) -> Option<State> {
         self.event(event)
@@ -222,6 +222,7 @@ mod test {
     // TODO(b/258049697): Tests to check the expected flow through more than one state.
     // c.f. https://cs.opensource.google/fuchsia/fuchsia/+/main:src/recovery/system/src/fdr.rs;l=183.
 
+    use super::OtaStatus;
     use crate::ota::state_machine::DataSharingConsent::{DontAllow, Unknown};
     use crate::ota::state_machine::{DataSharingConsent, Event, Operation, State, StateMachine};
     use lazy_static::lazy_static;
@@ -233,7 +234,7 @@ mod test {
             State::Done(Operation::Reinstall),
             State::EnterPassword("Network".to_string()),
             State::EnterWiFi,
-            State::ExecuteReinstall(0),
+            State::ExecuteReinstall(None),
             State::FactoryReset,
             State::Failed(Operation::Reinstall, Some("Error message".to_string())),
             State::GetWiFiNetworks,
@@ -246,13 +247,14 @@ mod test {
             Event::Cancel,
             Event::ChooseNetwork,
             Event::Error("Error".to_string()),
-            Event::Progress(0),
             Event::Networks(Vec::new()),
+            Event::OtaStatusReceived(OtaStatus::Succeeded),
+            Event::Progress(0),
             Event::Reinstall,
             Event::SendReports(DataSharingConsent::Allow),
             Event::StartFactoryReset,
-            Event::TryAnotherWay,
             Event::TryAgain,
+            Event::TryAnotherWay,
             Event::UserInput("User Input".to_string()),
             Event::UserInputUnsecuredNetwork("Network".to_string()),
             Event::WiFiConnected,
@@ -298,7 +300,7 @@ mod test {
         state = sm.event(Event::WiFiConnected).unwrap();
         assert_eq!(state, State::ReinstallConfirm { desired: DontAllow, reported: Unknown });
         state = sm.event(Event::Reinstall).unwrap();
-        assert_eq!(state, State::ExecuteReinstall(0));
+        assert_eq!(state, State::ExecuteReinstall(None));
         state = sm.event(Event::Progress(100)).unwrap();
         assert_eq!(state, State::Done(Operation::Reinstall));
     }

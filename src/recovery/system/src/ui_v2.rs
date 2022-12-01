@@ -7,10 +7,16 @@ use carnelian::{
     app::Config, drawing::DisplayRotation, App, AppAssistant, AppAssistantPtr, AppSender,
     AssistantCreator, AssistantCreatorFunc, ViewAssistantPtr, ViewKey,
 };
+use fidl::endpoints::{DiscoverableProtocolMarker, RequestStream};
+use fidl_fuchsia_recovery_ui as frui;
+use fuchsia_async as fasync;
+use futures::TryStreamExt;
+use ota_lib::OtaComponent;
 use recovery_ui::{font, proxy_view_assistant::ProxyViewAssistant};
 use recovery_ui_config::Config as UiConfig;
-use recovery_util::ota::controller::Controller;
-use recovery_util::ota::state_machine::{State, StateMachine};
+use recovery_util::ota::controller::{Controller, ControllerImpl, SendEvent};
+use recovery_util::ota::state_machine::{Event, OtaStatus, State, StateMachine};
+use std::sync::Arc;
 
 #[cfg(feature = "debug_console")]
 use recovery_ui::console::ConsoleViewAssistant;
@@ -20,12 +26,21 @@ use recovery_util::ota::action::Action;
 struct RecoveryAppAssistant {
     app_sender: AppSender,
     display_rotation: DisplayRotation,
+    controller: Box<dyn Controller>,
 }
 
 impl RecoveryAppAssistant {
-    pub fn new(app_sender: &AppSender) -> Self {
+    pub fn new(app_sender: AppSender) -> Self {
         let display_rotation = Self::get_display_rotation();
-        Self { app_sender: app_sender.clone(), display_rotation }
+        Self::new_with_params(app_sender, display_rotation, Box::new(ControllerImpl::new()))
+    }
+
+    pub fn new_with_params(
+        app_sender: AppSender,
+        display_rotation: DisplayRotation,
+        controller: Box<dyn Controller>,
+    ) -> Self {
+        Self { app_sender, display_rotation, controller }
     }
 
     fn get_display_rotation() -> DisplayRotation {
@@ -42,6 +57,18 @@ impl RecoveryAppAssistant {
             }
         }
     }
+
+    fn send_ota_status(mut event_sender: Box<dyn SendEvent>, status: frui::Status) {
+        match status {
+            frui::Status::Active => {
+                println!("OTA update is now in progress...")
+            }
+            frui::Status::Complete => {
+                event_sender.send(Event::OtaStatusReceived(OtaStatus::Succeeded))
+            }
+            _ => event_sender.send(Event::OtaStatusReceived(OtaStatus::Failed)),
+        }
+    }
 }
 
 impl AppAssistant for RecoveryAppAssistant {
@@ -54,18 +81,17 @@ impl AppAssistant for RecoveryAppAssistant {
     // Create the State Machine
     fn create_view_assistant(&mut self, view_key: ViewKey) -> Result<ViewAssistantPtr, Error> {
         // TODO(b/244744635) Add a structured initialization flow for the recovery component
-        let state_machine = Box::new(StateMachine::new(State::Home));
-        let mut controller = Controller::new();
-        let event_sender = controller.get_event_sender();
-
-        let action = Action::new(event_sender.clone());
-        controller.add_state_handler(Box::new(action));
+        let ota_manager =
+            Arc::new(OtaComponent::new().expect("failed to create OTA component manager"));
+        let action = Action::new(self.controller.get_event_sender(), ota_manager);
+        self.controller.add_state_handler(Box::new(action));
 
         let screens = Screens::new(self.app_sender.clone(), view_key);
         let first_screen = screens.initial_screen();
-        controller.add_state_handler(Box::new(screens));
+        self.controller.add_state_handler(Box::new(screens));
 
-        controller.start(state_machine);
+        let state_machine = Box::new(StateMachine::new(State::Home));
+        self.controller.start(state_machine);
 
         let font_face = font::get_default_font_face();
         #[cfg(feature = "debug_console")]
@@ -73,7 +99,7 @@ impl AppAssistant for RecoveryAppAssistant {
         #[cfg(not(feature = "debug_console"))]
         let console_view_assistant_ptr = None;
         let proxy_ptr = Box::new(ProxyViewAssistant::new(
-            Some(Box::new(event_sender)),
+            Some(Box::new(self.controller.get_event_sender())),
             Some(console_view_assistant_ptr),
             first_screen,
         )?);
@@ -82,6 +108,47 @@ impl AppAssistant for RecoveryAppAssistant {
 
     fn filter_config(&mut self, config: &mut Config) {
         config.display_rotation = self.display_rotation;
+    }
+
+    fn outgoing_services_names(&self) -> Vec<&'static str> {
+        vec![frui::ProgressRendererMarker::PROTOCOL_NAME]
+    }
+
+    fn handle_service_connection_request(
+        &mut self,
+        service_name: &str,
+        channel: fasync::Channel,
+    ) -> Result<(), Error> {
+        match service_name {
+            frui::ProgressRendererMarker::PROTOCOL_NAME => {
+                let event_sender = self.controller.get_event_sender();
+
+                fasync::Task::local(async move {
+                    let mut stream = frui::ProgressRendererRequestStream::from_channel(channel);
+                    while let Ok(Some(request)) = stream.try_next().await {
+                        match request {
+                            frui::ProgressRendererRequest::Render {
+                                status,
+                                percent_complete: _,
+                                responder,
+                            } => {
+                                Self::send_ota_status(Box::new(event_sender.clone()), status);
+                                responder.send().expect("Error replying to progress update");
+                            }
+                            frui::ProgressRendererRequest::Render2 { payload, responder } => {
+                                if let Some(status) = payload.status {
+                                    Self::send_ota_status(Box::new(event_sender.clone()), status);
+                                }
+                                responder.send().expect("Error replying to progress update");
+                            }
+                        }
+                    }
+                })
+                .detach();
+            }
+            _ => panic!("Error: Unexpected service: {}", service_name),
+        }
+        Ok(())
     }
 }
 
@@ -94,7 +161,7 @@ fn make_app_assistant_fut() -> impl FnOnce(&AppSender) -> AssistantCreator<'_> {
             });
             println!("Starting New recovery UI");
 
-            let assistant = Box::new(RecoveryAppAssistant::new(app_sender));
+            let assistant = Box::new(RecoveryAppAssistant::new(app_sender.clone()));
             Ok::<AppAssistantPtr, Error>(assistant)
         };
         Box::pin(f)
@@ -108,4 +175,130 @@ fn make_app_assistant() -> AssistantCreatorFunc {
 #[allow(unused)]
 pub fn main() -> Result<(), Error> {
     App::run(make_app_assistant())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fidl::endpoints::DiscoverableProtocolMarker;
+    use fidl_fuchsia_recovery_ui::{
+        ProgressRendererMarker, ProgressRendererRender2Request, Status,
+    };
+    use fuchsia_async as fasync;
+    use futures::channel::mpsc;
+    use ota_lib::OtaStatus;
+    use recovery_util::ota::controller::{EventSender, MockController};
+
+    #[fuchsia::test]
+    async fn test_create_view_assistant_sets_up_state_handlers_and_starts() {
+        let mut controller = MockController::new();
+        controller.expect_add_state_handler().times(2).return_const(());
+        controller.expect_start().once().return_const(());
+
+        let mut recovery_app_assistant = RecoveryAppAssistant::new_with_params(
+            AppSender::new_for_testing_purposes_only(),
+            DisplayRotation::Deg0,
+            Box::new(controller),
+        );
+
+        recovery_app_assistant.create_view_assistant(ViewKey::default()).unwrap();
+    }
+
+    #[fuchsia::test]
+    async fn test_progress_updates_reports_success_to_ota_manager() {
+        let (sender, mut on_handle_event) = mpsc::channel::<Event>(10);
+        let mut controller = MockController::new();
+        controller.expect_get_event_sender().return_const(EventSender::new(sender));
+        let mut recovery_app_assistant = RecoveryAppAssistant::new_with_params(
+            AppSender::new_for_testing_purposes_only(),
+            DisplayRotation::Deg0,
+            Box::new(controller),
+        );
+
+        assert_eq!(
+            vec![ProgressRendererMarker::PROTOCOL_NAME],
+            recovery_app_assistant.outgoing_services_names()
+        );
+
+        let (progress_proxy, progress_server) =
+            fidl::endpoints::create_proxy::<ProgressRendererMarker>().unwrap();
+
+        recovery_app_assistant
+            .handle_service_connection_request(
+                ProgressRendererMarker::PROTOCOL_NAME,
+                fasync::Channel::from_channel(progress_server.into_channel()).unwrap(),
+            )
+            .unwrap();
+
+        progress_proxy
+            .render2(ProgressRendererRender2Request {
+                status: Some(Status::Active),
+                percent_complete: Some(0.0),
+                ..ProgressRendererRender2Request::EMPTY
+            })
+            .await
+            .unwrap();
+        progress_proxy
+            .render2(ProgressRendererRender2Request {
+                status: Some(Status::Complete),
+                percent_complete: Some(100.0),
+                ..ProgressRendererRender2Request::EMPTY
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            Event::OtaStatusReceived(OtaStatus::Succeeded),
+            on_handle_event.try_next().unwrap().unwrap()
+        );
+    }
+
+    #[fuchsia::test]
+    async fn test_progress_updates_reports_error_to_ota_manager() {
+        let (sender, mut on_handle_event) = mpsc::channel::<Event>(10);
+        let mut controller = MockController::new();
+        controller.expect_get_event_sender().return_const(EventSender::new(sender));
+
+        let mut recovery_app_assistant = RecoveryAppAssistant::new_with_params(
+            AppSender::new_for_testing_purposes_only(),
+            DisplayRotation::Deg0,
+            Box::new(controller),
+        );
+
+        assert_eq!(
+            vec![ProgressRendererMarker::PROTOCOL_NAME],
+            recovery_app_assistant.outgoing_services_names()
+        );
+
+        let (progress_proxy, progress_server) =
+            fidl::endpoints::create_proxy::<ProgressRendererMarker>().unwrap();
+
+        recovery_app_assistant
+            .handle_service_connection_request(
+                ProgressRendererMarker::PROTOCOL_NAME,
+                fasync::Channel::from_channel(progress_server.into_channel()).unwrap(),
+            )
+            .unwrap();
+
+        progress_proxy
+            .render2(ProgressRendererRender2Request {
+                status: Some(Status::Active),
+                percent_complete: Some(0.0),
+                ..ProgressRendererRender2Request::EMPTY
+            })
+            .await
+            .unwrap();
+        progress_proxy
+            .render2(ProgressRendererRender2Request {
+                status: Some(Status::Error),
+                ..ProgressRendererRender2Request::EMPTY
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            Event::OtaStatusReceived(OtaStatus::Failed),
+            on_handle_event.try_next().unwrap().unwrap()
+        );
+    }
 }
