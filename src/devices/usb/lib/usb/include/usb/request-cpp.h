@@ -16,7 +16,7 @@
 
 #include <optional>
 
-#include "usb-request.h"
+#include "src/devices/usb/lib/usb/include/usb/usb-request.h"
 
 namespace usb {
 

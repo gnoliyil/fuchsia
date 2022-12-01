@@ -18,7 +18,7 @@
 #include <usb/usb-request.h>
 #include <usb/usb.h>
 
-#include "align.h"
+#include "src/devices/usb/lib/usb/align.h"
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
