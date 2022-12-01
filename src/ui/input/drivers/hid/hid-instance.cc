@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "hid-instance.h"
+
 #include <assert.h>
 #include <fuchsia/hardware/hidbus/c/banjo.h>
 #include <lib/ddk/debug.h>
@@ -29,6 +31,13 @@ static constexpr uint64_t hid_report_trace_id(uint32_t instance_id, uint64_t rep
   return (report_id << 32) | instance_id;
 }
 
+HidInstance::HidInstance(HidDevice* base, zx::event fifo_event)
+    : base_(base),
+      fifo_event_(std::move(fifo_event)),
+      loop_(&kAsyncLoopConfigNoAttachToCurrentThread) {
+  zx_hid_fifo_init(&fifo_);
+}
+
 void HidInstance::SetReadable() { fifo_event_.signal(0, DEV_STATE_READABLE); }
 
 void HidInstance::ClearReadable() { fifo_event_.signal(DEV_STATE_READABLE, 0); }
@@ -40,7 +49,7 @@ zx_status_t HidInstance::ReadReportFromFifo(uint8_t* buf, size_t buf_size, zx_ti
     return ZX_ERR_SHOULD_WAIT;
   }
 
-  size_t xfer = base_->GetReportSizeById(rpt_id, ReportType::kInput);
+  size_t xfer = base_->GetReportSizeById(rpt_id, fuchsia_hardware_input::ReportType::kInput);
   if (xfer == 0) {
     zxlogf(ERROR, "error reading hid device: unknown report id (%u)!", rpt_id);
     return ZX_ERR_BAD_STATE;
@@ -140,14 +149,6 @@ void HidInstance::GetReportsEvent(GetReportsEventCompleter::Sync& completer) {
 
   completer.Reply(status, std::move(new_event));
 }
-
-zx_status_t HidInstance::DdkClose(uint32_t flags) {
-  flags_ |= kHidFlagsDead;
-  base_->RemoveHidInstanceFromList(this);
-  return ZX_OK;
-}
-
-void HidInstance::DdkRelease() { delete this; }
 
 void HidInstance::GetBootProtocol(GetBootProtocolCompleter::Sync& completer) {
   completer.Reply(base_->GetBootProtocol());
@@ -269,16 +270,6 @@ void HidInstance::WriteToFifo(const uint8_t* report, size_t report_len, zx_time_
   if (was_empty) {
     SetReadable();
   }
-}
-
-zx_status_t HidInstance::Bind(HidDevice* base) {
-  base_ = base;
-  zx_status_t status = zx::event::create(0, &fifo_event_);
-  if (status != ZX_OK) {
-    return status;
-  }
-
-  return DdkAdd("hid-instance", DEVICE_ADD_INSTANCE);
 }
 
 }  // namespace hid_driver

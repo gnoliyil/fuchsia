@@ -12,8 +12,8 @@
 #include <lib/ddk/platform-defs.h>
 #include <lib/device-watcher/cpp/device-watcher.h>
 #include <lib/driver_test_realm/realm_builder/cpp/lib.h>
+#include <lib/fdio/cpp/caller.h>
 #include <lib/fdio/fd.h>
-#include <lib/fdio/fdio.h>
 #include <lib/sys/component/cpp/testing/realm_builder.h>
 #include <lib/sys/component/cpp/testing/realm_builder_types.h>
 #include <stdio.h>
@@ -35,7 +35,7 @@ class HidDriverTest : public zxtest::Test {
         std::make_unique<component_testing::RealmRoot>(realm_builder.Build(loop_.dispatcher()));
 
     // Start DriverTestRealm.
-    ASSERT_EQ(ZX_OK, realm_->Connect(driver_test_realm.NewRequest()));
+    ASSERT_OK(realm_->Connect(driver_test_realm.NewRequest()));
     fuchsia::driver::test::Realm_Start_Result realm_result;
 
     auto args = fuchsia::driver::test::RealmArgs();
@@ -44,26 +44,22 @@ class HidDriverTest : public zxtest::Test {
     args.set_root_driver("fuchsia-boot:///#meta/test-parent-sys.cm");
 #endif
 
-    ASSERT_EQ(ZX_OK, driver_test_realm->Start(std::move(args), &realm_result));
+    ASSERT_OK(driver_test_realm->Start(std::move(args), &realm_result));
     ASSERT_FALSE(realm_result.is_err());
 
     // Connect to dev.
     fidl::InterfaceHandle<fuchsia::io::Directory> dev;
-    zx_status_t status = realm_->Connect("dev", dev.NewRequest().TakeChannel());
-    ASSERT_EQ(status, ZX_OK);
+    ASSERT_OK(realm_->Connect("dev", dev.NewRequest().TakeChannel()));
+    ASSERT_OK(fdio_fd_create(dev.TakeChannel().release(), dev_fd_.reset_and_get_address()));
 
-    status = fdio_fd_create(dev.TakeChannel().release(), dev_fd_.reset_and_get_address());
-    ASSERT_EQ(status, ZX_OK);
-
-    // Wait for HidCtl to be created
+    // Wait for HidCtl to be created.
     fbl::unique_fd hidctl_fd;
     ASSERT_OK(device_watcher::RecursiveWaitForFile(dev_fd_, "sys/test/hidctl", &hidctl_fd));
 
-    // Get a FIDL channel to HidCtl
-    zx_handle_t handle;
-    ASSERT_OK(fdio_get_service_handle(hidctl_fd.release(), &handle));
-    hidctl_client_ =
-        fidl::WireSyncClient(fidl::ClientEnd<fuchsia_hardware_hidctl::Device>(zx::channel(handle)));
+    fdio_cpp::FdioCaller caller(std::move(hidctl_fd));
+    zx::result client_end = caller.take_as<fuchsia_hardware_hidctl::Device>();
+    ASSERT_OK(client_end);
+    hidctl_client_.Bind(std::move(client_end.value()));
   }
 
   async::Loop loop_ = async::Loop(&kAsyncLoopConfigNoAttachToCurrentThread);
@@ -121,25 +117,30 @@ TEST_F(HidDriverTest, BootMouseTest) {
 
   // Open the input-report device. We need to wait for this to exist so the test does not
   // shutdown while InputReport is still binding.
-  zx_status_t status =
-      device_watcher::RecursiveWaitForFile(dev_fd_, "class/input-report/000", &fd_device);
+  ASSERT_OK(device_watcher::RecursiveWaitForFile(dev_fd_, "class/input-report/000", &fd_device));
 
   // Open the corresponding /dev/class/input/ device
-  status = device_watcher::RecursiveWaitForFile(dev_fd_, "class/input/000", &fd_device);
-  ASSERT_OK(status);
-
-  // Send a single mouse report
-  hid_boot_mouse_report_t mouse_report = {};
-  mouse_report.rel_x = 50;
-  mouse_report.rel_y = 100;
-  status = hidctl_socket.write(0, &mouse_report, sizeof(mouse_report), NULL);
-  ASSERT_OK(status);
+  ASSERT_OK(device_watcher::RecursiveWaitForFile(dev_fd_, "class/input/000", &fd_device));
 
   // Open a FIDL channel to the HID device
-  zx::channel chan;
-  ASSERT_OK(fdio_get_service_handle(fd_device.get(), chan.reset_and_get_address()));
-  auto client =
-      fidl::WireSyncClient(fidl::ClientEnd<fuchsia_hardware_input::Device>(std::move(chan)));
+  zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_input::Device>();
+  ASSERT_OK(endpoints);
+  auto& [device, server] = endpoints.value();
+
+  fdio_cpp::UnownedFdioCaller caller(fd_device);
+  ASSERT_OK(fidl::WireCall(caller.borrow_as<fuchsia_hardware_input::Controller>())
+                ->OpenSession(std::move(server)));
+
+  fidl::WireSyncClient client(std::move(device));
+  // Make a synchronous FIDL call to ensure the session connection is alive.
+  ASSERT_OK(client->GetBootProtocol());
+
+  // Send a single mouse report
+  hid_boot_mouse_report_t mouse_report = {
+      .rel_x = 50,
+      .rel_y = 100,
+  };
+  ASSERT_OK(hidctl_socket.write(0, &mouse_report, sizeof(mouse_report), nullptr));
 
   // Get the report event.
   zx::event report_event;
@@ -195,20 +196,17 @@ TEST_F(HidDriverTest, BootMouseTestInputReport) {
 
   // Open the corresponding /dev/class/input/ device
   fbl::unique_fd fd_device;
-  zx_status_t status =
-      device_watcher::RecursiveWaitForFile(dev_fd_, "class/input-report/000", &fd_device);
-  ASSERT_OK(status);
-  zx::channel chan;
-  ASSERT_OK(fdio_get_service_handle(fd_device.get(), chan.reset_and_get_address()));
-  auto client =
-      fidl::WireSyncClient(fidl::ClientEnd<fuchsia_input_report::InputDevice>(std::move(chan)));
+  ASSERT_OK(device_watcher::RecursiveWaitForFile(dev_fd_, "class/input-report/000", &fd_device));
+  fdio_cpp::FdioCaller caller(std::move(fd_device));
+  zx::result client_end = caller.take_as<fuchsia_input_report::InputDevice>();
+  ASSERT_OK(client_end);
+  fidl::WireSyncClient client(std::move(client_end.value()));
 
   auto reader_endpoints = fidl::CreateEndpoints<fuchsia_input_report::InputReportsReader>();
   ASSERT_OK(reader_endpoints.status_value());
   auto reader = fidl::WireSyncClient<fuchsia_input_report::InputReportsReader>(
       std::move(reader_endpoints->client));
-  // TODO(fxbug.dev/97955) Consider handling the error instead of ignoring it.
-  (void)client->GetInputReportsReader(std::move(reader_endpoints->server));
+  ASSERT_OK(client->GetInputReportsReader(std::move(reader_endpoints->server)).status());
 
   // Check the Descriptor.
   {
@@ -224,8 +222,7 @@ TEST_F(HidDriverTest, BootMouseTestInputReport) {
   hid_boot_mouse_report_t mouse_report = {};
   mouse_report.rel_x = 50;
   mouse_report.rel_y = 100;
-  status = hidctl_socket.write(0, &mouse_report, sizeof(mouse_report), nullptr);
-  ASSERT_OK(status);
+  ASSERT_OK(hidctl_socket.write(0, &mouse_report, sizeof(mouse_report), nullptr));
 
   // Get the mouse InputReport.
   auto response = reader->ReadInputReports();

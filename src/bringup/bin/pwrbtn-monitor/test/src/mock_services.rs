@@ -108,49 +108,67 @@ async fn main() -> Result<(), Error> {
             fasync::Task::spawn(
                 async move {
                     info!("new connection to the mock input device");
-                    let mut stream = finput::DeviceRequestStream::from_channel(channel);
+                    let mut stream = finput::ControllerRequestStream::from_channel(channel);
 
                     while let Some(req) = stream.try_next().await? {
                         match req {
-                            finput::DeviceRequest::GetReportDesc { responder } => {
-                                info!("sending report desc");
-                                // The following sequence of numbers is a HID report containing a
-                                // power button press. This is used to convince pwrbtn-monitor that
-                                // the power button has been pressed, and that it should begin a
-                                // system power off.
-                                responder.send(&[
-                                    0x05, 0x01, // Usage Page (Generic Desktop Ctrls)
-                                    0x09, 0x80, // Usage (Sys Control)
-                                    0xA1, 0x01, // Collection (Application)
-                                    0x09, 0x81, //   Usage (Sys Power Down)
-                                    0x15, 0x00, //   Logical Minimum (0)
-                                    0x25, 0x01, //   Logical Maximum (1)
-                                    0x75, 0x08, //   Report Size (8)
-                                    0x95, 0x01, //   Report Count (1)
-                                    0x81,
-                                    0x02, //   Input (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position)
-                                    0xC0, // End Collection
-                                ]).expect("failed sending report desc");
+                            finput::ControllerRequest::OpenSession { control_handle: _, session } => {
+                                let event = event.duplicate_handle(event_handle_rights()).expect("failed to clone event");
+                                fasync::Task::spawn(
+                                    async move {
+                                        info!("new session to the mock input device");
+                                        let mut stream = session.into_stream()?;
+
+                                        while let Some(req) = stream.try_next().await? {
+                                            match req {
+                                                finput::DeviceRequest::GetReportDesc { responder } => {
+                                                    info!("sending report desc");
+                                                    // The following sequence of numbers is a HID report containing a
+                                                    // power button press. This is used to convince pwrbtn-monitor that
+                                                    // the power button has been pressed, and that it should begin a
+                                                    // system power off.
+                                                    responder.send(&[
+                                                        0x05, 0x01, // Usage Page (Generic Desktop Ctrls)
+                                                        0x09, 0x80, // Usage (Sys Control)
+                                                        0xA1, 0x01, // Collection (Application)
+                                                        0x09, 0x81, //   Usage (Sys Power Down)
+                                                        0x15, 0x00, //   Logical Minimum (0)
+                                                        0x25, 0x01, //   Logical Maximum (1)
+                                                        0x75, 0x08, //   Report Size (8)
+                                                        0x95, 0x01, //   Report Count (1)
+                                                        0x81,
+                                                        0x02, //   Input (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position)
+                                                        0xC0, // End Collection
+                                                    ]).expect("failed sending report desc");
+                                                }
+                                                finput::DeviceRequest::GetReportsEvent { responder } => {
+                                                    info!("sending reports event and signalling the event");
+                                                    let event_dup = event.duplicate_handle(event_handle_rights())?;
+                                                    responder.send(zx::Status::OK.into_raw(), event_dup)
+                                                        .expect("failed sending reports event");
+                                                    event.signal_handle(zx::Signals::NONE, zx::Signals::USER_0)?;
+                                                }
+                                                finput::DeviceRequest::ReadReport { responder } => {
+                                                    info!("sending report");
+                                                    let msg = &[1]; // 1 means "power off", 0 would mean "don't power off"
+                                                    responder.send(
+                                                        zx::Status::OK.into_raw(),
+                                                        msg,
+                                                        zx::Time::get_monotonic().into_nanos(),
+                                                    ).unwrap_or_else(|e| {
+                                                        warn!("failed sending response to ReadReport: {:?}", e);
+                                                    });
+                                                }
+                                                _ => panic!("unexpected call to fuchsia.hardware.input.Device"),
+                                            }
+                                        }
+                                        Ok(())
+                                    }
+                                    .unwrap_or_else(|e: anyhow::Error| {
+                                        panic!("couldn't run fuchsia.hardware.input.Device: {:?}", e);
+                                    })
+                                ).detach()
                             }
-                            finput::DeviceRequest::GetReportsEvent { responder } => {
-                                info!("sending reports event and signalling the event");
-                                let event_dup = event.duplicate_handle(event_handle_rights())?;
-                                responder.send(zx::Status::OK.into_raw(), event_dup)
-                                    .expect("failed sending reports event");
-                                event.signal_handle(zx::Signals::NONE, zx::Signals::USER_0)?;
-                            }
-                            finput::DeviceRequest::ReadReport { responder } => {
-                                info!("sending report");
-                                let msg = &[1]; // 1 means "power off", 0 would mean "don't power off"
-                                responder.send(
-                                    zx::Status::OK.into_raw(),
-                                    msg,
-                                    zx::Time::get_monotonic().into_nanos(),
-                                ).unwrap_or_else(|e| {
-                                    warn!("failed sending response to ReadReport: {:?}", e);
-                                });
-                            }
-                            _ => panic!("unexpected call to fuchsia.hardware.input.Device"),
                         }
                     }
                     Ok(())

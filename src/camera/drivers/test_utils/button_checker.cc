@@ -5,7 +5,7 @@
 #include "button_checker.h"
 
 #include <fcntl.h>
-#include <lib/fdio/fdio.h>
+#include <lib/fdio/directory.h>
 #include <lib/syslog/cpp/macros.h>
 #include <lib/zx/channel.h>
 #include <unistd.h>
@@ -33,11 +33,11 @@ std::unique_ptr<ButtonChecker> ButtonChecker::Create() {
     auto device = BindDevice(entry.path());
     hid::ReportField mute_field{};
     if (device && !GetMuteFieldForDevice(device, &mute_field)) {
-      checker->devices_.push_back(std::make_pair(std::move(device), std::move(mute_field)));
+      checker->devices_.emplace_back(std::move(device), mute_field);
     }
   }
 
-  if (checker->devices_.size() == 0) {
+  if (checker->devices_.empty()) {
     FX_LOGST(WARNING, kTag) << "Zero devices were bound from " << kDevicePath;
     return nullptr;
   }
@@ -82,25 +82,19 @@ ButtonChecker::ButtonState ButtonChecker::GetMuteState() {
 }
 
 fuchsia::hardware::input::DeviceSyncPtr ButtonChecker::BindDevice(const std::string& path) {
-  // Open the device.
-  int result = open(path.c_str(), O_RDONLY);
-  if (result < 0) {
-    FX_LOGST(ERROR, kTag) << "Error accessing " << path;
-    return nullptr;
-  }
-  fbl::unique_fd fd(result);
-
-  // Get a channel to its services.
-  zx::channel channel;
-  zx_status_t status = fdio_get_service_handle(fd.get(), channel.reset_and_get_address());
-  if (status != ZX_OK) {
-    FX_PLOGST(ERROR, kTag, status) << "Error getting channel from device " << path;
+  fuchsia::hardware::input::ControllerSyncPtr controller;
+  if (zx_status_t status =
+          fdio_service_connect(path.c_str(), controller.NewRequest().TakeChannel().release());
+      status != ZX_OK) {
+    FX_PLOGST(ERROR, kTag, status) << "Error connecting to controller " << path;
     return nullptr;
   }
 
-  // Bind to the channel.
   fuchsia::hardware::input::DeviceSyncPtr device;
-  device.Bind(std::move(channel));
+  if (zx_status_t status = controller->OpenSession(device.NewRequest()); status != ZX_OK) {
+    FX_PLOGST(ERROR, kTag, status) << "Error opening session " << path;
+    return nullptr;
+  }
 
   return device;
 }

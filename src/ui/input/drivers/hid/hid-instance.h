@@ -24,6 +24,7 @@
 #include <ddktl/fidl.h>
 #include <fbl/intrusive_double_list.h>
 #include <fbl/mutex.h>
+#include <fbl/ref_counted.h>
 #include <fbl/ring_buffer.h>
 
 #include "device-report-reader.h"
@@ -33,26 +34,13 @@ namespace hid_driver {
 
 class HidDevice;
 
-using fuchsia_hardware_input::wire::BootProtocol;
-using fuchsia_hardware_input::wire::ReportType;
-
-class HidInstance;
-using HidInstanceDeviceType = ddk::Device<HidInstance, ddk::Closable,
-                                          ddk::Messageable<fuchsia_hardware_input::Device>::Mixin>;
-
-class HidInstance : public HidInstanceDeviceType,
-                    public fbl::DoublyLinkedListable<HidInstance*>,
-                    public ddk::EmptyProtocol<ZX_PROTOCOL_HID_DEVICE> {
+class HidInstance : public fidl::WireServer<fuchsia_hardware_input::Device>,
+                    public fbl::DoublyLinkedListable<fbl::RefPtr<HidInstance>,
+                                                     fbl::NodeOptions::AllowRemoveFromContainer>,
+                    public fbl::RefCounted<HidInstance> {
  public:
-  explicit HidInstance(zx_device_t* parent)
-      : HidInstanceDeviceType(parent), loop_(&kAsyncLoopConfigNoAttachToCurrentThread) {
-    zx_hid_fifo_init(&fifo_);
-  }
-  ~HidInstance() = default;
-
-  zx_status_t Bind(HidDevice* base);
-  void DdkRelease();
-  zx_status_t DdkClose(uint32_t flags);
+  HidInstance(HidDevice* base, zx::event fifo_event);
+  ~HidInstance() override = default;
 
   void GetBootProtocol(GetBootProtocolCompleter::Sync& _completer) override;
   void GetDeviceIds(GetDeviceIdsCompleter::Sync& _completer) override;
@@ -74,7 +62,7 @@ class HidInstance : public HidInstanceDeviceType,
   void ClearReadable();
   zx_status_t ReadReportFromFifo(uint8_t* buf, size_t buf_size, zx_time_t* time,
                                  size_t* report_size) __TA_REQUIRES(fifo_lock_);
-  HidDevice* base_ = nullptr;
+  HidDevice* base_;
 
   uint32_t flags_ = 0;
 

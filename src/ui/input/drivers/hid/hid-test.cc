@@ -10,6 +10,7 @@
 #include <thread>
 #include <vector>
 
+#include <fbl/ref_ptr.h>
 #include <hid/ambient-light.h>
 #include <hid/boot.h>
 #include <hid/paradise.h>
@@ -153,13 +154,14 @@ class HidDeviceTest : public zxtest::Test {
   }
 
   void SetupInstanceDriver() {
-    ASSERT_OK(device_->DdkOpen(&instance_driver_, 0));
+    zx::result instance = device_->CreateInstance();
+    ASSERT_OK(instance);
+    instance_driver_ = std::move(instance.value());
 
     auto endpoints = fidl::CreateEndpoints<fuchsia_hardware_input::Device>();
     ASSERT_OK(endpoints.status_value());
     sync_client_ = fidl::WireSyncClient(std::move(endpoints->client));
-    fidl::BindServer(loop_.dispatcher(), std::move(endpoints->server),
-                     instance_driver_->GetDeviceContext<hid_driver::HidInstance>());
+    fidl::BindServer(loop_.dispatcher(), std::move(endpoints->server), instance_driver_.get());
 
     auto result = sync_client_->GetReportsEvent();
     ASSERT_OK(result.status());
@@ -171,8 +173,7 @@ class HidDeviceTest : public zxtest::Test {
     if (instance_driver_ == nullptr) {
       return;
     }
-    instance_driver_->CloseOp(0);
-    instance_driver_->ReleaseOp();
+    instance_driver_->CloseInstance();
     instance_driver_ = nullptr;
   }
 
@@ -203,7 +204,7 @@ class HidDeviceTest : public zxtest::Test {
   }
 
  protected:
-  zx_device_t* instance_driver_ = nullptr;
+  fbl::RefPtr<HidInstance> instance_driver_;
   fidl::WireSyncClient<fuchsia_hardware_input::Device> sync_client_;
   zx::event report_event_;
 
@@ -237,16 +238,15 @@ TEST_F(HidDeviceTest, TestQuery) {
 
   ASSERT_OK(device_->Bind(client_));
 
-  zx_device_t* open_dev;
-  ASSERT_OK(device_->DdkOpen(&open_dev, 0));
+  zx::result instance = device_->CreateInstance();
+  ASSERT_OK(instance);
   // Opening the device created an instance device to be created, and we can
   // get its arguments here.
   auto endpoints = fidl::CreateEndpoints<fuchsia_hardware_input::Device>();
   ASSERT_OK(endpoints.status_value());
   auto sync_client =
       fidl::WireSyncClient<fuchsia_hardware_input::Device>(std::move(endpoints->client));
-  fidl::BindServer(loop_.dispatcher(), std::move(endpoints->server),
-                   open_dev->GetDeviceContext<hid_driver::HidInstance>());
+  fidl::BindServer(loop_.dispatcher(), std::move(endpoints->server), instance.value().get());
 
   auto result = sync_client->GetDeviceIds();
   ASSERT_OK(result.status());
@@ -257,8 +257,7 @@ TEST_F(HidDeviceTest, TestQuery) {
   ASSERT_EQ(kVersion, ids.version);
 
   // Close the instance device.
-  open_dev->CloseOp(0);
-  open_dev->ReleaseOp();
+  instance.value()->CloseInstance();
 }
 
 TEST_F(HidDeviceTest, BootMouseSendReport) {

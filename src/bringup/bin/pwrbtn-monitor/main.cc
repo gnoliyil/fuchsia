@@ -108,13 +108,22 @@ zx_status_t InputDeviceAdded(int dirfd, int event, const char* name, void* cooki
   }
 
   fdio_cpp::UnownedFdioCaller caller(dirfd);
-  zx::result device =
-      component::ConnectAt<fuchsia_hardware_input::Device>(caller.directory(), name);
-  if (device.is_error()) {
-    return device.error_value();
+  zx::result controller =
+      component::ConnectAt<fuchsia_hardware_input::Controller>(caller.directory(), name);
+  if (controller.is_error()) {
+    return controller.error_value();
+  }
+  zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_input::Device>();
+  if (endpoints.is_error()) {
+    return endpoints.error_value();
+  }
+  auto& [device, server] = endpoints.value();
+  const fidl::Status status = fidl::WireCall(controller.value())->OpenSession(std::move(server));
+  if (!status.ok()) {
+    return status.status();
   }
 
-  fidl::WireSyncClient client(std::move(device.value()));
+  fidl::WireSyncClient client(std::move(device));
   // Get the report descriptor.
   auto result = client->GetReportDesc();
   if (result.status() != ZX_OK) {

@@ -23,7 +23,7 @@ class DeviceReportsReader : public fidl::WireServer<fuchsia_hardware_input::Devi
   // is alive.
   explicit DeviceReportsReader(HidDevice* base) : base_(base) {}
 
-  ~DeviceReportsReader() {
+  ~DeviceReportsReader() override {
     // The lock has to be grabbed to synchronize with any clients who are currently
     // trying access DeviceReportsReader.
     fbl::AutoLock lock(&reader_lock_);

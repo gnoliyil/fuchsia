@@ -18,6 +18,7 @@
 #include <lib/usb-virtual-bus-launcher/usb-virtual-bus-launcher.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <zircon/status.h>
 #include <zircon/syscalls.h>
 
 #include <fbl/string.h>
@@ -41,10 +42,15 @@ class UsbHidTest : public zxtest::Test {
     ASSERT_NO_FATAL_FAILURE(InitUsbHid(&devpath_, usb_hid_function_desc));
 
     fdio_cpp::UnownedFdioCaller caller(bus_->GetRootFd());
-    zx::result device =
-        component::ConnectAt<fuchsia_hardware_input::Device>(caller.directory(), devpath_);
-    ASSERT_OK(device);
-    sync_client_ = fidl::WireSyncClient<fuchsia_hardware_input::Device>(std::move(device.value()));
+    zx::result controller =
+        component::ConnectAt<fuchsia_hardware_input::Controller>(caller.directory(), devpath_);
+    ASSERT_OK(controller);
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_input::Device>();
+    ASSERT_OK(endpoints);
+    auto& [device, server] = endpoints.value();
+    ASSERT_OK(fidl::WireCall(controller.value())->OpenSession(std::move(server)));
+
+    sync_client_ = fidl::WireSyncClient<fuchsia_hardware_input::Device>(std::move(device));
   }
 
   void TearDown() override {
@@ -59,23 +65,18 @@ class UsbHidTest : public zxtest::Test {
   void InitUsbHid(fbl::String* devpath,
                   fuchsia_hardware_usb_peripheral::wire::FunctionDescriptor desc) {
     namespace usb_peripheral = fuchsia_hardware_usb_peripheral;
-    using ConfigurationDescriptor =
-        ::fidl::VectorView<fuchsia_hardware_usb_peripheral::wire::FunctionDescriptor>;
-    usb_peripheral::wire::DeviceDescriptor device_desc = {};
-    device_desc.bcd_usb = htole16(0x0200);
-    device_desc.id_vendor = htole16(0x18d1);
-    device_desc.id_product = htole16(0xaf10);
-    device_desc.b_max_packet_size0 = 64;
-    device_desc.bcd_device = htole16(0x0100);
-    device_desc.b_num_configurations = 1;
-
-    std::vector<usb_peripheral::wire::FunctionDescriptor> function_descs;
-    function_descs.push_back(desc);
-    std::vector<ConfigurationDescriptor> config_descs;
-    config_descs.emplace_back(
-        fidl::VectorView<usb_peripheral::wire::FunctionDescriptor>::FromExternal(function_descs));
-
-    ASSERT_OK(bus_->SetupPeripheralDevice(std::move(device_desc), std::move(config_descs)));
+    std::vector<usb_peripheral::wire::FunctionDescriptor> function_descs = {desc};
+    ASSERT_OK(bus_->SetupPeripheralDevice(
+        {
+            .bcd_usb = htole16(0x0200),
+            .b_max_packet_size0 = 64,
+            .id_vendor = htole16(0x18d1),
+            .id_product = htole16(0xaf10),
+            .bcd_device = htole16(0x0100),
+            .b_num_configurations = 1,
+        },
+        {fidl::VectorView<usb_peripheral::wire::FunctionDescriptor>::FromExternal(
+            function_descs)}));
 
     fbl::unique_fd fd(openat(bus_->GetRootFd(), "class/input", O_RDONLY));
     while (fdio_watch_directory(fd.get(), WaitForAnyFile, ZX_TIME_INFINITE, devpath) !=
@@ -90,26 +91,35 @@ class UsbHidTest : public zxtest::Test {
     zx::result input_controller =
         component::ConnectAt<fuchsia_device::Controller>(caller.directory(), devpath_);
     ASSERT_OK(input_controller);
-    auto hid_device_path_response = fidl::WireCall(input_controller.value())->GetTopologicalPath();
-    ASSERT_OK(hid_device_path_response.status());
-    std::string hid_device_path = hid_device_path_response->value()->path.data();
-    std::string DEV_CONST = "@/dev/";
-    std::string usb_hid_path = hid_device_path.substr(
-        DEV_CONST.length(), hid_device_path.find_last_of('/') - DEV_CONST.length());
+    const fidl::WireResult result = fidl::WireCall(input_controller.value())->GetTopologicalPath();
+    ASSERT_OK(result);
+    const fit::result response = result.value();
+    ASSERT_TRUE(response.is_ok(), "%s", zx_status_get_string(response.error_value()));
+    const std::string_view hid_device_abspath = response->path.get();
+    constexpr std::string_view kDev = "/dev/";
+    ASSERT_TRUE(cpp20::starts_with(hid_device_abspath, kDev));
+    const std::string_view hid_device_relpath = hid_device_abspath.substr(kDev.size());
+    const std::string_view usb_hid_relpath =
+        hid_device_relpath.substr(0, hid_device_relpath.find_last_of('/'));
 
     zx::result usb_hid_controller =
-        component::ConnectAt<fuchsia_device::Controller>(caller.directory(), usb_hid_path);
+        component::ConnectAt<fuchsia_device::Controller>(caller.directory(), usb_hid_relpath);
     ASSERT_OK(usb_hid_controller);
-
-    std::string ifc_path = usb_hid_path.substr(0, usb_hid_path.find_last_of('/'));
+    const size_t last_slash = usb_hid_relpath.find_last_of('/');
+    const std::string_view suffix = usb_hid_relpath.substr(last_slash + 1);
+    std::string ifc_path{usb_hid_relpath.substr(0, last_slash)};
     fbl::unique_fd fd_usb_hid_parent(
         openat(bus_->GetRootFd(), ifc_path.c_str(), O_DIRECTORY | O_RDONLY));
-    ASSERT_GE(fd_usb_hid_parent.get(), 0);
+    ASSERT_TRUE(fd_usb_hid_parent, "openat(_, %s, _): %s", ifc_path.c_str(), strerror(errno));
     std::unique_ptr<device_watcher::DirWatcher> watcher;
     ASSERT_OK(device_watcher::DirWatcher::Create(std::move(fd_usb_hid_parent), &watcher));
-    auto result = fidl::WireCall(usb_hid_controller.value())->ScheduleUnbind();
-    ASSERT_OK(result.status());
-    ASSERT_OK(watcher->WaitForRemoval("usb-hid", zx::duration::infinite()));
+    {
+      const fidl::WireResult result = fidl::WireCall(usb_hid_controller.value())->ScheduleUnbind();
+      ASSERT_OK(result.status());
+      const fit::result response = result.value();
+      ASSERT_TRUE(response.is_ok(), "%s", zx_status_get_string(response.error_value()));
+    }
+    ASSERT_OK(watcher->WaitForRemoval(suffix, zx::duration::infinite()));
   }
 
   std::optional<BusLauncher> bus_;

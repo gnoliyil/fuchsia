@@ -13,7 +13,7 @@ use bitfield::bitfield;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use fdio::service_connect;
 use fidl::endpoints::create_proxy;
-use fidl_fuchsia_hardware_input::DeviceMarker;
+use fidl_fuchsia_hardware_input::{ControllerMarker, DeviceMarker};
 use fuchsia_async::{Time, TimeoutExt};
 use fuchsia_zircon as zx;
 use futures::lock::Mutex;
@@ -369,9 +369,13 @@ impl Device<FidlConnection, OsRng> {
     /// Returns Ok(None) for valid paths that do not represent a FIDO device, and Err(err) if
     /// any errors are encountered.
     pub async fn new(path: String) -> Result<Option<Device<FidlConnection, OsRng>>, Error> {
-        let (proxy, server) = create_proxy::<DeviceMarker>().context("Failed to create proxy")?;
-        service_connect(&path, server.into_channel()).context("Failed to connect to device")?;
-        Device::new_from_connection(path, FidlConnection::new(proxy), Default::default()).await
+        let (controller, server) =
+            create_proxy::<ControllerMarker>().context("Failed to create proxy")?;
+        let () =
+            service_connect(&path, server.into_channel()).context("Failed to connect to device")?;
+        let (device, server) = create_proxy::<DeviceMarker>().context("Failed to create proxy")?;
+        let () = controller.open_session(server).context("Failed to open session")?;
+        Device::new_from_connection(path, FidlConnection::new(device), Default::default()).await
     }
 }
 

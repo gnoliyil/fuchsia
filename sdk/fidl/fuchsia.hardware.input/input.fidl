@@ -131,3 +131,10 @@ protocol Device {
         id uint32;
     });
 };
+
+protocol Controller {
+    /// Opens a new session on the device.
+    OpenSession(resource struct {
+        session server_end:Device;
+    });
+};

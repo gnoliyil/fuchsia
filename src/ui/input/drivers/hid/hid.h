@@ -5,6 +5,7 @@
 #ifndef SRC_UI_INPUT_DRIVERS_HID_HID_H_
 #define SRC_UI_INPUT_DRIVERS_HID_HID_H_
 
+#include <fidl/fuchsia.hardware.input/cpp/wire.h>
 #include <fuchsia/hardware/hidbus/cpp/banjo.h>
 #include <fuchsia/hardware/hiddevice/cpp/banjo.h>
 #include <lib/ddk/debug.h>
@@ -21,16 +22,16 @@
 #include <ddktl/protocol/empty-protocol.h>
 #include <fbl/intrusive_double_list.h>
 #include <fbl/mutex.h>
+#include <fbl/ref_ptr.h>
 #include <hid-parser/item.h>
 #include <hid-parser/parser.h>
 #include <hid-parser/usages.h>
 
-#include "hid-fifo.h"
 #include "hid-instance.h"
 
 namespace hid_driver {
 
-typedef uint8_t input_report_id_t;
+using input_report_id_t = uint8_t;
 struct HidPageUsage {
   uint16_t page;
   uint32_t usage;
@@ -42,18 +43,21 @@ struct HidPageUsage {
 
 class HidDevice;
 
-using HidDeviceType = ddk::Device<HidDevice, ddk::Unbindable, ddk::Openable>;
+using HidDeviceType =
+    ddk::Device<HidDevice, ddk::Messageable<fuchsia_hardware_input::Controller>::Mixin,
+                ddk::Unbindable>;
 
 class HidDevice : public HidDeviceType,
                   public ddk::HidDeviceProtocol<HidDevice, ddk::base_protocol> {
  public:
   explicit HidDevice(zx_device_t* parent) : HidDeviceType(parent) {}
-  ~HidDevice() = default;
+  ~HidDevice() override = default;
 
   zx_status_t Bind(ddk::HidbusProtocolClient hidbus_proto);
-  void DdkRelease();
-  zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags);
   void DdkUnbind(ddk::UnbindTxn txn);
+  void DdkRelease();
+
+  void OpenSession(OpenSessionRequestView request, OpenSessionCompleter::Sync& completer) override;
 
   // |HidDeviceProtocol|
   zx_status_t HidDeviceRegisterListener(const hid_report_listener_protocol_t* listener);
@@ -75,13 +79,14 @@ class HidDevice : public HidDeviceType,
   static void IoQueue(void* cookie, const uint8_t* buf, size_t len, zx_time_t time);
 
   size_t GetMaxInputReportSize();
-  size_t GetReportSizeById(input_report_id_t id, ReportType type);
-  BootProtocol GetBootProtocol();
+
+  size_t GetReportSizeById(input_report_id_t id, fuchsia_hardware_input::wire::ReportType type);
+  fuchsia_hardware_input::wire::BootProtocol GetBootProtocol();
   hid_info_t GetHidInfo() { return info_; }
 
   ddk::HidbusProtocolClient* GetHidbusProtocol() { return &hidbus_; }
 
-  void RemoveHidInstanceFromList(HidInstance* instance);
+  zx::result<fbl::RefPtr<HidInstance>> CreateInstance();
 
   size_t GetReportDescLen() { return hid_report_desc_.size(); }
   const uint8_t* GetReportDesc() { return hid_report_desc_.data(); }
@@ -114,7 +119,9 @@ class HidDevice : public HidDeviceType,
 
   fbl::Mutex instance_lock_;
   // Unmanaged linked-list because the HidInstances free themselves through DdkRelease.
-  fbl::DoublyLinkedList<HidInstance*> instance_list_ __TA_GUARDED(instance_lock_);
+  fbl::DoublyLinkedList<fbl::RefPtr<HidInstance>> instance_list_ __TA_GUARDED(instance_lock_);
+  fidl::ServerBindingGroup<fuchsia_hardware_input::Device> bindings_;
+  std::optional<ddk::UnbindTxn> unbind_txn_;
 
   std::array<char, ZX_DEVICE_NAME_MAX + 1> name_;
 

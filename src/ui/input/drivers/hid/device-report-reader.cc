@@ -21,7 +21,8 @@ zx_status_t DeviceReportsReader::ReadReportFromFifo(uint8_t* buf, size_t buf_siz
   }
   uint8_t report_id = data_fifo_.front();
 
-  size_t report_size = base_->GetReportSizeById(report_id, ReportType::kInput);
+  size_t report_size =
+      base_->GetReportSizeById(report_id, fuchsia_hardware_input::ReportType::kInput);
   if (report_size == 0) {
     zxlogf(ERROR, "error reading hid device: unknown report id (%u)!", report_id);
     return ZX_ERR_BAD_STATE;
@@ -71,7 +72,7 @@ zx_status_t DeviceReportsReader::SendReports() {
   if (!waiting_read_) {
     return ZX_ERR_BAD_STATE;
   }
-  if (data_fifo_.size() == 0) {
+  if (data_fifo_.empty()) {
     return ZX_ERR_SHOULD_WAIT;
   }
 

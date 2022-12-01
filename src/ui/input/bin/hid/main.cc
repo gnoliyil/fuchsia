@@ -306,15 +306,25 @@ static zx_status_t hid_input_device_added(int dirfd, int event, const char* fn, 
   }
 
   fdio_cpp::UnownedFdioCaller caller(dirfd);
-  zx::result device = component::ConnectAt<fuchsia_hardware_input::Device>(caller.directory(), fn);
-  if (device.is_error()) {
-    return device.error_value();
+  zx::result controller =
+      component::ConnectAt<fuchsia_hardware_input::Controller>(caller.directory(), fn);
+  if (controller.is_error()) {
+    return controller.error_value();
   }
+  zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_input::Device>();
+  if (endpoints.is_error()) {
+    return endpoints.error_value();
+  }
+  auto& [device, server] = endpoints.value();
+  const fidl::Status status = fidl::WireCall(controller.value())->OpenSession(std::move(server));
+  if (!status.ok()) {
+    return status.status();
+  }
+
   input_args_t* args = new input_args_t;
   args->command = *reinterpret_cast<Command*>(cookie);
 
-  args->sync_client =
-      fidl::WireSyncClient<fuchsia_hardware_input::Device>(std::move(device.value()));
+  args->sync_client = fidl::WireSyncClient<fuchsia_hardware_input::Device>(std::move(device));
 
   // TODO: support setting num_reads across all devices. requires a way to
   // signal shutdown to all input threads.
@@ -427,12 +437,25 @@ zx_status_t parse_input_args(int argc, const char** argv, input_args_t* args) {
   }
 
   // Parse <devpath>
-  zx::result device = component::Connect<fuchsia_hardware_input::Device>(argv[1]);
-  if (device.is_error()) {
-    printf("could not open %s: %s\n", argv[1], device.status_string());
-    return device.error_value();
+  zx::result controller = component::Connect<fuchsia_hardware_input::Controller>(argv[1]);
+  if (controller.is_error()) {
+    printf("could not open %s: %s\n", argv[1], controller.status_string());
+    return controller.error_value();
   }
-  args->sync_client = fidl::WireSyncClient(std::move(device.value()));
+  zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_input::Device>();
+  if (endpoints.is_error()) {
+    printf("could not create endpoints: %s\n", endpoints.status_string());
+    return endpoints.error_value();
+  }
+  auto& [device, server] = endpoints.value();
+  {
+    const fidl::Status status = fidl::WireCall(controller.value())->OpenSession(std::move(server));
+    if (!status.ok()) {
+      printf("could not create session %s: %s\n", argv[1], status.status_string());
+      return status.status();
+    }
+  }
+  args->sync_client = fidl::WireSyncClient(std::move(device));
   snprintf(args->devpath, kDevPathSize, "%s", argv[1]);
 
   if (args->command == Command::descriptor) {
