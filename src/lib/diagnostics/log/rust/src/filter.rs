@@ -5,7 +5,7 @@ use diagnostics_log_encoding::{Severity, SeverityExt};
 use fidl_fuchsia_diagnostics::Interest;
 use fidl_fuchsia_diagnostics_stream::Record;
 use fidl_fuchsia_logger::LogSinkProxy;
-use parking_lot::{Mutex, RwLock};
+use std::sync::{Mutex, RwLock};
 use std::{future::Future, sync::Arc};
 use tracing::{subscriber::Subscriber, Metadata};
 use tracing_subscriber::layer::{Context, Layer};
@@ -33,7 +33,8 @@ impl InterestFilter {
     where
         T: OnInterestChanged + Send + Sync + 'static,
     {
-        *self.listener.lock() = Some(Box::new(listener));
+        let mut listener_guard = self.listener.lock().unwrap();
+        *listener_guard = Some(Box::new(listener));
     }
 
     async fn listen_to_interest_changes(
@@ -43,16 +44,22 @@ impl InterestFilter {
         proxy: LogSinkProxy,
     ) {
         while let Ok(Ok(interest)) = proxy.wait_for_interest_change().await {
-            *min_severity.write() = interest.min_severity.unwrap_or(default_severity);
-            if let Some(callback) = &*listener.lock() {
-                callback.on_changed(&*min_severity.read());
+            let new_min_severity = {
+                let mut min_severity_guard = min_severity.write().unwrap();
+                *min_severity_guard = interest.min_severity.unwrap_or(default_severity);
+                interest.min_severity.unwrap_or(default_severity)
+            };
+            let callback_guard = listener.lock().unwrap();
+            if let Some(callback) = &*callback_guard {
+                callback.on_changed(&new_min_severity);
             }
         }
     }
 
     #[allow(unused)] // TODO(fxbug.dev/62858) remove attribute
     pub fn enabled_for_testing(&self, _file: &str, _line: u32, record: &Record) -> bool {
-        record.severity >= *self.min_severity.read()
+        let min_severity = self.min_severity.read().unwrap();
+        record.severity >= *min_severity
     }
 }
 
@@ -66,7 +73,8 @@ impl<S: Subscriber> Layer<S> for InterestFilter {
     }
 
     fn enabled(&self, metadata: &Metadata<'_>, _ctx: Context<'_, S>) -> bool {
-        metadata.severity() >= *self.min_severity.read()
+        let min_severity = self.min_severity.read().unwrap();
+        metadata.severity() >= *min_severity
     }
 }
 
