@@ -18,7 +18,16 @@ class RunnerServer : public fidl::WireServer<fidl_clientsuite::Runner> {
 
   void IsTestEnabled(IsTestEnabledRequestView request,
                      IsTestEnabledCompleter::Sync& completer) override {
-    completer.Reply(true);
+    switch (request->test) {
+      // TODO(fxbug.dev/116294): Wire Types should reject responses with the
+      // wrong ordinal.
+      case fidl_clientsuite::Test::kTwoWayWrongResponseOrdinal:
+        completer.Reply(false);
+        return;
+      default:
+        completer.Reply(true);
+        return;
+    }
   }
 
   void CheckAlive(CheckAliveCompleter::Sync& completer) override { completer.Reply(); }

@@ -30,10 +30,12 @@ async fn run_runner_server(stream: RunnerRequestStream) -> Result<(), Error> {
                 // Test management methods
                 RunnerRequest::IsTestEnabled { test, responder } => {
                     let enabled = match test {
-                        Test::V1TwoWayNoPayload | Test::V1TwoWayStructPayload => {
-                            // TODO(fxbug.dev/99738): Rust bindings should reject V1 wire format.
-                            false
-                        }
+                        // TODO(fxbug.dev/99738): Rust bindings should reject V1
+                        // wire format.
+                        Test::V1TwoWayNoPayload | Test::V1TwoWayStructPayload => false,
+                        // TODO(fxbug.dev/116294): Rust bindings should reject
+                        // responses with the wrong ordinal.
+                        Test::TwoWayWrongResponseOrdinal => false,
                         _ => true,
                     };
                     responder.send(enabled).context("sending response failed")

@@ -35,11 +35,12 @@ class RunnerServer : public fidl::clientsuite::Runner {
       case fidl::clientsuite::Test::UNKNOWN_FLEXIBLE_EVENT_CLOSED_PROTOCOL:
       case fidl::clientsuite::Test::UNKNOWN_STRICT_SERVER_INITIATED_TWO_WAY:
       case fidl::clientsuite::Test::UNKNOWN_FLEXIBLE_SERVER_INITIATED_TWO_WAY:
-        callback(false);
-        return;
+      // TODO(fxbug.dev/116294): HLCPP bindings should reject responses with the
+      // wrong ordinal.
+      case fidl::clientsuite::Test::TWO_WAY_WRONG_RESPONSE_ORDINAL:
+      // TODO(fxbug.dev/99738): HLCPP bindings should reject V1 wire format.
       case fidl::clientsuite::Test::V1_TWO_WAY_NO_PAYLOAD:
       case fidl::clientsuite::Test::V1_TWO_WAY_STRUCT_PAYLOAD:
-        // TODO(fxbug.dev/99738): HLCPP bindings should reject V1 wire format.
         callback(false);
         return;
       default:

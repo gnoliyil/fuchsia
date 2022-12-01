@@ -30,8 +30,12 @@ async fn run_runner_server(stream: RunnerRequestStream) -> Result<(), Error> {
                     // channel, so these tests are disabled.
                     Test::UnknownStrictServerInitiatedTwoWay
                     | Test::UnknownFlexibleServerInitiatedTwoWay => responder.send(false),
-                    // TODO(fxbug.dev/99738): Rust bindings should reject V1 wire format.
+                    // TODO(fxbug.dev/99738): Rust bindings should reject V1
+                    // wire format.
                     Test::V1TwoWayNoPayload | Test::V1TwoWayStructPayload => responder.send(false),
+                    // TODO(fxbug.dev/116294): Rust bindings should reject
+                    // responses with the wrong ordinal.
+                    Test::TwoWayWrongResponseOrdinal => responder.send(false),
                     _ => responder.send(true),
                 }
                 .context("sending response failed"),

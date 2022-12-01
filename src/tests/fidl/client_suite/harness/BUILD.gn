@@ -10,6 +10,7 @@ executable("bin") {
     "coding_tests.cc",
     "harness.cc",
     "harness.h",
+    "message_header_tests.cc",
     "ordinals.h",
     "unknown_interactions_tests.cc",
   ]

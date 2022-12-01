@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "fidl/fidl.clientsuite/cpp/common_types.h"
 #include "fidl/fidl.clientsuite/cpp/natural_types.h"
 #include "src/tests/fidl/channel_util/bytes.h"
 #include "src/tests/fidl/channel_util/channel.h"

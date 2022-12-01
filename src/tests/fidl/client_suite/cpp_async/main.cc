@@ -27,7 +27,16 @@ class RunnerServer : public fidl::Server<fidl_clientsuite::Runner> {
 
   void IsTestEnabled(IsTestEnabledRequest& request,
                      IsTestEnabledCompleter::Sync& completer) override {
-    completer.Reply(true);
+    switch (request.test()) {
+      // TODO(fxbug.dev/116294): Natural Types should reject responses with the
+      // wrong ordinal.
+      case fidl_clientsuite::Test::kTwoWayWrongResponseOrdinal:
+        completer.Reply(false);
+        return;
+      default:
+        completer.Reply(true);
+        return;
+    }
   }
 
   void CheckAlive(CheckAliveCompleter::Sync& completer) override { completer.Reply(); }

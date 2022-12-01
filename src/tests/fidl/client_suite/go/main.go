@@ -31,6 +31,11 @@ func classifyErr(err error) clientsuite.FidlErrorKind {
 		case zx.ErrNotSupported, zx.ErrNotFound:
 			return clientsuite.FidlErrorKindUnexpectedMessage
 		}
+	case fidl.ValidationError:
+		switch err.Code() {
+		case fidl.ErrUnexpectedOrdinal:
+			return clientsuite.FidlErrorKindDecodingError
+		}
 	}
 	return clientsuite.FidlErrorKindOtherError
 }
