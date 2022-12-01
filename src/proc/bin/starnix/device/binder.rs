@@ -250,9 +250,6 @@ struct BinderProcessState {
     objects: BTreeMap<UserAddress, Weak<BinderObject>>,
     /// Handle table of remote binder objects.
     handles: HandleTable,
-    /// A queue for commands that could not be scheduled on any existing binder threads. Binder
-    /// threads that exhaust their own queue will read from this one.
-    command_queue: VecDeque<Command>,
     /// State associated with active transactions, keyed by the userspace addresses of the buffers
     /// allocated to them. When the process frees a transaction buffer with `BC_FREE_BUFFER`, the
     /// state is dropped, releasing temporary strong references and the memory allocated to the
@@ -260,6 +257,12 @@ struct BinderProcessState {
     active_transactions: BTreeMap<UserAddress, ActiveTransaction>,
     /// The list of processes that should be notified if this process dies.
     death_subscribers: Vec<(Weak<BinderProcess>, binder_uintptr_t)>,
+}
+
+#[derive(Default, Debug)]
+struct CommandQueueWithWaitQueue {
+    commands: VecDeque<Command>,
+    waiters: WaitQueue,
 }
 
 #[derive(Debug)]
@@ -276,9 +279,12 @@ struct BinderProcess {
     shared_memory: Mutex<Option<SharedMemory>>,
     /// The main mutable state of the `BinderProcess`.
     state: Mutex<BinderProcessState>,
+    /// A queue for commands that could not be scheduled on any existing binder threads. Binder
+    /// threads that exhaust their own queue will read from this one.
+    ///
     /// When there are no commands in a thread's and the process' command queue, a binder thread can
     /// register with this [`WaitQueue`] to be notified when commands are available.
-    waiters: Mutex<WaitQueue>,
+    command_queue: Mutex<CommandQueueWithWaitQueue>,
 }
 
 type BinderProcessGuard<'a> = Guard<'a, BinderProcess, MutexGuard<'a, BinderProcessState>>;
@@ -411,13 +417,13 @@ impl BinderProcess {
             pid,
             shared_memory: Default::default(),
             state: Default::default(),
-            waiters: Default::default(),
+            command_queue: Default::default(),
         });
         #[cfg(any(test, debug_assertions))]
         {
             let _l1 = result.shared_memory.lock();
             let _l2 = result.lock();
-            let _l3 = result.waiters.lock();
+            let _l3 = result.command_queue.lock();
         }
         result
     }
@@ -610,8 +616,9 @@ impl<'a> BinderProcessGuard<'a> {
 
     /// Enqueues `command` for the process and wakes up any thread that is waiting for commands.
     fn enqueue_process_command(&mut self, command: Command) {
-        self.command_queue.push_back(command);
-        self.base.waiters.lock().notify_events(FdEvents::POLLIN);
+        let mut queue = self.base.command_queue.lock();
+        queue.commands.push_back(command);
+        queue.waiters.notify_events(FdEvents::POLLIN);
     }
 
     /// Return the `BinderThread` with the given `tid`, creating it if it doesn't exist.
@@ -677,11 +684,8 @@ impl<'a> BinderProcessGuard<'a> {
 
 impl Drop for BinderProcess {
     fn drop(&mut self) {
-        let (death_subscribers, command_queue) = {
-            let mut state = self.state.lock();
-            (std::mem::take(&mut state.death_subscribers), std::mem::take(&mut state.command_queue))
-        };
         // Notify any subscribers that the objects this process owned are now dead.
+        let death_subscribers = std::mem::take(&mut self.state.lock().death_subscribers);
         for (proc, cookie) in death_subscribers {
             if let Some(target_proc) = proc.upgrade() {
                 target_proc.lock().enqueue_command(Command::DeadBinder(cookie));
@@ -690,6 +694,7 @@ impl Drop for BinderProcess {
 
         // Notify all callers that had transactions scheduled for this process that the recipient is
         // dead.
+        let command_queue = std::mem::take(&mut self.command_queue.lock().commands);
         for command in command_queue {
             if let Command::Transaction { sender, .. } = command {
                 if let Some(sender_thread) = sender.thread.upgrade() {
@@ -1160,10 +1165,10 @@ impl BinderThread {
         #[cfg(any(test, debug_assertions))]
         {
             // The state must be acquired after the mutable state from the `BinderProcess` and before
-            // `waiters`. `binder_proc` being a guard, the mutable state of `BinderProcess` is
+            // `command_queue`. `binder_proc` being a guard, the mutable state of `BinderProcess` is
             // already locked.
             let _l1 = state.read();
-            let _l2 = binder_proc.base.waiters.lock();
+            let _l2 = binder_proc.base.command_queue.lock();
         }
         Self { tid, state }
     }
@@ -1253,7 +1258,7 @@ impl BinderThreadState {
         }
         // Notify any threads that are waiting on events from the binder driver FD.
         if let Some(binder_proc) = self.process.upgrade() {
-            binder_proc.waiters.lock().notify_events(FdEvents::POLLIN);
+            binder_proc.command_queue.lock().waiters.notify_events(FdEvents::POLLIN);
         }
     }
 
@@ -2371,10 +2376,10 @@ impl BinderDriver {
         read_buffer: &UserBuffer,
     ) -> Result<usize, Errno> {
         loop {
-            // THREADING: Always acquire the [`BinderProcess::state`] lock before the
-            // [`BinderThread::state`] lock or else it may lead to deadlock.
-            let mut binder_proc = binder_proc.lock();
+            // THREADING: Always acquire the [`BinderThread::state`] lock before the
+            // [`BinderProcess::command_queue`] lock or else it may lead to deadlock.
             let mut thread_state = binder_thread.write();
+            let mut proc_command_queue = binder_proc.command_queue.lock();
 
             // Select which command queue to read from, preferring the thread-local one.
             // If a transaction is pending, deadlocks can happen if reading from the process queue.
@@ -2383,7 +2388,7 @@ impl BinderDriver {
             {
                 &mut thread_state.command_queue
             } else {
-                &mut binder_proc.command_queue
+                &mut proc_command_queue.commands
             };
 
             if let Some(command) = command_queue.pop_front() {
@@ -2422,12 +2427,14 @@ impl BinderDriver {
             // No commands readily available to read. Wait for work.
             let waiter = Waiter::new();
             thread_state.waiter = waiter.weak();
+            let wait_key = proc_command_queue.waiters.wait_async(&waiter);
             drop(thread_state);
-            drop(binder_proc);
+            drop(proc_command_queue);
 
             // Put this thread to sleep.
             scopeguard::defer! {
                 binder_thread.write().waiter = WaiterRef::empty();
+                binder_proc.command_queue.lock().waiters.cancel_wait(wait_key);
             }
             current_task.wait_on_waiter(&waiter)?;
         }
@@ -2746,20 +2753,20 @@ impl BinderDriver {
         handler: EventHandler,
         _options: WaitAsyncOptions,
     ) -> WaitKey {
-        // THREADING: Always acquire the [`BinderProcess::state`] lock before the
-        // [`BinderThread::state`] lock or else it may lead to deadlock.
-        let proc_state = binder_proc.lock();
+        // THREADING: Always acquire the [`BinderThread::state`] lock before the
+        // [`BinderProcess::command_queue`] lock or else it may lead to deadlock.
         let thread_state = binder_thread.write();
+        let mut proc_command_queue = binder_proc.command_queue.lock();
 
-        if proc_state.command_queue.is_empty() && thread_state.command_queue.is_empty() {
-            binder_proc.waiters.lock().wait_async_events(waiter, events, handler)
+        if proc_command_queue.commands.is_empty() && thread_state.command_queue.is_empty() {
+            proc_command_queue.waiters.wait_async_events(waiter, events, handler)
         } else {
             waiter.wake_immediately(FdEvents::POLLIN.mask(), handler)
         }
     }
 
     fn cancel_wait(&self, binder_proc: &Arc<BinderProcess>, key: WaitKey) {
-        binder_proc.waiters.lock().cancel_wait(key);
+        binder_proc.command_queue.lock().waiters.cancel_wait(key);
     }
 }
 
@@ -3499,7 +3506,7 @@ mod tests {
         drop(object);
 
         assert_matches!(
-            proc.lock().command_queue.front(),
+            proc.command_queue.lock().commands.front(),
             Some(Command::ReleaseRef(LOCAL_BINDER_OBJECT))
         );
     }
@@ -4862,7 +4869,7 @@ mod tests {
         // to receive it, or else a deadlock may occur if the thread is in the middle of a
         // transaction. Since there is only one thread, check the process command queue.
         assert_matches!(
-            client_proc.lock().command_queue.front(),
+            client_proc.command_queue.lock().commands.front(),
             Some(Command::DeadBinder(DEATH_NOTIFICATION_COOKIE))
         );
     }
@@ -4921,7 +4928,7 @@ mod tests {
         assert!(client_thread.read().command_queue.is_empty());
 
         // The client process should have no notification.
-        assert!(client_proc.lock().command_queue.is_empty());
+        assert!(client_proc.command_queue.lock().commands.is_empty());
     }
 
     #[fuchsia::test]
@@ -5109,7 +5116,7 @@ mod tests {
 
         // The thread is ineligible to take the command (not sleeping) so check the process queue.
         assert_matches!(
-            receiver_proc.lock().command_queue.front(),
+            receiver_proc.command_queue.lock().commands.front(),
             Some(Command::OnewayTransaction(TransactionData { code: FIRST_TRANSACTION_CODE, .. }))
         );
 
@@ -5145,8 +5152,9 @@ mod tests {
 
         // The process queue should be unchanged. Simulate dispatching the command.
         let buffer_addr = match receiver_proc
-            .lock()
             .command_queue
+            .lock()
+            .commands
             .pop_front()
             .expect("the first oneway transaction should be queued on the process")
         {
@@ -5170,8 +5178,9 @@ mod tests {
 
         // The process queue should have a new transaction. Simulate dispatching the command.
         let buffer_addr = match receiver_proc
-            .lock()
             .command_queue
+            .lock()
+            .commands
             .pop_front()
             .expect("the second oneway transaction should be queued on the process")
         {
@@ -5243,7 +5252,7 @@ mod tests {
         // The thread is ineligible to take the command (not sleeping) so check (and dequeue)
         // the process queue.
         assert_matches!(
-            receiver_proc.lock().command_queue.pop_front(),
+            receiver_proc.command_queue.lock().commands.pop_front(),
             Some(Command::OnewayTransaction(TransactionData { code: ONEWAY_TRANSACTION_CODE, .. }))
         );
 
@@ -5285,7 +5294,7 @@ mod tests {
 
         // The process queue should now have the synchronous transaction queued.
         assert_matches!(
-            receiver_proc.lock().command_queue.pop_front(),
+            receiver_proc.command_queue.lock().commands.pop_front(),
             Some(Command::Transaction {
                 data: TransactionData { code: SYNC_TRANSACTION_CODE, .. },
                 ..
@@ -5328,7 +5337,7 @@ mod tests {
 
         // Check that the receiving process has a transaction scheduled.
         assert_matches!(
-            test.receiver_proc.lock().command_queue.front(),
+            test.receiver_proc.command_queue.lock().commands.front(),
             Some(Command::Transaction { .. })
         );
 
