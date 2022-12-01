@@ -314,6 +314,9 @@ class UsbAudioStream : public UsbAudioStreamBase,
   std::optional<StopCompleter::Async> stop_completer_ __TA_GUARDED(req_lock_);
   std::optional<WatchClockRecoveryPositionInfoCompleter::Async> position_completer_
       __TA_GUARDED(req_lock_);
+  // We won't ever actually Reply on this Async completer (we don't dynamically change delays),
+  // but WatchDelayInfo can't just call completer.ToAsync and immediately let it drop.
+  std::optional<WatchDelayInfoCompleter::Async> delay_completer_;
 
   list_node_t free_req_ __TA_GUARDED(req_lock_);
   uint32_t free_req_cnt_ __TA_GUARDED(req_lock_);

@@ -156,6 +156,11 @@ class IntelHDAStream : public fbl::RefCounted<IntelHDAStream>,
   bool delay_info_updated_ = false;
   int64_t internal_delay_nsec_ = 0;
   uint32_t bytes_per_frame_ TA_GUARDED(channel_lock_) = 0;
+  // All completers must either Reply, Close, or ToAsync(+persist until Unbind). For subsequent
+  // calls to WatchDelayInfo, we won't Reply, and we shouldn't Close, so we must ToAsync. Although
+  // we won't ever actually Reply on this Async completer (because we don't dynamically change our
+  // delays), WatchDelayInfo can't just call completer.ToAsync then immediately let it drop.
+  std::optional<WatchDelayInfoCompleter::Async> delay_completer_;
 
   // Parameters determined after ring buffer allocation.
   uint32_t cyclic_buffer_length_ TA_GUARDED(channel_lock_) = 0;

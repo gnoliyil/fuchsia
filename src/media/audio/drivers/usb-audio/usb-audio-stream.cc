@@ -648,6 +648,8 @@ void UsbAudioStream::WatchDelayInfo(WatchDelayInfoCompleter::Sync& completer) {
     delay_info.internal_delay(internal_delay_nsec_);
     completer.Reply(delay_info.Build());
   }
+  // All completers must either Reply, Close, or ToAsync(+persist until Unbind).
+  delay_completer_ = completer.ToAsync();
 }
 
 void UsbAudioStream::SetGain(audio_fidl::wire::GainState state,
