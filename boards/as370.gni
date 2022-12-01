@@ -74,3 +74,5 @@ use_gigaboot = false
 # Supports only physical devices.
 board_is_emu = false
 board_is_phys = true
+
+partitions_config_label = "//boards/partitions:as370"

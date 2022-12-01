@@ -38,3 +38,6 @@ avb_atx_metadata =
     "//third_party/android/platform/external/avb/test/data/atx_metadata.bin"
 avb_key =
     "//third_party/android/platform/external/avb/test/data/testkey_atx_psk.pem"
+
+partitions_config_label = "//boards/partitions:arm64"
+partitions_config_contents += [ "$root_build_dir/fuchsia.esp.blk" ]

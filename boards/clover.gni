@@ -59,3 +59,5 @@ fvm_ftl_nand_block_count = 2048
 # Supports only physical devices.
 board_is_emu = false
 board_is_phys = true
+
+partitions_config_label = "//boards/partitions:clover"

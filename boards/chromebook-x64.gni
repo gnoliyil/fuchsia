@@ -126,3 +126,7 @@ firmware_prebuilts = [
     #partition = "bootloader"
   },
 ]
+
+partitions_config_label = "//boards/partitions:chromebook-x64"
+partitions_config_contents +=
+    [ "//prebuilt/third_party/firmware/atlas/fuchsia_image.dev.bin" ]

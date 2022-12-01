@@ -76,3 +76,7 @@ fvm_emmc_partition_size = 3221225472
 # Supports only physical devices.
 board_is_emu = false
 board_is_phys = true
+
+partitions_config_label = "//boards/partitions:buckeye"
+partitions_config_contents +=
+    [ "//prebuilt/third_party/firmware/vim3/u-boot.bin.unsigned" ]

@@ -7,8 +7,9 @@ import("//build/images/args.gni")
 # Generates a partitions config to be consued by the Image Assembler.
 #
 # Arguments:
-#   output_path (required)
+#   output_path (optional)
 #     [path] Board config output location.
+#     Defaults to $target_out_dir/$target_name.json
 #
 #   hw_revision (required)
 #     [string] The name of the hardware revision.
@@ -60,8 +61,12 @@ import("//build/images/args.gni")
 #     [string] The name of the fvm partition.
 #
 template("generated_partitions_config_new") {
-  assert(defined(invoker.output_path), "Need to define output_path")
   assert(defined(invoker.hw_revision), "Need to define hw_revision")
+
+  output_path = "$target_out_dir/$target_name.json"
+  if (defined(invoker.output_path)) {
+    output_path = invoker.output_path
+  }
 
   bootloaders = []
   if (defined(invoker.bootloader_partitions)) {
@@ -118,7 +123,7 @@ template("generated_partitions_config_new") {
                              "visibility",
                            ])
 
-    outputs = [ invoker.output_path ]
+    outputs = [ output_path ]
     output_conversion = "json"
 
     # Aggregate all the non-bootloader partitions.

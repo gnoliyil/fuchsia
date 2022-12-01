@@ -104,4 +104,10 @@ declare_args() {
   # physical/virtual device spec or both.
   board_is_emu = false
   board_is_phys = true
+
+  # The partitions config information used to create an update package and
+  # product bundle.
+  partitions_config_label = false
+  partitions_config_file = false
+  partitions_config_contents = []
 }

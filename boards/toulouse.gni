@@ -25,3 +25,5 @@ board_driver_package_labels += [
 ]
 
 board_package_labels = [ "//boards:verify_zedboot_cmdline_params_for_toulouse" ]
+
+partitions_config_label = "//boards/partitions:toulouse"
