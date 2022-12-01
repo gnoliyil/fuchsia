@@ -507,7 +507,7 @@ void IntelHDAStream::Start(StartCompleter::Sync& completer) {
     LOG(DEBUG, "Bad state during start request %s%s.",
         !ring_buffer_valid ? "(ring buffer not configured)" : "",
         running_ ? "(already running)" : "");
-    completer.Close(ZX_ERR_INTERNAL);
+    completer.Close(ZX_ERR_BAD_STATE);
     return;
   }
 
@@ -566,6 +566,14 @@ void IntelHDAStream::Start(StartCompleter::Sync& completer) {
 
 void IntelHDAStream::Stop(StopCompleter::Sync& completer) {
   fbl::AutoLock channel_lock(&channel_lock_);
+
+  bool ring_buffer_valid = pinned_ring_buffer_.region_count() >= 1;
+  if (!ring_buffer_valid) {
+    LOG(DEBUG, "Bad state during stop request (ring buffer not configured)");
+    completer.Close(ZX_ERR_BAD_STATE);
+    return;
+  }
+
   if (running_) {
     // Start by preventing the IRQ thread from processing status interrupts.
     // After we have done this, it should be safe to manipulate the ctl/sts
