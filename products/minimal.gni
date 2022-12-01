@@ -56,7 +56,6 @@ legacy_base_package_labels += [
   "//src/connectivity/network:network-legacy-deprecated",
 
   "//src/developer/forensics:pkg",
-  "//src/developer/memory/monitor",
   "//src/diagnostics/config/persistence",
   "//src/diagnostics/config/triage:triage-detect",
   "//src/diagnostics/detect:triage-detect",
