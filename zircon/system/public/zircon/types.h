@@ -34,6 +34,13 @@ __BEGIN_CDECLS
 
 typedef uint32_t zx_handle_t;
 
+// The value 0 is always considered to be an invalid handle.  In addition, the
+// lowest two bits of a valid handle will _always_ be 1.  Users are free to
+// store additional application specific information encoded in these lower two
+// bits, provided that the are forced back to being set to 1 any time the handle
+// is passed to a syscall.
+//
+// See https://fuchsia.dev/fuchsia-src/concepts/kernel/handles for more details.
 #define ZX_HANDLE_INVALID           ((zx_handle_t)0)
 #define ZX_HANDLE_FIXED_BITS_MASK   ((zx_handle_t)0x3)
 
