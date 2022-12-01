@@ -378,8 +378,7 @@ constexpr ErrorDef<159, flat::Name> ErrStructCannotBeOptional(
     "`box<{}>`");
 constexpr UndocumentedErrorDef<160, flat::Name> ErrCannotIndicateOptionalTwice(
     "{} is already optional, cannot indicate optionality twice");
-constexpr UndocumentedErrorDef<161, flat::Name> ErrMustHaveNonZeroSize(
-    "{} must have non-zero size");
+constexpr ErrorDef<161, flat::Name> ErrMustHaveNonZeroSize("{} must have non-zero size");
 constexpr ErrorDef<162, flat::Name, size_t, size_t> ErrWrongNumberOfLayoutParameters(
     "{} expected {} layout parameter(s), but got {}");
 constexpr ErrorDef<163> ErrMultipleConstraintDefinitions(

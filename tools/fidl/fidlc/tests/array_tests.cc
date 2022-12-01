@@ -20,13 +20,8 @@ type S = struct {
 }
 
 TEST(ArrayTests, BadZeroSizeArray) {
-  TestLibrary library(R"FIDL(
-library example;
-
-type S = struct {
-    arr array<uint8,0>;
-};
-)FIDL");
+  TestLibrary library;
+  library.AddFile("bad/fi-0161.test.fidl");
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrMustHaveNonZeroSize);
 }
 

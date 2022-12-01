@@ -1025,6 +1025,12 @@ TEST(ErrcatTests, Good0159) {
   ASSERT_COMPILED(library);
 }
 
+TEST(ErrcatTests, Good0161) {
+  TestLibrary library;
+  library.AddFile("good/fi-0161.test.fidl");
+  ASSERT_COMPILED(library);
+}
+
 TEST(ErrcatTests, Good0162) {
   TestLibrary library;
   library.AddFile("good/fi-0162.test.fidl");
