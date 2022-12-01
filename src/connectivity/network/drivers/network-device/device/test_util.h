@@ -18,8 +18,7 @@
 #include "device_interface.h"
 #include "test_session.h"
 
-namespace network {
-namespace testing {
+namespace network::testing {
 
 constexpr uint16_t kRxDepth = 16;
 constexpr uint16_t kTxDepth = 16;
@@ -44,7 +43,7 @@ class TxBuffer : public fbl::DoublyLinkedListable<std::unique_ptr<TxBuffer>> {
 
   void set_status(zx_status_t status) { status_ = status; }
 
-  zx::result<std::vector<uint8_t>> GetData(const VmoProvider& vmo_provider);
+  zx::result<std::vector<uint8_t>> GetData(const VmoProvider& vmo_provider) const;
 
   tx_result_t result() {
     return {
@@ -369,7 +368,6 @@ class TxReturnTransaction {
   DISALLOW_COPY_AND_ASSIGN_ALLOW_MOVE(TxReturnTransaction);
 };
 
-}  // namespace testing
-}  // namespace network
+}  // namespace network::testing
 
 #endif  // SRC_CONNECTIVITY_NETWORK_DRIVERS_NETWORK_DEVICE_DEVICE_TEST_UTIL_H_

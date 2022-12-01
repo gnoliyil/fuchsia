@@ -10,8 +10,7 @@
 
 #include "definitions.h"
 
-namespace network {
-namespace testing {
+namespace network::testing {
 
 class TestSession {
  public:
@@ -86,7 +85,6 @@ class TestSession {
   netdev::wire::Fifos fifos_;
 };
 
-}  // namespace testing
-}  // namespace network
+}  // namespace network::testing
 
 #endif  // SRC_CONNECTIVITY_NETWORK_DRIVERS_NETWORK_DEVICE_DEVICE_TEST_SESSION_H_

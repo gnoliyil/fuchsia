@@ -10,10 +10,9 @@
 
 #include "src/lib/testing/predicates/status.h"
 
-namespace network {
-namespace testing {
+namespace network::testing {
 
-zx::result<std::vector<uint8_t>> TxBuffer::GetData(const VmoProvider& vmo_provider) {
+zx::result<std::vector<uint8_t>> TxBuffer::GetData(const VmoProvider& vmo_provider) const {
   if (!vmo_provider) {
     return zx::error(ZX_ERR_INTERNAL);
   }
@@ -128,8 +127,7 @@ void FakeNetworkPortImpl::SetStatus(const port_status_t& status) {
 }
 
 FakeNetworkDeviceImpl::FakeNetworkDeviceImpl()
-    : ddk::NetworkDeviceImplProtocol<FakeNetworkDeviceImpl>(),
-      info_({
+    : info_({
           .tx_depth = kTxDepth,
           .rx_depth = kRxDepth,
           .rx_threshold = kRxDepth / 2,
@@ -326,5 +324,4 @@ zx::result<std::unique_ptr<NetworkDeviceInterface>> FakeNetworkDeviceImpl::Creat
   return zx::ok(std::move(value));
 }
 
-}  // namespace testing
-}  // namespace network
+}  // namespace network::testing

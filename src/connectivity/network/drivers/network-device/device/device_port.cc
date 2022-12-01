@@ -222,7 +222,7 @@ void DevicePort::GetInfo(GetInfoCompleter::Sync& completer) {
       .set_tx_types(fidl::ObjectView<decltype(tx_support)>::FromExternal(&tx_support))
       .set_rx_types(fidl::ObjectView<decltype(rx_support)>::FromExternal(&rx_support));
 
-  completer.Reply(std::move(port_info));
+  completer.Reply(port_info);
 }
 
 void DevicePort::GetStatus(GetStatusCompleter::Sync& completer) {

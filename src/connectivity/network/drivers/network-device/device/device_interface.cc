@@ -167,17 +167,16 @@ zx_status_t DeviceInterface::Init() {
   }
   rx_queue_ = std::move(rx_queue.value());
 
-  zx_status_t status;
   {
     fbl::AutoLock lock(&control_lock_);
-    if ((status = vmo_store_.Reserve(MAX_VMOS)) != ZX_OK) {
+    if (zx_status_t status = vmo_store_.Reserve(MAX_VMOS); status != ZX_OK) {
       LOGF_ERROR("init: failed to init session identifiers %s", zx_status_get_string(status));
       return status;
     }
   }
 
   // Init session with parent.
-  if ((status = device_.Init(this, &network_device_ifc_protocol_ops_)) != ZX_OK) {
+  if (zx_status_t status = device_.Init(this, &network_device_ifc_protocol_ops_); status != ZX_OK) {
     LOGF_ERROR("init: NetworkDevice Init failed: %s", zx_status_get_string(status));
     return status;
   }
@@ -375,7 +374,7 @@ void DeviceInterface::GetInfo(GetInfoCompleter::Sync& completer) {
     device_info.set_max_buffer_length(device_info_.max_buffer_length);
   }
 
-  completer.Reply(std::move(device_info));
+  completer.Reply(device_info);
 }
 
 void DeviceInterface::OpenSession(OpenSessionRequestView request,

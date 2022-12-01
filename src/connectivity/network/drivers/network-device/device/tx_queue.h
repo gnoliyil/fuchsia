@@ -88,7 +88,7 @@ class TxQueue {
   void Thread(cpp20::span<tx_buffer_t> buffers);
   zx_status_t EnqueueUserPacket(uint64_t key);
   zx_status_t UpdateFifoWatches();
-  zx_status_t HandleFifoSignal(cpp20::span<tx_buffer_t> buffers, SessionKey session,
+  zx_status_t HandleFifoSignal(cpp20::span<tx_buffer_t> buffers, SessionKey session_key,
                                zx_signals_t signals);
 
   struct InFlightBuffer {

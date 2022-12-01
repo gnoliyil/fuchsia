@@ -227,10 +227,10 @@ zx_status_t TxQueue::UpdateFifoWatches() {
   return ZX_OK;
 }
 
-zx_status_t TxQueue::HandleFifoSignal(cpp20::span<tx_buffer_t> buffers, SessionKey key,
+zx_status_t TxQueue::HandleFifoSignal(cpp20::span<tx_buffer_t> buffers, SessionKey session_key,
                                       zx_signals_t signals) {
   fbl::AutoLock lock(&parent_->tx_lock());
-  SessionWaiter* find_session = sessions_.Get(key);
+  SessionWaiter* find_session = sessions_.Get(session_key);
   // Session already removed from Tx queue, packet was lingering in the port.
   if (find_session == nullptr) {
     return ZX_OK;
@@ -276,7 +276,8 @@ zx_status_t TxQueue::HandleFifoSignal(cpp20::span<tx_buffer_t> buffers, SessionK
     return ZX_OK;
   }
 
-  if (zx_status_t status = fifo.wait_async(port_, key, ZX_FIFO_PEER_CLOSED | ZX_FIFO_READABLE, 0);
+  if (zx_status_t status =
+          fifo.wait_async(port_, session_key, ZX_FIFO_PEER_CLOSED | ZX_FIFO_READABLE, 0);
       status != ZX_OK) {
     LOGF_ERROR("failed to start FIFO wait for session %s: %s", session.name(),
                zx_status_get_string(status));

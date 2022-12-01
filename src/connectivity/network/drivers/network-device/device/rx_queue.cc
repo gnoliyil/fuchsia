@@ -47,8 +47,7 @@ zx::result<std::unique_ptr<RxQueue>> RxQueue::Create(DeviceInterface* parent) {
   if (!ac.check()) {
     return zx::error(ZX_ERR_NO_MEMORY);
   }
-  zx_status_t status;
-  if ((status = zx::port::create(0, &queue->rx_watch_port_)) != ZX_OK) {
+  if (zx_status_t status = zx::port::create(0, &queue->rx_watch_port_); status != ZX_OK) {
     LOGF_ERROR("failed to create rx watch port: %s", zx_status_get_string(status));
     return zx::error(status);
   }
@@ -173,10 +172,11 @@ zx_status_t RxQueue::PrepareBuff(rx_space_buffer_t* buff) {
   if (session_buffer == nullptr) {
     return ZX_ERR_NO_RESOURCES;
   }
-  zx_status_t status;
+
   buff->id = index;
-  if ((status = session_buffer->session->FillRxSpace(session_buffer->descriptor_index, buff)) !=
-      ZX_OK) {
+  if (zx_status_t status =
+          session_buffer->session->FillRxSpace(session_buffer->descriptor_index, buff);
+      status != ZX_OK) {
     // If the session can't fill Rx for any reason, kill it.
     session_buffer->session->Kill();
     // Put the index back at the end of the available queue.
@@ -284,9 +284,9 @@ int RxQueue::WatchThread(std::unique_ptr<rx_space_buffer_t[]> space_buffers) {
     bool waiting_on_fifo = false;
     for (;;) {
       zx_port_packet_t packet;
-      zx_status_t status;
       bool fifo_readable = false;
-      if ((status = rx_watch_port_.wait(zx::time::infinite(), &packet)) != ZX_OK) {
+      if (zx_status_t status = rx_watch_port_.wait(zx::time::infinite(), &packet);
+          status != ZX_OK) {
         LOGF_ERROR("RxQueue::WatchThread port wait failed %s", zx_status_get_string(status));
         return status;
       }
@@ -297,8 +297,8 @@ int RxQueue::WatchThread(std::unique_ptr<rx_space_buffer_t[]> space_buffers) {
           return ZX_OK;
         case kSessionSwitchKey:
           if (observed_fifo && waiting_on_fifo) {
-            status = rx_watch_port_.cancel(observed_fifo->fifo, kFifoWatchKey);
-            if (status != ZX_OK) {
+            if (zx_status_t status = rx_watch_port_.cancel(observed_fifo->fifo, kFifoWatchKey);
+                status != ZX_OK) {
               LOGF_ERROR("RxQueue::WatchThread port cancel failed %s",
                          zx_status_get_string(status));
               return status;
@@ -368,8 +368,8 @@ int RxQueue::WatchThread(std::unique_ptr<rx_space_buffer_t[]> space_buffers) {
           // already tearing down, it's fine to just proceed.
           LOG_TRACE("RxQueue::WatchThread Should wait but no FIFO is here");
         } else if (!waiting_on_fifo) {
-          status = observed_fifo->fifo.wait_async(rx_watch_port_, kFifoWatchKey,
-                                                  ZX_FIFO_READABLE | ZX_FIFO_PEER_CLOSED, 0);
+          zx_status_t status = observed_fifo->fifo.wait_async(
+              rx_watch_port_, kFifoWatchKey, ZX_FIFO_READABLE | ZX_FIFO_PEER_CLOSED, 0);
           if (status == ZX_OK) {
             waiting_on_fifo = true;
           } else {

@@ -4,14 +4,12 @@
 
 #include "test_session.h"
 
-namespace network {
-namespace testing {
+namespace network::testing {
 
 zx_status_t TestSession::Open(fidl::WireSyncClient<netdev::Device>& netdevice, const char* name,
                               netdev::wire::SessionFlags flags, uint16_t num_descriptors,
                               uint64_t buffer_size) {
-  zx_status_t status;
-  if ((status = Init(num_descriptors, buffer_size)) != ZX_OK) {
+  if (zx_status_t status = Init(num_descriptors, buffer_size); status != ZX_OK) {
     return status;
   }
   zx::result info_status = GetInfo();
@@ -23,7 +21,7 @@ zx_status_t TestSession::Open(fidl::WireSyncClient<netdev::Device>& netdevice, c
 
   auto session_name = fidl::StringView::FromExternal(name);
 
-  auto res = netdevice->OpenSession(std::move(session_name), std::move(info));
+  auto res = netdevice->OpenSession(session_name, info);
   if (res.status() != ZX_OK) {
     return res.status();
   }
@@ -37,20 +35,20 @@ zx_status_t TestSession::Open(fidl::WireSyncClient<netdev::Device>& netdevice, c
 }
 
 zx_status_t TestSession::Init(uint16_t descriptor_count, uint64_t buffer_size) {
-  zx_status_t status;
   if (descriptors_vmo_.is_valid() || data_vmo_.is_valid() || session_.is_valid()) {
     return ZX_ERR_BAD_STATE;
   }
 
-  if ((status = descriptors_.CreateAndMap(descriptor_count * sizeof(buffer_descriptor_t),
-                                          ZX_VM_PERM_READ | ZX_VM_PERM_WRITE, nullptr,
-                                          &descriptors_vmo_)) != ZX_OK) {
+  if (zx_status_t status =
+          descriptors_.CreateAndMap(descriptor_count * sizeof(buffer_descriptor_t),
+                                    ZX_VM_PERM_READ | ZX_VM_PERM_WRITE, nullptr, &descriptors_vmo_);
+      status != ZX_OK) {
     return status;
   }
 
-  if ((status = data_.CreateAndMap(descriptor_count * buffer_size,
-                                   ZX_VM_PERM_READ | ZX_VM_PERM_WRITE, nullptr, &data_vmo_)) !=
-      ZX_OK) {
+  if (zx_status_t status = data_.CreateAndMap(
+          descriptor_count * buffer_size, ZX_VM_PERM_READ | ZX_VM_PERM_WRITE, nullptr, &data_vmo_);
+      status != ZX_OK) {
     return status;
   }
   descriptors_count_ = descriptor_count;
@@ -77,7 +75,7 @@ zx::result<netdev::wire::SessionInfo> TestSession::GetInfo() {
   info.set_descriptor_version(NETWORK_DEVICE_DESCRIPTOR_VERSION);
   info.set_descriptor_length(static_cast<uint8_t>(sizeof(buffer_descriptor_t) / sizeof(uint64_t)));
   info.set_descriptor_count(descriptors_count_);
-  return zx::ok(std::move(info));
+  return zx::ok(info);
 }
 
 void TestSession::Setup(fidl::ClientEnd<netdev::Session> session, netdev::wire::Fifos fifos) {
@@ -161,8 +159,8 @@ zx_status_t TestSession::SendTx(const uint16_t* descriptor, size_t count, size_t
 zx_status_t TestSession::SendTxData(const netdev::wire::PortId& port_id, uint16_t descriptor_index,
                                     const std::vector<uint8_t>& data) {
   buffer_descriptor_t& desc = ResetDescriptor(descriptor_index);
-  zx_status_t status;
-  if ((status = data_vmo_.write(&data.at(0), desc.offset, data.size())) != ZX_OK) {
+  if (zx_status_t status = data_vmo_.write(&data.at(0), desc.offset, data.size());
+      status != ZX_OK) {
     return status;
   }
   desc.port_id = {
@@ -173,5 +171,4 @@ zx_status_t TestSession::SendTxData(const netdev::wire::PortId& port_id, uint16_
   return SendTx(descriptor_index);
 }
 
-}  // namespace testing
-}  // namespace network
+}  // namespace network::testing
