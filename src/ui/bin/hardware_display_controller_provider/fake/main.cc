@@ -8,6 +8,7 @@
 #include <lib/syslog/cpp/macros.h>
 #include <lib/trace-provider/provider.h>
 
+#include "src/devices/testing/mock-ddk/mock-device.h"
 #include "src/ui/bin/hardware_display_controller_provider/fake/service.h"
 
 int main(int argc, const char** argv) {
@@ -18,7 +19,9 @@ int main(int argc, const char** argv) {
 
   FX_LOGS(INFO) << "Starting fake fuchsia.hardware.display.Provider service.";
 
-  fake_display::ProviderService hdcp_service_impl(app_context.get(), loop.dispatcher());
+  std::shared_ptr<zx_device> mock_root = MockDevice::FakeRootParent();
+  fake_display::ProviderService hdcp_service_impl(std::move(mock_root), app_context.get(),
+                                                  loop.dispatcher());
 
   loop.Run();
 

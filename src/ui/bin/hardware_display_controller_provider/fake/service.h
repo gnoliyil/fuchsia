@@ -11,7 +11,7 @@
 #include <memory>
 #include <queue>
 
-#include "src/graphics/display/drivers/fake/fake-display-device-tree.h"
+#include "src/graphics/display/drivers/fake/mock-display-device-tree.h"
 #include "src/lib/fxl/macros.h"
 
 namespace sys {
@@ -25,7 +25,8 @@ namespace fake_display {
 class ProviderService : public fuchsia::hardware::display::Provider {
  public:
   // |app_context| is used to publish this service.
-  ProviderService(sys::ComponentContext* app_context, async_dispatcher_t* dispatcher);
+  ProviderService(std::shared_ptr<zx_device> parent, sys::ComponentContext* app_context,
+                  async_dispatcher_t* dispatcher);
   ~ProviderService();
 
   // |fuchsia::hardware::display::Provider|.
@@ -52,12 +53,12 @@ class ProviderService : public fuchsia::hardware::display::Provider {
     OpenControllerCallback callback;
   };
 
-  // Encapsulates state for thread safety, since |display::FakeDisplayDeviceTree| invokes callbacks
+  // Encapsulates state for thread safety, since |display::MockDisplayDeviceTree| invokes callbacks
   // from other threads.
   struct State {
     async_dispatcher_t* const dispatcher;
 
-    std::unique_ptr<display::FakeDisplayDeviceTree> tree;
+    std::unique_ptr<display::MockDisplayDeviceTree> tree;
 
     bool controller_claimed = false;
     bool virtcon_controller_claimed = false;

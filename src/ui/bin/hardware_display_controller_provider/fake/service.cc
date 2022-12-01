@@ -5,7 +5,6 @@
 #include "src/ui/bin/hardware_display_controller_provider/fake/service.h"
 
 #include <lib/async/cpp/task.h>
-#include <lib/fake_ddk/fake_ddk.h>
 #include <lib/sys/cpp/component_context.h>
 #include <lib/syslog/cpp/macros.h>
 
@@ -13,7 +12,8 @@
 
 namespace fake_display {
 
-ProviderService::ProviderService(sys::ComponentContext* app_context,
+ProviderService::ProviderService(std::shared_ptr<zx_device> mock_root,
+                                 sys::ComponentContext* app_context,
                                  async_dispatcher_t* dispatcher) {
   FX_DCHECK(dispatcher);
 
@@ -23,10 +23,11 @@ ProviderService::ProviderService(sys::ComponentContext* app_context,
   }
 
   auto sysmem = std::make_unique<display::GenericSysmemDeviceWrapper<display::SysmemProxyDevice>>(
-      fake_ddk::kFakeParent);
-  state_ = std::make_shared<State>(State{.dispatcher = dispatcher,
-                                         .tree = std::make_unique<display::FakeDisplayDeviceTree>(
-                                             std::move(sysmem), /*start_vsync=*/true)});
+      mock_root.get());
+  state_ = std::make_shared<State>(
+      State{.dispatcher = dispatcher,
+            .tree = std::make_unique<display::MockDisplayDeviceTree>(
+                std::move(mock_root), std::move(sysmem), /*start_vsync=*/true)});
 }
 
 ProviderService::~ProviderService() { state_->tree->AsyncShutdown(); }
@@ -71,7 +72,7 @@ void ProviderService::ConnectClient(Request req, const std::shared_ptr<State>& s
       req.is_virtcon, req.controller_request.TakeChannel(),
       [weak = std::weak_ptr<State>(state), is_virtcon{req.is_virtcon}]() mutable {
         // Redispatch, in case this callback is invoked on a different thread (this depends
-        // on the implementation of FakeDisplayDeviceTree, which makes no guarantees).
+        // on the implementation of MockDisplayDeviceTree, which makes no guarantees).
         if (auto state = weak.lock()) {
           async::PostTask(state->dispatcher, [weak, is_virtcon]() mutable {
             if (auto state = weak.lock()) {

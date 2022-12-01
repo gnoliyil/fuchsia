@@ -6,6 +6,7 @@
 
 #include <lib/async/cpp/task.h>
 #include <lib/ddk/debug.h>
+#include <lib/sync/cpp/completion.h>
 
 #include "src/devices/bus/testing/fake-pdev/fake-pdev.h"
 #include "src/devices/testing/mock-ddk/mock-device.h"
@@ -16,17 +17,15 @@ namespace display {
 MockDisplayDeviceTree::MockDisplayDeviceTree(std::shared_ptr<zx_device> mock_root,
                                              std::unique_ptr<SysmemDeviceWrapper> sysmem,
                                              bool start_vsync)
-    : mock_root_(mock_root),
-      sysmem_(std::move(sysmem)),
-      outgoing_(component::OutgoingDirectory::Create(pdev_loop_.dispatcher())) {
+    : mock_root_(mock_root), sysmem_(std::move(sysmem)) {
   pdev_fidl_.UseFakeBti();
   pdev_banjo_.UseFakeBti();
   mock_root_->SetMetadata(SYSMEM_METADATA_TYPE, &sysmem_metadata_, sizeof(sysmem_metadata_));
 
   // Protocols for sysmem
+  pdev_loop_.StartThread("pdev-server-thread");
   fidl::ClientEnd<fuchsia_io::Directory> client = SetUpPDevFidlServer();
   mock_root_->AddFidlService(fuchsia_hardware_platform_device::Service::Name, std::move(client));
-  pdev_loop_.StartThread("pdev-server-thread");
 
   if (auto result = sysmem_->Bind(); result != ZX_OK) {
     ZX_PANIC("sysmem_.Bind() return status was not ZX_OK. Error: %s.",
@@ -90,13 +89,22 @@ fidl::ClientEnd<fuchsia_io::Directory> MockDisplayDeviceTree::SetUpPDevFidlServe
   };
   auto service_result = service.add_device(device_handler);
   ZX_ASSERT((service_result.is_ok()));
-  service_result =
-      outgoing_.AddService<fuchsia_hardware_platform_device::Service>(std::move(handler));
-  ZX_ASSERT(service_result.is_ok());
 
   auto endpoints = fidl::CreateEndpoints<fuchsia_io::Directory>();
   ZX_ASSERT(endpoints.is_ok());
-  ZX_ASSERT(outgoing_.Serve(std::move(endpoints->server)).is_ok());
+
+  libsync::Completion serve_complete;
+  async::TaskClosure serve_task([&] {
+    outgoing_ = component::OutgoingDirectory::Create(pdev_loop_.dispatcher());
+    service_result =
+        outgoing_->AddService<fuchsia_hardware_platform_device::Service>(std::move(handler));
+    ZX_ASSERT(service_result.is_ok());
+
+    ZX_ASSERT(outgoing_->Serve(std::move(endpoints->server)).is_ok());
+    serve_complete.Signal();
+  });
+  ZX_ASSERT(serve_task.Post(pdev_loop_.dispatcher()) == ZX_OK);
+  serve_complete.Wait();
 
   return std::move(endpoints->client);
 }
@@ -120,6 +128,18 @@ void MockDisplayDeviceTree::AsyncShutdown() {
   controller_->DdkAsyncRemove();
   display_->DdkAsyncRemove();
   mock_ddk::ReleaseFlaggedDevices(mock_root_.get());
+
+  libsync::Completion shutdown_complete;
+  async::TaskClosure shutdown_task([&] {
+    outgoing_.reset();
+    shutdown_complete.Signal();
+  });
+  ZX_ASSERT(shutdown_task.Post(pdev_loop_.dispatcher()) == ZX_OK);
+  shutdown_complete.Wait();
+
+  display_loop_.Shutdown();
+  sysmem_loop_.Shutdown();
+  pdev_loop_.Shutdown();
 }
 
 }  // namespace display

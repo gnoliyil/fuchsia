@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 
+#include "src/devices/testing/mock-ddk/mock-device.h"
 #include "src/lib/testing/loop_fixture/test_loop_fixture.h"
 #include "src/ui/bin/hardware_display_controller_provider/fake/service.h"
 
@@ -24,7 +25,8 @@ class FakeHardwareDisplayControllerProviderTest : public gtest::TestLoopFixture 
   void SetUp() override {
     TestLoopFixture::SetUp();
 
-    service_ = std::make_unique<fake_display::ProviderService>(nullptr, dispatcher());
+    service_ = std::make_unique<fake_display::ProviderService>(MockDevice::FakeRootParent(),
+                                                               nullptr, dispatcher());
   }
 
   void TearDown() override {

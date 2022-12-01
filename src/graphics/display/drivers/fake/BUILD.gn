@@ -96,35 +96,6 @@ static_library("sysmem-proxy-device") {
   configs += [ "//build/c:fidl-deprecated-c-bindings" ]
 }
 
-static_library("fake-display-device-tree") {
-  testonly = true
-
-  configs += [ "//build/config:all_source" ]
-
-  sources = [
-    "fake-display-device-tree.cc",
-    "fake-display-device-tree.h",
-    "sysmem-device-wrapper.h",
-  ]
-  public_deps = [
-    ":fake-lib",
-    "//sdk/banjo/fuchsia.hardware.platform.device:fuchsia.hardware.platform.device_banjo_cpp",
-    "//sdk/banjo/fuchsia.sysmem:fuchsia.sysmem_banjo_c",
-    "//sdk/fidl/fuchsia.hardware.display:fuchsia.hardware.display_cpp_wire",
-    "//src/devices/bus/testing/fake-pdev",
-
-    # TODO(fxb/114433): Migrate from fake_ddk to mock-ddk.
-    "//src/devices/testing/fake_ddk",
-    "//src/graphics/display/drivers/display:shared",
-    "//src/lib/ddktl",
-  ]
-
-  # TODO(fxbug.dev/69585): This target uses raw zx::channel with LLCPP which is deprecated.
-  # Please migrate to typed channel APIs (fidl::ClientEnd<T>, fidl::ServerEnd<T>).
-  # See linked bug for details.
-  configs += [ "//build/cpp:fidl-llcpp-deprecated-raw-channels" ]
-}
-
 static_library("mock-display-device-tree") {
   testonly = true
 
@@ -146,5 +117,6 @@ static_library("mock-display-device-tree") {
     "//src/devices/testing/mock-ddk",
     "//src/graphics/display/drivers/display:shared",
     "//src/lib/ddktl",
+    "//zircon/system/ulib/sync:sync-cpp",
   ]
 }

@@ -21,13 +21,10 @@ namespace display {
 
 // MockDisplayDeviceTree encapusulates the requirements for creating a fake DDK device tree with a
 // FakeDisplay device attached to it.
-//
-// It is equivalent to FakeDisplayDeviceTree but uses mock-ddk instead of the deprecated fake_ddk
-// library.
 class MockDisplayDeviceTree {
  public:
   // |sysmem| allows the caller to customize the sysmem implementation used by the
-  // FakeDisplayDeviceTree.  See SysmemDeviceWrapper for more details, as well as existing
+  // MockDisplayDeviceTree.  See SysmemDeviceWrapper for more details, as well as existing
   // specializations of GenericSysmemDeviceWrapper<>.
   MockDisplayDeviceTree(std::shared_ptr<zx_device> mock_root,
                         std::unique_ptr<SysmemDeviceWrapper> sysmem, bool start_vsync);
@@ -72,7 +69,7 @@ class MockDisplayDeviceTree {
   async::Loop display_loop_{&kAsyncLoopConfigNeverAttachToThread};
   async::Loop sysmem_loop_{&kAsyncLoopConfigNeverAttachToThread};
   async::Loop pdev_loop_{&kAsyncLoopConfigNeverAttachToThread};
-  component::OutgoingDirectory outgoing_;
+  std::optional<component::OutgoingDirectory> outgoing_;
 
   fidl::WireSyncClient<fuchsia_hardware_display::Provider> display_provider_client_;
   fidl::WireSyncClient<fuchsia_sysmem::DriverConnector> sysmem_client_;

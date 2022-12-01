@@ -126,6 +126,9 @@ fuchsia_test_package("virtio_magma_unittests") {
   test_components = [ ":unittest_component" ]
   test_specs = {
     environments = guest_vulkan_envs
+    log_settings = {
+      max_severity = "ERROR"
+    }
   }
 }
 

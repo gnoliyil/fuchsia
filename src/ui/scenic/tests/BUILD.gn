@@ -509,6 +509,9 @@ fuchsia_test_package("flatland_protected_memory_integration_test") {
       sherlock_env,
       nelson_env,
     ]
+    log_settings = {
+      max_severity = "ERROR"
+    }
   }
 }
 
@@ -519,6 +522,9 @@ fuchsia_test_package("observer_integration_tests") {
   ]
   test_specs = {
     environments = vulkan_envs
+    log_settings = {
+      max_severity = "ERROR"
+    }
   }
 }
 
@@ -526,5 +532,8 @@ fuchsia_test_package("display_integration_tests") {
   test_components = [ ":singleton_display_integration_test" ]
   test_specs = {
     environments = vulkan_envs
+    log_settings = {
+      max_severity = "ERROR"
+    }
   }
 }

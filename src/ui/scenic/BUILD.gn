@@ -200,6 +200,9 @@ fuchsia_unittest_package("gfx_swapchain_tests") {
          ] + scenic_test_deps
   test_specs = {
     environments = vulkan_envs
+    log_settings = {
+      max_severity = "ERROR"
+    }
   }
 }
 

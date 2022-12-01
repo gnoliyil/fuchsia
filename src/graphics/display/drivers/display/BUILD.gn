@@ -39,7 +39,6 @@ fuchsia_driver_component("display") {
 # Also used by test/.
 source_set("shared") {
   visibility = [
-    "../fake:fake-display-device-tree",
     "../fake:mock-display-device-tree",
     "./*",
   ]
