@@ -56,6 +56,33 @@ def license():
         '// Use of this source code is governed by a BSD-style license that can be\n'
         '// found in the LICENSE file.\n')
 
+def top_level_docs():
+    return (
+        '// Magma is the driver model for GPUs/NPUs on Fuchsia.\n'
+        '//\n'
+        '// Magma has two driver components: a hardware-specific library loaded into an "application"’s\n'
+        '// address space ("client driver", sometimes known as "Installable client driver" or "ICD");\n'
+        '// and a system driver that interfaces with the hardware. Magma is described in detail at [0].\n'
+        '//\n'
+        '// The Magma APIs are vendor independent. Some drivers may implement only the subset of the\n'
+        '// APIs that are relevant. The format of data carried inside commands/command buffers is not\n'
+        '// defined. Some APIs are explicitly extensible, such as magma_query, to allow for specific\n'
+        '// vendor/driver needs.\n'
+        '//\n'
+        '// Since client driver implementations may be written in a variety of languages (possibly C),\n'
+        '// the Magma bindings have a C interface, and may be used to interact with both Magma and Sysmem.\n'
+        '//\n'
+        '// The Magma bindings are OS independent so a client driver targeting Magma can easily be built\n'
+        '// for Fuchsia or Linux. On Fuchsia the APIs are backed by Zircon and FIDL; for virtualized Linux\n'
+        '// they are backed by a virtualization transport (virtmagma). APIs prefixed by \'magma_virt_\' are\n'
+        '// for virtualization only.\n'
+        '//\n'
+        '// On Fuchsia the system driver is a separate process, so Magma APIs follow a feed forward design\n'
+        '// where possible to allow for efficient pipelining of requests.\n'
+        '//\n'
+        '// [0] https://fuchsia.dev/fuchsia-src/contribute/governance/rfcs/0198_magma_api_design\n'
+        '//\n'
+    )
 
 # Guard macro that goes at the beginning/end of the header (after license).
 def guards(begin):
@@ -99,6 +126,7 @@ def main():
                 magma = json.load(file)['magma-interface']
                 lines = [
                     license(),
+                    top_level_docs(),
                     genwarning(),
                     genformatoff(),
                     guards(True),
