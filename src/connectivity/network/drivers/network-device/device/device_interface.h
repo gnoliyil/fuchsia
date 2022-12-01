@@ -225,7 +225,7 @@ class DeviceInterface : public fidl::WireServer<netdev::Device>,
 
   // Callback given to the device implementation for the `Start` call. The data path is considered
   // open only once the device is started.
-  void DeviceStarted();
+  void DeviceStarted() __TA_RELEASE(control_lock_);
   // Callback given to the device implementation for the `Stop` call. All outstanding buffers are
   // automatically reclaimed once the device is considered stopped. If a teardown is pending,
   // `DeviceStopped` will complete the teardown BEFORE all buffers are reclaimed and all the

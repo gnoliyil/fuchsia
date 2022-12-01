@@ -674,34 +674,32 @@ void DeviceInterface::StartDeviceInner() {
   device_.Start(
       [](void* cookie, zx_status_t status) {
         auto device = reinterpret_cast<DeviceInterface*>(cookie);
-        {
-          fbl::AutoLock lock(&device->control_lock_);
-          ZX_ASSERT_MSG(device->device_status_ == DeviceStatus::STARTING,
-                        "device not in starting status: %s",
-                        DeviceStatusToString(device->device_status_));
-          if (status != ZX_OK) {
-            LOGF_ERROR("failed to start implementation: %s", zx_status_get_string(status));
-            switch (device->SetDeviceStatus(DeviceStatus::STOPPED)) {
-              case PendingDeviceOperation::STOP:
-              case PendingDeviceOperation::NONE:
-                break;
-              case PendingDeviceOperation::START:
-                ZX_PANIC("unexpected start pending while starting already");
-                break;
-            }
-            if (device->primary_session_) {
-              LOGF_ERROR("killing session '%s' because device failed to start",
-                         device->primary_session_->name());
-              device->primary_session_->Kill();
-            }
-            for (auto& s : device->sessions_) {
-              LOGF_ERROR("killing session '%s' because device failed to start", s.name());
-              s.Kill();
-            }
-            // We have effectively shut down the device, so finish tearing it down.
-            device->ContinueTeardown(TeardownState::SESSIONS);
-            return;
+        device->control_lock_.Acquire();
+        ZX_ASSERT_MSG(device->device_status_ == DeviceStatus::STARTING,
+                      "device not in starting status: %s",
+                      DeviceStatusToString(device->device_status_));
+        if (status != ZX_OK) {
+          LOGF_ERROR("failed to start implementation: %s", zx_status_get_string(status));
+          switch (device->SetDeviceStatus(DeviceStatus::STOPPED)) {
+            case PendingDeviceOperation::STOP:
+            case PendingDeviceOperation::NONE:
+              break;
+            case PendingDeviceOperation::START:
+              ZX_PANIC("unexpected start pending while starting already");
+              break;
           }
+          if (device->primary_session_) {
+            LOGF_ERROR("killing session '%s' because device failed to start",
+                       device->primary_session_->name());
+            device->primary_session_->Kill();
+          }
+          for (auto& s : device->sessions_) {
+            LOGF_ERROR("killing session '%s' because device failed to start", s.name());
+            s.Kill();
+          }
+          // We have effectively shut down the device, so finish tearing it down.
+          device->ContinueTeardown(TeardownState::SESSIONS);
+          return;
         }
         device->DeviceStarted();
       },
@@ -752,7 +750,6 @@ PendingDeviceOperation DeviceInterface::SetDeviceStatus(DeviceStatus status) {
 
 void DeviceInterface::DeviceStarted() {
   LOGF_TRACE("%s", __FUNCTION__);
-  control_lock_.Acquire();
   switch (SetDeviceStatus(DeviceStatus::STARTED)) {
     case PendingDeviceOperation::STOP:
       StopDevice();
