@@ -21,7 +21,7 @@ const APP_ENTRY_COMPONENT_URLS: [&'static str; 4] = [
     "fuchsia-pkg://chromium.org/chrome#meta/chrome.cm",
     "fuchsia-pkg://fuchsia.com/spinning-square-rs#meta/spinning-square-rs.cm",
     "fuchsia-pkg://fuchsia.com/terminal#meta/terminal.cm",
-    "fuchsia-pkg://fuchsia.com/terminal#meta/terminal.cm",
+    "fuchsia-pkg://fuchsia.com/shell_settings#meta/shell_settings.cm",
 ];
 const LAUNCHER_IMG_WIDTH: u32 = 180;
 
