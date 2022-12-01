@@ -288,6 +288,7 @@ if (is_fuchsia) {
           if (zircon_r_partition != "") {
             fastboot_flash = [ zircon_r_partition ]
           }
+          bootserver_pave = [ "--zirconr" ]
         }
 
         if (sign_zbi) {
@@ -296,6 +297,7 @@ if (is_fuchsia) {
             if (zircon_r_partition != "") {
               fastboot_flash = [ zircon_r_partition ]
             }
+            bootserver_pave = [ "--zirconr" ]
           }
         }
 
@@ -305,6 +307,7 @@ if (is_fuchsia) {
             if (vbmeta_r_partition != "") {
               fastboot_flash = [ vbmeta_r_partition ]
             }
+            bootserver_pave = [ "--vbmetar" ]
           }
         }
       }
