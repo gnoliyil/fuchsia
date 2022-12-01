@@ -24,7 +24,6 @@ group("bin") {
     "vmm",
     "vmm_launcher",
     "vmm_rs",
-    "vsh",
   ]
 }
 

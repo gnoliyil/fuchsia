@@ -6,12 +6,7 @@ import("//build/components.gni")
 import("//build/rust/rustc_binary.gni")
 
 group("guest") {
-  deps = [
-    ":guest_package",
-
-    # TODO(fxbug.dev/89427): Remove this once vsh is migrated to rust.
-    "//src/virtualization/bin/vsh",
-  ]
+  deps = [ ":guest_package" ]
 }
 
 group("tests") {
