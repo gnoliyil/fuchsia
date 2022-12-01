@@ -5,6 +5,7 @@
 #ifndef SRC_LIB_ELFLDLTL_INCLUDE_LIB_ELFLDLTL_NOTE_H_
 #define SRC_LIB_ELFLDLTL_INCLUDE_LIB_ELFLDLTL_NOTE_H_
 
+#include <lib/stdcompat/span.h>
 #include <zircon/assert.h>
 
 #include <cstdint>
@@ -14,7 +15,6 @@
 #include <tuple>
 #include <type_traits>
 
-#include "internal/byte.h"
 #include "layout.h"
 #include "phdr.h"
 
@@ -26,7 +26,7 @@ namespace elfldltl {
 // This represents one decoded ELF note.  It's created ephemerally to yield
 // views on the name and desc (payload), along with the type value.
 struct ElfNote {
-  using Bytes = std::basic_string_view<std::byte, internal::ByteCharTraits>;
+  using Bytes = cpp20::span<const std::byte>;
 
   ElfNote() = delete;
 
@@ -36,7 +36,7 @@ struct ElfNote {
   ElfNote(const Header& nhdr, Bytes note)
       : name(std::string_view{reinterpret_cast<const char*>(note.data()), note.size()}.substr(
             nhdr.name_offset(), nhdr.namesz)),
-        desc(note.substr(nhdr.desc_offset(), nhdr.descsz)),
+        desc(note.subspan(nhdr.desc_offset(), nhdr.descsz)),
         type(nhdr.type) {}
 
   // For some reason `= default;` here doesn't permit constexpr.
@@ -126,11 +126,11 @@ class ElfNoteSegment {
 
     iterator& operator++() {  // prefix
       ZX_DEBUG_ASSERT(Check(notes_));
-      notes_.remove_prefix(Header(notes_).size_bytes());
+      notes_ = notes_.subspan(Header(notes_).size_bytes());
       if (!Check(notes_)) {
         // Ignore any odd bytes at the end of the segment and move to end()
         // state if there isn't space for another note.
-        notes_.remove_prefix(notes_.size());
+        notes_ = notes_.subspan(notes_.size());
       }
       ZX_DEBUG_ASSERT(notes_.empty() || Check(notes_));
       return *this;
@@ -166,7 +166,7 @@ class ElfNoteSegment {
 
   iterator begin() const { return Check(notes_) ? iterator{notes_} : end(); }
 
-  iterator end() const { return iterator{notes_.substr(notes_.size())}; }
+  iterator end() const { return iterator{notes_.subspan(notes_.size())}; }
 
  private:
   // This is safe only if the size has been checked.
