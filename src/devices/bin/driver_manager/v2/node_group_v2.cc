@@ -33,6 +33,15 @@ zx::result<std::optional<DeviceOrNode>> NodeGroupV2::BindNodeImpl(
 
   parent_set_collector_->AddNode(info.node_index(), *node_ptr);
 
+  auto owned_node = (*node_ptr).lock();
+  if (owned_node->name() == "sysmem-fidl" || owned_node->name() == "sysmem-banjo") {
+    LOGF(DEBUG, "Node '%s' matched node representation '%d' of node group '%s'",
+         owned_node->name().c_str(), info.node_index(), std::string(info.name().get()).c_str());
+  } else {
+    LOGF(INFO, "Node '%s' matched node representation '%d' of node group '%s'",
+         owned_node->name().c_str(), info.node_index(), std::string(info.name().get()).c_str());
+  }
+
   // Check if we have all the nodes for the node group.
   auto completed_parents = parent_set_collector_->GetIfComplete();
   if (!completed_parents.has_value()) {
@@ -55,6 +64,9 @@ zx::result<std::optional<DeviceOrNode>> NodeGroupV2::BindNodeImpl(
     parent_set_collector_->RemoveNode(info.node_index());
     return composite.take_error();
   }
+
+  LOGF(INFO, "Built composite node '%s' for completed node group '%s'",
+       composite.value()->name().c_str(), std::string(info.name().get()).c_str());
 
   // We can return a pointer, as the composite node is owned by its parents.
   return zx::ok(composite.value()->weak_from_this());

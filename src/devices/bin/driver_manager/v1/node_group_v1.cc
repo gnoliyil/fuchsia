@@ -66,6 +66,14 @@ zx::result<std::optional<DeviceOrNode>> NodeGroupV1::BindNodeImpl(
     return zx::error(status);
   }
 
+  if (owned_device->name() == "sysmem-fidl" || owned_device->name() == "sysmem-banjo") {
+    LOGF(DEBUG, "Node '%s' matched node representation '%d' of node group '%s'",
+         owned_device->name().c_str(), info.node_index(), std::string(info.name().get()).c_str());
+  } else {
+    LOGF(INFO, "Node '%s' matched node representation '%d' of node group '%s'",
+         owned_device->name().c_str(), info.node_index(), std::string(info.name().get()).c_str());
+  }
+
   return zx::ok(std::nullopt);
 }
 
