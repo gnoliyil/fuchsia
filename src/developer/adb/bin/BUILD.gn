@@ -28,9 +28,7 @@ group("tests") {
 group("adb-components") {
   deps = [
     "adb:adb-component",
-
-    # TODO (rdzhuang): add this back in after resolving cyclical dependency
-    # "adb-file-sync:adb-file-sync-component",
+    "adb-file-sync:adb-file-sync-component",
     "adb-shell:adb-shell-component",
   ]
 }
