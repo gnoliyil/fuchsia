@@ -90,8 +90,8 @@ zx_status_t IsolatedDevmgr::Create(Args* args, IsolatedDevmgr* out) {
 
   // Start DriverTestRealm.
   fidl::SynchronousInterfacePtr<fuchsia::driver::test::Realm> driver_test_realm;
-  zx_status_t status = devmgr.realm_->Connect(driver_test_realm.NewRequest());
-  if (status != ZX_OK) {
+  if (zx_status_t status = devmgr.realm_->Connect(driver_test_realm.NewRequest());
+      status != ZX_OK) {
     return status;
   }
 
@@ -107,8 +107,8 @@ zx_status_t IsolatedDevmgr::Create(Args* args, IsolatedDevmgr* out) {
   realm_args.set_board_name(std::string(args->board_name.data()));
   realm_args.set_driver_disable(args->driver_disable);
   realm_args.set_driver_bind_eager(args->driver_bind_eager);
-  status = driver_test_realm->Start(std::move(realm_args), &realm_result);
-  if (status != ZX_OK) {
+  if (zx_status_t status = driver_test_realm->Start(std::move(realm_args), &realm_result);
+      status != ZX_OK) {
     return status;
   }
   if (realm_result.is_err()) {
@@ -117,42 +117,43 @@ zx_status_t IsolatedDevmgr::Create(Args* args, IsolatedDevmgr* out) {
 
   // Connect to dev.
   fidl::InterfaceHandle<fuchsia::io::Directory> dev;
-  status = devmgr.realm_->Connect("dev", dev.NewRequest().TakeChannel());
-  if (status != ZX_OK) {
+  if (zx_status_t status = devmgr.realm_->Connect("dev", dev.NewRequest().TakeChannel());
+      status != ZX_OK) {
     return status;
   }
 
-  status = fdio_fd_create(dev.TakeChannel().release(), devmgr.devfs_root_.reset_and_get_address());
-  if (status != ZX_OK) {
+  if (zx_status_t status =
+          fdio_fd_create(dev.TakeChannel().release(), devmgr.devfs_root_.reset_and_get_address());
+      status != ZX_OK) {
     return status;
   }
 
   fbl::unique_fd platform_fd;
-  status = device_watcher::RecursiveWaitForFile(devmgr.devfs_root_, "sys/platform/pt/test-board",
-                                                &platform_fd);
-  if (status != ZX_OK) {
+  if (zx_status_t status = device_watcher::RecursiveWaitForFile(
+          devmgr.devfs_root_, "sys/platform/pt/test-board", &platform_fd);
+      status != ZX_OK) {
     return status;
   }
 
   zx::result client_end =
       fdio_cpp::FdioCaller(std::move(platform_fd)).take_as<fuchsia_board_test::Board>();
-  if (client_end.status_value() != ZX_OK) {
-    return client_end.status_value();
+  if (client_end.is_error()) {
+    return client_end.error_value();
   }
 
   fidl::WireSyncClient client(std::move(*client_end));
 
   for (auto& device : args->device_list) {
-    fuchsia_board_test::wire::Entry entry;
-    entry.name = device.name;
-    entry.vid = device.vid;
-    entry.pid = device.pid;
-    entry.did = device.did;
     std::vector<uint8_t> metadata(device.metadata, device.metadata + device.metadata_size);
-    entry.metadata = fidl::VectorView<uint8_t>::FromExternal(metadata);
-    auto status = client->CreateDevice(entry);
-    if (status.status() != ZX_OK) {
-      return status.status();
+    const fidl::WireResult result = client->CreateDevice({
+        .name = device.name,
+        .metadata = fidl::VectorView<uint8_t>::FromExternal(metadata),
+        .vid = device.vid,
+        .pid = device.pid,
+        .did = device.did,
+    });
+    if (!result.ok()) {
+      return result.status();
     }
   }
 
