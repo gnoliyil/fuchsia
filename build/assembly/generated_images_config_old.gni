@@ -63,7 +63,7 @@ import("//build/zbi/zbi.gni")
 #     "compact". The deprecated padded format is supported only for Astro devices and will be
 #     removed in the future (it wastes space).
 #
-template("generated_images_config") {
+template("generated_images_config_old") {
   assert(defined(invoker.output_path), "Need to define output_path")
   assert(defined(invoker.zbi_name), "Need to define zbi_name")
 

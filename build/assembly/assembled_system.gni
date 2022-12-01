@@ -4,7 +4,8 @@
 
 import("//build/assembly/compare_json_list.gni")
 import("//build/assembly/generated_image_assembly_config.gni")
-import("//build/assembly/generated_images_config.gni")
+import("//build/assembly/generated_images_config_new.gni")
+import("//build/assembly/generated_images_config_old.gni")
 import("//build/assembly/hermetic_inputs_for_image_assembly.gni")
 import("//build/assembly/legacy_assembly_input_bundle.gni")
 import("//build/bazel/assembly/bazel_assembly_images_config_inputs.gni")
@@ -12,9 +13,12 @@ import("//build/bazel/bazel_inputs.gni")
 import("//build/component/component_id_index.gni")
 import("//build/config.gni")
 import("//build/drivers/driver_manifest.gni")
+import("//build/images/filesystem_limits.gni")
 import("//build/images/fvm.gni")
 import("//build/info/info.gni")
 import("//build/packages/package_metadata.gni")
+import("//build/testing/verify_files_match.gni")
+import("//build/zbi/zbi.gni")
 import("//build/zircon/tools.gni")
 import("//src/developer/ffx/build/ffx_action.gni")
 import("//src/storage/fshost/fshost.gni")
@@ -300,7 +304,9 @@ template("assembled_system") {
     generated_config_for_legacy_bundle =
         "${image_name}.legacy_image_assembly_config"
     image_assembly_inputs = "${image_name}.image_assembly_inputs"
+    images_config_old = "${image_name}.images_config_old"
     images_config = "${image_name}.images_config"
+    images_config_matches = "${image_name}.images_config_matches"
     product_assembler = "${image_name}.product_assembler"
     image_assembler = "${image_name}.image_assembler"
     copy_vbmeta = "${image_name}.copy_vbmeta"
@@ -353,6 +359,7 @@ template("assembled_system") {
     image_assembly_inputs =
         "$target_out_dir/${image_name}.image_assembly_inputs"
 
+    images_config_old = "$target_out_dir/${image_name}.images_config_old.json"
     images_config = "$target_out_dir/${image_name}.images_config.json"
 
     outdir = "$target_out_dir/$image_name"
@@ -633,7 +640,7 @@ template("assembled_system") {
     }
   }
 
-  generated_images_config(labels.images_config) {
+  generated_images_config_old(labels.images_config_old) {
     forward_variables_from(invoker,
                            [
                              "testonly",
@@ -649,7 +656,7 @@ template("assembled_system") {
                              "fvm_truncate_to_length",
                            ])
 
-    output_path = files.images_config
+    output_path = files.images_config_old
     zbi_name = "${image_name}"
     fvm_reserved_slices = fvm_reserved_slices
     generate_fvm = generate_fvm
@@ -672,6 +679,136 @@ template("assembled_system") {
     if (defined(invoker.assembly_include_account_in_fvm)) {
       empty_account_partition = invoker.assembly_include_account_in_fvm
     }
+  }
+
+  generated_images_config(labels.images_config) {
+    forward_variables_from(invoker,
+                           [
+                             "testonly",
+                             "visibility",
+                           ])
+
+    output_path = files.images_config
+    zbi = {
+      name = "${image_name}"
+      compression = zbi_compression
+      if (defined(invoker.zbi_signing_script)) {
+        signing_script = invoker.zbi_signing_script
+        if (defined(invoker.zbi_signing_args)) {
+          signing_args = invoker.zbi_signing_args
+        }
+      }
+    }
+    if (use_vbmeta) {
+      vbmeta = {
+        key = avb_key
+        key_metadata = avb_atx_metadata
+        if (extra_vbmeta_descriptors != false) {
+          extra_descriptors = extra_vbmeta_descriptors
+        }
+      }
+    }
+    if (generate_fvm) {
+      _slice_size = 1048576
+      _compress_blobs = true
+      _blob_layout_format = "compact"
+      if (defined(invoker.assembly_fvm_slice_size)) {
+        _slice_size = invoker.assembly_fvm_slice_size
+      }
+      if (defined(invoker.assembly_compress_blobs)) {
+        _compress_blobs = invoker.assembly_compress_blobs
+      }
+      if (defined(invoker.assembly_blob_layout_format)) {
+        _blob_layout_format = invoker.assembly_blob_layout_format
+      }
+
+      fvm = {
+        # Parameters
+        slice_size = _slice_size
+        if (defined(invoker.fvm_truncate_to_length)) {
+          truncate_to_length = invoker.fvm_truncate_to_length
+        }
+        if (fvm_max_disk_size != false) {
+          max_disk_size = fvm_max_disk_size
+        }
+        if (defined(invoker.assembly_include_account_in_fvm)) {
+          empty_account_partition = invoker.assembly_include_account_in_fvm
+        }
+
+        # Filesystems
+        minfs = {
+          if (defined(invoker.minfs_minimum_data_bytes)) {
+            minimum_data_bytes = invoker.minfs_minimum_data_bytes
+          }
+          if (defined(invoker.minfs_maximum_bytes)) {
+            maximum_bytes = invoker.minfs_maximum_bytes
+          }
+        }
+        blobfs = {
+          compress = _compress_blobs
+          layout = _blob_layout_format
+          if (defined(invoker.blobfs_minimum_inodes)) {
+            minimum_inodes = invoker.blobfs_minimum_inodes
+          }
+          if (defined(invoker.blobfs_minimum_data_bytes)) {
+            minimum_data_bytes = invoker.blobfs_minimum_data_bytes
+          }
+          if (defined(invoker.blobfs_maximum_bytes)) {
+            maximum_bytes = invoker.blobfs_maximum_bytes
+          }
+          if (defined(invoker.blobfs_maximum_contents_size)) {
+            maximum_contents_size = invoker.blobfs_maximum_contents_size
+          }
+        }
+        reserved = {
+          slices = fvm_reserved_slices
+        }
+
+        # Optional outputs (emmc and nand)
+        if (fvm_partition != "") {
+          if (fvm_emmc_partition_size != false) {
+            emmc = {
+              # EMMC fvms are by default compressed.
+              compress = fvm_fastboot_compression != "none"
+              truncate_to_length = fvm_emmc_partition_size
+            }
+          } else if (fvm_ftl_nand_block_count != false) {
+            nand = {
+              if (fvm_max_disk_size != false) {
+                max_disk_size = fvm_max_disk_size
+              }
+
+              # NAND fvms are by default uncompressed.
+              compress = fvm_fastboot_compression != "default"
+              block_count = fvm_ftl_nand_block_count
+              oob_size = fvm_ftl_nand_oob_size
+              page_size = fvm_ftl_nand_page_size
+              pages_per_block = fvm_ftl_nand_pages_per_block
+            }
+          } else {
+            assert(
+                false,
+                "|fvm_partition| is specified. But failed to determine the target format.")
+          }
+        }
+      }
+    }
+  }
+
+  verify_files_match(labels.images_config_matches) {
+    forward_variables_from(invoker,
+                           [
+                             "testonly",
+                             "visibility",
+                           ])
+
+    first = files.images_config_old
+    second = files.images_config
+    deps = [
+      ":${labels.images_config_old}",
+      ":${labels.images_config}",
+    ]
+    display_text_diff_on_failure = true
   }
 
   bazel_assembly_images_config_inputs(labels.bazel_images_config_inputs) {
@@ -1193,6 +1330,7 @@ template("assembled_system") {
     public_deps = [
       ":${labels.generated_config_for_legacy_bundle}",
       ":${labels.image_assembler}",
+      ":${labels.images_config_matches}",
       ":${labels.images_config}",
     ]
     if (defined(invoker.output_dir)) {
