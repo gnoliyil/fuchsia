@@ -52,13 +52,12 @@ In VS Code, do the following:
    dependencies, such as [Clang]{:.external} and
    [Fuchsia IDK][fuchsia-idk] (which includes the `ffx` tool).
 
-   When finished successfully, it prints output similar to the following in the
-   end:
+   When finished successfully, it prints output similar to the following:
 
    ```none {:.devsite-disable-click-to-copy}
    $ tools/bazel build @fuchsia_sdk//:fuchsia_toolchain_sdk
    ...
-   INFO: Elapsed time: 25.185s, Critical Path: 0.03s
+   INFO: Elapsed time: 25.063s, Critical Path: 0.03s
    INFO: 1 process: 1 internal.
    INFO: Build completed successfully, 1 total action
    ```

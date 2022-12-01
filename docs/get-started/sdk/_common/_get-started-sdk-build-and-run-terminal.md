@@ -14,7 +14,7 @@ Do the following:
 1. Build and run the sample component:
 
    ```posix-terminal
-   tools/bazel run --config=fuchsia_x64 //src/hello_world:pkg.component
+   tools/bazel run //src/hello_world:pkg.component
    ```
 
    When the build is successful, this command generates build artifacts in a
@@ -24,24 +24,20 @@ Do the following:
    The command prints output similar to the following:
 
    ```none {:.devsite-disable-click-to-copy}
-   $ tools/bazel run --config=fuchsia_x64 //src/hello_world:pkg.component
-   INFO: Build options --copt, --cpu, --crosstool_top, and 1 more have changed, discarding analysis cache.
-   INFO: Analyzed target //src/hello_world:pkg.component (20 packages loaded, 2449 targets configured).
-   INFO: Found 1 target...
-   Target //src/hello_world:pkg.component up-to-date:
-     bazel-bin/src/hello_world/pkg.component_run_component.sh
-   INFO: Elapsed time: 4.709s, Critical Path: 2.47s
-   INFO: 129 processes: 104 internal, 24 linux-sandbox, 1 local.
-   INFO: Build completed successfully, 129 total actions
-   INFO: Build completed successfully, 129 total actions
-   added repository bazel.pkg.component
-   URL: fuchsia-pkg://bazel.pkg.component/hello_world#meta/hello_world.cm
+   $ tools/bazel run //src/hello_world:pkg.component
+   ...
+   INFO: Build completed successfully, 155 total actions
+   Running workflow: pkg.component_base
+   Running task: pkg.debug_symbols_base (step 1/2)
+   Running task: pkg.component.run_base (step 2/2)
+   added repository bazel.pkg.component.runnable
+   URL: fuchsia-pkg://bazel.pkg.component.runnable/hello_world#meta/hello_world.cm
    Moniker: /core/ffx-laboratory:hello_world.cm
    Creating component instance...
+   Resolving component instance...
    Starting component instance...
-   Success! The component instance has been started.
+   Started component instance!
    ```
-
 1. Check the status of the `hello_world` component:
 
    ```posix-terminal
@@ -53,13 +49,13 @@ Do the following:
    ```none {:.devsite-disable-click-to-copy}
    $ tools/ffx component show hello_world
                   Moniker:  /core/ffx-laboratory:hello_world.cm
-                      URL:  fuchsia-pkg://bazel.pkg.component/hello_world#meta/hello_world.cm
+                      URL:  fuchsia-pkg://bazel.pkg.component.runnable/hello_world#meta/hello_world.cm
               Instance ID:  None
                      Type:  CML Component
           Component State:  Resolved
     Incoming Capabilities:  /svc/fuchsia.logger.LogSink
      Exposed Capabilities:
-              Merkle root:  ec7f699b421f74843fbc8a24491a347790ece29c513b7b128b84a3e36e7311d7
+              Merkle root:  eebd529bd8ac6d2fd8a467279719f74c76643ebee2e94ebf594ffcbaac02fe8f
           Execution State:  Stopped
    ```
 
@@ -76,10 +72,11 @@ Do the following:
 
    ```none {:.devsite-disable-click-to-copy}
    $ tools/ffx log --filter hello_world dump
-   [2022-10-27 17:54:26.322][<ffx>]: logger started.
-   [137.639][pkg-resolver][pkg-resolver][I] updated local TUF metadata for "fuchsia-pkg://bazel.pkg.component" to version RepoVersions { root: 1, timestamp: Some(1666893385), snapshot: Some(1666893385), targets: Some(1666893385) } while getting merkle for TargetPath("hello_world/0")
-   [137.732][pkg-resolver][pkg-resolver][I] resolved fuchsia-pkg://bazel.pkg.component/hello_world as fuchsia-pkg://bazel.pkg.component/hello_world to e1a21b1f409cb31004e4ed995cebe094a0483056d305d2925b71080ffcfc88d7 with TUF
-   {{ '<strong>' }}[137.761][ffx-laboratory:hello_world][I] Hello, World!{{ '</strong>' }}
+   [2022-11-30 02:32:28.122][<ffx>]: logger started.
+   [183.252][pkg-resolver][pkg-resolver][I] updated local TUF metadata for "fuchsia-pkg://bazel.pkg.component.runnable" to version RepoVersions { root: 1, timestamp: Some(1669775711), snapshot: Some(1669775711), targets: Some(1669775711) } while getting merkle for TargetPath("hello_world/0")
+   [183.347][pkg-resolver][pkg-resolver][I] resolved fuchsia-pkg://bazel.pkg.component.runnable/hello_world as fuchsia-pkg://bazel.pkg.component.runnable/hello_world to eebd529bd8ac6d2fd8a467279719f74c76643ebee2e94ebf594ffcbaac02fe8f with TUF
+   [183.362][pkg-resolver][pkg-resolver][I] resolved fuchsia-pkg://bazel.pkg.component.runnable/hello_world as fuchsia-pkg://bazel.pkg.component.runnable/hello_world to eebd529bd8ac6d2fd8a467279719f74c76643ebee2e94ebf594ffcbaac02fe8f with TUF
+   {{ '<strong>' }}[183.397][ffx-laboratory:hello_world.cm][I] Hello, World!{{ '</strong>' }}
    ```
 
 1. Use a text editor to edit the `src/hello_world/hello_world.cc` file, for
@@ -105,7 +102,7 @@ Do the following:
 1. Build and run the sample component again:
 
    ```posix-terminal
-   tools/bazel run --config=fuchsia_x64 //src/hello_world:pkg.component
+   tools/bazel run //src/hello_world:pkg.component
    ```
 
 1. Verify the `Hello again, World!` message in the device logs:
@@ -119,6 +116,6 @@ Do the following:
    ```none {:.devsite-disable-click-to-copy}
    $ tools/ffx log --filter hello_world dump
    ...
-   [4885.928][pkg-resolver][pkg-resolver][I] resolved fuchsia-pkg://bazel.pkg.component/hello_world as fuchsia-pkg://bazel.pkg.component/hello_world to 916763545fe9df0299bf049359f6b09b8d9dac2881a6d6c016d929d970738586 with TUF
-   {{ '<strong>' }}[4885.959][ffx-laboratory:hello_world][I] Hello again, World!{{ '</strong>' }}
+   [280.088][pkg-resolver][pkg-resolver][I] resolved fuchsia-pkg://bazel.pkg.component.runnable/hello_world as fuchsia-pkg://bazel.pkg.component.runnable/hello_world to 03405c9f712b2db800194d496ce90372845a8f4bbcb1df4a9abfe9c5bdfc40fb with TUF
+   {{ '<strong>' }}[280.113][ffx-laboratory:hello_world.cm][I] Hello again, World!{{ '</strong>' }}
    ```

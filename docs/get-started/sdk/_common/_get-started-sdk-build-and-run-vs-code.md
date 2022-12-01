@@ -14,7 +14,7 @@ In VS Code, do the following:
 1. In the terminal, build and run the sample component:
 
    ```posix-terminal
-   tools/bazel run --config=fuchsia_x64 //src/hello_world:pkg.component
+   tools/bazel run //src/hello_world:pkg.component
    ```
 
    When the build is successful, this command generates build artifacts in a
@@ -24,22 +24,19 @@ In VS Code, do the following:
    The command prints output similar to the following:
 
    ```none {:.devsite-disable-click-to-copy}
-   $ tools/bazel run --config=fuchsia_x64 //src/hello_world:pkg.component
-   INFO: Build options --copt, --cpu, --crosstool_top, and 1 more have changed, discarding analysis cache.
-   INFO: Analyzed target //src/hello_world:pkg.component (20 packages loaded, 2449 targets configured).
-   INFO: Found 1 target...
-   Target //src/hello_world:pkg.component up-to-date:
-     bazel-bin/src/hello_world/pkg.component_run_component.sh
-   INFO: Elapsed time: 4.709s, Critical Path: 2.47s
-   INFO: 129 processes: 104 internal, 24 linux-sandbox, 1 local.
-   INFO: Build completed successfully, 129 total actions
-   INFO: Build completed successfully, 129 total actions
-   added repository bazel.pkg.component
-   URL: fuchsia-pkg://bazel.pkg.component/hello_world#meta/hello_world.cm
+   $ tools/bazel run //src/hello_world:pkg.component
+   ...
+   INFO: Build completed successfully, 155 total actions
+   Running workflow: pkg.component_base
+   Running task: pkg.debug_symbols_base (step 1/2)
+   Running task: pkg.component.run_base (step 2/2)
+   added repository bazel.pkg.component.runnable
+   URL: fuchsia-pkg://bazel.pkg.component.runnable/hello_world#meta/hello_world.cm
    Moniker: /core/ffx-laboratory:hello_world.cm
    Creating component instance...
+   Resolving component instance...
    Starting component instance...
-   Success! The component instance has been started.
+   Started component instance!
    ```
 
 1. Check the status of the `hello_world` component:
@@ -53,13 +50,13 @@ In VS Code, do the following:
    ```none {:.devsite-disable-click-to-copy}
    $ tools/ffx component show hello_world
                   Moniker:  /core/ffx-laboratory:hello_world.cm
-                      URL:  fuchsia-pkg://bazel.pkg.component/hello_world#meta/hello_world.cm
+                      URL:  fuchsia-pkg://bazel.pkg.component.runnable/hello_world#meta/hello_world.cm
               Instance ID:  None
                      Type:  CML Component
           Component State:  Resolved
     Incoming Capabilities:  /svc/fuchsia.logger.LogSink
      Exposed Capabilities:
-              Merkle root:  ec7f699b421f74843fbc8a24491a347790ece29c513b7b128b84a3e36e7311d7
+              Merkle root:  eebd529bd8ac6d2fd8a467279719f74c76643ebee2e94ebf594ffcbaac02fe8f
           Execution State:  Stopped
    ```
 
@@ -127,7 +124,7 @@ In VS Code, do the following:
 1. In the terminal, build and run the `hello_world` component again:
 
    ```posix-terminal
-   tools/bazel run --config=fuchsia_x64 //src/hello_world:pkg.component
+   tools/bazel run //src/hello_world:pkg.component
    ```
 
 1. Click the **FUCHSIA LOGS** tab on the VS Code panel.

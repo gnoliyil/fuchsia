@@ -37,7 +37,7 @@ In VS Code, do the following:
          "name": "{{ '<strong>' }}Fuchsia getting started{{ '</strong>' }}",
          "type": "zxdb",
          "request": "launch",
-         "launchCommand": "{{ '<strong>' }}tools/bazel run --config=fuchsia_x64 src/hello_world:pkg.component{{ '</strong>' }}",
+         "launchCommand": "{{ '<strong>' }}tools/bazel run //src/hello_world:pkg.component{{ '</strong>' }}",
          "process": "{{ '<strong>' }}hello_world{{ '</strong>' }}"
        }
      ]

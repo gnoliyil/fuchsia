@@ -243,7 +243,7 @@ Do the following:
 1. Build and run the sample test components:
 
    ```posix-terminal
-   tools/bazel test --config=fuchsia_x64 --test_output=all //src/hello_world:test_pkg
+   tools/bazel test --test_output=all //src/hello_world:test_pkg
    ```
 
    This command runs all the tests in the Hello World component’s test package
@@ -252,42 +252,39 @@ Do the following:
    The command prints output similar to the following:
 
    ```none {:.devsite-disable-click-to-copy}
-   $ tools/bazel test --config=fuchsia_x64 --test_output=all //src/hello_world:test_pkg
-   INFO: Analyzed target //src/hello_world:test_pkg (10 packages loaded, 577 targets configured).
-   INFO: Found 1 test target...
-   INFO: From Testing //src/hello_world:test_pkg:
+   $ tools/bazel test --test_output=all //src/hello_world:test_pkg
+   ...
+   INFO: From Testing //src/hello_world:test_pkg
    ==================== Test output for //src/hello_world:test_pkg:
-   Running 2 test components...
-   added repository bazel.test.pkg.hello.gtest
-   Running test 'fuchsia-pkg://bazel.test.pkg.hello.gtest/hello_test#meta/hello_gtest_autogen_cml.cm'
-   [RUNNING]    HelloTest.BasicAssertions
+   Error: Invalid build directory BUILD_WORKSPACE_DIRECTORY
+   added repository bazel.test.pkg.hello.gtest.runnable
+   Running test 'fuchsia-pkg://bazel.test.pkg.hello.gtest.runnable/hello_test#meta/hello_gtest_autogen_cml.cm'
+   [RUNNING]       HelloTest.BasicAssertions
    [stdout - HelloTest.BasicAssertions]
    Running main() from gmock_main.cc
    Example stdout.
-   [PASSED]    HelloTest.BasicAssertions
+   [PASSED]        HelloTest.BasicAssertions
 
    1 out of 1 tests passed...
-   fuchsia-pkg://bazel.test.pkg.hello.gtest/hello_test#meta/hello_gtest_autogen_cml.cm completed with result: PASSED
-   added repository bazel.test.pkg.hello.test
-   Running test 'fuchsia-pkg://bazel.test.pkg.hello.test/hello_test#meta/hello_test_autogen_cml.cm'
+   fuchsia-pkg://bazel.test.pkg.hello.gtest.runnable/hello_test#meta/hello_gtest_autogen_cml.cm completed with result: PASSED
+   added repository bazel.test.pkg.hello.test.runnable
+   Running test 'fuchsia-pkg://bazel.test.pkg.hello.test.runnable/hello_test#meta/hello_test_autogen_cml.cm'
    [RUNNING]    main
+   [PASSED] main
    [stdout - main]
    Example stdout.
-   [PASSED]    main
 
    1 out of 1 tests passed...
-   fuchsia-pkg://bazel.test.pkg.hello.test/hello_test#meta/hello_test_autogen_cml.cm completed with result: PASSED
-   2 test components passed.
+   fuchsia-pkg://bazel.test.pkg.hello.test.runnable/hello_test#meta/hello_test_autogen_cml.cm completed with result: PASSED
+   Running workflow: test_pkg_workflow_base
+   Running task: test_pkg.debug_symbols_base (step 1/3)
+   Running task: test_pkg.hello_gtest.run_base (step 2/3)
+   Running task: test_pkg.hello_test.run_base (step 3/3)
    ================================================================================
-   Target //src/hello_world:test_pkg up-to-date:
-     bazel-bin/src/hello_world/test_pkg_test_package.sh
-   INFO: Elapsed time: 19.563s, Critical Path: 11.83s
-   INFO: 105 processes: 46 internal, 56 linux-sandbox, 3 local.
-   INFO: Build completed successfully, 105 total actions
-   //src/hello_world:test_pkg                                               PASSED in 3.8s
+   //src/hello_world:test_pkg                                      (cached) PASSED in 4.7s
 
-   Executed 1 out of 1 test: 1 test passes.
-   INFO: Build completed successfully, 105 total actions
+   Executed 0 out of 1 test: 1 test passes.
+   INFO: Build completed successfully, 1 total action
    ```
 
 1. Use a text editor to edit the `src/hello_world/hello_gtest.cc` file, for
@@ -321,21 +318,20 @@ Do the following:
    component:
 
    ```posix-terminal
-   tools/bazel test --config=fuchsia_x64 --test_output=all //src/hello_world:test_pkg.hello_gtest
+   tools/bazel test --test_output=all //src/hello_world:test_pkg.hello_gtest
    ```
 
    This command prints output similar to the following:
 
    ```none {:.devsite-disable-click-to-copy}
-   $ tools/bazel test --config=fuchsia_x64 --test_output=all //src/hello_world:test_pkg.hello_gtest
-   INFO: Analyzed target //src/hello_world:test_pkg.hello_gtest (0 packages loaded, 0 targets configured).
-   INFO: Found 1 test target...
-   FAIL: //src/hello_world:test_pkg.hello_gtest (see /home/alice/.cache/bazel/_bazel_alice/ea119f1048230a864836be3d62fead2c/execroot/__main__/bazel-out/x86_64-fastbuild/testlogs/src/hello_world/test_pkg.hello_gtest/test.log)
+   $ tools/bazel test --test_output=all //src/hello_world:test_pkg.hello_gtest
+   ...
    INFO: From Testing //src/hello_world:test_pkg.hello_gtest:
    ==================== Test output for //src/hello_world:test_pkg.hello_gtest:
-   added repository bazel.test.pkg.hello.gtest
-   Running test 'fuchsia-pkg://bazel.test.pkg.hello.gtest/hello_test#meta/hello_gtest_autogen_cml.cm'
-   [RUNNING]   HelloTest.BasicAssertions
+   Error: Invalid build directory BUILD_WORKSPACE_DIRECTORY
+   added repository bazel.test.pkg.hello.gtest.runnable
+   Running test 'fuchsia-pkg://bazel.test.pkg.hello.gtest.runnable/hello_test#meta/hello_gtest_autogen_cml.cm'
+   [RUNNING]       HelloTest.BasicAssertions
    [stdout - HelloTest.BasicAssertions]
    Running main() from gmock_main.cc
    Example stdout.
@@ -343,23 +339,30 @@ Do the following:
    Expected equality of these values:
      "hello"
      "world"
-   [FAILED]   HelloTest.BasicAssertions
+   [FAILED]       HelloTest.BasicAssertions
 
    Failed tests: HelloTest.BasicAssertions
    0 out of 1 tests passed...
-   fuchsia-pkg://bazel.test.pkg.hello.gtest/hello_test#meta/hello_gtest_autogen_cml.cm completed with result: FAILED
-   One or more test runs failed.
+   fuchsia-pkg://bazel.test.pkg.hello.gtest.runnable/hello_test#meta/hello_gtest_autogen_cml.cm completed with result: FAILED
    Tests failed.
+   More information may be available in ffx host logs in directory:
+       /usr/local/google/home/alice/.local/share/Fuchsia/ffx/cache/logs
+   Fatal: Shell task ['/usr/local/google/home/alice/.cache/bazel/_bazel_alice/ea119f1048230a864836be3d62fead2c/execroot/__main__/bazel-out/x86_64-fastbuild-ST-1ad63a09c27b/bin/src/hello_world/test_pkg.hello_gtest_runnable_run_component.sh'] failed.
+   Running workflow: test_pkg.hello_gtest_base
+   Running task: test_pkg.debug_symbols_base (step 1/2)
+   Running task: test_pkg.hello_gtest.run_base (step 2/2)
+   Error: Task test_pkg.hello_gtest.run_base (step 2/2) failed to run.
    ================================================================================
    Target //src/hello_world:test_pkg.hello_gtest up-to-date:
-     bazel-bin/src/hello_world/test_pkg.hello_gtest_run_component.sh
-   INFO: Elapsed time: 4.195s, Critical Path: 3.79s
-   INFO: 11 processes: 2 internal, 6 linux-sandbox, 3 local.
-   INFO: Build completed, 1 test FAILED, 11 total actions
-   //src/hello_world:test_pkg.hello_gtest                                   FAILED in 1.8s
-     /home/alice/.cache/bazel/_bazel_alice/ea119f1048230a864836be3d62fead2c/execroot/__main__/bazel-out/x86_64-fastbuild/testlogs/src/hello_world/test_pkg.hello_gtest/test.log
+     bazel-out/x86_64-fastbuild-ST-1ad63a09c27b/bin/src/hello_world/test_pkg.hello_gtest_base.sh
+     bazel-out/x86_64-fastbuild-ST-1ad63a09c27b/bin/src/hello_world/test_pkg.hello_gtest_base_workflow.json
+   INFO: Elapsed time: 4.922s, Critical Path: 4.50s
+   INFO: 16 processes: 8 internal, 6 linux-sandbox, 2 local.
+   INFO: Build completed, 1 test FAILED, 16 total actions
+   //src/hello_world:test_pkg.hello_gtest                                   FAILED in 2.5s
+     /usr/local/google/home/alice/.cache/bazel/_bazel_alice/ea119f1048230a864836be3d62fead2c/execroot/__main__/bazel-out/k8-fastbuild/testlogs/src/hello_world/test_pkg.hello_gtest/test.log
 
-   INFO: Build completed, 1 test FAILED, 11 total actions
+   INFO: Build completed, 1 test FAILED, 16 total actions
    ```
 
 **Congratulations! You're now all set with the Fuchsia SDK!**
@@ -525,27 +528,28 @@ Virtualization features:
 ...
 ```
 
-If you see the following field in the output, your Linux machine
+If you see the following field in the output, your machine
 **supports** KVM hardware virtualization:
 
 ```none {:.devsite-disable-click-to-copy}
   Virtualization:        VT-x
 ```
 
-For AMD-based machines, you may see something like:
-
-```none {:.devsite-disable-click-to-copy}
-Virtualization features:
-  Virtualization:        AMD-V
-```
-
-Note: If your Linux machine supports KVM hardware virtualization, see
+Note: If your machine supports KVM hardware virtualization, see
 [Set up KVM virtualization on a Linux machine](#set-up-kvm-virtualization-on-a-linux-machine)
 to verify that KVM is configured correctly.
 
-However, you may see that the `Virtualization` field is  missing in your output
-(while the `Hypervisor vendor` and `Virtualization type` fields are still shown),
-for example:
+On the other hand, for machines that **supports** AMD
+virtualization, you may see the following field in the output:
+
+```none {:.devsite-disable-click-to-copy}
+  Virtualization:        AMD-V
+```
+
+However, if your output does not have the `Virtualization` field at all,
+while the `Hypervisor vendor` and `Virtualization type` fields may still
+be shown (see the example output below), your machine
+**does not support** hardware virtualization.
 
 ```none {:.devsite-disable-click-to-copy}
 $ lscpu
@@ -555,9 +559,6 @@ Virtualization features:
   Virtualization type:   full
 ...
 ```
-
-If your output does not show the `Virtualization` field, your Linux machine
-**does not support** KVM hardware virtualization.
 
 ### Set up KVM virtualization on a Linux machine {:#set-up-kvm-virtualization-on-a-linux-machine}
 

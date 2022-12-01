@@ -66,7 +66,7 @@ Do the following:
    directory (for instance, `cd $HOME/fuchsia-getting-started`).
 
    ```posix-terminal
-   tools/bazel run --config=fuchsia_x64 //src/hello_world:pkg.component
+   tools/bazel run //src/hello_world:pkg.component
    ```
 
    In the `zxdb` terminal, the sample component is paused at the breakpoint:
@@ -102,8 +102,8 @@ Do the following:
    ```none {:.devsite-disable-click-to-copy}
    $ tools/ffx log --filter hello_world
    ...
-   [6905.421][pkg-resolver][pkg-resolver][I] updated local TUF metadata for "fuchsia-pkg://bazel.pkg.component" to version RepoVersions { root: 1, timestamp: Some(1666898133), snapshot: Some(1666898133), targets: Some(1666898133) } while getting merkle for TargetPath("hello_world/0")
-   [6905.578][pkg-resolver][pkg-resolver][I] resolved fuchsia-pkg://bazel.pkg.component/hello_world as fuchsia-pkg://bazel.pkg.component/hello_world to 916763545fe9df0299bf049359f6b09b8d9dac2881a6d6c016d929d970738586 with TUF
+   [215.904][pkg-resolver][pkg-resolver][I] resolved fuchsia-pkg://bazel.pkg.component.runnable/hello_world as fuchsia-pkg://bazel.pkg.component.runnable/hello_world to 4c1ba90570cc92a62fab8e718a2fad4599583c5b49a684b97469452c9c9387a8 with TUF
+   [215.952][pkg-resolver][pkg-resolver][I] resolved fuchsia-pkg://bazel.pkg.component.runnable/hello_world as fuchsia-pkg://bazel.pkg.component.runnable/hello_world to 4c1ba90570cc92a62fab8e718a2fad4599583c5b49a684b97469452c9c9387a8 with TUF
    ```
 
    Notice the `Hello again, World!` line is not printed yet.
@@ -137,7 +137,7 @@ Do the following:
    printed:
 
    ```none {:.devsite-disable-click-to-copy}
-   [ffx-laboratory:hello_world][I] Hello again, World!
+   [ffx-laboratory:hello_world.cm][I] Hello again, World!
    ```
 
 1. To exit the `zxdb` terminal, type `exit` or press `Ctrl-D`.

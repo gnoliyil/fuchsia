@@ -38,7 +38,7 @@ In VS Code, do the following:
 1. In the terminal, build and run the sample component:
 
    ```posix-terminal
-   tools/bazel run --config=fuchsia_x64 //src/hello_world:pkg.component
+   tools/bazel run //src/hello_world:pkg.component
    ```
 
    Building a component automatically generates and registers the component’s
