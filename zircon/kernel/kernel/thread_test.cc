@@ -808,6 +808,37 @@ bool set_migrate_fn_stress_test() {
   END_TEST;
 }
 
+bool set_context_switch_fn_test() {
+  BEGIN_TEST;
+
+  // The worker thread will attempt to context switch.
+  auto worker_body = [](void* arg) -> int { return Thread::Current::SleepRelative(ZX_MSEC(1)); };
+  Thread* worker =
+      Thread::Create("set_context_switch_fn_test_worker", worker_body, nullptr, DEFAULT_PRIORITY);
+  ASSERT_NONNULL(worker, "thread_create failed.");
+
+  // Set the context switch function, and begin execution.
+  int context_switches = 0;
+  worker->SetContextSwitchFn([&context_switches] { ++context_switches; });
+  worker->Resume();
+
+  // Wait for the worker thread to test itself.
+  int worker_retcode;
+  ASSERT_EQ(worker->Join(&worker_retcode, ZX_TIME_INFINITE), ZX_OK, "Failed to join thread.");
+  EXPECT_EQ(worker_retcode, ZX_OK, "Worker thread failed.");
+  // There are at least 4 context switches that occur as part of this test:
+  // 1. When the thread is initially scheduled.
+  // 2. When the thread is blocked for sleep.
+  // 3. When the thread is rescheduled.
+  // 4. When the thread exits.
+  //
+  // Additionally context switches may occur to additional scheduling events
+  // during regular system operation.
+  EXPECT_GE(context_switches, 4, "Context switch function was not called at least 4 times.");
+
+  END_TEST;
+}
+
 bool scoped_allocation_disabled_test() {
   BEGIN_TEST;
 
@@ -935,6 +966,7 @@ UNITTEST("set_migrate_ready_threads_test", set_migrate_ready_threads_test)
 UNITTEST("migrate_unpinned_threads_test", migrate_unpinned_threads_test)
 UNITTEST("migrate_stress_test", migrate_stress_test)
 UNITTEST("set_migrate_fn_stress_test", set_migrate_fn_stress_test)
+UNITTEST("set_context_switch_fn", set_context_switch_fn_test)
 UNITTEST("runtime_test", runtime_test)
 UNITTEST("scoped_allocation_disabled_test", scoped_allocation_disabled_test)
 UNITTEST("backtrace_static_method_test", backtrace_static_method_test)

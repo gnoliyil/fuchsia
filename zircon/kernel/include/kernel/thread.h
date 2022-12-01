@@ -1154,13 +1154,24 @@ struct Thread {
   // function is called, |thread_lock| is held.
   using MigrateFn = fit::inline_function<void(Thread* thread, MigrateStage stage), sizeof(void*)>
       TA_REQ(thread_lock);
-
   void SetMigrateFn(MigrateFn migrate_fn) TA_EXCL(thread_lock);
   void SetMigrateFnLocked(MigrateFn migrate_fn) TA_REQ(thread_lock);
   void CallMigrateFnLocked(MigrateStage stage) TA_REQ(thread_lock);
-
   // Call |migrate_fn| for each thread that was last run on the current CPU.
   static void CallMigrateFnForCpuLocked(cpu_num_t cpu) TA_REQ(thread_lock);
+
+  // The context switch function will be invoked when a thread is context
+  // switched to or away from. This will be called when a thread is about to be
+  // run on a CPU, after it's stopped from running on a CPU, or about to exit.
+  using ContextSwitchFn = fit::inline_function<void(), sizeof(void*)> TA_REQ(thread_lock);
+  void SetContextSwitchFn(ContextSwitchFn context_switch_fn) TA_EXCL(thread_lock);
+  void SetContextSwitchFnLocked(ContextSwitchFn context_switch_fn) TA_REQ(thread_lock);
+  // Call |context_switch_fn| for this thread.
+  void CallContextSwitchFnLocked() TA_REQ(thread_lock) {
+    if (unlikely(context_switch_fn_)) {
+      context_switch_fn_();
+    }
+  }
 
   void OwnerName(char (&out_name)[ZX_MAX_NAME_LEN]);
   // Return the number of nanoseconds a thread has been running for.
@@ -1636,8 +1647,11 @@ struct Thread {
   // the migrate function has been called with Before but not yet with After.
   bool migrate_pending_{};
 
-  // Provides a way to execute a custom logic when a thread must be migrated between CPUs.
+  // Provides a way to execute custom logic when a thread must be migrated between CPUs.
   MigrateFn migrate_fn_;
+
+  // Provides a way to execute custom logic when a thread is context switched to or away from.
+  ContextSwitchFn context_switch_fn_;
 
   // Used to track threads that have set |migrate_fn_|. This is used to migrate
   // threads before a CPU is taken offline.

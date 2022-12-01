@@ -1311,6 +1311,12 @@ void Scheduler::RescheduleCommon(SchedTime now, EndTraceCallback end_outer_trace
 
     TraceContextSwitch(current_thread, next_thread, current_cpu);
 
+    // We invoke the context switch functions before context switching, so that
+    // they have a chance to correctly perform the actions required. Doing so
+    // after context switching may lead to an invalid CPU state.
+    current_thread->CallContextSwitchFnLocked();
+    next_thread->CallContextSwitchFnLocked();
+
     if (current_thread->aspace() != next_thread->aspace()) {
       vmm_context_switch(current_thread->aspace(), next_thread->aspace());
     }

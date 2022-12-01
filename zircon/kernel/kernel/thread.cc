@@ -774,6 +774,17 @@ void Thread::CallMigrateFnForCpuLocked(cpu_num_t cpu) {
   }
 }
 
+void Thread::SetContextSwitchFn(ContextSwitchFn context_switch_fn) {
+  canary_.Assert();
+  Guard<MonitoredSpinLock, IrqSave> guard{ThreadLock::Get(), SOURCE_TAG};
+  SetContextSwitchFnLocked(ktl::move(context_switch_fn));
+}
+
+void Thread::SetContextSwitchFnLocked(ContextSwitchFn context_switch_fn) {
+  canary_.Assert();
+  context_switch_fn_ = ktl::move(context_switch_fn);
+}
+
 bool Thread::CheckKillSignal() {
   thread_lock.AssertHeld();
 
