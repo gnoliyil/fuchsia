@@ -360,8 +360,12 @@ sdk_molecule("core_testing_idk") {
 
 sdk_molecule("platform_fidls") {
   visibility = [ ":*" ]
-  deps =
-      [ "//sdk/fidl/fuchsia.exception:fuchsia.exception_sdk($fidl_toolchain)" ]
+  deps = [
+    "//sdk/fidl/fuchsia.debugger:fuchsia.debugger_sdk($fidl_toolchain)",
+    "//sdk/fidl/fuchsia.exception:fuchsia.exception_sdk($fidl_toolchain)",
+    "//sdk/fidl/fuchsia.sys2:fuchsia.sys2_sdk($fidl_toolchain)",
+    "//sdk/fidl/fuchsia.test.manager:fuchsia.test.manager_sdk($fidl_toolchain)",
+  ]
 }
 
 # This SDK molecule is a collection of libraries only available to the in-tree
