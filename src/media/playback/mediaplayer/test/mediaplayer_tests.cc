@@ -565,64 +565,6 @@ TEST_F(MediaPlayerTests, PlayShortWavRetainPackets) {
   EXPECT_TRUE(fake_audio_.renderer().expected());
 }
 
-// Play an LPCM elementary stream using |ElementarySource|
-TEST_F(MediaPlayerTests, ElementarySource) {
-  fake_audio_.renderer().ExpectPackets({{0, 4096, 0xd2fbd957e3bf0000},
-                                        {1024, 4096, 0xda25db3fa3bf0000},
-                                        {2048, 4096, 0xe227e0f6e3bf0000},
-                                        {3072, 4096, 0xe951e2dea3bf0000},
-                                        {4096, 4096, 0x37ebf7d3e3bf0000},
-                                        {5120, 4096, 0x3f15f9bba3bf0000},
-                                        {6144, 4096, 0x4717ff72e3bf0000},
-                                        {7168, 4096, 0x4e42015aa3bf0000},
-                                        {8192, 4096, 0xeabc5347e3bf0000},
-                                        {9216, 4096, 0xf1e6552fa3bf0000},
-                                        {10240, 4096, 0xf9e85ae6e3bf0000},
-                                        {11264, 4096, 0x01125ccea3bf0000},
-                                        {12288, 4096, 0x4fac71c3e3bf0000},
-                                        {13312, 4096, 0x56d673aba3bf0000},
-                                        {14336, 4096, 0x5ed87962e3bf0000},
-                                        {15360, 4096, 0x66027b4aa3bf0000}});
-
-  fuchsia::media::playback::ElementarySourcePtr elementary_source;
-  player_->CreateElementarySource(0, false, false, nullptr, elementary_source.NewRequest());
-
-  fuchsia::media::AudioStreamType audio_stream_type;
-  audio_stream_type.sample_format = fuchsia::media::AudioSampleFormat::SIGNED_16;
-  audio_stream_type.channels = kSamplesPerFrame;
-  audio_stream_type.frames_per_second = kFramesPerSecond;
-  fuchsia::media::StreamType stream_type;
-  stream_type.medium_specific.set_audio(std::move(audio_stream_type));
-  stream_type.encoding = fuchsia::media::AUDIO_ENCODING_LPCM;
-
-  fuchsia::media::SimpleStreamSinkPtr sink;
-  elementary_source->AddStream(std::move(stream_type), kFramesPerSecond, 1, sink.NewRequest());
-  sink.set_error_handler([this](zx_status_t status) {
-    FX_LOGS(ERROR) << "SimpleStreamSink connection closed.";
-    sink_connection_closed_ = true;
-    QuitLoop();
-  });
-
-  // Here we're upcasting from a
-  // |fidl::InterfaceHandle<fuchsia::media::playback::ElementarySource>| to a
-  // |fidl::InterfaceHandle<fuchsia::media::playback::Source>| the only way we
-  // currently can. The compiler has no way of knowing whether this is
-  // legit.
-  // TODO(dalesat): Do this safely once fxbug.dev/7664 is fixed.
-  player_->SetSource(fidl::InterfaceHandle<fuchsia::media::playback::Source>(
-      elementary_source.Unbind().TakeChannel()));
-
-  sink_feeder_.Init(std::move(sink), kSinkFeedSize, kSamplesPerFrame * sizeof(int16_t),
-                    kSinkFeedMaxPacketSize, kSinkFeedMaxPacketCount);
-
-  commands_.Play();
-  QuitOnEndOfStream();
-
-  Execute();
-  EXPECT_TRUE(fake_audio_.renderer().expected());
-  EXPECT_FALSE(sink_connection_closed_);
-}
-
 // Opens an SBC elementary stream using |ElementarySource|.
 TEST_F(MediaPlayerTests, ElementarySourceWithSBC) {
   fuchsia::media::playback::ElementarySourcePtr elementary_source;
@@ -775,6 +717,7 @@ TEST_F(MediaPlayerTests, ElementarySourceWithBogus) {
 TEST_F(MediaPlayerTests, PlayBear) {
   fake_sysmem_.SetExpectations(BearSysmemExpectations());
 
+  // Old ARM64 hashes
   fake_audio_.renderer().ExpectPackets(
       {{1024, 8192, 0x0a68b3995a50a648},   {2048, 8192, 0x93bf522ee77e9d50},
        {3072, 8192, 0x89cc3bcedd6034be},   {4096, 8192, 0x40931af9f379dd00},
@@ -835,6 +778,8 @@ TEST_F(MediaPlayerTests, PlayBear) {
        {115712, 8192, 0x6571a4ff90e63490}, {116736, 8192, 0x20ffb62fff517f00},
        {117760, 8192, 0x20ffb62fff517f00}, {118784, 8192, 0x20ffb62fff517f00},
        {119808, 8192, 0x20ffb62fff517f00}, {120832, 8192, 0x20ffb62fff517f00}});
+
+  // Old X64 hashes
   fake_audio_.renderer().ExpectPackets(
       {{1024, 8192, 0x0a278d9cb22e24c4},   {2048, 8192, 0xcac15dcabac1d262},
        {3072, 8192, 0x8e9eab619d7bc6a4},   {4096, 8192, 0x71adf7d7c8ddda7c},
@@ -895,6 +840,130 @@ TEST_F(MediaPlayerTests, PlayBear) {
        {115712, 8192, 0x983976476c930d30}, {116736, 8192, 0xa597cd2125da8100},
        {117760, 8192, 0xa597cd2125da8100}, {118784, 8192, 0xa597cd2125da8100},
        {119808, 8192, 0xa597cd2125da8100}, {120832, 8192, 0xa597cd2125da8100}});
+
+  // ARM64 hashes
+  fake_audio_.renderer().ExpectPackets(
+      {{1024, 8192, 0xe378bf675ba71490},   {2048, 8192, 0x5f7fc82beb8b4b74},
+       {3072, 8192, 0xb25935423814b8a6},   {4096, 8192, 0xc9fb1d58b0bde3f6},
+       {5120, 8192, 0xb896f085158b4586},   {6144, 8192, 0x0fd4218f2faef458},
+       {7168, 8192, 0x4f8116da4dc6b28a},   {8192, 8192, 0x32091a93269776fc},
+       {9216, 8192, 0x4f7e9d36ec1b8b4e},   {10240, 8192, 0xad8ed32d90242ae0},
+       {11264, 8192, 0x49f1a268c9cff980},  {12288, 8192, 0x64742cd58ac6c22e},
+       {13312, 8192, 0x72079f9f21705496},  {14336, 8192, 0xc323f949fe02e528},
+       {15360, 8192, 0xd50113f31abc80bc},  {16384, 8192, 0xa6474b0944bef530},
+       {17408, 8192, 0x586ff0bb43d38cf4},  {18432, 8192, 0xb3ab96f86039eef6},
+       {19456, 8192, 0x19d0d34a083ee8ec},  {20480, 8192, 0x4e534dbfdfc34710},
+       {21504, 8192, 0x8f33738d2347df2a},  {22528, 8192, 0x524c8b4b9429f554},
+       {23552, 8192, 0x8215f88c173ccfac},  {24576, 8192, 0x8ecd0819bc5eb5ee},
+       {25600, 8192, 0xd452486f6ec7e774},  {26624, 8192, 0x2e5bc5f378b5823c},
+       {27648, 8192, 0x34031a02410688fa},  {28672, 8192, 0x350321100c085212},
+       {29696, 8192, 0x4fdbcdfeebde00ca},  {30720, 8192, 0x0d054da954b2c35a},
+       {31744, 8192, 0x0443303df505c864},  {32768, 8192, 0x3e7706767fc93696},
+       {33792, 8192, 0x5f555df0ee0e68ce},  {34816, 8192, 0x40b62bd3de931d94},
+       {35840, 8192, 0xd73efaddd2c31ca0},  {36864, 8192, 0x366cfd403b27444a},
+       {37888, 8192, 0x6e6e339acbfe94b2},  {38912, 8192, 0x4e4ae0ff82f02fe4},
+       {39936, 8192, 0x999d4a3175bb5188},  {40960, 8192, 0x6e61424992d9a268},
+       {41984, 8192, 0xc0d6a024162fd1c8},  {43008, 8192, 0x78f3afad01a3e276},
+       {44032, 8192, 0x930283e1fb4202d4},  {45056, 8192, 0x2bdd851dcffa4080},
+       {46080, 8192, 0xa17900e74b5189ee},  {47104, 8192, 0x89b1e172a13d431c},
+       {48128, 8192, 0xcaddea50e4234222},  {49152, 8192, 0xeb263f8ce068c084},
+       {50176, 8192, 0xf5648b51c1497ab4},  {51200, 8192, 0xb2c9efb9e61bae6c},
+       {52224, 8192, 0x251fd6e581d36824},  {53248, 8192, 0x8f9e5cdc7b9db9d8},
+       {54272, 8192, 0x245c4ec91ceec142},  {55296, 8192, 0x943b4f098eb11498},
+       {56320, 8192, 0xcd078ed886da307c},  {57344, 8192, 0x4a47778091fb6748},
+       {58368, 8192, 0xe10aeb8c4e48c9ba},  {59392, 8192, 0x82feae2dc18a1ca6},
+       {60416, 8192, 0x063b518491b66d2c},  {61440, 8192, 0x8893b7d1435d1cd8},
+       {62464, 8192, 0xd743f5b4a1cd25ae},  {63488, 8192, 0x0631dacbe0260396},
+       {64512, 8192, 0x9871be037107d926},  {65536, 8192, 0xc2fd7f8431296d26},
+       {66560, 8192, 0x040faf3e488989b4},  {67584, 8192, 0x4e3899c184dafb9e},
+       {68608, 8192, 0x1e172f91690b5a48},  {69632, 8192, 0x74940c17184fb6ea},
+       {70656, 8192, 0xea3eb83823ef84a2},  {71680, 8192, 0x8229d6eec16beb9c},
+       {72704, 8192, 0xfd40e1dc0acc7c70},  {73728, 8192, 0xa24440f46272b872},
+       {74752, 8192, 0xecda392d1658266c},  {75776, 8192, 0xcceb933a91533e82},
+       {76800, 8192, 0x83bdf67e40281fde},  {77824, 8192, 0x0f32f74dcf779620},
+       {78848, 8192, 0x628facdf5f56d366},  {79872, 8192, 0xd0a4b2b4b633ddc4},
+       {80896, 8192, 0xf03f415b49f3f08e},  {81920, 8192, 0x6962cb29ff70dc4a},
+       {82944, 8192, 0x4b63b039ce5e6292},  {83968, 8192, 0x98c2eba2dc607ed4},
+       {84992, 8192, 0x04680dbb9e52f2de},  {86016, 8192, 0x996730f73524f45a},
+       {87040, 8192, 0x2d6e4a03c3f5f36e},  {88064, 8192, 0xf395b48ca422c94a},
+       {89088, 8192, 0xc25e28e0b28c0758},  {90112, 8192, 0x0b352780cd68bd96},
+       {91136, 8192, 0x9a7ac0d8565922ba},  {92160, 8192, 0x58d325b0b2a7dfc2},
+       {93184, 8192, 0x687222156517fede},  {94208, 8192, 0xe0987d30b9229542},
+       {95232, 8192, 0xf239835603346e7c},  {96256, 8192, 0xa5bc27db8a5a2e6e},
+       {97280, 8192, 0x3240c439f17f7e8c},  {98304, 8192, 0x90c367db9515fd2c},
+       {99328, 8192, 0x8076b2ea67ecb4ba},  {100352, 8192, 0x96dd82019e8c75e6},
+       {101376, 8192, 0x8a98db93059d690e}, {102400, 8192, 0xc4d6a95d22e80e8c},
+       {103424, 8192, 0xce1ec7e9f4813ea0}, {104448, 8192, 0x6bedaa1372b9dab2},
+       {105472, 8192, 0xb90e1c646784b7f8}, {106496, 8192, 0x3b6cc09b62bf5e2c},
+       {107520, 8192, 0x93049f9eb1ca2040}, {108544, 8192, 0x8aa9d79d3737a300},
+       {109568, 8192, 0x0c59abb66b651876}, {110592, 8192, 0xb9903a57092ea688},
+       {111616, 8192, 0x56a4a184093d63be}, {112640, 8192, 0x9011ad111b2a3596},
+       {113664, 8192, 0xa35992a25b4697e8}, {114688, 8192, 0xf2e6c6600b9192e4},
+       {115712, 8192, 0x99139b1eafaac746}, {116736, 8192, 0x0000000000000000},
+       {117760, 8192, 0x0000000000000000}, {118784, 8192, 0x0000000000000000},
+       {119808, 8192, 0x0000000000000000}, {120832, 8192, 0x0000000000000000}});
+
+  // X64 hashes
+  fake_audio_.renderer().ExpectPackets(
+      {{1024, 8192, 0xe07048ea42002dc8},   {2048, 8192, 0x56ccb8a6089d573c},
+       {3072, 8192, 0x4d1bebb95f7baa6a},   {4096, 8192, 0x8fb71764268f4c7a},
+       {5120, 8192, 0x7b33af6ed09ce576},   {6144, 8192, 0x48ed1201b9eefa48},
+       {7168, 8192, 0xf7da361cdc44cdfc},   {8192, 8192, 0xff276202afd0d990},
+       {9216, 8192, 0x0f2a06a0e713d4de},   {10240, 8192, 0x8d6c214b1c28d0f4},
+       {11264, 8192, 0xbbebad03edf0f218},  {12288, 8192, 0xc793371fc6c6b274},
+       {13312, 8192, 0x666d565875a0a90a},  {14336, 8192, 0xe873a46b1df9a8ca},
+       {15360, 8192, 0xf2a738773576e102},  {16384, 8192, 0x73d97cf32df29b6a},
+       {17408, 8192, 0xb8371b8364a3f04a},  {18432, 8192, 0x04758eafbb08dd02},
+       {19456, 8192, 0x46e121c7a2949ac0},  {20480, 8192, 0x8e842c69c6a30734},
+       {21504, 8192, 0x37f2368ede9ff60a},  {22528, 8192, 0xd922dc101949b5fe},
+       {23552, 8192, 0x91924bd83306a0de},  {24576, 8192, 0xfd413297262e5864},
+       {25600, 8192, 0x6f0c36406ddada0c},  {26624, 8192, 0xa9b5bb928a964f86},
+       {27648, 8192, 0x010bd68d40ac585a},  {28672, 8192, 0x771778993e4cf7e6},
+       {29696, 8192, 0xea0cbf478731ab48},  {30720, 8192, 0xa847cc095eca0a52},
+       {31744, 8192, 0x4dad81e06b73b5fa},  {32768, 8192, 0x79193e3d6cd3b0d0},
+       {33792, 8192, 0xace570c8718bed06},  {34816, 8192, 0x8328c2729e0230ee},
+       {35840, 8192, 0x86bf3663fba59b06},  {36864, 8192, 0xa5ee21fe270a754e},
+       {37888, 8192, 0x9217963c010a5f6c},  {38912, 8192, 0xf6407a7f99a22c32},
+       {39936, 8192, 0xc732eba49f1a2458},  {40960, 8192, 0xcc70dc5bc2bcdefe},
+       {41984, 8192, 0x919d2b9244f10b7e},  {43008, 8192, 0x88287ed2dd9ed982},
+       {44032, 8192, 0xfcf762913a344dac},  {45056, 8192, 0x6eb78d25c098a8ba},
+       {46080, 8192, 0xa4acac73456f2ff4},  {47104, 8192, 0x01163dd1e8def692},
+       {48128, 8192, 0x8da60c2fb78bb1ce},  {49152, 8192, 0x57613f21dc6048b8},
+       {50176, 8192, 0x7fb9731ad640c646},  {51200, 8192, 0xa3215a4f58b465ca},
+       {52224, 8192, 0x4b0c4b346cdc5278},  {53248, 8192, 0xc556925fef0d300a},
+       {54272, 8192, 0x8b470fab15c0c680},  {55296, 8192, 0x35be5e27cbfb9dfe},
+       {56320, 8192, 0x19705bbb3096003e},  {57344, 8192, 0xa1451c1a7b60c922},
+       {58368, 8192, 0x34319151c1f2f84c},  {59392, 8192, 0x4e7e0c52f7f88b74},
+       {60416, 8192, 0x52250e7f427de308},  {61440, 8192, 0xc9ce53d293ede012},
+       {62464, 8192, 0x98890e49141641c4},  {63488, 8192, 0x6511024a3daa2a88},
+       {64512, 8192, 0xad865e490f55b4b0},  {65536, 8192, 0x061e09fd34dad5d8},
+       {66560, 8192, 0xdcb56d3f7b922edc},  {67584, 8192, 0x14fde740dfef633a},
+       {68608, 8192, 0xa9d874b5c49d6854},  {69632, 8192, 0x90f532855cb593c4},
+       {70656, 8192, 0xff341aae71e8cffe},  {71680, 8192, 0xd516442941cc7c6e},
+       {72704, 8192, 0x97711ff386fe3cfa},  {73728, 8192, 0x1795c91fd87297e8},
+       {74752, 8192, 0x8dbd5969ae4c79a4},  {75776, 8192, 0x5913acc40119b706},
+       {76800, 8192, 0xb25d01d4a4f66804},  {77824, 8192, 0xc8b2c623249734b8},
+       {78848, 8192, 0x1296a2693d5c8b66},  {79872, 8192, 0xb5605c5877374dc8},
+       {80896, 8192, 0x0d4a70097114e2de},  {81920, 8192, 0xba9d5b2368c16b1c},
+       {82944, 8192, 0x3885818f4c03f1e8},  {83968, 8192, 0x6f991203b29e99d8},
+       {84992, 8192, 0xcdaa5a21f84d9ddc},  {86016, 8192, 0x2c9090bddb1f302a},
+       {87040, 8192, 0x00046a36299086c2},  {88064, 8192, 0xd878df9a7d04f554},
+       {89088, 8192, 0x43c288db8ea0c1d0},  {90112, 8192, 0x5d831fc01b30762e},
+       {91136, 8192, 0xac2a7b67273a81fc},  {92160, 8192, 0xe21966c79303a938},
+       {93184, 8192, 0x59d837f4bcebfd02},  {94208, 8192, 0x814e88b91b1229a4},
+       {95232, 8192, 0x9f1a78beeb4fa414},  {96256, 8192, 0x7f8ff018d9cc9720},
+       {97280, 8192, 0xcb4b129681b91b2a},  {98304, 8192, 0xbb3d48aa3f62d486},
+       {99328, 8192, 0xaa9d642ab0856c4e},  {100352, 8192, 0x8b179bc7c2323d7a},
+       {101376, 8192, 0x06c73fa3037af4a8}, {102400, 8192, 0xcb8b533f4a2640d2},
+       {103424, 8192, 0x177825150ba16718}, {104448, 8192, 0x62749ca362394b14},
+       {105472, 8192, 0x57247528ac244288}, {106496, 8192, 0x74a451316a5e9f4c},
+       {107520, 8192, 0xfa863a3072b86888}, {108544, 8192, 0xf7d71018bc978038},
+       {109568, 8192, 0xdabc1a437f54a878}, {110592, 8192, 0x90e9f43b9b00ce94},
+       {111616, 8192, 0x05695a101ce2691c}, {112640, 8192, 0xd57dd116aec078fc},
+       {113664, 8192, 0x067388568736b478}, {114688, 8192, 0x69f5ec70dbc7478e},
+       {115712, 8192, 0xbd9c0421959f25a6}, {116736, 8192, 0x0000000000000000},
+       {117760, 8192, 0x0000000000000000}, {118784, 8192, 0x0000000000000000},
+       {119808, 8192, 0x0000000000000000}, {120832, 8192, 0x0000000000000000}});
 
   fake_scenic_.session().SetExpectations(
       1,
@@ -972,7 +1041,7 @@ TEST_F(MediaPlayerTests, PlayBear) {
   EXPECT_TRUE(fake_audio_.renderer().expected());
   EXPECT_TRUE(fake_scenic_.session().expected());
   EXPECT_TRUE(fake_sysmem_.expected());
-}  // namespace test
+}
 
 // Play a real A/V file from beginning to end with no audio.
 TEST_F(MediaPlayerTests, PlayBearSilent) {
@@ -1053,7 +1122,7 @@ TEST_F(MediaPlayerTests, PlayBearSilent) {
   EXPECT_FALSE(fake_audio_.create_audio_renderer_called());
   EXPECT_TRUE(fake_scenic_.session().expected());
   EXPECT_TRUE(fake_sysmem_.expected());
-}  // namespace test
+}
 
 // Play an opus file from beginning to end.
 TEST_F(MediaPlayerTests, PlayOpus) {
@@ -1239,7 +1308,7 @@ TEST_F(MediaPlayerTests, ElementarySourceDeferred) {
   EXPECT_FALSE(sink_connection_closed_);
 }
 
-// Play a real A/V file from beginning to end and rate 2.0.
+// Play a real A/V file from beginning to end at rate 2.0.
 TEST_F(MediaPlayerTests, PlayBear2) {
   fake_sysmem_.SetExpectations(BearSysmemExpectations());
 
@@ -1259,6 +1328,19 @@ TEST_F(MediaPlayerTests, PlayBear2) {
                                         {3072, 8192, 0x8e9eab619d7bc6a4},
                                         {4096, 8192, 0x71adf7d7c8ddda7c},
                                         {5120, 8192, 0x0b3e51a900e6b0b6}});
+  // ARM64 hashes
+  fake_audio_.renderer().ExpectPackets({{1024, 8192, 0xe378bf675ba71490},
+                                        {2048, 8192, 0x5f7fc82beb8b4b74},
+                                        {3072, 8192, 0xb25935423814b8a6},
+                                        {4096, 8192, 0xc9fb1d58b0bde3f6},
+                                        {5120, 8192, 0xb896f085158b4586}});
+
+  // X64 hashes
+  fake_audio_.renderer().ExpectPackets({{1024, 8192, 0xe07048ea42002dc8},
+                                        {2048, 8192, 0x56ccb8a6089d573c},
+                                        {3072, 8192, 0x4d1bebb95f7baa6a},
+                                        {4096, 8192, 0x8fb71764268f4c7a},
+                                        {5120, 8192, 0x7b33af6ed09ce576}});
 
   fake_scenic_.session().SetExpectations(
       1,
