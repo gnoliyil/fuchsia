@@ -27,7 +27,7 @@ async fn call_write_data_file(admin: &AdminProxy) -> AdminWriteDataFileResult {
 }
 
 #[fuchsia::test]
-async fn write_data_file_unformatted() {
+async fn unformatted() {
     let mut builder = new_builder();
     builder.fshost().set_fvm_ramdisk().set_ramdisk_prefix("/nada/zip/zilch");
     builder.with_disk();
@@ -53,7 +53,7 @@ async fn write_data_file_unformatted() {
 }
 
 #[fuchsia::test]
-async fn write_data_file_unformatted_small_disk() {
+async fn unformatted_small_disk() {
     let mut builder = new_builder();
     builder.fshost().set_fvm_ramdisk().set_ramdisk_prefix("/nada/zip/zilch");
     builder.with_disk().size(SMALL_DISK_SIZE).data_volume_size(SMALL_DISK_SIZE / 2);
@@ -84,7 +84,7 @@ async fn write_data_file_unformatted_small_disk() {
 }
 
 #[fuchsia::test]
-async fn write_data_file_formatted() {
+async fn formatted() {
     let mut builder = new_builder();
     builder.fshost().set_fvm_ramdisk().set_ramdisk_prefix("/nada/zip/zilch");
     builder.with_disk().format_data(DATA_FILESYSTEM_FORMAT);

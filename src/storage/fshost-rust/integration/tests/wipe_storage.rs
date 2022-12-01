@@ -6,6 +6,7 @@
 //! among other things, sets the fvm_ramdisk flag to prevent binding of the on-disk filesystems.)
 
 use {
+    crate::{new_builder, DATA_FILESYSTEM_FORMAT},
     device_watcher::recursive_wait_and_open_node,
     fidl::endpoints::{create_proxy, Proxy as _},
     fidl_fuchsia_fshost as fshost,
@@ -13,17 +14,9 @@ use {
     fidl_fuchsia_hardware_block_partition::PartitionProxy,
     fidl_fuchsia_io as fio,
     fs_management::{filesystem::Filesystem, Blobfs},
-    fshost_test_fixture::TestFixtureBuilder,
     fuchsia_zircon as zx,
     remote_block_device::{BlockClient, MutableBufferSlice, RemoteBlockClient},
 };
-
-const FSHOST_COMPONENT_NAME: &'static str = std::env!("FSHOST_COMPONENT_NAME");
-const DATA_FILESYSTEM_FORMAT: &'static str = std::env!("DATA_FILESYSTEM_FORMAT");
-
-fn new_builder() -> TestFixtureBuilder {
-    TestFixtureBuilder::new(FSHOST_COMPONENT_NAME)
-}
 
 // Blob containing 8192 bytes of 0xFF ("oneblock").
 const TEST_BLOB_LEN: u64 = 8192;
@@ -46,7 +39,12 @@ async fn write_test_blob(directory: &fio::DirectoryProxy) {
 
 // Ensure fuchsia.fshost.Admin/WipeStorage fails if we cannot identify a storage device to wipe.
 #[fuchsia::test]
-async fn wipe_storage_no_fvm_device() {
+async fn no_fvm_device() {
+    // TODO(fxbug.dev/113970): this test doesn't work on f2fs
+    if DATA_FILESYSTEM_FORMAT == "f2fs" {
+        return;
+    }
+
     let mut builder = new_builder();
     builder.fshost().set_fvm_ramdisk().set_ramdisk_prefix("/nada/zip/zilch");
     let fixture = builder.build().await;
@@ -64,7 +62,12 @@ async fn wipe_storage_no_fvm_device() {
 
 // Demonstrate high level usage of the fuchsia.fshost.Admin/WipeStorage method.
 #[fuchsia::test]
-async fn wipe_storage_write_blob() {
+async fn write_blob() {
+    // TODO(fxbug.dev/113970): this test doesn't work on f2fs
+    if DATA_FILESYSTEM_FORMAT == "f2fs" {
+        return;
+    }
+
     let mut builder = new_builder();
     builder.fshost().set_fvm_ramdisk().set_ramdisk_prefix("/nada/zip/zilch");
     builder.with_disk();
@@ -84,7 +87,12 @@ async fn wipe_storage_write_blob() {
 
 // Verify that all existing blobs are purged after running fuchsia.fshost.Admin/WipeStorage.
 #[fuchsia::test]
-async fn wipe_storage_blobfs_formatted() {
+async fn blobfs_formatted() {
+    // TODO(fxbug.dev/113970): this test doesn't work on f2fs
+    if DATA_FILESYSTEM_FORMAT == "f2fs" {
+        return;
+    }
+
     let mut builder = new_builder();
     builder.fshost().set_fvm_ramdisk().set_ramdisk_prefix("/nada/zip/zilch");
     builder.with_disk();
@@ -130,7 +138,12 @@ async fn wipe_storage_blobfs_formatted() {
 
 // Verify that the data partition is wiped and remains unformatted.
 #[fuchsia::test]
-async fn wipe_storage_data_unformatted() {
+async fn data_unformatted() {
+    // TODO(fxbug.dev/113970): this test doesn't work on f2fs
+    if DATA_FILESYSTEM_FORMAT == "f2fs" {
+        return;
+    }
+
     const BUFF_LEN: usize = 512;
     let mut builder = new_builder();
     builder.fshost().set_fvm_ramdisk().set_ramdisk_prefix("/nada/zip/zilch");
