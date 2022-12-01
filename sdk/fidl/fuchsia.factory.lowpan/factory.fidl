@@ -4,6 +4,7 @@
 library fuchsia.factory.lowpan;
 
 using fuchsia.lowpan;
+using zx;
 
 alias InterfaceName = fuchsia.lowpan.InterfaceName;
 
@@ -29,6 +30,15 @@ protocol FactoryDevice {
     }) -> (struct {
         response string:2000;
     });
+
+    /// Send proprietary manufacturing commands to the device and return the response.
+    ///
+    /// This method is intended to send the exact same set of commands as SendMfgCommand(), but
+    /// instead of sending one command at a time, this method opens an opens an interactive shell
+    /// operated over `server_socket`.
+    SetupOtCli(resource struct {
+        server_socket zx.handle:<SOCKET, zx.RIGHTS_IO | zx.rights.WAIT>;
+    }) -> ();
 };
 
 /// Protocol for looking up the LoWPAN factory protocol for a LoWPAN interface.

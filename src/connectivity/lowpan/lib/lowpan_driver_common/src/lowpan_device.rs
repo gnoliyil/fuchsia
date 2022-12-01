@@ -1113,6 +1113,15 @@ impl<T: Driver> ServeTo<FactoryDeviceRequestStream> for T {
                         .await
                         .context("error in send_mfg_command request")?;
                 }
+                FactoryDeviceRequest::SetupOtCli { responder, server_socket: _, .. } => {
+                    let responder = ResponderNoShutdown::wrap(responder);
+                    // TODO(jiamingw): this call will be replaced by the correct implementation in the chained CL.
+                    self.reset()
+                        .err_into::<Error>()
+                        .and_then(|_| ready(responder.unwrap().send().map_err(Error::from)))
+                        .await
+                        .context("error in setup_ot_cli request")?;
+                }
             }
             Result::<(), Error>::Ok(())
         };
