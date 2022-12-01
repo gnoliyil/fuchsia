@@ -227,7 +227,7 @@ zx_status_t Sherlock::I2cInit() {
   gpio_impl_.SetAltFunction(T931_GPIOA(15), 2);
 
   fpbus::Node dev;
-  dev.name() = "gpio";
+  dev.name() = "i2c";
   dev.vid() = PDEV_VID_AMLOGIC;
   dev.pid() = PDEV_PID_GENERIC;
   dev.did() = PDEV_DID_AMLOGIC_I2C;
