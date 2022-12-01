@@ -16,13 +16,14 @@ namespace forensics::feedback {
 
 PreviousBootLog::PreviousBootLog(async_dispatcher_t* dispatcher, timekeeper::Clock* clock,
                                  const zx::duration delete_previous_boot_log_at, std::string path)
-    : dispatcher_(dispatcher), clock_(clock), path_(std::move(path)) {
+    : dispatcher_(dispatcher), clock_(clock), is_file_deleted_(false), path_(std::move(path)) {
   auto self = weak_factory_.GetWeakPtr();
   async::PostDelayedTask(
       dispatcher_,
       [self] {
         if (self) {
           FX_LOGS(INFO) << "Deleting previous boot logs after 24 hours of device uptime";
+          self->is_file_deleted_ = true;
           files::DeletePath(self->path_, /*recursive=*/true);
         }
       },
@@ -33,6 +34,10 @@ PreviousBootLog::PreviousBootLog(async_dispatcher_t* dispatcher, timekeeper::Clo
 
 ::fpromise::promise<AttachmentValue> PreviousBootLog::Get(const uint64_t ticket) {
   AttachmentValue previous_boot_log(Error::kNotSet);
+  if (is_file_deleted_) {
+    return fpromise::make_ok_promise(AttachmentValue(Error::kCustom));
+  }
+
   if (std::string content; files::ReadFileToString(path_, &content)) {
     previous_boot_log = content.empty() ? AttachmentValue(Error::kMissingValue)
                                         : AttachmentValue(std::move(content));

@@ -36,6 +36,7 @@ class PreviousBootLog : public AttachmentProvider {
   async_dispatcher_t* dispatcher_;
 
   timekeeper::Clock* clock_;
+  bool is_file_deleted_;
   std::string path_;
   fxl::WeakPtrFactory<PreviousBootLog> weak_factory_{this};
 };
