@@ -287,21 +287,20 @@ static int local_socket_enqueue(asocket* s, apacket::payload_type data) {
   if (s->newline_replace) {
     std::replace(data.data(), data.data() + data.size(), '\r', '\n');
   }
-  // std::regex_replace(data.data(), std::regex("\r"), "\r\n");
   auto end = s->packet_queue.end();
   FX_LOGS(DEBUG) << "packet size before " << s->packet_queue.size();
   s->packet_queue.insert(end, data.data(), data.data() + data.size());
   FX_LOGS(DEBUG) << "packet size after " << s->packet_queue.size();
 
-  switch (local_socket_flush_incoming(s)) {
-    case SocketFlushResult::Destroyed:
+  while (true) {
+    auto result = local_socket_flush_incoming(s);
+    if (result == SocketFlushResult::Destroyed) {
       return -1;
+    }
 
-    case SocketFlushResult::TryAgain:
-      return 1;
-
-    case SocketFlushResult::Completed:
+    if (result == SocketFlushResult::Completed) {
       return 0;
+    }
   }
 
   return !s->packet_queue.empty();
