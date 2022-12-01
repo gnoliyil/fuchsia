@@ -11,6 +11,7 @@ if (is_linux) {
     testonly = true
     deps = [
       "//src/devices/board/lib/acpi:host-acpi",
+      "//src/devices/testing/no_ddk",
       "//third_party/acpica",
       "//third_party/googletest:gtest",
     ]
@@ -18,7 +19,6 @@ if (is_linux) {
     sources = [
       "acpi-host-test.cc",
       "acpi-stubs.cc",
-      "fake-driver-env.cc",
       "table-manager.cc",
       "table.cc",
     ]
