@@ -65,9 +65,9 @@ struct syscall_pre_out {
 
 fxt::StringRef<fxt::RefType::kId> syscall_name_ref(uint64_t syscall_num) {
   if (syscall_num < ktl::size(kSyscallNames) && kSyscallNames[syscall_num] != nullptr) {
-    return fxt::StringRef(kSyscallNames[syscall_num]->GetFxtId());
+    return fxt::StringRef(kSyscallNames[syscall_num]->GetId());
   } else {
-    return fxt::StringRef("Unknown Syscall"_stringref->GetFxtId());
+    return fxt::StringRef("Unknown Syscall"_stringref->GetId());
   }
 }
 
@@ -82,7 +82,7 @@ __NO_INLINE syscall_pre_out do_syscall_pre(uint64_t syscall_num, uint64_t pc) {
     Thread* current_thread = Thread::Current::Get();
     fxt_duration_begin(TAG_SYSCALL_ENTER, current_ticks(),
                        fxt::ThreadRef(current_thread->pid(), current_thread->tid()),
-                       fxt::StringRef("kernel:syscall"_stringref->GetFxtId()),
+                       fxt::StringRef("kernel:syscall"_stringref->GetId()),
                        syscall_name_ref(syscall_num));
   }
 
@@ -113,7 +113,7 @@ __NO_INLINE syscall_result do_syscall_post(uint64_t ret, uint64_t syscall_num) {
     Thread* current_thread = Thread::Current::Get();
     fxt_duration_end(TAG_SYSCALL_EXIT, current_ticks(),
                      fxt::ThreadRef(current_thread->pid(), current_thread->tid()),
-                     fxt::StringRef("kernel:syscall"_stringref->GetFxtId()),
+                     fxt::StringRef("kernel:syscall"_stringref->GetId()),
                      syscall_name_ref(syscall_num));
   }
 

@@ -1618,7 +1618,7 @@ void ktrace_report_live_threads() {
     fxt_kernel_object(TAG_THREAD_NAME, /*always*/ true, t.tid(), ZX_OBJ_TYPE_THREAD,
                       fxt::StringRef(t.name()),
                       fxt::Argument<fxt::ArgumentType::kKoid, fxt::RefType::kId>(
-                          fxt::StringRef("process"_stringref->GetFxtId()), t.pid()));
+                          fxt::StringRef("process"_stringref->GetId()), t.pid()));
   }
 }
 

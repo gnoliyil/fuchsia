@@ -96,25 +96,24 @@ class KTracer<Level, ktl::enable_if_t<(Level == KernelMutexTracingLevel::Contest
     auto tid_type = fxt::StringRef{(t == nullptr                  ? "none"_stringref
                                     : t->user_thread() == nullptr ? "kernel_mode"_stringref
                                                                   : "user_mode"_stringref)
-                                       ->GetFxtId()};
+                                       ->GetId()};
 
     fxt::Argument<fxt::ArgumentType::kPointer, fxt::RefType::kId> mutex_id_arg{
-        fxt::StringRef{"mutex_id"_stringref->GetFxtId()}, reinterpret_cast<uintptr_t>(mutex)};
+        fxt::StringRef{"mutex_id"_stringref->GetId()}, reinterpret_cast<uintptr_t>(mutex)};
     fxt::Argument<fxt::ArgumentType::kKoid, fxt::RefType::kId> tid_name_arg{
-        fxt::StringRef{"tid"_stringref->GetFxtId()}, t == nullptr ? ZX_KOID_INVALID : t->tid()};
-    fxt::Argument tid_type_arg{fxt::StringRef{"tid_type"_stringref->GetFxtId()}, tid_type};
-    fxt::Argument wait_count_arg{fxt::StringRef{"waiter_count"_stringref->GetFxtId()},
-                                 waiter_count};
+        fxt::StringRef{"tid"_stringref->GetId()}, t == nullptr ? ZX_KOID_INVALID : t->tid()};
+    fxt::Argument tid_type_arg{fxt::StringRef{"tid_type"_stringref->GetId()}, tid_type};
+    fxt::Argument wait_count_arg{fxt::StringRef{"waiter_count"_stringref->GetId()}, waiter_count};
 
     auto event_name = fxt::StringRef{(tag == TAG_KERNEL_MUTEX_ACQUIRE   ? "mutex_acquire"_stringref
                                       : tag == TAG_KERNEL_MUTEX_RELEASE ? "mutex_release"_stringref
                                       : tag == TAG_KERNEL_MUTEX_BLOCK   ? "mutex_block"_stringref
                                                                         : "unknown"_stringref)
-                                         ->GetFxtId()};
+                                         ->GetId()};
 
     fxt_duration_complete(tag, ts_, fxt::ThreadRef{t->pid(), t->tid()},
-                          fxt::StringRef{"kernel:sched"_stringref->GetFxtId()}, event_name,
-                          ts_ + 50, mutex_id_arg, tid_name_arg, tid_type_arg, wait_count_arg);
+                          fxt::StringRef{"kernel:sched"_stringref->GetId()}, event_name, ts_ + 50,
+                          mutex_id_arg, tid_name_arg, tid_type_arg, wait_count_arg);
   }
 
   const uint64_t ts_;

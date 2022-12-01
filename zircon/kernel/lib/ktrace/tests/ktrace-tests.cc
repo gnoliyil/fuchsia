@@ -119,120 +119,6 @@ class TestKTraceState : public ::internal::KTraceState {
     END_TEST;
   }
 
-  static bool NamesTest() {
-    BEGIN_TEST;
-    // Create a small trace buffer and initialize it.
-    constexpr uint32_t kGroups = 0x3;
-    TestKTraceState state;
-    ASSERT_TRUE(state.Init(kDefaultBufferSize, kGroups));
-
-    // Immediately after initialization, ktrace will write two metadata records
-    // expressing the version of the trace buffer format, as well as the
-    // resolution of the timestamps in the trace.  Make sure that the offset
-    // reflects this.
-    uint32_t expected_offset = sizeof(ktrace_rec_32b_t) * 2;
-    ASSERT_TRUE(state.CheckExpectedOffset(expected_offset));
-
-    constexpr struct NameTestVector {
-      uint32_t tag;
-      uint32_t id;
-      uint32_t arg;
-      bool always;
-      bool expected_present;
-      const char* name;
-    } kTestVectors[] = {
-        // clang-format off
-      { KTRACE_TAG(0x1, 0x1,   8), 0xbaad0000, 0xf00d0000, false,  true, "Aria" },
-      { KTRACE_TAG(0x2, 0x2,  16), 0xbaad0001, 0xf00d0001, false,  true, "Andrew Adrian" },
-      { KTRACE_TAG(0x3, 0x4,  24), 0xbaad0002, 0xf00d0002, false, false, "Aurora Angel Aaron" },
-      { KTRACE_TAG(0x4, 0x8,  32), 0xbaad0003, 0xf00d0003, false, false,
-                   "Axel Addison Austin Aubrey" },
-      { KTRACE_TAG(0x5, 0x1,  40), 0xbaad0004, 0xf00d0004,  true,  true,
-                   "Aaliyah Anna Alice Amir Allison Ariana" },
-      { KTRACE_TAG(0x6, 0x1,  48), 0xbaad0005, 0xf00d0005,  true,  true,
-                   "Autumn Ayden Ashton August Adeline Adriel Athena" },
-      { KTRACE_TAG(0x7, 0x1,  56), 0xbaad0006, 0xf00d0006,  true,  true,
-                   "Archer Adalynn Arthur Alex Alaia Arianna", },
-      { KTRACE_TAG(0x8, 0x1,  64), 0xbaad0007, 0xf00d0007,  true,  true,
-                   "Ayla Alexandra Alan Ariel Adalyn Amaya Ace Amara Abraham" },
-        // clang-format on
-    };
-
-    // A small helper which computes the expected size of a name test vector.
-    auto ExpectedNameRecordSize = [](const NameTestVector& vec) -> uint32_t {
-      // Strings are limited to ZX_MAX_NAME_LEN characters, including their null terminator.
-      size_t string_storage = ktl::min(strlen(vec.name) + 1, ZX_MAX_NAME_LEN);
-
-      // Total storage is the storage for the name header, plus the string
-      // storage, all rounded up to the nearest 8 bytes.
-      return (KTRACE_NAMESIZE + static_cast<uint32_t>(string_storage) + 7) & ~0x7;
-    };
-
-    // Add all of the name test vectors to the trace buffer.  Verify that the
-    // buffer grows as we would expect while we do so.
-    uint32_t expected_present_count = 0;
-    for (const auto& vec : kTestVectors) {
-      ASSERT_TRUE(state.CheckExpectedOffset(expected_offset));
-
-      state.WriteNameEtc(vec.tag, vec.id, vec.arg, vec.name, vec.always);
-      if (vec.expected_present) {
-        expected_offset += ExpectedNameRecordSize(vec);
-        ++expected_present_count;
-      }
-
-      ASSERT_TRUE(state.CheckExpectedOffset(expected_offset));
-    }
-
-    // Now, stop the trace, enumerate the buffer, and make sure that the records
-    // we expect are present.
-    uint32_t records_enumerated = 0;
-    uint32_t vec_id = 0;
-    auto checker = [&](const ktrace_header_t* hdr) -> bool {
-      BEGIN_TEST;
-
-      ASSERT_NONNULL(hdr);
-      const ktrace_rec_name_t& rec = *(reinterpret_cast<const ktrace_rec_name_t*>(hdr));
-
-      // Skip any records which should not have made it into the trace buffer.
-      while ((vec_id < ktl::size(kTestVectors)) && !kTestVectors[vec_id].expected_present) {
-        ++vec_id;
-      }
-
-      // We should still have a test vector to compare.
-      ASSERT_LT(vec_id, ktl::size(kTestVectors));
-      const auto& vec = kTestVectors[vec_id];
-
-      // The individual fields of the tag should all match, except for the
-      // length, which should have been overwritten when the record was
-      // added.
-      EXPECT_EQ(ExpectedNameRecordSize(vec), KTRACE_LEN(rec.tag));
-      EXPECT_EQ(KTRACE_GROUP(vec.tag), KTRACE_GROUP(rec.tag));
-      EXPECT_EQ(KTRACE_EVENT(vec.tag), KTRACE_EVENT(rec.tag));
-      EXPECT_EQ(KTRACE_FLAGS(vec.tag), KTRACE_FLAGS(rec.tag));
-
-      // ID and arg should have been directly copied into the record.
-      EXPECT_EQ(vec.id, rec.id);
-      EXPECT_EQ(vec.arg, rec.arg);
-
-      // Name should match, up to the limit of ZX_MAX_NAME_LEN - 1, and
-      // the record should be null terminated.
-      const size_t expected_name_len = ktl::min(strlen(vec.name), ZX_MAX_NAME_LEN - 1);
-      ASSERT_EQ(expected_name_len, strlen(rec.name));
-      EXPECT_BYTES_EQ(reinterpret_cast<const uint8_t*>(vec.name),
-                      reinterpret_cast<const uint8_t*>(rec.name), expected_name_len);
-      EXPECT_EQ(0, rec.name[expected_name_len]);
-
-      ++vec_id;
-      END_TEST;
-    };
-
-    ASSERT_OK(state.Stop());
-    ASSERT_TRUE(state.TestAllRecords(records_enumerated, checker));
-    EXPECT_EQ(expected_present_count, records_enumerated);
-
-    END_TEST;
-  }
-
   static bool WriteRecordsTest() {
     BEGIN_TEST;
 
@@ -943,7 +829,6 @@ class TestKTraceState : public ::internal::KTraceState {
 
 UNITTEST_START_TESTCASE(ktrace_tests)
 UNITTEST("init/start", ktrace_tests::TestKTraceState::InitStartTest)
-UNITTEST("names", ktrace_tests::TestKTraceState::NamesTest)
 UNITTEST("write record", ktrace_tests::TestKTraceState::WriteRecordsTest)
 UNITTEST("saturation", ktrace_tests::TestKTraceState::SaturationTest)
 UNITTEST("rewind", ktrace_tests::TestKTraceState::RewindTest)

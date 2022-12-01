@@ -60,10 +60,10 @@ void ktrace_vcpu(uint32_t tag, VcpuMeta meta) {
   if (unlikely(ktrace_tag_enabled(tag))) {
     const Thread* current_thread = Thread::Current::Get();
     const fxt::ThreadRef thread{current_thread->pid(), current_thread->tid()};
-    const fxt::StringRef category{"kernel:vcpu"_stringref->GetFxtId()};
-    const fxt::Argument arg{fxt::StringRef{"meta #"_stringref->GetFxtId()}, meta};
-    const auto name = meta < VCPU_META_COUNT ? fxt::StringRef(vcpu_meta[meta]->GetFxtId())
-                                             : fxt::StringRef("vcpu meta"_stringref->GetFxtId());
+    const fxt::StringRef category{"kernel:vcpu"_stringref->GetId()};
+    const fxt::Argument arg{fxt::StringRef{"meta #"_stringref->GetId()}, meta};
+    const auto name = meta < VCPU_META_COUNT ? fxt::StringRef(vcpu_meta[meta]->GetId())
+                                             : fxt::StringRef("vcpu meta"_stringref->GetId());
     if (tag == TAG_VCPU_BLOCK) {
       fxt_duration_begin(tag, current_ticks(), thread, category, name, arg);
     } else if (tag == TAG_VCPU_UNBLOCK) {
@@ -76,18 +76,18 @@ void ktrace_vcpu_exit(VcpuExit exit, uint64_t exit_address) {
   if (unlikely(ktrace_tag_enabled(TAG_VCPU_EXIT))) {
     const Thread* current_thread = Thread::Current::Get();
     const fxt::ThreadRef thread{current_thread->pid(), current_thread->tid()};
-    const fxt::StringRef category{"kernel:vcpu"_stringref->GetFxtId()};
+    const fxt::StringRef category{"kernel:vcpu"_stringref->GetId()};
     const fxt::Argument<fxt::ArgumentType::kUint64, fxt::RefType::kId> addr_arg{
-        fxt::StringRef{"exit_address"_stringref->GetFxtId()}, exit_address};
-    const fxt::StringRef name{"vcpu"_stringref->GetFxtId()};
+        fxt::StringRef{"exit_address"_stringref->GetId()}, exit_address};
+    const fxt::StringRef name{"vcpu"_stringref->GetId()};
 
     if (exit < VCPU_EXIT_COUNT) {
-      const fxt::Argument exit_type_arg{fxt::StringRef{"exit_address"_stringref->GetFxtId()},
-                                        fxt::StringRef{vcpu_exit[exit]->GetFxtId()}};
+      const fxt::Argument exit_type_arg{fxt::StringRef{"exit_address"_stringref->GetId()},
+                                        fxt::StringRef{vcpu_exit[exit]->GetId()}};
       fxt_duration_end(TAG_VCPU_EXIT, current_ticks(), thread, category, name, addr_arg,
                        exit_type_arg);
     } else {
-      const fxt::Argument exit_type_arg{fxt::StringRef("exit_address"_stringref->GetFxtId()), exit};
+      const fxt::Argument exit_type_arg{fxt::StringRef("exit_address"_stringref->GetId()), exit};
       fxt_duration_end(TAG_VCPU_EXIT, current_ticks(), thread, category, name, addr_arg,
                        exit_type_arg);
     }

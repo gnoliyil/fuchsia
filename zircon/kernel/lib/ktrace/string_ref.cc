@@ -11,9 +11,9 @@
 
 #include <ktl/enforce.h>
 
-int StringRef::Register(StringRef* string_ref) {
+uint16_t StringRef::Register(StringRef* string_ref) {
   // Return the id if the string ref is already registered.
-  int id = string_ref->id.load(ktl::memory_order_relaxed);
+  uint16_t id = string_ref->id.load(ktl::memory_order_relaxed);
   if (id != kInvalidId) {
     return id;
   }
@@ -22,7 +22,7 @@ int StringRef::Register(StringRef* string_ref) {
   // threads or CPUs only one will succeed, in which case the id counter will
   // harmlessly skip values equal to the number of agents racing between here
   // and the check above.
-  const int new_id = id_counter_.fetch_add(1, ktl::memory_order_relaxed);
+  const uint16_t new_id = id_counter_.fetch_add(1, ktl::memory_order_relaxed);
   while (!string_ref->id.compare_exchange_weak(id, new_id, ktl::memory_order_relaxed,
                                                ktl::memory_order_relaxed)) {
     // If another agent set the id first simply return the id.
@@ -33,11 +33,8 @@ int StringRef::Register(StringRef* string_ref) {
   // Emit a name record the first time this string ref is encountered at
   // runtime. This is ignored if tracing is not active and is replayed at the
   // beginning of subsequent tracing sessions.
-  // TEMPORARY(fxbug.dev/98176): Since ktrace_provider also creates its own
-  // string references, use the upper half of the index space.
-  const uint16_t fxt_id = static_cast<uint16_t>(string_ref->id) | 0x4000;
-  DEBUG_ASSERT(fxt_id <= 0x7FFF);
-  fxt_string_record(fxt_id, string_ref->string, strnlen(string_ref->string, ZX_MAX_NAME_LEN - 1));
+  DEBUG_ASSERT(id <= 0x7FFF);
+  fxt_string_record(id, string_ref->string, strnlen(string_ref->string, ZX_MAX_NAME_LEN - 1));
 
   // Register the string ref in the global linked list. When there is a race
   // above only the winning agent that set the id will continue to this point.
@@ -65,5 +62,5 @@ void StringRef::PreRegister() {
   }
 }
 
-ktl::atomic<int> StringRef::id_counter_{StringRef::kInvalidId + 1};
+ktl::atomic<uint16_t> StringRef::id_counter_{StringRef::kInvalidId + 1};
 ktl::atomic<StringRef*> StringRef::head_{nullptr};

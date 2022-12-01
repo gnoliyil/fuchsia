@@ -100,8 +100,6 @@ class KTraceState {
   // |payload| must consist of all uint32_t or all uint64_t types.
   template <typename... Args>
   void WriteRecord(uint32_t effective_tag, uint64_t explicit_ts, Args... args);
-  void WriteNameEtc(uint32_t tag, uint32_t id, uint32_t arg, const char* name, bool always)
-      TA_EXCL(write_lock_);
 
   inline uint32_t grpmask() const {
     return static_cast<uint32_t>(grpmask_and_inflight_writes_.load(ktl::memory_order_acquire));

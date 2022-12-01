@@ -507,11 +507,11 @@ void x86_exception_handler(iframe_t* frame) {
     // Hence page fault events are emitted in the thread context, not the cpu context like other
     // irq's. See TAG_PAGE_FAULT in vmm_page_fault_handler().
     fxt::Argument<fxt::ArgumentType::kUint64, fxt::RefType::kId> arg(
-        fxt::StringRef("irq #"_stringref->GetFxtId()), entry_vector);
+        fxt::StringRef("irq #"_stringref->GetId()), entry_vector);
     fxt_duration_begin(TAG_IRQ_ENTER, current_ticks(),
                        fxt::ThreadRef(kNoProcess, kKernelPseudoCpuBase + arch_curr_cpu_num()),
-                       fxt::StringRef("kernel:irq"_stringref->GetFxtId()),
-                       fxt::StringRef("irq"_stringref->GetFxtId()), arg);
+                       fxt::StringRef("kernel:irq"_stringref->GetId()),
+                       fxt::StringRef("irq"_stringref->GetId()), arg);
   }
 
   // deliver the interrupt
@@ -519,11 +519,11 @@ void x86_exception_handler(iframe_t* frame) {
 
   if (entry_vector != X86_INT_PAGE_FAULT && unlikely(ktrace_tag_enabled(TAG_IRQ_EXIT))) {
     fxt::Argument<fxt::ArgumentType::kUint64, fxt::RefType::kId> arg(
-        fxt::StringRef("irq #"_stringref->GetFxtId()), entry_vector);
+        fxt::StringRef("irq #"_stringref->GetId()), entry_vector);
     fxt_duration_end(TAG_IRQ_EXIT, current_ticks(),
                      fxt::ThreadRef(kNoProcess, kKernelPseudoCpuBase + arch_curr_cpu_num()),
-                     fxt::StringRef("kernel:irq"_stringref->GetFxtId()),
-                     fxt::StringRef("irq"_stringref->GetFxtId()), arg);
+                     fxt::StringRef("kernel:irq"_stringref->GetId()),
+                     fxt::StringRef("irq"_stringref->GetId()), arg);
   }
 
   bool do_preempt = int_handler_finish(&state);

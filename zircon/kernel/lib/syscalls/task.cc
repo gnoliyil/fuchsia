@@ -120,7 +120,7 @@ zx_status_t sys_thread_create(zx_handle_t process_handle, user_in_ptr<const char
 
   fxt_kernel_object(TAG_THREAD_NAME, /*always*/ false, tid, ZX_OBJ_TYPE_THREAD, fxt::StringRef(buf),
                     fxt::Argument<fxt::ArgumentType::kKoid, fxt::RefType::kId>(
-                        fxt::StringRef("process"_stringref->GetFxtId()), pid));
+                        fxt::StringRef("process"_stringref->GetId()), pid));
 
   return out->make(ktl::move(handle), thread_rights);
 }

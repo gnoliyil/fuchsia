@@ -531,22 +531,22 @@ extern "C" void arm64_serror_exception(iframe_t* iframe, uint exception_flags) {
 
   if (unlikely(ktrace_tag_enabled(TAG_IRQ_ENTER))) {
     fxt::Argument<fxt::ArgumentType::kUint64, fxt::RefType::kId> arg(
-        fxt::StringRef("irq #"_stringref->GetFxtId()), 0xaa55);
+        fxt::StringRef("irq #"_stringref->GetId()), 0xaa55);
     fxt_duration_begin(TAG_IRQ_ENTER, current_ticks(),
                        fxt::ThreadRef(kNoProcess, kKernelPseudoCpuBase + arch_curr_cpu_num()),
-                       fxt::StringRef("kernel:irq"_stringref->GetFxtId()),
-                       fxt::StringRef("irq"_stringref->GetFxtId()), arg);
+                       fxt::StringRef("kernel:irq"_stringref->GetId()),
+                       fxt::StringRef("irq"_stringref->GetId()), arg);
   }
 
   exceptions_serror.Add(1);
 
   if (unlikely(ktrace_tag_enabled(TAG_IRQ_EXIT))) {
     fxt::Argument<fxt::ArgumentType::kUint64, fxt::RefType::kId> arg(
-        fxt::StringRef("irq #"_stringref->GetFxtId()), 0xaa55);
+        fxt::StringRef("irq #"_stringref->GetId()), 0xaa55);
     fxt_duration_end(TAG_IRQ_EXIT, current_ticks(),
                      fxt::ThreadRef(kNoProcess, kKernelPseudoCpuBase + arch_curr_cpu_num()),
-                     fxt::StringRef("kernel:irq"_stringref->GetFxtId()),
-                     fxt::StringRef("irq"_stringref->GetFxtId()), arg);
+                     fxt::StringRef("kernel:irq"_stringref->GetId()),
+                     fxt::StringRef("irq"_stringref->GetId()), arg);
   }
 }
 

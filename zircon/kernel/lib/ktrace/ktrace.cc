@@ -52,10 +52,7 @@ void ktrace_add_probe(StringRef* string_ref) {
 
 void ktrace_report_probes() {
   for (StringRef* ref = StringRef::head(); ref != nullptr; ref = ref->next) {
-    // TEMPORARY(fxbug.dev/98176): Since ktrace_provider also creates its own
-    // string references, use the upper half of the index space.
-    const uint16_t fxt_id = static_cast<uint16_t>(ref->id) | 0x4000;
-    fxt_string_record(fxt_id, ref->string, strnlen(ref->string, ZX_MAX_NAME_LEN - 1));
+    fxt_string_record(ref->id, ref->string, strnlen(ref->string, ZX_MAX_NAME_LEN - 1));
   }
 }
 
@@ -68,10 +65,10 @@ void ktrace_report_cpu_pseudo_threads() {
     fxt_kernel_object(TAG_THREAD_NAME, /* always */ true, kKernelPseudoCpuBase + i,
                       ZX_OBJ_TYPE_THREAD, fxt::StringRef(name),
                       fxt::Argument<fxt::ArgumentType::kKoid, fxt::RefType::kId>(
-                          fxt::StringRef("process"_stringref->GetFxtId()), kNoProcess));
+                          fxt::StringRef("process"_stringref->GetId()), kNoProcess));
   }
   fxt_kernel_object(TAG_THREAD_NAME, /* always */ true, 0, ZX_OBJ_TYPE_THREAD,
-                    fxt::StringRef("kernel"_stringref->GetFxtId()));
+                    fxt::StringRef("kernel"_stringref->GetId()));
 }
 
 }  // namespace
@@ -446,35 +443,6 @@ void KTraceState::WriteRecord(uint32_t effective_tag, uint64_t explicit_ts, Args
     }
   } else {
     DisableGroupMask();
-  }
-}
-
-void KTraceState::WriteNameEtc(uint32_t tag, uint32_t id, uint32_t arg, const char* name,
-                               bool always) {
-  auto ShouldTrace = [tag, always](uint32_t mask) -> bool {
-    return tag_enabled(tag, mask) || always;
-  };
-
-  if (ShouldTrace(grpmask())) {
-    AutoWriteInFlight in_flight_manager(*this);
-    if (unlikely(!ShouldTrace(in_flight_manager.observed_grpmask()))) {
-      return;
-    }
-
-    const uint32_t len = static_cast<uint32_t>(strnlen(name, ZX_MAX_NAME_LEN - 1));
-
-    // set size to: sizeof(hdr) + len + 1, round up to multiple of 8
-    tag = (tag & 0xFFFFFFF0) | ((KTRACE_NAMESIZE + len + 1 + 7) >> 3);
-
-    if (PendingCommit reservation = Reserve(tag); reservation.is_valid()) {
-      ktrace_rec_name_t* rec = reinterpret_cast<ktrace_rec_name_t*>(reservation.hdr());
-      rec->id = id;
-      rec->arg = arg;
-      memcpy(rec->name, name, len);
-      rec->name[len] = 0;
-    } else {
-      DisableGroupMask();
-    }
   }
 }
 

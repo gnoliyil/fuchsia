@@ -17,24 +17,19 @@
 // constructors or a destructor and contains trivially constructible members so
 // that it may be aggregate-initialized to avoid static initializers and guards.
 struct StringRef {
-  static constexpr int kInvalidId = -1;
+  static constexpr uint16_t kInvalidId = 0;
 
   const char* string{nullptr};
-  ktl::atomic<int> id{kInvalidId};
+  ktl::atomic<uint16_t> id{kInvalidId};
   StringRef* next{nullptr};
 
   // Returns the numeric id for this string ref. If this is the first runtime
   // encounter with this string ref a new id is generated and the string ref
   // is added to the global linked list.
-  int GetId() {
-    const int ref_id = id.load(ktl::memory_order_relaxed);
+  uint16_t GetId() {
+    const uint16_t ref_id = id.load(ktl::memory_order_relaxed);
     return ref_id == kInvalidId ? Register(this) : ref_id;
   }
-
-  // TEMPORARY(fxbug.dev/98176): Returns the numeric id for this string ref for
-  // use in FXT records. Since ktrace_provider also allocates string records,
-  // use the high half of the index space to try to avoid collisions.
-  uint16_t GetFxtId() { return static_cast<uint16_t>(GetId() | 0x4000); }
 
   // Returns the head of the global string ref linked list.
   static StringRef* head() { return head_.load(ktl::memory_order_acquire); }
@@ -51,9 +46,9 @@ struct StringRef {
  private:
   // TODO(fxbug.dev/33293): Replace runtime lock-free linked list with comdat linker
   // sections once the toolchain supports it.
-  static int Register(StringRef* string_ref);
+  static uint16_t Register(StringRef* string_ref);
 
-  static ktl::atomic<int> id_counter_;
+  static ktl::atomic<uint16_t> id_counter_;
   static ktl::atomic<StringRef*> head_;
 };
 

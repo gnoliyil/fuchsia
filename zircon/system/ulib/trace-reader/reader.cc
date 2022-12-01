@@ -297,12 +297,10 @@ bool TraceReader::ReadEventRecord(Chunk& record, RecordHeader header) {
   switch (type) {
     case EventType::kInstant: {
       std::optional scope = record.ReadUint64();
-      if (!scope.has_value()) {
-        return false;
-      }
       record_consumer_(Record(Record::Event{
           timestamp, process_thread, std::move(category), std::move(name), std::move(arguments),
-          EventData(EventData::Instant{static_cast<EventScope>(scope.value())})}));
+          EventData(EventData::Instant{static_cast<EventScope>(
+              scope.value_or(static_cast<uint64_t>(EventScope::kThread)))})}));
       break;
     }
     case EventType::kCounter: {
