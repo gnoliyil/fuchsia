@@ -10,7 +10,6 @@
     program: {
         runner: "driver",
         bind: "meta/bind/tpm-lpc.bindbc",
-        colocate: "true",
         compat: "driver/tpm-lpc.so",
         default_dispatcher_opts: [ "allow_sync_calls" ],
     },
