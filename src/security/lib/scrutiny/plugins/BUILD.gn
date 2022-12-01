@@ -29,7 +29,7 @@ if (is_fuchsia) {
     version = "$target_out_dir/version"
   }
 
-  generated_partitions_config("partitions") {
+  generated_partitions_config_new("partitions") {
     testonly = true
     hw_revision = "board"
     output_path = files.partitions
@@ -66,10 +66,6 @@ if (is_fuchsia) {
       ":version",
     ]
     partitions = files.partitions
-    partitions_contents = []
-    foreach(file, firmware_prebuilts) {
-      partitions_contents += [ "${file.path}${firmware_prebuilts_path_suffix}" ]
-    }
     system_a = files.assembly_manifest
     system_a_contents = [
       files.qemu_kernel,

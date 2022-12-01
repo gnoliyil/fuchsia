@@ -101,7 +101,7 @@ if (is_fuchsia) {
     include_component_id_index = true
   }
 
-  generated_partitions_config("partitions_config") {
+  generated_partitions_config_new("partitions_config") {
     testonly = true
     output_path = files.partitions_config
     hw_revision = board_name
@@ -120,12 +120,6 @@ if (is_fuchsia) {
     version_file = build_info_files.version
     board_name = "fake_board"
     epoch = "1"
-  }
-
-  # Create a list of the files that are referenced by the partitions config.
-  _partitions_contents = []
-  foreach(file, firmware_prebuilts) {
-    _partitions_contents += [ "${file.path}${firmware_prebuilts_path_suffix}" ]
   }
 
   product_bundle("product_bundle") {
@@ -164,7 +158,6 @@ if (is_fuchsia) {
       _assembly_contents += [ files.vbmeta ]
     }
 
-    partitions_contents = _partitions_contents
     system_a_contents = _assembly_contents
   }
 

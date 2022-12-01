@@ -314,17 +314,55 @@ if (is_fuchsia) {
     image_metadata_overrides = legacy_fuchsia_image_metadata_overrides
   }
 
-  generated_partitions_config("partitions_config") {
+  generated_partitions_config_new("partitions_config") {
     testonly = fuchsia_zbi_testonly
     output_path = files.partitions_config
     hw_revision = board_name
     bootstrap_partitions = bootstrap_files
     unlock_credentials = board_fastboot_unlock_credentials
 
+    bootloader_partitions = []
+    foreach(firmware, firmware_prebuilts) {
+      assert(defined(firmware.type), "Firmware type must be specified")
+      assert(defined(firmware.path), "Firmware path must be specified")
+
+      firmware_path = "${firmware.path}${firmware_prebuilts_path_suffix}"
+      if (defined(firmware.partition)) {
+        bootloader_partitions += [
+          {
+            type = firmware.type
+            image = firmware_path
+            name = firmware.partition
+          },
+        ]
+      } else {
+        bootloader_partitions += [
+          {
+            type = firmware.type
+            image = firmware_path
+          },
+        ]
+      }
+    }
+
     if (use_gigaboot) {
-      esp_image_path = files.esp_image_path
+      bootloader_partitions += [
+        {
+          image = files.esp_image_path
+          type = "esp"
+          name = "fuchsia-esp"
+        },
+      ]
       deps = [ "//build/images/flash:esp" ]
     }
+
+    zbi_a = zircon_a_partition
+    zbi_b = zircon_b_partition
+    zbi_r = zircon_r_partition
+    vbmeta_a = vbmeta_a_partition
+    vbmeta_b = vbmeta_b_partition
+    vbmeta_r = vbmeta_r_partition
+    fvm = fvm_partition
   }
 
   # Create a list of the files that are referenced by the partitions config.

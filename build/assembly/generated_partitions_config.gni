@@ -15,8 +15,17 @@ import("//build/images/args.gni")
 #     This is placed in the flash manifest to ensure partitions are not
 #     flashed to the wrong hardware.
 #
-#   esp_image_path (optional)
-#     [string] The path on host to the ESP bootloader.
+#   bootloader_partitions (optional)
+#     [list] List of bootloaders to use when flashing or updating.
+#     Each entry will have the following format.
+#       {
+#         image = "path/to/image"
+#         type = "bl2"
+#         name = "boot1"
+#       }
+#
+#     If a name is not provided, then the bootloader will not be flashed, but
+#     will still be included in the update package.
 #
 #   bootstrap_partitions (optional)
 #     [list] List of OEM images to flash when using:
@@ -26,9 +35,9 @@ import("//build/images/args.gni")
 #     partition if the conditional fastboot arg equals the specified value.
 #       {
 #         path = "path/to/image"
-#         partition = "partition_name"
+#         partition = "partition"
 #         condition = {
-#           variable = "variable_name"
+#           variable = "variable"
 #           value = "value
 #         }
 #       }
@@ -37,14 +46,54 @@ import("//build/images/args.gni")
 #     [list] List of zip files containing the credentials used to unlock
 #     a device in fastboot mode.
 #
-template("generated_partitions_config") {
+#   zbi_a (optional)
+#   zbi_b (optional)
+#   zbi_r (optional)
+#     [string] The name of the zbi partitions for each slot.
+#
+#   vbmeta_a (optional)
+#   vbmeta_b (optional)
+#   vbmeta_r (optional)
+#     [string] The name of the vbmeta partitions for each slot.
+#
+#   fvm (optional)
+#     [string] The name of the fvm partition.
+#
+template("generated_partitions_config_new") {
   assert(defined(invoker.output_path), "Need to define output_path")
   assert(defined(invoker.hw_revision), "Need to define hw_revision")
 
-  bootstrap = []
+  bootloaders = []
+  if (defined(invoker.bootloader_partitions)) {
+    foreach(part, invoker.bootloader_partitions) {
+      assert(defined(part.image), "All bootloaders must define a path")
+      assert(defined(part.type), "All bootloaders must define a type")
+
+      path = rebase_path(part.image, root_build_dir)
+
+      if (defined(part.name)) {
+        bootloaders += [
+          {
+            image = path
+            type = part.type
+            name = part.name
+          },
+        ]
+      } else {
+        bootloaders += [
+          {
+            image = path
+            type = part.type
+          },
+        ]
+      }
+    }
+  }
+
+  bootstraps = []
   if (defined(invoker.bootstrap_partitions)) {
     foreach(part, invoker.bootstrap_partitions) {
-      bootstrap += [
+      bootstraps += [
         {
           image = rebase_path(part.path, root_build_dir)
           name = part.partition
@@ -72,15 +121,137 @@ template("generated_partitions_config") {
     outputs = [ invoker.output_path ]
     output_conversion = "json"
 
+    # Aggregate all the non-bootloader partitions.
+    _partitions = []
+    if (defined(invoker.zbi_a) && invoker.zbi_a != "") {
+      _partitions += [
+        {
+          name = invoker.zbi_a
+          type = "ZBI"
+          slot = "A"
+        },
+      ]
+    }
+    if (defined(invoker.zbi_b) && invoker.zbi_b != "") {
+      _partitions += [
+        {
+          name = invoker.zbi_b
+          type = "ZBI"
+          slot = "B"
+        },
+      ]
+    }
+    if (defined(invoker.zbi_r) && invoker.zbi_r != "") {
+      _partitions += [
+        {
+          name = invoker.zbi_r
+          type = "ZBI"
+          slot = "R"
+        },
+      ]
+    }
+    if (defined(invoker.vbmeta_a) && invoker.vbmeta_a != "") {
+      _partitions += [
+        {
+          name = invoker.vbmeta_a
+          type = "VBMeta"
+          slot = "A"
+        },
+      ]
+    }
+    if (defined(invoker.vbmeta_b) && invoker.vbmeta_b != "") {
+      _partitions += [
+        {
+          name = invoker.vbmeta_b
+          type = "VBMeta"
+          slot = "B"
+        },
+      ]
+    }
+    if (defined(invoker.vbmeta_r) && invoker.vbmeta_r != "") {
+      _partitions += [
+        {
+          name = invoker.vbmeta_r
+          type = "VBMeta"
+          slot = "R"
+        },
+      ]
+    }
+    if (defined(invoker.fvm) && invoker.fvm != "") {
+      _partitions += [
+        {
+          name = invoker.fvm
+          type = "FVM"
+        },
+      ]
+    }
+
+    contents = {
+      hardware_revision = invoker.hw_revision
+      bootloader_partitions = bootloaders
+      partitions = _partitions
+      bootstrap_partitions = bootstraps
+      unlock_credentials = credentials
+    }
+  }
+}
+
+# Generates a partitions config to be consumed by the Image Assembler.
+#
+# Arguments:
+#   output_path (required)
+#     [path] Board config output location.
+#
+#   hw_revision (required)
+#     [string] The name of the hardware revision.
+#     This is placed in the flash manifest to ensure partitions are not
+#     flashed to the wrong hardware.
+#
+#   esp_image_path (optional)
+#     [string] The path on host to the ESP bootloader.
+#
+#   bootstrap_partitions (optional)
+#     [list] List of OEM images to flash when using:
+#       ffx target flash --product fuchsia
+#
+#     Each entry will have the following format. A file is only flashed to the
+#     partition if the conditional fastboot arg equals the specified value.
+#       {
+#         path = "path/to/image"
+#         partition = "partition_name"
+#         condition = {
+#           variable = "variable_name"
+#           value = "value
+#         }
+#       }
+#
+#   unlock_credentials (optional)
+#     [list] List of zip files containing the credentials used to unlock
+#     a device in fastboot mode.
+#
+template("generated_partitions_config") {
+  assert(defined(invoker.output_path), "Need to define output_path")
+  assert(defined(invoker.hw_revision), "Need to define hw_revision")
+
+  generated_partitions_config_new(target_name) {
+    forward_variables_from(invoker,
+                           [
+                             "deps",
+                             "testonly",
+                             "visibility",
+                             "output_path",
+                             "hw_revision",
+                             "bootstrap_partitions",
+                             "unlock_credentials",
+                           ])
+
     # Aggregate all the bootloader partitions.
-    _bootloader_partitions = []
+    bootloader_partitions = []
     foreach(firmware, firmware_prebuilts) {
       assert(defined(firmware.type), "Firmware type must be specified")
       assert(defined(firmware.path), "Firmware path must be specified")
 
-      firmware_path =
-          rebase_path("${firmware.path}${firmware_prebuilts_path_suffix}",
-                      root_build_dir)
+      firmware_path = "${firmware.path}${firmware_prebuilts_path_suffix}"
       partition = {
       }
       partition.type = firmware.type
@@ -90,7 +261,7 @@ template("generated_partitions_config") {
       if (defined(firmware.partition)) {
         partition.name = firmware.partition
       }
-      _bootloader_partitions += [ partition ]
+      bootloader_partitions += [ partition ]
     }
 
     # Add the ESP partition if necessary.
@@ -99,82 +270,32 @@ template("generated_partitions_config") {
         {
           name = "fuchsia-esp"
           type = "esp"
-          image = rebase_path("${invoker.esp_image_path}", root_build_dir)
+          image = invoker.esp_image_path
         },
       ]
     }
 
     # Aggregate all the non-bootloader partitions.
-    _partitions = []
     if (zircon_a_partition != "") {
-      _partitions += [
-        {
-          name = zircon_a_partition
-          type = "ZBI"
-          slot = "A"
-        },
-      ]
+      zbi_a = zircon_a_partition
     }
     if (zircon_b_partition != "") {
-      _partitions += [
-        {
-          name = zircon_b_partition
-          type = "ZBI"
-          slot = "B"
-        },
-      ]
+      zbi_b = zircon_b_partition
     }
     if (zircon_r_partition != "") {
-      _partitions += [
-        {
-          name = zircon_r_partition
-          type = "ZBI"
-          slot = "R"
-        },
-      ]
+      zbi_r = zircon_r_partition
     }
     if (vbmeta_a_partition != "") {
-      _partitions += [
-        {
-          name = vbmeta_a_partition
-          type = "VBMeta"
-          slot = "A"
-        },
-      ]
+      vbmeta_a = vbmeta_a_partition
     }
     if (vbmeta_b_partition != "") {
-      _partitions += [
-        {
-          name = vbmeta_b_partition
-          type = "VBMeta"
-          slot = "B"
-        },
-      ]
+      vbmeta_b = vbmeta_b_partition
     }
     if (vbmeta_r_partition != "") {
-      _partitions += [
-        {
-          name = vbmeta_r_partition
-          type = "VBMeta"
-          slot = "R"
-        },
-      ]
+      vbmeta_r = vbmeta_r_partition
     }
     if (fvm_partition != "") {
-      _partitions += [
-        {
-          name = fvm_partition
-          type = "FVM"
-        },
-      ]
-    }
-
-    contents = {
-      hardware_revision = invoker.hw_revision
-      bootloader_partitions = _bootloader_partitions
-      partitions = _partitions
-      bootstrap_partitions = bootstrap
-      unlock_credentials = credentials
+      fvm = fvm_partition
     }
   }
 }
