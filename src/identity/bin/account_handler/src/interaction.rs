@@ -18,9 +18,18 @@ use {
     fuchsia_zircon as zx,
     futures::{Future, TryStreamExt},
     identity_common::{EnrollmentData, PrekeyMaterial},
-    std::{cell::RefCell, rc::Rc},
+    lazy_static::lazy_static,
+    std::{cell::RefCell, collections::HashSet, rc::Rc},
     tracing::warn,
 };
+
+lazy_static! {
+    /// Set of Authentication Mechanisms which are currently supported
+    /// in AccountHandler.
+    static ref AVAILABLE_MECHANISMS: HashSet<Mechanism> = HashSet::from([
+        Mechanism::Test
+    ]);
+}
 
 type NotifyFn = Box<dyn Fn(&InteractionWatchStateResponse, InteractionWatchStateResponder) -> bool>;
 
@@ -176,8 +185,6 @@ impl Interaction {
                             self.state_publisher.set(self.create_state());
                         }
                         Ok(()) => {
-                            // TODO(104337): Get enrollment/authentication result
-                            // from the authenticator and return.
                             let storage_unlock_proxy = self.get_storage_unlock_proxy()?;
                             match authenticator_fn(
                                 storage_unlock_proxy,
@@ -239,12 +246,24 @@ impl Interaction {
 
     /// Get the proxy to the appropriate authenticator based on the Mechanism.
     fn get_storage_unlock_proxy(&self) -> Result<StorageUnlockMechanismProxy, ApiError> {
-        // TODO(fxb/104199): Return the correct proxy based on the current
-        // operation mechanism.
-        client::connect_to_protocol::<StorageUnlockMechanismMarker>().map_err(|err| {
-            warn!("Failed to connect to authenticator {:?}", err);
+        if !AVAILABLE_MECHANISMS.contains(&self.mechanism) {
+            warn!("Unsupported auth mechanism: {:?}", self.mechanism);
+            return Err(ApiError::InvalidRequest);
+        }
+
+        let path = format!(
+            "/svc/fuchsia.identity.authentication.{:?}StorageUnlockMechanism",
+            self.mechanism
+        );
+        let auth_mechanism_proxy = client::connect_to_protocol_at_path::<
+            StorageUnlockMechanismMarker,
+        >(&path)
+        .map_err(|err| {
+            warn!("Failed to connect to authentication protocol {}: {:?}", path, err);
             ApiError::Resource
-        })
+        })?;
+
+        Ok(auth_mechanism_proxy)
     }
 
     async fn start_authentication(
@@ -333,6 +352,13 @@ mod tests {
             make_proxy(Mechanism::Test, Mode::Enroll, Box::new(move |_, _| async { Ok(()) }));
         let state = proxy.watch_state().await.expect("Failed to get interaction state");
         assert_eq!(state, InteractionWatchStateResponse::Enrollment(vec![Mechanism::Test]));
+    }
+
+    #[fuchsia_async::run_until_stalled(test)]
+    async fn interaction_get_proxy_for_unavailable_password_mechanism() {
+        let interaction = Interaction::new(Mechanism::Password, Mode::Authenticate);
+
+        assert_matches!(interaction.get_storage_unlock_proxy(), Err(ApiError::InvalidRequest));
     }
 
     #[fuchsia_async::run_until_stalled(test)]
