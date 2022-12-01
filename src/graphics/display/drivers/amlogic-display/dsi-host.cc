@@ -57,7 +57,7 @@ PanelConfig kPanelConfig[] = {
     MakeConfig("TV070WSM_FT_9365",
                {lcd_init_sequence_TV070WSM_FT_9365, std::size(lcd_init_sequence_TV070WSM_FT_9365)}),
     MakeConfig("KD070D82_FT",
-               {lcd_init_sequence_KD070D82_FT_9365, std::size(lcd_init_sequence_KD070D82_FT_9365)}),
+               {lcd_init_sequence_KD070D82_FT, std::size(lcd_init_sequence_KD070D82_FT)}),
     MakeConfig("KD070D82_FT_9365",
                {lcd_init_sequence_KD070D82_FT_9365, std::size(lcd_init_sequence_KD070D82_FT_9365)}),
     MakeConfig("TV070WSM_ST7703I",
