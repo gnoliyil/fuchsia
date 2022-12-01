@@ -56,6 +56,24 @@
         },
         {
             "event_codes": [
+                3,
+                0
+            ],
+            "metric_id": 101,
+            "metric_type": "Occurrence",
+            "selector": "bootstrap/archivist:root/archive_accessor_stats/lowpan/inspect/batch_iterator/get_next:requests"
+        },
+        {
+            "event_codes": [
+                3,
+                1
+            ],
+            "metric_id": 101,
+            "metric_type": "Occurrence",
+            "selector": "bootstrap/archivist:root/archive_accessor_stats/lowpan/logs/batch_iterator/get_next:requests"
+        },
+        {
+            "event_codes": [
                 0,
                 0
             ],
@@ -107,6 +125,24 @@
             "metric_id": 103,
             "metric_type": "Occurrence",
             "selector": "bootstrap/archivist:root/archive_accessor_stats/legacy_metrics/logs/batch_iterator/get_next:result_count"
+        },
+        {
+            "event_codes": [
+                3,
+                0
+            ],
+            "metric_id": 103,
+            "metric_type": "Occurrence",
+            "selector": "bootstrap/archivist:root/archive_accessor_stats/lowpan/inspect/batch_iterator/get_next:result_count"
+        },
+        {
+            "event_codes": [
+                3,
+                1
+            ],
+            "metric_id": 103,
+            "metric_type": "Occurrence",
+            "selector": "bootstrap/archivist:root/archive_accessor_stats/lowpan/logs/batch_iterator/get_next:result_count"
         },
         {
             "event_codes": [
@@ -164,6 +200,24 @@
         },
         {
             "event_codes": [
+                3,
+                0
+            ],
+            "metric_id": 104,
+            "metric_type": "Occurrence",
+            "selector": "bootstrap/archivist:root/archive_accessor_stats/lowpan/inspect/batch_iterator/get_next:result_errors"
+        },
+        {
+            "event_codes": [
+                3,
+                1
+            ],
+            "metric_id": 104,
+            "metric_type": "Occurrence",
+            "selector": "bootstrap/archivist:root/archive_accessor_stats/lowpan/logs/batch_iterator/get_next:result_errors"
+        },
+        {
+            "event_codes": [
                 0,
                 0
             ],
@@ -218,6 +272,24 @@
         },
         {
             "event_codes": [
+                3,
+                0
+            ],
+            "metric_id": 105,
+            "metric_type": "Occurrence",
+            "selector": "bootstrap/archivist:root/archive_accessor_stats/lowpan/inspect:component_timeouts_count"
+        },
+        {
+            "event_codes": [
+                3,
+                1
+            ],
+            "metric_id": 105,
+            "metric_type": "Occurrence",
+            "selector": "bootstrap/archivist:root/archive_accessor_stats/lowpan/logs:component_timeouts_count"
+        },
+        {
+            "event_codes": [
                 0
             ],
             "metric_id": 106,
@@ -239,6 +311,14 @@
             "metric_id": 106,
             "metric_type": "Occurrence",
             "selector": "bootstrap/archivist:root/archive_accessor_stats/legacy_metrics:connections_opened"
+        },
+        {
+            "event_codes": [
+                3
+            ],
+            "metric_id": 106,
+            "metric_type": "Occurrence",
+            "selector": "bootstrap/archivist:root/archive_accessor_stats/lowpan:connections_opened"
         },
         {
             "event_codes": [
@@ -266,6 +346,15 @@
             "metric_id": 108,
             "metric_type": "Occurrence",
             "selector": "bootstrap/archivist:root/archive_accessor_stats/legacy_metrics/inspect:schema_truncation_count"
+        },
+        {
+            "event_codes": [
+                3,
+                0
+            ],
+            "metric_id": 108,
+            "metric_type": "Occurrence",
+            "selector": "bootstrap/archivist:root/archive_accessor_stats/lowpan/inspect:schema_truncation_count"
         }
     ],
     "poll_rate_sec": 1800,
