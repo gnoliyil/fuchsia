@@ -487,9 +487,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenBoolStruct_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenBoolStruct{
-				V: true,
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenBoolStruct)(nil)),
 			bytes: []byte{
 				0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			},
@@ -510,9 +508,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenIntStruct_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenIntStruct{
-				V: 0x1,
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenIntStruct)(nil)),
 			bytes: []byte{
 				0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			},
@@ -533,9 +529,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenUintStruct_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenUintStruct{
-				V: 0x1,
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenUintStruct)(nil)),
 			bytes: []byte{
 				0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			},
@@ -556,9 +550,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenFloatStruct_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenFloatStruct{
-				V: 0,
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenFloatStruct)(nil)),
 			bytes: []byte{
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			},
@@ -579,9 +571,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenDoubleStruct_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenDoubleStruct{
-				V: 0,
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenDoubleStruct)(nil)),
 			bytes: []byte{
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			},
@@ -602,9 +592,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenStringStruct_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenStringStruct{
-				V: "abcd",
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenStringStruct)(nil)),
 			bytes: []byte{
 				0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -627,9 +615,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenNullableStringStructNonNull_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenNullableStringStruct{
-				V: &[]string{"abcd"}[0],
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenNullableStringStruct)(nil)),
 			bytes: []byte{
 				0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -654,9 +640,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenNullableStringStructNull_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenNullableStringStruct{
-				V: nil,
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenNullableStringStruct)(nil)),
 			bytes: []byte{
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -678,9 +662,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenEnumStruct_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenEnumStruct{
-				V: conformance.GoldenEnum(1),
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenEnumStruct)(nil)),
 			bytes: []byte{
 				0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			},
@@ -701,9 +683,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenBitsStruct_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenBitsStruct{
-				V: conformance.GoldenBits(1),
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenBitsStruct)(nil)),
 			bytes: []byte{
 				0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			},
@@ -724,12 +704,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenTableStruct_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenTableStruct{
-				V: conformance.GoldenTable{
-					V:        0x1,
-					VPresent: true,
-				},
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenTableStruct)(nil)),
 			bytes: []byte{
 				0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -759,12 +734,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenUnionStruct_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenUnionStruct{
-				V: conformance.GoldenUnion{
-					I_goldenUnionTag: conformance.GoldenUnionV,
-					V:                0x1,
-				},
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenUnionStruct)(nil)),
 			bytes: []byte{
 				0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
@@ -793,12 +763,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenNullableUnionStructNonNull_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenNullableUnionStruct{
-				V: &conformance.GoldenUnion{
-					I_goldenUnionTag: conformance.GoldenUnionV,
-					V:                0x1,
-				},
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenNullableUnionStruct)(nil)),
 			bytes: []byte{
 				0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
@@ -827,9 +792,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenNullableUnionStructNull_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenNullableUnionStruct{
-				V: nil,
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenNullableUnionStruct)(nil)),
 			bytes: []byte{
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -851,14 +814,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenByteArrayStruct_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenByteArrayStruct{
-				V: [4]uint8{
-					0x1,
-					0x2,
-					0x3,
-					0x4,
-				},
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenByteArrayStruct)(nil)),
 			bytes: []byte{
 				0x01, 0x02, 0x03, 0x04, 0x00, 0x00, 0x00, 0x00,
 			},
@@ -890,16 +846,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenStructArrayStruct_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenStructArrayStruct{
-				V: [2]conformance.GoldenIntStruct{
-					conformance.GoldenIntStruct{
-						V: 0x1,
-					},
-					conformance.GoldenIntStruct{
-						V: 0x2,
-					},
-				},
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenStructArrayStruct)(nil)),
 			bytes: []byte{
 				0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00,
 			},
@@ -929,22 +876,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenByteVectorStruct_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenByteVectorStruct{
-				V: []uint8{
-					0x1,
-					0x2,
-					0x3,
-					0x4,
-					0x1,
-					0x2,
-					0x3,
-					0x4,
-					0x1,
-					0x2,
-					0x3,
-					0x4,
-				},
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenByteVectorStruct)(nil)),
 			bytes: []byte{
 				0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -1006,14 +938,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenByteNullableVectorStructNonNull_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenNullableByteVectorStruct{
-				V: &[]uint8{
-					0x1,
-					0x2,
-					0x3,
-					0x4,
-				},
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenNullableByteVectorStruct)(nil)),
 			bytes: []byte{
 				0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -1050,9 +975,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenNullableByteVectorStructNull_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenNullableByteVectorStruct{
-				V: nil,
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenNullableByteVectorStruct)(nil)),
 			bytes: []byte{
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -1074,16 +997,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenStructVectorStruct_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenStructVectorStruct{
-				V: []conformance.GoldenIntStruct{
-					conformance.GoldenIntStruct{
-						V: 0x1,
-					},
-					conformance.GoldenIntStruct{
-						V: 0x2,
-					},
-				},
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenStructVectorStruct)(nil)),
 			bytes: []byte{
 				0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -1118,11 +1032,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenNullableStructNonNull_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenNullableStruct{
-				V: &conformance.GoldenBoolStruct{
-					V: true,
-				},
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenNullableStruct)(nil)),
 			bytes: []byte{
 				0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 				0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -1148,9 +1058,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenNullableStructNull_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenNullableStruct{
-				V: nil,
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenNullableStruct)(nil)),
 			bytes: []byte{
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			},
@@ -1190,9 +1098,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenHandleBasicRightsStruct_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenHandleBasicRightsStruct{
-				V: zx.Event(handles[0]),
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenHandleBasicRightsStruct)(nil)),
 			bytes: []byte{
 				0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
 			},
@@ -1247,9 +1153,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenNullableHandleStructNonNull_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenNullableHandleStruct{
-				V: handles[0],
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenNullableHandleStruct)(nil)),
 			bytes: []byte{
 				0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
 			},
@@ -1287,9 +1191,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name:    "GoldenNullableHandleStructNull_v2",
 			context: fidl.MarshalerContext{UseV2WireFormat: true},
-			input: &conformance.GoldenNullableHandleStruct{
-				V: zx.HandleInvalid,
-			},
+			typ:     reflect.TypeOf((*conformance.GoldenNullableHandleStruct)(nil)),
 			bytes: []byte{
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			},

@@ -72,7 +72,7 @@ func TestAllDecodeSuccessCases(t *testing.T) {
 		decodeSuccessCase{
 			name: {{ .Name }},
 			context: {{ .Context }},
-			input: &{{ .Value }},
+			typ: reflect.TypeOf((*{{ .Type }})(nil)),
 			bytes: {{ .Bytes }},
 	{{- if .HandleDefs }}
 			handleInfos: {{ .Handles }},

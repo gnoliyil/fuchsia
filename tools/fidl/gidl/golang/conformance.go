@@ -123,7 +123,6 @@ func decodeSuccessCases(gidlDecodeSuccesses []gidlir.DecodeSuccess, schema gidlm
 		if err != nil {
 			return nil, fmt.Errorf("decode success %s: %s", decodeSuccess.Name, err)
 		}
-		value := visit(decodeSuccess.Value, decl)
 		equalityCheckInputVar := "val"
 		equalityCheckKoidArrayVar := "koidArray"
 		equalityCheck := BuildEqualityCheck(equalityCheckInputVar, decodeSuccess.Value, decl, equalityCheckKoidArrayVar)
@@ -134,7 +133,6 @@ func decodeSuccessCases(gidlDecodeSuccesses []gidlir.DecodeSuccess, schema gidlm
 			decodeSuccessCases = append(decodeSuccessCases, decodeSuccessCase{
 				Name:                      testCaseName(decodeSuccess.Name, encoding.WireFormat),
 				Context:                   marshalerContext(encoding.WireFormat),
-				Value:                     value,
 				Bytes:                     buildBytes(encoding.Bytes),
 				Type:                      declName(decl),
 				HandleDefs:                buildHandleDefs(decodeSuccess.HandleDefs),
