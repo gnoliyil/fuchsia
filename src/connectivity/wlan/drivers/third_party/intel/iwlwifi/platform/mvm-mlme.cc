@@ -861,48 +861,16 @@ zx_status_t phy_destroy_iface(void* ctx, uint16_t id) {
       IWL_ERR(mvm, "the interface id (%d) has no MAC context\n", id);
       return ZX_ERR_NOT_FOUND;
     }
+
+    if (mvmvif->ap_sta_id != IWL_MVM_INVALID_STA &&
+        mvmvif->mvm->fw_id_to_mac_id[mvmvif->ap_sta_id]) {
+      IWL_WARN(mvmvif, "STA found during delete, please try again.");
+      return ZX_ERR_BAD_STATE;
+    }
+
     // Mark this interface as being deleted. This is used to prevent any OPs on the interface.
     mvmvif->delete_in_progress = true;
-  }
-  if (mvmvif->ap_sta_id != IWL_MVM_INVALID_STA) {
-    // Client interface is in connected state. Clean it up before deleting the interface.
-    // Attempting to take down the interface with the client connected causes FW to crash
-    // sometimes.
-    struct iwl_mvm_sta* mvm_sta = mvmvif->mvm->fw_id_to_mac_id[mvmvif->ap_sta_id];
-    if (mvm_sta) {
-      zx_status_t ret;
 
-      IWL_INFO(mvmvif, "STA found during delete, needs to be cleaned up");
-      mvmvif->bss_conf.assoc = false;
-
-      // Below are to simulate the behavior of iwl_mvm_bss_info_changed_station().
-      ret = iwl_mvm_mac_sta_state(mvmvif, mvm_sta, IWL_STA_AUTHORIZED, IWL_STA_ASSOC);
-      if (ret != ZX_OK) {
-        IWL_ERR(mvmvif, "cannot set state from AUTHORIZED to ASSOC: %s\n",
-                zx_status_get_string(ret));
-      }
-      ret = iwl_mvm_mac_sta_state(mvmvif, mvm_sta, IWL_STA_ASSOC, IWL_STA_AUTH);
-      if (ret != ZX_OK) {
-        IWL_ERR(mvmvif, "cannot set state from ASSOC to AUTH: %s\n", zx_status_get_string(ret));
-      }
-      ret = iwl_mvm_mac_sta_state(mvmvif, mvm_sta, IWL_STA_AUTH, IWL_STA_NONE);
-      if (ret != ZX_OK) {
-        IWL_ERR(mvmvif, "cannot set state from AUTH to NONE: %s\n", zx_status_get_string(ret));
-      }
-      ret = iwl_mvm_mac_sta_state(mvmvif, mvm_sta, IWL_STA_NONE, IWL_STA_NOTEXIST);
-      if (ret != ZX_OK) {
-        IWL_ERR(mvmvif, "cannot set state from NONE to NOTEXIST: %s\n", zx_status_get_string(ret));
-      }
-      if (mac_clear_assoc(mvmvif, mvmvif->addr) != ZX_OK) {
-        IWL_ERR(mvmvif, "Unable to clear assoc during iface destroy");
-      }
-    } else {
-      IWL_WARN(mvmvif, "Sta id: %d set but mvm_sta not set", mvmvif->ap_sta_id);
-    }
-  }
-
-  {
-    auto lock = std::lock_guard(mvm->mutex);
     // attempt to stop any ongoing scans.
     iwl_mvm_scan_stop(mvm, IWL_MVM_SCAN_REGULAR, true);
 
