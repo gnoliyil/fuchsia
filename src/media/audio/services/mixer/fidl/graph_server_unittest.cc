@@ -233,14 +233,14 @@ MakeDefaultProcessorConfig(fidl::AnyArena& arena) {
   fidl::VectorView<fuchsia_audio_effects::wire::InputConfiguration> inputs(arena, 1);
   inputs.at(0) = fuchsia_audio_effects::wire::InputConfiguration::Builder(arena)
                      .buffer(fuchsia_mem::wire::Range{.vmo = MakeVmo(), .offset = 0, .size = 1024})
-                     .format(kFormat.ToLegacyWireFidl())
+                     .format(kFormat.ToLegacyMediastreamsWireFidl())
                      .Build();
   builder.inputs(fidl::ObjectView{arena, inputs});
 
   fidl::VectorView<fuchsia_audio_effects::wire::OutputConfiguration> outputs(arena, 1);
   outputs.at(0) = fuchsia_audio_effects::wire::OutputConfiguration::Builder(arena)
                       .buffer(fuchsia_mem::wire::Range{.vmo = MakeVmo(), .offset = 0, .size = 1024})
-                      .format(kFormat.ToLegacyWireFidl())
+                      .format(kFormat.ToLegacyMediastreamsWireFidl())
                       .latency_frames(0)
                       .ring_out_frames(0)
                       .Build();

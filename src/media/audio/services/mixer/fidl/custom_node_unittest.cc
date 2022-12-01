@@ -72,11 +72,13 @@ class CustomNodeTest : public ::testing::Test {
     builder.block_size_frames(block_size_frames);
     builder.max_frames_per_call(block_size_frames);
 
-    builder.inputs(MakeInputs(
-        MakeInputConfigBuilder().buffer(MakeBuffer()).format(kFormat.ToLegacyWireFidl()).Build()));
+    builder.inputs(MakeInputs(MakeInputConfigBuilder()
+                                  .buffer(MakeBuffer())
+                                  .format(kFormat.ToLegacyMediastreamsWireFidl())
+                                  .Build()));
     builder.outputs(MakeOutputs(MakeOutputConfigBuilder()
                                     .buffer(MakeBuffer())
-                                    .format(kFormat.ToLegacyWireFidl())
+                                    .format(kFormat.ToLegacyMediastreamsWireFidl())
                                     .latency_frames(latency_frames)
                                     .ring_out_frames(0)
                                     .Build()));
@@ -406,10 +408,11 @@ TEST_F(CustomNodeTest, CreateFailsMissingInputBuffer) {
   auto custom_node = CustomNode::Create({
       .reference_clock = DefaultClock(),
       .pipeline_direction = PipelineDirection::kOutput,
-      .config = MakeProcessorConfigBuilder()
-                    .inputs(MakeInputs(
-                        MakeInputConfigBuilder().format(kFormat.ToLegacyWireFidl()).Build()))
-                    .Build(),
+      .config =
+          MakeProcessorConfigBuilder()
+              .inputs(MakeInputs(
+                  MakeInputConfigBuilder().format(kFormat.ToLegacyMediastreamsWireFidl()).Build()))
+              .Build(),
   });
 }
 
@@ -417,10 +420,11 @@ TEST_F(CustomNodeTest, CreateFailsMissingOutputBuffer) {
   auto custom_node = CustomNode::Create({
       .reference_clock = DefaultClock(),
       .pipeline_direction = PipelineDirection::kOutput,
-      .config = MakeProcessorConfigBuilder()
-                    .outputs(MakeOutputs(
-                        MakeOutputConfigBuilder().format(kFormat.ToLegacyWireFidl()).Build()))
-                    .Build(),
+      .config =
+          MakeProcessorConfigBuilder()
+              .outputs(MakeOutputs(
+                  MakeOutputConfigBuilder().format(kFormat.ToLegacyMediastreamsWireFidl()).Build()))
+              .Build(),
   });
 }
 
@@ -431,7 +435,7 @@ TEST_F(CustomNodeTest, CreateFailsEmptyInputBuffer) {
       .config = MakeProcessorConfigBuilder()
                     .inputs(MakeInputs(MakeInputConfigBuilder()
                                            .buffer(MakeBuffer(/*size=*/0))
-                                           .format(kFormat.ToLegacyWireFidl())
+                                           .format(kFormat.ToLegacyMediastreamsWireFidl())
                                            .Build()))
                     .Build(),
   });
@@ -444,7 +448,7 @@ TEST_F(CustomNodeTest, CreateFailsEmptyOutputBuffer) {
       .config = MakeProcessorConfigBuilder()
                     .outputs(MakeOutputs(MakeOutputConfigBuilder()
                                              .buffer(MakeBuffer(/*size=*/0))
-                                             .format(kFormat.ToLegacyWireFidl())
+                                             .format(kFormat.ToLegacyMediastreamsWireFidl())
                                              .Build()))
                     .Build(),
   });
@@ -457,7 +461,7 @@ TEST_F(CustomNodeTest, CreateFailsInvalidInputBuffer) {
       .config = MakeProcessorConfigBuilder()
                     .inputs(MakeInputs(MakeInputConfigBuilder()
                                            .buffer(Range{.size = 100})
-                                           .format(kFormat.ToLegacyWireFidl())
+                                           .format(kFormat.ToLegacyMediastreamsWireFidl())
                                            .Build()))
                     .Build(),
   });
@@ -472,7 +476,7 @@ TEST_F(CustomNodeTest, CreateFailsInvalidInputBufferNotMappable) {
       .config = MakeProcessorConfigBuilder()
                     .inputs(MakeInputs(MakeInputConfigBuilder()
                                            .buffer(std::move(buffer))
-                                           .format(kFormat.ToLegacyWireFidl())
+                                           .format(kFormat.ToLegacyMediastreamsWireFidl())
                                            .Build()))
                     .Build(),
   });
@@ -487,7 +491,7 @@ TEST_F(CustomNodeTest, CreateFailsInvalidInputBufferNotWritable) {
       .config = MakeProcessorConfigBuilder()
                     .inputs(MakeInputs(MakeInputConfigBuilder()
                                            .buffer(std::move(buffer))
-                                           .format(kFormat.ToLegacyWireFidl())
+                                           .format(kFormat.ToLegacyMediastreamsWireFidl())
                                            .Build()))
                     .Build(),
   });
@@ -504,7 +508,7 @@ TEST_F(CustomNodeTest, CreateFailsInvalidInputBufferSizeTooSmall) {
       .config = MakeProcessorConfigBuilder()
                     .inputs(MakeInputs(MakeInputConfigBuilder()
                                            .buffer(std::move(buffer))
-                                           .format(kFormat.ToLegacyWireFidl())
+                                           .format(kFormat.ToLegacyMediastreamsWireFidl())
                                            .Build()))
                     .Build(),
   });
@@ -521,7 +525,7 @@ TEST_F(CustomNodeTest, CreateFailsInvalidInputBufferOffsetTooLarge) {
       .config = MakeProcessorConfigBuilder()
                     .inputs(MakeInputs(MakeInputConfigBuilder()
                                            .buffer(std::move(buffer))
-                                           .format(kFormat.ToLegacyWireFidl())
+                                           .format(kFormat.ToLegacyMediastreamsWireFidl())
                                            .Build()))
                     .Build(),
   });
@@ -534,7 +538,7 @@ TEST_F(CustomNodeTest, CreateFailsInvalidOutputBuffer) {
       .config = MakeProcessorConfigBuilder()
                     .outputs(MakeOutputs(MakeOutputConfigBuilder()
                                              .buffer(Range{.size = 100})
-                                             .format(kFormat.ToLegacyWireFidl())
+                                             .format(kFormat.ToLegacyMediastreamsWireFidl())
                                              .Build()))
                     .Build(),
   });
@@ -549,7 +553,7 @@ TEST_F(CustomNodeTest, CreateFailsInvalidOutputBufferNotMappable) {
       .config = MakeProcessorConfigBuilder()
                     .outputs(MakeOutputs(MakeOutputConfigBuilder()
                                              .buffer(std::move(buffer))
-                                             .format(kFormat.ToLegacyWireFidl())
+                                             .format(kFormat.ToLegacyMediastreamsWireFidl())
                                              .Build()))
                     .Build(),
   });
@@ -564,7 +568,7 @@ TEST_F(CustomNodeTest, CreateFailsInvalidOutputBufferNotReadable) {
       .config = MakeProcessorConfigBuilder()
                     .outputs(MakeOutputs(MakeOutputConfigBuilder()
                                              .buffer(std::move(buffer))
-                                             .format(kFormat.ToLegacyWireFidl())
+                                             .format(kFormat.ToLegacyMediastreamsWireFidl())
                                              .Build()))
                     .Build(),
   });
@@ -581,7 +585,7 @@ TEST_F(CustomNodeTest, CreateFailsInvalidOutputBufferSizeTooSmall) {
       .config = MakeProcessorConfigBuilder()
                     .outputs(MakeOutputs(MakeOutputConfigBuilder()
                                              .buffer(std::move(buffer))
-                                             .format(kFormat.ToLegacyWireFidl())
+                                             .format(kFormat.ToLegacyMediastreamsWireFidl())
                                              .Build()))
                     .Build(),
   });
@@ -598,7 +602,7 @@ TEST_F(CustomNodeTest, CreateFailsInvalidOutputBufferOffsetTooLarge) {
       .config = MakeProcessorConfigBuilder()
                     .outputs(MakeOutputs(MakeOutputConfigBuilder()
                                              .buffer(std::move(buffer))
-                                             .format(kFormat.ToLegacyWireFidl())
+                                             .format(kFormat.ToLegacyMediastreamsWireFidl())
                                              .Build()))
                     .Build(),
   });
@@ -614,12 +618,12 @@ TEST_F(CustomNodeTest, CreateFailsOutputBufferPartiallyOverlapsInputBuffer) {
       .config = MakeProcessorConfigBuilder()
                     .inputs(MakeInputs(MakeInputConfigBuilder()
                                            .buffer(std::move(input_buffer))
-                                           .format(kFormat.ToLegacyWireFidl())
+                                           .format(kFormat.ToLegacyMediastreamsWireFidl())
                                            .Build()))
                     .outputs(MakeOutputs(
                         MakeOutputConfigBuilder()
                             .buffer(Range{.vmo = std::move(output_vmo), .offset = 255, .size = 256})
-                            .format(kFormat.ToLegacyWireFidl())
+                            .format(kFormat.ToLegacyMediastreamsWireFidl())
                             .Build()))
                     .Build(),
   });

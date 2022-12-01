@@ -141,15 +141,28 @@ TEST(FormatTest, ToNaturalFidl) {
   EXPECT_EQ(*msg.frames_per_second(), 48000u);
 }
 
-TEST(FormatTest, ToLegacyWireFidl) {
+TEST(FormatTest, ToLegacyMediaWireFidl) {
   Format format = Format::CreateOrDie({
       .sample_type = SampleType::kInt32,
       .channels = 2,
       .frames_per_second = 48000,
   });
 
-  auto msg = format.ToLegacyWireFidl();
-  EXPECT_EQ(msg.sample_format, fuchsia_mediastreams::wire::AudioSampleFormat::kSigned24In32);
+  auto msg = format.ToLegacyMediaWireFidl();
+  EXPECT_EQ(msg.sample_format, fuchsia_media::AudioSampleFormat::kSigned24In32);
+  EXPECT_EQ(msg.channels, 2u);
+  EXPECT_EQ(msg.frames_per_second, 48000u);
+}
+
+TEST(FormatTest, ToLegacyMediastreamsWireFidl) {
+  Format format = Format::CreateOrDie({
+      .sample_type = SampleType::kInt32,
+      .channels = 2,
+      .frames_per_second = 48000,
+  });
+
+  auto msg = format.ToLegacyMediastreamsWireFidl();
+  EXPECT_EQ(msg.sample_format, fuchsia_mediastreams::AudioSampleFormat::kSigned24In32);
   EXPECT_EQ(msg.channel_count, 2u);
   EXPECT_EQ(msg.frames_per_second, 48000u);
 }

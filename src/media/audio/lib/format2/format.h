@@ -77,8 +77,10 @@ class Format {
   fuchsia_audio::Format ToNaturalFidl() const;
   fuchsia_hardware_audio::wire::Format ToHardwareWireFidl(fidl::AnyArena& arena) const;
   fuchsia_hardware_audio::Format ToHardwareNaturalFidl() const;
+  // TODO(fxbug.dev/115503): Remove when audio_core/v2 is deleted.
+  fuchsia_media::wire::AudioStreamType ToLegacyMediaWireFidl() const;
   // TODO(fxbug.dev/114919): Remove when fuchsia.audio.effects has migrated to the new types.
-  fuchsia_mediastreams::wire::AudioFormat ToLegacyWireFidl() const;
+  fuchsia_mediastreams::wire::AudioFormat ToLegacyMediastreamsWireFidl() const;
 
   fuchsia_audio::SampleType sample_type() const { return sample_type_; }
   int64_t channels() const { return channels_; }

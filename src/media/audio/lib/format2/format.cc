@@ -409,20 +409,46 @@ fuchsia_hardware_audio::Format Format::ToHardwareNaturalFidl() const {
   });
 }
 
-fuchsia_mediastreams::wire::AudioFormat Format::ToLegacyWireFidl() const {
+fuchsia_media::wire::AudioStreamType Format::ToLegacyMediaWireFidl() const {
+  auto sample_format = fuchsia_media::AudioSampleFormat::kFloat;
+  switch (sample_type_) {
+    case SampleType::kUint8:
+      sample_format = fuchsia_media::AudioSampleFormat::kUnsigned8;
+      break;
+    case SampleType::kInt16:
+      sample_format = fuchsia_media::AudioSampleFormat::kSigned16;
+      break;
+    case SampleType::kInt32:
+      sample_format = fuchsia_media::AudioSampleFormat::kSigned24In32;
+      break;
+    case SampleType::kFloat32:
+      sample_format = fuchsia_media::AudioSampleFormat::kFloat;
+      break;
+    default:
+      FX_LOGS(FATAL) << "unexpected sample format " << sample_type_;
+      break;
+  }
+  return {
+      .sample_format = sample_format,
+      .channels = static_cast<uint32_t>(channels_),
+      .frames_per_second = static_cast<uint32_t>(frames_per_second_),
+  };
+}
+
+fuchsia_mediastreams::wire::AudioFormat Format::ToLegacyMediastreamsWireFidl() const {
   auto sample_format = fuchsia_mediastreams::AudioSampleFormat::kFloat;
   switch (sample_type_) {
     case SampleType::kUint8:
-      sample_format = fuchsia_mediastreams::wire::AudioSampleFormat::kUnsigned8;
+      sample_format = fuchsia_mediastreams::AudioSampleFormat::kUnsigned8;
       break;
     case SampleType::kInt16:
-      sample_format = fuchsia_mediastreams::wire::AudioSampleFormat::kSigned16;
+      sample_format = fuchsia_mediastreams::AudioSampleFormat::kSigned16;
       break;
     case SampleType::kInt32:
-      sample_format = fuchsia_mediastreams::wire::AudioSampleFormat::kSigned24In32;
+      sample_format = fuchsia_mediastreams::AudioSampleFormat::kSigned24In32;
       break;
     case SampleType::kFloat32:
-      sample_format = fuchsia_mediastreams::wire::AudioSampleFormat::kFloat;
+      sample_format = fuchsia_mediastreams::AudioSampleFormat::kFloat;
       break;
     default:
       FX_LOGS(FATAL) << "unexpected sample format " << sample_type_;
