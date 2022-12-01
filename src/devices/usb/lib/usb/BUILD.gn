@@ -2,19 +2,20 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/zircon/zx_library.gni")
-
 group("tests") {
   testonly = true
   deps = [ "tests" ]
 }
 
-zx_library("usb") {
-  sdk = "source"
-  sdk_headers = [
-    "usb/request-cpp.h",
-    "usb/usb-request.h",
-    "usb/usb.h",
+config("includes") {
+  include_dirs = [ "include" ]
+}
+
+source_set("usb") {
+  public = [
+    "include/usb/request-cpp.h",
+    "include/usb/usb-request.h",
+    "include/usb/usb.h",
   ]
   sources = [
     "align.h",
@@ -41,51 +42,51 @@ zx_library("usb") {
     "//src/lib/ddk",
     "//src/lib/ddktl",
   ]
+  public_configs = [ ":includes" ]
 }
 
-zx_library("audio") {
-  sdk = "source"
-  sdk_headers = [ "usb/audio.h" ]
+source_set("audio") {
+  public = [ "include/usb/audio.h" ]
+  public_configs = [ ":includes" ]
 }
 
-zx_library("video") {
-  sdk = "source"
-  sdk_headers = [ "usb/video.h" ]
+source_set("video") {
+  public = [ "include/usb/video.h" ]
+  public_configs = [ ":includes" ]
 }
 
-zx_library("dfu") {
-  sdk = "source"
-  sdk_headers = [ "usb/dfu.h" ]
+source_set("dfu") {
+  public = [ "include/usb/dfu.h" ]
+  public_configs = [ ":includes" ]
 }
 
-zx_library("ums") {
-  sdk = "source"
-  sdk_headers = [ "usb/ums.h" ]
+source_set("ums") {
+  public = [ "include/usb/ums.h" ]
+  public_configs = [ ":includes" ]
 }
 
-zx_library("hid") {
-  sdk = "source"
-  sdk_headers = [ "usb/hid.h" ]
+source_set("hid") {
+  public = [ "include/usb/hid.h" ]
+  public_configs = [ ":includes" ]
 }
 
-zx_library("cdc") {
-  sdk = "source"
-  sdk_headers = [ "usb/cdc.h" ]
+source_set("cdc") {
+  public = [ "include/usb/cdc.h" ]
+  public_configs = [ ":includes" ]
 }
 
-zx_library("peripheral") {
-  sdk = "source"
-  sdk_headers = [ "usb/peripheral.h" ]
+source_set("peripheral") {
+  public = [ "include/usb/peripheral.h" ]
+  public_configs = [ ":includes" ]
 }
 
-zx_library("peripheral-test") {
-  sdk = "source"
-  sdk_headers = [ "usb/peripheral-test.h" ]
+source_set("peripheral-test") {
+  public = [ "include/usb/peripheral-test.h" ]
+  public_configs = [ ":includes" ]
 }
 
-zx_library("peripheral-config") {
-  sdk = "source"
-  sdk_headers = [ "usb/peripheral-config.h" ]
+source_set("peripheral-config") {
+  public = [ "include/usb/peripheral-config.h" ]
   sources = [ "usb-peripheral-config.cc" ]
   public_deps = [
     "//src/devices/usb/lib/usb:cdc",
@@ -94,4 +95,5 @@ zx_library("peripheral-config") {
     "//src/lib/ddk:ddk-metadata-headers",
   ]
   deps = [ "//zircon/system/ulib/zircon-internal" ]
+  public_configs = [ ":includes" ]
 }
