@@ -22,6 +22,7 @@ group("bin") {
     "guest_manager_rs:packages",
     "termina_guest_manager",
     "vmm",
+    "vmm_launcher",
     "vmm_rs",
     "vsh",
   ]
@@ -36,6 +37,7 @@ group("tests") {
     "guest_manager_rs:tests",
     "termina_guest_manager:tests",
     "vmm:tests",
+    "vmm_launcher:tests",
     "vmm_rs:tests",
   ]
 }
