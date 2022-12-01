@@ -277,6 +277,10 @@ impl WindowManager {
                                             self.refocus()?;
                                         }
                                     }
+
+                                    ShortcutAction::Logout => {
+                                        self.event_sender.send(Event::Exit);
+                                    }
                                 }
 
                                 self.window.redraw();

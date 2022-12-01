@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'dart:convert' show json;
 import 'dart:io';
 import 'dart:ui';
 
@@ -228,6 +227,17 @@ class OobeStateImpl with Disposable implements OobeState {
   @override
   void showDialog(DialogInfo dialog) {
     runInAction(() => dialogs.add(dialog));
+  }
+
+  @override
+  AppShell get appShell => _appShell.value;
+  final _appShell = AppShell.ermine.asObservable();
+
+  @override
+  void setAppShell(AppShell appShell) {
+    runInAction(() => _appShell.value = appShell);
+    shellService.shellUrl =
+        appShell == AppShell.ermine ? kErmineShellUrl : kGazelleShellUrl;
   }
 
   @override

@@ -35,6 +35,13 @@ const kApplicationShellCollectionName = 'application_shell';
 /// 1, so we'll need to decide what to do with this.
 const kApplicationShellComponentName = '1';
 
+// The component url of the ermine application shell.
+const kErmineShellUrl = 'fuchsia-pkg://fuchsia.com/ermine#meta/ermine.cm';
+
+// The component url of the gazelle application shell.
+const kGazelleShellUrl =
+    'fuchsia-pkg://fuchsia.com/gazelle_shell#meta/gazelle_shell.cm';
+
 /// Defines a service to launch and support Ermine user shell.
 class ShellService {
   late final StreamSubscription<bool> _focusSubscription;
@@ -42,6 +49,7 @@ class ShellService {
   late final VoidCallback onShellExit;
   late final bool _useFlatland;
   late final String _shellComponentUrl;
+  String? _overrideShellComponentUrl;
 
   /// A DirectoryProxy for forwarding felement.Manager connections (among
   /// others) to the application shell, once it's running.
@@ -82,6 +90,11 @@ class ShellService {
           felement.GraphicalPresenter.$serviceName);
   }
 
+  // Override the default url of the application shell.
+  set shellUrl(String url) => _overrideShellComponentUrl = url;
+
+  String get shellUrl => _overrideShellComponentUrl ?? _shellComponentUrl;
+
   /// Returns [true] after call to [Scenic.usesFlatland] completes.
   bool get ready => _ready.value;
   final _ready = false.asObservable();
@@ -107,7 +120,7 @@ class ShellService {
         onShellReady();
       },
       onExit: onShellExit,
-      componentUrl: _shellComponentUrl,
+      componentUrl: shellUrl,
       exposedDir: _shellExposedDir,
       exposedDirRequest: _shellExposedDir.ctrl.request(),
     );

@@ -24,6 +24,9 @@ enum SshScreen { add, confirm, error, exit }
 /// The ssh key import methods.
 enum SshImport { github, manual }
 
+/// The application shell to load after successful login.
+enum AppShell { ermine, gazelle }
+
 const kContentWidth = 696.0;
 
 /// Defines the state of an application view.
@@ -47,6 +50,7 @@ abstract class OobeState {
   bool get showDataSharing;
   String get authError;
   List<DialogInfo> get dialogs;
+  AppShell get appShell;
 
   FuchsiaViewConnection get ermineViewConnection;
 
@@ -65,6 +69,7 @@ abstract class OobeState {
   void shutdown();
   void factoryReset();
   void resetAuthError();
+  void setAppShell(AppShell shell);
 
   factory OobeState.fromEnv() {
     return OobeStateImpl(

@@ -128,6 +128,36 @@ class Login extends StatelessWidget {
                       ],
                     ),
                   ),
+
+                  // Application Shell radio buttons.
+                  SizedBox(
+                    width: kOobeBodyFieldWidth,
+                    child: Row(
+                      // mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      // crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: RadioListTile<AppShell>(
+                            contentPadding: EdgeInsets.only(left: 4),
+                            title: Text('Ermine Shell'),
+                            value: AppShell.ermine,
+                            groupValue: oobe.appShell,
+                            onChanged: (value) => oobe.setAppShell(value!),
+                          ),
+                        ),
+                        // SizedBox(height: 40),
+                        Expanded(
+                          child: RadioListTile<AppShell>(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text('Gazelle Shell'),
+                            value: AppShell.gazelle,
+                            groupValue: oobe.appShell,
+                            onChanged: (value) => oobe.setAppShell(value!),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   SizedBox(height: 144),
 
                   Container(

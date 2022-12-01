@@ -14,6 +14,7 @@ pub(crate) enum ShortcutAction {
     FocusNext = 1,
     FocusPrev = 2,
     Close = 3,
+    Logout = 4,
 }
 
 /// Returns an array of keyboard shortcut definitions.
@@ -62,6 +63,15 @@ pub(crate) fn all_shortcuts() -> Vec<ui_shortcut2::Shortcut> {
                 KeyMeaning::NonPrintableKey(NonPrintableKey::Control),
                 KeyMeaning::NonPrintableKey(NonPrintableKey::Shift),
                 KeyMeaning::Codepoint('w' as u32),
+            ],
+        ),
+        // Ctrl+Shift+q to logout from the application shell.
+        create_shortcut(
+            ShortcutAction::Logout.to_u32().unwrap(),
+            vec![
+                KeyMeaning::NonPrintableKey(NonPrintableKey::Control),
+                KeyMeaning::NonPrintableKey(NonPrintableKey::Shift),
+                KeyMeaning::Codepoint('q' as u32),
             ],
         ),
     ]
