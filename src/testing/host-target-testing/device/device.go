@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -228,7 +229,8 @@ func (c *Client) Reboot(ctx context.Context) error {
 			// us the command ran, it will tell us the session
 			// exited without passing along an exit code. So,
 			// ignore that specific error.
-			if _, ok := err.(*ssh.ExitMissingError); ok {
+			var exitErr *ssh.ExitMissingError
+			if errors.As(err, &exitErr) {
 				logger.Infof(ctx, "ssh disconnected before returning a status")
 			} else {
 				return fmt.Errorf("failed to reboot: %w", err)
@@ -253,7 +255,8 @@ func (c *Client) RebootToRecovery(ctx context.Context) error {
 			// us the command ran, it will tell us the session
 			// exited without passing along an exit code. So,
 			// ignore that specific error.
-			if _, ok := err.(*ssh.ExitMissingError); ok {
+			var exitErr *ssh.ExitMissingError
+			if errors.As(err, &exitErr) {
 				logger.Infof(ctx, "ssh disconnected before returning a status")
 			} else {
 				return fmt.Errorf("failed to reboot into recovery: %w", err)
