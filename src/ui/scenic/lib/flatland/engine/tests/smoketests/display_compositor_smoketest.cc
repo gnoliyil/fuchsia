@@ -83,6 +83,7 @@ class DisplayCompositorSmokeTest : public DisplayCompositorTestBase {
 
   bool IsDisplaySupported(DisplayCompositor* display_compositor,
                           allocation::GlobalBufferCollectionId id) {
+    std::scoped_lock lock(display_compositor->lock_);
     return display_compositor->buffer_collection_supports_display_[id];
   }
 

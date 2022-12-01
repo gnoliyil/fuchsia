@@ -242,21 +242,23 @@ std::optional<fuchsia::sysmem::PixelFormat> DetermineDisplaySupportFor(
 }  // anonymous namespace
 
 DisplayCompositor::DisplayCompositor(
-    async_dispatcher_t* dispatcher,
+    async_dispatcher_t* main_dispatcher,
     std::shared_ptr<fuchsia::hardware::display::ControllerSyncPtr> display_controller,
     const std::shared_ptr<Renderer>& renderer, fuchsia::sysmem::AllocatorSyncPtr sysmem_allocator,
     BufferCollectionImportMode import_mode)
     : display_controller_(std::move(display_controller)),
       renderer_(renderer),
-      release_fence_manager_(dispatcher),
+      release_fence_manager_(main_dispatcher),
       sysmem_allocator_(std::move(sysmem_allocator)),
-      import_mode_(import_mode) {
-  FX_DCHECK(dispatcher);
+      import_mode_(import_mode),
+      main_dispatcher_(main_dispatcher) {
+  FX_CHECK(main_dispatcher_);
   FX_DCHECK(renderer_);
   FX_DCHECK(sysmem_allocator_);
 }
 
 DisplayCompositor::~DisplayCompositor() {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   // Destroy all of the display layers.
   DiscardConfig();
   for (const auto& [_, data] : display_engine_data_map_) {
@@ -278,8 +280,9 @@ bool DisplayCompositor::ImportBufferCollection(
     fuchsia::sysmem::Allocator_Sync* sysmem_allocator,
     fidl::InterfaceHandle<fuchsia::sysmem::BufferCollectionToken> token,
     const BufferCollectionUsage usage, const std::optional<fuchsia::math::SizeU> size) {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   TRACE_DURATION("gfx", "flatland::DisplayCompositor::ImportBufferCollection");
-  FX_DCHECK(display_controller_);
+
   // Expect the default Buffer Collection usage type.
   FX_DCHECK(usage == BufferCollectionUsage::kClientImage);
 
@@ -325,29 +328,37 @@ bool DisplayCompositor::ImportBufferCollection(
 
   // Create a BufferCollectionPtr from a duplicate of |display_token| with which to later check if
   // buffers allocated from the BufferCollection are display-compatible.
-  if (auto collection_ptr =
-          CreateBufferCollectionPtrWithEmptyConstraints(sysmem_allocator, display_token)) {
-    display_buffer_collection_ptrs_[collection_id] = std::move(*collection_ptr);
-  } else {
+  auto collection_ptr =
+      CreateBufferCollectionPtrWithEmptyConstraints(sysmem_allocator, display_token);
+  if (!collection_ptr.has_value()) {
     return false;
   }
 
-  std::scoped_lock lock(lock_);  // Lock |display_controller_|.
+  std::scoped_lock lock(lock_);
+  {
+    const auto [_, success] =
+        display_buffer_collection_ptrs_.emplace(collection_id, std::move(*collection_ptr));
+    FX_DCHECK(success);
+  }
+
   // Import the buffer collection into the display controller, setting display constraints.
-  return scenic_impl::ImportBufferCollection(
-      collection_id, *display_controller_, std::move(display_token),
+  return ImportBufferCollectionToDisplayController(
+      collection_id, std::move(display_token),
       // Indicate that no specific size, format, or type is required.
       fuchsia::hardware::display::ImageConfig{.pixel_format = ZX_PIXEL_FORMAT_NONE, .type = 0});
 }
 
 void DisplayCompositor::ReleaseBufferCollection(
     const allocation::GlobalBufferCollectionId collection_id, const BufferCollectionUsage usage) {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   TRACE_DURATION("gfx", "flatland::DisplayCompositor::ReleaseBufferCollection");
   FX_DCHECK(usage == BufferCollectionUsage::kClientImage);
+
+  renderer_->ReleaseBufferCollection(collection_id, usage);
+
   std::scoped_lock lock(lock_);
   FX_DCHECK(display_controller_);
   (*display_controller_)->ReleaseBufferCollection(collection_id);
-  renderer_->ReleaseBufferCollection(collection_id, usage);
   display_buffer_collection_ptrs_.erase(collection_id);
   buffer_collection_supports_display_.erase(collection_id);
 }
@@ -374,8 +385,8 @@ fuchsia::hardware::display::ImageConfig DisplayCompositor::CreateImageConfig(
 
 bool DisplayCompositor::ImportBufferImage(const allocation::ImageMetadata& metadata,
                                           const BufferCollectionUsage usage) {
+  // Called from main thread or Flatland threads.
   TRACE_DURATION("gfx", "flatland::DisplayCompositor::ImportBufferImage");
-  FX_DCHECK(display_controller_);
 
   if (!IsValidBufferImage(metadata)) {
     return false;
@@ -385,6 +396,9 @@ bool DisplayCompositor::ImportBufferImage(const allocation::ImageMetadata& metad
     FX_LOGS(ERROR) << "Renderer could not import image.";
     return false;
   }
+
+  std::scoped_lock lock(lock_);
+  FX_DCHECK(display_controller_);
 
   const allocation::GlobalBufferCollectionId collection_id = metadata.collection_id;
   const bool display_support_already_set =
@@ -427,7 +441,6 @@ bool DisplayCompositor::ImportBufferImage(const allocation::ImageMetadata& metad
   const fuchsia::hardware::display::ImageConfig image_config = CreateImageConfig(metadata);
   zx_status_t import_image_status = ZX_OK;
   {
-    std::scoped_lock lock(lock_);  // Lock |display_controller_|.
     const auto status = (*display_controller_)
                             ->ImportImage2(image_config, collection_id, metadata.identifier,
                                            metadata.vmo_index, &import_image_status);
@@ -443,21 +456,19 @@ bool DisplayCompositor::ImportBufferImage(const allocation::ImageMetadata& metad
 }
 
 void DisplayCompositor::ReleaseBufferImage(const allocation::GlobalImageId image_id) {
+  // Called from main thread or Flatland threads.
   TRACE_DURATION("gfx", "flatland::DisplayCompositor::ReleaseBufferImage");
 
-  // Locks the rest of the function.
+  renderer_->ReleaseBufferImage(image_id);
+
   std::scoped_lock lock(lock_);
   FX_DCHECK(display_controller_);
   (*display_controller_)->ReleaseImage(image_id);
-
-  // Release image from the renderer.
-  renderer_->ReleaseBufferImage(image_id);
-
   image_event_map_.erase(image_id);
 }
 
 uint64_t DisplayCompositor::CreateDisplayLayer() {
-  std::scoped_lock lock(lock_);
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   uint64_t layer_id;
   zx_status_t create_layer_status;
   const zx_status_t transport_status =
@@ -471,23 +482,20 @@ uint64_t DisplayCompositor::CreateDisplayLayer() {
 
 void DisplayCompositor::SetDisplayLayers(const uint64_t display_id,
                                          const std::vector<uint64_t>& layers) {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   // Set all of the layers for each of the images on the display.
-  std::scoped_lock lock(lock_);
   const auto status = (*display_controller_)->SetDisplayLayers(display_id, layers);
   FX_DCHECK(status == ZX_OK);
 }
 
 bool DisplayCompositor::SetRenderDataOnDisplay(const RenderData& data) {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   // Every rectangle should have an associated image.
   const uint32_t num_images = static_cast<uint32_t>(data.images.size());
 
   // Since we map 1 image to 1 layer, if there are more images than layers available for
   // the given display, then they cannot be directly composited to the display in hardware.
-  std::vector<uint64_t> layers;
-  {
-    std::scoped_lock lock(lock_);
-    layers = display_engine_data_map_.at(data.display_id).layers;
-  }
+  const std::vector<uint64_t>& layers = display_engine_data_map_.at(data.display_id).layers;
   if (layers.size() < num_images) {
     return false;
   }
@@ -537,13 +545,13 @@ bool DisplayCompositor::SetRenderDataOnDisplay(const RenderData& data) {
       }
     }
   }
+
   return true;
 }
 
 void DisplayCompositor::ApplyLayerColor(const uint64_t layer_id, const ImageRect rectangle,
                                         const allocation::ImageMetadata image) {
-  std::scoped_lock lock(lock_);
-
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   // We have to convert the image_metadata's multiply color, which is an array of normalized
   // floating point values, to an unnormalized array of uint8_ts in the range 0-255.
   std::vector<uint8_t> col = {static_cast<uint8_t>(255 * image.multiply_color[0]),
@@ -580,6 +588,7 @@ void DisplayCompositor::ApplyLayerImage(const uint64_t layer_id, const ImageRect
                                         const allocation::ImageMetadata image,
                                         const scenic_impl::DisplayEventId wait_id,
                                         const scenic_impl::DisplayEventId signal_id) {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   const auto [src, dst] = DisplaySrcDstFrames::New(rectangle, image);
   FX_DCHECK(src.width && src.height) << "Source frame cannot be empty.";
   FX_DCHECK(dst.width && dst.height) << "Destination frame cannot be empty.";
@@ -587,7 +596,6 @@ void DisplayCompositor::ApplyLayerImage(const uint64_t layer_id, const ImageRect
       GetDisplayTransformFromOrientationAndFlip(rectangle.orientation, image.flip);
   const auto alpha_mode = GetAlphaMode(image.blend_mode);
 
-  std::scoped_lock lock(lock_);
   // TODO(fxbug.dev/71344): Pixel format should be ignored when using sysmem. We do not want to have
   // to deal with this default image format. Work was in progress to address this, but is currently
   // stalled: see fxr/716543.
@@ -601,26 +609,26 @@ void DisplayCompositor::ApplyLayerImage(const uint64_t layer_id, const ImageRect
 }
 
 bool DisplayCompositor::CheckConfig() {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   TRACE_DURATION("gfx", "flatland::DisplayCompositor::CheckConfig");
   fuchsia::hardware::display::ConfigResult result;
   std::vector<fuchsia::hardware::display::ClientCompositionOp> ops;
-  std::scoped_lock lock(lock_);
   (*display_controller_)->CheckConfig(/*discard*/ false, &result, &ops);
   return result == fuchsia::hardware::display::ConfigResult::OK;
 }
 
 void DisplayCompositor::DiscardConfig() {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   TRACE_DURATION("gfx", "flatland::DisplayCompositor::DiscardConfig");
   pending_images_in_config_.clear();
   fuchsia::hardware::display::ConfigResult result;
   std::vector<fuchsia::hardware::display::ClientCompositionOp> ops;
-  std::scoped_lock lock(lock_);
   (*display_controller_)->CheckConfig(/*discard*/ true, &result, &ops);
 }
 
 fuchsia::hardware::display::ConfigStamp DisplayCompositor::ApplyConfig() {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   TRACE_DURATION("gfx", "flatland::DisplayCompositor::ApplyConfig");
-  std::scoped_lock lock(lock_);
   {
     const auto status = (*display_controller_)->ApplyConfig();
     FX_DCHECK(status == ZX_OK);
@@ -637,6 +645,7 @@ bool DisplayCompositor::PerformGpuComposition(
     const uint64_t frame_number, const zx::time presentation_time,
     const std::vector<RenderData>& render_data_list, std::vector<zx::event> release_fences,
     scheduling::FrameRenderer::FramePresentedCallback callback) {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   // Create an event that will be signaled when the final display's content has finished
   // rendering; it will be passed into |release_fence_manager_.OnGpuCompositedFrame()|.  If there
   // are multiple displays which require GPU-composited content, we pass this event to be signaled
@@ -749,8 +758,10 @@ void DisplayCompositor::RenderFrame(const uint64_t frame_number, const zx::time 
                                     const std::vector<RenderData>& render_data_list,
                                     std::vector<zx::event> release_fences,
                                     scheduling::FrameRenderer::FramePresentedCallback callback) {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   TRACE_DURATION("gfx", "flatland::DisplayCompositor::RenderFrame");
   TRACE_FLOW_STEP("gfx", "scenic_frame", frame_number);
+  std::scoped_lock lock(lock_);
 
   // Config should be reset before doing anything new.
   DiscardConfig();
@@ -791,6 +802,7 @@ void DisplayCompositor::RenderFrame(const uint64_t frame_number, const zx::time 
 }
 
 bool DisplayCompositor::SetRenderDatasOnDisplay(const std::vector<RenderData>& render_data_list) {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   if (kDisableDisplayComposition) {
     return false;
   }
@@ -820,6 +832,7 @@ bool DisplayCompositor::SetRenderDatasOnDisplay(const std::vector<RenderData>& r
 
 void DisplayCompositor::OnVsync(zx::time timestamp,
                                 fuchsia::hardware::display::ConfigStamp applied_config_stamp) {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   TRACE_DURATION("gfx", "Flatland::DisplayCompositor::OnVsync");
 
   // We might receive multiple OnVsync() callbacks with the same |applied_config_stamp| if the scene
@@ -855,6 +868,7 @@ void DisplayCompositor::OnVsync(zx::time timestamp,
 }
 
 DisplayCompositor::FrameEventData DisplayCompositor::NewFrameEventData() {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   FrameEventData result;
   {  // The DC waits on this to be signaled by the renderer.
     const auto status = zx::event::create(0, &result.wait_event);
@@ -866,7 +880,6 @@ DisplayCompositor::FrameEventData DisplayCompositor::NewFrameEventData() {
     FX_DCHECK(status == ZX_OK);
   }
 
-  std::scoped_lock lock(lock_);
   result.wait_id = scenic_impl::ImportEvent(*display_controller_, result.wait_event);
   FX_DCHECK(result.wait_id != fuchsia::hardware::display::INVALID_DISP_ID);
   result.signal_event.signal(0, ZX_EVENT_SIGNALED);
@@ -876,6 +889,7 @@ DisplayCompositor::FrameEventData DisplayCompositor::NewFrameEventData() {
 }
 
 DisplayCompositor::ImageEventData DisplayCompositor::NewImageEventData() {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   ImageEventData result;
   // The DC signals this once it has set the layer image.  We pre-signal this event so the first
   // frame rendered with it behaves as though it was previously OKed for recycling.
@@ -888,7 +902,6 @@ DisplayCompositor::ImageEventData DisplayCompositor::NewImageEventData() {
     FX_DCHECK(status == ZX_OK);
   }
 
-  std::scoped_lock lock(lock_);
   result.signal_id = scenic_impl::ImportEvent(*display_controller_, result.signal_event);
   FX_DCHECK(result.signal_id != fuchsia::hardware::display::INVALID_DISP_ID);
 
@@ -898,27 +911,31 @@ DisplayCompositor::ImageEventData DisplayCompositor::NewImageEventData() {
 void DisplayCompositor::AddDisplay(scenic_impl::display::Display* display, const DisplayInfo info,
                                    const uint32_t num_render_targets,
                                    fuchsia::sysmem::BufferCollectionInfo_2* out_collection_info) {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
+
+  // Grab the best pixel format that the renderer prefers given the list of available formats on
+  // the display.
+  FX_DCHECK(!info.formats.empty());
+  const auto pixel_format = renderer_->ChoosePreferredPixelFormat(info.formats);
+
+  const fuchsia::math::SizeU size = {/*width*/ info.dimensions.x, /*height*/ info.dimensions.y};
+
   const auto display_id = display->display_id();
   FX_DCHECK(display_engine_data_map_.find(display_id) == display_engine_data_map_.end())
       << "DisplayCompositor::AddDisplay(): display already exists: " << display_id;
 
-  const uint32_t width = info.dimensions.x;
-  const uint32_t height = info.dimensions.y;
-
-  // Grab the best pixel format that the renderer prefers given the list of available formats on
-  // the display.
-  FX_DCHECK(info.formats.size());
-  auto pixel_format = renderer_->ChoosePreferredPixelFormat(info.formats);
-
   display_info_map_[display_id] = std::move(info);
   auto& display_engine_data = display_engine_data_map_[display_id];
 
-  // When we add in a new display, we create a couple of layers for that display upfront to be
-  // used when we directly composite render data in hardware via the display controller.
-  // TODO(fxbug.dev/77873): per-display layer lists are probably a bad idea; this approach doesn't
-  // reflect the constraints of the underlying display hardware.
-  for (uint32_t i = 0; i < 2; i++) {
-    display_engine_data.layers.push_back(CreateDisplayLayer());
+  {
+    std::scoped_lock lock(lock_);
+    // When we add in a new display, we create a couple of layers for that display upfront to be
+    // used when we directly composite render data in hardware via the display controller.
+    // TODO(fxbug.dev/77873): per-display layer lists are probably a bad idea; this approach doesn't
+    // reflect the constraints of the underlying display hardware.
+    for (uint32_t i = 0; i < 2; i++) {
+      display_engine_data.layers.push_back(CreateDisplayLayer());
+    }
   }
 
   // Add vsync callback on display. Note that this will overwrite the existing callback on
@@ -940,10 +957,13 @@ void DisplayCompositor::AddDisplay(scenic_impl::display::Display* display, const
   FX_DCHECK(out_collection_info);
 
   display_engine_data.render_targets = AllocateDisplayRenderTargets(
-      /*use_protected_memory=*/false, num_render_targets, {width, height}, pixel_format,
-      out_collection_info);
-  for (uint32_t i = 0; i < num_render_targets; i++) {
-    display_engine_data.frame_event_datas.push_back(NewFrameEventData());
+      /*use_protected_memory=*/false, num_render_targets, size, pixel_format, out_collection_info);
+
+  {
+    std::scoped_lock lock(lock_);
+    for (uint32_t i = 0; i < num_render_targets; i++) {
+      display_engine_data.frame_event_datas.push_back(NewFrameEventData());
+    }
   }
   display_engine_data.vmo_count = num_render_targets;
   display_engine_data.curr_vmo = 0;
@@ -953,16 +973,14 @@ void DisplayCompositor::AddDisplay(scenic_impl::display::Display* display, const
   // running out of protected memory.
   if (renderer_->SupportsRenderInProtected()) {
     display_engine_data.protected_render_targets = AllocateDisplayRenderTargets(
-        /*use_protected_memory=*/true, num_render_targets, {width, height}, pixel_format, nullptr);
+        /*use_protected_memory=*/true, num_render_targets, size, pixel_format, nullptr);
   }
 }
 
 void DisplayCompositor::SetColorConversionValues(const std::array<float, 9>& coefficients,
                                                  const std::array<float, 3>& preoffsets,
                                                  const std::array<float, 3>& postoffsets) {
-  // Lock the whole function.
-  std::scoped_lock lock(lock_);
-
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   cc_state_machine_.SetData(
       {.coefficients = coefficients, .preoffsets = preoffsets, .postoffsets = postoffsets});
 
@@ -970,6 +988,8 @@ void DisplayCompositor::SetColorConversionValues(const std::array<float, 9>& coe
 }
 
 bool DisplayCompositor::SetMinimumRgb(const uint8_t minimum_rgb) {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
+  std::scoped_lock lock(lock_);
   fuchsia::hardware::display::Controller_SetMinimumRgb_Result cmd_result;
   const auto status = (*display_controller_)->SetMinimumRgb(minimum_rgb, &cmd_result);
   if (status != ZX_OK || cmd_result.is_err()) {
@@ -983,6 +1003,7 @@ std::vector<allocation::ImageMetadata> DisplayCompositor::AllocateDisplayRenderT
     const bool use_protected_memory, const uint32_t num_render_targets,
     const fuchsia::math::SizeU& size, const zx_pixel_format_t pixel_format,
     fuchsia::sysmem::BufferCollectionInfo_2* out_collection_info) {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   // Create the buffer collection token to be used for frame buffers.
   fuchsia::sysmem::BufferCollectionTokenSyncPtr compositor_token;
   {
@@ -1013,8 +1034,9 @@ std::vector<allocation::ImageMetadata> DisplayCompositor::AllocateDisplayRenderT
   }
 
   {  // Set display constraints.
-    const auto result = scenic_impl::ImportBufferCollection(
-        collection_id, *display_controller_, std::move(display_token),
+    std::scoped_lock lock(lock_);
+    const auto result = ImportBufferCollectionToDisplayController(
+        collection_id, std::move(display_token),
         fuchsia::hardware::display::ImageConfig{.pixel_format = pixel_format});
     FX_DCHECK(result);
   }
@@ -1071,11 +1093,14 @@ std::vector<allocation::ImageMetadata> DisplayCompositor::AllocateDisplayRenderT
 
   // We know that this collection is supported by display because we collected constraints from
   // display in scenic_impl::ImportBufferCollection() and waited for successful allocation.
-  buffer_collection_supports_display_[collection_id] = true;
-  buffer_collection_pixel_format_[collection_id] =
-      collection_info.settings.image_format_constraints.pixel_format;
-  if (out_collection_info) {
-    *out_collection_info = std::move(collection_info);
+  {
+    std::scoped_lock lock(lock_);
+    buffer_collection_supports_display_[collection_id] = true;
+    buffer_collection_pixel_format_[collection_id] =
+        collection_info.settings.image_format_constraints.pixel_format;
+    if (out_collection_info) {
+      *out_collection_info = std::move(collection_info);
+    }
   }
 
   std::vector<allocation::ImageMetadata> render_targets;
@@ -1086,10 +1111,19 @@ std::vector<allocation::ImageMetadata> DisplayCompositor::AllocateDisplayRenderT
                                               .width = size.width,
                                               .height = size.height};
     render_targets.push_back(target);
-    bool res = ImportBufferImage(target, BufferCollectionUsage::kRenderTarget);
+    const bool res = ImportBufferImage(target, BufferCollectionUsage::kRenderTarget);
     FX_DCHECK(res);
   }
   return render_targets;
+}
+
+bool DisplayCompositor::ImportBufferCollectionToDisplayController(
+    allocation::GlobalBufferCollectionId identifier,
+    fuchsia::sysmem::BufferCollectionTokenSyncPtr token,
+    const fuchsia::hardware::display::ImageConfig& image_config) {
+  FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
+  return scenic_impl::ImportBufferCollection(identifier, *display_controller_, std::move(token),
+                                             image_config);
 }
 
 }  // namespace flatland

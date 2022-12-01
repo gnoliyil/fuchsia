@@ -13,6 +13,7 @@
 #include <unordered_map>
 
 #include "src/lib/fxl/memory/weak_ptr.h"
+#include "src/lib/fxl/synchronization/thread_annotations.h"
 #include "src/ui/scenic/lib/allocation/buffer_collection_importer.h"
 #include "src/ui/scenic/lib/display/display.h"
 #include "src/ui/scenic/lib/display/util.h"
@@ -63,7 +64,7 @@ class DisplayCompositor final : public allocation::BufferCollectionImporter,
   // display-controller clients could be accessing the same functions and/or state at the same time
   // as the DisplayCompositor without making use of locks.
   DisplayCompositor(
-      async_dispatcher_t* dispatcher,
+      async_dispatcher_t* main_dispatcher,
       std::shared_ptr<fuchsia::hardware::display::ControllerSyncPtr> display_controller,
       const std::shared_ptr<Renderer>& renderer, fuchsia::sysmem::AllocatorSyncPtr sysmem_allocator,
       BufferCollectionImportMode import_mode);
@@ -71,30 +72,37 @@ class DisplayCompositor final : public allocation::BufferCollectionImporter,
   ~DisplayCompositor() override;
 
   // |BufferCollectionImporter|
+  // Only called from the main thread.
   bool ImportBufferCollection(allocation::GlobalBufferCollectionId collection_id,
                               fuchsia::sysmem::Allocator_Sync* sysmem_allocator,
                               fidl::InterfaceHandle<fuchsia::sysmem::BufferCollectionToken> token,
                               BufferCollectionUsage usage,
-                              std::optional<fuchsia::math::SizeU> size) override;
+                              std::optional<fuchsia::math::SizeU> size) override
+      FXL_LOCKS_EXCLUDED(lock_);
 
   // |BufferCollectionImporter|
+  // Only called from the main thread.
   void ReleaseBufferCollection(allocation::GlobalBufferCollectionId collection_id,
-                               BufferCollectionUsage usage_type) override;
+                               BufferCollectionUsage usage_type) override FXL_LOCKS_EXCLUDED(lock_);
 
   // |BufferCollectionImporter|
+  // Called from main thread or Flatland threads.
   bool ImportBufferImage(const allocation::ImageMetadata& metadata,
-                         BufferCollectionUsage usage_type) override;
+                         BufferCollectionUsage usage_type) override FXL_LOCKS_EXCLUDED(lock_);
 
   // |BufferCollectionImporter|
-  void ReleaseBufferImage(allocation::GlobalImageId image_id) override;
+  // Called from main thread or Flatland threads.
+  void ReleaseBufferImage(allocation::GlobalImageId image_id) override FXL_LOCKS_EXCLUDED(lock_);
 
   // Generates frame and presents it to display.  This may involve directly scanning out client
   // images, or it may involve first using the GPU to composite (some of) these images into a single
   // image which is then scanned out.
+  // Only called from the main thread.
   void RenderFrame(uint64_t frame_number, zx::time presentation_time,
                    const std::vector<RenderData>& render_data_list,
                    std::vector<zx::event> release_fences,
-                   scheduling::FrameRenderer::FramePresentedCallback callback);
+                   scheduling::FrameRenderer::FramePresentedCallback callback)
+      FXL_LOCKS_EXCLUDED(lock_);
 
   // Register a new display to the DisplayCompositor, which also generates the render targets to be
   // presented on the display when compositing on the GPU. If |num_render_targets| is 0, this
@@ -105,17 +113,21 @@ class DisplayCompositor final : public allocation::BufferCollectionImporter,
   // required.
   // TODO(fxbug.dev/59646): We need to figure out exactly how we want the display to anchor
   // to the Flatland hierarchy.
+  // Only called from the main thread.
   void AddDisplay(scenic_impl::display::Display* display, DisplayInfo info,
                   uint32_t num_render_targets,
-                  fuchsia::sysmem::BufferCollectionInfo_2* out_collection_info);
+                  fuchsia::sysmem::BufferCollectionInfo_2* out_collection_info)
+      FXL_LOCKS_EXCLUDED(lock_);
 
   // Values needed to adjust the color of the framebuffer as a postprocessing effect.
+  // Only called from the main thread.
   void SetColorConversionValues(const std::array<float, 9>& coefficients,
                                 const std::array<float, 3>& preoffsets,
                                 const std::array<float, 3>& postoffsets);
 
   // Clamps the minimum value for all channels on all pixels on the display to this number.
-  bool SetMinimumRgb(uint8_t minimum_rgb);
+  // Only called from the main thread.
+  bool SetMinimumRgb(uint8_t minimum_rgb) FXL_LOCKS_EXCLUDED(lock_);
 
  private:
   friend class test::DisplayCompositorSmokeTest;
@@ -170,63 +182,78 @@ class DisplayCompositor final : public allocation::BufferCollectionImporter,
 
   std::vector<allocation::ImageMetadata> AllocateDisplayRenderTargets(
       bool use_protected_memory, uint32_t num_render_targets, const fuchsia::math::SizeU& size,
-      zx_pixel_format_t pixel_format, fuchsia::sysmem::BufferCollectionInfo_2* out_collection_info);
+      zx_pixel_format_t pixel_format, fuchsia::sysmem::BufferCollectionInfo_2* out_collection_info)
+      FXL_LOCKS_EXCLUDED(lock_);
 
   // Generates a new FrameEventData struct to be used with a render target on a display.
-  FrameEventData NewFrameEventData();
+  FrameEventData NewFrameEventData() FXL_EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Generates a new ImageEventData struct to be used with a client image on a display.
-  ImageEventData NewImageEventData();
+  ImageEventData NewImageEventData() FXL_EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   fuchsia::hardware::display::ImageConfig CreateImageConfig(
-      const allocation::ImageMetadata& metadata) const;
+      const allocation::ImageMetadata& metadata) const FXL_EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Generates a hardware layer for direct compositing on the display. Returns the ID used
   // to reference that layer in the display controller API.
-  uint64_t CreateDisplayLayer();
+  uint64_t CreateDisplayLayer() FXL_EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Moves a token out of |display_buffer_collection_ptrs_| and returns it.
   fuchsia::sysmem::BufferCollectionSyncPtr TakeDisplayBufferCollectionPtr(
-      allocation::GlobalBufferCollectionId collection_id);
+      allocation::GlobalBufferCollectionId collection_id) FXL_EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Used when we're forced to fall back to GPU rendering.
   bool PerformGpuComposition(uint64_t frame_number, zx::time presentation_time,
                              const std::vector<RenderData>& render_data_list,
                              std::vector<zx::event> release_fences,
-                             scheduling::FrameRenderer::FramePresentedCallback callback);
+                             scheduling::FrameRenderer::FramePresentedCallback callback)
+      FXL_EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Does all the setup for applying the render data, which includes images and rectangles,
   // onto the display via the display controller interface. Returns false if this cannot
   // be completed.
-  bool SetRenderDataOnDisplay(const RenderData& data);
+  bool SetRenderDataOnDisplay(const RenderData& data) FXL_EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Calls SetRenderData for each item in |render_data_list| and applies direct-to-display color
   // conversion. Return false if this fails for any RenderData.
-  bool SetRenderDatasOnDisplay(const std::vector<RenderData>& render_data_list);
+  bool SetRenderDatasOnDisplay(const std::vector<RenderData>& render_data_list)
+      FXL_EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Sets the provided layers onto the display referenced by the given display_id.
-  void SetDisplayLayers(uint64_t display_id, const std::vector<uint64_t>& layers);
+  void SetDisplayLayers(uint64_t display_id, const std::vector<uint64_t>& layers)
+      FXL_EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Takes a solid color rectangle and directly composites it to a hardware layer on the display.
-  void ApplyLayerColor(uint64_t layer_id, ImageRect rectangle, allocation::ImageMetadata image);
+  void ApplyLayerColor(uint64_t layer_id, ImageRect rectangle, allocation::ImageMetadata image)
+      FXL_EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Takes an image and directly composites it to a hardware layer on the display.
   void ApplyLayerImage(uint64_t layer_id, ImageRect rectangle, allocation::ImageMetadata image,
-                       scenic_impl::DisplayEventId wait_id, scenic_impl::DisplayEventId signal_id);
+                       scenic_impl::DisplayEventId wait_id, scenic_impl::DisplayEventId signal_id)
+      FXL_EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Checks if the display controller is capable of applying the configuration settings that
   // have been set up until that point.
-  bool CheckConfig();
+  bool CheckConfig() FXL_EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Erases the configuration that has been set on the display controller.
-  void DiscardConfig();
+  void DiscardConfig() FXL_EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Applies the config to the display controller and returns the ConfigStamp associated with this
   // config. ConfigStamp is provided by the display controller. This should only be called after
   // CheckConfig has verified that the config is okay, since ApplyConfig does not return any errors.
-  fuchsia::hardware::display::ConfigStamp ApplyConfig();
+  fuchsia::hardware::display::ConfigStamp ApplyConfig() FXL_EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
-  // This mutex protects access to |display_controller_| and |image_id_map_|.
+  bool ImportBufferCollectionToDisplayController(
+      allocation::GlobalBufferCollectionId identifier,
+      fuchsia::sysmem::BufferCollectionTokenSyncPtr token,
+      const fuchsia::hardware::display::ImageConfig& image_config)
+      FXL_EXCLUSIVE_LOCKS_REQUIRED(lock_);
+
+  // This mutex protects access to class members that are accessed on main thread and the Flatland
+  // threads. All the methods of this class are run of |main_dispatcher_| except for
+  // ImportBufferImage() and ReleaseBufferImage(), where the shared data structures are guarded by
+  // this.
   //
   // TODO(fxbug.dev/44335): Convert this to a lock-free structure. This is a unique
   // case since we are talking to a FIDL interface (display_controller_) through a lock.
@@ -235,16 +262,37 @@ class DisplayCompositor final : public allocation::BufferCollectionImporter,
   mutable std::mutex lock_;
 
   // Handle to the display controller interface.
-  std::shared_ptr<fuchsia::hardware::display::ControllerSyncPtr> display_controller_;
+  std::shared_ptr<fuchsia::hardware::display::ControllerSyncPtr> display_controller_
+      FXL_GUARDED_BY(lock_);
 
   // Maps the flatland global image id to the events used by the display controller.
-  std::unordered_map<allocation::GlobalImageId, ImageEventData> image_event_map_;
+  std::unordered_map<allocation::GlobalImageId, ImageEventData> image_event_map_
+      FXL_GUARDED_BY(lock_);
 
-  // Pending images in the current config that hasn't been applied yet.
-  std::vector<allocation::GlobalImageId> pending_images_in_config_;
+  // Maps a buffer collection ID to a BufferCollectionSyncPtr in the same domain as the token with
+  // display constraints set. This is used as a bridge between ImportBufferCollection() and
+  // ImportBufferImage() calls, so  that we can check if the existing allocation is
+  // display-compatible.
+  std::unordered_map<allocation::GlobalBufferCollectionId, fuchsia::sysmem::BufferCollectionSyncPtr>
+      display_buffer_collection_ptrs_ FXL_GUARDED_BY(lock_);
+
+  // Maps a buffer collection ID to a boolean indicating if it can be imported into display.
+  std::unordered_map<allocation::GlobalBufferCollectionId, bool> buffer_collection_supports_display_
+      FXL_GUARDED_BY(lock_);
+
+  // Maps a buffer collection ID to a collection pixel format struct.
+  // TODO(fxbug.dev/71344): Delete after we don't need the pixel format anymore.
+  std::unordered_map<allocation::GlobalBufferCollectionId, fuchsia::sysmem::PixelFormat>
+      buffer_collection_pixel_format_ FXL_GUARDED_BY(lock_);
+
+  /// The below members are either thread-safe or only manipulated from the main thread and
+  /// therefore don't need locks.
 
   // Software renderer used when render data cannot be directly composited to the display.
   const std::shared_ptr<Renderer> renderer_;
+
+  // Pending images in the current config that hasn't been applied yet.
+  std::vector<allocation::GlobalImageId> pending_images_in_config_;
 
   // Maps a display ID to the the DisplayInfo struct. This is kept separate from the
   // display_DisplayCompositor_data_map_ since this only this data is needed for the
@@ -254,22 +302,6 @@ class DisplayCompositor final : public allocation::BufferCollectionImporter,
   // Maps a display ID to a struct of all the information needed to properly render to
   // that display in both the hardware and software composition paths.
   std::unordered_map<uint64_t, DisplayEngineData> display_engine_data_map_;
-
-  // Maps a buffer collection ID to a BufferCollectionSyncPtr in the same domain as the token with
-  // display constraints set. This is used as a bridge between ImportBufferCollection() and
-  // ImportBufferImage() calls, so  that we can check if the existing allocation is
-  // display-compatible.
-  std::unordered_map<allocation::GlobalBufferCollectionId, fuchsia::sysmem::BufferCollectionSyncPtr>
-      display_buffer_collection_ptrs_;
-
-  // Maps a buffer collection ID to a boolean indicating if it can be imported into display.
-  std::unordered_map<allocation::GlobalBufferCollectionId, bool>
-      buffer_collection_supports_display_;
-
-  // Maps a buffer collection ID to a collection pixel format struct.
-  // TODO(fxbug.dev/71344): Delete after we don't need the pixel format anymore.
-  std::unordered_map<allocation::GlobalBufferCollectionId, fuchsia::sysmem::PixelFormat>
-      buffer_collection_pixel_format_;
 
   ReleaseFenceManager release_fence_manager_;
 
@@ -295,6 +327,8 @@ class DisplayCompositor final : public allocation::BufferCollectionImporter,
   BufferCollectionImportMode import_mode_ = BufferCollectionImportMode::AttemptDisplayConstraints;
 
   ColorConversionStateMachine cc_state_machine_;
+
+  const async_dispatcher_t* const main_dispatcher_;
 };
 
 }  // namespace flatland
