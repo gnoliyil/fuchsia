@@ -283,14 +283,7 @@ void TestDevice::CreateRamdisk(size_t device_size, size_t block_size) {
 
   ASSERT_EQ(ramdisk_create_at(devfs_root().get(), block_size, count, &ramdisk_), ZX_OK);
 
-  fbl::unique_fd ramdisk_ignored;
-  device_watcher::RecursiveWaitForFile(devfs_root(), ramdisk_get_path(ramdisk_), &ramdisk_ignored);
-
-  // TODO(https://fxbug.dev/112484): this relies on multiplexing.
-  fidl::UnownedClientEnd<fuchsia_io::Node> client(ramdisk_get_block_interface(ramdisk_));
-  zx::result owned = component::Clone(client);
-  ASSERT_OK(owned.status_value());
-  ASSERT_OK(fdio_fd_create(owned.value().TakeChannel().release(), parent_.reset_and_get_address()));
+  device_watcher::RecursiveWaitForFile(devfs_root(), ramdisk_get_path(ramdisk_), &parent_);
 
   block_size_ = block_size;
   block_count_ = count;
