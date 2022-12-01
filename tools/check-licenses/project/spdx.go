@@ -6,7 +6,6 @@ package project
 
 import (
 	"fmt"
-	"log"
 	"path/filepath"
 
 	spdx_builder "github.com/spdx/tools-golang/builder/builder2v2"
@@ -26,10 +25,6 @@ func (p *Project) setSPDXFields() error {
 	files := make([]*spdx.File, 0)
 	pkg, err := spdx_builder.BuildPackageSection2_2(p.Name, p.Root, ignore)
 	if err != nil {
-		log.Printf(
-			"Failed to create SPDX pkg for project %s [path %s]: %s\n",
-			p.Name, p.Root, err)
-
 		// If the builder fails to create a pkg object, create one manually.
 		code, err2 := spdx_utils.GetVerificationCode2_2(files, "")
 		if err2 != nil {

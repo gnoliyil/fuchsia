@@ -153,6 +153,14 @@
         "notes": [
           "Skip local copies of external Bazel repositories"
         ]
+      },
+      {
+        "paths": [
+          "build/rbe/proto"
+        ],
+        "notes": [
+          "Subdirectories of this folder are auto-generated. It's easier to simply skip this dir."
+        ]
       }
     ]
   }
