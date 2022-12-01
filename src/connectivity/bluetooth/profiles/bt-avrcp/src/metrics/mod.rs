@@ -2,17 +2,53 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use {
-    fuchsia_bluetooth::types::PeerId,
-    fuchsia_inspect::{self as inspect, NumericProperty},
-    fuchsia_inspect_derive::Inspect,
-    parking_lot::Mutex,
-    std::{collections::HashSet, sync::Arc},
-};
+use fidl_fuchsia_bluetooth_avrcp as fidl_avrcp;
+use fidl_fuchsia_metrics;
+use fuchsia_async as fasync;
+use fuchsia_bluetooth::types::PeerId;
+use fuchsia_inspect::{self as inspect, NumericProperty};
+use fuchsia_inspect_derive::Inspect;
+use parking_lot::Mutex;
+use std::{collections::HashMap, collections::HashSet, sync::Arc};
 
 use crate::profile::{AvrcpControllerFeatures, AvrcpTargetFeatures};
 
 pub const METRICS_NODE_NAME: &str = "metrics";
+
+// Enum to express the level of browsing supported from a peer's available
+// players.
+#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+enum BrowseLevel {
+    NotBrowsable = 1,
+    OnlyBrowsableWhenAddressed = 2,
+    // Player that supports browsing without `OnlyBrowsableWhenAddressed`.
+    Browsable = 3,
+}
+
+impl From<&fidl_avrcp::MediaPlayerItem> for BrowseLevel {
+    fn from(src: &fidl_avrcp::MediaPlayerItem) -> Self {
+        let feature_bits = src.feature_bits.unwrap_or(fidl_avrcp::PlayerFeatureBits::empty());
+        if !feature_bits.contains(fidl_avrcp::PlayerFeatureBits::BROWSING) {
+            return Self::NotBrowsable;
+        }
+        if feature_bits.contains(fidl_avrcp::PlayerFeatureBits::ONLY_BROWSABLE_WHEN_ADDRESSED) {
+            return Self::OnlyBrowsableWhenAddressed;
+        }
+        Self::Browsable
+    }
+}
+
+impl From<BrowseLevel>
+    for bt_metrics::AvrcpTargetDistinctPeerPlayerCapabilitiesMetricDimensionBrowsing
+{
+    fn from(src: BrowseLevel) -> Self {
+        match src {
+            BrowseLevel::NotBrowsable => Self::Unsupported,
+            BrowseLevel::OnlyBrowsableWhenAddressed => Self::SupportedWhenAddressed,
+            BrowseLevel::Browsable => Self::Supported,
+        }
+    }
+}
 
 /// Cumulative metrics node for the supported features of discovered peers.
 #[derive(Default, Inspect)]
@@ -27,6 +63,14 @@ struct PeerSupportMetrics {
     /// about a specific period of time.
     distinct_target_peers_supporting_browsing: inspect::UintProperty,
     distinct_target_peers_supporting_cover_art: inspect::UintProperty,
+    // If a target peer has any players that support browsing without the
+    // `OnlyBrowsableWhenAddressed` feature, this should be incremented by 1.
+    distinct_target_peers_with_players_support_browsing: inspect::UintProperty,
+    // If a target peer has any players that support browsing with `OnlyBrowsableWhenAddressed`
+    // feature, this should be incremented by 1.
+    distinct_target_peers_with_players_only_browsable_when_addressed: inspect::UintProperty,
+    // If a target peer has no players that support browsing in any way, this should be incremented by 1.
+    distinct_target_peers_with_no_players_support_browsing: inspect::UintProperty,
     distinct_controller_peers_supporting_browsing: inspect::UintProperty,
     distinct_controller_peers_supporting_cover_art: inspect::UintProperty,
 
@@ -34,6 +78,8 @@ struct PeerSupportMetrics {
     /// representation.
     #[inspect(skip)]
     tg_browse_peers: HashSet<PeerId>,
+    #[inspect(skip)]
+    tg_players_highest_browse_level_peers: HashMap<PeerId, BrowseLevel>,
     #[inspect(skip)]
     tg_cover_art_peers: HashSet<PeerId>,
     #[inspect(skip)]
@@ -108,6 +154,33 @@ impl MetricsNodeInner {
             self.support_node.distinct_target_peers_supporting_cover_art.add(1);
         }
     }
+
+    /// Returns true if the current support level is different from previously
+    /// logged value to indicate highest support level update for this peer.
+    /// Otherwise, return false.
+    fn target_players_support_browsing(&mut self, id: PeerId, support_level: BrowseLevel) -> bool {
+        let prev_val =
+            self.support_node.tg_players_highest_browse_level_peers.insert(id, support_level);
+        // Only increment metrics for peer player browsability if we have not
+        // yet or if the new highest support level is different from previously
+        // seen value.
+        if prev_val.is_none() || prev_val.unwrap() != support_level {
+            match support_level {
+                BrowseLevel::Browsable => {
+                    self.support_node.distinct_target_peers_with_players_support_browsing.add(1)
+                }
+                BrowseLevel::OnlyBrowsableWhenAddressed => self
+                    .support_node
+                    .distinct_target_peers_with_players_only_browsable_when_addressed
+                    .add(1),
+                BrowseLevel::NotBrowsable => {
+                    self.support_node.distinct_target_peers_with_no_players_support_browsing.add(1)
+                }
+            };
+            return true;
+        }
+        return false;
+    }
 }
 
 /// An object, backed by inspect, used to track cumulative metrics for the AVRCP component.
@@ -115,6 +188,8 @@ impl MetricsNodeInner {
 pub struct MetricsNode {
     #[inspect(forward)]
     inner: Arc<Mutex<MetricsNodeInner>>,
+    /// Cobalt logger for this object.
+    cobalt_proxy: Option<fidl_fuchsia_metrics::MetricEventLoggerProxy>,
 }
 
 impl MetricsNode {
@@ -142,6 +217,14 @@ impl MetricsNode {
         self.inner.lock().browse_channel_collisions.add(1);
     }
 
+    pub fn with_cobalt_proxy(
+        mut self,
+        cobalt_proxy: Option<fidl_fuchsia_metrics::MetricEventLoggerProxy>,
+    ) -> Self {
+        self.cobalt_proxy = cobalt_proxy;
+        self
+    }
+
     /// A peer supporting the controller role is discovered.
     pub fn controller_features(&self, id: PeerId, features: AvrcpControllerFeatures) {
         let mut inner = self.inner.lock();
@@ -165,12 +248,59 @@ impl MetricsNode {
             inner.target_supporting_cover_art(id);
         }
     }
+
+    /// A target role peer's players are fetched for feature examination.
+    pub fn target_player_features(&self, id: PeerId, players: Vec<fidl_avrcp::MediaPlayerItem>) {
+        if players.len() == 0 {
+            return;
+        }
+
+        // See AVRCP v1.6.2 section 6.10.2.1 for complete features.
+        // Browsing (Octet 7 bit 3).
+        // OnlyBrowsableWhenAddressed (Octet 7 bit 7).
+        let highest_browse_support: BrowseLevel =
+            players.into_iter().map(|p| BrowseLevel::from(&p)).max().unwrap();
+        let support_updated: bool;
+        {
+            let mut inner = self.inner.lock();
+            support_updated = inner.target_players_support_browsing(id, highest_browse_support);
+        }
+        if !support_updated {
+            // No need to log to cobalt if the highest browse support level
+            // hasn't changed for this peer.
+            return;
+        }
+
+        // For now we only log for "browsing" dimension (first dimension).
+        // Also log to cobalt if cobalt exists.
+        if let Some(cobalt) = self.cobalt_proxy.clone() {
+            let browse_cap : bt_metrics::AvrcpTargetDistinctPeerPlayerCapabilitiesMetricDimensionBrowsing = highest_browse_support.into();
+            let cobalt_event_codes = [browse_cap as u32, 0, 0];
+            let cobalt_task = fasync::Task::spawn(async move {
+                bt_metrics::log_on_failure(
+                    cobalt
+                        .log_occurrence(
+                            bt_metrics::AVRCP_TARGET_DISTINCT_PEER_PLAYER_CAPABILITIES_METRIC_ID,
+                            1,
+                            &cobalt_event_codes,
+                        )
+                        .await,
+                );
+            });
+            cobalt_task.detach();
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use {fuchsia_inspect::assert_data_tree, fuchsia_inspect_derive::WithInspect};
+    use async_utils::PollExt;
+    use bt_metrics::respond_to_metrics_req_for_test;
+    use fidl_fuchsia_metrics::{MetricEventLoggerMarker, MetricEventPayload};
+    use fuchsia_inspect::assert_data_tree;
+    use fuchsia_inspect_derive::WithInspect;
+    use futures::stream::StreamExt;
 
     #[test]
     fn multiple_peers_connection_updates_to_shared_node() {
@@ -302,5 +432,175 @@ mod tests {
                 distinct_controller_peers_supporting_cover_art: 1u64,
             }
         });
+    }
+
+    const NOT_BROWSABLE: fidl_avrcp::PlayerFeatureBits = fidl_avrcp::PlayerFeatureBits::empty();
+    const BROWSABLE: fidl_avrcp::PlayerFeatureBits = fidl_avrcp::PlayerFeatureBits::BROWSING;
+    const BROWSABLE_WHEN_ADDRESSED: fidl_avrcp::PlayerFeatureBits =
+        fidl_avrcp::PlayerFeatureBits::from_bits_truncate(
+            fidl_avrcp::PlayerFeatureBits::BROWSING.bits()
+                | fidl_avrcp::PlayerFeatureBits::ONLY_BROWSABLE_WHEN_ADDRESSED.bits(),
+        );
+
+    #[fuchsia::test]
+    fn target_peer_players_update() {
+        let mut exec = fasync::TestExecutor::new().unwrap();
+
+        let inspect = inspect::Inspector::new();
+
+        let (proxy, mut receiver) =
+            fidl::endpoints::create_proxy_and_stream::<MetricEventLoggerMarker>()
+                .expect("failed to create MetricsEventLogger proxy");
+
+        let metrics = MetricsNode::default()
+            .with_inspect(inspect.root(), "metrics")
+            .unwrap()
+            .with_cobalt_proxy(Some(proxy));
+
+        // Peer #1 has no players that support browsing in any way.
+        let id1 = PeerId(1101);
+        metrics.target_player_features(
+            id1,
+            vec![fidl_avrcp::MediaPlayerItem {
+                player_id: Some(1),
+                major_type: Some(fidl_avrcp::MajorPlayerType::AUDIO),
+                displayable_name: Some("player 1".to_string()),
+                feature_bits: Some(NOT_BROWSABLE),
+                ..fidl_avrcp::MediaPlayerItem::EMPTY
+            }],
+        );
+        assert_data_tree!(inspect, root: {
+            metrics: contains {
+                distinct_target_peers_with_players_support_browsing: 0u64,
+                distinct_target_peers_with_players_only_browsable_when_addressed: 0u64,
+                distinct_target_peers_with_no_players_support_browsing: 1u64,
+            }
+        });
+        // Cobalt was logged with `Unsupported` value in browse dimension.
+        let log_request = exec.run_until_stalled(&mut receiver.next()).expect("should be ready");
+        let got = respond_to_metrics_req_for_test(log_request.unwrap().expect("should be ok"));
+        assert_eq!(
+            bt_metrics::AVRCP_TARGET_DISTINCT_PEER_PLAYER_CAPABILITIES_METRIC_ID,
+            got.metric_id
+        );
+        assert_eq!(vec![1, 0, 0], got.event_codes);
+        assert_eq!(MetricEventPayload::Count(1), got.payload);
+
+        // Try logging with 2 non-browsable players.
+        let id1 = PeerId(1101);
+        metrics.target_player_features(
+            id1,
+            vec![
+                fidl_avrcp::MediaPlayerItem {
+                    player_id: Some(1),
+                    major_type: Some(fidl_avrcp::MajorPlayerType::AUDIO),
+                    displayable_name: Some("player 1".to_string()),
+                    feature_bits: Some(NOT_BROWSABLE),
+                    ..fidl_avrcp::MediaPlayerItem::EMPTY
+                },
+                fidl_avrcp::MediaPlayerItem {
+                    player_id: Some(2),
+                    major_type: Some(fidl_avrcp::MajorPlayerType::AUDIO),
+                    displayable_name: Some("player 2".to_string()),
+                    feature_bits: Some(NOT_BROWSABLE),
+                    ..fidl_avrcp::MediaPlayerItem::EMPTY
+                },
+            ],
+        );
+        // Metrics is not incremented since the highest level of support
+        // for peer 1 hasn't changed since last time.
+        assert_data_tree!(inspect, root: {
+            metrics: contains {
+                distinct_target_peers_with_players_support_browsing: 0u64,
+                distinct_target_peers_with_players_only_browsable_when_addressed: 0u64,
+                distinct_target_peers_with_no_players_support_browsing: 1u64,
+            }
+        });
+        // Cobalt was not logged.
+        let _ = exec.run_until_stalled(&mut receiver.next()).expect_pending("should be pending");
+
+        // Peer #2 has one player that supports browsing with
+        // OnlyBrowsableWhenAddressed feature bit and another that supports
+        // browsing without it.
+        let id2 = PeerId(1102);
+        metrics.target_player_features(
+            id2,
+            vec![
+                fidl_avrcp::MediaPlayerItem {
+                    player_id: Some(1),
+                    major_type: Some(fidl_avrcp::MajorPlayerType::AUDIO),
+                    displayable_name: Some("player 1".to_string()),
+                    feature_bits: Some(BROWSABLE_WHEN_ADDRESSED),
+                    ..fidl_avrcp::MediaPlayerItem::EMPTY
+                },
+                fidl_avrcp::MediaPlayerItem {
+                    player_id: Some(2),
+                    major_type: Some(fidl_avrcp::MajorPlayerType::AUDIO),
+                    displayable_name: Some("player 2".to_string()),
+                    feature_bits: Some(BROWSABLE),
+                    ..fidl_avrcp::MediaPlayerItem::EMPTY
+                },
+            ],
+        );
+        // `..._support_browsing` metric is incremented since it's the highest
+        // support level for player 2.
+        assert_data_tree!(inspect, root: {
+            metrics: contains {
+                distinct_target_peers_with_players_support_browsing: 1u64,
+                distinct_target_peers_with_players_only_browsable_when_addressed: 0u64,
+                distinct_target_peers_with_no_players_support_browsing: 1u64,
+            }
+        });
+        // Cobalt was logged with `Supported` value in browse dimension.
+        let log_request = exec.run_until_stalled(&mut receiver.next()).expect("should be ready");
+        let got = respond_to_metrics_req_for_test(log_request.unwrap().expect("should be ok"));
+        assert_eq!(
+            bt_metrics::AVRCP_TARGET_DISTINCT_PEER_PLAYER_CAPABILITIES_METRIC_ID,
+            got.metric_id
+        );
+        assert_eq!(vec![2, 0, 0], got.event_codes);
+        assert_eq!(MetricEventPayload::Count(1), got.payload);
+
+        // Peer #2 available players information changed and the highest level
+        // of browsing supported by its players is the one that supports
+        // browsing with OnlyBrowsableWhenAddressed feature.
+        let id1 = PeerId(1102);
+        metrics.target_player_features(
+            id1,
+            vec![
+                fidl_avrcp::MediaPlayerItem {
+                    player_id: Some(1),
+                    major_type: Some(fidl_avrcp::MajorPlayerType::AUDIO),
+                    displayable_name: Some("player 1".to_string()),
+                    feature_bits: Some(BROWSABLE_WHEN_ADDRESSED),
+                    ..fidl_avrcp::MediaPlayerItem::EMPTY
+                },
+                fidl_avrcp::MediaPlayerItem {
+                    player_id: Some(1004),
+                    major_type: Some(fidl_avrcp::MajorPlayerType::AUDIO),
+                    displayable_name: Some("other player".to_string()),
+                    feature_bits: Some(NOT_BROWSABLE),
+                    ..fidl_avrcp::MediaPlayerItem::EMPTY
+                },
+            ],
+        );
+        // `...only_browsable_when_addressed` metric is incremented since the
+        // highest support level changed since last time.
+        assert_data_tree!(inspect, root: {
+            metrics: contains {
+                distinct_target_peers_with_players_support_browsing: 1u64,
+                distinct_target_peers_with_players_only_browsable_when_addressed: 1u64,
+                distinct_target_peers_with_no_players_support_browsing: 1u64,
+            }
+        });
+        // Cobalt was logged with `SupportedWhenAddressed` value in browse dimension.
+        let log_request = exec.run_until_stalled(&mut receiver.next()).expect("should be ready");
+        let got = respond_to_metrics_req_for_test(log_request.unwrap().expect("should be ok"));
+        assert_eq!(
+            bt_metrics::AVRCP_TARGET_DISTINCT_PEER_PLAYER_CAPABILITIES_METRIC_ID,
+            got.metric_id
+        );
+        assert_eq!(vec![3, 0, 0], got.event_codes);
+        assert_eq!(MetricEventPayload::Count(1), got.payload);
     }
 }

@@ -103,16 +103,17 @@ async fn main() -> Result<(), Error> {
     if let Err(e) = peer_manager.iattach(inspect.root(), "peers") {
         warn!("Failed to attach to inspect: {:?}", e);
     }
-    let mut metrics_node = MetricsNode::default();
-    if let Err(e) = metrics_node.iattach(inspect.root(), METRICS_NODE_NAME) {
-        warn!("Failed to attach to inspect metrics: {:?}", e);
-    }
-    peer_manager.set_metrics_node(metrics_node);
 
     // Set up cobalt 1.1 logger.
     let cobalt = bt_metrics::create_metrics_logger()
         .map_err(|e| warn!("Failed to create metrics: {e}"))
         .ok();
+
+    let mut metrics_node = MetricsNode::default().with_cobalt_proxy(cobalt.clone());
+    if let Err(e) = metrics_node.iattach(inspect.root(), METRICS_NODE_NAME) {
+        warn!("Failed to attach to inspect metrics: {:?}", e);
+    }
+    peer_manager.set_metrics_node(metrics_node);
 
     let mut service_fut = service::run_services(fs, client_sender)
         .expect("Unable to start AVRCP FIDL service")

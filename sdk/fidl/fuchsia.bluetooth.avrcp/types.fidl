@@ -338,18 +338,98 @@ type PlayerSubType = strict bits : uint32 {
     // Bits 2 - 31 are reserved.
 };
 
+// Player feature bits associated with feature bits in octets 0-7.
+// Defined by AVRCP 1.6.2 section 6.10.2.1.
+type PlayerFeatureBits = strict bits : uint64 {
+    SELECT = 0x1;
+    UP = 0x2;
+    DOWN = 0x4;
+    LEFT = 0x8;
+    RIGHT = 0x10;
+    RIGHT_UP = 0x20;
+    RIGHT_DOWN = 0x40;
+    LEFT_UP = 0x80;
+    LEFT_DOWN = 0x100;
+    ROOT_MENU = 0x200;
+    SETUP_MENU = 0x400;
+    CONTENTS_MENU = 0x800;
+    FAVORITE_MENU = 0x1000;
+    EXIT = 0x2000;
+    // ZERO-NINE are for pass through commands 0-9.
+    ZERO = 0x4000;
+    ONE = 0x8000;
+    TWO = 0x10000;
+    THREE = 0x20000;
+    FOUR = 0x40000;
+    FIVE = 0x80000;
+    SIX = 0x100000;
+    SEVEN = 0x200000;
+    EIGHT = 0x400000;
+    NINE = 0x800000;
+    DOT = 0x1000000;
+    ENTER = 0x2000000;
+    CLEAR = 0x4000000;
+    CHANNEL_UP = 0x8000000;
+    CHANNEL_DOWN = 0x10000000;
+    PREVIOUS_CHANNEL = 0x20000000;
+    SOUND_SELECT = 0x40000000;
+    INPUT_SELECT = 0x80000000;
+    DISPLAY_INFORMATION = 0x100000000;
+    HELP = 0x200000000;
+    PAGE_UP = 0x400000000;
+    PAGE_DOWN = 0x800000000;
+    POWER = 0x1000000000;
+    VOLUME_UP = 0x2000000000;
+    VOLUME_DOWN = 0x4000000000;
+    MUTE = 0x8000000000;
+    PLAY = 0x10000000000;
+    STOP = 0x20000000000;
+    PAUSE = 0x40000000000;
+    RECORD = 0x80000000000;
+    REWIND = 0x100000000000;
+    FAST_FORWARD = 0x200000000000;
+    EJECT = 0x400000000000;
+    FORWARD = 0x800000000000;
+    BACKWARD = 0x1000000000000;
+    ANGLE = 0x2000000000000;
+    SUBPICTURE = 0x4000000000000;
+    F1 = 0x8000000000000;
+    F2 = 0x10000000000000;
+    F3 = 0x20000000000000;
+    F4 = 0x40000000000000;
+    F5 = 0x80000000000000;
+    VENDOR_UNIQUE = 0x100000000000000;
+    BASIC_GROUP_NAVIGATION = 0x200000000000000;
+    ADVANCED_CONTROL_PLAYER = 0x400000000000000;
+    BROWSING = 0x800000000000000;
+    SEARCHING = 0x1000000000000000;
+    ADD_TO_NOW_PLAYING = 0x2000000000000000;
+    UIDS_UNIQUE_IN_PLAYER_BROWSE_TREE = 0x4000000000000000;
+    ONLY_BROWSABLE_WHEN_ADDRESSED = 0x8000000000000000;
+};
+
+// Player feature bits associated with feature bits in octet 8.
+// Defined by AVRCP 1.6.2 section 6.10.2.1.
+type PlayerFeatureBitsExt = strict bits : uint64 {
+    ONLY_SEARCHABLE_WHEN_ADDRESSED = 0x01;
+    NOW_PLAYING = 0x02;
+    UID_PERSISTENCY = 0x04;
+    NUMBER_OF_ITEMS = 0x08;
+    COVER_ART = 0x10;
+
+    // Bits 5 - 63 are reserved.
+};
+
 /// Response data for the browseable items associated with a media player.
 /// Defined by AVRCP 1.6.2 section 6.10.2.1.
 type MediaPlayerItem = table {
     1: player_id uint16;
-
     2: major_type MajorPlayerType;
-
     3: sub_type PlayerSubType;
-
     4: playback_status PlaybackStatus;
-
     5: displayable_name string:255;
+    6: feature_bits PlayerFeatureBits;
+    7: feature_bits_ext PlayerFeatureBitsExt;
 };
 
 /// Response data for a browseable media element item.

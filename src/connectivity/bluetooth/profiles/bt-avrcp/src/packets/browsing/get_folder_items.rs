@@ -15,6 +15,22 @@ use crate::packets::{
     PlaybackStatus, Scope, StatusCode, ATTRIBUTE_ID_LEN,
 };
 
+const DEFAULT_PLAYER_FEATURE_BITS: fidl_avrcp::PlayerFeatureBits =
+    fidl_avrcp::PlayerFeatureBits::from_bits_truncate(
+        fidl_avrcp::PlayerFeatureBits::PLAY.bits()
+            | fidl_avrcp::PlayerFeatureBits::STOP.bits()
+            | fidl_avrcp::PlayerFeatureBits::PAUSE.bits()
+            | fidl_avrcp::PlayerFeatureBits::REWIND.bits()
+            | fidl_avrcp::PlayerFeatureBits::FAST_FORWARD.bits()
+            | fidl_avrcp::PlayerFeatureBits::FORWARD.bits()
+            | fidl_avrcp::PlayerFeatureBits::BACKWARD.bits()
+            | fidl_avrcp::PlayerFeatureBits::VENDOR_UNIQUE.bits()
+            | fidl_avrcp::PlayerFeatureBits::ADVANCED_CONTROL_PLAYER.bits(),
+    );
+
+const DEFAULT_PLAYER_FEATURE_BITS_EXT: fidl_avrcp::PlayerFeatureBitsExt =
+    fidl_avrcp::PlayerFeatureBitsExt::empty();
+
 /// AVRCP 1.6.2 section 6.10.4.2 GetFolderItems
 /// If `attribute_list` is None, then all attribute ids will be used. Otherwise,
 /// the ids provided in the list are used.
@@ -354,14 +370,15 @@ impl Decodable for AttributeValueEntry {
 
 /// The response parameters for a Media Player Item.
 /// Defined in AVRCP 1.6.2, Section 6.10.2.1.
-// TODO(fxbug.dev/45904): Maybe wrap major_player_type and player_sub_type into strongly typed variables.
+// TODO(fxbug.dev/45904): Maybe wrap major_player_type, player_sub_type,
+// and feature_bit_mask into strongly typed variables.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MediaPlayerItem {
     player_id: u16,
     major_player_type: u8,
     player_sub_type: u32,
     play_status: PlaybackStatus,
-    feature_bit_mask: [u8; 16],
+    feature_bit_mask: [u64; 2],
     name: String,
 }
 
@@ -396,7 +413,8 @@ impl Encodable for MediaPlayerItem {
         buf[3..7].copy_from_slice(&self.player_sub_type.to_be_bytes());
         buf[7] = u8::from(&self.play_status);
 
-        buf[8..24].copy_from_slice(&self.feature_bit_mask);
+        buf[8..16].copy_from_slice(&self.feature_bit_mask[0].to_be_bytes());
+        buf[16..24].copy_from_slice(&self.feature_bit_mask[1].to_be_bytes());
 
         let charset_id = u16::from(&CharsetId::Utf8);
         buf[24..26].copy_from_slice(&charset_id.to_be_bytes());
@@ -438,8 +456,10 @@ impl Decodable for MediaPlayerItem {
         let player_sub_type = u32::from_be_bytes(buf[3..7].try_into().unwrap());
         let play_status = PlaybackStatus::try_from(buf[7])?;
 
-        let mut feature_bit_mask = [0; 16];
-        feature_bit_mask.copy_from_slice(&buf[8..24]);
+        let feature_bit_mask = [
+            u64::from_be_bytes(buf[8..16].try_into().unwrap()),
+            u64::from_be_bytes(buf[16..24].try_into().unwrap()),
+        ];
         let is_utf8 = is_utf8_charset_id(&buf[24..26].try_into().unwrap());
 
         let name_len = u16::from_be_bytes(buf[26..28].try_into().unwrap()) as usize;
@@ -679,10 +699,9 @@ impl From<fidl_avrcp::MediaPlayerItem> for BrowseableItem {
         let player_sub_type = 0x0;
         // The play_status should always be provided. If not, default to the error case.
         let play_status = src.playback_status.map(|s| s.into()).unwrap_or(PlaybackStatus::Error);
-        // Arbitrary feature bitmask.
         let feature_bit_mask = [
-            0x00, 0x00, 0x00, 0x00, 0x00, 0xB7, 0x01, 0xEF, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00,
+            src.feature_bits.unwrap_or(DEFAULT_PLAYER_FEATURE_BITS).bits(),
+            src.feature_bits_ext.unwrap_or(DEFAULT_PLAYER_FEATURE_BITS_EXT).bits(),
         ];
         // The displayable name should always be provided. If not, default to empty.
         let name = src.displayable_name.unwrap_or("".to_string());
@@ -692,7 +711,7 @@ impl From<fidl_avrcp::MediaPlayerItem> for BrowseableItem {
             major_player_type,
             player_sub_type,
             play_status,
-            feature_bit_mask,
+            feature_bit_mask: feature_bit_mask,
             name,
         })
     }
@@ -709,6 +728,14 @@ impl TryFrom<BrowseableItem> for fidl_avrcp::MediaPlayerItem {
                 sub_type: fidl_avrcp::PlayerSubType::from_bits(p.player_sub_type),
                 playback_status: Some(p.play_status.into()),
                 displayable_name: Some(p.name),
+                feature_bits: Some(
+                    fidl_avrcp::PlayerFeatureBits::from_bits(p.feature_bit_mask[0])
+                        .ok_or(Error::ParameterEncodingError)?,
+                ),
+                feature_bits_ext: Some(
+                    fidl_avrcp::PlayerFeatureBitsExt::from_bits(p.feature_bit_mask[1])
+                        .ok_or(Error::ParameterEncodingError)?,
+                ),
                 ..fidl_avrcp::MediaPlayerItem::EMPTY
             }),
             _ => Err(fidl_avrcp::BrowseControllerError::PacketEncoding),
@@ -1054,7 +1081,7 @@ mod tests {
     #[test]
     /// Tests encoding a response buffer for GetFolderItemsResponse works as intended.
     fn test_get_folder_items_response_media_player_list_encode() {
-        let feature_bit_mask = [0; 16];
+        let feature_bit_mask = [0; 2];
         let player_name = "Foobar".to_string();
         let item_list = vec![BrowseableItem::MediaPlayer(MediaPlayerItem {
             player_id: 5,
@@ -1163,7 +1190,7 @@ mod tests {
                         major_player_type: 0,
                         player_sub_type: 1,
                         play_status: PlaybackStatus::Playing,
-                        feature_bit_mask: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 1],
+                        feature_bit_mask: [0, 8193],
                         name: "test".to_string(),
                     })
                 );
@@ -1278,7 +1305,7 @@ mod tests {
     /// Tests encoding a MediaPlayerItem succeeds.
     fn test_media_player_item_encode() {
         let player_id = 10;
-        let feature_bit_mask = [0; 16];
+        let feature_bit_mask = [0; 2];
         let player_name = "Tea".to_string();
         let item = MediaPlayerItem {
             player_id,
@@ -1315,7 +1342,7 @@ mod tests {
         assert_eq!(item.major_player_type, 0);
         assert_eq!(item.player_sub_type, 1);
         assert_eq!(item.play_status, PlaybackStatus::Playing);
-        assert_eq!(item.feature_bit_mask, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 1]);
+        assert_eq!(item.feature_bit_mask, [0, 8193]);
         assert_eq!(item.name, "test".to_string());
 
         // Without utf8 name.
@@ -1329,7 +1356,7 @@ mod tests {
         assert_eq!(item.major_player_type, 0);
         assert_eq!(item.player_sub_type, 1);
         assert_eq!(item.play_status, PlaybackStatus::Playing);
-        assert_eq!(item.feature_bit_mask, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 1]);
+        assert_eq!(item.feature_bit_mask, [0, 8193]);
         assert_eq!(item.name, "Media Player".to_string());
     }
 
@@ -1504,11 +1531,6 @@ mod tests {
     /// works as intended.
     fn test_fidl_to_media_player_item() {
         let player_id = 1;
-        // Static value used in conversion.
-        let feature_bit_mask = [
-            0x00, 0x00, 0x00, 0x00, 0x00, 0xB7, 0x01, 0xEF, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00,
-        ];
         let item_fidl = fidl_avrcp::MediaPlayerItem {
             player_id: Some(player_id),
             playback_status: Some(fidl_avrcp::PlaybackStatus::Stopped),
@@ -1521,7 +1543,10 @@ mod tests {
                 assert_eq!(item.player_id, player_id);
                 assert_eq!(item.major_player_type, 1);
                 assert_eq!(item.player_sub_type, 0);
-                assert_eq!(item.feature_bit_mask, feature_bit_mask);
+                assert_eq!(
+                    item.feature_bit_mask,
+                    [DEFAULT_PLAYER_FEATURE_BITS.bits(), DEFAULT_PLAYER_FEATURE_BITS_EXT.bits()]
+                );
                 assert_eq!(item.name, "hi".to_string());
             }
             _ => panic!("expected MediaPlayer item"),
