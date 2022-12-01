@@ -422,7 +422,7 @@ class MakeLegacyConfig(unittest.TestCase):
 
             # Copies legacy config into AIB
             aib, _, _ = make_legacy_config.copy_to_assembly_input_bundle(
-                image_assembly, [], OUTDIR, [], [], [])
+                image_assembly, [], OUTDIR, [], [], dict())
 
             # Asserts that the duplicate package is present in the base package set after
             # being copied to the AIB
@@ -462,7 +462,7 @@ class MakeLegacyConfig(unittest.TestCase):
                 patched_method.return_value = (
                     {make_package_path(duplicate_package)}, list())
                 aib, _, _ = make_legacy_config.copy_to_assembly_input_bundle(
-                    image_assembly, [], OUTDIR, [manifest_path], [], [])
+                    image_assembly, [], OUTDIR, [manifest_path], [], dict())
 
             self.assertNotIn(make_package_path(duplicate_package), aib.base)
             self.assertIn(
@@ -510,4 +510,4 @@ class MakeLegacyConfig(unittest.TestCase):
                 DuplicatePackageException,
                 partial(
                     make_legacy_config.copy_to_assembly_input_bundle,
-                    image_assembly, [], OUTDIR, [], [], []))
+                    image_assembly, [], OUTDIR, [], [], dict()))
