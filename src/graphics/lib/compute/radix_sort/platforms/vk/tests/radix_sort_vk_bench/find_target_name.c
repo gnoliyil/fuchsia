@@ -109,6 +109,18 @@ radix_sort_vk_find_target_name(uint32_t vendor_id, uint32_t device_id, uint32_t 
             case 2:
               return RS_VK_TARGET_NAME(google_swiftshader_u64);
           }
+
+      case 0x10005:
+        //
+        // MESA LAVAPIPE
+        //
+        switch (keyval_dwords)
+          {
+            case 1:
+              return RS_VK_TARGET_NAME(mesa_lavapipe_u32);
+            case 2:
+              return RS_VK_TARGET_NAME(mesa_lavapipe_u64);
+          }
     }
 
   return NULL;

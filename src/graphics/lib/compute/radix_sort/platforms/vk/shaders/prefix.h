@@ -162,7 +162,7 @@ rs_prefix(RS_PREFIX_ARGS)
       const uint32_t h0_inc = subgroupInclusiveAdd(h0_red);
 
       RS_PREFIX_SWEEP0(gl_LocalInvocationID.x) = h0_inc - h0_red;
-      RS_PREFIX_SWEEP1(gl_SubgroupID) = subgroupBroadcast(h0_inc, RS_SUBGROUP_SIZE - 1);
+      RS_PREFIX_SWEEP1(gl_SubgroupID)          = subgroupBroadcast(h0_inc, RS_SUBGROUP_SIZE - 1);
     }
 
 #else

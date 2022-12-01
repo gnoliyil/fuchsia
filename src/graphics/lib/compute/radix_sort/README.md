@@ -26,6 +26,8 @@ ARM    | Bifrost4      | ✔                  | ✔               |
 ARM    | Bifrost8      | ✔                  | ✔               |
 Intel  | GEN8+         | ✔                  | ✔               |
 Intel  | Xe+           | ✔                  | ✔               |
+Google | SwiftShader   | ✔                  | ✔               |
+Mesa   | LavaPipe      | ✔                  | ✔               |
 
 ## Benchmarks
 
@@ -56,7 +58,7 @@ Intel  | Xe+           | ✔                  | ✔               |
 ## Future Improvements
 
 * 96-bit and 128-bit keyval support.
-* Possibly reduce GMEM transactions by accumulating stores that share the same
+* Reduce GMEM transactions by accumulating stores that share the same
   transaction boundary.
 
 ## References

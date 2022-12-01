@@ -68,6 +68,8 @@ group("radix_sort_vk_target_fuchsia_default") {
     "${_vendors_dir}/google/swiftshader/u64:radix_sort_vk_google_swiftshader_u64_resource",
     "${_vendors_dir}/intel/gen8/u32:radix_sort_vk_intel_gen8_u32_resource",
     "${_vendors_dir}/intel/gen8/u64:radix_sort_vk_intel_gen8_u64_resource",
+    "${_vendors_dir}/mesa/lavapipe/u32:radix_sort_vk_mesa_lavapipe_u32_resource",
+    "${_vendors_dir}/mesa/lavapipe/u64:radix_sort_vk_mesa_lavapipe_u64_resource",
     "${_vendors_dir}/nvidia/sm35/u32:radix_sort_vk_nvidia_sm35_u32_resource",
     "${_vendors_dir}/nvidia/sm35/u64:radix_sort_vk_nvidia_sm35_u64_resource",
   ]
@@ -88,6 +90,8 @@ group("radix_sort_vk_target_host_default") {
     "${_vendors_dir}/google/swiftshader/u64:radix_sort_vk_google_swiftshader_u64_linkable",
     "${_vendors_dir}/intel/gen8/u32:radix_sort_vk_intel_gen8_u32_linkable",
     "${_vendors_dir}/intel/gen8/u64:radix_sort_vk_intel_gen8_u64_linkable",
+    "${_vendors_dir}/mesa/lavapipe/u32:radix_sort_vk_mesa_lavapipe_u32_linkable",
+    "${_vendors_dir}/mesa/lavapipe/u64:radix_sort_vk_mesa_lavapipe_u64_linkable",
     "${_vendors_dir}/nvidia/sm35/u32:radix_sort_vk_nvidia_sm35_u32_linkable",
     "${_vendors_dir}/nvidia/sm35/u64:radix_sort_vk_nvidia_sm35_u64_linkable",
   ]
