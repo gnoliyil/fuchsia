@@ -576,16 +576,10 @@ TEST(NewSyntaxTests, BadNotEnoughParameters) {
 }
 
 TEST(NewSyntaxTests, BadTooManyConstraints) {
-  TestLibrary library(R"FIDL(
-library example;
-
-type Foo = struct {
-  foo uint8:<1, 2, 3>;
-};
-)FIDL");
-
+  TestLibrary library;
+  library.AddFile("bad/fi-0164.test.fidl");
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrTooManyConstraints);
-  EXPECT_EQ(library.errors()[0]->span.data(), "<1, 2, 3>");
+  EXPECT_EQ(library.errors()[0]->span.data(), "<0, 20, optional>");
 }
 
 TEST(NewSyntaxTests, BadParameterizedAnonymousLayout) {
