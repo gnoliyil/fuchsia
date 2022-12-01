@@ -7,9 +7,9 @@ workflows of building, running, debugging, and updating
 
 Important: This guide is the driver equivalent of the
 [_Get started with the Fuchsia SDK_][get-started-sdk] guide. If you haven't
-already, it's strongly recommended that you first complete the _Get started
-with the Fuchsia SDK_ guide to become familiar with the comprehensive set of
-Fuchsia SDK-based workflows.
+already, it's strongly recommended that you complete _Get started with the
+Fuchsia SDK_ first to become familiar with the comprehensive set of
+Fuchsia SDK workflows.
 
 Complete the following sections:
 
@@ -23,45 +23,36 @@ Complete the following sections:
 
 Found an issue? Please [let us know][sdk-bug]{:.external}.
 
-## 1. Prerequisites {:#prerequisites}
+## Prerequisites {:#prerequisites .numbered}
 
 This guide requires that your host machine meets the following criteria:
 
 *  An x64-based machine running Linux or macOS.
-
-   Note: While you can use an x64-based (Intel) macOS machine for this get-started
-   flow, you might run into issues. To help us improve, please
-   [file a bug][sdk-bug]{:.external} if you discover issues on macOS.
-
 *  Has at least 15 GB of storage space.
 *  Supports [KVM][kvm]{:.external} (Kernel Virtual Machine) for running a
    [QEMU][qemu]{:.external}-based emulator.
 *  IPv6 is enabled.
 *  [Git][git-install]{:.external} is installed.
 
-## 2. Clone the SDK driver samples repository {:#clone-the-sdk-driver-samples-repository}
+## Clone the SDK driver samples repository {:#clone-the-sdk-driver-samples-repository .numbered}
 
-Clone the [SDK driver samples repository][sdk-driver-sample-repo]{:.external}
-on your host machine. This repository contains sample driver components and the
-Bazel-based Fuchsia SDK.
+Clone the SDK driver samples repository on your host machine. This repository
+contains sample driver components and the Bazel-based Fuchsia SDK.
 
 The tasks include:
 
 *   Bootstrap the SDK driver samples repository.
-*   Verify that you can build the sample driver components and run `ffx`
-    commands.
+*   Download the SDK toolchain to initialize the SDK environment.
+*   Verify that you can run `ffx` commands.
 
 Do the following:
 
-1. In a terminal, change to your home directory:
+1. Open a terminal.
 
-   Note: This guide uses the home directory (`$HOME`) as a base directory. This
-   is where a new work directory (`drivers`) will be created for this guide. You
-   may also select a different base directory (for instance,
-   `cd $HOME/my-fuchsia-project`).
+1. In the terminal, change to your home directory:
 
    ```posix-terminal
-   cd $HOME
+   cd
    ```
 
 1. Clone the SDK driver samples repository:
@@ -70,9 +61,9 @@ Do the following:
    git clone https://fuchsia.googlesource.com/sdk-samples/drivers fuchsia-drivers --recurse-submodules
    ```
 
-   This `git clone` command creates a new directory named `fuchsia-drivers` (see the
-   command's second argument above) and clones the content of the SDK driver samples
-   repository.
+   This `git clone` command creates a new directory named `fuchsia-drivers` and
+   clones the content of the
+   [SDK driver samples repository][sdk-driver-sample-repo]{:.external}.
 
 1. Go to the new directory:
 
@@ -86,25 +77,23 @@ Do the following:
    scripts/bootstrap.sh
    ```
 
-1. To verify the Fuchsia SDK environment setup, build the sample drivers:
+1. Download the SDK toolchain:
 
    ```posix-terminal
-   tools/bazel build --config=fuchsia_x64 //src/qemu_edu/drivers:qemu_edu
+   tools/bazel build @fuchsia_sdk//:fuchsia_toolchain_sdk
    ```
 
    The first build may take a few minutes to download dependencies, such as
-   Bazel build rules, [Clang][clang], and [Fuchsia IDK][fuchsia-idk]
-   (which includes the `ffx` tool).
+   [Clang][clang] and [Fuchsia IDK][fuchsia-idk] (which includes the `ffx` tool).
 
-   When finished successfully, it prints output similar to the following in the
-   end:
+   When finished successfully, it prints output similar to the following:
 
    ```none {:.devsite-disable-click-to-copy}
-   $ tools/bazel build --config=fuchsia_x64 //src/qemu_edu/drivers:qemu_edu
+   $ tools/bazel build @fuchsia_sdk//:fuchsia_toolchain_sdk
    ...
-   INFO: Elapsed time: 114.304s, Critical Path: 58.62s
-   INFO: 994 processes: 605 internal, 389 linux-sandbox.
-   INFO: Build completed successfully, 994 total actions
+   INFO: Elapsed time: 23.608s, Critical Path: 0.03s
+   INFO: 1 process: 1 internal.
+   INFO: Build completed successfully, 1 total action
    ```
 
 5. To verify that you can use the `ffx` tool in your environment, run the
@@ -122,17 +111,12 @@ Do the following:
    ```
 
    At this point, you only need to confirm that you can run `ffx` commands
-   without error. (However for your information, the output above shows the version
-   `10.20221103.2.1`, which indicates that this SDK was built and published on
-   November 3, 2022.)
+   without error.
 
-   Note: To ensure that you’re using the right version of `ffx` during development,
-   consider updating your `PATH` to include the SDK's `tools` directory
-   (for instance, `export PATH="$PATH:$HOME/fuchsia-drivers/tools"`). However,
-   if you don't wish to update your `PATH`, ensure that you specify the relative path to
-   this `ffx` tool (`tools/ffx`) whenever you run `ffx` commands.
+   Note: The output above shows the version `10.20221103.2.1`, which indicates that
+   this SDK was built and published on November 3, 2022.
 
-## 3. Start the emulator {:#start-the-emulator}
+## Start the emulator {:#start-the-emulator .numbered}
 
 Start the [Fuchsia emulator][femu] on the host machine while configuring the
 emulator instance to use Fuchsia’s new [driver framework][driver-framework]
@@ -164,7 +148,7 @@ Do the following:
    Once the download is finished, the `ffx product-bundle get` command creates
    a local Fuchsia package repository named `workstation-packages` on your host machine.
    This package repository hosts additional system packages for this Workstation prebuilt image.
-   Later in Step 8 you’ll register this package repository to the emulator instance.
+   Later in step 8 you’ll register this package repository to the emulator instance.
 
 1. Stop all emulator instances:
 
@@ -249,7 +233,7 @@ Do the following:
    +-----------------------+------+-------------------------------------------------------------------------------------------------+
    ```
 
-   Notice a package repository (`workstation-packages`) is created
+   Notice a package repository named `workstation-packages` is created
    for the Workstation prebuilt image.
 
 1. Register the `workstation-packages` package repository to the target device:
@@ -260,7 +244,7 @@ Do the following:
 
    This command exits silently without output.
 
-## 4. Build and load the sample driver {:#build-and-load-the-sample-driver}
+## Build and load the sample driver {:#build-and-load-the-sample-driver .numbered}
 
 The Fuchsia emulator (launched in the [Start the emulator](#start-the-emulator)
 section above) is configured to create a virtual device named
@@ -328,26 +312,22 @@ Do the following:
 2. Build and publish the `qemu_edu` driver component:
 
    ```posix-terminal
-   tools/bazel run --config=fuchsia_x64 //src/qemu_edu/drivers:pkg.component
+   tools/bazel run //src/qemu_edu/drivers:pkg.component
    ```
 
    This command prints output similar to the following:
 
    ```none {:.devsite-disable-click-to-copy}
-   $ tools/bazel run --config=fuchsia_x64 //src/qemu_edu/drivers:pkg.component
-   INFO: Build options --copt, --cpu, --crosstool_top, and 1 more have changed, discarding analysis cache.
-   INFO: Analyzed target //src/qemu_edu/drivers:pkg.component (9 packages loaded, 3162 targets configured).
-   INFO: Found 1 target...
-   Target //src/qemu_edu/drivers:pkg.component up-to-date:
-     bazel-bin/src/qemu_edu/drivers/pkg.component_run_component.sh
-   INFO: Elapsed time: 100.275s, Critical Path: 56.62s
-   INFO: 1012 processes: 614 internal, 397 linux-sandbox, 1 local.
-   INFO: Build completed successfully, 1012 total actions
-   INFO: Build completed successfully, 1012 total actions
-   added repository bazel.pkg.component
-   Registering fuchsia-pkg://bazel.pkg.component/qemu_edu#meta/qemu_edu.cm
+   $ tools/bazel run //src/qemu_edu/drivers:pkg.component
+   ...
+   INFO: Build completed successfully, 1045 total actions
+   Running workflow: pkg.component_base
+   Running task: pkg.debug_symbols_base (step 1/2)
+   Running task: pkg.component.run_base (step 2/2)
+   added repository bazel.pkg.component.runnable
+   Registering fuchsia-pkg://bazel.pkg.component.runnable/qemu_edu#meta/qemu_edu.cm
    Successfully bound:
-   Node 'root.sys.platform.pt.PCI0.bus.00_06_0_.pci-00_06.0-fidl', Driver 'fuchsia-pkg://bazel.pkg.component/qemu_edu#meta/qemu_edu.cm'.
+   Node 'root.sys.platform.pt.PCI0.bus.00_06_0_.pci-00_06.0-fidl', Driver 'fuchsia-pkg://bazel.pkg.component.runnable/qemu_edu#meta/qemu_edu.cm'.
    ```
 
 3. Verify that the `qemu_edu` driver is now loaded to the Fuchsia emulator
@@ -412,7 +392,7 @@ Do the following:
                             /svc/fuchsia.driver.compat.Service
                             /svc/fuchsia.logger.LogSink
      Exposed Capabilities:  examples.qemuedu.Service
-              Merkle root:  986038015ed8e6330e13cb299d7bd9ab50b1de01216c181566672d413f6d5eed
+              Merkle root:  ca337aa579388a7335c8fa53e47ba111b6a58c0b9af7519731e9942dec31f7ef
           Execution State:  Running
              Start reason:  Instance is in a single_run collection
     Outgoing Capabilities:  examples.qemuedu.Service
@@ -433,7 +413,7 @@ Do the following:
    [184.073][universe-pkg-drivers:root.sys.platform.pt.PCI0.bus.00_06_0_.pci-00_06.0-fidl][qemu-edu,driver][I]: [src/qemu_edu/drivers/qemu_edu.cc:117] Exported devfs_path=sys/platform/pt/PCI0/bus/00:06.0_/qemu-edu service_path=examples.qemuedu.Service/default/device
    ```
 
-## 5. Build and run a tool {:#build-and-run-a-tool}
+## Build and run a tool {:#build-and-run-a-tool .numbered}
 
 The `qemu_edu` driver sample includes [tools][eductl_tools] for interacting with the
 `qemu_edu` driver. Developers often include binary executables in a Fuchsia package and
@@ -457,22 +437,19 @@ Do the following:
 1. Build and run `eductl_tool` (and run the `live` command):
 
    ```posix-terminal
-   tools/bazel run --config=fuchsia_x64 //src/qemu_edu/tools:pkg.eductl_tool -- live
+   tools/bazel run //src/qemu_edu/tools:pkg.eductl_tool -- live
    ```
 
    This command prints output similar to the following:
 
    ```none {:.devsite-disable-click-to-copy}
-   $ tools/bazel run --config=fuchsia_x64 //src/qemu_edu/tools:pkg.eductl_tool -- live
-   INFO: Analyzed target //src/qemu_edu/tools:pkg.eductl_tool (1 packages loaded, 2662 targets configured).
-   INFO: Found 1 target...
-   Target //src/qemu_edu/tools:pkg.eductl_tool up-to-date:
-     bazel-bin/src/qemu_edu/tools/pkg.eductl_tool_run_driver_tool.sh
-   INFO: Elapsed time: 2.406s, Critical Path: 1.84s
-   INFO: 22 processes: 7 internal, 14 linux-sandbox, 1 local.
-   INFO: Build completed successfully, 22 total actions
-   INFO: Build completed successfully, 22 total actions
-   added repository bazel.pkg.eductl.tool
+   $ tools/bazel run //src/qemu_edu/tools:pkg.eductl_tool -- live
+   ...
+   INFO: Build completed successfully, 38 total actions
+   Running workflow: pkg.eductl_tool_base
+   Running task: pkg.debug_symbols_base (step 1/2)
+   Running task: pkg.eductl_tool.run_base (step 2/2)
+   added repository bazel.pkg.eductl.tool.runnable
    {{ '<strong>' }}Liveness check passed!{{ '</strong>' }}
    ```
 
@@ -481,21 +458,24 @@ Do the following:
 1. Run `eductl_tool` using `fact` and `12` as input:
 
    ```posix-terminal
-   tools/bazel run --config=fuchsia_x64 //src/qemu_edu/tools:pkg.eductl_tool -- fact 12
+   tools/bazel run //src/qemu_edu/tools:pkg.eductl_tool -- fact 12
    ```
 
    This command prints output similar to the following:
 
    ```none {:.devsite-disable-click-to-copy}
-   $ tools/bazel run --config=fuchsia_x64 //src/qemu_edu/tools:pkg.eductl_tool -- fact 12
+   $ tools/bazel run //src/qemu_edu/tools:pkg.eductl_tool -- fact 12
    ...
    INFO: Build completed successfully, 1 total action
-   added repository bazel.pkg.eductl.tool
+   Running workflow: pkg.eductl_tool_base
+   Running task: pkg.debug_symbols_base (step 1/2)
+   Running task: pkg.eductl_tool.run_base (step 2/2)
+   added repository bazel.pkg.eductl.tool.runnable
    {{ '<strong>' }}Factorial(12) = 479001600{{ '</strong>' }}
    ```
 
-   The last line shows that the driver replied `479001600` as the result of the factorial
-   to `eductl_tool`, which passed 12 as input to the driver.
+   The last line shows that the driver replied `479001600` as the result of
+   the factorial to `eductl_tool`, which passed 12 as input to the driver.
 
 1. View the device logs of the `qemu-edu` driver:
 
@@ -516,7 +496,7 @@ Do the following:
 
    Notice that more messages are now logged from the `qemu-edu` driver.
 
-## 6. Debug the sample driver {:#debug-the-sample-driver}
+## Debug the sample driver {:#debug-the-sample-driver .numbered}
 
 Use the Fuchsia debugger ([`zxdb`][zxdb-user-guide]) to step through the
 sample driver’s code as the driver is running on the emulator instance.
@@ -544,7 +524,7 @@ Do the following:
 
    ```none {:.devsite-disable-click-to-copy}
    $ tools/ffx driver list-hosts
-   Driver Host: 5460
+   Driver Host: 5507
        fuchsia-boot:///#meta/bus-pci.cm
        fuchsia-boot:///#meta/display.cm
        fuchsia-boot:///#meta/goldfish-display.cm
@@ -555,53 +535,23 @@ Do the following:
        fuchsia-boot:///#meta/hid.cm
        fuchsia-boot:///#meta/platform-bus-x86.cm
        fuchsia-boot:///#meta/platform-bus.cm
-       fuchsia-boot:///#meta/sysmem.cm
-       fuchsia-pkg://fuchsia.com/virtual_audio#meta/virtual_audio_driver.cm
+       unbound
 
-   Driver Host: 6757
-       fuchsia-boot:///#meta/ramdisk.cm
+   ...
 
-   Driver Host: 9571
-       fuchsia-boot:///#meta/intel-rtc.cm
-
-   Driver Host: 9764
-       fuchsia-boot:///#meta/pc-ps2.cm
-
-   Driver Host: 9864
-       fuchsia-boot:///#meta/hid-input-report.cm
-       fuchsia-boot:///#meta/hid.cm
-       fuchsia-boot:///#meta/virtio_input.cm
-
-   Driver Host: 9988
-       fuchsia-boot:///#meta/intel-hda.cm
-       fuchsia-boot:///#meta/qemu-audio-codec.cm
-
-   Driver Host: 10224
+   Driver Host: 10784
        fuchsia-boot:///#meta/goldfish_address_space.cm
+       unbound
 
-   Driver Host: 10412
-       fuchsia-boot:///#meta/block.core.cm
-       fuchsia-boot:///#meta/fvm.cm
-       fuchsia-boot:///#meta/virtio_block.cm
+   Driver Host: 25673
+       fuchsia-pkg://fuchsia.com/virtual_audio#meta/virtual_audio_driver.cm
+       unbound
 
-   Driver Host: 10539
-       fuchsia-boot:///#meta/ahci.cm
-
-   Driver Host: 10648
-       fuchsia-boot:///#meta/netdevice-migration.cm
-       fuchsia-boot:///#meta/network-device.cm
-       fuchsia-boot:///#meta/virtio_ethernet.cm
-
-   Driver Host: 10802
-       fuchsia-boot:///#meta/hid-input-report.cm
-       fuchsia-boot:///#meta/hid.cm
-       fuchsia-boot:///#meta/virtio_input.cm
-
-   Driver Host: 134104
-       fuchsia-pkg://bazel.pkg.component/qemu_edu#meta/qemu_edu.cm
+   Driver Host: 85211
+       fuchsia-pkg://bazel.pkg.component.runnable/qemu_edu#meta/qemu_edu.cm
    ```
 
-   Make a note of the PID of the `qemu_edu` driver host (`134104` in the
+   Make a note of the PID of the `qemu_edu` driver host (`85211` in the
    example above).
 
 1. Start the Fuchsia debugger:
@@ -627,19 +577,19 @@ Do the following:
    </pre>
 
    Replace `PID` with the PID of the `qemu_edu` driver host identified
-   in Step 1, for example:
+   in step 1, for example:
 
    ```none {:.devsite-disable-click-to-copy}
-   [zxdb] attach 134104
+   [zxdb] attach 85211
    ```
 
    This command prints output similar to the following:
 
    ```none {:.devsite-disable-click-to-copy}
-   [zxdb] attach 134104
-   Attached Process 1 state=Running koid=134104 name=driver_host2.cm component=driver_host2.cm
+   [zxdb] attach 85211
+   Attached Process 1 state=Running koid=85211 name=driver_host2.cm component=driver_host2.cm
    Downloading symbols...
-   Symbol downloading complete. 2 succeeded, 0 failed.
+   Symbol downloading complete. 4 succeeded, 0 failed.
    [zxdb]
    ```
 
@@ -667,23 +617,20 @@ Do the following:
    directory (for instance, `cd $HOME/fuchsia-drivers`).
 
    ```posix-terminal
-   tools/bazel run --config=fuchsia_x64 //src/qemu_edu/tools:pkg.eductl_tool -- fact 12
+   tools/bazel run //src/qemu_edu/tools:pkg.eductl_tool -- fact 12
    ```
 
    Unlike in the previous section, after printing output similar to the following,
    the command now waits:
 
    ```none {:.devsite-disable-click-to-copy}
-   $ tools/bazel run --config=fuchsia_x64 //src/qemu_edu/tools:pkg.eductl_tool -- fact 12
-   INFO: Analyzed target //src/qemu_edu/tools:pkg.eductl_tool (0 packages loaded, 0 targets configured).
-   INFO: Found 1 target...
-   Target //src/qemu_edu/tools:pkg.eductl_tool up-to-date:
-     bazel-bin/src/qemu_edu/tools/pkg.eductl_tool_run_driver_tool.sh
-   INFO: Elapsed time: 0.348s, Critical Path: 0.01s
-   INFO: 1 process: 1 internal.
+   $ tools/bazel run //src/qemu_edu/tools:pkg.eductl_tool -- fact 12
+   ...
    INFO: Build completed successfully, 1 total action
-   INFO: Build completed successfully, 1 total action
-   added repository bazel.pkg.eductl.tool
+   Running workflow: pkg.eductl_tool_base
+   Running task: pkg.debug_symbols_base (step 1/2)
+   Running task: pkg.eductl_tool.run_base (step 2/2)
+   added repository bazel.pkg.eductl.tool.runnable
    ```
 
    In the `zxdb` terminal, verify that the debugger is stopped at the
@@ -754,10 +701,13 @@ Do the following:
    verify that `eductl_tool` prints the factorial result and exits:
 
    ```none {:.devsite-disable-click-to-copy}
-   $ tools/bazel run --config=fuchsia_x64 //src/qemu_edu/tools:pkg.eductl_tool -- fact 12
+   $ tools/bazel run //src/qemu_edu/tools:pkg.eductl_tool -- fact 12
    ...
    INFO: Build completed successfully, 1 total action
-   added repository bazel.pkg.eductl.tool
+   Running workflow: pkg.eductl_tool_base
+   Running task: pkg.debug_symbols_base (step 1/2)
+   Running task: pkg.eductl_tool.run_base (step 2/2)
+   added repository bazel.pkg.eductl.tool.runnable
    {{ '<strong>' }}Factorial(12) = 479001600{{ '</strong>' }}
    $
    ```
@@ -767,7 +717,7 @@ Do the following:
    Note: For more information on usages and best practices on `zxdb`, see the
    [zxdb user guide][zxdb-user-guide].
 
-## 7. Modify and reload the sample driver {:#modify-and-reload-the-sample-driver}
+## Modify and reload the sample driver {:#modify-and-reload-the-sample-driver .numbered}
 
 Update the source code of the sample driver and reload it to the emulator
 instance.
@@ -862,22 +812,25 @@ Do the following:
 1. Rebuild and run the modified sample driver:
 
    ```posix-terminal
-   tools/bazel run --config=fuchsia_x64 //src/qemu_edu/drivers:pkg.component
+   tools/bazel run //src/qemu_edu/drivers:pkg.component
    ```
 
 1. Run `eductl_tool` using `fact` and `12` as input:
 
    ```posix-terminal
-   tools/bazel run --config=fuchsia_x64 //src/qemu_edu/tools:pkg.eductl_tool -- fact 12
+   tools/bazel run //src/qemu_edu/tools:pkg.eductl_tool -- fact 12
    ```
 
    This command now prints output similar to the following:
 
    ```none {:.devsite-disable-click-to-copy}
-   $ tools/bazel run --config=fuchsia_x64 //src/qemu_edu/tools:pkg.eductl_tool -- fact 12
+   $ tools/bazel run //src/qemu_edu/tools:pkg.eductl_tool -- fact 12
    ...
    INFO: Build completed successfully, 1 total action
-   added repository bazel.pkg.eductl.tool
+   Running workflow: pkg.eductl_tool_base
+   Running task: pkg.debug_symbols_base (step 1/2)
+   Running task: pkg.eductl_tool.run_base (step 2/2)
+   added repository bazel.pkg.eductl.tool.runnable
    {{ '<strong>' }}Factorial(12) = 12345{{ '</strong>' }}
    ```
 
