@@ -9,8 +9,8 @@
 #include <gtest/gtest.h>
 
 TEST(AutobindTest, DriversExist) {
-  fbl::unique_fd out;
-  ASSERT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile("/dev/sys/test/autobind", &out));
+  zx::result channel = device_watcher::RecursiveWaitForFile("/dev/sys/test/autobind");
+  ASSERT_EQ(channel.status_value(), ZX_OK);
 
   // We want to make sure autobind doesn't bind to itself, so try to connect
   // and assert that it was closed.

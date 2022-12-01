@@ -40,9 +40,8 @@ TEST_F(FidlServiceTest, ChildBinds) {
   // Wait for the child device to bind and appear. The child driver should bind with its string
   // properties. It will then make a call via FIDL and wait for the response before adding the child
   // device.
-  fbl::unique_fd fd;
-  status = device_watcher::RecursiveWaitForFile(root_fd, "sys/test/parent/child", &fd);
-  ASSERT_EQ(status, ZX_OK);
+  zx::result channel = device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/parent/child");
+  ASSERT_EQ(channel.status_value(), ZX_OK);
 }
 
 TEST_F(FidlServiceTest, ChildBindsV2) {
@@ -73,9 +72,8 @@ TEST_F(FidlServiceTest, ChildBindsV2) {
   // Wait for the child device to bind and appear. The child driver should bind with its string
   // properties. It will then make a call via FIDL and wait for the response before adding the child
   // device.
-  fbl::unique_fd fd;
-  status = device_watcher::RecursiveWaitForFile(root_fd, "sys/test/parent/child", &fd);
-  ASSERT_EQ(status, ZX_OK);
+  zx::result channel = device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/parent/child");
+  ASSERT_EQ(channel.status_value(), ZX_OK);
 }
 
 }  // namespace

@@ -54,34 +54,29 @@ class PartitionMappingTest : public zxtest::Test {
         continue;
       }
 
-      fbl::unique_fd fd;
-      EXPECT_OK(RecursiveWaitForFile(devfs_root, de->d_name, &fd), "%s/%s", DEV_BLOCK, de->d_name);
-      ASSERT_TRUE(fd);
-      fdio_cpp::FdioCaller caller(std::move(fd));
+      zx::result channel = RecursiveWaitForFile(devfs_root.get(), de->d_name);
+      EXPECT_OK(channel.status_value(), "%s/%s", DEV_BLOCK, de->d_name);
+      fidl::ClientEnd<fuchsia_partition::Partition> client_end(std::move(channel.value()));
 
-      std::string partition_name = GetLabel(caller);
+      std::string partition_name = GetLabel(client_end);
 
       if (mapping.count(partition_name)) {
         std::string expected_type = mapping.at(partition_name);
-        EXPECT_EQ(GetType(caller), expected_type);
+        EXPECT_EQ(GetType(client_end), expected_type);
       }
     }
   }
 
-  static std::string GetType(const fdio_cpp::FdioCaller& caller) {
-    auto guid_resp = fidl::WireCall<fuchsia_partition::Partition>(
-                         fidl::UnownedClientEnd<fuchsia_partition::Partition>(caller.channel()))
-                         ->GetTypeGuid();
+  static std::string GetType(const fidl::ClientEnd<fuchsia_partition::Partition>& client_end) {
+    auto guid_resp = fidl::WireCall(client_end)->GetTypeGuid();
     if (guid_resp.ok() && guid_resp->status == ZX_OK && guid_resp->guid) {
       return gpt::KnownGuid::TypeDescription(guid_resp->guid->value.data());
     }
     return {};
   }
 
-  static std::string GetLabel(const fdio_cpp::FdioCaller& caller) {
-    auto name_resp = fidl::WireCall<fuchsia_partition::Partition>(
-                         fidl::UnownedClientEnd<fuchsia_partition::Partition>(caller.channel()))
-                         ->GetName();
+  static std::string GetLabel(const fidl::ClientEnd<fuchsia_partition::Partition>& client_end) {
+    auto name_resp = fidl::WireCall(client_end)->GetName();
     if (name_resp.ok() && name_resp->status == ZX_OK) {
       return std::string(name_resp->name.data(), name_resp->name.size());
     }

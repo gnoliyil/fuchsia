@@ -60,7 +60,7 @@ TEST(RamNandCtlTest, TrivialLifetime) {
   std::unique_ptr<device_watcher::DirWatcher> watcher;
   fbl::unique_fd dir_fd(open(ramdevice_client::RamNand::kBasePath, O_RDONLY | O_DIRECTORY));
   ASSERT_TRUE(dir_fd);
-  ASSERT_EQ(device_watcher::DirWatcher::Create(std::move(dir_fd), &watcher), ZX_OK);
+  ASSERT_EQ(device_watcher::DirWatcher::Create(dir_fd.get(), &watcher), ZX_OK);
 
   fbl::String path;
   fbl::String filename;
@@ -107,7 +107,7 @@ int main(int argc, char** argv) {
   // Connect to DriverTestRealm.
   auto client_end = component::Connect<fuchsia_driver_test::Realm>();
   if (!client_end.is_ok()) {
-    fprintf(stderr, "Failed to connect to Realm FIDL: %d", client_end.error_value());
+    fprintf(stderr, "Failed to connect to Realm FIDL: %d\n", client_end.error_value());
     return 1;
   }
   fidl::WireSyncClient client{std::move(*client_end)};
@@ -118,15 +118,19 @@ int main(int argc, char** argv) {
   realm_args.set_root_driver(arena, "fuchsia-boot:///#driver/platform-bus.so");
   auto wire_result = client->Start(realm_args);
   if (wire_result.status() != ZX_OK) {
-    fprintf(stderr, "Failed to call to Realm:Start: %d", wire_result.status());
+    fprintf(stderr, "Failed to call to Realm:Start: %d\n", wire_result.status());
     return 1;
   }
   if (wire_result->is_error()) {
-    fprintf(stderr, "Realm:Start failed: %d", wire_result->error_value());
+    fprintf(stderr, "Realm:Start failed: %d\n", wire_result->error_value());
     return 1;
   }
-  fbl::unique_fd dir_fd;
-  device_watcher::RecursiveWaitForFile(ramdevice_client::RamNand::kBasePath, &dir_fd);
+
+  zx::result channel = device_watcher::RecursiveWaitForFile(ramdevice_client::RamNand::kBasePath);
+  if (channel.is_error()) {
+    fprintf(stderr, "Failed to open device file: %s\n", channel.status_string());
+    return 1;
+  }
   setlinebuf(stdout);
   return RUN_ALL_TESTS(argc, argv);
 }

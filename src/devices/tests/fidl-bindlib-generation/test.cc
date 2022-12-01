@@ -7,9 +7,10 @@
 #include <gtest/gtest.h>
 
 TEST(SimpleDriverTestRealmTest, DriversExist) {
-  fbl::unique_fd out;
-  ASSERT_EQ(ZX_OK,
-            device_watcher::RecursiveWaitForFile("/dev/sys/test/fidl_bindlib_generation", &out));
-  ASSERT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile(
-                       "/dev/sys/test/fidl_bindlib_generation/child", &out));
+  ASSERT_EQ(
+      device_watcher::RecursiveWaitForFile("/dev/sys/test/fidl_bindlib_generation").status_value(),
+      ZX_OK);
+  ASSERT_EQ(device_watcher::RecursiveWaitForFile("/dev/sys/test/fidl_bindlib_generation/child")
+                .status_value(),
+            ZX_OK);
 }

@@ -43,8 +43,9 @@ TEST_F(DeviceControllerFidl, ControllerTest) {
   ASSERT_EQ(status, ZX_OK);
 
   // Wait for driver.
-  fbl::unique_fd out;
-  ASSERT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile(root_fd, "sys/test/sample_driver", &out));
+  zx::result dev_channel =
+      device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/sample_driver");
+  ASSERT_EQ(dev_channel.status_value(), ZX_OK);
 
   // Connect to the controller.
   auto endpoints = fidl::CreateEndpoints<fuchsia_device::Controller>();
@@ -113,8 +114,9 @@ TEST_F(DeviceControllerFidl, ControllerTestDfv2) {
   ASSERT_EQ(status, ZX_OK);
 
   // Wait for driver.
-  fbl::unique_fd out;
-  ASSERT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile(root_fd, "sys/test/sample_driver", &out));
+  zx::result dev_channel =
+      device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/sample_driver");
+  ASSERT_EQ(dev_channel.status_value(), ZX_OK);
 
   auto endpoints = fidl::CreateEndpoints<fuchsia_device::Controller>();
   ASSERT_EQ(endpoints.status_value(), ZX_OK);

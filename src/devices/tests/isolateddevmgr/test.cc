@@ -49,7 +49,6 @@ const board_test::DeviceEntry kDeviceEntry2 = []() {
 
 TEST_F(IsolatedDevMgrTest, MetadataOneDriverTest) {
   IsolatedDevmgr devmgr;
-  zx_handle_t metadata_driver_channel;
 
   // Set the driver arguments.
   IsolatedDevmgr::Args args;
@@ -60,21 +59,19 @@ TEST_F(IsolatedDevMgrTest, MetadataOneDriverTest) {
   ASSERT_OK(status);
 
   // Wait for Metadata-test driver to be created
-  fbl::unique_fd fd;
-  status = device_watcher::RecursiveWaitForFile(devmgr.devfs_root(),
-                                                "sys/platform/11:07:2/metadata-test", &fd);
-  ASSERT_OK(status);
+  zx::result channel = device_watcher::RecursiveWaitForFile(devmgr.devfs_root().get(),
+                                                            "sys/platform/11:07:2/metadata-test");
+  ASSERT_OK(channel.status_value());
 
   // Get a FIDL channel to the Metadata device
-  status = fdio_get_service_handle(fd.get(), &metadata_driver_channel);
-  ASSERT_OK(status);
+  zx::channel metadata_driver_channel = std::move(channel.value());
 
   // Read the metadata it received.
   size_t out_size;
   std::vector<uint8_t> received_metadata(sizeof(metadata1));
 
   status = fuchsia_device_manager_test_MetadataGetMetadata(
-      metadata_driver_channel, DEVICE_METADATA_TEST, received_metadata.data(),
+      metadata_driver_channel.get(), DEVICE_METADATA_TEST, received_metadata.data(),
       received_metadata.size(), &out_size);
 
   ASSERT_OK(status);
@@ -98,29 +95,20 @@ TEST_F(IsolatedDevMgrTest, MetadataTwoDriverTest) {
   ASSERT_OK(status);
 
   // Wait for Metadata-test driver to be created
-  fbl::unique_fd fd1;
-  status = device_watcher::RecursiveWaitForFile(devmgr.devfs_root(),
-                                                "sys/platform/11:07:2/metadata-test", &fd1);
-  ASSERT_OK(status);
-  fbl::unique_fd fd2;
-  status = device_watcher::RecursiveWaitForFile(devmgr.devfs_root(),
-                                                "sys/platform/11:07:3/metadata-test", &fd2);
-  ASSERT_OK(status);
+  zx::result metadata_driver_channel1 = device_watcher::RecursiveWaitForFile(
+      devmgr.devfs_root().get(), "sys/platform/11:07:2/metadata-test");
+  ASSERT_OK(metadata_driver_channel1.status_value());
 
-  // Get a FIDL channel to the Metadata device
-  zx_handle_t metadata_driver_channel1;
-  zx_handle_t metadata_driver_channel2;
-  status = fdio_get_service_handle(fd1.get(), &metadata_driver_channel1);
-  ASSERT_OK(status);
-  status = fdio_get_service_handle(fd2.get(), &metadata_driver_channel2);
-  ASSERT_OK(status);
+  zx::result metadata_driver_channel2 = device_watcher::RecursiveWaitForFile(
+      devmgr.devfs_root().get(), "sys/platform/11:07:3/metadata-test");
+  ASSERT_OK(metadata_driver_channel2.status_value());
 
   // Read the metadata it received.
   size_t out_size;
   std::vector<uint8_t> received_metadata(sizeof(metadata1));
 
   status = fuchsia_device_manager_test_MetadataGetMetadata(
-      metadata_driver_channel1, DEVICE_METADATA_TEST, received_metadata.data(),
+      metadata_driver_channel1.value().get(), DEVICE_METADATA_TEST, received_metadata.data(),
       received_metadata.size(), &out_size);
 
   ASSERT_OK(status);
@@ -132,7 +120,7 @@ TEST_F(IsolatedDevMgrTest, MetadataTwoDriverTest) {
 
   received_metadata.resize(sizeof(metadata2));
   status = fuchsia_device_manager_test_MetadataGetMetadata(
-      metadata_driver_channel2, DEVICE_METADATA_TEST, received_metadata.data(),
+      metadata_driver_channel2.value().get(), DEVICE_METADATA_TEST, received_metadata.data(),
       received_metadata.size(), &out_size);
   ASSERT_OK(status);
   ASSERT_EQ(out_size, sizeof(metadata2));

@@ -107,10 +107,9 @@ int main(int argc, char** argv) {
   ZX_ASSERT_MSG(root.is_valid(),
                 "runtests must be given \"/\" as the sole entry "
                 "in its incoming namespace");
-  fbl::unique_fd dev_fd;
-  zx_status_t status = device_watcher::RecursiveWaitForFileReadOnly(root, "dev", &dev_fd);
-  if (status != ZX_OK) {
-    printf("Error: Failed to wait for /dev to appear: %s", zx_status_get_string(status));
+  zx::result channel = device_watcher::RecursiveWaitForFileReadOnly(root.get(), "dev");
+  if (channel.is_error()) {
+    printf("Error: Failed to wait for /dev to appear: %s", channel.status_string());
     return -1;
   }
 

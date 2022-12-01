@@ -93,8 +93,9 @@ void SkipBlockDevice::Create(fuchsia_hardware_nand::wire::RamNandInfo nand_info,
   ASSERT_OK(ramdevice_client_test::RamNandCtl::Create(&ctl));
   std::optional<ramdevice_client::RamNand> ram_nand;
   ASSERT_OK(ctl->CreateRamNand(std::move(nand_info), &ram_nand));
-  fbl::unique_fd fd;
-  ASSERT_OK(device_watcher::RecursiveWaitForFile(ctl->devfs_root(), "sys/platform", &fd));
+
+  ASSERT_OK(
+      device_watcher::RecursiveWaitForFile(ctl->devfs_root().get(), "sys/platform").status_value());
   device->reset(new SkipBlockDevice(std::move(ctl), *std::move(ram_nand), std::move(mapper)));
 }
 

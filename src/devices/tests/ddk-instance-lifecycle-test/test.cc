@@ -34,11 +34,11 @@ class InstanceLifecycleTest : public zxtest::Test {
 
     zx_status_t status = IsolatedDevmgr::Create(&args, &devmgr_);
     ASSERT_OK(status);
-    fbl::unique_fd fd;
-    ASSERT_OK(device_watcher::RecursiveWaitForFile(devmgr_.devfs_root(),
-                                                   "sys/platform/11:12:0/instance-test", &fd));
-    ASSERT_GT(fd.get(), 0);
-    ASSERT_OK(fdio_get_service_handle(fd.release(), device_.channel().reset_and_get_address()));
+    zx::result channel = device_watcher::RecursiveWaitForFile(devmgr_.devfs_root().get(),
+                                                              "sys/platform/11:12:0/instance-test");
+    ASSERT_OK(channel.status_value());
+
+    device_ = fidl::ClientEnd<TestDevice>(std::move(channel.value()));
     ASSERT_TRUE(device_.is_valid());
   }
 
@@ -160,12 +160,10 @@ TEST_F(InstanceLifecycleTest, NonPipelinedClientClose) {
 
   fidl::ClientEnd<InstanceDevice> instance_client;
   {
-    fbl::unique_fd fd;
-    ASSERT_OK(device_watcher::RecursiveWaitForFile(
-        devmgr_.devfs_root(), "sys/platform/11:12:0/instance-test/child", &fd));
-    ASSERT_GT(fd.get(), 0);
-    ASSERT_OK(
-        fdio_get_service_handle(fd.release(), instance_client.channel().reset_and_get_address()));
+    zx::result channel = device_watcher::RecursiveWaitForFile(
+        devmgr_.devfs_root().get(), "sys/platform/11:12:0/instance-test/child");
+    ASSERT_OK(channel.status_value());
+    instance_client = fidl::ClientEnd<InstanceDevice>(std::move(channel.value()));
   }
 
   ASSERT_NO_FATAL_FAILURE(
@@ -208,12 +206,10 @@ TEST_F(InstanceLifecycleTest, NonPipelinedClientRemoveAndClose) {
 
   fidl::ClientEnd<InstanceDevice> instance_client;
   {
-    fbl::unique_fd fd;
-    ASSERT_OK(device_watcher::RecursiveWaitForFile(
-        devmgr_.devfs_root(), "sys/platform/11:12:0/instance-test/child", &fd));
-    ASSERT_GT(fd.get(), 0);
-    ASSERT_OK(
-        fdio_get_service_handle(fd.release(), instance_client.channel().reset_and_get_address()));
+    zx::result channel = device_watcher::RecursiveWaitForFile(
+        devmgr_.devfs_root().get(), "sys/platform/11:12:0/instance-test/child");
+    ASSERT_OK(channel.status_value());
+    instance_client = fidl::ClientEnd<InstanceDevice>(std::move(channel.value()));
   }
 
   ASSERT_NO_FATAL_FAILURE(

@@ -43,8 +43,7 @@ TEST(AstroAbrTests, CreateFails) {
   args.board_name = "sherlock";
 
   ASSERT_OK(IsolatedDevmgr::Create(&args, &devmgr));
-  fbl::unique_fd fd;
-  ASSERT_OK(RecursiveWaitForFile(devmgr.devfs_root(), "sys/platform", &fd));
+  ASSERT_OK(RecursiveWaitForFile(devmgr.devfs_root().get(), "sys/platform").status_value());
 
   fidl::ClientEnd<fuchsia_io::Directory> svc_root;
   ASSERT_NOT_OK(
@@ -58,8 +57,7 @@ TEST(SherlockAbrTests, CreateFails) {
   args.board_name = "astro";
 
   ASSERT_OK(IsolatedDevmgr::Create(&args, &devmgr));
-  fbl::unique_fd fd;
-  ASSERT_OK(RecursiveWaitForFile(devmgr.devfs_root(), "sys/platform", &fd));
+  ASSERT_OK(RecursiveWaitForFile(devmgr.devfs_root().get(), "sys/platform").status_value());
 
   ASSERT_NOT_OK(paver::SherlockAbrClientFactory().Create(devmgr.devfs_root().duplicate(),
                                                          devmgr.fshost_svc_dir(), nullptr));
@@ -72,8 +70,7 @@ TEST(LuisAbrTests, CreateFails) {
   args.board_name = "astro";
 
   ASSERT_OK(IsolatedDevmgr::Create(&args, &devmgr));
-  fbl::unique_fd fd;
-  ASSERT_OK(RecursiveWaitForFile(devmgr.devfs_root(), "sys/platform", &fd));
+  ASSERT_OK(RecursiveWaitForFile(devmgr.devfs_root().get(), "sys/platform").status_value());
 
   ASSERT_NOT_OK(paver::LuisAbrClientFactory().Create(devmgr.devfs_root().duplicate(),
                                                      devmgr.fshost_svc_dir(), nullptr));
@@ -86,8 +83,7 @@ TEST(X64AbrTests, CreateFails) {
   args.board_name = "x64";
 
   ASSERT_OK(IsolatedDevmgr::Create(&args, &devmgr));
-  fbl::unique_fd fd;
-  ASSERT_OK(RecursiveWaitForFile(devmgr.devfs_root(), "sys/platform", &fd));
+  ASSERT_OK(RecursiveWaitForFile(devmgr.devfs_root().get(), "sys/platform").status_value());
 
   ASSERT_NOT_OK(paver::X64AbrClientFactory().Create(devmgr.devfs_root().duplicate(),
                                                     devmgr.fshost_svc_dir(), nullptr));
@@ -116,9 +112,9 @@ class ChromebookX64AbrTests : public zxtest::Test {
     args.board_name = "chromebook-x64";
 
     ASSERT_OK(IsolatedDevmgr::Create(&args, &devmgr_));
-    fbl::unique_fd fd;
-    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root(), "sys/platform", &fd));
-    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root(), "sys/platform/00:00:2d/ramctl", &fd));
+    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root().get(), "sys/platform").status_value());
+    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root().get(), "sys/platform/00:00:2d/ramctl")
+                  .status_value());
     ASSERT_NO_FATAL_FAILURE(
         BlockDevice::Create(devmgr_.devfs_root(), kEmptyType, kDiskBlocks, kBlockSize, &disk_));
     fake_svc_.fake_boot_args().GetArgumentsMap().emplace("zvb.current_slot", "_a");
@@ -289,8 +285,8 @@ class CurrentSlotUuidTest : public zxtest::Test {
     args.disable_block_watcher = true;
 
     ASSERT_OK(IsolatedDevmgr::Create(&args, &devmgr_));
-    fbl::unique_fd fd;
-    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root(), "sys/platform/00:00:2d/ramctl", &fd));
+    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root().get(), "sys/platform/00:00:2d/ramctl")
+                  .status_value());
     ASSERT_NO_FATAL_FAILURE(
         BlockDevice::Create(devmgr_.devfs_root(), kEmptyType, kDiskBlocks, kBlockSize, &disk_));
   }

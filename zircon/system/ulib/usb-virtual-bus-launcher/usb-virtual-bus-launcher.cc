@@ -39,20 +39,14 @@ zx::result<BusLauncher> BusLauncher::Create(IsolatedDevmgr::Args args) {
 
   zx_status_t status = IsolatedDevmgr::Create(&args, &launcher.devmgr_);
 
-  fbl::unique_fd fd;
-  device_watcher::RecursiveWaitForFile(launcher.devmgr_.devfs_root(),
-                                       "sys/platform/11:03:0/usb-virtual-bus", &fd);
-  if (!fd.is_valid()) {
+  zx::result channel = device_watcher::RecursiveWaitForFile(launcher.devmgr_.devfs_root().get(),
+                                                            "sys/platform/11:03:0/usb-virtual-bus");
+  if (channel.is_error()) {
     std::cout << "Failed to wait for usb-virtual-bus" << std::endl;
-    return zx::error(ZX_ERR_NOT_FOUND);
+    return channel.take_error();
   }
 
-  zx::channel virtual_bus;
-  status = fdio_get_service_handle(fd.release(), virtual_bus.reset_and_get_address());
-  if (status != ZX_OK) {
-    std::cout << "Failed to get virtual bus service: " << zx_status_get_string(status) << std::endl;
-    return zx::error(status);
-  }
+  zx::channel virtual_bus = std::move(channel.value());
   launcher.virtual_bus_ =
       fidl::WireSyncClient<fuchsia_hardware_usb_virtual_bus::Bus>(std::move(virtual_bus));
 
@@ -68,6 +62,7 @@ zx::result<BusLauncher> BusLauncher::Create(IsolatedDevmgr::Args args) {
     return zx::error(enable_result.value().status);
   }
 
+  fbl::unique_fd fd;
   fd.reset(openat(launcher.devmgr_.devfs_root().get(), "class/usb-peripheral", O_RDONLY));
   fbl::String devpath;
   while (fdio_watch_directory(fd.get(), usb_virtual_bus::WaitForAnyFile, ZX_TIME_INFINITE,

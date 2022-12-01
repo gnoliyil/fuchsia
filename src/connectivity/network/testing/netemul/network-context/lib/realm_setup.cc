@@ -38,10 +38,9 @@ zx::result<fbl::unique_fd> StartDriverTestRealm() {
         ZX_PANIC("unexpected error opening '/dev': %s", strerror(errno));
     }
   }
-  fbl::unique_fd out;
-  zx_status_t status = device_watcher::RecursiveWaitForFile(dev, kTapctlRelativePath, &out);
-  if (status != ZX_OK) {
-    return zx::error(status);
+  zx::result channel = device_watcher::RecursiveWaitForFile(dev.get(), kTapctlRelativePath);
+  if (channel.is_error()) {
+    return channel.take_error();
   }
   return zx::ok(std::move(dev));
 }

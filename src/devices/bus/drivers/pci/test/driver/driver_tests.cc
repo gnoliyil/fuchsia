@@ -74,14 +74,14 @@ TEST_F(PciDriverTests, TestRunner) {
            "sys/platform/%02x:%02x:%01x/%s/%02x:%02x.%1x/%s", kDeviceEntry.vid, kDeviceEntry.pid,
            kDeviceEntry.did, kDeviceEntry.name, PCI_TEST_BUS_ID, PCI_TEST_DEV_ID, PCI_TEST_FUNC_ID,
            kProtocolTestDriverName);
-  ASSERT_OK(device_watcher::RecursiveWaitForFile(devmgr_.devfs_root(), proto_driver_path.data(),
-                                                 &protocol_fd_));
-  const fdio_cpp::UnownedFdioCaller caller(protocol_fd_);
+  zx::result channel =
+      device_watcher::RecursiveWaitForFile(devmgr_.devfs_root().get(), proto_driver_path.data());
+  ASSERT_OK(channel.status_value());
+  fidl::ClientEnd<fuchsia_device_test::Test> client_end(std::move(channel.value()));
   // Flush the output to this point so it doesn't interleave with the proxy's
   // test output.
   fflush(stdout);
-  const fidl::WireResult result =
-      fidl::WireCall(caller.borrow_as<fuchsia_device_test::Test>())->RunTests();
+  const fidl::WireResult result = fidl::WireCall(client_end)->RunTests();
   ASSERT_OK(result.status());
   const fidl::WireResponse response = result.value();
   ASSERT_OK(response.status);

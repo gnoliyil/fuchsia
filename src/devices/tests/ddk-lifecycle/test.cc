@@ -43,14 +43,10 @@ class LifecycleTest : public zxtest::Test {
 
     zx_status_t status = IsolatedDevmgr::Create(&args, &devmgr_);
     ASSERT_OK(status);
-    fbl::unique_fd fd;
-    ASSERT_OK(device_watcher::RecursiveWaitForFile(devmgr_.devfs_root(),
-                                                   "sys/platform/11:10:0/ddk-lifecycle-test", &fd));
-    ASSERT_TRUE(fd.is_valid());
-    fdio_cpp::FdioCaller caller(std::move(fd));
-    zx::result chan = caller.take_as<TestDevice>();
-    ASSERT_OK(chan);
-    chan_ = std::move(chan.value());
+    zx::result channel = device_watcher::RecursiveWaitForFile(
+        devmgr_.devfs_root().get(), "sys/platform/11:10:0/ddk-lifecycle-test");
+    ASSERT_OK(channel.status_value());
+    chan_ = fidl::ClientEnd<TestDevice>(std::move(channel.value()));
 
     // Subscribe to the device lifecycle events.
     auto endpoints = fidl::CreateEndpoints<Lifecycle>();
@@ -146,16 +142,16 @@ TEST_F(LifecycleTest, CloseAllConnectionsOnInstanceUnbind) {
   ASSERT_OK(result.status());
   ASSERT_FALSE(result->is_error());
   auto child_id = result->value()->child_id;
-  fbl::unique_fd fd;
-  ASSERT_OK(device_watcher::RecursiveWaitForFile(
-      devmgr_.devfs_root(), "sys/platform/11:10:0/ddk-lifecycle-test/ddk-lifecycle-test-child-0",
-      &fd));
-  ASSERT_TRUE(fd.is_valid());
-  fdio_cpp::UnownedFdioCaller caller(fd);
-  zx::unowned_channel chan = caller.channel();
+
+  zx::result channel = device_watcher::RecursiveWaitForFile(
+      devmgr_.devfs_root().get(),
+      "sys/platform/11:10:0/ddk-lifecycle-test/ddk-lifecycle-test-child-0");
+  ASSERT_OK(channel.status_value());
+
+  zx::channel chan = std::move(channel.value());
   ASSERT_TRUE(fidl::WireCall(chan_)->RemoveChild(child_id).ok());
   zx_signals_t closed;
-  ASSERT_OK(chan->wait_one(ZX_CHANNEL_PEER_CLOSED, zx::time::infinite(), &closed));
+  ASSERT_OK(chan.wait_one(ZX_CHANNEL_PEER_CLOSED, zx::time::infinite(), &closed));
   ASSERT_TRUE(closed & ZX_CHANNEL_PEER_CLOSED);
   // Wait for the child pre-release notification.
   ASSERT_NO_FATAL_FAILURE(WaitPreRelease(child_id));
@@ -166,27 +162,25 @@ TEST_F(LifecycleTest, CallsFailDuringUnbind) {
   ASSERT_OK(result.status());
   ASSERT_FALSE(result->is_error());
   auto child_id = result->value()->child_id;
-  fbl::unique_fd fd;
 
-  ASSERT_OK(device_watcher::RecursiveWaitForFile(
-      devmgr_.devfs_root(), "sys/platform/11:10:0/ddk-lifecycle-test/ddk-lifecycle-test-child-0",
-      &fd));
-  ASSERT_TRUE(fd.is_valid());
-  fdio_cpp::UnownedFdioCaller caller(fd);
-  fidl::UnownedClientEnd chan = caller.file();
+  zx::result channel = device_watcher::RecursiveWaitForFile(
+      devmgr_.devfs_root().get(),
+      "sys/platform/11:10:0/ddk-lifecycle-test/ddk-lifecycle-test-child-0");
+  ASSERT_OK(channel.status_value());
+
+  fidl::ClientEnd<fuchsia_io::File> file_client(std::move(channel.value()));
 
   ASSERT_TRUE(fidl::WireCall(chan_)->AsyncRemoveChild(child_id).ok());
   {
-    const fidl::WireResult result = fidl::WireCall(chan)->GetAttr();
+    const fidl::WireResult result = fidl::WireCall(file_client)->GetAttr();
     ASSERT_OK(result.status());
     const fidl::WireResponse response = result.value();
     ASSERT_STATUS(response.s, ZX_ERR_IO_NOT_PRESENT);
   }
   int fd2 = open("sys/platform/11:10:0/ddk-lifecycle-test/ddk-lifecycle-test-child-0", O_RDWR);
   ASSERT_EQ(fd2, -1);
-  ASSERT_EQ(
-      fidl::WireCall(caller.borrow_as<fuchsia_hardware_serial::Device>())->GetClass().status(),
-      ZX_ERR_PEER_CLOSED);
+  fidl::ClientEnd<fuchsia_hardware_serial::Device> device_client(file_client.TakeChannel());
+  ASSERT_EQ(fidl::WireCall(device_client)->GetClass().status(), ZX_ERR_PEER_CLOSED);
   struct Epitaph {
     zx_txid_t txid;
     uint8_t flags[3];
@@ -197,8 +191,8 @@ TEST_F(LifecycleTest, CallsFailDuringUnbind) {
   constexpr auto kEpitaph = 0xFFFFFFFFFFFFFFFF;
   uint32_t actual_bytes = 0;
   uint32_t actual_handles = 0;
-  ASSERT_OK(chan.channel()->read(0, &epitaph, nullptr, sizeof(epitaph), 0, &actual_bytes,
-                                 &actual_handles));
+  ASSERT_OK(device_client.channel().read(0, &epitaph, nullptr, sizeof(epitaph), 0, &actual_bytes,
+                                         &actual_handles));
   ASSERT_EQ(actual_bytes, sizeof(epitaph));
   ASSERT_EQ(epitaph.ordinal, kEpitaph);
   ASSERT_EQ(epitaph.error, ZX_ERR_IO_NOT_PRESENT);

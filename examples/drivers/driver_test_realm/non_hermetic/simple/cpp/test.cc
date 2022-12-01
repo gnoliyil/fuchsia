@@ -8,7 +8,7 @@
 
 // [START example]
 TEST(SimpleDriverTestRealmTest, DriversExist) {
-  fbl::unique_fd out;
-  ASSERT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile("/dev/sys/test", &out));
+  zx::result channel = device_watcher::RecursiveWaitForFile("/dev/sys/test");
+  ASSERT_EQ(channel.status_value(), ZX_OK);
 }
 // [END example]

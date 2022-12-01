@@ -38,14 +38,12 @@ void ConnectToVirtualAudio(component_testing::RealmRoot& root,
   std::string control_file_name(kControlName.substr(5));
 
   // Wait for the driver to load.
-  fbl::unique_fd file_fd;
-  ASSERT_EQ(ZX_OK,
-            device_watcher::RecursiveWaitForFile(dev_fd, control_file_name.c_str(), &file_fd));
+  zx::result channel =
+      device_watcher::RecursiveWaitForFile(dev_fd.get(), control_file_name.c_str());
+  ASSERT_EQ(channel.status_value(), ZX_OK);
 
   // Turn the connection into FIDL.
-  zx_handle_t handle;
-  ASSERT_EQ(ZX_OK, fdio_fd_clone(file_fd.get(), &handle));
-  out.Bind(zx::channel(handle));
+  out.Bind(std::move(channel.value()));
 }
 
 // Implements a simple component that serves fuchsia.audio.effects.ProcessorCreator

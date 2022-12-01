@@ -55,17 +55,11 @@ class NandDevice {
 
       // Get the new child.
       fbl::unique_fd dir(open(parent.Path(), O_RDONLY | O_DIRECTORY));
-      fbl::unique_fd fd;
-      if (zx_status_t status = device_watcher::RecursiveWaitForFile(dir, "broker", &fd);
-          status != ZX_OK) {
-        return zx::error(status);
+      zx::result channel = device_watcher::RecursiveWaitForFile(dir.get(), "broker");
+      if (channel.is_error()) {
+        return channel.take_error();
       }
-      fdio_cpp::FdioCaller caller(std::move(fd));
-      zx::result child = caller.take_as<fuchsia_device::Controller>();
-      if (child.is_error()) {
-        return child.take_error();
-      }
-      controller = std::move(child.value());
+      controller = fidl::ClientEnd<fuchsia_device::Controller>(std::move(channel.value()));
     }
 
     if (parent.IsExternal()) {

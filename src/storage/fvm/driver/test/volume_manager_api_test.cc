@@ -161,18 +161,17 @@ TEST_F(FvmVolumeManagerApiTest, PartitionLimit) {
   ASSERT_OK(alloc_result.value().status, "Service returned error.");
 
   // Find the partition we just created. Should be "<ramdisk-path>/fvm/<name>-p-1/block"
-  fbl::unique_fd volume_fd;
   std::string device_name(ramdisk->path());
   device_name.append("/fvm/");
   device_name.append(kPartitionName);
   device_name.append("-p-1/block");
-  ASSERT_OK(
-      device_watcher::RecursiveWaitForFile(devmgr_->devfs_root(), device_name.c_str(), &volume_fd));
-  fdio_cpp::UnownedFdioCaller volume(volume_fd.get());
+  zx::result file_channel =
+      device_watcher::RecursiveWaitForFile(devmgr_->devfs_root().get(), device_name.c_str());
+  ASSERT_OK(file_channel.status_value());
+  fidl::ClientEnd<Volume> client_end(std::move(file_channel.value()));
 
   // Query the volume to check its information.
-  fidl::WireResult<Volume::GetVolumeInfo> get_info =
-      fidl::WireCall(volume.borrow_as<Volume>())->GetVolumeInfo();
+  fidl::WireResult<Volume::GetVolumeInfo> get_info = fidl::WireCall(client_end)->GetVolumeInfo();
   ASSERT_OK(get_info.status(), "Transport error");
   ASSERT_OK(get_info.value().status, "Expected GetVolumeInfo() call to succeed.");
   EXPECT_EQ(kSliceSize, get_info.value().manager->slice_size);
@@ -202,14 +201,12 @@ TEST_F(FvmVolumeManagerApiTest, PartitionLimit) {
 
   // Try to expand it by one slice. Since the initial size was one slice and the limit is two, this
   // should succeed.
-  fidl::WireResult<Volume::Extend> good_extend =
-      fidl::WireCall(volume.borrow_as<Volume>())->Extend(100, 1);
+  fidl::WireResult<Volume::Extend> good_extend = fidl::WireCall(client_end)->Extend(100, 1);
   ASSERT_OK(good_extend.status(), "Transport error");
   ASSERT_OK(good_extend.value().status, "Expected Expand() call to succeed.");
 
   // Query the volume to check its information.
-  fidl::WireResult<Volume::GetVolumeInfo> get_info2 =
-      fidl::WireCall(volume.borrow_as<Volume>())->GetVolumeInfo();
+  fidl::WireResult<Volume::GetVolumeInfo> get_info2 = fidl::WireCall(client_end)->GetVolumeInfo();
   ASSERT_OK(get_info2.status(), "Transport error");
   ASSERT_OK(get_info2.value().status, "Expected GetVolumeInfo() call to succeed.");
   EXPECT_EQ(kSliceSize, get_info2.value().manager->slice_size);
@@ -219,17 +216,14 @@ TEST_F(FvmVolumeManagerApiTest, PartitionLimit) {
   EXPECT_EQ(2u, get_info2.value().volume->slice_limit);
 
   // Adding a third slice should fail since it's already at the max size.
-  fidl::WireResult<Volume::Extend> bad_extend =
-      fidl::WireCall(volume.borrow_as<Volume>())->Extend(200, 1);
+  fidl::WireResult<Volume::Extend> bad_extend = fidl::WireCall(client_end)->Extend(200, 1);
   ASSERT_OK(bad_extend.status(), "Transport error");
   ASSERT_EQ(bad_extend.value().status, ZX_ERR_NO_SPACE, "Expected Expand() call to fail.");
 
   // Delete and re-create the partition. It should have no limit.
-  fidl::WireResult<Volume::Destroy> destroy_result =
-      fidl::WireCall(volume.borrow_as<Volume>())->Destroy();
+  fidl::WireResult<Volume::Destroy> destroy_result = fidl::WireCall(client_end)->Destroy();
   ASSERT_OK(destroy_result.status(), "Transport layer error");
   ASSERT_OK(destroy_result.value().status, "Can't destroy partition.");
-  volume_fd.reset();
 
   fidl::WireResult<VolumeManager::AllocatePartition> alloc2_result =
       fidl::WireCall(channel.value())
@@ -287,18 +281,17 @@ TEST_F(FvmVolumeManagerApiTest, SetPartitionName) {
 
   // Find the partition we just created. It will still have the original path:
   // "<ramdisk-path>/fvm/mypart-p-1/block"
-  fbl::unique_fd volume_fd;
   std::string device_name(ramdisk->path());
   device_name.append("/fvm/");
   device_name.append(kPartitionName);
   device_name.append("-p-1/block");
-  ASSERT_OK(
-      device_watcher::RecursiveWaitForFile(devmgr_->devfs_root(), device_name.c_str(), &volume_fd));
-  fdio_cpp::UnownedFdioCaller volume(volume_fd.get());
+  zx::result file_channel =
+      device_watcher::RecursiveWaitForFile(devmgr_->devfs_root().get(), device_name.c_str());
+  ASSERT_OK(file_channel.status_value());
+  fidl::ClientEnd<Volume> client_end(std::move(file_channel.value()));
 
   {
-    auto get_name_result =
-        fidl::WireCall(fidl::UnownedClientEnd<Volume>(volume.borrow_channel()))->GetName();
+    auto get_name_result = fidl::WireCall(client_end)->GetName();
     ASSERT_OK(get_name_result.status(), "Transport layer error");
     ASSERT_OK(get_name_result.value().status, "Service returned error.");
 
@@ -306,7 +299,6 @@ TEST_F(FvmVolumeManagerApiTest, SetPartitionName) {
   }
 
   // Make sure that the change was persisted.
-  volume_fd.reset();
   ASSERT_OK(fvm->Rebind({}));
 
   // This time, the path should include the new name.
@@ -314,12 +306,12 @@ TEST_F(FvmVolumeManagerApiTest, SetPartitionName) {
   device_name.append("/fvm/");
   device_name.append(kNewPartitionName);
   device_name.append("-p-1/block");
-  ASSERT_OK(
-      device_watcher::RecursiveWaitForFile(devmgr_->devfs_root(), device_name.c_str(), &volume_fd));
-  volume.reset(volume_fd.get());
+  file_channel =
+      device_watcher::RecursiveWaitForFile(devmgr_->devfs_root().get(), device_name.c_str());
+  ASSERT_OK(file_channel.status_value());
+  client_end = fidl::ClientEnd<Volume>(std::move(file_channel.value()));
 
-  auto get_name_result =
-      fidl::WireCall(fidl::UnownedClientEnd<Volume>(volume.borrow_channel()))->GetName();
+  auto get_name_result = fidl::WireCall(client_end)->GetName();
   ASSERT_OK(get_name_result.status(), "Transport layer error");
   ASSERT_OK(get_name_result.value().status, "Service returned error.");
 

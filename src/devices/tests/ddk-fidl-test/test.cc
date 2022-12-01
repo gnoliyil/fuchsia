@@ -29,7 +29,6 @@ namespace {
 
 void CheckTransaction(const board_test::DeviceEntry& entry, const char* device_fs) {
   IsolatedDevmgr devmgr;
-  zx_handle_t driver_channel;
 
   // Set the driver arguments.
   IsolatedDevmgr::Args args;
@@ -40,13 +39,11 @@ void CheckTransaction(const board_test::DeviceEntry& entry, const char* device_f
   ASSERT_OK(status);
 
   // Wait for the driver to be created
-  fbl::unique_fd fd;
-  status = device_watcher::RecursiveWaitForFile(devmgr.devfs_root(), device_fs, &fd);
-  ASSERT_OK(status);
+  zx::result channel = device_watcher::RecursiveWaitForFile(devmgr.devfs_root().get(), device_fs);
+  ASSERT_OK(channel.status_value());
 
   // Get a FIDL channel to the device
-  status = fdio_get_service_handle(fd.get(), &driver_channel);
-  ASSERT_OK(status);
+  zx::channel driver_channel = std::move(channel.value());
 
   // The method does not define a request payload, so the message should be a header only.
   fidl_message_header_t hdr;
@@ -54,14 +51,14 @@ void CheckTransaction(const board_test::DeviceEntry& entry, const char* device_f
   zx_txid_t first_txid = 1;
   fidl::InitTxnHeader(&hdr, first_txid, fuchsia_hardware_test_DeviceGetChannelOrdinal,
                       fidl::MessageDynamicFlags::kStrictMethod);
-  ASSERT_OK(zx_channel_write(driver_channel, 0, &hdr, sizeof(hdr), nullptr, 0));
-  ASSERT_OK(zx_object_wait_one(driver_channel, ZX_CHANNEL_READABLE, ZX_TIME_INFINITE, nullptr));
+  ASSERT_OK(driver_channel.write(0, &hdr, sizeof(hdr), nullptr, 0));
+  ASSERT_OK(driver_channel.wait_one(ZX_CHANNEL_READABLE, zx::time::infinite(), nullptr));
 
   std::memset(&hdr, 0, sizeof(hdr));
   zx_txid_t second_txid = 2;
   fidl::InitTxnHeader(&hdr, second_txid, fuchsia_hardware_test_DeviceGetChannelOrdinal,
                       fidl::MessageDynamicFlags::kStrictMethod);
-  ASSERT_OK(zx_channel_write(driver_channel, 0, &hdr, sizeof(hdr), nullptr, 0));
+  ASSERT_OK(driver_channel.write(0, &hdr, sizeof(hdr), nullptr, 0));
 
   // If the transaction incorrectly closes the sent handles, it will cause a policy violation.
   // Waiting for the channel to be readable once isn't enough, there is still a very small amount
@@ -73,20 +70,18 @@ void CheckTransaction(const board_test::DeviceEntry& entry, const char* device_f
   uint32_t actual_bytes = 0;
   uint32_t actual_handles = 0;
 
-  status = zx_channel_read(driver_channel, 0, msg_bytes.get(), msg_handles.get(),
-                           ZX_CHANNEL_MAX_MSG_BYTES, ZX_CHANNEL_MAX_MSG_HANDLES, &actual_bytes,
-                           &actual_handles);
+  status = driver_channel.read(0, msg_bytes.get(), msg_handles.get(), ZX_CHANNEL_MAX_MSG_BYTES,
+                               ZX_CHANNEL_MAX_MSG_HANDLES, &actual_bytes, &actual_handles);
   if (status == ZX_ERR_SHOULD_WAIT) {
-    ASSERT_OK(zx_object_wait_one(driver_channel, ZX_CHANNEL_READABLE, ZX_TIME_INFINITE, nullptr));
+    ASSERT_OK(driver_channel.wait_one(ZX_CHANNEL_READABLE, zx::time::infinite(), nullptr));
   } else {
     ASSERT_OK(status);
   }
 
-  status = zx_channel_read(driver_channel, 0, msg_bytes.get(), msg_handles.get(),
-                           ZX_CHANNEL_MAX_MSG_BYTES, ZX_CHANNEL_MAX_MSG_HANDLES, &actual_bytes,
-                           &actual_handles);
+  status = driver_channel.read(0, msg_bytes.get(), msg_handles.get(), ZX_CHANNEL_MAX_MSG_BYTES,
+                               ZX_CHANNEL_MAX_MSG_HANDLES, &actual_bytes, &actual_handles);
   if (status == ZX_ERR_SHOULD_WAIT) {
-    ASSERT_OK(zx_object_wait_one(driver_channel, ZX_CHANNEL_READABLE, ZX_TIME_INFINITE, nullptr));
+    ASSERT_OK(driver_channel.wait_one(ZX_CHANNEL_READABLE, zx::time::infinite(), nullptr));
   } else {
     ASSERT_OK(status);
   }

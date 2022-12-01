@@ -51,7 +51,7 @@ zx_status_t RebindBlockDevice(DeviceRef* device) {
   std::unique_ptr<device_watcher::DirWatcher> watcher;
   fbl::unique_fd dir_fd(
       openat(device->devfs_root_fd().get(), device->path(), O_RDONLY | O_DIRECTORY));
-  if (zx_status_t status = device_watcher::DirWatcher::Create(std::move(dir_fd), &watcher);
+  if (zx_status_t status = device_watcher::DirWatcher::Create(dir_fd.get(), &watcher);
       status != ZX_OK) {
     ADD_FAILURE("DirWatcher::Create('%s'): %s", device->path(), zx_status_get_string(status));
     return status;

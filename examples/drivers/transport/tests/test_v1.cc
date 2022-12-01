@@ -41,8 +41,10 @@ TEST(DriverTransportTest, ParentChildExists) {
   ASSERT_EQ(status, ZX_OK);
 
   // Wait for drivers.
-  fbl::unique_fd out;
-  ASSERT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile(root_fd, "sys/test/transport-child", &out));
-  ASSERT_EQ(ZX_OK,
-            device_watcher::RecursiveWaitForFile(root_fd, "sys/test/transport-child/test", &out));
+  ASSERT_EQ(device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/transport-child")
+                .status_value(),
+            ZX_OK);
+  ASSERT_EQ(device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/transport-child/test")
+                .status_value(),
+            ZX_OK);
 }

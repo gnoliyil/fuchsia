@@ -31,12 +31,13 @@ class FallbackTest : public zxtest::Test {
   // Check that the correct driver was bound. `fallback` indicates if we expect the fallback or
   // not-fallback driver to have bound.
   void CheckDriverBound(bool fallback) {
-    fbl::unique_fd fd;
     fbl::String path = fbl::StringPrintf("sys/platform/11:16:0/ddk-%s-test",
                                          fallback ? "fallback" : "not-fallback");
-    ASSERT_OK(device_watcher::RecursiveWaitForFile(devmgr_.devfs_root(), path.c_str(), &fd));
-    ASSERT_GT(fd.get(), 0);
-    ASSERT_OK(fdio_get_service_handle(fd.release(), chan_.reset_and_get_address()));
+    zx::result channel =
+        device_watcher::RecursiveWaitForFile(devmgr_.devfs_root().get(), path.c_str());
+    ASSERT_OK(channel.status_value());
+
+    chan_ = std::move(channel.value());
     ASSERT_NE(chan_.get(), ZX_HANDLE_INVALID);
   }
 

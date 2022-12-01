@@ -41,14 +41,15 @@ TEST_F(FidlProtocolTest, ChildBinds) {
   // Wait for the child device to bind and appear. The child driver should bind with its string
   // properties. It will then make a call via FIDL and wait for the response before adding the child
   // device.
-  fbl::unique_fd fd;
-  status = device_watcher::RecursiveWaitForFile(root_fd, "sys/test/parent/child", &fd);
-  ASSERT_EQ(status, ZX_OK);
+  ASSERT_EQ(
+      device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/parent/child").status_value(),
+      ZX_OK);
 
   // Wait for the other child device to bind to prevent a shutdown race condition bug.
-  status =
-      device_watcher::RecursiveWaitForFile(root_fd, "sys/test/parent/child/isolated-child", &fd);
-  ASSERT_EQ(status, ZX_OK);
+  ASSERT_EQ(
+      device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/parent/child/isolated-child")
+          .status_value(),
+      ZX_OK);
 }
 
 TEST_F(FidlProtocolTest, ColocateFlagIsRespected) {
@@ -76,9 +77,8 @@ TEST_F(FidlProtocolTest, ColocateFlagIsRespected) {
   // Wait for the device to bind and appear.
   std::string parent_device_path = "sys/test/parent/child";
   std::string device_path = parent_device_path + "/isolated-child";
-  fbl::unique_fd fd;
-  status = device_watcher::RecursiveWaitForFile(root_fd, device_path.c_str(), &fd);
-  ASSERT_EQ(status, ZX_OK);
+  zx::result channel = device_watcher::RecursiveWaitForFile(root_fd.get(), device_path.c_str());
+  ASSERT_EQ(channel.status_value(), ZX_OK);
 
   // Connect to the driver development server.
   fuchsia::driver::development::DriverDevelopmentSyncPtr driver_dev;
@@ -144,9 +144,8 @@ TEST_F(FidlProtocolTest, MustIsolateFlagIsPassed) {
 
   // Wait for the device to bind and appear.
   std::string device_path = "sys/test/parent/child/isolated-child";
-  fbl::unique_fd fd;
-  status = device_watcher::RecursiveWaitForFile(root_fd, device_path.c_str(), &fd);
-  ASSERT_EQ(status, ZX_OK);
+  zx::result channel = device_watcher::RecursiveWaitForFile(root_fd.get(), device_path.c_str());
+  ASSERT_EQ(channel.status_value(), ZX_OK);
 
   // Connect to the driver development server.
   fuchsia::driver::development::DriverDevelopmentSyncPtr driver_dev;
@@ -198,14 +197,15 @@ TEST_F(FidlProtocolTest, ChildBindsV2) {
   // Wait for the child device to bind and appear. The child driver should bind with its string
   // properties. It will then make a call via FIDL and wait for the response before adding the child
   // device.
-  fbl::unique_fd fd;
-  status = device_watcher::RecursiveWaitForFile(root_fd, "sys/test/parent/child", &fd);
-  ASSERT_EQ(status, ZX_OK);
+  ASSERT_EQ(
+      device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/parent/child").status_value(),
+      ZX_OK);
 
   // Wait for the other child device to bind to prevent a shutdown race condition bug.
-  status =
-      device_watcher::RecursiveWaitForFile(root_fd, "sys/test/parent/child/isolated-child", &fd);
-  ASSERT_EQ(status, ZX_OK);
+  ASSERT_EQ(
+      device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/parent/child/isolated-child")
+          .status_value(),
+      ZX_OK);
 }
 
 }  // namespace

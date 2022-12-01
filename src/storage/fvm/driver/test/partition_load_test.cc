@@ -74,12 +74,13 @@ TEST_F(FvmVPartitionLoadTest, LoadPartitionWithPlaceHolderGuidIsUpdated) {
     // After rebind the instance guid should not be kPlaceHolderGUID.
     ASSERT_OK(fvm->Rebind({}));
 
-    fbl::unique_fd fvmfd;
-    device_watcher::RecursiveWaitForFile(devmgr_->devfs_root(), partition_path.c_str(), &fvmfd);
+    zx::result channel =
+        device_watcher::RecursiveWaitForFile(devmgr_->devfs_root().get(), partition_path.c_str());
+    ASSERT_OK(channel.status_value());
 
-    fdio_cpp::UnownedFdioCaller caller(fvmfd.get());
-    auto result = fidl::WireCall(caller.borrow_as<fuchsia_hardware_block_partition::Partition>())
-                      ->GetInstanceGuid();
+    fidl::ClientEnd<fuchsia_hardware_block_partition::Partition> client_end(
+        std::move(channel.value()));
+    auto result = fidl::WireCall(client_end)->GetInstanceGuid();
     ASSERT_OK(result.status());
     ASSERT_OK(result.value().status);
     EXPECT_FALSE(memcmp(result.value().guid.get(), kPlaceHolderInstanceGuid.data(),
@@ -90,12 +91,13 @@ TEST_F(FvmVPartitionLoadTest, LoadPartitionWithPlaceHolderGuidIsUpdated) {
     // One more time to check that the UUID persisted, so it doesn't change between 'reboot'.
     ASSERT_OK(fvm->Rebind({}));
 
-    fbl::unique_fd fvmfd;
-    device_watcher::RecursiveWaitForFile(devmgr_->devfs_root(), partition_path.c_str(), &fvmfd);
+    zx::result channel =
+        device_watcher::RecursiveWaitForFile(devmgr_->devfs_root().get(), partition_path.c_str());
+    ASSERT_OK(channel.status_value());
 
-    fdio_cpp::UnownedFdioCaller caller(fvmfd.get());
-    auto result = fidl::WireCall(caller.borrow_as<fuchsia_hardware_block_partition::Partition>())
-                      ->GetInstanceGuid();
+    fidl::ClientEnd<fuchsia_hardware_block_partition::Partition> client_end(
+        std::move(channel.value()));
+    auto result = fidl::WireCall(client_end)->GetInstanceGuid();
     ASSERT_OK(result.status());
     ASSERT_OK(result.value().status);
     EXPECT_TRUE(memcmp(result.value().guid.get(), partition_guid.data(),

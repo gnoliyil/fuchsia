@@ -72,11 +72,11 @@ int main(int argc, char** argv) {
     fprintf(stderr, "Realm::Start failed: %s\n", zx_status_get_string(response.error_value()));
     return -1;
   }
-  fbl::unique_fd dir_fd;
-  if (zx_status_t status =
-          device_watcher::RecursiveWaitForFile(ramdevice_client::RamNand::kBasePath, &dir_fd);
-      status != ZX_OK) {
-    fprintf(stderr, "Failed to wait for device: %s\n", zx_status_get_string(status));
+
+  if (zx::result channel =
+          device_watcher::RecursiveWaitForFile(ramdevice_client::RamNand::kBasePath);
+      channel.is_error()) {
+    fprintf(stderr, "Failed to wait for device: %s\n", channel.status_string());
     return -1;
   }
   zx::result parent = ParentDevice::Create({
@@ -95,11 +95,9 @@ int main(int argc, char** argv) {
   });
 
   // Wait for nandpart to spawn.
-  fbl::unique_fd nandpart;
-  if (zx_status_t status = device_watcher::RecursiveWaitForFile(path.c_str(), &nandpart);
-      status != ZX_OK) {
-    fprintf(stderr, "Failed to attach to device: %s\n", zx_status_get_string(status));
-    return status;
+  if (zx::result channel = device_watcher::RecursiveWaitForFile(path.c_str()); channel.is_error()) {
+    fprintf(stderr, "Failed to attach to device: %s\n", channel.status_string());
+    return channel.status_value();
   }
   zx::result nandpart_parent = ParentDevice::Create({
       .path = path.c_str(),

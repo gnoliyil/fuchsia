@@ -45,12 +45,14 @@ TEST(DriverTransportTest, ParentChildExists) {
   status = fdio_fd_create(dev.TakeChannel().release(), root_fd.reset_and_get_address());
   ASSERT_EQ(status, ZX_OK);
 
-  // Wait for parent driver.
-  auto result = device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/transport-parent");
-  ASSERT_EQ(result.status_value(), ZX_OK);
   {
+    // Wait for parent driver.
+    zx::result channel =
+        device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/transport-parent");
+    ASSERT_EQ(channel.status_value(), ZX_OK);
+
     // Turn the connection into FIDL.
-    fidl::ClientEnd<fuchsia_gizmo_protocol::TestingProtocol> client_end(std::move(result.value()));
+    fidl::ClientEnd<fuchsia_gizmo_protocol::TestingProtocol> client_end(std::move(channel.value()));
     fidl::SyncClient client{std::move(client_end)};
 
     fidl::Result result = client->GetValue();
@@ -58,13 +60,14 @@ TEST(DriverTransportTest, ParentChildExists) {
     ASSERT_EQ(0x1234, result->response());
   }
 
-  // Wait for child driver.
-  result = device_watcher::RecursiveWaitForFile(root_fd.get(),
-                                                "sys/test/transport-parent/transport-child");
-  ASSERT_EQ(result.status_value(), ZX_OK);
   {
+    // Wait for child driver.
+    zx::result channel = device_watcher::RecursiveWaitForFile(
+        root_fd.get(), "sys/test/transport-parent/transport-child");
+    ASSERT_EQ(channel.status_value(), ZX_OK);
+
     // Turn the connection into FIDL.
-    fidl::ClientEnd<fuchsia_gizmo_protocol::TestingProtocol> client_end(std::move(result.value()));
+    fidl::ClientEnd<fuchsia_gizmo_protocol::TestingProtocol> client_end(std::move(channel.value()));
     fidl::SyncClient client{std::move(client_end)};
 
     fidl::Result result = client->GetValue();

@@ -112,7 +112,8 @@ class UsbHidTest : public zxtest::Test {
         openat(bus_->GetRootFd(), ifc_path.c_str(), O_DIRECTORY | O_RDONLY));
     ASSERT_TRUE(fd_usb_hid_parent, "openat(_, %s, _): %s", ifc_path.c_str(), strerror(errno));
     std::unique_ptr<device_watcher::DirWatcher> watcher;
-    ASSERT_OK(device_watcher::DirWatcher::Create(std::move(fd_usb_hid_parent), &watcher));
+
+    ASSERT_OK(device_watcher::DirWatcher::Create(fd_usb_hid_parent.get(), &watcher));
     {
       const fidl::WireResult result = fidl::WireCall(usb_hid_controller.value())->ScheduleUnbind();
       ASSERT_OK(result.status());

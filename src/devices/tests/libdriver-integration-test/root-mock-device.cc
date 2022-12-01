@@ -48,18 +48,13 @@ zx_status_t RootMockDevice::Create(const IsolatedDevmgr& devmgr, async_dispatche
                                    std::unique_ptr<MockDeviceHooks> hooks,
                                    std::unique_ptr<RootMockDevice>* mock_out) {
   // Wait for /dev/sys/test/test to appear
-  fbl::unique_fd fd;
-  zx_status_t status =
-      device_watcher::RecursiveWaitForFile(devmgr.devfs_root(), "sys/test/test", &fd);
-  if (status != ZX_OK) {
-    return status;
+  zx::result channel =
+      device_watcher::RecursiveWaitForFile(devmgr.devfs_root().get(), "sys/test/test");
+  if (channel.is_error()) {
+    return channel.status_value();
   }
 
-  zx::channel test_root_chan;
-  status = fdio_get_service_handle(fd.release(), test_root_chan.reset_and_get_address());
-  if (status != ZX_OK) {
-    return status;
-  }
+  zx::channel test_root_chan = std::move(channel.value());
 
   fidl::SynchronousInterfacePtr<fuchsia::device::test::RootDevice> test_root;
   test_root.Bind(std::move(test_root_chan));

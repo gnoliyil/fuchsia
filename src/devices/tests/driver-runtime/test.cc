@@ -41,17 +41,16 @@ class RuntimeTest : public gtest::TestLoopFixture {
     status = fdio_fd_create(dev.TakeChannel().release(), root_fd.reset_and_get_address());
     ASSERT_EQ(status, ZX_OK);
 
-    fbl::unique_fd parent_fd;
-    ASSERT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile(root_fd, "sys/test/parent", &parent_fd));
-    ASSERT_EQ(ZX_OK, fdio_get_service_handle(parent_fd.release(),
-                                             parent_chan.channel().reset_and_get_address()));
+    zx::result parent_channel =
+        device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/parent");
+    ASSERT_EQ(parent_channel.status_value(), ZX_OK);
+    parent_chan = fidl::ClientEnd<TestDevice>(std::move(parent_channel.value()));
     ASSERT_TRUE(parent_chan.is_valid());
 
-    fbl::unique_fd child_fd;
-    ASSERT_EQ(ZX_OK,
-              device_watcher::RecursiveWaitForFile(root_fd, "sys/test/parent/child", &child_fd));
-    ASSERT_EQ(ZX_OK, fdio_get_service_handle(child_fd.release(),
-                                             child_chan.channel().reset_and_get_address()));
+    zx::result child_channel =
+        device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/parent/child");
+    ASSERT_EQ(child_channel.status_value(), ZX_OK);
+    child_chan = fidl::ClientEnd<TestDeviceChild>(std::move(child_channel.value()));
     ASSERT_TRUE(child_chan.is_valid());
   }
 

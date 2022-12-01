@@ -45,8 +45,8 @@ class FvmTest : public zxtest::Test {
 
     ASSERT_OK(IsolatedDevmgr::Create(&args, &devmgr_));
 
-    fbl::unique_fd ctl;
-    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root(), "sys/platform/00:00:2d/ramctl", &ctl));
+    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root().get(), "sys/platform/00:00:2d/ramctl")
+                  .status_value());
   }
 
   void CreateRamdisk() { CreateRamdiskWithBlockCount(); }

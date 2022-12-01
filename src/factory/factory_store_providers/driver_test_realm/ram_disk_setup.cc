@@ -63,11 +63,9 @@ int main() {
     return 1;
   }
 
-  fbl::unique_fd out;
-  zx_status_t status =
-      device_watcher::RecursiveWaitForFile("/dev/sys/platform/00:00:2d/ramctl", &out);
-  if (status != ZX_OK) {
-    FX_SLOG(ERROR, "Failed to wait for ramctl", KV("status", status));
+  zx::result channel = device_watcher::RecursiveWaitForFile("/dev/sys/platform/00:00:2d/ramctl");
+  if (channel.is_error()) {
+    FX_SLOG(ERROR, "Failed to wait for ramctl", KV("status", channel.status_value()));
   }
 
   auto result = MakeRamdisk();

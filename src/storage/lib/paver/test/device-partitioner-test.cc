@@ -360,9 +360,9 @@ class GptDevicePartitionerTests : public zxtest::Test {
     args.board_name = std::move(board_name);
     ASSERT_OK(IsolatedDevmgr::Create(&args, &devmgr_));
 
-    fbl::unique_fd fd;
-    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root(), "sys/platform/00:00:2d/ramctl", &fd));
-    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root(), "sys/platform", &fd));
+    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root().get(), "sys/platform/00:00:2d/ramctl")
+                  .status_value());
+    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root().get(), "sys/platform").status_value());
   }
 
   fidl::ClientEnd<fuchsia_io::Directory> GetSvcRoot() { return devmgr_.fshost_svc_dir(); }
@@ -1137,8 +1137,8 @@ class FixedDevicePartitionerTests : public zxtest::Test {
 
     ASSERT_OK(IsolatedDevmgr::Create(&args, &devmgr_));
 
-    fbl::unique_fd fd;
-    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root(), "sys/platform/00:00:2d/ramctl", &fd));
+    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root().get(), "sys/platform/00:00:2d/ramctl")
+                  .status_value());
   }
 
   IsolatedDevmgr devmgr_;
@@ -2528,8 +2528,7 @@ TEST(AstroPartitionerTests, ChooseAstroPartitioner) {
   std::unique_ptr<SkipBlockDevice> device;
   ASSERT_NO_FATAL_FAILURE(SkipBlockDevice::Create(NandInfo(), &device));
   auto devfs_root = device->devfs_root();
-  fbl::unique_fd fd;
-  ASSERT_OK(RecursiveWaitForFile(devfs_root, "sys/platform/00:00:2d/ramctl", &fd));
+  ASSERT_OK(RecursiveWaitForFile(devfs_root.get(), "sys/platform/00:00:2d/ramctl").status_value());
   std::unique_ptr<BlockDevice> zircon_a;
   ASSERT_NO_FATAL_FAILURE(BlockDevice::Create(devfs_root, kZirconAType, &zircon_a));
 
@@ -2589,8 +2588,7 @@ TEST(AstroPartitionerTests, FindPartitionTest) {
   std::unique_ptr<SkipBlockDevice> device;
   ASSERT_NO_FATAL_FAILURE(SkipBlockDevice::Create(NandInfo(), &device));
   auto devfs_root = device->devfs_root();
-  fbl::unique_fd fd;
-  ASSERT_OK(RecursiveWaitForFile(devfs_root, "sys/platform/00:00:2d/ramctl", &fd));
+  ASSERT_OK(RecursiveWaitForFile(devfs_root.get(), "sys/platform/00:00:2d/ramctl").status_value());
   std::unique_ptr<BlockDevice> fvm;
   ASSERT_NO_FATAL_FAILURE(BlockDevice::Create(devfs_root, kFvmType, &fvm));
 
@@ -2712,9 +2710,9 @@ class As370PartitionerTests : public zxtest::Test {
 
     ASSERT_OK(IsolatedDevmgr::Create(&args, &devmgr_));
 
-    fbl::unique_fd fd;
-    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root(), "sys/platform", &fd));
-    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root(), "sys/platform/00:00:2d/ramctl", &fd));
+    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root().get(), "sys/platform").status_value());
+    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root().get(), "sys/platform/00:00:2d/ramctl")
+                  .status_value());
   }
 
   IsolatedDevmgr devmgr_;

@@ -40,21 +40,15 @@ zx_status_t RamNandCtl::Create(std::unique_ptr<RamNandCtl>* out) {
     return status;
   }
 
-  fbl::unique_fd fd;
-  if (zx_status_t status = device_watcher::RecursiveWaitForFile(
-          devmgr.devfs_root(), "sys/platform/00:00:2e/nand-ctl", &fd);
-      status != ZX_OK) {
-    fprintf(stderr, "ram_nand_ctl device failed enumerated: %s\n", zx_status_get_string(status));
-    return status;
+  zx::result channel = device_watcher::RecursiveWaitForFile(devmgr.devfs_root().get(),
+                                                            "sys/platform/00:00:2e/nand-ctl");
+  if (channel.is_error()) {
+    fprintf(stderr, "ram_nand_ctl device failed enumerated: %s\n", channel.status_string());
+    return channel.status_value();
   }
-  fdio_cpp::FdioCaller caller(std::move(fd));
-  zx::result ctl = caller.take_as<fuchsia_hardware_nand::RamNandCtl>();
-  if (ctl.is_error()) {
-    fprintf(stderr, "Failed to get ram_nand_ctl device channel: %s\n", ctl.status_string());
-    return ctl.status_value();
-  }
+  fidl::ClientEnd<fuchsia_hardware_nand::RamNandCtl> client_end(std::move(channel.value()));
 
-  *out = std::unique_ptr<RamNandCtl>(new RamNandCtl(std::move(devmgr), std::move(ctl.value())));
+  *out = std::unique_ptr<RamNandCtl>(new RamNandCtl(std::move(devmgr), std::move(client_end)));
   return ZX_OK;
 }
 
@@ -78,19 +72,13 @@ zx_status_t RamNandCtl::CreateRamNand(fuchsia_hardware_nand::wire::RamNandInfo c
   });
   fprintf(stderr, "Trying to open (%s)\n", path.c_str());
 
-  fbl::unique_fd fd;
-  if (zx_status_t status = device_watcher::RecursiveWaitForFile(devfs_root(), path.c_str(), &fd);
-      status != ZX_OK) {
-    return status;
+  zx::result channel = device_watcher::RecursiveWaitForFile(devfs_root().get(), path.c_str());
+  if (channel.is_error()) {
+    return channel.status_value();
   }
-  fdio_cpp::FdioCaller caller(std::move(fd));
-  zx::result ram_nand = caller.take_as<fuchsia_device::Controller>();
-  if (ram_nand.is_error()) {
-    fprintf(stderr, "Failed to get ram_nand device channel: %s\n", ram_nand.status_string());
-    return ram_nand.status_value();
-  }
+  fidl::ClientEnd<fuchsia_device::Controller> client_end(std::move(channel.value()));
 
-  *out = ramdevice_client::RamNand(std::move(ram_nand.value()));
+  *out = ramdevice_client::RamNand(std::move(client_end));
   return ZX_OK;
 }
 

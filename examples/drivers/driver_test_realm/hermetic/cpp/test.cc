@@ -40,14 +40,13 @@ TEST_F(DriverTestRealmTest, DriversExist) {
   ASSERT_EQ(status, ZX_OK);
 
   // Wait for driver.
-  fbl::unique_fd out;
-  ASSERT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile(root_fd, "sys/test/sample_driver", &out));
+  zx::result channel =
+      device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/sample_driver");
+  ASSERT_EQ(channel.status_value(), ZX_OK);
 
   // Turn the connection into FIDL.
-  zx_handle_t handle;
-  ASSERT_EQ(ZX_OK, fdio_fd_clone(out.get(), &handle));
-  auto client =
-      fidl::WireSyncClient(fidl::ClientEnd<fuchsia_hardware_sample::Echo>(zx::channel(handle)));
+  fidl::WireSyncClient client(
+      fidl::ClientEnd<fuchsia_hardware_sample::Echo>(std::move(channel.value())));
 
   // Send a FIDL request.
   std::string_view sent_string = "hello";

@@ -41,9 +41,9 @@ TEST_F(BanjoProxyTest, ChildBinds) {
 
   // Wait for the child device to bind and appear. The child driver will then make a call via
   // proxied Banjo and wait for the response before adding the child device.
-  fbl::unique_fd fd;
-  status = device_watcher::RecursiveWaitForFile(root_fd, "sys/test/parent/composite/child", &fd);
-  ASSERT_EQ(status, ZX_OK);
+  zx::result channel =
+      device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/parent/composite/child");
+  ASSERT_EQ(channel.status_value(), ZX_OK);
 }
 
 }  // namespace

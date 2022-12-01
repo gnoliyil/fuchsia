@@ -59,13 +59,11 @@ TEST(PbusBtiTest, BtiIsSameAfterCrash) {
   status = fdio_fd_create(dev.TakeChannel().release(), dev_fd.reset_and_get_address());
   ASSERT_EQ(status, ZX_OK);
 
-  fbl::unique_fd fd;
-  EXPECT_OK(RecursiveWaitForFile(dev_fd, kDevicePath, &fd));
-  zx::result bti_client_end =
-      fdio_cpp::FdioCaller(std::move(fd)).take_as<fuchsia_hardware_btitest::BtiDevice>();
-  ASSERT_OK(bti_client_end.status_value());
+  zx::result channel = RecursiveWaitForFile(dev_fd.get(), kDevicePath);
+  EXPECT_OK(channel.status_value());
+  fidl::ClientEnd<fuchsia_hardware_btitest::BtiDevice> bti_client_end(std::move(channel.value()));
 
-  fidl::WireSyncClient client(std::move(*bti_client_end));
+  fidl::WireSyncClient client(std::move(bti_client_end));
   uint64_t koid1;
   {
     auto result = client->GetKoid();
@@ -73,9 +71,9 @@ TEST(PbusBtiTest, BtiIsSameAfterCrash) {
     koid1 = result.value().koid;
   }
 
-  fd.reset(openat(dev_fd.get(), kParentPath, O_DIRECTORY | O_RDONLY));
+  fbl::unique_fd watch_fd(openat(dev_fd.get(), kParentPath, O_DIRECTORY | O_RDONLY));
   std::unique_ptr<device_watcher::DirWatcher> watcher;
-  ASSERT_OK(device_watcher::DirWatcher::Create(std::move(fd), &watcher));
+  ASSERT_OK(device_watcher::DirWatcher::Create(watch_fd.get(), &watcher));
 
   {
     auto result = client->Crash();
@@ -84,11 +82,10 @@ TEST(PbusBtiTest, BtiIsSameAfterCrash) {
 
   // We implicitly rely on driver host being rebound in the event of a crash.
   ASSERT_OK(watcher->WaitForRemoval("test-bti", zx::duration::infinite()));
-  EXPECT_OK(RecursiveWaitForFile(dev_fd, kDevicePath, &fd));
-  bti_client_end =
-      fdio_cpp::FdioCaller(std::move(fd)).take_as<fuchsia_hardware_btitest::BtiDevice>();
-  ASSERT_OK(bti_client_end.status_value());
-  client = fidl::WireSyncClient(std::move(*bti_client_end));
+  channel = RecursiveWaitForFile(dev_fd.get(), kDevicePath);
+  ASSERT_OK(channel.status_value());
+  bti_client_end = fidl::ClientEnd<fuchsia_hardware_btitest::BtiDevice>(std::move(channel.value()));
+  client = fidl::WireSyncClient(std::move(bti_client_end));
 
   uint64_t koid2;
   {

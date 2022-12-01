@@ -44,18 +44,30 @@ TEST_P(CompositeTest, DriversExist) {
   status = fdio_fd_create(dev.TakeChannel().release(), root_fd.reset_and_get_address());
   ASSERT_EQ(status, ZX_OK);
 
-  fbl::unique_fd out;
-  EXPECT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile(root_fd, "sys/test/child_a", &out));
-  EXPECT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile(root_fd, "sys/test/child_b", &out));
-  EXPECT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile(root_fd, "sys/test/child_c", &out));
-  EXPECT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile(
-                       root_fd, "sys/test/child_a/composite_driver_v1/composite_child", &out));
+  EXPECT_EQ(device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/child_a").status_value(),
+            ZX_OK);
+  EXPECT_EQ(device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/child_b").status_value(),
+            ZX_OK);
+  EXPECT_EQ(device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/child_c").status_value(),
+            ZX_OK);
+  EXPECT_EQ(device_watcher::RecursiveWaitForFile(
+                root_fd.get(), "sys/test/child_a/composite_driver_v1/composite_child")
+                .status_value(),
+            ZX_OK);
 
-  EXPECT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile(root_fd, "sys/test/fragment_a", &out));
-  EXPECT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile(root_fd, "sys/test/fragment_b", &out));
-  EXPECT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile(root_fd, "sys/test/fragment_c", &out));
-  EXPECT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile(
-                       root_fd, "sys/test/fragment_a/composite-device/composite_child", &out));
+  EXPECT_EQ(
+      device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/fragment_a").status_value(),
+      ZX_OK);
+  EXPECT_EQ(
+      device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/fragment_b").status_value(),
+      ZX_OK);
+  EXPECT_EQ(
+      device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/fragment_c").status_value(),
+      ZX_OK);
+  EXPECT_EQ(device_watcher::RecursiveWaitForFile(
+                root_fd.get(), "sys/test/fragment_a/composite-device/composite_child")
+                .status_value(),
+            ZX_OK);
 }
 
 INSTANTIATE_TEST_SUITE_P(CompositeTest, CompositeTest, testing::Bool(),

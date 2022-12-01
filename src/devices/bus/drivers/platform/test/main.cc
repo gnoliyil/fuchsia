@@ -41,32 +41,34 @@ TEST(PbusTest, Enumeration) {
       loop.dispatcher());
   ASSERT_OK(devmgr.status_value());
 
-  const fbl::unique_fd& devfs_root = devmgr.value().devfs_root();
+  const int dirfd = devmgr.value().devfs_root().get();
 
-  fbl::unique_fd fd;
-  ASSERT_OK(RecursiveWaitForFile(devfs_root, "sys/platform", &fd));
-  EXPECT_OK(RecursiveWaitForFile(devfs_root, "sys/platform/pt/test-board", &fd));
-  EXPECT_OK(RecursiveWaitForFile(devfs_root, "sys/platform/11:01:1", &fd));
-  EXPECT_OK(RecursiveWaitForFile(devfs_root, "sys/platform/11:01:1/child-1", &fd));
-  EXPECT_OK(RecursiveWaitForFile(devfs_root, "sys/platform/11:01:1/child-1/child-2", &fd));
-  EXPECT_OK(RecursiveWaitForFile(devfs_root, "sys/platform/11:01:1/child-1/child-2/child-4", &fd));
-  EXPECT_OK(RecursiveWaitForFile(devfs_root, "sys/platform/11:01:1/child-1/child-3-top", &fd));
+  ASSERT_OK(RecursiveWaitForFile(dirfd, "sys/platform").status_value());
+  EXPECT_OK(RecursiveWaitForFile(dirfd, "sys/platform/pt/test-board").status_value());
+  EXPECT_OK(RecursiveWaitForFile(dirfd, "sys/platform/11:01:1").status_value());
+  EXPECT_OK(RecursiveWaitForFile(dirfd, "sys/platform/11:01:1/child-1").status_value());
+  EXPECT_OK(RecursiveWaitForFile(dirfd, "sys/platform/11:01:1/child-1/child-2").status_value());
   EXPECT_OK(
-      RecursiveWaitForFile(devfs_root, "sys/platform/11:01:1/child-1/child-3-top/child-3", &fd));
-  EXPECT_OK(RecursiveWaitForFile(devfs_root, "sys/platform/11:01:5/test-gpio/gpio-3", &fd));
-  EXPECT_OK(RecursiveWaitForFile(devfs_root, "sys/platform/11:01:7/test-clock/clock-1", &fd));
-  EXPECT_OK(RecursiveWaitForFile(devfs_root, "sys/platform/11:01:8/test-i2c/i2c/i2c-1-5", &fd));
-  EXPECT_OK(RecursiveWaitForFile(devfs_root, "sys/platform/11:01:f", &fd));
-  EXPECT_OK(RecursiveWaitForFile(devfs_root, "sys/platform/11:01:f/composite-dev/composite", &fd));
-  EXPECT_OK(RecursiveWaitForFile(devfs_root, "sys/platform/11:01:10", &fd));
-  EXPECT_OK(RecursiveWaitForFile(devfs_root, "sys/platform/11:01:12/test-spi/spi/spi-0-0", &fd));
+      RecursiveWaitForFile(dirfd, "sys/platform/11:01:1/child-1/child-2/child-4").status_value());
+  EXPECT_OK(RecursiveWaitForFile(dirfd, "sys/platform/11:01:1/child-1/child-3-top").status_value());
+  EXPECT_OK(RecursiveWaitForFile(dirfd, "sys/platform/11:01:1/child-1/child-3-top/child-3")
+                .status_value());
+  EXPECT_OK(RecursiveWaitForFile(dirfd, "sys/platform/11:01:5/test-gpio/gpio-3").status_value());
+  EXPECT_OK(RecursiveWaitForFile(dirfd, "sys/platform/11:01:7/test-clock/clock-1").status_value());
+  EXPECT_OK(
+      RecursiveWaitForFile(dirfd, "sys/platform/11:01:8/test-i2c/i2c/i2c-1-5").status_value());
+  EXPECT_OK(RecursiveWaitForFile(dirfd, "sys/platform/11:01:f").status_value());
+  EXPECT_OK(
+      RecursiveWaitForFile(dirfd, "sys/platform/11:01:f/composite-dev/composite").status_value());
+  EXPECT_OK(RecursiveWaitForFile(dirfd, "sys/platform/11:01:10").status_value());
+  EXPECT_OK(
+      RecursiveWaitForFile(dirfd, "sys/platform/11:01:12/test-spi/spi/spi-0-0").status_value());
   EXPECT_EQ(
-      RecursiveWaitForFile(devfs_root, "sys/platform/11:01:10/composite-dev-2/composite", &fd),
+      RecursiveWaitForFile(dirfd, "sys/platform/11:01:10/composite-dev-2/composite").status_value(),
       ZX_OK);
-  EXPECT_EQ(RecursiveWaitForFile(devfs_root, "sys/platform/11:01:21/test-pci", &fd), ZX_OK);
-  EXPECT_EQ(RecursiveWaitForFile(devfs_root, "sys/platform/11:01:23/node_group", &fd), ZX_OK);
+  EXPECT_EQ(RecursiveWaitForFile(dirfd, "sys/platform/11:01:21/test-pci").status_value(), ZX_OK);
+  EXPECT_EQ(RecursiveWaitForFile(dirfd, "sys/platform/11:01:23/node_group").status_value(), ZX_OK);
 
-  const int dirfd = devfs_root.get();
   struct stat st;
   EXPECT_EQ(fstatat(dirfd, "sys/platform/pt/test-board", &st, 0), 0);
   EXPECT_EQ(fstatat(dirfd, "sys/platform/11:01:1", &st, 0), 0);
@@ -106,15 +108,12 @@ TEST(PbusTest, Enumeration) {
       ZX_ERR_STOP);
   ASSERT_EQ(devices_seen, 2);
 
-  fbl::unique_fd platform_bus;
-  ASSERT_OK(RecursiveWaitForFile(devfs_root, "sys/platform", &platform_bus));
-
-  fdio_cpp::FdioCaller caller{std::move(platform_bus)};
-
-  zx::result channel = caller.take_as<fuchsia_sysinfo::SysInfo>();
+  zx::result channel = RecursiveWaitForFile(dirfd, "sys/platform");
   ASSERT_OK(channel.status_value());
 
-  const fidl::WireSyncClient<fuchsia_sysinfo::SysInfo> client(std::move(channel.value()));
+  fidl::ClientEnd<fuchsia_sysinfo::SysInfo> client_end(std::move(channel.value()));
+
+  const fidl::WireSyncClient client(std::move(client_end));
 
   // Get board name.
   [&client]() {

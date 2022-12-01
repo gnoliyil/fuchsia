@@ -46,20 +46,17 @@ class PowerTestCase : public zxtest::Test {
 
     zx_status_t status = IsolatedDevmgr::Create(&args, &devmgr);
     ASSERT_OK(status);
-    fbl::unique_fd parent_fd, child_fd;
-    ASSERT_OK(device_watcher::RecursiveWaitForFile(devmgr.devfs_root(),
-                                                   "sys/platform/11:0b:0/power-test", &parent_fd));
-    ASSERT_GT(parent_fd.get(), 0);
-    ASSERT_OK(
-        fdio_get_service_handle(parent_fd.release(), parent_device_handle.reset_and_get_address()));
+
+    zx::result parent_channel = device_watcher::RecursiveWaitForFile(
+        devmgr.devfs_root().get(), "sys/platform/11:0b:0/power-test");
+    ASSERT_EQ(parent_channel.status_value(), ZX_OK);
+    parent_device_handle = std::move(parent_channel.value());
     ASSERT_NE(parent_device_handle.get(), ZX_HANDLE_INVALID);
 
-    ASSERT_OK(device_watcher::RecursiveWaitForFile(
-        devmgr.devfs_root(), "sys/platform/11:0b:0/power-test/power-test-child", &child_fd));
-    ASSERT_GT(child_fd.get(), 0);
-
-    ASSERT_OK(
-        fdio_get_service_handle(child_fd.release(), child_device_handle.reset_and_get_address()));
+    zx::result child_channel = device_watcher::RecursiveWaitForFile(
+        devmgr.devfs_root().get(), "sys/platform/11:0b:0/power-test/power-test-child");
+    ASSERT_EQ(child_channel.status_value(), ZX_OK);
+    child_device_handle = std::move(child_channel.value());
     ASSERT_NE(child_device_handle.get(), ZX_HANDLE_INVALID);
   }
 
@@ -79,12 +76,10 @@ class PowerTestCase : public zxtest::Test {
     }
     ASSERT_OK(call_status);
 
-    fbl::unique_fd child2_fd;
-    ASSERT_OK(device_watcher::RecursiveWaitForFile(
-        devmgr.devfs_root(), "sys/platform/11:0b:0/power-test/power-test-child-2", &child2_fd));
-    ASSERT_GT(child2_fd.get(), 0);
-    ASSERT_OK(
-        fdio_get_service_handle(child2_fd.release(), child2_device_handle.reset_and_get_address()));
+    zx::result channel = device_watcher::RecursiveWaitForFile(
+        devmgr.devfs_root().get(), "sys/platform/11:0b:0/power-test/power-test-child-2");
+    ASSERT_EQ(channel.status_value(), ZX_OK);
+    child2_device_handle = std::move(channel.value());
     ASSERT_NE(child2_device_handle.get(), ZX_HANDLE_INVALID);
   }
 

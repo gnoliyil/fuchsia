@@ -25,10 +25,8 @@ class BindLibToFidlCodeGenTest : public testing::Test {
   void SetUp() override {
     // Wait for the child device to bind and appear. The child device should bind with its string
     // properties.
-    fbl::unique_fd string_bind_fd;
-    zx_status_t status =
-        device_watcher::RecursiveWaitForFile("/dev/sys/test/parent/child", &string_bind_fd);
-    ASSERT_EQ(ZX_OK, status);
+    zx::result channel = device_watcher::RecursiveWaitForFile("/dev/sys/test/parent/child");
+    ASSERT_EQ(channel.status_value(), ZX_OK);
 
     // Connect to the DriverDevelopment service.
     auto context = sys::ComponentContext::Create();

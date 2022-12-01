@@ -315,12 +315,13 @@ class PaverServiceSkipBlockTest : public PaverServiceTest {
   }
 
   void WaitForDevices() {
-    fbl::unique_fd fd;
-    ASSERT_OK(RecursiveWaitForFile(device_->devfs_root(),
-                                   "sys/platform/00:00:2e/nand-ctl/ram-nand-0/sysconfig/skip-block",
-                                   &fd));
-    ASSERT_OK(RecursiveWaitForFile(
-        device_->devfs_root(), "sys/platform/00:00:2e/nand-ctl/ram-nand-0/fvm/ftl/block", &fvm_));
+    ASSERT_OK(RecursiveWaitForFile(device_->devfs_root().get(),
+                                   "sys/platform/00:00:2e/nand-ctl/ram-nand-0/sysconfig/skip-block")
+                  .status_value());
+    zx::result fvm_result = RecursiveWaitForFile(
+        device_->devfs_root().get(), "sys/platform/00:00:2e/nand-ctl/ram-nand-0/fvm/ftl/block");
+    ASSERT_OK(fvm_result.status_value());
+    fvm_client_ = fidl::ClientEnd<fuchsia_hardware_block::Block>(std::move(fvm_result.value()));
   }
 
   void FindBootManager() {
@@ -436,7 +437,7 @@ class PaverServiceSkipBlockTest : public PaverServiceTest {
   fidl::WireSyncClient<fuchsia_paver::Sysconfig> sysconfig_;
 
   std::unique_ptr<SkipBlockDevice> device_;
-  fbl::unique_fd fvm_;
+  fidl::ClientEnd<fuchsia_hardware_block::Block> fvm_client_;
 };
 
 constexpr AbrData kAbrData = {
@@ -1737,13 +1738,10 @@ void CheckGuid(const fbl::unique_fd& device, const uint8_t type[GPT_GUID_LEN]) {
 TEST_F(PaverServiceSkipBlockTest, WipeVolumeCreatesFvm) {
   ASSERT_NO_FATAL_FAILURE(InitializeRamNand());
 
-  fdio_cpp::UnownedFdioCaller fvm_caller(fvm_);
-
   constexpr size_t kBufferSize = 8192;
   char buffer[kBufferSize];
   memset(buffer, 'a', kBufferSize);
-  ASSERT_OK(block_client::SingleWriteBytes(fvm_caller.borrow_as<fuchsia_hardware_block::Block>(),
-                                           buffer, sizeof(buffer), 0));
+  ASSERT_OK(block_client::SingleWriteBytes(fvm_client_, buffer, sizeof(buffer), 0));
 
   ASSERT_NO_FATAL_FAILURE(FindDataSink());
   auto result = data_sink_->WipeVolume();
@@ -1751,8 +1749,7 @@ TEST_F(PaverServiceSkipBlockTest, WipeVolumeCreatesFvm) {
   ASSERT_TRUE(result->is_ok());
   ASSERT_TRUE(result->value()->volume);
 
-  ASSERT_OK(block_client::SingleReadBytes(fvm_caller.borrow_as<fuchsia_hardware_block::Block>(),
-                                          buffer, sizeof(buffer), 0));
+  ASSERT_OK(block_client::SingleReadBytes(fvm_client_, buffer, sizeof(buffer), 0));
   EXPECT_BYTES_EQ(fs_management::kFvmMagic, buffer, sizeof(fs_management::kFvmMagic));
 
   fidl::ClientEnd<fuchsia_hardware_block_volume::VolumeManager> volume_client =
@@ -1920,8 +1917,8 @@ class PaverServiceBlockTest : public PaverServiceTest {
     fake_svc_.ForwardServiceTo(fidl::DiscoverableProtocolName<fuchsia_fshost::BlockWatcher>,
                                devmgr_.fshost_svc_dir());
 
-    fbl::unique_fd fd;
-    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root(), "sys/platform/00:00:2d/ramctl", &fd));
+    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root().get(), "sys/platform/00:00:2d/ramctl")
+                  .status_value());
     static_cast<paver::Paver*>(provider_ctx_)->set_devfs_root(devmgr_.devfs_root().duplicate());
     static_cast<paver::Paver*>(provider_ctx_)->set_svc_root(std::move(fake_svc_.svc_chan()));
   }
@@ -2036,9 +2033,9 @@ class PaverServiceGptDeviceTest : public PaverServiceTest {
     fake_svc_.ForwardServiceTo(fidl::DiscoverableProtocolName<fuchsia_fshost::BlockWatcher>,
                                devmgr_.fshost_svc_dir());
 
-    fbl::unique_fd fd;
-    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root(), "sys/platform/00:00:2d/ramctl", &fd));
-    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root(), "sys/platform", &fd));
+    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root().get(), "sys/platform/00:00:2d/ramctl")
+                  .status_value());
+    ASSERT_OK(RecursiveWaitForFile(devmgr_.devfs_root().get(), "sys/platform").status_value());
     static_cast<paver::Paver*>(provider_ctx_)->set_dispatcher(loop_.dispatcher());
     static_cast<paver::Paver*>(provider_ctx_)->set_devfs_root(devmgr_.devfs_root().duplicate());
     fidl::ClientEnd<fuchsia_io::Directory> svc_root = GetSvcRoot();

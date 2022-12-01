@@ -67,13 +67,12 @@ TEST(HotReloadIntegrationTest, TestRestartOneDriver) {
   // Setup the environment for testing.
   SetupEnvironment(dev, &devmgr, &development_);
 
-  fbl::unique_fd fd_driver;
   zx::channel chan_driver;
 
-  ASSERT_OK(device_watcher::RecursiveWaitForFile(
-      devmgr.devfs_root(), "sys/platform/11:17:0/driver-host-restart-driver", &fd_driver));
-  ASSERT_GT(fd_driver.get(), 0);
-  ASSERT_OK(fdio_get_service_handle(fd_driver.release(), chan_driver.reset_and_get_address()));
+  zx::result channel = device_watcher::RecursiveWaitForFile(
+      devmgr.devfs_root().get(), "sys/platform/11:17:0/driver-host-restart-driver");
+  ASSERT_OK(channel.status_value());
+  chan_driver = std::move(channel.value());
   ASSERT_NE(chan_driver.get(), ZX_HANDLE_INVALID);
   ASSERT_TRUE(chan_driver.is_valid());
 
@@ -87,7 +86,7 @@ TEST(HotReloadIntegrationTest, TestRestartOneDriver) {
   fbl::unique_fd fd(
       openat(devmgr.devfs_root().get(), "sys/platform/11:17:0", O_DIRECTORY | O_RDONLY));
   std::unique_ptr<device_watcher::DirWatcher> watcher;
-  ASSERT_OK(device_watcher::DirWatcher::Create(std::move(fd), &watcher));
+  ASSERT_OK(device_watcher::DirWatcher::Create(fd.get(), &watcher));
 
   // Restart the driver host of the test driver.
   fuchsia::driver::development::DriverDevelopment_RestartDriverHosts_Result result;
@@ -99,10 +98,10 @@ TEST(HotReloadIntegrationTest, TestRestartOneDriver) {
   ASSERT_OK(watcher->WaitForRemoval("driver-host-restart-driver", zx::duration::infinite()));
 
   // Get pid of driver after restarting.
-  ASSERT_OK(device_watcher::RecursiveWaitForFile(
-      devmgr.devfs_root(), "sys/platform/11:17:0/driver-host-restart-driver", &fd_driver));
-  ASSERT_GT(fd_driver.get(), 0);
-  ASSERT_OK(fdio_get_service_handle(fd_driver.release(), chan_driver.reset_and_get_address()));
+  channel = device_watcher::RecursiveWaitForFile(devmgr.devfs_root().get(),
+                                                 "sys/platform/11:17:0/driver-host-restart-driver");
+  ASSERT_OK(channel.status_value());
+  chan_driver = std::move(channel.value());
   ASSERT_NE(chan_driver.get(), ZX_HANDLE_INVALID);
   ASSERT_TRUE(chan_driver.is_valid());
 
@@ -134,23 +133,21 @@ TEST(HotReloadIntegrationTest, TestRestartTwoDriversParent) {
   // Setup the environment for testing.
   SetupEnvironment(dev, &devmgr, &development_);
 
-  fbl::unique_fd fd_parent, fd_child;
   zx::channel chan_parent, chan_child;
 
   // Open parent.
-  ASSERT_OK(device_watcher::RecursiveWaitForFile(
-      devmgr.devfs_root(), "sys/platform/11:0e:0/devhost-test-parent", &fd_parent));
-  ASSERT_GT(fd_parent.get(), 0);
-  ASSERT_OK(fdio_get_service_handle(fd_parent.release(), chan_parent.reset_and_get_address()));
+  zx::result parent_channel = device_watcher::RecursiveWaitForFile(
+      devmgr.devfs_root().get(), "sys/platform/11:0e:0/devhost-test-parent");
+  ASSERT_OK(parent_channel.status_value());
+  chan_parent = std::move(parent_channel.value());
   ASSERT_NE(chan_parent.get(), ZX_HANDLE_INVALID);
   ASSERT_TRUE(chan_parent.is_valid());
 
   // Open child.
-  ASSERT_OK(device_watcher::RecursiveWaitForFile(
-      devmgr.devfs_root(), "sys/platform/11:0e:0/devhost-test-parent/devhost-test-child",
-      &fd_child));
-  ASSERT_GT(fd_child.get(), 0);
-  ASSERT_OK(fdio_get_service_handle(fd_child.release(), chan_child.reset_and_get_address()));
+  zx::result child_channel = device_watcher::RecursiveWaitForFile(
+      devmgr.devfs_root().get(), "sys/platform/11:0e:0/devhost-test-parent/devhost-test-child");
+  ASSERT_OK(child_channel.status_value());
+  chan_child = std::move(child_channel.value());
   ASSERT_NE(chan_child.get(), ZX_HANDLE_INVALID);
   ASSERT_TRUE(chan_child.is_valid());
 
@@ -164,7 +161,7 @@ TEST(HotReloadIntegrationTest, TestRestartTwoDriversParent) {
   fbl::unique_fd fd_watcher(
       openat(devmgr.devfs_root().get(), "sys/platform/11:0e:0", O_DIRECTORY | O_RDONLY));
   std::unique_ptr<device_watcher::DirWatcher> watcher;
-  ASSERT_OK(device_watcher::DirWatcher::Create(std::move(fd_watcher), &watcher));
+  ASSERT_OK(device_watcher::DirWatcher::Create(fd_watcher.get(), &watcher));
 
   // Restart the driver host of the parent driver.
   fuchsia::driver::development::DriverDevelopment_RestartDriverHosts_Result result;
@@ -176,10 +173,10 @@ TEST(HotReloadIntegrationTest, TestRestartTwoDriversParent) {
   ASSERT_OK(watcher->WaitForRemoval("devhost-test-parent", zx::duration::infinite()));
 
   // Reopen parent.
-  ASSERT_OK(device_watcher::RecursiveWaitForFile(
-      devmgr.devfs_root(), "sys/platform/11:0e:0/devhost-test-parent", &fd_parent));
-  ASSERT_GT(fd_parent.get(), 0);
-  ASSERT_OK(fdio_get_service_handle(fd_parent.release(), chan_parent.reset_and_get_address()));
+  parent_channel = device_watcher::RecursiveWaitForFile(devmgr.devfs_root().get(),
+                                                        "sys/platform/11:0e:0/devhost-test-parent");
+  ASSERT_OK(parent_channel.status_value());
+  chan_parent = std::move(parent_channel.value());
   ASSERT_NE(chan_parent.get(), ZX_HANDLE_INVALID);
   ASSERT_TRUE(chan_parent.is_valid());
 
@@ -193,11 +190,10 @@ TEST(HotReloadIntegrationTest, TestRestartTwoDriversParent) {
   ASSERT_NE(parent_before->value()->pid, parent_after->value()->pid);
 
   // Check child has reopened.
-  ASSERT_OK(device_watcher::RecursiveWaitForFile(
-      devmgr.devfs_root(), "sys/platform/11:0e:0/devhost-test-parent/devhost-test-child",
-      &fd_child));
-  ASSERT_GT(fd_child.get(), 0);
-  ASSERT_OK(fdio_get_service_handle(fd_child.release(), chan_child.reset_and_get_address()));
+  child_channel = device_watcher::RecursiveWaitForFile(
+      devmgr.devfs_root().get(), "sys/platform/11:0e:0/devhost-test-parent/devhost-test-child");
+  ASSERT_OK(child_channel.status_value());
+  chan_child = std::move(child_channel.value());
   ASSERT_NE(chan_child.get(), ZX_HANDLE_INVALID);
   ASSERT_TRUE(chan_child.is_valid());
 }
@@ -222,23 +218,21 @@ TEST(HotReloadIntegrationTest, TestRestartTwoDriversChild) {
   // Setup the environment for testing.
   SetupEnvironment(dev, &devmgr, &development_);
 
-  fbl::unique_fd fd_parent, fd_child;
   zx::channel chan_parent, chan_child;
 
   // Open parent.
-  ASSERT_OK(device_watcher::RecursiveWaitForFile(
-      devmgr.devfs_root(), "sys/platform/11:0e:0/devhost-test-parent", &fd_parent));
-  ASSERT_GT(fd_parent.get(), 0);
-  ASSERT_OK(fdio_get_service_handle(fd_parent.release(), chan_parent.reset_and_get_address()));
+  zx::result parent_channel = device_watcher::RecursiveWaitForFile(
+      devmgr.devfs_root().get(), "sys/platform/11:0e:0/devhost-test-parent");
+  ASSERT_OK(parent_channel.status_value());
+  chan_parent = std::move(parent_channel.value());
   ASSERT_NE(chan_parent.get(), ZX_HANDLE_INVALID);
   ASSERT_TRUE(chan_parent.is_valid());
 
   // Open child.
-  ASSERT_OK(device_watcher::RecursiveWaitForFile(
-      devmgr.devfs_root(), "sys/platform/11:0e:0/devhost-test-parent/devhost-test-child",
-      &fd_child));
-  ASSERT_GT(fd_child.get(), 0);
-  ASSERT_OK(fdio_get_service_handle(fd_child.release(), chan_child.reset_and_get_address()));
+  zx::result child_channel = device_watcher::RecursiveWaitForFile(
+      devmgr.devfs_root().get(), "sys/platform/11:0e:0/devhost-test-parent/devhost-test-child");
+  ASSERT_OK(child_channel.status_value());
+  chan_child = std::move(child_channel.value());
   ASSERT_NE(chan_child.get(), ZX_HANDLE_INVALID);
   ASSERT_TRUE(chan_child.is_valid());
 
@@ -246,7 +240,7 @@ TEST(HotReloadIntegrationTest, TestRestartTwoDriversChild) {
   fbl::unique_fd fd_watcher(
       openat(devmgr.devfs_root().get(), "sys/platform/11:0e:0", O_DIRECTORY | O_RDONLY));
   std::unique_ptr<device_watcher::DirWatcher> watcher;
-  ASSERT_OK(device_watcher::DirWatcher::Create(std::move(fd_watcher), &watcher));
+  ASSERT_OK(device_watcher::DirWatcher::Create(fd_watcher.get(), &watcher));
 
   // Get pid of parent driver before restarting.
   auto parent_before = fidl::WireCall<TestDevice>(zx::unowned(chan_parent))->GetPid();
@@ -264,10 +258,10 @@ TEST(HotReloadIntegrationTest, TestRestartTwoDriversChild) {
   ASSERT_OK(watcher->WaitForRemoval("devhost-test-parent", zx::duration::infinite()));
 
   // Reopen parent.
-  ASSERT_OK(device_watcher::RecursiveWaitForFile(
-      devmgr.devfs_root(), "sys/platform/11:0e:0/devhost-test-parent", &fd_parent));
-  ASSERT_GT(fd_parent.get(), 0);
-  ASSERT_OK(fdio_get_service_handle(fd_parent.release(), chan_parent.reset_and_get_address()));
+  parent_channel = device_watcher::RecursiveWaitForFile(devmgr.devfs_root().get(),
+                                                        "sys/platform/11:0e:0/devhost-test-parent");
+  ASSERT_OK(parent_channel.status_value());
+  chan_parent = std::move(parent_channel.value());
   ASSERT_NE(chan_parent.get(), ZX_HANDLE_INVALID);
   ASSERT_TRUE(chan_parent.is_valid());
 
@@ -281,11 +275,10 @@ TEST(HotReloadIntegrationTest, TestRestartTwoDriversChild) {
   ASSERT_NE(parent_before->value()->pid, parent_after->value()->pid);
 
   // Check child has reopened.
-  ASSERT_OK(device_watcher::RecursiveWaitForFile(
-      devmgr.devfs_root(), "sys/platform/11:0e:0/devhost-test-parent/devhost-test-child",
-      &fd_child));
-  ASSERT_GT(fd_child.get(), 0);
-  ASSERT_OK(fdio_get_service_handle(fd_child.release(), chan_child.reset_and_get_address()));
+  child_channel = device_watcher::RecursiveWaitForFile(
+      devmgr.devfs_root().get(), "sys/platform/11:0e:0/devhost-test-parent/devhost-test-child");
+  ASSERT_OK(child_channel.status_value());
+  chan_child = std::move(child_channel.value());
   ASSERT_NE(chan_child.get(), ZX_HANDLE_INVALID);
   ASSERT_TRUE(chan_child.is_valid());
 }

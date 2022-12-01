@@ -37,12 +37,11 @@ int main(int argc, char** argv) {
     fprintf(stderr, "open(\"/dev\"): %s\n", strerror(errno));
     return -1;
   }
-  fbl::unique_fd out;
-  zx_status_t status =
-      device_watcher::RecursiveWaitForFile(dev, "sys/platform/00:00:2d/ramctl", &out);
-  if (status != ZX_OK) {
+  zx::result channel =
+      device_watcher::RecursiveWaitForFile(dev.get(), "sys/platform/00:00:2d/ramctl");
+  if (channel.is_error()) {
     fprintf(stderr, "RecursiveWaitForFile(dev, \"sys/platform/00:00:2d/ramctl\"): %s\n",
-            zx_status_get_string(status));
+            channel.status_string());
     return -1;
   }
 

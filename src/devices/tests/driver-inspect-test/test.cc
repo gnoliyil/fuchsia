@@ -37,12 +37,12 @@ class InspectTestCase : public InspectTestHelper, public zxtest::Test {
 
     zx_status_t status = IsolatedDevmgr::Create(&args, &devmgr_);
     ASSERT_OK(status);
-    fbl::unique_fd fd;
 
-    ASSERT_OK(device_watcher::RecursiveWaitForFile(devmgr_.devfs_root(),
-                                                   "sys/platform/11:13:0/inspect-test", &fd));
-    ASSERT_GT(fd.get(), 0);
-    ASSERT_OK(fdio_get_service_handle(fd.release(), chan_.reset_and_get_address()));
+    zx::result channel = device_watcher::RecursiveWaitForFile(devmgr_.devfs_root().get(),
+                                                              "sys/platform/11:13:0/inspect-test");
+    ASSERT_OK(channel.status_value());
+
+    chan_ = std::move(channel.value());
     ASSERT_NE(chan_.get(), ZX_HANDLE_INVALID);
   }
 
@@ -55,22 +55,24 @@ class InspectTestCase : public InspectTestHelper, public zxtest::Test {
 };
 
 TEST_F(InspectTestCase, InspectDevfs) {
-  fbl::unique_fd fd;
   // Check if inspect-test device is hosted in diagnostics folder
-  ASSERT_OK(device_watcher::RecursiveWaitForFileReadOnly(devmgr().devfs_root(), "diagnostics/class",
-                                                         &fd));
-  ASSERT_GT(fd.get(), 0);
-  ASSERT_OK(device_watcher::RecursiveWaitForFileReadOnly(
-      devmgr().devfs_root(), "diagnostics/class/test/000.inspect", &fd));
-  ASSERT_GT(fd.get(), 0);
+  ASSERT_OK(
+      device_watcher::RecursiveWaitForFileReadOnly(devmgr().devfs_root().get(), "diagnostics/class")
+          .status_value());
+  ASSERT_OK(device_watcher::RecursiveWaitForFileReadOnly(devmgr().devfs_root().get(),
+                                                         "diagnostics/class/test/000.inspect")
+                .status_value());
 }
 
 TEST_F(InspectTestCase, ReadInspectData) {
-  fbl::unique_fd fd;
   // Wait for inspect data to appear
-  ASSERT_OK(device_watcher::RecursiveWaitForFileReadOnly(
-      devmgr().devfs_root(), "diagnostics/class/test/000.inspect", &fd));
-  ASSERT_GT(fd.get(), 0);
+  zx::result inspect_channel = device_watcher::RecursiveWaitForFileReadOnly(
+      devmgr().devfs_root().get(), "diagnostics/class/test/000.inspect");
+  ASSERT_OK(inspect_channel.status_value());
+  fbl::unique_fd fd;
+  zx_status_t status =
+      fdio_fd_create(inspect_channel.value().release(), fd.reset_and_get_address());
+  ASSERT_OK(status);
   zx_handle_t out_vmo = ZX_HANDLE_INVALID;
   ASSERT_OK(fdio_get_vmo_clone(fd.get(), &out_vmo));
   ASSERT_NE(out_vmo, ZX_HANDLE_INVALID);

@@ -128,20 +128,14 @@ zx_status_t IsolatedDevmgr::Create(Args* args, IsolatedDevmgr* out) {
     return status;
   }
 
-  fbl::unique_fd platform_fd;
-  if (zx_status_t status = device_watcher::RecursiveWaitForFile(
-          devmgr.devfs_root_, "sys/platform/pt/test-board", &platform_fd);
-      status != ZX_OK) {
-    return status;
+  zx::result channel =
+      device_watcher::RecursiveWaitForFile(devmgr.devfs_root_.get(), "sys/platform/pt/test-board");
+  if (channel.is_error()) {
+    return channel.status_value();
   }
 
-  zx::result client_end =
-      fdio_cpp::FdioCaller(std::move(platform_fd)).take_as<fuchsia_board_test::Board>();
-  if (client_end.is_error()) {
-    return client_end.error_value();
-  }
-
-  fidl::WireSyncClient client(std::move(*client_end));
+  fidl::ClientEnd<fuchsia_board_test::Board> client_end(std::move(channel.value()));
+  fidl::WireSyncClient client(std::move(client_end));
 
   for (auto& device : args->device_list) {
     std::vector<uint8_t> metadata(device.metadata, device.metadata + device.metadata_size);

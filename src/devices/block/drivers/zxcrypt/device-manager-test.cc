@@ -43,11 +43,16 @@ std::string GetInspectInstanceGuid(const zx::vmo& inspect_vmo) {
 }
 
 zx::vmo GetInspectVMOHandle(const fbl::unique_fd& devfs_root) {
+  zx::result channel = device_watcher::RecursiveWaitForFileReadOnly(
+      devfs_root.get(), "diagnostics/class/zxcrypt/000.inspect");
+  if (channel.is_error()) {
+    printf("Failed in wait for inspect file: %s\n", channel.status_string());
+    return zx::vmo();
+  }
   fbl::unique_fd fd;
-  if (zx_status_t status = device_watcher::RecursiveWaitForFileReadOnly(
-          devfs_root, "diagnostics/class/zxcrypt/000.inspect", &fd);
+  if (zx_status_t status = fdio_fd_create(channel.value().release(), fd.reset_and_get_address());
       status != ZX_OK) {
-    printf("Failed in wait for inspect file: %s\n", zx_status_get_string(status));
+    printf("Failed to create inspect file descriptor: %s\n", zx_status_get_string(status));
     return zx::vmo();
   }
   zx_handle_t out_vmo = ZX_HANDLE_INVALID;
@@ -63,9 +68,9 @@ TEST(ZxcryptInspect, ExportsGuid) {
   driver_integration_test::IsolatedDevmgr devmgr;
   driver_integration_test::IsolatedDevmgr::Args args;
   ASSERT_EQ(driver_integration_test::IsolatedDevmgr::Create(&args, &devmgr), ZX_OK);
-  fbl::unique_fd ctl;
-  ASSERT_EQ(device_watcher::RecursiveWaitForFile(devmgr.devfs_root(),
-                                                 "sys/platform/00:00:2d/ramctl", &ctl),
+  ASSERT_EQ(device_watcher::RecursiveWaitForFile(devmgr.devfs_root().get(),
+                                                 "sys/platform/00:00:2d/ramctl")
+                .status_value(),
             ZX_OK);
 
   fbl::unique_fd devfs_root_fd = devmgr.devfs_root().duplicate();
@@ -73,8 +78,9 @@ TEST(ZxcryptInspect, ExportsGuid) {
   // Create a new ramdisk to stick our zxcrypt instance on.
   ramdisk_client_t* ramdisk = nullptr;
   ASSERT_OK(ramdisk_create_at(devmgr.devfs_root().get(), kBlockSz, kBlockCnt, &ramdisk));
-  fbl::unique_fd ramdisk_ignored;
-  device_watcher::RecursiveWaitForFile(devfs_root_fd, ramdisk_get_path(ramdisk), &ramdisk_ignored);
+  zx::result channel =
+      device_watcher::RecursiveWaitForFile(devfs_root_fd.get(), ramdisk_get_path(ramdisk));
+  ASSERT_OK(channel.status_value());
   fbl::unique_fd ramdisk_fd;
   {
     // TODO(https://fxbug.dev/112484): this relies on multiplexing.

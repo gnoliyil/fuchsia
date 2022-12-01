@@ -26,6 +26,6 @@ TEST(NonbindableTest, DriversExist) {
     ASSERT_EQ(wire_result.status(), ZX_OK);
   }
 
-  fbl::unique_fd out;
-  ASSERT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile("/dev/sys/test/nonbindable/child", &out));
+  zx::result channel = device_watcher::RecursiveWaitForFile("/dev/sys/test/nonbindable/child");
+  ASSERT_EQ(channel.status_value(), ZX_OK);
 }

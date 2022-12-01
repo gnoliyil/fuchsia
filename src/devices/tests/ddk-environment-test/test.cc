@@ -29,11 +29,11 @@ class EnvironmentTest : public zxtest::Test {
 
     zx_status_t status = IsolatedDevmgr::Create(&args, &devmgr_);
     ASSERT_OK(status);
-    fbl::unique_fd fd;
-    ASSERT_OK(device_watcher::RecursiveWaitForFile(
-        devmgr_.devfs_root(), "sys/platform/11:14:0/ddk-environment-test", &fd));
-    ASSERT_GT(fd.get(), 0);
-    ASSERT_OK(fdio_get_service_handle(fd.release(), chan_.reset_and_get_address()));
+    zx::result channel = device_watcher::RecursiveWaitForFile(
+        devmgr_.devfs_root().get(), "sys/platform/11:14:0/ddk-environment-test");
+    ASSERT_OK(channel.status_value());
+
+    chan_ = std::move(channel.value());
     ASSERT_NE(chan_.get(), ZX_HANDLE_INVALID);
   }
 

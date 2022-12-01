@@ -43,14 +43,11 @@ class BindCompilerV2Test : public gtest::TestLoopFixture {
     ASSERT_EQ(status, ZX_OK);
 
     // Wait for /dev/sys/test/test to appear, then create an endpoint to it.
-    fbl::unique_fd out;
-    status = device_watcher::RecursiveWaitForFile(root_fd, "sys/test/test", &out);
-    ASSERT_EQ(status, ZX_OK);
+    zx::result channel = device_watcher::RecursiveWaitForFile(root_fd.get(), "sys/test/test");
+    ASSERT_EQ(channel.status_value(), ZX_OK);
 
-    zx::result root_device_client_end =
-        fdio_cpp::FdioCaller(std::move(out)).take_as<fuchsia_device_test::RootDevice>();
-    ASSERT_EQ(root_device_client_end.status_value(), ZX_OK);
-    fidl::WireSyncClient root_device{std::move(*root_device_client_end)};
+    fidl::ClientEnd<fuchsia_device_test::RootDevice> client_end(std::move(channel.value()));
+    fidl::WireSyncClient root_device{std::move(client_end)};
 
     auto endpoints = fidl::CreateEndpoints<fuchsia_device::Controller>();
     ASSERT_EQ(ZX_OK, endpoints.status_value());

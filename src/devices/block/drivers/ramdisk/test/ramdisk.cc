@@ -574,7 +574,7 @@ TEST(RamdiskTests, RamdiskTestFilesystem) {
 
   // Start watching for the block device removal.
   std::unique_ptr<device_watcher::DirWatcher> watcher;
-  ASSERT_EQ(device_watcher::DirWatcher::Create(fbl::unique_fd(dirfd(dir)), &watcher), ZX_OK);
+  ASSERT_EQ(device_watcher::DirWatcher::Create(dirfd(dir), &watcher), ZX_OK);
 
   ASSERT_NO_FATAL_FAILURE(ramdisk->Terminate());
 
