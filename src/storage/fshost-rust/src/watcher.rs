@@ -62,6 +62,7 @@ impl PathSource {
         &mut self,
         ignore_existing: bool,
     ) -> stream::BoxStream<'static, Box<dyn Device>> {
+        tracing::info!(path = %self.path, "watching for new devices");
         let is_nand = self.is_nand;
         Box::pin(
             watch(self.path).await.expect(&format!("failed to watch {}", self.path)).filter_map(
@@ -193,6 +194,7 @@ impl Watcher {
         // the watcher know to pause. `send` will wait until the event is removed from the channel
         // by the watcher loop, as long as the channel buffer is 0.
         self.pause_event_tx.send(PauseEvent::Pause).await?;
+        tracing::info!("block watcher paused");
         Ok(())
     }
 
@@ -217,6 +219,7 @@ impl Watcher {
         self.pause_event_tx
             .send(PauseEvent::Resume(Box::pin(block_and_nand_device_stream)))
             .await?;
+        tracing::info!("block watcher resumed");
         Ok(())
     }
 }

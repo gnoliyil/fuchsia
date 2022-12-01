@@ -116,7 +116,7 @@ impl<'a> Environment for FshostEnvironment<'a> {
         device: &mut dyn Device,
         driver_path: &str,
     ) -> Result<(), Error> {
-        tracing::info!(path = %device.topological_path(), %driver_path, "Binding driver to device");
+        tracing::info!(path = %device.path(), %driver_path, "Binding driver to device");
         let controller = ControllerProxy::new(device.proxy()?.into_channel().unwrap());
         controller.bind(driver_path).await?.map_err(zx::Status::from_raw)?;
         Ok(())
@@ -130,7 +130,7 @@ impl<'a> Environment for FshostEnvironment<'a> {
     async fn mount_blobfs(&mut self, device: &mut dyn Device) -> Result<(), Error> {
         let queue = self.blobfs.queue().ok_or(anyhow!("blobfs already mounted"))?;
 
-        tracing::info!(path = %device.topological_path(), "Mounting /blob");
+        tracing::info!(path = %device.path(), "Mounting /blob");
 
         // Setting max partition size for blobfs
         if let Err(e) = set_partition_max_size(device, self.config.blobfs_max_bytes).await {
@@ -185,7 +185,7 @@ impl<'a> FshostEnvironment<'a> {
     ) -> Result<Filesystem, Error> {
         let format = config.disk_format();
         tracing::info!(
-            path = %device.topological_path(),
+            path = %device.path(),
             expected_format = ?format,
             "Mounting /data"
         );

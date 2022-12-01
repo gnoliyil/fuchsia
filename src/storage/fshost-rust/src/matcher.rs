@@ -471,6 +471,9 @@ mod tests {
         fn topological_path(&self) -> &str {
             &self.topological_path
         }
+        fn path(&self) -> &str {
+            unreachable!()
+        }
         async fn partition_label(&mut self) -> Result<&str, Error> {
             Ok(self
                 .partition_label

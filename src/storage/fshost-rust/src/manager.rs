@@ -50,17 +50,18 @@ impl<E: Environment> Manager<E> {
 
             let content_format = device.content_format().await.unwrap_or(DiskFormat::Unknown);
             tracing::info!(
-                path = %device.topological_path(),
+                topological_path = %device.topological_path(),
+                path = %device.path(),
                 ?content_format,
                 "Matching device"
             );
 
             match self.matcher.match_device(device.as_mut(), &mut self.environment).await {
                 Ok(true) => {}
-                Ok(false) => tracing::info!(path = %device.topological_path(), "Ignored device"),
+                Ok(false) => tracing::info!(path = %device.path(), "Ignored device"),
                 Err(e) => {
                     tracing::error!(
-                        path = %device.topological_path(),
+                        path = %device.path(),
                         ?e,
                         "Failed to match device",
                     );

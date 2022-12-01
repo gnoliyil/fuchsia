@@ -32,6 +32,9 @@ pub trait Device: Send + Sync {
     /// Returns the topological path.
     fn topological_path(&self) -> &str;
 
+    /// Returns the path in /dev/class. This path is absolute and includes the /dev/class prefix.
+    fn path(&self) -> &str;
+
     /// If this device is a partition, this returns the label. Otherwise, an error is returned.
     async fn partition_label(&mut self) -> Result<&str, Error>;
 
@@ -101,6 +104,10 @@ impl Device for NandDevice {
         self.block_device.topological_path()
     }
 
+    fn path(&self) -> &str {
+        self.block_device.path()
+    }
+
     async fn partition_label(&mut self) -> Result<&str, Error> {
         self.block_device.partition_label().await
     }
@@ -166,11 +173,6 @@ impl BlockDevice {
             partition_instance: None,
         }
     }
-
-    #[allow(unused)]
-    pub fn path(&self) -> &str {
-        &self.path
-    }
 }
 
 #[async_trait]
@@ -194,6 +196,10 @@ impl Device for BlockDevice {
 
     fn topological_path(&self) -> &str {
         &self.topological_path
+    }
+
+    fn path(&self) -> &str {
+        &self.path
     }
 
     async fn partition_label(&mut self) -> Result<&str, Error> {

@@ -256,6 +256,7 @@ pub fn fshost_admin(config: &Arc<fshost_config::Config>) -> Arc<service::Service
             while let Some(request) = stream.next().await {
                 match request {
                     Ok(fshost::AdminRequest::Mount { responder, .. }) => {
+                        tracing::info!("admin mount called");
                         responder
                             .send(&mut Err(zx::Status::NOT_SUPPORTED.into_raw()))
                             .unwrap_or_else(|e| {
@@ -263,6 +264,7 @@ pub fn fshost_admin(config: &Arc<fshost_config::Config>) -> Arc<service::Service
                             });
                     }
                     Ok(fshost::AdminRequest::Unmount { responder, .. }) => {
+                        tracing::info!("admin unmount called");
                         responder
                             .send(&mut Err(zx::Status::NOT_SUPPORTED.into_raw()))
                             .unwrap_or_else(|e| {
@@ -270,6 +272,7 @@ pub fn fshost_admin(config: &Arc<fshost_config::Config>) -> Arc<service::Service
                             });
                     }
                     Ok(fshost::AdminRequest::GetDevicePath { responder, .. }) => {
+                        tracing::info!("admin get device path called");
                         responder
                             .send(&mut Err(zx::Status::NOT_SUPPORTED.into_raw()))
                             .unwrap_or_else(|e| {
@@ -280,6 +283,7 @@ pub fn fshost_admin(config: &Arc<fshost_config::Config>) -> Arc<service::Service
                             });
                     }
                     Ok(fshost::AdminRequest::WriteDataFile { responder, payload, filename }) => {
+                        tracing::info!(?filename, "admin write data file called");
                         let mut res = match write_data_file(&config, &filename, payload).await {
                             Ok(()) => Ok(()),
                             Err(e) => {
@@ -295,6 +299,7 @@ pub fn fshost_admin(config: &Arc<fshost_config::Config>) -> Arc<service::Service
                         });
                     }
                     Ok(fshost::AdminRequest::WipeStorage { responder, .. }) => {
+                        tracing::info!("admin wipe storage called");
                         responder
                             .send(&mut Err(zx::Status::NOT_SUPPORTED.into_raw()))
                             .unwrap_or_else(|e| {
