@@ -2,6 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/group_with_inputs.gni")
+
 # Defines a python library
 #
 # NOTE: Currently does NOT support depending on other python_libraries.
@@ -56,7 +58,7 @@ template("python_library") {
     library_deps = invoker.library_deps
   }
 
-  group(target_name) {
+  group_with_inputs(target_name) {
     forward_variables_from(invoker,
                            [
                              "testonly",
@@ -78,6 +80,7 @@ template("python_library") {
     if (defined(invoker.source_root)) {
       source_root = invoker.source_root
     }
+
     metadata = {
       library_info = [
         {
@@ -89,6 +92,20 @@ template("python_library") {
 
       # Collect library_info from any libraries that are needed.
       library_info_barrier = library_deps
+    }
+
+    # Add the sources from the invoker
+    if (defined(invoker.sources)) {
+      if (source_root == ".") {
+        # use the directory of the current target to locate the files
+        _source_root = get_label_info(":$target_name", "dir")
+      } else {
+        _source_root = source_root
+      }
+      sources = []
+      foreach(source, invoker.sources) {
+        sources += [ _source_root + "/" + source ]
+      }
     }
   }
 }

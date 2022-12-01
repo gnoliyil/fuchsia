@@ -51,7 +51,8 @@ template("group_with_inputs") {
                              "visibility",
                            ])
 
-    assert(defined(inputs), "Must provide inputs to manifests.")
+    assert(defined(inputs) || defined(sources),
+           "Must provide inputs or sources.")
     assert(defined(deps) || defined(public_deps),
            "Must provide deps or public_deps.")
 
