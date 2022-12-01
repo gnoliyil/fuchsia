@@ -150,14 +150,15 @@ bool Mutex::AcquireCommon(zx_duration_t spin_max_duration,
   const uintptr_t new_mutex_state = reinterpret_cast<uintptr_t>(current_thread);
 
   {
-    // Make sure that we don't leave this scope with preemption disabled.
-    AutoPreemptDisabler preempt_disabler(AutoPreemptDisabler::Defer);
+    // Record whether we set a timeslice extension for later return/rollback. Is marked unused for
+    // when there is no timeslice extension.
+    bool set_extension = false;
     if constexpr (TimesliceExtensionEnabled) {
-      // We've got a timeslice extension that we need to install after we've
-      // acquired the mutex.  However, to avoid the (small) risk of getting
-      // preempted after acquiring the mutex, but before we've installed the
-      // timeslice extension, disable preemption.
-      preempt_disabler.Disable();
+      // To ensure there is no gap between acquiring the mutex, and setting the timeslice extension,
+      // we optimistically set the timeslice extension first. Should acquiring the mutex fail we
+      // will roll it back.
+      set_extension =
+          current_thread->preemption_state().SetTimesliceExtension(timeslice_extension.value);
     }
 
     // Fast path: The mutex is unlocked and uncontested. Try to acquire it immediately.
@@ -179,10 +180,12 @@ bool Mutex::AcquireCommon(zx_duration_t spin_max_duration,
       // the thread_lock.
       KTracer{}.KernelMutexUncontestedAcquire(this);
 
-      if constexpr (TimesliceExtensionEnabled) {
-        return Thread::Current::preemption_state().SetTimesliceExtension(timeslice_extension.value);
+      return set_extension;
+    }
+    if constexpr (TimesliceExtensionEnabled) {
+      if (set_extension) {
+        current_thread->preemption_state().ClearTimesliceExtension();
       }
-      return false;
     }
   }
 
