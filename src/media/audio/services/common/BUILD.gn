@@ -25,6 +25,8 @@ source_set("common") {
     "fidl_thread.h",
     "logging.cc",
     "logging.h",
+    "memory_mapped_buffer.cc",
+    "memory_mapped_buffer.h",
     "thread_checker.h",
   ]
 
@@ -38,6 +40,7 @@ source_set("common") {
     "//zircon/system/ulib/async-loop:async-loop-default",
     "//zircon/system/ulib/async-loop/testing:async-loop-testing",
     "//zircon/system/ulib/ffl",
+    "//zircon/system/ulib/fzl",
     "//zircon/system/ulib/sync:sync-cpp",
     "//zircon/system/ulib/trace",
     "//zircon/system/ulib/zircon-internal",
@@ -54,6 +57,7 @@ executable("common_unittests") {
     "delay_watcher_client_unittest.cc",
     "delay_watcher_server_unittest.cc",
     "fidl_thread_unittest.cc",
+    "memory_mapped_buffer_unittest.cc",
   ]
 
   deps = [

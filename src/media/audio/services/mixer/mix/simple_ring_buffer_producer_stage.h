@@ -13,7 +13,7 @@
 
 #include "src/media/audio/lib/format2/fixed.h"
 #include "src/media/audio/lib/format2/format.h"
-#include "src/media/audio/services/mixer/common/memory_mapped_buffer.h"
+#include "src/media/audio/services/common/memory_mapped_buffer.h"
 #include "src/media/audio/services/mixer/mix/mix_job_context.h"
 #include "src/media/audio/services/mixer/mix/pipeline_stage.h"
 #include "src/media/audio/services/mixer/mix/ptr_decls.h"

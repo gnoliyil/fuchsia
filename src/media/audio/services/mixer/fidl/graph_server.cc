@@ -24,7 +24,7 @@
 #include "src/media/audio/services/common/delay_watcher_client.h"
 #include "src/media/audio/services/common/delay_watcher_server.h"
 #include "src/media/audio/services/common/logging.h"
-#include "src/media/audio/services/mixer/common/memory_mapped_buffer.h"
+#include "src/media/audio/services/common/memory_mapped_buffer.h"
 #include "src/media/audio/services/mixer/fidl/consumer_node.h"
 #include "src/media/audio/services/mixer/fidl/custom_node.h"
 #include "src/media/audio/services/mixer/fidl/gain_control_server.h"

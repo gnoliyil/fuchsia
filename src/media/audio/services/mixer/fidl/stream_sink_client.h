@@ -14,7 +14,7 @@
 #include <memory>
 
 #include "src/media/audio/services/common/fidl_thread.h"
-#include "src/media/audio/services/mixer/common/memory_mapped_buffer.h"
+#include "src/media/audio/services/common/memory_mapped_buffer.h"
 #include "src/media/audio/services/mixer/mix/stream_sink_consumer_writer.h"
 
 namespace media_audio {

@@ -12,7 +12,7 @@
 #include <optional>
 
 #include "src/media/audio/lib/format2/stream_converter.h"
-#include "src/media/audio/services/mixer/common/memory_mapped_buffer.h"
+#include "src/media/audio/services/common/memory_mapped_buffer.h"
 #include "src/media/audio/services/mixer/mix/consumer_stage.h"
 #include "src/media/audio/services/mixer/mix/ring_buffer.h"
 

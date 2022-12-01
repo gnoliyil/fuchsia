@@ -9,7 +9,7 @@
 
 #include "src/media/audio/lib/clock/real_clock.h"
 #include "src/media/audio/lib/clock/synthetic_clock_realm.h"
-#include "src/media/audio/services/mixer/common/memory_mapped_buffer.h"
+#include "src/media/audio/services/common/memory_mapped_buffer.h"
 #include "src/media/audio/services/mixer/fidl/consumer_node.h"
 #include "src/media/audio/services/mixer/fidl/testing/fake_graph.h"
 #include "src/media/audio/services/mixer/fidl/testing/graph_mix_thread_without_loop.h"

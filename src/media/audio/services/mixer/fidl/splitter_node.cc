@@ -10,7 +10,7 @@
 #include <fbl/algorithm.h>
 
 #include "src/media/audio/services/common/logging.h"
-#include "src/media/audio/services/mixer/common/memory_mapped_buffer.h"
+#include "src/media/audio/services/common/memory_mapped_buffer.h"
 #include "src/media/audio/services/mixer/fidl/ptr_decls.h"
 
 namespace media_audio {
