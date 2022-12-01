@@ -35,14 +35,7 @@ On Fuchsia, the UI may be composed of multiple Scenic views and the
 accessibility framework tracks a separate semantic tree for each view on
 screen. This diagram shows an example UI with multiple semantic trees.
 
-![This figure shows the hierarchy of a Fuchsia UI from Scenic's perspective
-only.
-
-At the top are the many views that Scenic manages.  Each view is linked to a
-runtime displaying some UI, including both Flutter and Chromium runtimes.
-
-Each Flutter and Chromium runtime maintains within itself a semantic hierarchy
-that would be supplied to the Accessibility Manager.](scenic_semantics.png)
+![This figure shows the hierarchy of a Fuchsia UI from Scenic's perspective only. At the top are the many views that Scenic manages. Each view is linked to a runtime displaying some UI, including both Flutter and Chromium runtimes. Each Flutter and Chromium runtime maintains within itself a semantic hierarchy that would be supplied to the Accessibility Manager.](scenic_semantics.png)
 
 Internally, both Flutter and Chromium have the ability to produce semantic trees
 for UI they are rendering. The Fuchsia [accessibility
