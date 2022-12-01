@@ -270,7 +270,7 @@ Update the driver's build configuration to include the new source files:
 Use the `bazel run` command to build and execute the component target:
 
 ```posix-terminal
-bazel run --config=fuchsia_x64 //fuchsia-codelab/qemu_edu/drivers:pkg.component
+bazel run //fuchsia-codelab/qemu_edu/drivers:pkg.component
 ```
 
 The `bazel run` command rebuilds the package and runs `ffx driver register` to

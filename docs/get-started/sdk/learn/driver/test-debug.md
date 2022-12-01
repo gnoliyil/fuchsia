@@ -98,7 +98,7 @@ Created Breakpoint 1 @ QemuEduServer::ComputeFactorial
 In a separate terminal, run the `eductl` tool again:
 
 ```posix-terminal
-bazel run --config=fuchsia_x64 //fuchsia-codelab/qemu_edu/tools:pkg.eductl_tool -- fact 12
+bazel run //fuchsia-codelab/qemu_edu/tools:pkg.eductl_tool -- fact 12
 ```
 
 In the `zxdb` terminal, verify that the debugger has hit the breakpoint in the driver's
@@ -245,7 +245,7 @@ test component into a Fuchsia test package:
 Use the `bazel run` command to build and execute the test component target:
 
 ```posix-terminal
-bazel run --config=fuchsia_x64 //fuchsia-codelab/qemu_edu/tests:pkg.component
+bazel run //fuchsia-codelab/qemu_edu/tests:pkg.component
 ```
 
 The `bazel run` command performs the following steps:

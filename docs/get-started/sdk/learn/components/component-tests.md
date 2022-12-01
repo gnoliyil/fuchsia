@@ -154,7 +154,7 @@ fuchsia-pkg://fuchsiasamples.com/echo_unittests#meta/echo_unittests.cm
 Build and publish the test package to the `fuchsiasamples.com` repository:
 
 ```posix-terminal
-bazel run --config=fuchsia_x64 //fuchsia-codelab/echo:test_pkg.publish -- \
+bazel run //fuchsia-codelab/echo:test_pkg.publish -- \
     --repo_name fuchsiasamples.com
 ```
 

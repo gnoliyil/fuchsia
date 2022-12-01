@@ -199,7 +199,7 @@ to build the driver component into a Fuchsia package:
 Use the `bazel run` command to build and execute the component target:
 
 ```posix-terminal
-bazel run --config=fuchsia_x64 //fuchsia-codelab/qemu_edu/drivers:pkg.component
+bazel run //fuchsia-codelab/qemu_edu/drivers:pkg.component
 ```
 
 The `bazel run` command performs the following steps:

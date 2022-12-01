@@ -126,7 +126,7 @@ Update the tool's build configuration to depend on the FIDL bindings for the
 Use the `bazel run` command to build and execute the driver component target:
 
 ```posix-terminal
-bazel run --config=fuchsia_x64 //fuchsia-codelab/qemu_edu/drivers:pkg.component
+bazel run //fuchsia-codelab/qemu_edu/drivers:pkg.component
 ```
 
 ## Run the tool
@@ -135,7 +135,7 @@ Use the `bazel run` command to build and execute the tool, passing the arguments
 `fact 12` to compute the factorial of 12:
 
 ```posix-terminal
-bazel run --config=fuchsia_x64 //fuchsia-codelab/qemu_edu/tools:pkg.eductl_tool -- fact 12
+bazel run //fuchsia-codelab/qemu_edu/tools:pkg.eductl_tool -- fact 12
 ```
 
 The `bazel run` command performs the following steps:

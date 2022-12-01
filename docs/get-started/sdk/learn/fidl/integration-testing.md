@@ -201,7 +201,7 @@ Build and publish the integration test package to the `fuchsiasamples.com`
 repository:
 
 ```posix-terminal
-bazel run --config=fuchsia_x64 //fuchsia-codelab/echo-integration:test_pkg.publish -- \
+bazel run //fuchsia-codelab/echo-integration:test_pkg.publish -- \
     --repo_name fuchsiasamples.com
 ```
 

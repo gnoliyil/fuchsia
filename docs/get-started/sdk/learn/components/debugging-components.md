@@ -131,7 +131,7 @@ int main(int argc, const char* argv[], char* envp[]) {
 Build and publish the updated package to the `fuchsiasamples.com` repository:
 
 ```posix-terminal
-bazel run --config=fuchsia_x64 //fuchsia-codelab/echo:pkg.publish -- \
+bazel run //fuchsia-codelab/echo:pkg.publish -- \
     --repo_name fuchsiasamples.com
 ```
 

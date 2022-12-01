@@ -319,7 +319,7 @@ Fuchsia package containing the server and client:
 Build and publish the package to the `fuchsiasamples.com` repository:
 
 ```posix-terminal
-bazel run --config=fuchsia_x64 //fuchsia-codelab/echo-realm:pkg.publish -- \
+bazel run //fuchsia-codelab/echo-realm:pkg.publish -- \
     --repo_name fuchsiasamples.com
 ```
 

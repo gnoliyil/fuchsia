@@ -217,7 +217,7 @@ Use the `bazel build` command to verify that the driver builds successfully with
 your code changes:
 
 ```posix-terminal
-bazel build --config=fuchsia_x64 //fuchsia-codelab/qemu_edu/drivers:pkg
+bazel build //fuchsia-codelab/qemu_edu/drivers:pkg
 ```
 
 Congratulations! You've successfully exposed FIDL services from a Fuchsia driver.

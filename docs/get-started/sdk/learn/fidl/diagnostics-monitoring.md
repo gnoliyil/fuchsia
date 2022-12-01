@@ -152,7 +152,7 @@ Finally, update the imports to include the new Inspect libraries:
 Build and publish the updated package to the `fuchsiasamples.com` repository:
 
 ```posix-terminal
-bazel run --config=fuchsia_x64 //fuchsia-codelab/echo-realm:pkg.publish -- \
+bazel run //fuchsia-codelab/echo-realm:pkg.publish -- \
     --repo_name fuchsiasamples.com
 ```
 

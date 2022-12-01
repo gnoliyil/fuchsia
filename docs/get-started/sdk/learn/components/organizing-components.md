@@ -26,7 +26,7 @@ that Fuchsia devices resolve software packages on demand from a package reposito
 Use the `bazel run` command to build and publish the `echo` component package:
 
 ```posix-terminal
-bazel run --config=fuchsia_x64 //fuchsia-codelab/echo:pkg.publish -- \
+bazel run //fuchsia-codelab/echo:pkg.publish -- \
     --repo_name fuchsiasamples.com
 ```
 
