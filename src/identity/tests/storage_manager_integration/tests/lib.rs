@@ -6,4 +6,5 @@
 #![allow(clippy::expect_fun_call)]
 #![cfg(test)]
 
+mod fxfs;
 mod storage_manager;
