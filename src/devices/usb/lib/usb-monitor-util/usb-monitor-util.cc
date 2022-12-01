@@ -2,11 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "src/devices/usb/lib/usb-monitor-util/include/usb-monitor-util/usb-monitor-util.h"
+
 #include <fuchsia/hardware/usb/request/c/banjo.h>
 #include <lib/trace/event.h>
 
 #include <fbl/auto_lock.h>
-#include <usb-monitor-util/usb-monitor-util.h>
 #include <usb/usb.h>
 
 void USBMonitor::Start() {
