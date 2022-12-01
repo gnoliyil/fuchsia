@@ -267,6 +267,20 @@ TEST_P(MaxFileTest, ReadAfterNonContiguousWritesSuceeds) {
   ASSERT_EQ(close(fdb.release()), 0);
 }
 
+TEST_P(MaxFileTest, PartialWriteWhenFull) {
+  fbl::unique_fd fd(open(GetPath("bigfile").c_str(), O_CREAT | O_RDWR, 0644));
+  ASSERT_TRUE(fd);
+  const TestFilesystemOptions& options = fs().options();
+  auto size = options.device_block_size * options.device_block_count * 2;
+  auto buf = std::make_unique<uint8_t[]>(size);
+
+  // We should be able to write something.
+  ssize_t result = write(fd.get(), buf.get(), size);
+  EXPECT_NE(result, -1) << errno;
+  EXPECT_NE(result, 0);
+  printf("wrote: %zd\n", result);
+}
+
 std::string GetParamDescription(const testing::TestParamInfo<ParamType>& param) {
   std::stringstream s;
   s << std::get<0>(param.param) << (std::get<1>(param.param) ? "WithRemount" : "WithoutRemount");
