@@ -3,42 +3,46 @@
 // found in the LICENSE file.
 
 #include <fuchsia/wlan/common/cpp/fidl.h>
-#include <lib/async-loop/cpp/loop.h>
-#include <lib/async-loop/default.h>
+#include <lib/sync/cpp/completion.h>
 
-#include <gtest/gtest.h>
+#include <zxtest/zxtest.h>
 
 #include "src/connectivity/wlan/drivers/wlanphy/device.h"
-#include "src/connectivity/wlan/drivers/wlanphy/driver.h"
 
 namespace wlanphy {
 namespace {
 
-class WlanphyDeviceTest : public ::testing::Test {
+class WlanphyDeviceTest : public ::zxtest::Test {
  public:
-  WlanphyDeviceTest() : client_loop_(async::Loop(&kAsyncLoopConfigNoAttachToCurrentThread)) {
-    zx_status_t status = ZX_OK;
-
-    status = client_loop_.StartThread("fake-wlandevicemonitor-loop");
-    // There is a return value in ASSERT_EQ(), cannot apply here.
-    EXPECT_EQ(ZX_OK, status);
-
-    client_dispatcher_ = client_loop_.dispatcher();
-
+  WlanphyDeviceTest() {
     void* dummy_ctx_ = nullptr;
-    wlanphy_init(&dummy_ctx_);
     fake_wlanphy_impl_protocol_.ctx = dummy_ctx_;
-  }
 
-  void ConnectToWlanphyDevice() {
     auto endpoints = fidl::CreateEndpoints<fuchsia_wlan_device::Phy>();
     ASSERT_FALSE(endpoints.is_error());
-
-    client_ = fidl::WireSharedClient<fuchsia_wlan_device::Phy>(std::move(endpoints->client),
-                                                               client_dispatcher_);
+    client_ = fidl::WireSyncClient<fuchsia_wlan_device::Phy>(std::move(endpoints->client));
 
     wlanphy_device_ = std::make_unique<Device>(nullptr, fake_wlanphy_impl_protocol_);
-    wlanphy_device_->Connect(std::move(endpoints->server));
+
+    auto driver_dispatcher =
+        fdf::Dispatcher::Create(0, "wlanphy-test-driver-dispatcher",
+                                [&](fdf_dispatcher_t*) { driver_dispatcher_completion_.Signal(); });
+    ASSERT_FALSE(driver_dispatcher.is_error());
+    driver_dispatcher_ = *std::move(driver_dispatcher);
+
+    // `Device::Connect` must be called from an fdf dispatcher because the
+    // function will try to get the current fdf dispatcher of the caller.
+    libsync::Completion connected;
+    async::PostTask(driver_dispatcher_.async_dispatcher(), [&]() {
+      wlanphy_device_->Connect(std::move(endpoints->server));
+      connected.Signal();
+    });
+    connected.Wait();
+  }
+
+  ~WlanphyDeviceTest() {
+    driver_dispatcher_.ShutdownAsync();
+    driver_dispatcher_completion_.Wait();
   }
 
   wlanphy_impl_protocol_ops_t fake_wlanphy_impl_protocol_ops_ = {
@@ -70,24 +74,20 @@ class WlanphyDeviceTest : public ::testing::Test {
 
  protected:
   // The FIDL client to communicate with wlanphy device.
-  fidl::WireSharedClient<fuchsia_wlan_device::Phy> client_;
+  fidl::WireSyncClient<fuchsia_wlan_device::Phy> client_;
 
   void* dummy_ctx_;
 
  private:
-  async::Loop client_loop_;
-
-  // Dispatcher for the FIDL client sending requests to wlanphy device.
-  async_dispatcher_t* client_dispatcher_;
-
   std::unique_ptr<Device> wlanphy_device_;
+  fdf::Dispatcher driver_dispatcher_;
+  libsync::Completion driver_dispatcher_completion_;
 };
 
 static constexpr uint16_t kFakeIfaceId = 3;
 static constexpr uint8_t kFakeMacAddr[fuchsia_wlan_ieee80211::wire::kMacAddrLen] = {2, 2, 3,
                                                                                     3, 4, 5};
 TEST_F(WlanphyDeviceTest, GetSupportedMacRolesTest) {
-  ConnectToWlanphyDevice();
   fake_wlanphy_impl_protocol_ops_.get_supported_mac_roles =
       [](void* ctx,
          wlan_mac_role_t supported_mac_roles_list[fuchsia_wlan_common_MAX_SUPPORTED_MAC_ROLES],
@@ -98,7 +98,7 @@ TEST_F(WlanphyDeviceTest, GetSupportedMacRolesTest) {
     return ZX_OK;
   };
 
-  auto result = client_.sync()->GetSupportedMacRoles();
+  auto result = client_->GetSupportedMacRoles();
   ASSERT_TRUE(result.ok());
 
   EXPECT_EQ(2U, result->value()->supported_mac_roles.count());
@@ -109,8 +109,6 @@ TEST_F(WlanphyDeviceTest, GetSupportedMacRolesTest) {
 }
 
 TEST_F(WlanphyDeviceTest, CreateIfaceRequestConvertTest) {
-  ConnectToWlanphyDevice();
-
   auto dummy_ends = fidl::CreateEndpoints<fuchsia_wlan_device::Phy>();
   auto dummy_channel = dummy_ends->server.TakeChannel();
   {
@@ -125,8 +123,8 @@ TEST_F(WlanphyDeviceTest, CreateIfaceRequestConvertTest) {
     };
 
     fake_wlanphy_impl_protocol_ops_.create_iface = [](void* ctx,
-                                                       const wlanphy_impl_create_iface_req_t* req,
-                                                       uint16_t* out_iface_id) -> zx_status_t {
+                                                      const wlanphy_impl_create_iface_req_t* req,
+                                                      uint16_t* out_iface_id) -> zx_status_t {
       EXPECT_EQ(WLAN_MAC_ROLE_AP, req->role);
       EXPECT_TRUE(req->has_init_sta_addr);
       EXPECT_EQ(0, memcmp(&kFakeMacAddr[0], &req->init_sta_addr[0],
@@ -135,7 +133,7 @@ TEST_F(WlanphyDeviceTest, CreateIfaceRequestConvertTest) {
       return ZX_OK;
     };
 
-    auto result = client_.sync()->CreateIface(std::move(req_in));
+    auto result = client_->CreateIface(std::move(req_in));
     ASSERT_TRUE(result.ok());
     EXPECT_EQ(kFakeIfaceId, result->value()->iface_id);
   }
@@ -152,20 +150,19 @@ TEST_F(WlanphyDeviceTest, CreateIfaceRequestConvertTest) {
     };
 
     fake_wlanphy_impl_protocol_ops_.create_iface = [](void* ctx,
-                                                       const wlanphy_impl_create_iface_req_t* req,
-                                                       uint16_t* out_iface_id) -> zx_status_t {
+                                                      const wlanphy_impl_create_iface_req_t* req,
+                                                      uint16_t* out_iface_id) -> zx_status_t {
       EXPECT_EQ(WLAN_MAC_ROLE_AP, req->role);
       EXPECT_FALSE(req->has_init_sta_addr);
       return ZX_OK;
     };
 
-    auto result = client_.sync()->CreateIface(std::move(req_in));
+    auto result = client_->CreateIface(std::move(req_in));
     ASSERT_TRUE(result.ok());
   }
 }
 
 TEST_F(WlanphyDeviceTest, DestroyIfaceTest) {
-  ConnectToWlanphyDevice();
   fuchsia_wlan_device::wire::DestroyIfaceRequest req_in = {
       .id = kFakeIfaceId,
   };
@@ -174,12 +171,11 @@ TEST_F(WlanphyDeviceTest, DestroyIfaceTest) {
     EXPECT_EQ(kFakeIfaceId, id);
     return ZX_OK;
   };
-  auto result = client_.sync()->DestroyIface(std::move(req_in));
+  auto result = client_->DestroyIface(std::move(req_in));
   ASSERT_TRUE(result.ok());
 }
 
 TEST_F(WlanphyDeviceTest, SetCountryTest) {
-  ConnectToWlanphyDevice();
   fuchsia_wlan_device::wire::CountryCode cc_in = {
       .alpha2 =
           {
@@ -193,7 +189,7 @@ TEST_F(WlanphyDeviceTest, SetCountryTest) {
     return ZX_OK;
   };
 
-  auto result = client_.sync()->SetCountry(std::move(cc_in));
+  auto result = client_->SetCountry(std::move(cc_in));
   ASSERT_TRUE(result.ok());
 }
 
@@ -203,8 +199,7 @@ TEST_F(WlanphyDeviceTest, GetCountryConvertsPrintableAndReturnsSuccess) {
     return ZX_OK;
   };
 
-  ConnectToWlanphyDevice();
-  auto result = client_.sync()->GetCountry();
+  auto result = client_->GetCountry();
   ASSERT_TRUE(result.ok());
 
   EXPECT_EQ('U', result->value()->resp.alpha2.data()[0]);
@@ -217,8 +212,7 @@ TEST_F(WlanphyDeviceTest, GetCountryConvertsNonPrintableAndReturnSuccess) {
     return ZX_OK;
   };
 
-  ConnectToWlanphyDevice();
-  auto result = client_.sync()->GetCountry();
+  auto result = client_->GetCountry();
   ASSERT_TRUE(result.ok());
 
   EXPECT_EQ(0x00, result->value()->resp.alpha2.data()[0]);
@@ -226,15 +220,13 @@ TEST_F(WlanphyDeviceTest, GetCountryConvertsNonPrintableAndReturnSuccess) {
 }
 
 TEST_F(WlanphyDeviceTest, ClearCountryTest) {
-  ConnectToWlanphyDevice();
   fake_wlanphy_impl_protocol_ops_.clear_country = [](void* ctx) -> zx_status_t { return ZX_OK; };
 
-  auto result = client_.sync()->ClearCountry();
+  auto result = client_->ClearCountry();
   ASSERT_TRUE(result.ok());
 }
 
 TEST_F(WlanphyDeviceTest, SetPsModeTest) {
-  ConnectToWlanphyDevice();
   fuchsia_wlan_common::wire::PowerSaveType ps_mode_in =
       fuchsia_wlan_common::wire::PowerSaveType::kPsModeLowPower;
 
@@ -243,7 +235,7 @@ TEST_F(WlanphyDeviceTest, SetPsModeTest) {
     EXPECT_EQ(POWER_SAVE_TYPE_PS_MODE_LOW_POWER, ps_mode->ps_mode);
     return ZX_OK;
   };
-  auto result = client_.sync()->SetPsMode(std::move(ps_mode_in));
+  auto result = client_->SetPsMode(std::move(ps_mode_in));
   ASSERT_TRUE(result.ok());
 }
 
@@ -253,8 +245,7 @@ TEST_F(WlanphyDeviceTest, GetPsModeReturnsSuccess) {
     return ZX_OK;
   };
 
-  ConnectToWlanphyDevice();
-  auto result = client_.sync()->GetPsMode();
+  auto result = client_->GetPsMode();
   ASSERT_TRUE(result.ok());
 
   EXPECT_EQ(fuchsia_wlan_common::wire::PowerSaveType::kPsModeBalanced, result->value()->resp);

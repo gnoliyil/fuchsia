@@ -50,9 +50,6 @@ class Device : public fidl::WireServer<fuchsia_wlan_device::Phy> {
 
   wlanphy_impl_protocol_t wlanphy_impl_;
 
-  // Dispatcher for being a FIDL server listening MLME requests.
-  async_dispatcher_t* server_dispatcher_;
-
   friend class DeviceConnector;
   friend class WlanphyConvertTest;
 };

@@ -19,7 +19,6 @@ async_dispatcher_t* wlanphy_async_t();
 void wlanphy_destroy_loop();
 // Callbacks for wlanphy_driver_ops
 __BEGIN_CDECLS
-zx_status_t wlanphy_init(void** out_ctx);
 zx_status_t wlanphy_bind(void* ctx, zx_device_t* device);
 __END_CDECLS
 

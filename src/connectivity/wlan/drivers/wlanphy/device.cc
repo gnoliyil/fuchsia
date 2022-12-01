@@ -38,7 +38,7 @@ class DeviceConnector : public fidl::WireServer<fuchsia_wlan_device::Connector> 
 };
 
 Device::Device(zx_device_t* device, wlanphy_impl_protocol_t wlanphy_impl_proto)
-    : parent_(device), wlanphy_impl_(wlanphy_impl_proto), server_dispatcher_(wlanphy_async_t()) {
+    : parent_(device), wlanphy_impl_(wlanphy_impl_proto) {
   ltrace_fn();
   // Assert minimum required functionality from the wlanphy_impl driver
   ZX_ASSERT(wlanphy_impl_.ops != nullptr && wlanphy_impl_.ops->get_supported_mac_roles != nullptr &&
@@ -61,7 +61,7 @@ static zx_protocol_device_t wlanphy_device_ops = {
 
 zx_status_t Device::Connect(fidl::ServerEnd<fuchsia_wlan_device::Phy> server_end) {
   ltrace_fn();
-  fidl::BindServer(server_dispatcher_, std::move(server_end), this);
+  fidl::BindServer(fdf::Dispatcher::GetCurrent()->async_dispatcher(), std::move(server_end), this);
   return ZX_OK;
 }
 
@@ -99,7 +99,6 @@ void Device::Release() {
 
 void Device::Unbind() {
   ltrace_fn();
-  wlanphy_destroy_loop();
   device_unbind_reply(zxdev_);
 }
 
