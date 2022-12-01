@@ -381,12 +381,14 @@ impl FxFilesystem {
         filesystem.journal.set_trace(filesystem.trace);
         filesystem.root_store().set_trace(filesystem.trace);
         if !read_only {
-            // Start the async reaper.
-            filesystem.graveyard.clone().reap_async();
-            // Purge old entries.
+            // Queue all purged entries for tombstoning.  Don't start the reaper yet because that
+            // can trigger a flush which can add more entries to the graveyard which might get
+            // caught in the initial reap and cause objects to be prematurely tombstoned.
             for store in objects.unlocked_stores() {
                 filesystem.graveyard.initial_reap(&store).await?;
             }
+            // Now start the async reaper.
+            filesystem.graveyard.clone().reap_async();
         }
         filesystem.closed.store(false, atomic::Ordering::SeqCst);
         Ok(filesystem.into())

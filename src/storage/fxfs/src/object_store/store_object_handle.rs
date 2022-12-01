@@ -807,7 +807,7 @@ impl<S: AsRef<ObjectStore> + Send + Sync + 'static> StoreObjectHandle<S> {
                     anyhow!(FxfsError::Inconsistent).context("Allocated size underflow")
                 })?;
         } else {
-            panic!("Unexpceted object value");
+            panic!("Unexpected object value");
         }
         transaction.add(self.store().store_object_id, Mutation::ObjectStore(mutation));
         Ok(())
