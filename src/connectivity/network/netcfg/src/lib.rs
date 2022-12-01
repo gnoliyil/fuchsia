@@ -1463,7 +1463,12 @@ impl<'a> NetCfg<'a> {
             ) {
                 Ok(name) => name.to_string(),
                 Err(interface::NameGenerationError::FileUpdateError { name, err }) => {
-                    warn!("failed to update interface (topo path = {}, mac = {}, interface_type = {:?}) with new name = {}: {}", topological_path, mac, interface_type, name, err);
+                    warn!(
+                        "failed to update interface \
+                            (topo path = {}, mac = {}, interface_type = {:?}) \
+                            with new name = {}: {}",
+                        topological_path, mac, interface_type, name, err
+                    );
                     name.to_string()
                 }
                 Err(interface::NameGenerationError::GenerationError(e)) => {
@@ -1539,17 +1544,24 @@ impl<'a> NetCfg<'a> {
                     None
                 }
             }) {
-                return Err(errors::Error::NonFatal(anyhow::anyhow!("multiple WLAN AP interfaces are not supported, have WLAN AP interface with id = {}", id)));
+                return Err(errors::Error::NonFatal(anyhow::anyhow!(
+                    "multiple WLAN AP interfaces are not supported, \
+                        have WLAN AP interface with id = {}",
+                    id
+                )));
             }
-            let InterfaceState { control, config: _ } = match self
-                .interface_states
-                .entry(interface_id)
-            {
-                Entry::Occupied(entry) => {
-                    return Err(errors::Error::Fatal(anyhow::anyhow!("multiple interfaces with the same ID = {}; attempting to add state for a WLAN AP, existing state = {:?}", entry.key(), entry.get())));
-                }
-                Entry::Vacant(entry) => entry.insert(InterfaceState::new_wlan_ap(control)),
-            };
+            let InterfaceState { control, config: _ } =
+                match self.interface_states.entry(interface_id) {
+                    Entry::Occupied(entry) => {
+                        return Err(errors::Error::Fatal(anyhow::anyhow!(
+                            "multiple interfaces with the same ID = {}; \
+                                attempting to add state for a WLAN AP, existing state = {:?}",
+                            entry.key(),
+                            entry.get()
+                        )));
+                    }
+                    Entry::Vacant(entry) => entry.insert(InterfaceState::new_wlan_ap(control)),
+                };
 
             info!("discovered WLAN AP (interface ID={})", interface_id);
 
@@ -1565,18 +1577,25 @@ impl<'a> NetCfg<'a> {
                 .await
                 .context("error configuring wlan ap and dhcp server")?;
             } else {
-                warn!("cannot configure DHCP server for WLAN AP (interface ID={}) since DHCP server service is not available", interface_id);
+                warn!(
+                    "cannot configure DHCP server for WLAN AP (interface ID={}) \
+                        since DHCP server service is not available",
+                    interface_id
+                );
             }
         } else {
-            let InterfaceState { control, config: _ } = match self
-                .interface_states
-                .entry(interface_id)
-            {
-                Entry::Occupied(entry) => {
-                    return Err(errors::Error::Fatal(anyhow::anyhow!("multiple interfaces with the same ID = {}; attempting to add state for a host, existing state = {:?}", entry.key(), entry.get())));
-                }
-                Entry::Vacant(entry) => entry.insert(InterfaceState::new_host(control)),
-            };
+            let InterfaceState { control, config: _ } =
+                match self.interface_states.entry(interface_id) {
+                    Entry::Occupied(entry) => {
+                        return Err(errors::Error::Fatal(anyhow::anyhow!(
+                            "multiple interfaces with the same ID = {}; \
+                                attempting to add state for a host, existing state = {:?}",
+                            entry.key(),
+                            entry.get()
+                        )));
+                    }
+                    Entry::Vacant(entry) => entry.insert(InterfaceState::new_host(control)),
+                };
 
             info!("discovered host interface with id={}, configuring interface", interface_id);
 
