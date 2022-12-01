@@ -90,7 +90,7 @@ constexpr int64_t kFreqTestBufSize = 65536;
 // When testing fidelity, we compare actual measured dB to expected dB. These tests are designed
 // to pass if 'actual >= expected', OR less but within the following tolerance. This tolerance
 // also sets the digits of precision for 'expected' values, when stored or displayed.
-constexpr double kFidelityDbTolerance = 0.001;
+constexpr double kFidelityDbTolerance = 0.01;
 // If kDisplayAnalysisDataOnFailureDbTolerance, display freq bins with magnitude >= this val.
 constexpr double kMinAnalysisMagnitudeToDisplay = 1e-4;
 
