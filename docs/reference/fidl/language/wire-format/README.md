@@ -438,7 +438,7 @@ bit 0 of its flags indicate whether the data is stored inline or out-of-line:
 ![drawing](images/inline_envelope.png)
 
   - If bit 0 is unset an *out-of-line representation* is used.
-  
+
 ![drawing](images/out_of_line_envelope.png)
 
 Bit 0 may only be set if the size of the payload is <= 4 bytes. Bit 0 may be
@@ -569,6 +569,10 @@ Here we see that the answer to 912 / 43 is 21 with a remainder of 9.
 Note the `txid` value of `1` &mdash; this identifies the transaction.
 The `ordinal` value of `2` indicates the method &mdash; in this case, the
 **Divide()** method.
+
+Note: Although only the `txid` is needed to determine which request a method
+response is associated with, bindings must also check that the `ordinal` matches
+the method that was called.
 
 ![drawing](images/transaction-division.png)
 
