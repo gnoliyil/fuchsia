@@ -10,7 +10,6 @@ sdk_component_manifests("testing_sdk") {
     "elf_test_runner.shard.cml",
     "system-test.shard.cml",
     "coverage.shard.cml",
-    "allow-all-packages.shard.cml",
   ]
   category = "partner"
 }
