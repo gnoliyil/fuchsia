@@ -32,7 +32,6 @@ use fidl_fuchsia_starnix_binder as fbinder;
 use fuchsia_async as fasync;
 use fuchsia_zircon as zx;
 use futures::{TryFutureExt, TryStreamExt};
-use slab::Slab;
 use std::collections::{btree_map::Entry as BTreeMapEntry, BTreeMap, BTreeSet, VecDeque};
 use std::sync::{Arc, Weak};
 use zerocopy::{AsBytes, FromBytes};
@@ -951,7 +950,7 @@ impl ThreadPool {
 /// Table containing handles to remote binder objects.
 #[derive(Debug, Default)]
 struct HandleTable {
-    table: Slab<BinderObjectRef>,
+    table: ObjectTable,
 }
 
 /// A reference to a binder object in another process.
@@ -5614,5 +5613,66 @@ impl RwLockCondVar {
             let mut guard = guard;
             self.c.wait(&mut guard);
         });
+    }
+}
+
+#[cfg(not(any(test, debug_assertions)))]
+type ObjectTable = slab::Slab<BinderObjectRef>;
+
+#[cfg(any(test, debug_assertions))]
+type ObjectTable = object_table::ObjectTable<BinderObjectRef>;
+
+#[cfg(any(test, debug_assertions))]
+mod object_table {
+    use super::*;
+    use slab as _;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    pub struct Iter<'a, A> {
+        map_iter: std::collections::btree_map::Iter<'a, usize, A>,
+    }
+
+    impl<'a, A> Iterator for Iter<'a, A> {
+        type Item = (usize, &'a A);
+
+        fn next(&mut self) -> Option<Self::Item> {
+            self.map_iter.next().map(|(i, v)| (*i, v))
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct ObjectTable<A> {
+        objects: BTreeMap<usize, A>,
+        next_id: AtomicUsize,
+    }
+
+    impl<A> ObjectTable<A> {
+        pub fn remove(&mut self, key: usize) -> A {
+            self.objects.remove(&key).unwrap()
+        }
+
+        pub fn get(&self, key: usize) -> Option<&A> {
+            self.objects.get(&key)
+        }
+
+        pub fn get_mut(&mut self, key: usize) -> Option<&mut A> {
+            self.objects.get_mut(&key)
+        }
+
+        pub fn insert(&mut self, val: A) -> usize {
+            let key = self.next_id.fetch_add(1, Ordering::SeqCst);
+            self.objects.insert(key, val);
+            key
+        }
+
+        pub fn iter(&self) -> Iter<'_, A> {
+            Iter { map_iter: self.objects.iter() }
+        }
+    }
+
+    impl<A> Default for ObjectTable<A> {
+        fn default() -> Self {
+            Self { objects: Default::default(), next_id: AtomicUsize::new(0) }
+        }
     }
 }
