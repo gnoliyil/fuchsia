@@ -151,7 +151,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[fuchsia::test]
     fn test() {
         let clock = FakeClock::new(zx::Time::from_nanos(0));
         let limiter = RateLimiter::<FakeClock>::new(clock.clone(), 2, zx::Duration::from_nanos(2));

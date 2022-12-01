@@ -704,7 +704,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
+    #[fuchsia::test]
     fn malformed_rx_chain_doesnt_consume_packet() {
         let guest_port = 123;
         let header_size = mem::size_of::<VirtioVsockHeader>() as u32;
@@ -840,7 +840,7 @@ mod tests {
         assert_eq!(OpType::try_from(header.op.get()).unwrap(), OpType::Reset);
     }
 
-    #[test]
+    #[fuchsia::test]
     fn guest_rx_from_two_client_initiated_connections() {
         let guest_port = 12345;
         let header_size = mem::size_of::<VirtioVsockHeader>() as u32;

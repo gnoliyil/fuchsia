@@ -380,7 +380,7 @@ mod tests {
         virtio_device::fake_queue::{ChainBuilder, IdentityDriverMem, TestQueue},
     };
 
-    #[test]
+    #[fuchsia::test]
     fn test_check_request() -> Result<(), anyhow::Error> {
         // Happy cases
         check_request(
@@ -402,7 +402,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[fuchsia::test]
     fn test_check_request_integer_overflow() {
         // The largest number of sectors, when expressed in bytes, that can fit within a u64.
         const MAX_SECTORS: u64 = (u64::MAX - (u64::MAX % wire::VIRTIO_BLOCK_SECTOR_SIZE))
@@ -449,7 +449,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[fuchsia::test]
     fn test_check_request_device_overflow() {
         // Check the situation where the requested range overflows the device capacity.
         assert_eq!(

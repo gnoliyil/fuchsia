@@ -1375,7 +1375,7 @@ mod tests {
         assert_eq!(OpType::try_from(header.op.get()).unwrap(), OpType::Reset);
     }
 
-    #[test]
+    #[fuchsia::test]
     fn guest_initiated_client_returned_failure() {
         let key = VsockConnectionKey::new(HOST_CID, 5, DEFAULT_GUEST_CID, 10);
         let mut executor = fasync::TestExecutor::new().unwrap();
@@ -1410,7 +1410,7 @@ mod tests {
         };
     }
 
-    #[test]
+    #[fuchsia::test]
     fn guest_initiated_client_returned_socket() {
         let key = VsockConnectionKey::new(HOST_CID, 5, DEFAULT_GUEST_CID, 10);
         let mut executor = fasync::TestExecutor::new().unwrap();
@@ -1446,7 +1446,7 @@ mod tests {
         };
     }
 
-    #[test]
+    #[fuchsia::test]
     fn client_initiated_guest_responded_before_request() {
         let key = VsockConnectionKey::new(HOST_CID, 5, DEFAULT_GUEST_CID, 10);
         let (control_tx, _control_rx) = mpsc::unbounded::<VirtioVsockHeader>();
@@ -1484,7 +1484,7 @@ mod tests {
         };
     }
 
-    #[test]
+    #[fuchsia::test]
     fn client_initiated_guest_acceptance() {
         let key = VsockConnectionKey::new(HOST_CID, 5, DEFAULT_GUEST_CID, 10);
         let (control_tx, mut control_rx) = mpsc::unbounded::<VirtioVsockHeader>();
@@ -1532,7 +1532,7 @@ mod tests {
         };
     }
 
-    #[test]
+    #[fuchsia::test]
     fn read_write_basic_tx_data_integrity_validation() {
         let mut executor = fasync::TestExecutor::new().expect("failed to create executor");
         let key = VsockConnectionKey::new(HOST_CID, 5, DEFAULT_GUEST_CID, 10);
@@ -1611,7 +1611,7 @@ mod tests {
         assert_eq!(received_bytes, random_bytes);
     }
 
-    #[test]
+    #[fuchsia::test]
     fn read_write_basic_rx_data_integrity_validation() {
         let mut executor = fasync::TestExecutor::new().expect("failed to create executor");
         let key = VsockConnectionKey::new(HOST_CID, 5, DEFAULT_GUEST_CID, 10);
@@ -1725,7 +1725,7 @@ mod tests {
         assert_eq!(received_bytes, random_bytes);
     }
 
-    #[test]
+    #[fuchsia::test]
     fn require_fresh_read_signal_in_read_write_state() {
         let mut executor = fasync::TestExecutor::new().expect("failed to create executor");
         let key = VsockConnectionKey::new(HOST_CID, 5, DEFAULT_GUEST_CID, 10);
@@ -1761,7 +1761,7 @@ mod tests {
         assert!(!executor.run_until_stalled(&mut want_rx_chain_fut).is_pending());
     }
 
-    #[test]
+    #[fuchsia::test]
     fn require_fresh_write_signal_in_read_write_state() {
         let mut executor = fasync::TestExecutor::new().expect("failed to create executor");
         let key = VsockConnectionKey::new(HOST_CID, 5, DEFAULT_GUEST_CID, 10);
@@ -1854,7 +1854,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[fuchsia::test]
     fn read_write_client_close_socket_rx_bytes_outstanding() {
         let mut executor = fasync::TestExecutor::new().expect("failed to create executor");
         let key = VsockConnectionKey::new(HOST_CID, 5, DEFAULT_GUEST_CID, 10);
@@ -1980,7 +1980,7 @@ mod tests {
         assert_eq!(OpType::try_from(header.op.get()).unwrap(), OpType::Shutdown);
     }
 
-    #[test]
+    #[fuchsia::test]
     fn read_write_rx_obeys_guest_credit() {
         let mut executor = fasync::TestExecutor::new().expect("failed to create executor");
         let key = VsockConnectionKey::new(HOST_CID, 5, DEFAULT_GUEST_CID, 10);
@@ -2116,7 +2116,7 @@ mod tests {
         assert_eq!(received_bytes, random_bytes);
     }
 
-    #[test]
+    #[fuchsia::test]
     fn read_write_guest_send_packet_after_shutdown_send_leeway() {
         let mut executor =
             TestExecutor::new_with_fake_time().expect("failed to create test executor");
@@ -2277,7 +2277,7 @@ mod tests {
         assert_eq!(header.fwd_cnt.get(), 3);
     }
 
-    #[test]
+    #[fuchsia::test]
     fn read_write_unsolicited_credit_update() {
         let mut executor = fasync::TestExecutor::new().expect("failed to create executor");
         let key = VsockConnectionKey::new(HOST_CID, 5, DEFAULT_GUEST_CID, 10);
@@ -2338,7 +2338,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[fuchsia::test]
     fn client_initiated_shutdown_timeout_due_to_no_guest_reply() {
         let mut executor =
             TestExecutor::new_with_fake_time().expect("failed to create test executor");

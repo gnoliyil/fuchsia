@@ -151,7 +151,7 @@ mod tests {
         virtio_device::fake_queue::{ChainBuilder, IdentityDriverMem, TestQueue},
     };
 
-    #[test]
+    #[fuchsia::test]
     fn tx_blocked_on_full_socket() {
         let mut executor = fasync::TestExecutor::new().unwrap();
         let (remote, local) =

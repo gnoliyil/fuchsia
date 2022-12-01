@@ -110,7 +110,7 @@ pub fn bytes_for_duration(
 mod tests {
     use {super::*, pretty_assertions::assert_eq};
 
-    #[test]
+    #[fuchsia::test]
     fn test_wire_formats_supported_bitmask() {
         // All formats we support.
         assert!(*WIRE_FORMATS_SUPPORTED_BITMASK & (1u64 << VIRTIO_SND_PCM_FMT_U8) != 0);
@@ -123,7 +123,7 @@ mod tests {
         assert!(*WIRE_FORMATS_SUPPORTED_BITMASK & (1u64 << VIRTIO_SND_PCM_FMT_S20) == 0);
     }
 
-    #[test]
+    #[fuchsia::test]
     fn test_wire_format_to_fidl() {
         // All formats we support.
         assert_eq!(
@@ -148,7 +148,7 @@ mod tests {
         assert_eq!(wire_format_to_fidl(VIRTIO_SND_PCM_FMT_S20), None);
     }
 
-    #[test]
+    #[fuchsia::test]
     fn test_wire_rates_supported_bitmask() {
         // Sample of rates we support.
         assert!(*WIRE_RATES_SUPPORTED_BITMASK & (1u64 << VIRTIO_SND_PCM_RATE_8000) != 0);
@@ -159,7 +159,7 @@ mod tests {
         assert!(*WIRE_RATES_SUPPORTED_BITMASK & (1u64 << VIRTIO_SND_PCM_RATE_384000) == 0);
     }
 
-    #[test]
+    #[fuchsia::test]
     fn test_wire_rate_to_fidl() {
         // Sample of rates we support.
         assert_eq!(wire_rate_to_fidl(VIRTIO_SND_PCM_RATE_8000), Some(8000));
@@ -170,7 +170,7 @@ mod tests {
         assert_eq!(wire_rate_to_fidl(VIRTIO_SND_PCM_RATE_384000), None);
     }
 
-    #[test]
+    #[fuchsia::test]
     fn test_bytes_per_frame() {
         use fidl_fuchsia_media::AudioSampleFormat as ASF;
         use fidl_fuchsia_media::AudioStreamType;
@@ -209,7 +209,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[fuchsia::test]
     fn test_bytes_for_duration() {
         use fidl_fuchsia_media::AudioSampleFormat as ASF;
         use fidl_fuchsia_media::AudioStreamType;

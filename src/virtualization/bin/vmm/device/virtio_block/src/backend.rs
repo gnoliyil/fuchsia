@@ -249,7 +249,7 @@ pub trait BlockBackend {
 mod tests {
     use {super::*, crate::wire, virtio_device::fake_queue::IdentityDriverMem};
 
-    #[test]
+    #[fuchsia::test]
     fn test_ranges_bounded_no_change() {
         // Create a Request with 3 ranges.
         let mem = IdentityDriverMem::new();
@@ -271,7 +271,7 @@ mod tests {
         assert_eq!(None, iter.next());
     }
 
-    #[test]
+    #[fuchsia::test]
     fn test_ranges_bounded_split_range() {
         // Create a Request with 3 ranges.
         let mem = IdentityDriverMem::new();
@@ -293,7 +293,7 @@ mod tests {
         assert_eq!(None, iter.next());
     }
 
-    #[test]
+    #[fuchsia::test]
     fn test_ranges_unbounded() {
         // Create a Request with 3 ranges.
         let mem = IdentityDriverMem::new();
@@ -316,7 +316,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[fuchsia::test]
     fn test_ranges_unbounded_split() {
         // Create a Request with 3 ranges.
         let mem = IdentityDriverMem::new();
@@ -350,7 +350,7 @@ mod tests {
         assert_eq!(None, iter.next_with_bound(wire::VIRTIO_BLOCK_SECTOR_SIZE as usize));
     }
 
-    #[test]
+    #[fuchsia::test]
     fn test_request_split_at_large_range() {
         // Create a Request with a single 4-sector range.
         let mem = IdentityDriverMem::new();
@@ -374,7 +374,7 @@ mod tests {
         assert_eq!(r2.ranges[0].len(), 3 * wire::VIRTIO_BLOCK_SECTOR_SIZE as usize);
     }
 
-    #[test]
+    #[fuchsia::test]
     fn test_request_split_at_range_boundary() {
         // Create a Request with 3 ranges.
         let mem = IdentityDriverMem::new();
@@ -410,7 +410,7 @@ mod tests {
         assert_eq!(r4.ranges[0].len(), wire::VIRTIO_BLOCK_SECTOR_SIZE as usize);
     }
 
-    #[test]
+    #[fuchsia::test]
     fn test_request_split_at_mixed_ranges() {
         // We have a request that spans 2 full sectors (half sector, full sector, half sector).
         let mem = IdentityDriverMem::new();
@@ -438,7 +438,7 @@ mod tests {
         assert_eq!(r2.ranges[1].len(), wire::VIRTIO_BLOCK_SECTOR_SIZE as usize / 2);
     }
 
-    #[test]
+    #[fuchsia::test]
     fn test_request_split_at_end() {
         let mem = IdentityDriverMem::new();
         let ranges = vec![mem.new_range(wire::VIRTIO_BLOCK_SECTOR_SIZE as usize).unwrap()];
@@ -458,7 +458,7 @@ mod tests {
         assert_eq!(r2.ranges.len(), 0);
     }
 
-    #[test]
+    #[fuchsia::test]
     fn test_request_split_at_out_of_range() {
         let mem = IdentityDriverMem::new();
         let ranges = vec![mem.new_range(wire::VIRTIO_BLOCK_SECTOR_SIZE as usize).unwrap()];

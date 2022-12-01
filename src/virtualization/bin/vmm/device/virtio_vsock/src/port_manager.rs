@@ -247,7 +247,7 @@ mod tests {
         assert!(port_manager.active_ports.get(&12345).unwrap().has_listener);
     }
 
-    #[test]
+    #[fuchsia::test]
     fn listen_unlisten_listen_on_port() {
         let executor = TestExecutor::new_with_fake_time().unwrap();
         executor.set_fake_time(fuchsia_async::Time::from_nanos(0));
@@ -317,7 +317,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[fuchsia::test]
     fn port_stays_active_when_connection_quarantined() {
         let executor = TestExecutor::new_with_fake_time().unwrap();
         executor.set_fake_time(fuchsia_async::Time::from_nanos(0));
@@ -342,7 +342,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[fuchsia::test]
     fn port_stays_active_when_no_connections_but_listener() {
         let executor = TestExecutor::new_with_fake_time().unwrap();
         executor.set_fake_time(fuchsia_async::Time::from_nanos(0));
@@ -376,7 +376,7 @@ mod tests {
         assert!(port_manager.active_ports.get(&1).unwrap().guest_ports.is_empty());
     }
 
-    #[test]
+    #[fuchsia::test]
     fn connection_pair_recycled_after_quarantine() {
         let executor = TestExecutor::new_with_fake_time().unwrap();
         executor.set_fake_time(fuchsia_async::Time::from_nanos(0));

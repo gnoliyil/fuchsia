@@ -532,7 +532,7 @@ mod tests {
         assert!(credit.guest_believes_no_tx_buffer_available());
     }
 
-    #[test]
+    #[fuchsia::test]
     fn guest_initiated_and_client_closed_connection() {
         let (control_tx, mut control_rx) = mpsc::unbounded::<VirtioVsockHeader>();
         let mut executor = fasync::TestExecutor::new().unwrap();
@@ -605,7 +605,7 @@ mod tests {
     //    connection into a guest intiated shutdown state.
     // 9) The device sends the guest a reset packet in confirmation, moving this into a clean
     //    shutdown.
-    #[test]
+    #[fuchsia::test]
     fn client_initiated_connection_write_data_to_port() {
         let (control_tx, mut control_rx) = mpsc::unbounded::<VirtioVsockHeader>();
         let mut executor = fasync::TestExecutor::new().unwrap();
