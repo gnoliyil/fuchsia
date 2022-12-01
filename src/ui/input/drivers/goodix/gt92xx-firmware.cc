@@ -70,7 +70,7 @@ void Gt92xxDevice::LogFirmwareStatus() {
 #pragma GCC diagnostic pop
   static_assert(std::size(kFirmwareStatusStrings) == kFirmwareStatusCount);
 
-  node_ = inspector_.GetRoot().CreateChild("Chip info");
+  node_ = inspector_.GetRoot().CreateChild("Chip_info");
 
   uint8_t config_version;
   zx_status_t status = Read(GT_REG_CONFIG_DATA, &config_version, sizeof(config_version));
@@ -97,7 +97,7 @@ void Gt92xxDevice::LogFirmwareStatus() {
     zxlogf(ERROR, "  FW_VERSION: error %d", status);
   }
 
-  node_.CreateString("Firmware update", kFirmwareStatusStrings[firmware_status_], &values_);
+  node_.CreateString("Firmware_update", kFirmwareStatusStrings[firmware_status_], &values_);
 }
 
 bool Gt92xxDevice::ProductIdsMatch(const uint8_t* firmware_product_id,

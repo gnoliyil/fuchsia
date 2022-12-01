@@ -135,7 +135,7 @@ zx_status_t FtDevice::Init() {
     return status;
   }
 
-  node_ = inspector_.GetRoot().CreateChild("Chip info");
+  node_ = inspector_.GetRoot().CreateChild("Chip_info");
   LogRegisterValue(FTS_REG_TYPE, "TYPE");
   LogRegisterValue(FTS_REG_FIRMID, "FIRMID");
   LogRegisterValue(FTS_REG_VENDOR_ID, "VENDOR_ID");
@@ -145,13 +145,13 @@ zx_status_t FtDevice::Init() {
   LogRegisterValue(FTS_REG_IC_VERSION, "IC_VERSION");
 
   if (device_info.needs_firmware) {
-    node_.CreateUint("Display vendor", device_info.display_vendor, &values_);
-    node_.CreateUint("DDIC version", device_info.ddic_version, &values_);
+    node_.CreateUint("Display_vendor", device_info.display_vendor, &values_);
+    node_.CreateUint("DDIC_version", device_info.ddic_version, &values_);
     zxlogf(INFO, "Display vendor: %u", device_info.display_vendor);
     zxlogf(INFO, "DDIC version:   %u", device_info.ddic_version);
   } else {
-    node_.CreateString("Display vendor", "none", &values_);
-    node_.CreateString("DDIC version", "none", &values_);
+    node_.CreateString("Display_vendor", "none", &values_);
+    node_.CreateString("DDIC_version", "none", &values_);
     zxlogf(INFO, "Display vendor: none");
     zxlogf(INFO, "DDIC version:   none");
   }
