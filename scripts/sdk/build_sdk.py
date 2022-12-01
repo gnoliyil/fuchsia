@@ -17,6 +17,7 @@ import os
 import shutil
 import stat
 import subprocess
+import tarfile
 import tempfile
 
 import merger.merge as merge
@@ -24,7 +25,10 @@ import gn.generate as generate
 
 REPOSITORY_ROOT = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", ".."))
-FINT_PARAMS_DIR = os.path.join(
+FUCHSIA_FINT_PARAMS_DIR = os.path.join(
+    REPOSITORY_ROOT, "integration", "infra", "config", "generated", "fuchsia",
+    "fint_params", "global.ci")
+TQ_FINT_PARAMS_DIR = os.path.join(
     REPOSITORY_ROOT, "integration", "infra", "config", "generated", "turquoise",
     "fint_params", "global.ci")
 SUPPORTED_ARCHITECTURES = ["x64", "arm64"]
@@ -38,13 +42,24 @@ FINT_CONTEXT_TEMPLATE = """checkout_dir: "{checkout_dir}"
 build_dir: "{build_dir}"
 """
 
-FINT_PARAMS_MAP = {
+FUCHSIA_FINT_PARAMS_MAP = {
     "x64":
         os.path.join(
-            FINT_PARAMS_DIR, "sdk-google-linux-x64-build_only.textproto"),
+            FUCHSIA_FINT_PARAMS_DIR,
+            "sdk-core-linux-x64-build_only.textproto"),
     "arm64":
         os.path.join(
-            FINT_PARAMS_DIR, "sdk-google-linux-arm64-build_only.textproto")
+            FUCHSIA_FINT_PARAMS_DIR,
+            "sdk-core-linux-arm64-build_only.textproto")
+}
+
+INTERNAL_FINT_PARAMS_MAP = {
+    "x64":
+        os.path.join(
+            TQ_FINT_PARAMS_DIR, "sdk-google-linux-x64-build_only.textproto"),
+    "arm64":
+        os.path.join(
+            TQ_FINT_PARAMS_DIR, "sdk-google-linux-arm64-build_only.textproto")
 }
 
 
@@ -124,11 +139,19 @@ def build_fint_params(args):
             "context": generate_context("custom")
         }
     elif args.arch:
-        for arch in args.arch:
-            fint_params[arch] = {
-                "static": FINT_PARAMS_MAP[arch],
-                "context": generate_context(arch)
-            }
+        if args.internal:
+            for arch in args.arch:
+                fint_params[arch] = {
+                    "static": INTERNAL_FINT_PARAMS_MAP[arch],
+                    "context": generate_context(arch)
+                }
+        else:
+            for arch in args.arch:
+                fint_params[arch] = {
+                    "static": FUCHSIA_FINT_PARAMS_MAP[arch],
+                    "context": generate_context(arch)
+                }
+
     return fint_params
 
 
@@ -139,7 +162,7 @@ def overwrite_even_if_RO(src, dst):
     This is to support the use case where the same output directory is used
     more than once, as some files are read only.
     """
-    if not os.access(dst, os.W_OK):
+    if os.path.isfile(dst) and not os.access(dst, os.W_OK):
         os.chmod(dst, stat.S_IWUSR)
     shutil.copy2(src, dst)
 
@@ -156,6 +179,12 @@ def main():
         help="Output SDK directory. Will overwrite existing files if present")
     parser.add_argument(
         "--fint-path", help="Path to fint", default=bootstrap_fint())
+    parser.add_argument(
+        "--GN", help="Apply GN build files to the IDK", action='store_true')
+    parser.add_argument(
+        "--internal",
+        help="Build the google IDK if applicable (i.e. sdk-google-linux)",
+        action='store_true')
     build_params = parser.add_mutually_exclusive_group(required=True)
     build_params.add_argument(
         "--fint-config",
@@ -189,59 +218,61 @@ def main():
         sdk = build_for_arch(arch, args.fint_path, fint_params[arch])
         output_dirs.append(sdk)
 
-    with tempfile.TemporaryDirectory() as tempdir:
+    primary_dir = tempfile.TemporaryDirectory()
+    with tarfile.open(output_dirs[0], 'r') as sdk:
+        sdk.extractall(primary_dir.name)
+
+    with tempfile.TemporaryDirectory() as tempdir_name:
         if len(output_dirs) > 1:
             print("Merging")
-            primary = output_dirs[0]
             for sdk in output_dirs[1:]:
+                secondary_dir = tempfile.TemporaryDirectory()
+                with tarfile.open(output_dirs[0], 'r') as sdk:
+                    sdk.extractall(secondary_dir.name)
+                output_dir = tempfile.TemporaryDirectory()
                 merge.main(
                     [
-                        "--first-archive",
-                        primary,
-                        "--second-archive",
-                        sdk,
-                        "--output-archive",
-                        os.path.join(
-                            os.path.dirname(sdk), "arch_merged.tar.gz"),
+                        "--first-directory",
+                        primary_dir.name,
+                        "--second-directory",
+                        secondary_dir.name,
+                        "--output-directory",
+                        output_dir.name,
                     ])
-                primary = os.path.join(
-                    os.path.dirname(sdk), "arch_merged.tar.gz")
+                primary_dir.cleanup()
+                secondary_dir.cleanup()
+                primary_dir = output_dir
+        sdk_output_dir = primary_dir.name
 
+        if args.GN:
             # Process the Core SDK tarball to generate the GN SDK.
             print("Generating GN SDK")
+            sdk_output_dir = tempdir_name
             if (generate.main([
-                    "--archive",
-                    primary,
+                    "--directory",
+                    primary_dir.name,
                     "--output",
-                    tempdir,
+                    tempdir_name,
             ])) != 0:
                 print("Error - Failed to generate GN build files")
-                return 1
-
-        else:
-            print("Generating GN SDK")
-            if (generate.main([
-                    "--archive",
-                    output_dirs[0],
-                    "--output",
-                    tempdir,
-            ])) != 0:
-                print("Error - Failed to generate GN build files")
+                primary_dir.cleanup()
                 return 1
 
         if args.output:
             os.makedirs(os.path.dirname(args.output), exist_ok=True)
-            generate.create_archive(args.output, tempdir)
+            generate.create_archive(args.output, sdk_output_dir)
 
         if args.output_dir:
             if not os.path.exists(args.output_dir) and not os.path.isfile(
                     args.output_dir):
                 os.makedirs(args.output_dir)
             shutil.copytree(
-                tempdir,
+                sdk_output_dir,
                 args.output_dir,
                 copy_function=overwrite_even_if_RO,
                 dirs_exist_ok=True)
+
+        primary_dir.cleanup()
 
 
 # Clean up.
