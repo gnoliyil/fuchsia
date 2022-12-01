@@ -40,6 +40,17 @@ config("analysis") {
   rustflags = [ "-Zsave-analysis" ]
 }
 
+config("self-profile") {
+  rustflags = [
+    "-Zself-profile",
+    "-Zself-profile-events=default,args",
+  ]
+}
+
+config("time-passes") {
+  rustflags = [ "-Ztime-passes" ]
+}
+
 config("edition_2021") {
   rustflags = [ "--edition=2021" ]
 }
