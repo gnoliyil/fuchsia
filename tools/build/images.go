@@ -4,6 +4,14 @@
 
 package build
 
+// Select values of Image.Type.
+const (
+	ImageTypeFAT        string = "fat"
+	ImageTypeQEMUKernel string = "kernel"
+	ImageTypeZBI        string = "zbi"
+	ImageTypeVBMeta     string = "vbmeta"
+)
+
 // Image represents an entry in an image manifest.
 type Image struct {
 	// Name is the canonical name of the image.

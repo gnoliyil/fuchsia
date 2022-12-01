@@ -18,6 +18,7 @@ import (
 
 	"go.fuchsia.dev/fuchsia/tools/bootserver"
 	"go.fuchsia.dev/fuchsia/tools/botanist"
+	"go.fuchsia.dev/fuchsia/tools/build"
 	"go.fuchsia.dev/fuchsia/tools/lib/ffxutil"
 	"go.fuchsia.dev/fuchsia/tools/lib/iomisc"
 	"go.fuchsia.dev/fuchsia/tools/lib/logger"
@@ -336,9 +337,10 @@ func getImageByName(imgs []bootserver.Image, name string) *bootserver.Image {
 	return nil
 }
 
-func getImageByLabel(imgs []bootserver.Image, label string) *bootserver.Image {
+// Images are not guaranteed to be uniquely identified by label.
+func getImage(imgs []bootserver.Image, label, typ string) *bootserver.Image {
 	for _, img := range imgs {
-		if img.Label == label {
+		if img.Label == label && typ == img.Type {
 			return &img
 		}
 	}
@@ -352,7 +354,7 @@ func (t *DeviceTarget) ramBoot(ctx context.Context, images []bootserver.Image) e
 		if t.imageOverrides.ZBI == "" {
 			zbi = getImageByName(images, "zbi_zircon-a")
 		} else {
-			zbi = getImageByLabel(images, t.imageOverrides.ZBI)
+			zbi = getImage(images, t.imageOverrides.ZBI, build.ImageTypeZBI)
 		}
 		if zbi == nil {
 			return fmt.Errorf("could not find \"zbi_zircon-a\" or ZBI override")
@@ -362,7 +364,7 @@ func (t *DeviceTarget) ramBoot(ctx context.Context, images []bootserver.Image) e
 		if t.imageOverrides.VBMeta == "" {
 			vbmeta = getImageByName(images, "vbmeta_zircon-a")
 		} else {
-			vbmeta = getImageByLabel(images, t.imageOverrides.VBMeta)
+			vbmeta = getImage(images, t.imageOverrides.VBMeta, build.ImageTypeVBMeta)
 		}
 		if vbmeta == nil {
 			return fmt.Errorf("could not find \"vbmeta_zircon-a\" or VBMeta override")

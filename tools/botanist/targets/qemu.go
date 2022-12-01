@@ -23,6 +23,7 @@ import (
 	"go.fuchsia.dev/fuchsia/tools/bootserver"
 	"go.fuchsia.dev/fuchsia/tools/botanist"
 	"go.fuchsia.dev/fuchsia/tools/botanist/constants"
+	"go.fuchsia.dev/fuchsia/tools/build"
 	"go.fuchsia.dev/fuchsia/tools/lib/ffxutil"
 	"go.fuchsia.dev/fuchsia/tools/lib/jsonutil"
 	"go.fuchsia.dev/fuchsia/tools/lib/logger"
@@ -249,19 +250,19 @@ func (t *QEMUTarget) Start(ctx context.Context, images []bootserver.Image, args 
 	if t.imageOverrides.QEMUKernel == "" {
 		qemuKernel = getImageByName(images, "kernel_qemu-kernel")
 	} else {
-		qemuKernel = getImageByLabel(images, t.imageOverrides.QEMUKernel)
+		qemuKernel = getImage(images, t.imageOverrides.QEMUKernel, build.ImageTypeQEMUKernel)
 	}
 
 	var zbi *bootserver.Image
 	if t.imageOverrides.ZBI == "" {
 		zbi = getImageByName(images, "zbi_zircon-a")
 	} else {
-		zbi = getImageByLabel(images, t.imageOverrides.ZBI)
+		zbi = getImage(images, t.imageOverrides.ZBI, build.ImageTypeZBI)
 	}
 
 	var efi *bootserver.Image
 	if t.imageOverrides.EFI != "" {
-		efi = getImageByLabel(images, t.imageOverrides.EFI)
+		efi = getImage(images, t.imageOverrides.EFI, build.ImageTypeFAT)
 	}
 
 	// The QEMU command needs to be invoked within an empty directory, as QEMU
