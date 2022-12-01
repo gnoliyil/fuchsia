@@ -10,11 +10,4 @@
     program: {
         binary: "test/adb-file-sync-test-bin",
     },
-    offer: [
-        {
-            protocol: "fuchsia.sys2.RealmQuery.root",
-            from: "parent",
-            to: [ "#realm_builder" ],
-        },
-    ],
 }

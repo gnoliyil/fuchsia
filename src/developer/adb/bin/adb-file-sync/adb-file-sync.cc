@@ -21,26 +21,6 @@ zx_status_t AdbFileSync::StartService(std::optional<std::string> default_compone
   FX_LOGS(DEBUG) << "Starting ADB File Sync Service";
   std::unique_ptr file_sync = std::make_unique<AdbFileSync>(std::move(default_component));
 
-  component::OutgoingDirectory outgoing =
-      component::OutgoingDirectory::Create(file_sync->loop_.dispatcher());
-  zx::result result = outgoing.ServeFromStartupInfo();
-  if (result.is_error()) {
-    FX_LOGS(ERROR) << "Failed to serve outgoing directory: " << result.status_string();
-    return result.error_value();
-  }
-
-  result = outgoing.AddProtocol<fuchsia_hardware_adb::Provider>(
-      [file_sync_ptr =
-           file_sync.get()](fidl::ServerEnd<fuchsia_hardware_adb::Provider> server_end) {
-        file_sync_ptr->binding_ref_.emplace(fidl::BindServer(file_sync_ptr->loop_.dispatcher(),
-                                                             std::move(server_end), file_sync_ptr,
-                                                             std::mem_fn(&AdbFileSync::OnUnbound)));
-      });
-  if (result.is_error()) {
-    FX_LOGS(ERROR) << "Could not publish service " << result.error_value();
-    return result.error_value();
-  }
-
   auto endpoints = fidl::CreateEndpoints<fuchsia_sys2::RealmQuery>();
   if (endpoints.is_error()) {
     FX_LOGS(ERROR) << "Could not create endpoints " << endpoints.error_value();
@@ -66,6 +46,27 @@ zx_status_t AdbFileSync::StartService(std::optional<std::string> default_compone
     return status;
   }
   file_sync->lifecycle_.Bind(std::move(lifecycle_ep->client));
+
+  component::OutgoingDirectory outgoing =
+      component::OutgoingDirectory::Create(file_sync->loop_.dispatcher());
+
+  auto result = outgoing.AddProtocol<fuchsia_hardware_adb::Provider>(
+      [file_sync_ptr =
+           file_sync.get()](fidl::ServerEnd<fuchsia_hardware_adb::Provider> server_end) {
+        file_sync_ptr->binding_ref_.emplace(fidl::BindServer(file_sync_ptr->loop_.dispatcher(),
+                                                             std::move(server_end), file_sync_ptr,
+                                                             std::mem_fn(&AdbFileSync::OnUnbound)));
+      });
+  if (result.is_error()) {
+    FX_LOGS(ERROR) << "Could not publish service " << result.error_value();
+    return result.error_value();
+  }
+
+  result = outgoing.ServeFromStartupInfo();
+  if (result.is_error()) {
+    FX_LOGS(ERROR) << "Failed to serve outgoing directory: " << result.status_string();
+    return result.error_value();
+  }
 
   file_sync->loop_.JoinThreads();
   return ZX_OK;

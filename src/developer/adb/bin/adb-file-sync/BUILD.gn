@@ -41,17 +41,14 @@ fuchsia_component("adb-file-sync-component") {
 }
 
 test("adb-file-sync-test-bin") {
-  sources = [
-    "adb-file-sync-test.cc",
-    "adb-file-sync.cc",
-  ]
+  sources = [ "adb-file-sync-test.cc" ]
   deps = [
-    ":common",
     "//sdk/fidl/fuchsia.hardware.adb:fuchsia.hardware.adb_hlcpp",
     "//sdk/fidl/fuchsia.io:fuchsia.io_cpp_wire_testing",
     "//sdk/fidl/fuchsia.sys2:fuchsia.sys2_cpp_wire_testing",
     "//sdk/fidl/fuchsia.sys2:fuchsia.sys2_hlcpp",
     "//sdk/lib/sys/component/cpp/testing:cpp",
+    "//src/developer/adb/third_party/adb-file-sync",
     "//src/lib/fxl/test:gtest_main",
     "//src/lib/testing/loop_fixture:gtest",
     "//third_party/googletest:gtest",

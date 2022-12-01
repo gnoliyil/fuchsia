@@ -3,9 +3,9 @@
 // found in the LICENSE file.
 
 #include <fidl/fuchsia.io/cpp/wire_test_base.h>
-#include <fidl/fuchsia.sys2/cpp/wire_test_base.h>
 #include <fuchsia/hardware/adb/cpp/fidl.h>
 #include <fuchsia/sys2/cpp/fidl.h>
+#include <fuchsia/sys2/cpp/fidl_test_base.h>
 #include <lib/fidl/cpp/binding_set.h>
 #include <lib/sys/component/cpp/testing/realm_builder.h>
 #include <lib/syslog/cpp/macros.h>
@@ -13,9 +13,9 @@
 #include <queue>
 
 #include <gtest/gtest.h>
-#include <src/lib/testing/loop_fixture/real_loop_fixture.h>
 
 #include "src/developer/adb/third_party/adb-file-sync/file_sync_service.h"
+#include "src/lib/testing/loop_fixture/real_loop_fixture.h"
 
 namespace adb_file_sync {
 
@@ -135,7 +135,7 @@ class FakeDirectory : public fidl::testing::WireTestBase<fuchsia_io::Directory> 
   uint32_t expect_rewind_ = 0;
 };
 
-class LocalRealmQueryImpl : public fuchsia::sys2::RealmQuery,
+class LocalRealmQueryImpl : public fuchsia::sys2::testing::RealmQuery_TestBase,
                             public component_testing::LocalComponentImpl {
  public:
   explicit LocalRealmQueryImpl(async_dispatcher_t* dispatcher, FakeDirectory* directory)
@@ -152,9 +152,8 @@ class LocalRealmQueryImpl : public fuchsia::sys2::RealmQuery,
   }
 
   // fuchsia_sys2::RealmQuery methods
-  void GetInstanceInfo(std::string moniker, GetInstanceInfoCallback callback) override {
-    callback(fuchsia::sys2::RealmQuery_GetInstanceInfo_Result::WithErr(
-        fuchsia::sys2::RealmQueryError::Unknown()));
+  void NotImplemented_(const std::string& name) override {
+    FX_LOGS(ERROR) << "Not implemented " << name;
   }
 
   void GetInstanceDirectories(std::string moniker,
@@ -182,44 +181,34 @@ class LocalRealmQueryImpl : public fuchsia::sys2::RealmQuery,
   FakeDirectory pkg_dir_;      // Not used
 };
 
-class LocalLifecycleController
-    : public fidl::testing::WireTestBase<fuchsia_sys2::LifecycleController>,
-      public component_testing::LocalComponentImpl {
+class LocalLifecycleController : public fuchsia::sys2::testing::LifecycleController_TestBase,
+                                 public component_testing::LocalComponentImpl {
  public:
   explicit LocalLifecycleController(async_dispatcher_t* dispatcher) : dispatcher_(dispatcher) {}
 
-  void NotImplemented_(const std::string& name, ::fidl::CompleterBase& completer) override {
+  void NotImplemented_(const std::string& name) override {
     FX_LOGS(ERROR) << "Not implemented " << name;
-    completer.Close(ZX_ERR_NOT_SUPPORTED);
   }
 
-  void Resolve(::fuchsia_sys2::wire::LifecycleControllerResolveRequest* request,
-               ResolveCompleter::Sync& completer) override {
-    moniker_ = request->moniker.get();
+  void Resolve(std::string moniker, ResolveCallback callback) override {
+    moniker_ = moniker;
     EXPECT_EQ(moniker_, "./" + kComponent);
-    completer.ReplySuccess();
-  }
-
-  void BindServer(fidl::ServerEnd<fuchsia_sys2::LifecycleController> server_end) {
-    binding_refs_.emplace_back(fidl::BindServer(dispatcher_, std::move(server_end), this));
+    callback(fuchsia::sys2::LifecycleController_Resolve_Result::WithResponse(
+        fuchsia::sys2::LifecycleController_Resolve_Response(ZX_OK)));
   }
 
   // component_testing::LocalComponentImpl methods
   void OnStart() override {
-    fidl::InterfaceRequestHandler<fuchsia::sys2::LifecycleController> handler =
-        [&](fidl::InterfaceRequest<fuchsia::sys2::LifecycleController> request) {
-          BindServer(fidl::ServerEnd<fuchsia_sys2::LifecycleController>(request.TakeChannel()));
-        };
-    ASSERT_EQ(
-        outgoing()->AddPublicService(std::move(handler), "fuchsia.sys2.LifecycleController.root"),
-        ZX_OK);
+    ASSERT_EQ(outgoing()->AddPublicService(bindings_.GetHandler(this, dispatcher_),
+                                           "fuchsia.sys2.LifecycleController.root"),
+              ZX_OK);
   }
 
   std::string moniker() { return moniker_; }
 
  private:
   // Lifecycle controller server bindings.
-  std::vector<fidl::ServerBindingRef<fuchsia_sys2::LifecycleController>> binding_refs_;
+  fidl::BindingSet<fuchsia::sys2::LifecycleController> bindings_;
   // Moniker string passed in the latest request if any.
   std::string moniker_;
   async_dispatcher_t* dispatcher_;
@@ -252,47 +241,51 @@ class AdbFileSyncTest : public gtest::RealLoopFixture {
                            .targets = {ParentRef()}});
     realm_ = std::make_unique<RealmRoot>(builder.Build(dispatcher()));
 
-    file_sync_ = realm_->ConnectSync<fuchsia::hardware::adb::Provider>();
+    ASSERT_EQ(
+        realm_->Connect<fuchsia::hardware::adb::Provider>(file_sync_.NewRequest(dispatcher())),
+        ZX_OK);
 
     zx::socket server, client;
     ASSERT_EQ(zx::socket::create(ZX_SOCKET_STREAM, &server, &client), ZX_OK);
     fuchsia::hardware::adb::Provider_ConnectToService_Result result;
-    ASSERT_EQ(file_sync_->ConnectToService(std::move(client), "", &result), ZX_OK);
-    ASSERT_FALSE(result.is_err());
+    file_sync_.set_error_handler(
+        [](zx_status_t status) { FX_LOGS(INFO) << "File Sync could not connect " << status; });
+    file_sync_->ConnectToService(std::move(client), "", [&](auto result) {
+      ASSERT_FALSE(result.is_err());
+      QuitLoop();
+    });
+    RunLoop();
 
     adb_ = std::move(server);
   }
 
   void TearDown() override {
-    directory_.TearDown();
     realm_.reset();
+    directory_.TearDown();
   }
 
   void ExpectSendFail() {
     size_t actual;
     syncmsg msg;
-    EXPECT_EQ(adb_.wait_one(ZX_SOCKET_READABLE, zx::time::infinite(), nullptr), ZX_OK);
-    EXPECT_EQ(adb_.read(0, &msg.data, sizeof(msg.data), &actual), ZX_OK);
+    RunLoopUntil([&]() { return adb_.read(0, &msg.data, sizeof(msg.data), &actual) == ZX_OK; });
     EXPECT_EQ(actual, sizeof(msg.data));
     EXPECT_EQ(static_cast<int32_t>(msg.data.id), ID_FAIL);
 
     char buffer[msg.data.size];
-    EXPECT_EQ(adb_.wait_one(ZX_SOCKET_READABLE, zx::time::infinite(), nullptr), ZX_OK);
-    EXPECT_EQ(adb_.read(0, buffer, msg.data.size, &actual), ZX_OK);
+    RunLoopUntil([&]() { return adb_.read(0, buffer, msg.data.size, &actual) == ZX_OK; });
     EXPECT_EQ(actual, msg.data.size);
   }
 
  private:
   std::unique_ptr<component_testing::RealmRoot> realm_;
-  fidl::SynchronousInterfacePtr<fuchsia::hardware::adb::Provider> file_sync_;
+  fidl::InterfacePtr<fuchsia::hardware::adb::Provider> file_sync_;
 
  protected:
   zx::socket adb_;
   FakeDirectory directory_;
 };
 
-// TODO (fxb/115455): Turn on after fixing flake.
-TEST_F(AdbFileSyncTest, DISABLED_BadPathLengthConnectTest) {
+TEST_F(AdbFileSyncTest, BadPathLengthConnectTest) {
   SyncRequest request{.id = ID_LIST, .path_length = 1025};
   size_t actual;
   EXPECT_EQ(adb_.write(0, &request, sizeof(request), &actual), ZX_OK);
@@ -300,8 +293,7 @@ TEST_F(AdbFileSyncTest, DISABLED_BadPathLengthConnectTest) {
   ExpectSendFail();
 }
 
-// TODO (fxb/115455): Turn on after fixing flake.
-TEST_F(AdbFileSyncTest, DISABLED_BadIDConnectTest) {
+TEST_F(AdbFileSyncTest, BadIDConnectTest) {
   std::string filename = "filename";
 
   SyncRequest request{.id = MKID('B', 'A', 'D', 'D'),
@@ -315,8 +307,7 @@ TEST_F(AdbFileSyncTest, DISABLED_BadIDConnectTest) {
   ExpectSendFail();
 }
 
-// TODO (fxb/115455): Turn on after fixing flake.
-TEST_F(AdbFileSyncTest, DISABLED_HandleListTest) {
+TEST_F(AdbFileSyncTest, HandleListTest) {
   directory_.ExpectRewind();
   directory_.ExpectReadDirents({0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 'a', 'b'});
   std::string path = "./" + kComponent + "::/" + kTest;
@@ -329,12 +320,8 @@ TEST_F(AdbFileSyncTest, DISABLED_HandleListTest) {
   EXPECT_EQ(actual, path.size());
 
   // Read dirent
-  RunLoopUntil([&] {
-    return adb_.wait_one(ZX_SOCKET_READABLE | ZX_SOCKET_PEER_CLOSED,
-                         zx::deadline_after(zx::msec(10)), nullptr) == ZX_OK;
-  });
   syncmsg msg;
-  ASSERT_EQ(adb_.read(0, &(msg.dent), sizeof(msg.dent), &actual), ZX_OK);
+  RunLoopUntil([&]() { return adb_.read(0, &(msg.dent), sizeof(msg.dent), &actual) == ZX_OK; });
   EXPECT_EQ(actual, sizeof(msg.dent));
   EXPECT_EQ(static_cast<int32_t>(msg.dent.id), ID_DENT);
   EXPECT_EQ(msg.dent.mode, 1U);
@@ -343,22 +330,14 @@ TEST_F(AdbFileSyncTest, DISABLED_HandleListTest) {
   EXPECT_EQ(msg.dent.time, 5U);
 
   // Read name
-  RunLoopUntil([&] {
-    return adb_.wait_one(ZX_SOCKET_READABLE | ZX_SOCKET_PEER_CLOSED,
-                         zx::deadline_after(zx::msec(10)), nullptr) == ZX_OK;
-  });
   char name[2];
-  EXPECT_EQ(adb_.read(0, name, sizeof(name), &actual), ZX_OK);
+  RunLoopUntil([&]() { return adb_.read(0, name, sizeof(name), &actual) == ZX_OK; });
   EXPECT_EQ(actual, sizeof(name));
   EXPECT_EQ(name[0], 'a');
   EXPECT_EQ(name[1], 'b');
 
   // Read done
-  RunLoopUntil([&] {
-    return adb_.wait_one(ZX_SOCKET_READABLE | ZX_SOCKET_PEER_CLOSED,
-                         zx::deadline_after(zx::msec(10)), nullptr) == ZX_OK;
-  });
-  EXPECT_EQ(adb_.read(0, &(msg.dent), sizeof(msg.dent), &actual), ZX_OK);
+  RunLoopUntil([&]() { return adb_.read(0, &(msg.dent), sizeof(msg.dent), &actual) == ZX_OK; });
   EXPECT_EQ(actual, sizeof(msg.dent));
   EXPECT_EQ(static_cast<int32_t>(msg.dent.id), ID_DONE);
   EXPECT_EQ(msg.dent.mode, 0U);
@@ -367,8 +346,7 @@ TEST_F(AdbFileSyncTest, DISABLED_HandleListTest) {
   EXPECT_EQ(msg.dent.time, 0U);
 }
 
-// TODO (fxb/115455): Turn on after fixing flake.
-TEST_F(AdbFileSyncTest, DISABLED_HandleStatTest) {
+TEST_F(AdbFileSyncTest, HandleStatTest) {
   directory_.ExpectGetAttr(fuchsia_io::wire::NodeAttributes{
       .mode = 5,
       .storage_size = 15,
@@ -384,12 +362,8 @@ TEST_F(AdbFileSyncTest, DISABLED_HandleStatTest) {
   EXPECT_EQ(actual, path.size());
 
   // Read stat
-  RunLoopUntil([&] {
-    return adb_.wait_one(ZX_SOCKET_READABLE | ZX_SOCKET_PEER_CLOSED,
-                         zx::deadline_after(zx::msec(10)), nullptr) == ZX_OK;
-  });
   syncmsg msg;
-  ASSERT_EQ(adb_.read(0, &msg.stat_v1, sizeof(msg.stat_v1), &actual), ZX_OK);
+  RunLoopUntil([&]() { return adb_.read(0, &msg.stat_v1, sizeof(msg.stat_v1), &actual) == ZX_OK; });
   EXPECT_EQ(actual, sizeof(msg.stat_v1));
   EXPECT_EQ(static_cast<int32_t>(msg.stat_v1.id), ID_LSTAT_V1);
   EXPECT_EQ(msg.stat_v1.mode, 5U);
@@ -397,8 +371,7 @@ TEST_F(AdbFileSyncTest, DISABLED_HandleStatTest) {
   EXPECT_EQ(msg.stat_v1.time, 1234U);
 }
 
-// TODO (fxb/115455): Turn on after fixing flake.
-TEST_F(AdbFileSyncTest, DISABLED_HandleSendTest) {
+TEST_F(AdbFileSyncTest, HandleSendTest) {
   std::string path = "./" + kComponent + "::/" + kTest + "/tmp.txt,0755";
   SyncRequest request{.id = ID_SEND, .path_length = static_cast<uint32_t>(path.length())};
   size_t actual;
@@ -430,11 +403,7 @@ TEST_F(AdbFileSyncTest, DISABLED_HandleSendTest) {
   EXPECT_EQ(actual, sizeof(msg.data));
 
   // Read done
-  RunLoopUntil([&] {
-    return adb_.wait_one(ZX_SOCKET_READABLE | ZX_SOCKET_PEER_CLOSED,
-                         zx::deadline_after(zx::msec(10)), nullptr) == ZX_OK;
-  });
-  ASSERT_EQ(adb_.read(0, &(msg.data), sizeof(msg.data), &actual), ZX_OK);
+  RunLoopUntil([&]() { return adb_.read(0, &(msg.data), sizeof(msg.data), &actual) == ZX_OK; });
   EXPECT_EQ(actual, sizeof(msg.data));
   EXPECT_EQ(static_cast<int32_t>(msg.data.id), ID_OKAY);
   EXPECT_EQ(msg.data.size, 0U);
@@ -446,8 +415,7 @@ TEST_F(AdbFileSyncTest, DISABLED_HandleSendTest) {
   }
 }
 
-// TODO (fxb/115455): Turn on after fixing flake.
-TEST_F(AdbFileSyncTest, DISABLED_HandleReceiveTest) {
+TEST_F(AdbFileSyncTest, HandleReceiveTest) {
   directory_.file_.set_data(std::vector<uint8_t>{4, 3, 2, 1});
 
   std::string path = "./" + kComponent + "::/" + kTest + "/tmp.txt";
@@ -461,21 +429,13 @@ TEST_F(AdbFileSyncTest, DISABLED_HandleReceiveTest) {
 
   // Read data
   syncmsg msg;
-  RunLoopUntil([&] {
-    return adb_.wait_one(ZX_SOCKET_READABLE | ZX_SOCKET_PEER_CLOSED,
-                         zx::deadline_after(zx::msec(10)), nullptr) == ZX_OK;
-  });
-  ASSERT_EQ(adb_.read(0, &(msg.data), sizeof(msg.data), &actual), ZX_OK);
+  RunLoopUntil([&]() { return adb_.read(0, &(msg.data), sizeof(msg.data), &actual) == ZX_OK; });
   EXPECT_EQ(actual, sizeof(msg.data));
   EXPECT_EQ(static_cast<int32_t>(msg.data.id), ID_DATA);
   EXPECT_EQ(msg.data.size, 4U);
 
-  RunLoopUntil([&] {
-    return adb_.wait_one(ZX_SOCKET_READABLE | ZX_SOCKET_PEER_CLOSED,
-                         zx::deadline_after(zx::msec(10)), nullptr) == ZX_OK;
-  });
   uint8_t buffer[msg.data.size];
-  EXPECT_EQ(adb_.read(0, buffer, msg.data.size, &actual), ZX_OK);
+  RunLoopUntil([&]() { return adb_.read(0, buffer, msg.data.size, &actual) == ZX_OK; });
   EXPECT_EQ(actual, msg.data.size);
 
   uint8_t expected_data[] = {4, 3, 2, 1};
@@ -485,11 +445,7 @@ TEST_F(AdbFileSyncTest, DISABLED_HandleReceiveTest) {
   }
 
   // Read done
-  RunLoopUntil([&] {
-    return adb_.wait_one(ZX_SOCKET_READABLE | ZX_SOCKET_PEER_CLOSED,
-                         zx::deadline_after(zx::msec(10)), nullptr) == ZX_OK;
-  });
-  EXPECT_EQ(adb_.read(0, &(msg.data), sizeof(msg.data), &actual), ZX_OK);
+  RunLoopUntil([&]() { return adb_.read(0, &(msg.data), sizeof(msg.data), &actual) == ZX_OK; });
   EXPECT_EQ(actual, sizeof(msg.data));
   EXPECT_EQ(static_cast<int32_t>(msg.data.id), ID_DONE);
   EXPECT_EQ(msg.data.size, 0U);
