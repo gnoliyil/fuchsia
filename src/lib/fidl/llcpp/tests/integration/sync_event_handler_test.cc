@@ -31,6 +31,39 @@ TEST(SyncEventHandler, TestBase) {
   EXPECT_TRUE(event_handler.called);
 }
 
+TEST(SyncEventHandler, WaitOneFails) {
+  zx::result endpoints = fidl::CreateEndpoints<test::TwoEvents>();
+  ASSERT_OK(endpoints.status_value());
+  ASSERT_OK(fidl::WireSendEvent(endpoints->server)->EventA());
+
+  struct EventHandler : public fidl::testing::WireSyncEventHandlerTestBase<test::TwoEvents> {
+    void NotImplemented_(const std::string& name) override { __builtin_unreachable(); }
+  };
+  EventHandler event_handler;
+  zx::channel bad_endpoint;
+  endpoints->client.channel().replace(ZX_RIGHT_NONE, &bad_endpoint);
+  fidl::ClientEnd<test::TwoEvents> client_end(std::move(bad_endpoint));
+  auto result = event_handler.HandleOneEvent(client_end.borrow());
+  ASSERT_EQ(ZX_ERR_ACCESS_DENIED, result.status());
+  ASSERT_EQ(fidl::Reason::kTransportError, result.reason());
+}
+
+TEST(SyncEventHandler, BufferTooSmall) {
+  zx::result endpoints = fidl::CreateEndpoints<test::TwoEvents>();
+  ASSERT_OK(endpoints.status_value());
+  uint8_t bogus_message[ZX_CHANNEL_MAX_MSG_BYTES] = {};
+  ASSERT_OK(endpoints->server.channel().write(0, bogus_message, sizeof(bogus_message), nullptr, 0));
+
+  struct EventHandler : public fidl::testing::WireSyncEventHandlerTestBase<test::TwoEvents> {
+    void NotImplemented_(const std::string& name) override { __builtin_unreachable(); }
+  };
+
+  EventHandler event_handler;
+  auto result = event_handler.HandleOneEvent(endpoints->client);
+  ASSERT_EQ(ZX_ERR_BUFFER_TOO_SMALL, result.status());
+  ASSERT_EQ(fidl::Reason::kUnexpectedMessage, result.reason());
+}
+
 TEST(SyncEventHandler, ExhaustivenessRequired) {
   class EventHandlerNone : public fidl::WireSyncEventHandler<test::TwoEvents> {};
   class EventHandlerA : public fidl::WireSyncEventHandler<test::TwoEvents> {
