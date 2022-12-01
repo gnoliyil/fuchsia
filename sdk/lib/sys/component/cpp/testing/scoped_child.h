@@ -79,9 +79,9 @@ class ScopedChild final {
   // interface. Callers can supply an interface name explicitly to override
   // the default name.
   //
-  // This overload for |ConnectAtExposedDir| panics if the connection operation
-  // doesn't return ZX_OK. Callers that wish to receive that status should use
-  // one of the other overloads that returns a |zx_status_t|.
+  // This overload panics if the connection operation doesn't return ZX_OK.
+  // Callers that wish to receive that status should use one of the other
+  // overloads that returns a |zx_status_t|.
   //
   // # Example
   //
@@ -98,8 +98,8 @@ class ScopedChild final {
     return std::move(result);
   }
 
-  // SynchronousInterfacePtr method overload of |ConnectAtExposedDir|. See
-  // method above for more details.
+  // SynchronousInterfacePtr method variant of |Connect|. See |Connect| for
+  // more details.
   template <typename Interface>
   fidl::SynchronousInterfacePtr<Interface> ConnectSync(
       const std::string& interface_name = Interface::Name_) const {
