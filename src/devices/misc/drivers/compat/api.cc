@@ -8,7 +8,7 @@
 
 #include <ddktl/fidl.h>
 
-#include "src/devices/misc/drivers/compat/devfs_vnode.h"
+#include "src/devices/lib/fidl/transaction.h"
 #include "src/devices/misc/drivers/compat/device.h"
 #include "src/devices/misc/drivers/compat/driver.h"
 

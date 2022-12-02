@@ -19,7 +19,6 @@
 #include <lib/sync/cpp/completion.h>
 #include <zircon/dlfcn.h>
 
-#include "src/devices/misc/drivers/compat/devfs_vnode.h"
 #include "src/devices/misc/drivers/compat/loader.h"
 
 namespace fboot = fuchsia_boot;

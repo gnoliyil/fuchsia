@@ -24,10 +24,10 @@
 #include <fbl/auto_lock.h>
 
 #include "src/devices/bin/driver_host/composite_device.h"
-#include "src/devices/bin/driver_host/devfs_vnode.h"
 #include "src/devices/bin/driver_host/driver_host.h"
 #include "src/devices/bin/driver_host/proxy_device.h"
 #include "src/devices/bin/driver_host/scheduler_profile.h"
+#include "src/devices/lib/fidl/transaction.h"
 
 namespace fio = fuchsia_io;
 

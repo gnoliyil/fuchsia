@@ -11,6 +11,8 @@
 
 #include <utility>
 
+#include "src/devices/lib/fidl/transaction.h"
+
 namespace fake_ddk {
 
 zx_device_t* kFakeDevice = reinterpret_cast<zx_device_t*>(0x55);
@@ -527,13 +529,13 @@ zx_status_t device_set_profile_by_role(zx_device_t* device, zx_handle_t thread, 
 
 __EXPORT
 void device_fidl_transaction_take_ownership(fidl_txn_t* txn, device_fidl_txn_t* new_txn) {
-  auto fidl_txn = fake_ddk::FromDdkInternalTransaction(ddk::internal::Transaction::FromTxn(txn));
+  auto fidl_txn = FromDdkInternalTransaction(ddk::internal::Transaction::FromTxn(txn));
 
   ZX_ASSERT_MSG(std::holds_alternative<fidl::Transaction*>(fidl_txn),
                 "Can only take ownership of transaction once\n");
 
   auto result = std::get<fidl::Transaction*>(fidl_txn)->TakeOwnership();
-  auto new_ddk_txn = fake_ddk::MakeDdkInternalTransaction(std::move(result));
+  auto new_ddk_txn = MakeDdkInternalTransaction(std::move(result));
   *new_txn = *new_ddk_txn.DeviceFidlTxn();
 }
 

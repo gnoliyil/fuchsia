@@ -21,6 +21,7 @@ zx_library("fake_ddk") {
   deps = [
     "//sdk/lib/fdio",
     "//sdk/lib/fidl/cpp/wire",
+    "//src/devices/lib/fidl",
     "//src/lib/ddk",
     "//src/lib/ddktl",
     "//zircon/system/ulib/async",

@@ -6,56 +6,9 @@
 
 #include <lib/fidl/cpp/wire/channel.h>
 
+#include "src/devices/lib/fidl/transaction.h"
+
 namespace fake_ddk {
-namespace {
-// We are using lowest bit of transaction as a flag. The static assert assures us that this bit will
-// always be 0 due to alignment.
-static_assert(alignof(fidl::Transaction) > 1);
-constexpr uintptr_t kTransactionIsBoxed = 0x1;
-
-zx_status_t DdkReply(fidl_txn_t* txn, const fidl_outgoing_msg_t* msg) {
-  auto message = fidl::OutgoingMessage::FromEncodedCMessage(msg);
-  // If FromDdkInternalTransaction returns a unique_ptr variant, it will be destroyed when exiting
-  // this scope.
-  auto fidl_txn = FromDdkInternalTransaction(ddk::internal::Transaction::FromTxn(txn));
-  std::visit([&](auto&& arg) { arg->Reply(&message); }, fidl_txn);
-  return ZX_OK;
-}
-
-}  // namespace
-
-ddk::internal::Transaction MakeDdkInternalTransaction(fidl::Transaction* txn) {
-  device_fidl_txn_t fidl_txn = {};
-  fidl_txn.txn = {
-      .reply = DdkReply,
-  };
-  fidl_txn.driver_host_context = reinterpret_cast<uintptr_t>(txn);
-  return ddk::internal::Transaction(fidl_txn);
-}
-
-ddk::internal::Transaction MakeDdkInternalTransaction(std::unique_ptr<fidl::Transaction> txn) {
-  device_fidl_txn_t fidl_txn = {};
-  fidl_txn.txn = {
-      .reply = DdkReply,
-  };
-  fidl_txn.driver_host_context = reinterpret_cast<uintptr_t>(txn.release()) | kTransactionIsBoxed;
-  return ddk::internal::Transaction(fidl_txn);
-}
-
-std::variant<::fidl::Transaction*, std::unique_ptr<::fidl::Transaction>> FromDdkInternalTransaction(
-    ddk::internal::Transaction* txn) {
-  uintptr_t raw = txn->DriverHostCtx();
-  ZX_ASSERT_MSG(raw != 0, "Reused a fidl_txn_t!\n");
-
-  // Invalidate the source transaction
-  txn->DeviceFidlTxn()->driver_host_context = 0;
-
-  auto ptr = reinterpret_cast<fidl::Transaction*>(raw & ~kTransactionIsBoxed);
-  if (raw & kTransactionIsBoxed) {
-    return std::unique_ptr<fidl::Transaction>(ptr);
-  }
-  return ptr;
-}
 
 void FidlMessenger::Dispatch(fidl::IncomingHeaderAndMessage&& msg, ::fidl::Transaction* txn) {
   auto ddk_txn = MakeDdkInternalTransaction(txn);

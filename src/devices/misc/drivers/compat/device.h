@@ -27,7 +27,6 @@
 #include <fbl/intrusive_double_list.h>
 
 #include "src/devices/misc/drivers/compat/devfs_vnode.h"
-#include "src/lib/storage/vfs/cpp/pseudo_dir.h"
 #include "src/lib/storage/vfs/cpp/vmo_file.h"
 
 namespace compat {

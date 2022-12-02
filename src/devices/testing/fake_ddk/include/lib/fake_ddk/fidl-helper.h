@@ -46,12 +46,6 @@ namespace fake_ddk {
 
 typedef zx_status_t(MessageOp)(void* ctx, fidl_incoming_msg_t* msg, fidl_txn_t* txn);
 
-ddk::internal::Transaction MakeDdkInternalTransaction(fidl::Transaction* txn);
-ddk::internal::Transaction MakeDdkInternalTransaction(std::unique_ptr<fidl::Transaction> txn);
-
-std::variant<::fidl::Transaction*, std::unique_ptr<::fidl::Transaction>> FromDdkInternalTransaction(
-    ddk::internal::Transaction* txn);
-
 // Helper class to call fidl handlers in unit tests
 // Use in conjunction with fake ddk
 //
