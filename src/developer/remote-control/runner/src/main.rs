@@ -8,7 +8,7 @@ use {
     fidl_fuchsia_developer_remotecontrol::{RemoteControlMarker, RemoteControlProxy},
     fuchsia_async as fasync,
     fuchsia_component::client::connect_to_protocol,
-    futures::future::try_join,
+    futures::future::select,
     futures::io::BufReader,
     futures::prelude::*,
     hoist::{hoist, OvernetInstance},
@@ -101,13 +101,15 @@ async fn main() -> Result<()> {
     let mut stdin = zx_socket_from_fd(std::io::stdin().lock().as_raw_fd())?;
     let mut stdout = zx_socket_from_fd(std::io::stdout().lock().as_raw_fd())?;
 
-    try_join(
-        buffered_copy(&mut stdin, &mut tx_socket, BUFFER_SIZE),
-        buffered_copy(&mut rx_socket, &mut stdout, BUFFER_SIZE),
-    )
-    .await
+    let in_fut = buffered_copy(&mut stdin, &mut tx_socket, BUFFER_SIZE);
+    let out_fut = buffered_copy(&mut rx_socket, &mut stdout, BUFFER_SIZE);
+    futures::pin_mut!(in_fut);
+    futures::pin_mut!(out_fut);
+    match select(in_fut, out_fut).await {
+        future::Either::Left((v, _)) => v.context("stdin copy"),
+        future::Either::Right((v, _)) => v.context("stdout copy"),
+    }
     .map(|_| ())
-    .context("io copy")
 }
 
 #[cfg(test)]
