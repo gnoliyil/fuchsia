@@ -198,6 +198,93 @@ CLIENT_TEST(TwoWayResultWithError) {
   WAIT_UNTIL_CALLBACK_RUN();
 }
 
+CLIENT_TEST(OneWayNoRequest) {
+  runner()
+      ->CallOneWayNoRequest({{.target = TakeClosedClient()}})
+      .ThenExactlyOnce([&](fidl::Result<fidl_clientsuite::Runner::CallOneWayNoRequest>& result) {
+        MarkCallbackRun();
+        ASSERT_TRUE(result.is_ok()) << result.error_value();
+        ASSERT_EQ(fidl_clientsuite::EmptyResultClassification::WithSuccess({}), result.value());
+      });
+
+  ASSERT_OK(server_end().wait_for_signal(ZX_CHANNEL_READABLE));
+
+  Bytes bytes_out = {
+      header(0, kOrdinalOneWayNoRequest, fidl::MessageDynamicFlags::kStrictMethod),
+  };
+  ASSERT_OK(server_end().read_and_check(bytes_out));
+
+  WAIT_UNTIL_CALLBACK_RUN();
+}
+
+CLIENT_TEST(OneWayStructRequest) {
+  static const fidl_clientsuite::NonEmptyPayload kRequest{{.some_field = 390023}};
+
+  runner()
+      ->CallOneWayStructRequest({{.target = TakeClosedClient(), .request = kRequest}})
+      .ThenExactlyOnce(
+          [&](fidl::Result<fidl_clientsuite::Runner::CallOneWayStructRequest>& result) {
+            MarkCallbackRun();
+            ASSERT_TRUE(result.is_ok()) << result.error_value();
+            ASSERT_EQ(fidl_clientsuite::EmptyResultClassification::WithSuccess({}), result.value());
+          });
+
+  ASSERT_OK(server_end().wait_for_signal(ZX_CHANNEL_READABLE));
+
+  Bytes bytes_out = {
+      header(0, kOrdinalOneWayStructRequest, fidl::MessageDynamicFlags::kStrictMethod),
+      encode(kRequest),
+  };
+  ASSERT_OK(server_end().read_and_check(bytes_out));
+
+  WAIT_UNTIL_CALLBACK_RUN();
+}
+
+CLIENT_TEST(OneWayTableRequest) {
+  static const fidl_clientsuite::TablePayload kRequest{{.some_field = 390023}};
+
+  runner()
+      ->CallOneWayTableRequest({{.target = TakeClosedClient(), .request = kRequest}})
+      .ThenExactlyOnce([&](fidl::Result<fidl_clientsuite::Runner::CallOneWayTableRequest>& result) {
+        MarkCallbackRun();
+        ASSERT_TRUE(result.is_ok()) << result.error_value();
+        ASSERT_EQ(fidl_clientsuite::EmptyResultClassification::WithSuccess({}), result.value());
+      });
+
+  ASSERT_OK(server_end().wait_for_signal(ZX_CHANNEL_READABLE));
+
+  Bytes bytes_out = {
+      header(0, kOrdinalOneWayTableRequest, fidl::MessageDynamicFlags::kStrictMethod),
+      encode(kRequest),
+  };
+  ASSERT_OK(server_end().read_and_check(bytes_out));
+
+  WAIT_UNTIL_CALLBACK_RUN();
+}
+
+CLIENT_TEST(OneWayUnionRequest) {
+  static const fidl_clientsuite::UnionPayload kRequest =
+      fidl_clientsuite::UnionPayload::WithSomeVariant(390023);
+
+  runner()
+      ->CallOneWayUnionRequest({{.target = TakeClosedClient(), .request = kRequest}})
+      .ThenExactlyOnce([&](fidl::Result<fidl_clientsuite::Runner::CallOneWayUnionRequest>& result) {
+        MarkCallbackRun();
+        ASSERT_TRUE(result.is_ok()) << result.error_value();
+        ASSERT_EQ(fidl_clientsuite::EmptyResultClassification::WithSuccess({}), result.value());
+      });
+
+  ASSERT_OK(server_end().wait_for_signal(ZX_CHANNEL_READABLE));
+
+  Bytes bytes_out = {
+      header(0, kOrdinalOneWayUnionRequest, fidl::MessageDynamicFlags::kStrictMethod),
+      encode(kRequest),
+  };
+  ASSERT_OK(server_end().read_and_check(bytes_out));
+
+  WAIT_UNTIL_CALLBACK_RUN();
+}
+
 CLIENT_TEST(GracefulFailureDuringCallAfterPeerClose) {
   server_end().get().reset();
 

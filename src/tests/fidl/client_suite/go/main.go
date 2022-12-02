@@ -178,6 +178,38 @@ func (*runnerImpl) CallTwoWayStructPayloadErr(ctx fidl.Context, target clientsui
 	}
 }
 
+func (*runnerImpl) CallOneWayNoRequest(ctx fidl.Context, target clientsuite.ClosedTargetWithCtxInterface) (clientsuite.EmptyResultClassification, error) {
+	err := target.OneWayNoRequest(ctx)
+	if err != nil {
+		return clientsuite.EmptyResultClassificationWithFidlError(classifyErr(err)), nil
+	}
+	return clientsuite.EmptyResultClassificationWithSuccess(clientsuite.Empty{}), nil
+}
+
+func (*runnerImpl) CallOneWayStructRequest(ctx fidl.Context, target clientsuite.ClosedTargetWithCtxInterface, request clientsuite.NonEmptyPayload) (clientsuite.EmptyResultClassification, error) {
+	err := target.OneWayStructRequest(ctx, request.SomeField)
+	if err != nil {
+		return clientsuite.EmptyResultClassificationWithFidlError(classifyErr(err)), nil
+	}
+	return clientsuite.EmptyResultClassificationWithSuccess(clientsuite.Empty{}), nil
+}
+
+func (*runnerImpl) CallOneWayTableRequest(ctx fidl.Context, target clientsuite.ClosedTargetWithCtxInterface, request clientsuite.TablePayload) (clientsuite.EmptyResultClassification, error) {
+	err := target.OneWayTableRequest(ctx, request)
+	if err != nil {
+		return clientsuite.EmptyResultClassificationWithFidlError(classifyErr(err)), nil
+	}
+	return clientsuite.EmptyResultClassificationWithSuccess(clientsuite.Empty{}), nil
+}
+
+func (*runnerImpl) CallOneWayUnionRequest(ctx fidl.Context, target clientsuite.ClosedTargetWithCtxInterface, request clientsuite.UnionPayload) (clientsuite.EmptyResultClassification, error) {
+	err := target.OneWayUnionRequest(ctx, request)
+	if err != nil {
+		return clientsuite.EmptyResultClassificationWithFidlError(classifyErr(err)), nil
+	}
+	return clientsuite.EmptyResultClassificationWithSuccess(clientsuite.Empty{}), nil
+}
+
 func (*runnerImpl) CallStrictOneWay(_ fidl.Context, target clientsuite.OpenTargetWithCtxInterface) (clientsuite.EmptyResultClassification, error) {
 	return clientsuite.EmptyResultClassification{}, errors.New("Go Bindings do not support Open protocols")
 }

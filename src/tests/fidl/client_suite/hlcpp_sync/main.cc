@@ -124,6 +124,57 @@ class RunnerServer : public fidl::clientsuite::Runner {
     }
   }
 
+  void CallOneWayNoRequest(::fidl::InterfaceHandle<::fidl::clientsuite::ClosedTarget> target,
+                           CallOneWayNoRequestCallback callback) override {
+    auto client = target.BindSync();
+    auto status = client->OneWayNoRequest();
+    if (status == ZX_OK) {
+      callback(fidl::clientsuite::EmptyResultClassification::WithSuccess({}));
+    } else {
+      callback(fidl::clientsuite::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(status)));
+    }
+  }
+
+  void CallOneWayStructRequest(::fidl::InterfaceHandle<::fidl::clientsuite::ClosedTarget> target,
+                               fidl::clientsuite::NonEmptyPayload request,
+                               CallOneWayStructRequestCallback callback) override {
+    auto client = target.BindSync();
+    auto status = client->OneWayStructRequest(request.some_field);
+    if (status == ZX_OK) {
+      callback(fidl::clientsuite::EmptyResultClassification::WithSuccess({}));
+    } else {
+      callback(fidl::clientsuite::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(status)));
+    }
+  }
+
+  void CallOneWayTableRequest(::fidl::InterfaceHandle<::fidl::clientsuite::ClosedTarget> target,
+                              fidl::clientsuite::TablePayload request,
+                              CallOneWayTableRequestCallback callback) override {
+    auto client = target.BindSync();
+    auto status = client->OneWayTableRequest(std::move(request));
+    if (status == ZX_OK) {
+      callback(fidl::clientsuite::EmptyResultClassification::WithSuccess({}));
+    } else {
+      callback(fidl::clientsuite::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(status)));
+    }
+  }
+
+  void CallOneWayUnionRequest(::fidl::InterfaceHandle<::fidl::clientsuite::ClosedTarget> target,
+                              fidl::clientsuite::UnionPayload request,
+                              CallOneWayUnionRequestCallback callback) override {
+    auto client = target.BindSync();
+    auto status = client->OneWayUnionRequest(std::move(request));
+    if (status == ZX_OK) {
+      callback(fidl::clientsuite::EmptyResultClassification::WithSuccess({}));
+    } else {
+      callback(fidl::clientsuite::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(status)));
+    }
+  }
+
   void CallStrictOneWay(::fidl::InterfaceHandle<::fidl::clientsuite::OpenTarget> target,
                         CallStrictOneWayCallback callback) override {
     auto client = target.BindSync();

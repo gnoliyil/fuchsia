@@ -185,6 +185,61 @@ class RunnerServer : public fidl::clientsuite::Runner {
     });
   }
 
+  void CallOneWayNoRequest(fidl::InterfaceHandle<fidl::clientsuite::ClosedTarget> target,
+                           CallOneWayNoRequestCallback callback) override {
+    SharedCallbackAndClient client_callback(target.Bind(), std::move(callback));
+    client_callback.client().set_error_handler([client_callback](auto status) {
+      client_callback(fidl::clientsuite::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(status)));
+    });
+    client_callback.client()->OneWayNoRequest();
+    if (client_callback) {
+      client_callback(fidl::clientsuite::EmptyResultClassification::WithSuccess({}));
+    }
+  }
+
+  void CallOneWayStructRequest(fidl::InterfaceHandle<fidl::clientsuite::ClosedTarget> target,
+                               fidl::clientsuite::NonEmptyPayload request,
+                               CallOneWayStructRequestCallback callback) override {
+    SharedCallbackAndClient client_callback(target.Bind(), std::move(callback));
+    client_callback.client().set_error_handler([client_callback](auto status) {
+      client_callback(fidl::clientsuite::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(status)));
+    });
+    client_callback.client()->OneWayStructRequest(request.some_field);
+    if (client_callback) {
+      client_callback(fidl::clientsuite::EmptyResultClassification::WithSuccess({}));
+    }
+  }
+
+  void CallOneWayTableRequest(fidl::InterfaceHandle<fidl::clientsuite::ClosedTarget> target,
+                              fidl::clientsuite::TablePayload request,
+                              CallOneWayTableRequestCallback callback) override {
+    SharedCallbackAndClient client_callback(target.Bind(), std::move(callback));
+    client_callback.client().set_error_handler([client_callback](auto status) {
+      client_callback(fidl::clientsuite::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(status)));
+    });
+    client_callback.client()->OneWayTableRequest(std::move(request));
+    if (client_callback) {
+      client_callback(fidl::clientsuite::EmptyResultClassification::WithSuccess({}));
+    }
+  }
+
+  void CallOneWayUnionRequest(fidl::InterfaceHandle<fidl::clientsuite::ClosedTarget> target,
+                              fidl::clientsuite::UnionPayload request,
+                              CallOneWayUnionRequestCallback callback) override {
+    SharedCallbackAndClient client_callback(target.Bind(), std::move(callback));
+    client_callback.client().set_error_handler([client_callback](auto status) {
+      client_callback(fidl::clientsuite::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(status)));
+    });
+    client_callback.client()->OneWayUnionRequest(std::move(request));
+    if (client_callback) {
+      client_callback(fidl::clientsuite::EmptyResultClassification::WithSuccess({}));
+    }
+  }
+
   void CallStrictOneWay(::fidl::InterfaceHandle<::fidl::clientsuite::OpenTarget> target,
                         CallStrictOneWayCallback callback) override {
     SharedCallbackAndClient client_callback(target.Bind(), std::move(callback));

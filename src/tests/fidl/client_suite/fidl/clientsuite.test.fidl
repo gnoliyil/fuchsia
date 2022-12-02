@@ -195,6 +195,29 @@ closed protocol Runner {
         target client_end:ClosedTarget;
     }) -> (NonEmptyResultWithErrorClassification);
 
+    // Request that the client call the [`ClosedTarget.OneWayNoRequest`] method.
+    strict CallOneWayNoRequest(resource struct {
+        target client_end:ClosedTarget;
+    }) -> (EmptyResultClassification);
+
+    // Request that the client call the [`ClosedTarget.OneWayStructRequest`] method.
+    strict CallOneWayStructRequest(resource struct {
+        target client_end:ClosedTarget;
+        request NonEmptyPayload;
+    }) -> (EmptyResultClassification);
+
+    // Request that the client call the [`ClosedTarget.OneWayTableRequest`] method.
+    strict CallOneWayTableRequest(resource struct {
+        target client_end:ClosedTarget;
+        request TablePayload;
+    }) -> (EmptyResultClassification);
+
+    // Request that the client call the [`ClosedTarget.OneWayUnionRequest`] method.
+    strict CallOneWayUnionRequest(resource struct {
+        target client_end:ClosedTarget;
+        request UnionPayload;
+    }) -> (EmptyResultClassification);
+
     // Calls on the open protocol.
 
     // Request that the client call the [`OpenTarget.StrictOneWay`] method.
@@ -307,6 +330,11 @@ closed protocol ClosedTarget {
     strict TwoWayTablePayload() -> (TablePayload);
     strict TwoWayUnionPayload() -> (UnionPayload);
     strict TwoWayStructPayloadErr() -> (NonEmptyPayload) error int32;
+
+    strict OneWayNoRequest();
+    strict OneWayStructRequest(NonEmptyPayload);
+    strict OneWayTableRequest(TablePayload);
+    strict OneWayUnionRequest(UnionPayload);
 };
 
 // An event received in the [`ClosedTarget`]. Used to report the received event
@@ -393,6 +421,12 @@ type Test = flexible enum : uint32 {
     TWO_WAY_UNION_PAYLOAD = 44;
     TWO_WAY_RESULT_WITH_PAYLOAD = 45;
     TWO_WAY_RESULT_WITH_ERROR = 46;
+
+    ONE_WAY_NO_REQUEST = 48;
+    ONE_WAY_STRUCT_REQUEST = 49;
+    ONE_WAY_TABLE_REQUEST = 50;
+    ONE_WAY_UNION_REQUEST = 51;
+
     GRACEFUL_FAILURE_DURING_CALL_AFTER_PEER_CLOSE = 3;
 
     // ////////////////////////////////////////////////////////////////////////
@@ -448,5 +482,5 @@ type Test = flexible enum : uint32 {
     V1_TWO_WAY_NO_PAYLOAD = 40;
     V1_TWO_WAY_STRUCT_PAYLOAD = 41;
 
-    // next available: 48
+    // next available: 52
 };

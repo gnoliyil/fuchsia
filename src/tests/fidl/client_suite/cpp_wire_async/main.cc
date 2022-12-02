@@ -130,6 +130,58 @@ class RunnerServer : public fidl::WireServer<fidl_clientsuite::Runner> {
     });
   }
 
+  void CallOneWayNoRequest(CallOneWayNoRequestRequestView request,
+                           CallOneWayNoRequestCompleter::Sync& completer) override {
+    auto client = fidl::WireClient(std::move(request->target), dispatcher_);
+    auto result = client->OneWayNoRequest();
+    if (result.ok()) {
+      completer.Reply(fidl_clientsuite::wire::EmptyResultClassification::WithSuccess(
+          ::fidl_clientsuite::wire::Empty()));
+    } else {
+      completer.Reply(fidl_clientsuite::wire::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(result.error())));
+    }
+  }
+
+  void CallOneWayStructRequest(CallOneWayStructRequestRequestView request,
+                               CallOneWayStructRequestCompleter::Sync& completer) override {
+    auto client = fidl::WireClient(std::move(request->target), dispatcher_);
+    auto result = client->OneWayStructRequest(request->request.some_field);
+    if (result.ok()) {
+      completer.Reply(fidl_clientsuite::wire::EmptyResultClassification::WithSuccess(
+          ::fidl_clientsuite::wire::Empty()));
+    } else {
+      completer.Reply(fidl_clientsuite::wire::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(result.error())));
+    }
+  }
+
+  void CallOneWayTableRequest(CallOneWayTableRequestRequestView request,
+                              CallOneWayTableRequestCompleter::Sync& completer) override {
+    auto client = fidl::WireClient(std::move(request->target), dispatcher_);
+    auto result = client->OneWayTableRequest(request->request);
+    if (result.ok()) {
+      completer.Reply(fidl_clientsuite::wire::EmptyResultClassification::WithSuccess(
+          ::fidl_clientsuite::wire::Empty()));
+    } else {
+      completer.Reply(fidl_clientsuite::wire::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(result.error())));
+    }
+  }
+
+  void CallOneWayUnionRequest(CallOneWayUnionRequestRequestView request,
+                              CallOneWayUnionRequestCompleter::Sync& completer) override {
+    auto client = fidl::WireClient(std::move(request->target), dispatcher_);
+    auto result = client->OneWayUnionRequest(request->request);
+    if (result.ok()) {
+      completer.Reply(fidl_clientsuite::wire::EmptyResultClassification::WithSuccess(
+          ::fidl_clientsuite::wire::Empty()));
+    } else {
+      completer.Reply(fidl_clientsuite::wire::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(result.error())));
+    }
+  }
+
   void CallStrictOneWay(CallStrictOneWayRequestView request,
                         CallStrictOneWayCompleter::Sync& completer) override {
     auto client = fidl::WireClient(std::move(request->target), dispatcher_);

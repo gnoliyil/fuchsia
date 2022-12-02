@@ -150,6 +150,55 @@ class RunnerImpl extends Runner {
     }
   }
 
+  Future<EmptyResultClassification> callOneWayNoRequest(
+      InterfaceHandle<ClosedTarget> targetHandle) async {
+    var target = ClosedTargetProxy();
+    target.ctrl.bind(targetHandle);
+    try {
+      await target.oneWayNoRequest();
+      return const EmptyResultClassification.withSuccess(Empty());
+    } catch (e) {
+      return EmptyResultClassification.withFidlError(classifyError(e));
+    }
+  }
+
+  Future<EmptyResultClassification> callOneWayStructRequest(
+      InterfaceHandle<ClosedTarget> targetHandle,
+      NonEmptyPayload request) async {
+    var target = ClosedTargetProxy();
+    target.ctrl.bind(targetHandle);
+    try {
+      await target.oneWayStructRequest(request.someField);
+      return const EmptyResultClassification.withSuccess(Empty());
+    } catch (e) {
+      return EmptyResultClassification.withFidlError(classifyError(e));
+    }
+  }
+
+  Future<EmptyResultClassification> callOneWayTableRequest(
+      InterfaceHandle<ClosedTarget> targetHandle, TablePayload request) async {
+    var target = ClosedTargetProxy();
+    target.ctrl.bind(targetHandle);
+    try {
+      await target.oneWayTableRequest(request);
+      return const EmptyResultClassification.withSuccess(Empty());
+    } catch (e) {
+      return EmptyResultClassification.withFidlError(classifyError(e));
+    }
+  }
+
+  Future<EmptyResultClassification> callOneWayUnionRequest(
+      InterfaceHandle<ClosedTarget> targetHandle, UnionPayload request) async {
+    var target = ClosedTargetProxy();
+    target.ctrl.bind(targetHandle);
+    try {
+      await target.oneWayUnionRequest(request);
+      return const EmptyResultClassification.withSuccess(Empty());
+    } catch (e) {
+      return EmptyResultClassification.withFidlError(classifyError(e));
+    }
+  }
+
   Future<EmptyResultClassification> callStrictOneWay(
       InterfaceHandle<OpenTarget> targetHandle) async {
     var target = OpenTargetProxy();

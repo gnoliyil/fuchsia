@@ -118,6 +118,58 @@ class RunnerServer : public fidl::Server<fidl_clientsuite::Runner> {
         });
   }
 
+  void CallOneWayNoRequest(CallOneWayNoRequestRequest& request,
+                           CallOneWayNoRequestCompleter::Sync& completer) override {
+    auto client = fidl::SharedClient(std::move(request.target()), dispatcher_);
+    auto result = client->OneWayNoRequest();
+    if (result.is_ok()) {
+      completer.Reply(
+          fidl_clientsuite::EmptyResultClassification::WithSuccess(::fidl_clientsuite::Empty()));
+    } else {
+      completer.Reply(fidl_clientsuite::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(result.error_value())));
+    }
+  }
+
+  void CallOneWayStructRequest(CallOneWayStructRequestRequest& request,
+                               CallOneWayStructRequestCompleter::Sync& completer) override {
+    auto client = fidl::SharedClient(std::move(request.target()), dispatcher_);
+    auto result = client->OneWayStructRequest(request.request());
+    if (result.is_ok()) {
+      completer.Reply(
+          fidl_clientsuite::EmptyResultClassification::WithSuccess(::fidl_clientsuite::Empty()));
+    } else {
+      completer.Reply(fidl_clientsuite::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(result.error_value())));
+    }
+  }
+
+  void CallOneWayTableRequest(CallOneWayTableRequestRequest& request,
+                              CallOneWayTableRequestCompleter::Sync& completer) override {
+    auto client = fidl::SharedClient(std::move(request.target()), dispatcher_);
+    auto result = client->OneWayTableRequest(request.request());
+    if (result.is_ok()) {
+      completer.Reply(
+          fidl_clientsuite::EmptyResultClassification::WithSuccess(::fidl_clientsuite::Empty()));
+    } else {
+      completer.Reply(fidl_clientsuite::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(result.error_value())));
+    }
+  }
+
+  void CallOneWayUnionRequest(CallOneWayUnionRequestRequest& request,
+                              CallOneWayUnionRequestCompleter::Sync& completer) override {
+    auto client = fidl::SharedClient(std::move(request.target()), dispatcher_);
+    auto result = client->OneWayUnionRequest(request.request());
+    if (result.is_ok()) {
+      completer.Reply(
+          fidl_clientsuite::EmptyResultClassification::WithSuccess(::fidl_clientsuite::Empty()));
+    } else {
+      completer.Reply(fidl_clientsuite::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(result.error_value())));
+    }
+  }
+
   void CallStrictOneWay(CallStrictOneWayRequest& request,
                         CallStrictOneWayCompleter::Sync& completer) override {
     auto client = fidl::SharedClient(std::move(request.target()), dispatcher_);

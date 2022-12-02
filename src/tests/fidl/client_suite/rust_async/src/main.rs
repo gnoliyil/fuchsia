@@ -109,6 +109,50 @@ async fn run_runner_server(stream: RunnerRequestStream) -> Result<(), Error> {
                             .context("sending response failed"),
                     }
                 }
+                RunnerRequest::CallOneWayNoRequest { target, responder } => {
+                    let client = target.into_proxy().context("creating proxy failed")?;
+                    match client.one_way_no_request() {
+                        Ok(()) => responder
+                            .send(&mut EmptyResultClassification::Success(Empty))
+                            .context("sending response failed"),
+                        Err(err) => responder
+                            .send(&mut EmptyResultClassification::FidlError(classify_error(err)))
+                            .context("sending response failed"),
+                    }
+                }
+                RunnerRequest::CallOneWayStructRequest { target, request, responder } => {
+                    let client = target.into_proxy().context("creating proxy failed")?;
+                    match client.one_way_struct_request(request.some_field) {
+                        Ok(()) => responder
+                            .send(&mut EmptyResultClassification::Success(Empty))
+                            .context("sending response failed"),
+                        Err(err) => responder
+                            .send(&mut EmptyResultClassification::FidlError(classify_error(err)))
+                            .context("sending response failed"),
+                    }
+                }
+                RunnerRequest::CallOneWayTableRequest { target, request, responder } => {
+                    let client = target.into_proxy().context("creating proxy failed")?;
+                    match client.one_way_table_request(request) {
+                        Ok(()) => responder
+                            .send(&mut EmptyResultClassification::Success(Empty))
+                            .context("sending response failed"),
+                        Err(err) => responder
+                            .send(&mut EmptyResultClassification::FidlError(classify_error(err)))
+                            .context("sending response failed"),
+                    }
+                }
+                RunnerRequest::CallOneWayUnionRequest { target, mut request, responder } => {
+                    let client = target.into_proxy().context("creating proxy failed")?;
+                    match client.one_way_union_request(&mut request) {
+                        Ok(()) => responder
+                            .send(&mut EmptyResultClassification::Success(Empty))
+                            .context("sending response failed"),
+                        Err(err) => responder
+                            .send(&mut EmptyResultClassification::FidlError(classify_error(err)))
+                            .context("sending response failed"),
+                    }
+                }
                 // Open target methods
                 RunnerRequest::CallStrictOneWay { target, responder } => {
                     let client = target.into_proxy().context("creating proxy failed")?;
