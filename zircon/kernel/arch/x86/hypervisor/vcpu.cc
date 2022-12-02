@@ -102,32 +102,6 @@ bool has_error_code(uint32_t vector) {
   }
 }
 
-struct MsrListEntry {
-  uint32_t msr;
-  uint32_t reserved;
-  uint64_t value;
-} __PACKED;
-
-void edit_msr_list(VmxPage* msr_list_page, size_t index, uint32_t msr, uint64_t value) {
-  // From Volume 3, Section 24.7.2.
-
-  // From Volume 3, Appendix A.6: Specifically, if the value bits 27:25 of
-  // IA32_VMX_MISC is N, then 512 * (N + 1) is the recommended maximum number
-  // of MSRs to be included in each list.
-  //
-  // From Volume 3, Section 24.7.2: This field specifies the number of MSRs to
-  // be stored on VM exit. It is recommended that this count not exceed 512
-  // bytes.
-  //
-  // Since these two statements conflict, we are taking the conservative
-  // minimum and asserting that: index < (512 bytes / size of MsrListEntry).
-  ASSERT(index < (512 / sizeof(MsrListEntry)));
-
-  MsrListEntry* entry = msr_list_page->VirtualAddress<MsrListEntry>() + index;
-  entry->msr = msr;
-  entry->value = value;
-}
-
 void swap_extended_registers(uint8_t* save_extended_registers, uint64_t& save_xcr0, bool save,
                              uint8_t* load_extended_registers, uint64_t& load_xcr0, bool load) {
   x86_extended_register_save_state(save_extended_registers);
@@ -161,7 +135,6 @@ void register_copy(Out& out, const In& in) {
 
 zx_status_t vmcs_init(AutoVmcs& vmcs, const VcpuConfig& config, uint16_t vpid, uintptr_t entry,
                       paddr_t msr_bitmaps_address, paddr_t ept_pml4, VmxState* vmx_state,
-                      VmxPage* host_msr_page, VmxPage* guest_msr_page,
                       uint8_t* extended_register_state) {
   // Setup secondary processor-based VMCS controls.
   zx_status_t status =
@@ -332,25 +305,6 @@ zx_status_t vmcs_init(AutoVmcs& vmcs, const VcpuConfig& config, uint16_t vpid, u
 
   // Setup MSR handling.
   vmcs.Write(VmcsField64::MSR_BITMAPS_ADDRESS, msr_bitmaps_address);
-
-  edit_msr_list(host_msr_page, 0, X86_MSR_IA32_KERNEL_GS_BASE,
-                read_msr(X86_MSR_IA32_KERNEL_GS_BASE));
-  edit_msr_list(host_msr_page, 1, X86_MSR_IA32_STAR, read_msr(X86_MSR_IA32_STAR));
-  edit_msr_list(host_msr_page, 2, X86_MSR_IA32_LSTAR, read_msr(X86_MSR_IA32_LSTAR));
-  edit_msr_list(host_msr_page, 3, X86_MSR_IA32_FMASK, read_msr(X86_MSR_IA32_FMASK));
-  edit_msr_list(host_msr_page, 4, X86_MSR_IA32_TSC_AUX, read_msr(X86_MSR_IA32_TSC_AUX));
-  vmcs.Write(VmcsField64::EXIT_MSR_LOAD_ADDRESS, host_msr_page->PhysicalAddress());
-  vmcs.Write(VmcsField32::EXIT_MSR_LOAD_COUNT, 5);
-
-  edit_msr_list(guest_msr_page, 0, X86_MSR_IA32_KERNEL_GS_BASE, 0);
-  edit_msr_list(guest_msr_page, 1, X86_MSR_IA32_STAR, 0);
-  edit_msr_list(guest_msr_page, 2, X86_MSR_IA32_LSTAR, 0);
-  edit_msr_list(guest_msr_page, 3, X86_MSR_IA32_FMASK, 0);
-  edit_msr_list(guest_msr_page, 4, X86_MSR_IA32_TSC_AUX, 0);
-  vmcs.Write(VmcsField64::EXIT_MSR_STORE_ADDRESS, guest_msr_page->PhysicalAddress());
-  vmcs.Write(VmcsField32::EXIT_MSR_STORE_COUNT, 5);
-  vmcs.Write(VmcsField64::ENTRY_MSR_LOAD_ADDRESS, guest_msr_page->PhysicalAddress());
-  vmcs.Write(VmcsField32::ENTRY_MSR_LOAD_COUNT, 5);
 
   // Setup VMCS host state.
   //
@@ -732,17 +686,7 @@ zx::result<ktl::unique_ptr<V>> Vcpu::Create(G& guest, uint16_t vpid, zx_vaddr_t 
   }
 
   VmxInfo vmx_info;
-  zx_status_t status = vcpu->host_msr_page_.Alloc(vmx_info, 0);
-  if (status != ZX_OK) {
-    return zx::error(status);
-  }
-
-  status = vcpu->guest_msr_page_.Alloc(vmx_info, 0);
-  if (status != ZX_OK) {
-    return zx::error(status);
-  }
-
-  status = vcpu->vmcs_page_.Alloc(vmx_info, 0);
+  zx_status_t status = vcpu->vmcs_page_.Alloc(vmx_info, 0);
   if (status != ZX_OK) {
     return zx::error(status);
   }
@@ -757,19 +701,27 @@ zx::result<ktl::unique_ptr<V>> Vcpu::Create(G& guest, uint16_t vpid, zx_vaddr_t 
   // that we do not migrate CPUs while setting up the VCPU.
   AutoVmcs vmcs(vmcs_address, /*clear=*/true);
   status = vmcs_init(vmcs, V::kConfig, vpid, entry, guest.MsrBitmapsAddress(), ept_pml4,
-                     &vcpu->vmx_state_, &vcpu->host_msr_page_, &vcpu->guest_msr_page_,
-                     vcpu->extended_register_state_);
+                     &vcpu->vmx_state_, vcpu->extended_register_state_);
   if (status != ZX_OK) {
     return zx::error(status);
   }
 
-  // Only set the thread migrate function after we have initialised the VMCS.
-  // Otherwise, the migrate function may interact with an uninitialised VMCS.
-  //
-  // We have to disable thread safety analysis because it's not smart enough to
-  // realize that SetMigrateFn will always be called with the ThreadLock.
-  thread->SetMigrateFn([vcpu = vcpu.get()](Thread* thread, auto stage)
-                           TA_NO_THREAD_SAFETY_ANALYSIS { vcpu->MigrateCpu(thread, stage); });
+  {
+    Guard<MonitoredSpinLock, IrqSave> guard{ThreadLock::Get(), SOURCE_TAG};
+    // Only set the thread migrate function after we have initialised the VMCS.
+    // Otherwise, the migrate function may interact with an uninitialised VMCS.
+    //
+    // We have to disable thread safety analysis because it's not smart enough to
+    // realize that SetMigrateFn will always be called with the ThreadLock.
+    thread->SetMigrateFnLocked([vcpu = vcpu.get()](Thread* thread, auto stage)
+                                   TA_NO_THREAD_SAFETY_ANALYSIS { vcpu->Migrate(thread, stage); });
+    thread->SetContextSwitchFnLocked([vcpu = vcpu.get()]() {
+      if (vcpu->entered_.load()) {
+        // `arch_context_switch()` saves and restores GS, so we can skip it.
+        vcpu->ContextSwitch(/*include_gs=*/false);
+      }
+    });
+  }
 
   return zx::ok(ktl::move(vcpu));
 }
@@ -779,7 +731,8 @@ Vcpu::Vcpu(Guest& guest, uint16_t vpid, Thread* thread)
       vpid_(vpid),
       last_cpu_(thread->LastCpu()),
       thread_(thread),
-      vmx_state_(/* zero-init */) {
+      vmx_state_(/* zero-init */),
+      msr_state_(/* zero-init */) {
   thread->set_vcpu(true);
 }
 
@@ -795,6 +748,7 @@ Vcpu::~Vcpu() {
       // Clear the migration function, so that |thread_| does not reference
       // |this| after destruction of the VCPU.
       thread->SetMigrateFnLocked(nullptr);
+      thread->SetContextSwitchFnLocked(nullptr);
     }
     cpu = last_cpu_;
   }
@@ -812,7 +766,7 @@ Vcpu::~Vcpu() {
   }
 }
 
-void Vcpu::MigrateCpu(Thread* thread, Thread::MigrateStage stage) {
+void Vcpu::Migrate(Thread* thread, Thread::MigrateStage stage) {
   // Volume 3, Section 31.8.2: An MP-aware VMM is free to assign any logical
   // processor to a VM. But for performance considerations, moving a guest VMCS
   // to another logical processor is slower than resuming that guest VMCS on the
@@ -857,10 +811,6 @@ void Vcpu::MigrateCpu(Thread* thread, Thread::MigrateStage stage) {
       // Load the VMCS on the destination processor.
       vmptrld(vmcs_page_.PhysicalAddress());
 
-      // Update the host MSR list entries with the per-CPU variables of the
-      // destination processor.
-      edit_msr_list(&host_msr_page_, 4, X86_MSR_IA32_TSC_AUX, read_msr(X86_MSR_IA32_TSC_AUX));
-
       // Update the VMCS with the per-CPU variables of the destination
       // processor.
       x86_percpu* percpu = x86_get_percpu();
@@ -879,6 +829,29 @@ void Vcpu::MigrateCpu(Thread* thread, Thread::MigrateStage stage) {
       thread_.store(nullptr);
       break;
     }
+  }
+}
+
+void Vcpu::ContextSwitch(bool include_gs) {
+  uint64_t star = read_msr(X86_MSR_IA32_STAR);
+  uint64_t lstar = read_msr(X86_MSR_IA32_LSTAR);
+  uint64_t fmask = read_msr(X86_MSR_IA32_FMASK);
+  uint64_t tsc_aux = read_msr(X86_MSR_IA32_TSC_AUX);
+
+  write_msr(X86_MSR_IA32_STAR, msr_state_.star);
+  write_msr(X86_MSR_IA32_LSTAR, msr_state_.lstar);
+  write_msr(X86_MSR_IA32_FMASK, msr_state_.fmask);
+  write_msr(X86_MSR_IA32_TSC_AUX, msr_state_.tsc_aux);
+
+  msr_state_.star = star;
+  msr_state_.lstar = lstar;
+  msr_state_.fmask = fmask;
+  msr_state_.tsc_aux = tsc_aux;
+
+  if (include_gs) {
+    uint64_t kernel_gs_base = read_msr(X86_MSR_IA32_KERNEL_GS_BASE);
+    write_msr(X86_MSR_IA32_KERNEL_GS_BASE, msr_state_.kernel_gs_base);
+    msr_state_.kernel_gs_base = kernel_gs_base;
   }
 }
 
@@ -927,6 +900,8 @@ zx_status_t Vcpu::EnterInternal(PreEnterFn pre_enter, PostExitFn post_exit,
     if (extended_registers_loaded) {
       AutoVmcs vmcs(vmcs_page_.PhysicalAddress());
       SaveExtendedRegisters(vmcs);
+      ContextSwitch(/*include_gs=*/true);
+      entered_.store(false);
     }
     // Spectre V2: Ensure that code executed in the VM guest cannot influence
     // indirect branch prediction in the host.
@@ -971,6 +946,8 @@ zx_status_t Vcpu::EnterInternal(PreEnterFn pre_enter, PostExitFn post_exit,
     }
 
     if (!extended_registers_loaded) {
+      entered_.store(true);
+      ContextSwitch(/*include_gs=*/true);
       LoadExtendedRegisters(vmcs);
       extended_registers_loaded = true;
     }

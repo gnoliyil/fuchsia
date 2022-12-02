@@ -71,7 +71,7 @@ zx::result<ktl::unique_ptr<G>> Guest::Create() {
   IgnoreMsr(guest->msr_bitmaps_page_, X86_MSR_IA32_FS_BASE);
   IgnoreMsr(guest->msr_bitmaps_page_, X86_MSR_IA32_GS_BASE);
 
-  // These are handled by MSR-load / MSR-store areas.
+  // These are saved/restored manually.
   IgnoreMsr(guest->msr_bitmaps_page_, X86_MSR_IA32_STAR);
   IgnoreMsr(guest->msr_bitmaps_page_, X86_MSR_IA32_LSTAR);
   IgnoreMsr(guest->msr_bitmaps_page_, X86_MSR_IA32_FMASK);

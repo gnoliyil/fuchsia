@@ -98,6 +98,15 @@ class DirectGuest : public Guest {
   fbl::RefPtr<VmAspace> shared_aspace_;
 };
 
+// Stores part of the MSR state for a virtual CPU.
+struct MsrState {
+  uint64_t star;
+  uint64_t lstar;
+  uint64_t fmask;
+  uint64_t tsc_aux;
+  uint64_t kernel_gs_base;
+};
+
 // Represents a virtual CPU within a guest.
 class Vcpu {
  public:
@@ -121,7 +130,8 @@ class Vcpu {
 
   Vcpu(Guest& guest, uint16_t vpid, Thread* thread);
 
-  void MigrateCpu(Thread* thread, Thread::MigrateStage stage) TA_REQ(ThreadLock::Get());
+  void Migrate(Thread* thread, Thread::MigrateStage stage) TA_REQ(ThreadLock::Get());
+  void ContextSwitch(bool include_gs);
   void LoadExtendedRegisters(AutoVmcs& vmcs);
   void SaveExtendedRegisters(AutoVmcs& vmcs);
 
@@ -142,10 +152,10 @@ class Vcpu {
   // |thread_| will be set to nullptr when the thread exits.
   ktl::atomic<Thread*> thread_;
   ktl::atomic<bool> kicked_ = false;
-  VmxPage host_msr_page_;
-  VmxPage guest_msr_page_;
+  ktl::atomic<bool> entered_ = false;
   VmxPage vmcs_page_;
   VmxState vmx_state_;
+  MsrState msr_state_;
   // The guest may enable any state, so the XSAVE area is the maximum size.
   alignas(64) uint8_t extended_register_state_[X86_MAX_EXTENDED_REGISTER_SIZE];
 };
