@@ -100,6 +100,9 @@ assembly_input_bundle("common_minimal") {
     # Other
     "//src/sys/stash:pkg",
     "//src/developer/memory/monitor",
+
+    # Security
+    "//src/security/bin/root_ssl_certificates",
   ]
 
   # Create package and archive for use OOT.
