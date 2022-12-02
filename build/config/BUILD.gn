@@ -738,7 +738,6 @@ config("Wno-conversion") {
     "//src/devices/rtc/drivers/intel-rtc:*",
     "//src/devices/spi/drivers/aml-spi:*",
     "//src/devices/spi/drivers/intel-gspi:*",
-    "//src/devices/spi/drivers/spi:*",
     "//src/devices/sysmem/drivers/sysmem:*",
     "//src/devices/tee/drivers/optee:*",
     "//src/devices/temperature/drivers/shtv3:*",

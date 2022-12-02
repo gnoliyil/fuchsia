@@ -237,7 +237,7 @@ TEST_F(SpiDeviceTest, SpiTest) {
   uint8_t txbuf[] = {0, 1, 2, 3, 4, 5, 6};
   uint8_t rxbuf[sizeof txbuf];
 
-  size_t i = 0;
+  uint32_t i = 0;
   for (auto it = spi_bus->children().begin(); it != spi_bus->children().end(); it++, i++) {
     spi_impl_.current_test_cs_ = i;
 
