@@ -73,6 +73,12 @@ fn read_from_chain<'a, 'b, N: DriverNotify, M: DriverMem, T: FromBytes>(
     Ok(T::read_from(buffer.as_slice()).unwrap())
 }
 
+#[derive(Debug, PartialEq)]
+enum CursorOperation {
+    Update,
+    Move,
+}
+
 #[derive(Default)]
 struct ScanoutEntry {
     scanout: Option<Box<dyn Scanout>>,
@@ -136,7 +142,9 @@ impl<'a, M: DriverMem> GpuDevice<'a, M> {
                             tracing::warn!("Error processing cursor queue: {}", e);
                         }
                     }
-                    None => {}
+                    None => {
+                        tracing::warn!("Cursor stream has ended");
+                    }
                 },
                 gpu_command = self.command_receiver.next() => match gpu_command {
                     Some(command) => self.handle_gpu_command(command),
@@ -211,6 +219,10 @@ impl<'a, M: DriverMem> GpuDevice<'a, M> {
             }
         };
         match header.ty.get() {
+            wire::VIRTIO_GPU_CMD_UPDATE_CURSOR => {
+                self.update_cursor(chain, CursorOperation::Update)?
+            }
+            wire::VIRTIO_GPU_CMD_MOVE_CURSOR => self.update_cursor(chain, CursorOperation::Move)?,
             cmd => self.unsupported_command(chain, cmd)?,
         }
         Ok(())
@@ -560,6 +572,86 @@ impl<'a, M: DriverMem> GpuDevice<'a, M> {
                 ..Default::default()
             },
         )
+    }
+
+    fn update_cursor<'b, N: DriverNotify>(
+        &mut self,
+        mut chain: ReadableChain<'a, 'b, N, M>,
+        cursor_op: CursorOperation,
+    ) -> Result<(), Error> {
+        let result: Result<wire::VirtioGpuUpdateCursor, _> = read_from_chain(&mut chain);
+        let Ok(cmd) = result else {
+            tracing::warn!("Failed to read VirtioGpuUpdateCursor from queue: {:?}", result);
+            return write_error_to_chain(chain, wire::VirtioGpuError::Unspecified);
+        };
+
+        // Validate scanout_id.
+        let scanout_id: usize = cmd.pos.scanout_id.get().try_into()?;
+        if scanout_id >= self.scanouts.len() || self.scanouts[scanout_id].scanout.is_none() {
+            tracing::warn!("UPDATE_CURSOR with invalid scanout_id {}", scanout_id);
+            return write_error_to_chain(chain, wire::VirtioGpuError::InvalidScanoutId);
+        }
+
+        let scanout = self.scanouts[cmd.pos.scanout_id.get() as usize].scanout.as_mut().unwrap();
+
+        // For an update call, the cursor resource and hotspot are first updated.
+        if cursor_op == CursorOperation::Update {
+            let resource_id = cmd.resource_id.get();
+            let resource = if resource_id == 0 {
+                // Resource ID 0 is a special case indicating the cursor resource should be cleared.
+                None
+            } else {
+                let Some(resource) = self.resources.get(&resource_id) else {
+                    tracing::warn!(
+                        "UPDATE_CURSOR called with invalid resource_id: {}",
+                        resource_id
+                    );
+                    return write_error_to_chain(chain, wire::VirtioGpuError::InvalidResourceId);
+                };
+
+                let dimensions = (resource.width(), resource.height());
+                if dimensions != (wire::CURSOR_WIDTH, wire::CURSOR_HEIGHT) {
+                    tracing::warn!(
+                        "UPDATE_CURSOR called with resource {} of incorrect dimensions {:?}. Expected {:?}",
+                        resource.id(),
+                        dimensions,
+                        (wire::CURSOR_WIDTH, wire::CURSOR_HEIGHT),
+                    );
+                    return write_error_to_chain(chain, wire::VirtioGpuError::InvalidParameter);
+                }
+
+                Some(resource)
+            };
+
+            let hot_x = cmd.hot_x.get() as u32;
+            let hot_y = cmd.hot_y.get() as u32;
+            if !(0..wire::CURSOR_WIDTH).contains(&hot_x)
+                || !(0..wire::CURSOR_HEIGHT).contains(&hot_y)
+            {
+                tracing::warn!("Cursor hotspot dimensions are out of bounds: {:?}", (hot_x, hot_y));
+                return write_error_to_chain(chain, wire::VirtioGpuError::InvalidParameter);
+            }
+
+            scanout.update_cursor_resource(resource, (hot_x, hot_y))?;
+        }
+
+        scanout.update_cursor_position_and_commit(cmd.pos)?;
+
+        let chain = WritableChain::from_readable(chain)?;
+
+        // It seems that some guests (such as debian) do not allow a response to cursorq requests.
+        // This is likely done as an extra optimization for the fast path.
+        if chain.remaining()?.bytes == 0 {
+            Ok(())
+        } else {
+            write_to_chain(
+                chain,
+                wire::VirtioGpuCtrlHeader {
+                    ty: wire::VIRTIO_GPU_RESP_OK_NODATA.into(),
+                    ..Default::default()
+                },
+            )
+        }
     }
 
     fn attach_scanout(&mut self, scanout: Box<dyn Scanout>, responder: AttachScanoutResponder) {
@@ -1108,6 +1200,224 @@ mod tests {
                 assert_eq!(None, row_data.iter().find(|x| **x != value));
                 offset += res_width * bytes_per_pixel();
             }
+        }
+
+        /// Performs an UPDATE_CURSOR (if `full_update` is true) or else a MOVE_CURSOR request.
+        /// If `accept_response` is false no writable descriptor will be allocated for the response,
+        /// as is consistent with the behaviour of certain guests.
+        fn update_cursor(
+            &mut self,
+            cmd: wire::VirtioGpuUpdateCursor,
+            cursor_op: CursorOperation,
+            accept_response: bool,
+        ) -> Option<wire::VirtioGpuCtrlHeader> {
+            self.state
+                .fake_queue
+                .publish({
+                    let mut builder = ChainBuilder::new()
+                        // Header
+                        .readable(
+                            std::slice::from_ref(&wire::VirtioGpuCtrlHeader {
+                                ty: match cursor_op {
+                                    CursorOperation::Update => {
+                                        wire::VIRTIO_GPU_CMD_UPDATE_CURSOR.into()
+                                    }
+                                    CursorOperation::Move => {
+                                        wire::VIRTIO_GPU_CMD_MOVE_CURSOR.into()
+                                    }
+                                },
+                                ..Default::default()
+                            }),
+                            self.mem,
+                        )
+                        // Command
+                        .readable(std::slice::from_ref(&cmd), self.mem);
+                    if accept_response {
+                        builder = builder.writable(
+                            std::mem::size_of::<wire::VirtioGpuCtrlHeader>() as u32,
+                            self.mem,
+                        )
+                    }
+                    builder.build()
+                })
+                .unwrap();
+
+            self.device
+                .process_cursor_chain(ReadableChain::new(
+                    self.state.queue.next_chain().unwrap(),
+                    self.mem,
+                ))
+                .expect("Failed to process control chain");
+
+            let returned = self.state.fake_queue.next_used().unwrap();
+            assert_eq!(
+                if accept_response { std::mem::size_of::<wire::VirtioGpuCtrlHeader>() } else { 0 },
+                returned.written() as usize
+            );
+
+            // Read and return the header, if space was allocated for a response.
+            accept_response.then(|| {
+                let mut iter = returned.data_iter();
+                read_returned::<wire::VirtioGpuCtrlHeader>(iter.next().unwrap())
+            })
+        }
+    }
+
+    struct TestUpdateCursorHelperOptions {
+        create_scanout: bool,
+        create_resource: bool,
+        cursor_width_height: (u32, u32),
+        cursor_hot_x_y: (u32, u32),
+        cursor_op: CursorOperation,
+        accept_response: bool,
+    }
+
+    impl TestUpdateCursorHelperOptions {
+        const MAX_HOT_X: u32 = wire::CURSOR_WIDTH - 1;
+        const MAX_HOT_Y: u32 = wire::CURSOR_HEIGHT - 1;
+
+        // Produce a valid set of options for the test to execute successfully.
+        fn valid() -> Self {
+            Self {
+                create_scanout: true,
+                create_resource: true,
+                cursor_width_height: (wire::CURSOR_WIDTH, wire::CURSOR_HEIGHT),
+                cursor_hot_x_y: (Self::MAX_HOT_X, Self::MAX_HOT_Y),
+                cursor_op: CursorOperation::Update,
+                accept_response: true,
+            }
+        }
+    }
+
+    async fn test_update_cursor_helper(options: TestUpdateCursorHelperOptions) -> Option<u32> {
+        let TestUpdateCursorHelperOptions {
+            create_scanout,
+            create_resource,
+            cursor_width_height,
+            cursor_hot_x_y,
+            cursor_op,
+            accept_response,
+        } = options;
+
+        let mem = IdentityDriverMem::new();
+        let mut test = TestFixture::new(&mem);
+
+        // Create scanout
+        if create_scanout {
+            let _scanout_controller = test
+                .attach_scanout(VIRTIO_GPU_STARTUP_WIDTH, VIRTIO_GPU_STARTUP_HEIGHT)
+                .await
+                .unwrap();
+        }
+
+        // Create cursor resource
+        if create_resource {
+            let request = wire::VirtioGpuResourceCreate2d {
+                resource_id: 1.into(),
+                width: cursor_width_height.0.into(),
+                height: cursor_width_height.1.into(),
+                format: VALID_RESOURCE_FORMAT.into(),
+            };
+            let response = test.resource_create_2d(request.clone()).await;
+            assert_eq!(response.ty.get(), wire::VIRTIO_GPU_RESP_OK_NODATA);
+        }
+
+        // Calls to ATTACH_BACKING and TRANSFER_TO_HOST_2D would normally be placed here, but
+        // are not necessary in these tests since FakeScanout::update_cursor_* don't really do
+        // anything in practice. All the validation steps leading up to the actual
+        // scanout operations are what is being verified.
+
+        // Perform cursor update
+        let cmd = wire::VirtioGpuUpdateCursor {
+            pos: wire::VirtioGpuCursorPos {
+                scanout_id: 0.into(),
+                x: 0.into(),
+                y: 0.into(),
+                ..Default::default()
+            },
+            resource_id: 1.into(),
+            hot_x: cursor_hot_x_y.0.into(),
+            hot_y: cursor_hot_x_y.1.into(),
+            ..Default::default()
+        };
+        let response = test.update_cursor(cmd, cursor_op, accept_response);
+        response.map(|r| r.ty.get())
+    }
+
+    #[fuchsia::test]
+    async fn test_update_cursor_with_bad_scanout_fails() {
+        assert_eq!(
+            test_update_cursor_helper(TestUpdateCursorHelperOptions {
+                create_scanout: false,
+                ..TestUpdateCursorHelperOptions::valid()
+            })
+            .await,
+            Some(wire::VIRTIO_GPU_RESP_ERR_INVALID_SCANOUT_ID)
+        );
+    }
+
+    #[fuchsia::test]
+    async fn test_update_cursor_with_invalid_resource_id_fails() {
+        assert_eq!(
+            test_update_cursor_helper(TestUpdateCursorHelperOptions {
+                create_resource: false,
+                ..TestUpdateCursorHelperOptions::valid()
+            })
+            .await,
+            Some(wire::VIRTIO_GPU_RESP_ERR_INVALID_RESOURCE_ID)
+        );
+    }
+
+    #[fuchsia::test]
+    async fn test_update_cursor_with_wrongly_sized_resource_fails() {
+        assert_eq!(
+            test_update_cursor_helper(TestUpdateCursorHelperOptions {
+                cursor_width_height: (wire::CURSOR_WIDTH - 1, wire::CURSOR_HEIGHT),
+                ..TestUpdateCursorHelperOptions::valid()
+            })
+            .await,
+            Some(wire::VIRTIO_GPU_RESP_ERR_INVALID_PARAMETER)
+        );
+    }
+
+    #[fuchsia::test]
+    async fn test_update_cursor_with_out_of_range_hotspot_fails() {
+        type Options = TestUpdateCursorHelperOptions;
+        assert_eq!(
+            test_update_cursor_helper(TestUpdateCursorHelperOptions {
+                cursor_hot_x_y: (Options::MAX_HOT_X, Options::MAX_HOT_Y + 1),
+                ..Options::valid()
+            })
+            .await,
+            Some(wire::VIRTIO_GPU_RESP_ERR_INVALID_PARAMETER)
+        );
+    }
+
+    #[fuchsia::test]
+    async fn test_update_cursor() {
+        let options = TestUpdateCursorHelperOptions::valid();
+
+        let all_bool_pairs = (0b00..=0b11).map(|x| {
+            let a = (x & 0b01) == 0b01;
+            let b = (x & 0b10) == 0b10;
+            (a, b)
+        });
+
+        for (full_update, accept_response) in all_bool_pairs {
+            let cursor_op =
+                if full_update { CursorOperation::Update } else { CursorOperation::Move };
+            println!(
+                "test_update_cursor: cursor_op={cursor_op:?}, accept_response={accept_response}"
+            );
+            assert_eq!(
+                test_update_cursor_helper(TestUpdateCursorHelperOptions {
+                    cursor_op,
+                    accept_response,
+                    ..options
+                })
+                .await,
+                accept_response.then(|| wire::VIRTIO_GPU_RESP_OK_NODATA)
+            );
         }
     }
 

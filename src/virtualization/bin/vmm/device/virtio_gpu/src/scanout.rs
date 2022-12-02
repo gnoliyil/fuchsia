@@ -62,6 +62,15 @@ pub trait Scanout {
     ) -> Result<(), Error>;
     fn layout_info(&self) -> LayoutInfo;
     fn set_layout_info(&mut self, layout_info: LayoutInfo);
+    fn update_cursor_resource<'a>(
+        &mut self,
+        resource: Option<&Resource2D<'a>>,
+        cursor_hotspot: (u32, u32),
+    ) -> Result<(), Error>;
+    fn update_cursor_position_and_commit(
+        &mut self,
+        pos: wire::VirtioGpuCursorPos,
+    ) -> Result<(), Error>;
 }
 
 pub struct FlatlandScanout {
@@ -73,6 +82,7 @@ pub struct FlatlandScanout {
     present_credits: Rc<Cell<u64>>,
     layout_info: LayoutInfo,
     _event_handler: fasync::Task<()>,
+    cursor_transform_id: TransformId,
 }
 
 impl Scanout for FlatlandScanout {
@@ -135,6 +145,39 @@ impl Scanout for FlatlandScanout {
         if let Err(e) = result {
             tracing::warn!("Failed to set view layout: {}", e);
         }
+    }
+
+    fn update_cursor_resource<'a>(
+        &mut self,
+        resource: Option<&Resource2D<'a>>,
+        _cursor_hotspot: (u32, u32),
+    ) -> Result<(), Error> {
+        let mut content_id = if let Some(resource) = resource {
+            let content_id = self.get_or_create_resource(resource)?;
+            self.flatland
+                .set_image_blending_function(&mut content_id.clone(), BlendMode::SrcOver)?;
+            content_id
+        } else {
+            NULL_CONTENT_ID.clone()
+        };
+
+        self.flatland.set_content(&mut self.cursor_transform_id.clone(), &mut content_id)?;
+
+        Ok(())
+    }
+
+    fn update_cursor_position_and_commit(
+        &mut self,
+        pos: wire::VirtioGpuCursorPos,
+    ) -> Result<(), Error> {
+        // pos.x and pos.y are signed integers representing the position of the top-left corner of
+        // the cursor resource.
+        let x = pos.x.get() as i32;
+        let y = pos.y.get() as i32;
+        self.flatland
+            .set_translation(&mut self.cursor_transform_id.clone(), &mut fmath::Vec_ { x, y })?;
+        self.present()?;
+        Ok(())
     }
 }
 
@@ -212,6 +255,11 @@ impl FlatlandScanout {
         let content_transform_id = new_transform_id(&mut next_flatland_id);
         flatland.create_transform(&mut content_transform_id.clone())?;
         flatland.add_child(&mut root_transform_id.clone(), &mut content_transform_id.clone())?;
+
+        // Add a cursor node on top of the scanout content.
+        let cursor_transform_id = new_transform_id(&mut next_flatland_id);
+        flatland.create_transform(&mut cursor_transform_id.clone())?;
+        flatland.add_child(&mut root_transform_id.clone(), &mut cursor_transform_id.clone())?;
 
         // Wait for an initial layout. We don't bother attaching a scanout until we have an initial
         // size so that we can report the size of this scanout to the driver.
@@ -294,6 +342,7 @@ impl FlatlandScanout {
             present_credits,
             layout_info: initial_layout,
             _event_handler: event_handler,
+            cursor_transform_id,
         });
         let scanout_controller = command_sender.attach_scanout(scanout).await?;
         sender.send(scanout_controller).map_err(|_| {}).unwrap();
@@ -379,5 +428,21 @@ impl Scanout for FakeScanout {
 
     fn set_layout_info(&mut self, layout_info: LayoutInfo) {
         self.layout_info = layout_info;
+    }
+
+    fn update_cursor_resource<'a>(
+        &mut self,
+        _resource: Option<&Resource2D<'a>>,
+        _cursor_hotspot: (u32, u32),
+    ) -> Result<(), Error> {
+        // No way to inspect cursor or scanout state from the tests so just return success.
+        Ok(())
+    }
+    fn update_cursor_position_and_commit(
+        &mut self,
+        _pos: wire::VirtioGpuCursorPos,
+    ) -> Result<(), Error> {
+        // No way to inspect cursor or scanout state from the tests so just return success.
+        Ok(())
     }
 }

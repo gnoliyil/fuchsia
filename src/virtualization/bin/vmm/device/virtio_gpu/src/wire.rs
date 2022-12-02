@@ -19,6 +19,13 @@ pub const CONTROLQ: u16 = 0;
 pub const CURSORQ: u16 = 1;
 
 //
+// 5.7.6.6 Device Operation: Configure mouse cursor
+//
+/// Cursor resources are required to be 64x64 pixels
+pub const CURSOR_WIDTH: u32 = 64;
+pub const CURSOR_HEIGHT: u32 = 64;
+
+//
 // 5.7.6.7: Request Header
 //
 

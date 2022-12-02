@@ -13,6 +13,8 @@
 #include <lib/sys/component/cpp/testing/realm_builder_types.h>
 #include <lib/zx/result.h>
 
+#include <numeric>
+
 #include <virtio/gpu.h>
 
 #include "src/ui/testing/ui_test_manager/ui_test_manager.h"
@@ -21,11 +23,27 @@
 
 namespace {
 
-constexpr uint16_t kNumQueues = 2;
+enum Virtqueues : uint16_t {
+  kControlQ,
+  kCursorQ,
+  kNumQueues,
+};
+
 constexpr uint16_t kQueueSize = 16;
 
 constexpr uint32_t kPixelFormat = VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM;
 constexpr size_t kPixelSizeInBytes = 4;
+
+constexpr uint32_t kCursorWidth = 64;
+constexpr uint32_t kCursorHeight = 64;
+
+static constexpr std::array<uint32_t, kNumQueues> kQueueDataSizes = {
+    // A single full framebuffer for a 1280x800 scanout requires almost 4MiB. A cursor resource
+    // (64x64) requires 16KiB. Ensure the controlq can safely accommodate these amounts as well as
+    // any miscellaneous descriptors
+    8 * 1024 * 1024,
+    PAGE_SIZE,
+};
 
 // Resource IDs are client allocated, so any value here is fine except for 0. Some GPU commands (ex
 // SET_SCANOUT) use resource_id == 0 to mean no resource so some implementations may fail to create
@@ -50,7 +68,10 @@ class VirtioGpuTest : public TestWithDevice,
                       public ::testing::WithParamInterface<VirtioGpuTestParam> {
  protected:
   VirtioGpuTest()
-      : control_queue_(phys_mem_, PAGE_SIZE * kNumQueues, kQueueSize),
+      :  // Place both queues after the miscellaneous data segment
+        control_queue_(phys_mem_,
+                       std::accumulate(kQueueDataSizes.begin(), kQueueDataSizes.end(), 0),
+                       kQueueSize),
         cursor_queue_(phys_mem_, control_queue_.end(), kQueueSize) {}
 
   void SetUp() override {
@@ -120,6 +141,7 @@ class VirtioGpuTest : public TestWithDevice,
     ui_test_manager_->InitializeScene();
 
     fuchsia::virtualization::hardware::StartInfo start_info;
+    // The cursor queue is placed at the very end of the guest memory range.
     zx_status_t status = MakeStartInfo(cursor_queue_.end(), &start_info);
     ASSERT_EQ(ZX_OK, status);
 
@@ -133,7 +155,8 @@ class VirtioGpuTest : public TestWithDevice,
     VirtioQueueFake* queues[kNumQueues] = {&control_queue_, &cursor_queue_};
     for (uint16_t i = 0; i < kNumQueues; i++) {
       auto q = queues[i];
-      q->Configure(PAGE_SIZE * i, PAGE_SIZE);
+      q->Configure(std::accumulate(kQueueDataSizes.begin(), kQueueDataSizes.begin() + i, 0),
+                   kQueueDataSizes[i]);
       status = gpu_->ConfigureQueue(i, q->size(), q->desc(), q->avail(), q->used());
       ASSERT_EQ(ZX_OK, status);
       if (!GetParam().configure_cursor_queue) {
@@ -171,8 +194,9 @@ class VirtioGpuTest : public TestWithDevice,
   }
 
   template <typename T>
-  zx_status_t SendRequest(const T& request, virtio_gpu_ctrl_hdr_t** response) {
-    zx_status_t status = DescriptorChainBuilder(control_queue_)
+  zx_status_t SendRequest(uint16_t queue_id, VirtioQueueFake& queue, const T& request,
+                          virtio_gpu_ctrl_hdr_t** response) {
+    zx_status_t status = DescriptorChainBuilder(queue)
                              .AppendReadableDescriptor(&request, sizeof(request))
                              .AppendWritableDescriptor(response, sizeof(virtio_gpu_ctrl_hdr_t))
                              .Build();
@@ -180,7 +204,7 @@ class VirtioGpuTest : public TestWithDevice,
       return status;
     }
 
-    status = gpu_->NotifyQueue(0);
+    status = gpu_->NotifyQueue(queue_id);
     if (status != ZX_OK) {
       return status;
     }
@@ -188,9 +212,19 @@ class VirtioGpuTest : public TestWithDevice,
     return WaitOnInterrupt();
   }
 
+  template <typename T>
+  zx_status_t SendControlRequest(const T& request, virtio_gpu_ctrl_hdr_t** response) {
+    return SendRequest(kControlQ, control_queue_, request, response);
+  }
+
+  template <typename T>
+  zx_status_t SendCursorRequest(const T& request, virtio_gpu_ctrl_hdr_t** response) {
+    return SendRequest(kCursorQ, cursor_queue_, request, response);
+  }
+
   void ResourceCreate2d() {
     virtio_gpu_ctrl_hdr_t* response;
-    ASSERT_EQ(SendRequest(
+    ASSERT_EQ(SendControlRequest(
                   virtio_gpu_resource_create_2d_t{
                       .hdr = {.type = VIRTIO_GPU_CMD_RESOURCE_CREATE_2D},
                       .resource_id = kResourceId,
@@ -205,7 +239,7 @@ class VirtioGpuTest : public TestWithDevice,
 
   void ResourceAttachBacking() {
     virtio_gpu_ctrl_hdr_t* response;
-    ASSERT_EQ(SendRequest(
+    ASSERT_EQ(SendControlRequest(
                   virtio_gpu_resource_attach_backing_t{
                       .hdr = {.type = VIRTIO_GPU_CMD_RESOURCE_ATTACH_BACKING},
                       .resource_id = kResourceId,
@@ -218,7 +252,7 @@ class VirtioGpuTest : public TestWithDevice,
 
   void SetScanout(uint32_t resource_id, uint32_t response_type) {
     virtio_gpu_ctrl_hdr_t* response;
-    ASSERT_EQ(SendRequest(
+    ASSERT_EQ(SendControlRequest(
                   virtio_gpu_set_scanout_t{
                       .hdr = {.type = VIRTIO_GPU_CMD_SET_SCANOUT},
                       .r = {.x = 0, .y = 0, .width = kGpuStartupWidth, .height = kGpuStartupHeight},
@@ -283,7 +317,7 @@ TEST_P(VirtioGpuTest, SetScanoutWithInvalidResourceId) {
 
 TEST_P(VirtioGpuTest, CreateLargeResource) {
   virtio_gpu_ctrl_hdr_t* response;
-  ASSERT_EQ(SendRequest(
+  ASSERT_EQ(SendControlRequest(
                 virtio_gpu_resource_create_2d_t{
                     .hdr = {.type = VIRTIO_GPU_CMD_RESOURCE_CREATE_2D},
                     .resource_id = kResourceId,
@@ -312,7 +346,7 @@ TEST_P(VirtioGpuTest, InvalidTransferToHostParams) {
 
   virtio_gpu_ctrl_hdr_t* response;
   ASSERT_EQ(
-      SendRequest(
+      SendControlRequest(
           virtio_gpu_transfer_to_host_2d_t{
               .hdr = {.type = VIRTIO_GPU_CMD_TRANSFER_TO_HOST_2D},
               .r = kBadRectangle,
@@ -322,6 +356,319 @@ TEST_P(VirtioGpuTest, InvalidTransferToHostParams) {
           &response),
       ZX_OK);
   EXPECT_EQ(response->type, VIRTIO_GPU_RESP_ERR_INVALID_PARAMETER);
+}
+
+TEST_P(VirtioGpuTest, UpdateCursor) {
+  if (!GetParam().configure_cursor_queue)
+    return;
+
+  auto geometry = WaitForScanout();
+  ASSERT_TRUE(geometry.is_ok());
+  auto [display_width, display_height] = *geometry;
+
+  constexpr uint32_t kBackgroundResourceId = 10;
+  constexpr uint32_t kCursorResourceId = 20;
+
+  // Cursor hotspot position, relative to the cursor resource's top-left corner.
+  constexpr uint32_t kCursorHotX = 63;
+  constexpr uint32_t kCursorHotY = 63;
+
+  // Position at which to draw the cursor resource.
+  constexpr uint32_t kCursorX = 100;
+  constexpr uint32_t kCursorY = 100;
+
+  const auto& kWhite = ui_testing::Pixel(0xff, 0xff, 0xff, 0xff);
+  const auto& kBlack = ui_testing::Screenshot::kBlack;
+  const auto& kMagenta = ui_testing::Screenshot::kMagenta;
+
+  // Create background resource
+  {
+    virtio_gpu_ctrl_hdr_t* response;
+    ASSERT_EQ(SendControlRequest(
+                  virtio_gpu_resource_create_2d_t{
+                      .hdr = {.type = VIRTIO_GPU_CMD_RESOURCE_CREATE_2D},
+                      .resource_id = kBackgroundResourceId,
+                      .format = kPixelFormat,
+                      .width = display_width,
+                      .height = display_height,
+                  },
+                  &response),
+              ZX_OK);
+    ASSERT_EQ(VIRTIO_GPU_RESP_OK_NODATA, response->type);
+  }
+
+  // Initialize backing memory for background resource
+  uint32_t background_data_size = display_width * display_height * kPixelSizeInBytes;
+  auto background_allocation = control_queue_.AllocData(background_data_size);
+  std::memset(background_allocation.device_mem, 0xff, background_data_size);
+
+  // Attach backing memory to background resource
+  {
+    struct {
+      virtio_gpu_resource_attach_backing_t attach_backing;
+      virtio_gpu_mem_entry_t entry;
+    } __PACKED request = {
+        .attach_backing =
+            {
+                .hdr = {.type = VIRTIO_GPU_CMD_RESOURCE_ATTACH_BACKING},
+                .resource_id = kBackgroundResourceId,
+                .nr_entries = 1,
+            },
+        .entry =
+            {
+                .addr = background_allocation.driver_mem,
+                .length = background_data_size,
+            },
+    };
+
+    virtio_gpu_ctrl_hdr_t* response;
+    ASSERT_EQ(SendControlRequest(request, &response), ZX_OK);
+    ASSERT_EQ(VIRTIO_GPU_RESP_OK_NODATA, response->type);
+  }
+
+  const virtio_gpu_rect_t full_screen_rect = {
+      .x = 0,
+      .y = 0,
+      .width = display_width,
+      .height = display_height,
+  };
+  ASSERT_LE(full_screen_rect.width + full_screen_rect.x, display_width);
+  ASSERT_LE(full_screen_rect.height + full_screen_rect.y, display_height);
+
+  // Set scanout to resource
+  {
+    virtio_gpu_ctrl_hdr_t* response;
+    ASSERT_EQ(SendControlRequest(
+                  virtio_gpu_set_scanout_t{
+                      .hdr = {.type = VIRTIO_GPU_CMD_SET_SCANOUT},
+                      .r = full_screen_rect,
+                      .scanout_id = kScanoutId,
+                      .resource_id = kBackgroundResourceId,
+                  },
+                  &response),
+              ZX_OK);
+    ASSERT_EQ(VIRTIO_GPU_RESP_OK_NODATA, response->type);
+  }
+
+  // Transfer background resource to host
+  {
+    virtio_gpu_ctrl_hdr_t* response;
+    ASSERT_EQ(SendControlRequest(
+                  virtio_gpu_transfer_to_host_2d_t{
+                      .hdr = {.type = VIRTIO_GPU_CMD_TRANSFER_TO_HOST_2D},
+                      .r = full_screen_rect,
+                      .offset = 0,
+                      .resource_id = kBackgroundResourceId,
+                  },
+                  &response),
+              ZX_OK);
+    ASSERT_EQ(VIRTIO_GPU_RESP_OK_NODATA, response->type);
+  }
+
+  // Flush resource to display
+  {
+    virtio_gpu_ctrl_hdr_t* response;
+    ASSERT_EQ(SendControlRequest(
+                  virtio_gpu_resource_flush_t{
+                      .hdr = {.type = VIRTIO_GPU_CMD_RESOURCE_FLUSH},
+                      .r = full_screen_rect,
+                      .resource_id = kBackgroundResourceId,
+                  },
+                  &response),
+              ZX_OK);
+    ASSERT_EQ(VIRTIO_GPU_RESP_OK_NODATA, response->type);
+  }
+
+  // We should have an opaque white background at this point.
+  {
+    std::map<ui_testing::Pixel, uint32_t> expected_histogram{
+        std::tuple{kWhite, display_width * display_height}};
+
+    RunLoopUntil(
+        [&]() { return ui_test_manager_->TakeScreenshot().Histogram() == expected_histogram; });
+
+    auto screenshot = ui_test_manager_->TakeScreenshot();
+    EXPECT_EQ(screenshot.width(), display_width);
+    EXPECT_EQ(screenshot.height(), display_height);
+    ASSERT_EQ(screenshot.Histogram(), expected_histogram);
+  }
+
+  // Create cursor resource
+  {
+    virtio_gpu_ctrl_hdr_t* response;
+    ASSERT_EQ(SendControlRequest(
+                  virtio_gpu_resource_create_2d_t{
+                      .hdr = {.type = VIRTIO_GPU_CMD_RESOURCE_CREATE_2D},
+                      .resource_id = kCursorResourceId,
+                      .format = kPixelFormat,
+                      .width = kCursorWidth,
+                      .height = kCursorHeight,
+                  },
+                  &response),
+              ZX_OK);
+    ASSERT_EQ(VIRTIO_GPU_RESP_OK_NODATA, response->type);
+  }
+
+  // Initialize backing memory for cursor resource. It will be all black except for the
+  // cursor hotspot pixel which will be magenta.
+  uint32_t cursor_data_size = kCursorWidth * kCursorHeight * kPixelSizeInBytes;
+  auto cursor_allocation = control_queue_.AllocData(cursor_data_size);
+  uint8_t* cursor_data = static_cast<uint8_t*>(cursor_allocation.device_mem);
+  // Pixel format is BGRA
+  for (size_t i = 0; i < cursor_data_size; i += kPixelSizeInBytes) {
+    cursor_data[i + 0] = kBlack.blue;
+    cursor_data[i + 1] = kBlack.green;
+    cursor_data[i + 2] = kBlack.red;
+    cursor_data[i + 3] = kBlack.alpha;
+  }
+  size_t hotspot_idx =
+      kCursorWidth * kPixelSizeInBytes * kCursorHotX + kPixelSizeInBytes * kCursorHotY;
+  cursor_data[hotspot_idx + 0] = kMagenta.blue;
+  cursor_data[hotspot_idx + 1] = kMagenta.green;
+  cursor_data[hotspot_idx + 2] = kMagenta.red;
+  cursor_data[hotspot_idx + 3] = kMagenta.alpha;
+
+  // Attach backing memory to cursor resource
+  {
+    struct {
+      virtio_gpu_resource_attach_backing_t attach_backing;
+      virtio_gpu_mem_entry_t entry;
+    } __PACKED request = {
+        .attach_backing =
+            {
+                .hdr = {.type = VIRTIO_GPU_CMD_RESOURCE_ATTACH_BACKING},
+                .resource_id = kCursorResourceId,
+                .nr_entries = 1,
+            },
+        .entry =
+            {
+                .addr = cursor_allocation.driver_mem,
+                .length = cursor_data_size,
+            },
+    };
+
+    virtio_gpu_ctrl_hdr_t* response;
+    ASSERT_EQ(SendControlRequest(request, &response), ZX_OK);
+    ASSERT_EQ(VIRTIO_GPU_RESP_OK_NODATA, response->type);
+  }
+
+  // Transfer cursor resource to host
+  {
+    virtio_gpu_ctrl_hdr_t* response;
+    ASSERT_EQ(SendControlRequest(
+                  virtio_gpu_transfer_to_host_2d_t{
+                      .hdr = {.type = VIRTIO_GPU_CMD_TRANSFER_TO_HOST_2D},
+                      .r =
+                          {
+                              .x = 0,
+                              .y = 0,
+                              .width = kCursorWidth,
+                              .height = kCursorHeight,
+                          },
+                      .offset = 0,
+                      .resource_id = kCursorResourceId,
+                  },
+                  &response),
+              ZX_OK);
+    ASSERT_EQ(VIRTIO_GPU_RESP_OK_NODATA, response->type);
+  }
+
+  // Try to update the cursor. (hot_x, hot_y) is the active pixel's coordinate within the cursor
+  // image and should be the pixel eventually found at the (x, y) coordinate.
+  {
+    virtio_gpu_ctrl_hdr_t* response;
+    ASSERT_EQ(SendCursorRequest(
+                  virtio_gpu_update_cursor_t{
+                      .hdr = {.type = VIRTIO_GPU_CMD_UPDATE_CURSOR},
+                      .pos =
+                          {
+                              .scanout_id = kScanoutId,
+                              .x = kCursorX,
+                              .y = kCursorY,
+                          },
+                      .resource_id = kCursorResourceId,
+                      .hot_x = kCursorHotX,
+                      .hot_y = kCursorHotY,
+                  },
+                  &response),
+              ZX_OK);
+    ASSERT_EQ(VIRTIO_GPU_RESP_OK_NODATA, response->type);
+  }
+
+  // Verify the screenshot is as expected.
+  {
+    std::map<ui_testing::Pixel, uint32_t> expected_histogram{
+        std::tuple{kWhite, display_width * display_height - kCursorWidth * kCursorHeight},
+        std::tuple{kBlack, kCursorWidth * kCursorHeight - 1}, std::tuple{kMagenta, 1}};
+
+    RunLoopUntil(
+        [&]() { return ui_test_manager_->TakeScreenshot().Histogram() == expected_histogram; });
+
+    auto screen = ui_test_manager_->TakeScreenshot();
+    EXPECT_EQ(screen.Histogram(), expected_histogram);
+
+    auto screenshot = screen.screenshot();
+    ASSERT_EQ(screenshot.size(), display_height);
+    ASSERT_EQ(screenshot[0].size(), display_width);
+
+    size_t below_cursor = kCursorY + kCursorHeight;
+    size_t right_of_cursor = kCursorX + kCursorWidth;
+
+    std::vector<ui_testing::Pixel> scanline{display_width, kWhite};
+    for (size_t row_idx = 0; row_idx < kCursorY; row_idx++) {
+      EXPECT_EQ(screenshot[row_idx], scanline);
+    }
+    for (size_t row_idx = below_cursor; row_idx < display_height; row_idx++) {
+      EXPECT_EQ(screenshot[row_idx], scanline);
+    }
+
+    for (size_t col_idx = kCursorX; col_idx < right_of_cursor; col_idx++) {
+      scanline[col_idx] = kBlack;
+    }
+    for (size_t row_idx = kCursorY; row_idx < below_cursor; row_idx++) {
+      if (row_idx != kCursorY + kCursorHotY) {
+        EXPECT_EQ(screenshot[row_idx], scanline);
+      }
+    }
+
+    scanline[kCursorX + kCursorHotX] = kMagenta;
+    EXPECT_EQ(screenshot[kCursorY + kCursorHotY], scanline);
+  }
+
+  // Clear the cursor with resource_id 0.
+  {
+    virtio_gpu_ctrl_hdr_t* response;
+    ASSERT_EQ(SendCursorRequest(
+                  virtio_gpu_update_cursor_t{
+                      .hdr = {.type = VIRTIO_GPU_CMD_UPDATE_CURSOR},
+                      .pos =
+                          {
+                              .scanout_id = kScanoutId,
+                              .x = kCursorX,
+                              .y = kCursorY,
+                          },
+                      .resource_id = 0,
+                      .hot_x = kCursorHotX,
+                      .hot_y = kCursorHotY,
+                  },
+                  &response),
+              ZX_OK);
+    ASSERT_EQ(VIRTIO_GPU_RESP_OK_NODATA, response->type);
+  }
+
+  // Once more we should have just a white background.
+  {
+    std::map<ui_testing::Pixel, uint32_t> expected_histogram{
+        std::tuple{kWhite, display_width * display_height}};
+
+    RunLoopUntil(
+        [&]() { return ui_test_manager_->TakeScreenshot().Histogram() == expected_histogram; });
+
+    auto screenshot = ui_test_manager_->TakeScreenshot();
+    EXPECT_EQ(screenshot.width(), display_width);
+    EXPECT_EQ(screenshot.height(), display_height);
+    ASSERT_EQ(screenshot.Histogram(), expected_histogram);
+  }
 }
 
 INSTANTIATE_TEST_SUITE_P(VirtioGpuComponentsTest, VirtioGpuTest,
