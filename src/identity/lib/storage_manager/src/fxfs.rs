@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 use crate::{
-    fxfs::cryptkeeper::CryptKeeper,
+    fxfs::cryptkeeper::{Args as CryptKeeperArgs, CryptKeeper},
     fxfs::log_and_map_err::LogThen,
     state::{State, StateName},
     StorageManager as StorageManagerTrait,
@@ -20,13 +20,17 @@ use fuchsia_component::client::{
     connect_to_named_protocol_at_dir_root, connect_to_protocol_at_dir_root,
     connect_to_protocol_at_dir_svc,
 };
+use fuchsia_zircon::AsHandleRef;
 use futures::lock::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tracing::{error, warn};
 use typed_builder::TypedBuilder;
 
 mod cryptkeeper;
 mod log_and_map_err;
+
+static COLLECTION_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn new_directory_proxy_pair(
 ) -> Result<(fio::DirectoryProxy, ServerEnd<fio::DirectoryMarker>), faccount::Error> {
@@ -71,6 +75,13 @@ pub struct Args {
 
     // The directory of the filesystem.
     filesystem_dir: fio::DirectoryProxy,
+
+    // If true, overrides the name of the crypt component within
+    // the component collection. In production, where there should be one crypt,
+    // this should be None. Storage manager tests will need to set this to true
+    // so that test cases can run in parallel.
+    #[builder(default = false)]
+    use_unique_crypt_name_for_test: bool,
 }
 
 // An FXFS-backed StorageManager implementation.
@@ -84,6 +95,8 @@ pub struct Fxfs {
 
     // The directory of the filesystem.
     filesystem_dir: fio::DirectoryProxy,
+
+    use_unique_crypt_name_for_test: bool,
 }
 
 impl Fxfs {
@@ -94,6 +107,22 @@ impl Fxfs {
             state: Arc::new(Mutex::new(State::Uninitialized)),
             volume_label: args.volume_label,
             filesystem_dir: args.filesystem_dir,
+            use_unique_crypt_name_for_test: args.use_unique_crypt_name_for_test,
+        }
+    }
+    fn crypt_args(&self) -> CryptKeeperArgs {
+        if self.use_unique_crypt_name_for_test {
+            // We need a unique name, so we pull in the process Koid here since it's
+            // possible for the same binary in a component to be launched multiple times and we don't
+            // want to collide with children created by other processes.
+            let name = format!(
+                "crypt-{}-{}",
+                fuchsia_runtime::process_self().get_koid().unwrap().raw_koid(),
+                COLLECTION_COUNTER.fetch_add(1, Ordering::Relaxed)
+            );
+            CryptKeeperArgs::builder().crypt_component_name(name).build()
+        } else {
+            CryptKeeperArgs::builder().build()
         }
     }
 }
@@ -114,7 +143,7 @@ impl StorageManagerTrait for Fxfs {
             return Err(AccountManagerError::new(AccountApiError::Internal));
         }
 
-        let cryptkeeper = CryptKeeper::new_from_key(key).await?;
+        let cryptkeeper = CryptKeeper::new_from_key(self.crypt_args(), key).await?;
 
         let (outgoing_dir, server_end) = new_directory_proxy_pair()?;
 
@@ -144,7 +173,7 @@ impl StorageManagerTrait for Fxfs {
             return Err(AccountManagerError::new(AccountApiError::Internal));
         }
 
-        let cryptkeeper = CryptKeeper::new_from_key(key).await?;
+        let cryptkeeper = CryptKeeper::new_from_key(self.crypt_args(), key).await?;
 
         let (exposed_dir, server_end) = new_directory_proxy_pair()?;
 

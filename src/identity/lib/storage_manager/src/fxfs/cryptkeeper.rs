@@ -13,13 +13,20 @@ use {
         connect_to_protocol, connect_to_protocol_at_dir_root, open_childs_exposed_directory,
     },
     tracing::error,
+    typed_builder::TypedBuilder,
 };
 
-// The name of the component collection within which crypt components are launched.
-const CRYPT_COLLECTION_NAME: &str = "crypt";
+#[derive(TypedBuilder)]
+pub struct Args {
+    // The name of the component collection within which crypt components are
+    // launched. Defaults to "crypt".
+    #[builder(default = "crypt".to_string())]
+    crypt_collection_name: String,
 
-// The name for the crypt component.
-const CRYPT_COMPONENT_NAME: &str = "crypt";
+    // The name for the crypt component instance. Defaults to "crypt".
+    #[builder(default = "crypt".to_string())]
+    crypt_component_name: String,
+}
 
 const CRYPT_CM_URL: &str = "#meta/fxfs-crypt.cm";
 
@@ -34,6 +41,11 @@ const CRYPT_CM_URL: &str = "#meta/fxfs-crypt.cm";
 ///   - for an example (test) callsite for FxfsStorageManager and CryptKeeper.
 pub struct CryptKeeper {
     directory: Option<fio::DirectoryProxy>,
+
+    // The name of the component collection within which crypt components are launched.
+    crypt_collection_name: String,
+    // The name for the crypt component.
+    crypt_component_name: String,
 }
 
 impl CryptKeeper {
@@ -46,8 +58,8 @@ impl CryptKeeper {
 
         let () = proxy
             .destroy_child(&mut fdecl::ChildRef {
-                name: CRYPT_COMPONENT_NAME.to_string(),
-                collection: Some(CRYPT_COLLECTION_NAME.to_string()),
+                name: self.crypt_component_name.to_string(),
+                collection: Some(self.crypt_collection_name.to_string()),
             })
             .await
             .log_warn_then("Could not send destroy child request", faccount::Error::Resource)?
@@ -58,17 +70,15 @@ impl CryptKeeper {
 
     // Creates a new CryptKeeper instance (and a new underlying Crypt child
     // component to serve it) given some initializing key.
-    pub async fn new_from_key(key: &[u8]) -> Result<CryptKeeper, faccount::Error> {
+    pub async fn new_from_key(args: Args, key: &[u8]) -> Result<CryptKeeper, faccount::Error> {
         let realm_proxy = connect_to_protocol::<RealmMarker>()
             .log_error_then("Connect to Realm protocol failed", faccount::Error::Resource)?;
 
         realm_proxy
             .create_child(
-                &mut fdecl::CollectionRef { name: CRYPT_COLLECTION_NAME.to_string() },
+                &mut fdecl::CollectionRef { name: args.crypt_collection_name.clone() },
                 fdecl::Child {
-                    // TODO(jbuckland): when I pick the names below "crypt" under name:,
-                    // allow a tester to override this value with something unique.
-                    name: Some(CRYPT_COMPONENT_NAME.to_string()),
+                    name: Some(args.crypt_component_name.clone()),
                     url: Some(CRYPT_CM_URL.to_string()),
                     startup: Some(fdecl::StartupMode::Lazy),
                     environment: None,
@@ -81,8 +91,8 @@ impl CryptKeeper {
             .log_warn_then("create_child failed", faccount::Error::Resource)?;
 
         let exposed_dir = open_childs_exposed_directory(
-            CRYPT_COMPONENT_NAME,
-            Some(CRYPT_COLLECTION_NAME.to_string()),
+            args.crypt_component_name.clone(),
+            Some(args.crypt_collection_name.clone()),
         )
         .await
         .log_warn_then("open_childs_exposed_directory failed", faccount::Error::Resource)?;
@@ -117,7 +127,11 @@ impl CryptKeeper {
             .log_warn_then("set_active_key FIDL failed", faccount::Error::Resource)?
             .log_warn_then("set_active_key failed", faccount::Error::Resource)?;
 
-        Ok(CryptKeeper { directory: Some(exposed_dir) })
+        Ok(CryptKeeper {
+            directory: Some(exposed_dir),
+            crypt_collection_name: args.crypt_collection_name,
+            crypt_component_name: args.crypt_component_name,
+        })
     }
 
     // Returns a crypt proxy.  This will panic if destroy has been called.
@@ -151,7 +165,14 @@ impl Drop for CryptKeeper {
     // .destroy() has not already been called), destroy it.
     fn drop(&mut self) {
         if self.directory.is_some() {
-            let to_drop = std::mem::replace(self, CryptKeeper { directory: None });
+            let to_drop = std::mem::replace(
+                self,
+                CryptKeeper {
+                    directory: None,
+                    crypt_collection_name: "".to_string(),
+                    crypt_component_name: "".to_string(),
+                },
+            );
             let _ = to_drop.destroy();
         }
     }

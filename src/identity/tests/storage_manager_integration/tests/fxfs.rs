@@ -57,19 +57,23 @@ fn new_key() -> [u8; 32] {
     bits
 }
 
-#[fuchsia::test]
-async fn test_lifecycle() -> Result<(), Error> {
-    let (_ramdisk, _filesystem, mut fs): (_, _, _) = make_ramdisk_and_filesystem().await?;
-
-    let fxfs_storage_manager = Fxfs::new(
+fn new_storage_manager(fs: &mut ServingMultiVolumeFilesystem) -> Fxfs {
+    Fxfs::new(
         FxfsArgs::builder()
             .volume_label(ACCOUNT_LABEL.to_string())
             .filesystem_dir(
                 fuchsia_fs::clone_directory(fs.exposed_dir(), fio::OpenFlags::CLONE_SAME_RIGHTS)
                     .unwrap(),
             )
+            .use_unique_crypt_name_for_test(true)
             .build(),
-    );
+    )
+}
+
+#[fuchsia::test]
+async fn test_lifecycle() -> Result<(), Error> {
+    let (_ramdisk, _filesystem, mut fs): (_, _, _) = make_ramdisk_and_filesystem().await?;
+    let fxfs_storage_manager = new_storage_manager(&mut fs);
 
     let key = new_key();
     let expected_contents = b"some data";
@@ -141,5 +145,34 @@ async fn test_lifecycle() -> Result<(), Error> {
 
     let () = fs.shutdown().await.unwrap();
 
+    Ok(())
+}
+
+#[fuchsia::test]
+async fn test_get_root_dir_before_provision() -> Result<(), Error> {
+    let (_ramdisk, _filesystem, mut fs): (_, _, _) = make_ramdisk_and_filesystem().await?;
+    let fxfs_storage_manager = new_storage_manager(&mut fs);
+
+    // Calling .get_root_dir() before .provision() fails, since the root
+    // directory has not yet been set up.
+    assert_matches!(fxfs_storage_manager.get_root_dir().await, Err(_));
+
+    let () = fs.shutdown().await.unwrap();
+    Ok(())
+}
+
+#[fuchsia::test]
+async fn test_get_root_dir_while_locked() -> Result<(), Error> {
+    let (_ramdisk, _filesystem, mut fs): (_, _, _) = make_ramdisk_and_filesystem().await?;
+    let fxfs_storage_manager = new_storage_manager(&mut fs);
+    let key = new_key();
+
+    // Calling .get_root_dir() while locked fails, since the root
+    // directory is inaccessible.
+    assert_matches!(fxfs_storage_manager.provision(&key).await, Ok(()));
+    assert_matches!(fxfs_storage_manager.lock_storage().await, Ok(()));
+    assert_matches!(fxfs_storage_manager.get_root_dir().await, Err(_));
+
+    let () = fs.shutdown().await.unwrap();
     Ok(())
 }
