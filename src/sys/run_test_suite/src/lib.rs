@@ -9,6 +9,7 @@ mod outcome;
 pub mod output;
 mod params;
 mod run;
+mod running_suite;
 mod stream_util;
 mod trace;
 
