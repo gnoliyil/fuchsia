@@ -5,10 +5,9 @@
 #ifndef SRC_CONNECTIVITY_BLUETOOTH_HCI_VIRTUAL_EMULATOR_H_
 #define SRC_CONNECTIVITY_BLUETOOTH_HCI_VIRTUAL_EMULATOR_H_
 
-#include <fuchsia/bluetooth/test/cpp/fidl.h>
-#include <fuchsia/hardware/bluetooth/c/fidl.h>
-#include <fuchsia/hardware/bt/hci/c/banjo.h>
-#include <fuchsia/hardware/test/c/banjo.h>
+#include <fidl/fuchsia.hardware.bluetooth/cpp/wire.h>
+#include <fuchsia/hardware/bt/hci/cpp/banjo.h>
+#include <fuchsia/hardware/test/cpp/banjo.h>
 #include <lib/async-loop/cpp/loop.h>
 #include <lib/async-loop/default.h>
 #include <lib/ddk/debug.h>

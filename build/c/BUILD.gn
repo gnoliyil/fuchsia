@@ -69,8 +69,6 @@ config("fidl-deprecated-c-bindings") {
     "//src/connectivity/bluetooth/hci/vendor/broadcom:bt-hci-broadcom-test-bin",
     "//src/connectivity/bluetooth/hci/vendor/broadcom:common",
     "//src/connectivity/bluetooth/hci/vendor/broadcom:tests_executable",
-    "//src/connectivity/bluetooth/hci/virtual:_driver.shlib-used.fuchsia_driver",
-    "//src/connectivity/bluetooth/hci/virtual:fuchsia_driver",
     "//src/connectivity/bluetooth/tools/bt-hci-tool:bin",
     "//src/connectivity/bluetooth/tools/bt-intel-tool:bin",
 

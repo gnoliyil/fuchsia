@@ -4,7 +4,7 @@
 
 #include "emulator.h"
 
-#include <fuchsia/hardware/bt/hci/c/banjo.h>
+#include <fuchsia/hardware/bt/hci/cpp/banjo.h>
 #include <lib/async/cpp/task.h>
 #include <zircon/status.h>
 #include <zircon/types.h>
