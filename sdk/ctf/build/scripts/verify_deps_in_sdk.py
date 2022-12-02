@@ -118,7 +118,7 @@ class VerifyDepsInSDK:
         for dep in self.deps_to_verify:
             # Removes FIDL binding suffixes because the SDK manifests will only
             # contain the FIDL name.
-            for suffix in ["_hlcpp", "_rust"]:
+            for suffix in ["_hlcpp", "_rust", "_cpp_wire"]:
                 if dep.endswith(suffix):
                     dep = dep[:-len(suffix)]
                     break
