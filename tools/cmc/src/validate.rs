@@ -2043,6 +2043,72 @@ mod tests {
     }
 
     #[test]
+    fn offer_to_all_mixed_with_array_syntax() {
+        let input = r##"{
+                "children": [
+                    {
+                        "name": "something",
+                        "url": "fuchsia-pkg://fuchsia.com/something/stable#meta/something.cm",
+                    },
+                ],
+                "offer": [
+                    {
+                        "protocol": ["fuchsia.logger.LogSink", "fuchsia.inspect.InspectSink",],
+                        "from": "parent",
+                        "to": "#something",
+                    },
+                    {
+                        "protocol": "fuchsia.logger.LogSink",
+                        "from": "parent",
+                        "to": "all",
+                    },
+                ],
+        }"##;
+
+        let result = write_and_validate_with_features(
+            "test.cml",
+            input.as_bytes(),
+            &FeatureSet::empty(),
+            &vec!["fuchsia.logger.LogSink".into()],
+            &Vec::new(),
+        );
+
+        assert!(result.is_ok(), "{:#?}", result);
+
+        let input = r##"{
+
+                "children": [
+                    {
+                        "name": "something",
+                        "url": "fuchsia-pkg://fuchsia.com/something/stable#meta/something.cm",
+                    },
+                ],
+                "offer": [
+                    {
+                        "protocol": ["fuchsia.logger.LogSink", "fuchsia.inspect.InspectSink",],
+                        "from": "parent",
+                        "to": "all",
+                    },
+                    {
+                        "protocol": "fuchsia.logger.LogSink",
+                        "from": "parent",
+                        "to": "#something",
+                    },
+                ],
+        }"##;
+
+        let result = write_and_validate_with_features(
+            "test.cml",
+            input.as_bytes(),
+            &FeatureSet::empty(),
+            &vec!["fuchsia.logger.LogSink".into()],
+            &Vec::new(),
+        );
+
+        assert!(result.is_ok(), "{:#?}", result);
+    }
+
+    #[test]
     fn offer_to_all_and_manual() {
         let input = r##"{
             children: [

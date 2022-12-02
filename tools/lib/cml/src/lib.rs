@@ -3071,15 +3071,17 @@ pub fn offer_to_all_would_duplicate(
     // Only protocols may be offered to all
     assert!(offer_to_all.protocol.is_some());
 
-    for specific_offer_cap_id in CapabilityId::from_offer_expose(specific_offer).iter().flatten() {
-        let matching_capability_found = CapabilityId::from_offer_expose(offer_to_all)
-            .iter()
-            .flatten()
-            .any(|offer_to_all_cap_id| offer_to_all_cap_id == specific_offer_cap_id);
-
-        if !matching_capability_found {
-            return Ok(false);
-        }
+    // If none of the pairs of the cross products of the two offer's protocols
+    // match, then the offer is certainly not a duplicate
+    if CapabilityId::from_offer_expose(specific_offer).iter().flatten().all(
+        |specific_offer_cap_id| {
+            CapabilityId::from_offer_expose(offer_to_all)
+                .iter()
+                .flatten()
+                .all(|offer_to_all_cap_id| offer_to_all_cap_id != specific_offer_cap_id)
+        },
+    ) {
+        return Ok(false);
     }
 
     let to_field_matches = specific_offer
@@ -3105,7 +3107,15 @@ pub fn offer_to_all_would_duplicate(
         )));
     }
 
-    if offer_to_all.protocol != specific_offer.protocol {
+    // Since the capability ID's match, the underlying protocol must also match
+    if offer_to_all.protocol.as_ref().unwrap().iter().all(|to_all_protocol| {
+        specific_offer
+            .protocol
+            .as_ref()
+            .unwrap()
+            .iter()
+            .all(|to_specific_protocol| to_all_protocol != to_specific_protocol)
+    }) {
         return Err(Error::validate(offer_to_all_and_component_diff_protocols_message(
             offer_to_all
                 .protocol

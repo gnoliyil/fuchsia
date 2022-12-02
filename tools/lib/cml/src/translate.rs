@@ -566,24 +566,30 @@ fn derive_source_and_availability(
     }
 }
 
-/// Emit a specialized offer from `offer_to_all` for `target`, unless it
-/// overlaps with an offer in `specialized_offers`.
-fn maybe_generate_specialization_from_all(
+/// Emit a set of direct offers from `offer_to_all` for `target`, unless it
+/// overlaps with an offer in `direct_offers`.
+fn maybe_generate_direct_offer_from_all(
     offer_to_all: &Offer,
-    specialized_offers: &[Offer],
+    direct_offers: &[Offer],
     target: &cm_types::Name,
-) -> Option<Offer> {
-    if specialized_offers.iter().all(|specialized| {
-        // Assume that the cml being parsed is valid, which is the only
-        // way that this function errors
-        !offer_to_all_would_duplicate(offer_to_all, specialized, target).unwrap()
-    }) {
-        let mut local_offer = Offer::clone(offer_to_all);
-        local_offer.to = OneOrMany::One(OfferToRef::Named((*target).clone()));
-        Some(local_offer)
-    } else {
-        None
+) -> Vec<Offer> {
+    assert!(offer_to_all.protocol.is_some());
+    let mut returned_offers = vec![];
+    for individual_protocol in offer_to_all.protocol.as_ref().unwrap() {
+        let mut local_offer = offer_to_all.clone();
+        local_offer.protocol = Some(OneOrMany::One(individual_protocol.clone()));
+
+        if direct_offers.iter().all(|direct| {
+            // Assume that the cml being parsed is valid, which is the only
+            // way that this function errors
+            !offer_to_all_would_duplicate(&local_offer, direct, target).unwrap()
+        }) {
+            local_offer.to = OneOrMany::One(OfferToRef::Named((*target).clone()));
+            returned_offers.push(local_offer);
+        }
     }
+
+    returned_offers
 }
 
 fn expand_offer_to_all(
@@ -594,31 +600,22 @@ fn expand_offer_to_all(
     let offers_to_all =
         offers_in.iter().filter(|offer| matches!(offer.to, OneOrMany::One(OfferToRef::All)));
 
-    let mut specialized_offers = offers_in
+    let mut direct_offers = offers_in
         .iter()
         .filter(|o| !matches!(o.to, OneOrMany::One(OfferToRef::All)))
         .map(Offer::clone)
         .collect::<Vec<Offer>>();
 
-    for offer in offers_to_all {
-        for child in children {
-            if let Some(offer) =
-                maybe_generate_specialization_from_all(offer, &specialized_offers, child)
-            {
-                specialized_offers.push(offer);
-            }
-        }
-
-        for collection in collections {
-            if let Some(offer) =
-                maybe_generate_specialization_from_all(offer, &specialized_offers, collection)
-            {
-                specialized_offers.push(offer);
+    for offer_to_all in offers_to_all {
+        for target in children.iter().chain(collections.iter()) {
+            let offers = maybe_generate_direct_offer_from_all(offer_to_all, &direct_offers, target);
+            for offer in offers {
+                direct_offers.push(offer);
             }
         }
     }
 
-    Ok(specialized_offers)
+    Ok(direct_offers)
 }
 
 /// `offer` rules route multiple capabilities from multiple sources to multiple targets.
@@ -2148,7 +2145,69 @@ mod tests {
             },
         },
 
-        test_compile_offer_multiple_protocols_to_all_array_syntax => {
+        test_compile_offer_multiple_protocols_to_single_array_syntax_and_all => {
+            input = json!({
+                "children": [
+                    {
+                        "name": "something",
+                        "url": "fuchsia-pkg://fuchsia.com/something/stable#meta/something.cm",
+                    },
+                ],
+                "offer": [
+                    {
+                        "protocol": ["fuchsia.logger.LogSink", "fuchsia.inspect.InspectSink",],
+                        "from": "parent",
+                        "to": "#something",
+                    },
+                    {
+                        "protocol": "fuchsia.logger.LogSink",
+                        "from": "parent",
+                        "to": "all",
+                    },
+                ],
+            }),
+            output = fdecl::Component {
+                offers: Some(vec![
+                    fdecl::Offer::Protocol(fdecl::OfferProtocol {
+                        source: Some(fdecl::Ref::Parent(fdecl::ParentRef {})),
+                        source_name: Some("fuchsia.logger.LogSink".into()),
+                        target: Some(fdecl::Ref::Child(fdecl::ChildRef {
+                            name: "something".into(),
+                            collection: None,
+                        })),
+                        target_name: Some("fuchsia.logger.LogSink".into()),
+                        dependency_type: Some(fdecl::DependencyType::Strong),
+                        availability: Some(fdecl::Availability::Required),
+                        ..fdecl::OfferProtocol::EMPTY
+                    }),
+                    fdecl::Offer::Protocol(fdecl::OfferProtocol {
+                        source: Some(fdecl::Ref::Parent(fdecl::ParentRef {})),
+                        source_name: Some("fuchsia.inspect.InspectSink".into()),
+                        target: Some(fdecl::Ref::Child(fdecl::ChildRef {
+                            name: "something".into(),
+                            collection: None,
+                        })),
+                        target_name: Some("fuchsia.inspect.InspectSink".into()),
+                        dependency_type: Some(fdecl::DependencyType::Strong),
+                        availability: Some(fdecl::Availability::Required),
+                        ..fdecl::OfferProtocol::EMPTY
+                    }),
+                ]),
+                children: Some(vec![
+                    fdecl::Child {
+                        name: Some("something".into()),
+                        url: Some(
+                            "fuchsia-pkg://fuchsia.com/something/stable#meta/something.cm".into(),
+                        ),
+                        startup: Some(fdecl::StartupMode::Lazy),
+                        ..fdecl::Child::EMPTY
+                    },
+                ]),
+                ..default_component_decl()
+            },
+        },
+
+        test_compile_offer_to_all_array_and_single => {
             input = json!({
                 "children": [
                     {
@@ -2161,6 +2220,11 @@ mod tests {
                         "protocol": ["fuchsia.logger.LogSink", "fuchsia.inspect.InspectSink",],
                         "from": "parent",
                         "to": "all",
+                    },
+                    {
+                        "protocol": "fuchsia.logger.LogSink",
+                        "from": "parent",
+                        "to": "#something",
                     },
                 ],
             }),
@@ -4396,17 +4460,22 @@ mod tests {
             OneOrMany::One(OfferToRef::All),
         )];
 
-        let result = maybe_generate_specialization_from_all(
+        let result = maybe_generate_direct_offer_from_all(
             &offer,
             &offer_set,
             &Name::from_str("something").unwrap(),
-        )
-        .unwrap();
+        );
 
-        assert_matches!(result, Offer {protocol, from, to, ..} => {
-            assert_eq!(protocol, Some(OneOrMany::One(Name::from_str("fuchsia.logger.LegacyLog").unwrap())));
-            assert_eq!(from, OneOrMany::One(OfferFromRef::Parent {}));
-            assert_eq!(to, OneOrMany::One(OfferToRef::Named(Name::from_str("something").unwrap())));
+        assert_matches!(&result[..], [Offer {protocol, from, to, ..}] => {
+            assert_eq!(
+                protocol,
+                &Some(OneOrMany::One(Name::from_str("fuchsia.logger.LegacyLog").unwrap())),
+            );
+            assert_eq!(from, &OneOrMany::One(OfferFromRef::Parent {}));
+            assert_eq!(
+                to,
+                &OneOrMany::One(OfferToRef::Named(Name::from_str("something").unwrap())),
+            );
         });
 
         offer_set.push(create_offer(
@@ -4415,17 +4484,22 @@ mod tests {
             OneOrMany::One(OfferToRef::Named(Name::from_str("something").unwrap())),
         ));
 
-        let result = maybe_generate_specialization_from_all(
+        let result = maybe_generate_direct_offer_from_all(
             &offer,
             &offer_set,
             &Name::from_str("something").unwrap(),
-        )
-        .unwrap();
+        );
 
-        assert_matches!(result, Offer {protocol, from, to, ..} => {
-            assert_eq!(protocol, Some(OneOrMany::One(Name::from_str("fuchsia.logger.LegacyLog").unwrap())));
-            assert_eq!(from, OneOrMany::One(OfferFromRef::Parent {}));
-            assert_eq!(to, OneOrMany::One(OfferToRef::Named(Name::from_str("something").unwrap())));
+        assert_matches!(&result[..], [Offer {protocol, from, to, ..}] => {
+            assert_eq!(
+                protocol,
+                &Some(OneOrMany::One(Name::from_str("fuchsia.logger.LegacyLog").unwrap())),
+            );
+            assert_eq!(from, &OneOrMany::One(OfferFromRef::Parent {}));
+            assert_eq!(
+                to,
+                &OneOrMany::One(OfferToRef::Named(Name::from_str("something").unwrap())),
+            );
         });
 
         offer_set.push(create_offer(
@@ -4434,11 +4508,11 @@ mod tests {
             OneOrMany::One(OfferToRef::Named(Name::from_str("something").unwrap())),
         ));
 
-        assert!(maybe_generate_specialization_from_all(
+        assert!(maybe_generate_direct_offer_from_all(
             &offer,
             &offer_set,
             &Name::from_str("something").unwrap()
         )
-        .is_none());
+        .is_empty());
     }
 }
