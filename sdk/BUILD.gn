@@ -337,6 +337,7 @@ sdk_molecule("core_idk") {
     "devices",
     "docs",
     "//sdk/fidl",
+    "//src/developer/ffx/lib/symbol-index:symbol-index-sdk",
     "//src/lib/vulkan:vulkan_layers",
     "//third_party/Vulkan-Loader:libvulkan_sdk",
     "//third_party/Vulkan-Loader:vulkan_license",

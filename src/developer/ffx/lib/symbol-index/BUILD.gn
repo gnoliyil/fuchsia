@@ -3,6 +3,7 @@
 # found in the LICENSE file.
 
 import("//build/rust/rustc_library.gni")
+import("//build/sdk/sdk_data.gni")
 
 if (is_host) {
   rustc_library("lib") {
@@ -78,7 +79,43 @@ if (current_toolchain == default_toolchain) {
         {
           url = "gs://fuchsia-artifacts/debug"
         },
+        {
+          url = "gs://fuchsia-public-artifacts-release/debug"
+        },
       ]
     }
+  }
+
+  # Generate symbol-index config for SDK.
+  generated_file("symbol-index-sdk-file") {
+    outputs = [ "$target_gen_dir/symbol-index-sdk.json" ]
+
+    output_conversion = "json"
+    contents = {
+      build_id_dirs = [
+        {
+          # The config will be located at $sdk/data/config/symbol-index*/config.json
+          # and the build id directory will be at $sdk/.build-id.
+          path = "../../../.build-id"
+        },
+      ]
+
+      gcs_flat = [
+        {
+          url = "gs://fuchsia-artifacts/debug"
+        },
+        {
+          url = "gs://fuchsia-public-artifacts-release/debug"
+        },
+      ]
+    }
+  }
+
+  sdk_data("symbol-index-sdk") {
+    category = "partner"
+    name = "symbol-index"
+    file = "$target_gen_dir/symbol-index-sdk.json"
+    type = "config"
+    non_sdk_deps = [ ":symbol-index-sdk-file" ]
   }
 }
