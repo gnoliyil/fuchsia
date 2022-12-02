@@ -144,7 +144,8 @@ shared_library("memory_trace") {
 # time by the instrumented binary; this can cause those library to be
 # stripped at link-time, which disables the instrumentation.
 config("no-as-needed") {
-  visibility = [ ":memory_trace" ]
+  # TODO(fxbug.dev/116590): Re-enable this restriction.
+  # visibility = [ ":memory_trace" ]
   rustflags = [ "-Clink-args=--no-as-needed" ]
 }
 
