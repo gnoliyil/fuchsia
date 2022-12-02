@@ -140,6 +140,8 @@ async fn run_test<W: 'static + Write + Send + Sync>(
         },
         accumulate_debug_data: false, // ffx never accumulates.
         log_protocol: None,
+        min_severity_logs: min_log_severity,
+        show_full_moniker: cmd.show_full_moniker_in_logs,
     };
     let test_definitions = test_params_from_args(cmd, experiments.json_input.enabled)?;
 
@@ -163,7 +165,6 @@ async fn run_test<W: 'static + Write + Send + Sync>(
         proxy,
         test_definitions,
         run_params,
-        min_log_severity,
         reporter,
         cancel_receiver.map(|_| ()),
     )
@@ -234,7 +235,6 @@ fn test_params_from_args(
                 also_run_disabled_tests: cmd.run_disabled,
                 parallel: cmd.parallel,
                 test_args,
-                show_full_moniker: cmd.show_full_moniker_in_logs,
                 tags: vec![],
             };
 
@@ -366,7 +366,6 @@ mod test {
                     timeout_seconds: None,
                     test_filters: None,
                     also_run_disabled_tests: false,
-                    show_full_moniker: false,
                     parallel: None,
                     test_args: vec![],
                     max_severity_logs: None,
@@ -397,7 +396,6 @@ mod test {
                         test_url: "my-test-url".to_string(),
                         timeout_seconds: None,
                         test_filters: None,
-                        show_full_moniker: false,
                         also_run_disabled_tests: false,
                         max_severity_logs: Some(diagnostics_data::Severity::Warn),
                         parallel: None,
@@ -431,7 +429,6 @@ mod test {
                     timeout_seconds: Some(NonZeroU32::new(10).unwrap()),
                     test_filters: Some(vec!["filter".to_string()]),
                     also_run_disabled_tests: true,
-                    show_full_moniker: false,
                     max_severity_logs: None,
                     parallel: Some(20),
                     test_args: vec!["--".to_string(), "arg".to_string()],
@@ -465,7 +462,6 @@ mod test {
                         timeout_seconds: None,
                         test_filters: None,
                         also_run_disabled_tests: false,
-                        show_full_moniker: false,
                         max_severity_logs: None,
                         parallel: None,
                         test_args: vec![],
@@ -476,7 +472,6 @@ mod test {
                         timeout_seconds: Some(NonZeroU32::new(60).unwrap()),
                         test_filters: None,
                         also_run_disabled_tests: false,
-                        show_full_moniker: false,
                         max_severity_logs: None,
                         parallel: None,
                         test_args: vec![],
@@ -487,7 +482,6 @@ mod test {
                         timeout_seconds: None,
                         test_filters: Some(vec!["Unit".to_string()]),
                         also_run_disabled_tests: true,
-                        show_full_moniker: false,
                         max_severity_logs: Some(diagnostics_data::Severity::Info),
                         parallel: Some(4),
                         test_args: vec!["--flag".to_string()],

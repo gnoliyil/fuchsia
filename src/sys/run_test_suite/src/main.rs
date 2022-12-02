@@ -148,6 +148,9 @@ async fn main() {
         experimental_parallel_execution: None,
         accumulate_debug_data: true, // must be true to support coverage via scp
         log_protocol: Some(LogsIteratorOption::ArchiveIterator),
+        min_severity_logs,
+        // TODO(https://fxbug.dev/107998): make this configurable
+        show_full_moniker: true,
     };
 
     let proxy = fuchsia_component::client::connect_to_protocol::<RunBuilderMarker>()
@@ -162,8 +165,6 @@ async fn main() {
                 test_filters,
                 also_run_disabled_tests,
                 parallel,
-                // TODO(https://fxbug.dev/107998): make this configurable
-                show_full_moniker: true,
                 test_args,
                 max_severity_logs,
                 tags: vec![],
@@ -171,7 +172,6 @@ async fn main() {
             count as usize
         ],
         run_params,
-        min_severity_logs,
         run_reporter,
         futures::future::pending(),
     )

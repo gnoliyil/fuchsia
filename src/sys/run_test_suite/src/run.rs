@@ -48,12 +48,17 @@ struct CollectedEntityState<R> {
 async fn run_suite_and_collect_logs<F: Future<Output = ()> + Unpin>(
     running_suite: RunningSuite,
     suite_reporter: &SuiteReporter<'_>,
-    log_opts: diagnostics::LogCollectionOptions,
+    log_display: diagnostics::LogDisplayConfiguration,
     cancel_fut: F,
 ) -> Result<Outcome, RunTestSuiteError> {
     duration!("collect_suite");
 
-    let RunningSuite { mut event_stream, stopper, timeout, timeout_grace, .. } = running_suite;
+    let RunningSuite {
+        mut event_stream, stopper, timeout, timeout_grace, max_severity_logs, ..
+    } = running_suite;
+
+    let log_opts =
+        diagnostics::LogCollectionOptions { format: log_display, max_severity: max_severity_logs };
 
     let mut test_cases: HashMap<u32, CollectedEntityState<_>> = HashMap::new();
     let mut suite_state = CollectedEntityState {
@@ -528,15 +533,12 @@ async fn run_tests<'a, F: 'a + Future<Output = ()> + Unpin>(
     builder_proxy: RunBuilderProxy,
     test_params: impl IntoIterator<Item = TestParams>,
     run_params: RunParams,
-    min_severity_logs: Option<Severity>,
     run_reporter: &'a RunReporter,
     cancel_fut: F,
 ) -> Result<Outcome, RunTestSuiteError> {
     let mut suite_start_futs = FuturesUnordered::new();
     let mut suite_reporters = HashMap::new();
-    let mut show_full_moniker = false;
     for (suite_id_raw, params) in test_params.into_iter().enumerate() {
-        show_full_moniker = show_full_moniker || params.show_full_moniker;
         let timeout = params
             .timeout_seconds
             .map(|seconds| std::time::Duration::from_secs(seconds.get() as u64));
@@ -599,16 +601,15 @@ async fn run_tests<'a, F: 'a + Future<Output = ()> + Unpin>(
 
             let suite_reporter = suite_reporters.remove(&suite_id).unwrap();
 
-            let log_options = diagnostics::LogCollectionOptions {
-                min_severity: min_severity_logs,
-                max_severity: running_suite.max_severity_logs,
-                format: LogDisplayConfiguration { show_full_moniker },
+            let log_display = LogDisplayConfiguration {
+                show_full_moniker: run_params.show_full_moniker,
+                min_severity: run_params.min_severity_logs,
             };
 
             let result = run_suite_and_collect_logs(
                 running_suite,
                 &suite_reporter,
-                log_options,
+                log_display,
                 cancel_fut.clone(),
             )
             .await;
@@ -679,9 +680,11 @@ async fn run_tests<'a, F: 'a + Future<Output = ()> + Unpin>(
                             run_reporter,
                             artifact,
                             diagnostics::LogCollectionOptions {
-                                min_severity: min_severity_logs,
                                 max_severity: None,
-                                format: LogDisplayConfiguration { show_full_moniker },
+                                format: LogDisplayConfiguration {
+                                    show_full_moniker: run_params.show_full_moniker,
+                                    min_severity: run_params.min_severity_logs,
+                                },
                             },
                         )
                         .await?;
@@ -733,13 +736,10 @@ async fn run_tests<'a, F: 'a + Future<Output = ()> + Unpin>(
 /// terminated and recorded when the future resolves. The caller can control when the
 /// future resolves by passing in the receiver end of a `future::channel::oneshot`
 /// channel.
-/// |min_severity_logs| specifies the minimum log severity to report. As it is an
-/// option for output, it will likely soon be moved to a reporter.
 pub async fn run_tests_and_get_outcome<F: Future<Output = ()>>(
     builder_proxy: RunBuilderProxy,
     test_params: impl IntoIterator<Item = TestParams>,
     run_params: RunParams,
-    min_severity_logs: Option<Severity>,
     run_reporter: RunReporter,
     cancel_fut: F,
 ) -> Outcome {
@@ -747,7 +747,6 @@ pub async fn run_tests_and_get_outcome<F: Future<Output = ()>>(
         builder_proxy,
         test_params,
         run_params,
-        min_severity_logs,
         &run_reporter,
         cancel_fut.boxed_local(),
     )
@@ -1088,7 +1087,7 @@ mod test {
                 run_suite_and_collect_logs(
                     suite,
                     &suite_reporter,
-                    diagnostics::LogCollectionOptions::default(),
+                    diagnostics::LogDisplayConfiguration::default(),
                     futures::future::pending()
                 )
                 .await
@@ -1162,7 +1161,7 @@ mod test {
                 run_suite_and_collect_logs(
                     suite,
                     &suite_reporter,
-                    diagnostics::LogCollectionOptions::default(),
+                    diagnostics::LogDisplayConfiguration::default(),
                     futures::future::pending()
                 )
                 .await
@@ -1251,7 +1250,7 @@ mod test {
                 run_suite_and_collect_logs(
                     suite,
                     &suite_reporter,
-                    diagnostics::LogCollectionOptions::default(),
+                    diagnostics::LogDisplayConfiguration::default(),
                     futures::future::pending()
                 )
                 .await
@@ -1337,7 +1336,7 @@ mod test {
                 run_suite_and_collect_logs(
                     suite,
                     &suite_reporter,
-                    diagnostics::LogCollectionOptions::default(),
+                    diagnostics::LogDisplayConfiguration::default(),
                     futures::future::pending()
                 )
                 .await
@@ -1416,7 +1415,7 @@ mod test {
                 run_suite_and_collect_logs(
                     suite,
                     &suite_reporter,
-                    diagnostics::LogCollectionOptions::default(),
+                    diagnostics::LogDisplayConfiguration::default(),
                     futures::future::pending()
                 )
                 .await
@@ -1579,8 +1578,9 @@ mod test {
                 experimental_parallel_execution: None,
                 accumulate_debug_data: false,
                 log_protocol: None,
+                min_severity_logs: None,
+                show_full_moniker: false,
             },
-            None,
             params.run_reporter,
             futures::future::pending(),
         )
@@ -1904,6 +1904,8 @@ mod test {
             experimental_parallel_execution: Some(max_parallel_suites),
             accumulate_debug_data: false,
             log_protocol: None,
+            min_severity_logs: None,
+            show_full_moniker: false,
         };
 
         let request_parallel_fut = request_scheduling_options(&run_params, &builder_proxy);
@@ -1932,6 +1934,8 @@ mod test {
             experimental_parallel_execution: None,
             accumulate_debug_data: false,
             log_protocol: None,
+            min_severity_logs: None,
+            show_full_moniker: false,
         };
 
         let request_parallel_fut = request_scheduling_options(&run_params, &builder_proxy);

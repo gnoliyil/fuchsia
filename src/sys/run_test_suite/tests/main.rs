@@ -67,7 +67,6 @@ fn new_test_params(test_url: &str) -> TestParams {
         parallel: None,
         test_args: vec![],
         max_severity_logs: None,
-        show_full_moniker: true,
         tags: vec![TestTag { key: "internal".to_string(), value: "true".to_string() }],
     }
 }
@@ -80,6 +79,8 @@ fn new_run_params() -> run_test_suite_lib::RunParams {
         experimental_parallel_execution: None,
         accumulate_debug_data: false,
         log_protocol: None,
+        min_severity_logs: None,
+        show_full_moniker: true,
     }
 }
 
@@ -142,13 +143,14 @@ async fn run_test_once(
     test_params: TestParams,
     min_log_severity: Option<Severity>,
 ) -> Result<Outcome, RunTestSuiteError> {
+    let mut run_options = new_run_params();
+    run_options.min_severity_logs = min_log_severity;
     let run_reporter = run_test_suite_lib::output::RunReporter::new(reporter);
     Ok(run_test_suite_lib::run_tests_and_get_outcome(
         fuchsia_component::client::connect_to_protocol::<RunBuilderMarker>()
             .expect("connecting to RunBuilderProxy"),
         vec![test_params],
         new_run_params(),
-        min_log_severity,
         run_reporter,
         futures::future::pending(),
     )
@@ -227,7 +229,6 @@ async fn launch_and_test_passing_v2_test(
             "fuchsia-pkg://fuchsia.com/run_test_suite_integration_tests#meta/passing-test-example.cm",
         )],
         new_run_params(),
-        None,
         reporter,
         futures::future::pending(),
     )
@@ -309,7 +310,6 @@ async fn experimental_parallel_execution_integ_test(
             "fuchsia-pkg://fuchsia.com/run_test_suite_integration_tests#meta/passing-test-example.cm",
         )],
         run_params,
-        None,
         reporter,
         futures::future::pending(),
     )
@@ -363,7 +363,6 @@ async fn launch_and_test_stderr_test(
             "fuchsia-pkg://fuchsia.com/run_test_suite_integration_tests#meta/test-with-stderr.cm",
         )],
         new_run_params(),
-        None,
         reporter,
         futures::future::pending(),
     )
@@ -456,7 +455,6 @@ async fn launch_and_test_passing_v2_test_multiple_times(
                 "fuchsia-pkg://fuchsia.com/run_test_suite_integration_tests#meta/passing-test-example.cm",
                 ); 10],
                 new_run_params(),
-            None,
             reporter,
             futures::future::pending(),
         )
@@ -504,7 +502,6 @@ async fn launch_and_test_multiple_passing_tests(
                 )
             ],
             new_run_params(),
-            None,
             reporter,
             futures::future::pending(),
         )
@@ -732,7 +729,6 @@ async fn launch_and_test_logspam_test(iterator_option: LogsIteratorOption) {
             "fuchsia-pkg://fuchsia.com/run_test_suite_integration_tests#meta/logspam_test.cm",
         )],
         run_params,
-        None,
         run_test_suite_lib::output::RunReporter::new(reporter),
         futures::future::pending(),
     )
@@ -941,7 +937,7 @@ async fn launch_and_test_failing_v2_test_multiple_times(
                 "fuchsia-pkg://fuchsia.com/run_test_suite_integration_tests#meta/failing-test-example.cm",
                 ); 10],
                 new_run_params(),
-                None, reporter, futures::future::pending(),
+                reporter, futures::future::pending(),
         )
     .await;
 
@@ -1104,7 +1100,6 @@ async fn test_timeout_multiple_times(
             .expect("connecting to RunBuilderProxy"),
         vec![test_params; 10],
         new_run_params(),
-        None,
         reporter,
         futures::future::pending(),
     )
@@ -1183,8 +1178,9 @@ async fn test_continue_on_timeout(
             experimental_parallel_execution: None,
             accumulate_debug_data: false,
             log_protocol: None,
+            min_severity_logs: None,
+            show_full_moniker: false,
         },
-        None,
         reporter,
         futures::future::pending(),
     )
@@ -1256,8 +1252,10 @@ async fn test_stop_after_n_failures(
                     experimental_parallel_execution: None,
                     accumulate_debug_data: false,
                     log_protocol: None,
+                    min_severity_logs: None,
+            show_full_moniker: false,
                 },
-                None, reporter, futures::future::pending(),
+                reporter, futures::future::pending(),
         )
     .await;
     assert_eq!(outcome, Outcome::Failed);
@@ -1348,7 +1346,6 @@ async fn test_logging_component(subcase: &'static str, iterator_option: LogsIter
                     .expect("connecting to RunBuilderProxy"),
                 vec![test_params],
                 run_params,
-                None,
                 run_test_suite_lib::output::RunReporter::new(reporter),
                 futures::future::pending(),
             )
@@ -1410,12 +1407,12 @@ async fn test_logging_component_min_severity(
         test_params.timeout_seconds = std::num::NonZeroU32::new(600);
         let mut run_params = new_run_params();
         run_params.log_protocol = Some(iterator_option);
+        run_params.min_severity_logs = Some(Severity::Info);
         let outcome = run_test_suite_lib::run_tests_and_get_outcome(
             fuchsia_component::client::connect_to_protocol::<RunBuilderMarker>()
                 .expect("connecting to RunBuilderProxy"),
             vec![test_params],
             run_params,
-            Some(Severity::Info),
             run_test_suite_lib::output::RunReporter::new(reporter),
             futures::future::pending(),
         )
@@ -1477,13 +1474,14 @@ async fn test_stdout_and_log_filter_ansi(
         "fuchsia-pkg://fuchsia.com/run_test_suite_integration_tests#meta/stdout_ansi_test.cm",
     );
     test_params.timeout_seconds = std::num::NonZeroU32::new(600);
+    let mut run_params = new_run_params();
+    run_params.min_severity_logs = Some(Severity::Info);
 
     let outcome = run_test_suite_lib::run_tests_and_get_outcome(
         fuchsia_component::client::connect_to_protocol::<RunBuilderMarker>()
             .expect("connecting to RunBuilderProxy"),
         vec![test_params],
-        new_run_params(),
-        Some(Severity::Info),
+        run_params,
         reporter,
         futures::future::pending(),
     )
@@ -1539,7 +1537,6 @@ async fn test_max_severity(max_severity: Severity, iterator_option: LogsIterator
             .expect("connecting to RunBuilderProxy"),
         vec![test_params],
         run_params,
-        None,
         run_test_suite_lib::output::RunReporter::new(reporter),
         futures::future::pending(),
     )
@@ -1629,7 +1626,6 @@ async fn test_stdout_to_directory(
             .expect("connecting to RunBuilderProxy"),
         vec![test_params],
         new_run_params(),
-        None,
         reporter,
         futures::future::pending(),
     )
@@ -1692,7 +1688,6 @@ async fn test_syslog_to_directory(
             .expect("connecting to RunBuilderProxy"),
         vec![test_params],
         new_run_params(),
-        None,
         reporter,
         futures::future::pending(),
     )
@@ -1747,7 +1742,6 @@ async fn test_custom_artifacts_to_directory(
             .expect("connecting to RunBuilderProxy"),
         vec![test_params],
         new_run_params(),
-        None,
         reporter,
         futures::future::pending(),
     )
@@ -1800,7 +1794,6 @@ async fn test_terminate_signal(
             .expect("connecting to RunBuilderProxy"),
         vec![test_params],
         new_run_params(),
-        None,
         reporter,
         futures::future::ready(()),
     )
@@ -1850,7 +1843,6 @@ async fn test_terminate_signal_multiple_suites(
             .expect("connecting to RunBuilderProxy"),
         vec![test_params; 10],
         new_run_params(),
-        None,
         reporter,
         futures::future::ready(()),
     )
@@ -1918,7 +1910,6 @@ async fn test_collect_stream_artifacts_from_hung_test(
             .expect("connecting to RunBuilderProxy"),
         vec![new_test_params(SUITE_NAME)],
         new_run_params(),
-        None,
         reporter,
         cancel_waiter,
     );

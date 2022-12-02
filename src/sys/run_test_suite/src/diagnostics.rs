@@ -17,16 +17,16 @@ use {
 pub(crate) struct LogDisplayConfiguration {
     /// Whether or not to show the full moniker
     pub show_full_moniker: bool,
+
+    /// The minimum severity log to display.
+    pub min_severity: Option<Severity>,
 }
 
 // TODO(fxbug.dev/54198, fxbug.dev/70581): deprecate this when implementing metadata selectors for
 // logs or when we support OnRegisterInterest that can be sent to *all* test components.
 #[derive(Clone, Default)]
 pub(crate) struct LogCollectionOptions {
-    /// The minimum severity for collecting logs.
-    pub min_severity: Option<Severity>,
-
-    /// The maximum severity for collecting logs.
+    /// The maximum allowed severity for logs.
     pub max_severity: Option<Severity>,
 
     /// Log display options for unstructured logs.
@@ -41,8 +41,8 @@ impl LogCollectionOptions {
 
     fn should_display(&self, log: &LogsData) -> bool {
         let severity = log.metadata.severity;
-        matches!(self.min_severity, None)
-            || matches!(self.min_severity, Some(min) if severity >= min)
+        matches!(self.format.min_severity, None)
+            || matches!(self.format.min_severity, Some(min) if severity >= min)
     }
 }
 
@@ -154,9 +154,11 @@ mod test {
                 futures::stream::iter(input_logs.into_iter().map(Ok)),
                 &mut log_artifact,
                 LogCollectionOptions {
-                    min_severity: Severity::Warn.into(),
                     max_severity: None,
-                    format: LogDisplayConfiguration { show_full_moniker: true }
+                    format: LogDisplayConfiguration {
+                        show_full_moniker: true,
+                        min_severity: Severity::Warn.into(),
+                    }
                 },
             )
             .await
@@ -214,9 +216,11 @@ mod test {
                 futures::stream::iter(unaltered_logs.into_iter().map(Ok)),
                 &mut log_artifact,
                 LogCollectionOptions {
-                    min_severity: None,
                     max_severity: None,
-                    format: LogDisplayConfiguration { show_full_moniker: false }
+                    format: LogDisplayConfiguration {
+                        show_full_moniker: false,
+                        min_severity: None,
+                    }
                 }
             )
             .await
@@ -281,9 +285,8 @@ mod test {
                 futures::stream::iter(unaltered_logs.into_iter().map(Ok)),
                 &mut log_artifact,
                 LogCollectionOptions {
-                    min_severity: None,
                     max_severity: None,
-                    format: LogDisplayConfiguration { show_full_moniker: true }
+                    format: LogDisplayConfiguration { show_full_moniker: true, min_severity: None }
                 }
             )
             .await
@@ -345,9 +348,8 @@ mod test {
                 futures::stream::iter(input_logs.into_iter().map(Ok)),
                 &mut log_artifact,
                 LogCollectionOptions {
-                    min_severity: None,
                     max_severity: Severity::Warn.into(),
-                    format: LogDisplayConfiguration { show_full_moniker: true }
+                    format: LogDisplayConfiguration { show_full_moniker: true, min_severity: None }
                 }
             )
             .await

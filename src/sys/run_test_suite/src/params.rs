@@ -28,9 +28,6 @@ pub struct TestParams {
     /// Maximum allowable log severity for the test.
     pub max_severity_logs: Option<Severity>,
 
-    /// If true, shows the full moniker in log output.
-    pub show_full_moniker: bool,
-
     /// List of tags to associate with this test's output.
     pub tags: Vec<TestTag>,
 }
@@ -57,6 +54,13 @@ pub struct RunParams {
     /// If set, set the protocol used to retrieve logs. If not set, an appropriate default
     /// will be chosen by the implementation.
     pub log_protocol: Option<ftest_manager::LogsIteratorOption>,
+
+    /// If set, specifies the minimum log severity to report. As it is an
+    /// option for output, it will likely soon be moved to a reporter.
+    pub min_severity_logs: Option<Severity>,
+
+    /// If true, shows the full moniker in logs.
+    pub show_full_moniker: bool,
 }
 
 /// Sets the behavior of the overall run if a suite terminates with a timeout.
