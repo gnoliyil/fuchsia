@@ -24,11 +24,10 @@
 namespace board_qemu_arm64 {
 namespace fpbus = fuchsia_hardware_platform_bus;
 
-static bool use_fake_display() {
+static bool use_fake_display(zx_device_t* dev) {
   char ufd[32];
-  // TODO(fxb/115160): Pass device argument to device_get_variable.
   zx_status_t status =
-      device_get_variable(nullptr, "driver.qemu_bus.use_fake_display", ufd, sizeof(ufd), nullptr);
+      device_get_variable(dev, "driver.qemu_bus.use_fake_display", ufd, sizeof(ufd), nullptr);
   return (status == ZX_OK && (!strcmp(ufd, "1") || !strcmp(ufd, "true") || !strcmp(ufd, "on")));
 }
 
@@ -36,7 +35,7 @@ int QemuArm64::Thread() {
   zx_status_t status;
   zxlogf(INFO, "qemu-bus thread running ");
 
-  if (use_fake_display()) {
+  if (use_fake_display(zxdev())) {
     status = DisplayInit();
     if (status != ZX_OK) {
       zxlogf(ERROR, "%s: DisplayInit() failed %d", __func__, status);

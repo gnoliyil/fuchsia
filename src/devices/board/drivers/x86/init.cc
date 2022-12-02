@@ -16,6 +16,18 @@
 
 namespace x86 {
 
+bool use_hardware_iommu(zx_device_t* dev) {
+  char value[32];
+  auto status = device_get_variable(dev, "driver.iommu.enable", value, sizeof(value), nullptr);
+  if (status != ZX_OK) {
+    return false;  // Default to false currently
+  } else if (!strcmp(value, "0") || !strcmp(value, "false") || !strcmp(value, "off")) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
 zx_status_t X86::EarlyAcpiInit() {
   ZX_DEBUG_ASSERT(!acpica_initialized_);
   // First initialize the ACPI subsystem.
@@ -36,7 +48,7 @@ zx_status_t X86::EarlyInit() {
   zx::unowned_resource root_resource(get_root_resource());
   // Now initialize the IOMMU manager. Any failures in setting it up we consider non-fatal and do
   // not propagate.
-  status = iommu_manager_.Init(std::move(root_resource), false /* force_hardware_iommu */);
+  status = iommu_manager_.Init(std::move(root_resource), use_hardware_iommu(parent()));
   if (status != ZX_OK) {
     zxlogf(INFO, "acpi: Failed to initialize IOMMU manager: %s", zx_status_get_string(status));
   }

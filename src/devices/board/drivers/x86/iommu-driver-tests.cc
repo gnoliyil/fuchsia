@@ -23,7 +23,7 @@ TEST(IommuTest, BasicTest) {
   // kernel iommu objects are actually created (and then destroyed).
   IommuManager manager([](fx_log_severity_t severity, const char* file, int line, const char* msg,
                           va_list args) { zxlogvf_etc(severity, nullptr, file, line, msg, args); });
-  zx_status_t status = manager.Init(std::move(root_resource), true /* force_hardware_iommu */);
+  zx_status_t status = manager.Init(std::move(root_resource), true /* use_hardware_iommu */);
   // It could be that this system has no hardware iommus and so we tolerate ZX_ERR_NOT_FOUND.
   EXPECT_TRUE(status == ZX_OK || status == ZX_ERR_NOT_FOUND);
   // Let the IommuManager get destroyed and free the kernel resources, turning back off any iommus.

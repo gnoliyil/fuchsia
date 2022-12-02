@@ -93,7 +93,7 @@ class IommuManager : public iommu::IommuManagerInterface {
   // Initializes the iommu_manager using the ACPI DMAR table. If this fails,
   // the IOMMU manager will be left in a well-defined empty state, and
   // IommuForBdf() can still succeed (yielding dummy IOMMU handles).
-  zx_status_t Init(zx::unowned_resource root_resource, bool force_hardware_iommu);
+  zx_status_t Init(zx::unowned_resource root_resource, bool use_hardware_iommu);
 
   // Returns a handle to the IOMMU that is responsible for the given BDF.
   zx::unowned_iommu IommuForPciDevice(uint32_t bdf) override;

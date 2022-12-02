@@ -18,19 +18,6 @@ namespace {
 // Temporary single global reference until C wrappers are removed.
 x86::IommuManager* iommu_mgr = nullptr;
 
-bool use_hardware_iommu(void) {
-  char value[32];
-  // TODO(fxb/115160): Pass device argument to device_get_variable.
-  auto status = device_get_variable(nullptr, "driver.iommu.enable", value, sizeof(value), nullptr);
-  if (status != ZX_OK) {
-    return false;  // Default to false currently
-  } else if (!strcmp(value, "0") || !strcmp(value, "false") || !strcmp(value, "off")) {
-    return false;
-  } else {
-    return true;
-  }
-}
-
 // Given a table that may have a Length > sizeof(TABLE), this returns a Span of the data following
 // table, based on that Length. The type T of the record can be used to get a more convenient span
 // and will cause the alignment etc to ber checked.
@@ -384,7 +371,7 @@ IommuManager::~IommuManager() {
   }
 }
 
-zx_status_t IommuManager::Init(zx::unowned_resource root_resource, bool force_hardware_iommu) {
+zx_status_t IommuManager::Init(zx::unowned_resource root_resource, bool use_hardware_iommu) {
   // Prevent double initialization.
   ZX_DEBUG_ASSERT(!iommu_mgr);
   iommu_mgr = this;
@@ -397,7 +384,7 @@ zx_status_t IommuManager::Init(zx::unowned_resource root_resource, bool force_ha
     return status;
   }
 
-  if (!force_hardware_iommu && !use_hardware_iommu()) {
+  if (!use_hardware_iommu) {
     logf(INFO, "not using IOMMU");
     return ZX_OK;
   }
