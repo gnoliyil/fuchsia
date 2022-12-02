@@ -367,6 +367,10 @@ group("hex") {
   public_deps = [ ":hex-v0_3_2" ]
 }
 
+group("hkdf") {
+  public_deps = [ ":hkdf-v0_11_0" ]
+}
+
 group("hmac") {
   public_deps = [ ":hmac-v0_11_0" ]
 }
@@ -4926,6 +4930,28 @@ rust_library("hex-v0_3_2") {
     "--edition=2015",
     "-Cmetadata=67ad4b3000c63154",
     "-Cextra-filename=-67ad4b3000c63154",
+  ]
+
+  visibility = [ ":*" ]
+}
+
+rust_library("hkdf-v0_11_0") {
+  crate_name = "hkdf"
+  crate_root = "//third_party/rust_crates/vendor/hkdf-0.11.0/src/hkdf.rs"
+  output_name = "hkdf-29df0bf5a933579f"
+  configs -= [ "//build/config/rust:2018_idioms" ]
+
+  deps = []
+  deps += [ ":digest-v0_9_0" ]
+  deps += [ ":hmac-v0_11_0" ]
+
+  rustenv = []
+
+  rustflags = [
+    "--cap-lints=allow",
+    "--edition=2018",
+    "-Cmetadata=29df0bf5a933579f",
+    "-Cextra-filename=-29df0bf5a933579f",
   ]
 
   visibility = [ ":*" ]
