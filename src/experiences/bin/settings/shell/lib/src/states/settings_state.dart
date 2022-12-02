@@ -4,6 +4,7 @@
 
 import 'package:flutter/material.dart' hide Action;
 import 'package:shell_settings/src/services/brightness_service.dart';
+import 'package:shell_settings/src/services/channel_service.dart';
 import 'package:shell_settings/src/services/datetime_service.dart';
 import 'package:shell_settings/src/services/task_service.dart';
 import 'package:shell_settings/src/services/timezone_service.dart';
@@ -15,6 +16,19 @@ import 'package:shell_settings/src/widgets/setting_details.dart';
 enum SettingsPage {
   none,
   timezone,
+  channel,
+}
+
+/// Defines states for channel ota.
+enum ChannelState {
+  idle,
+  checkingForUpdates,
+  errorCheckingForUpdate,
+  noUpdateAvailable,
+  installationDeferredByPolicy,
+  installingUpdate,
+  waitingForReboot,
+  installationError
 }
 
 /// Defines the state of the main settings overlay.
@@ -30,6 +44,14 @@ abstract class SettingsState implements TaskService {
   double? get brightnessLevel;
   bool? get brightnessAuto;
   IconData get brightnessIcon;
+  // Channel
+  bool get channelPageVisible;
+  String get currentChannel;
+  List<String> get availableChannels;
+  String get targetChannel;
+  ChannelState get channelState;
+  bool? get optedIntoUpdates;
+  double get systemUpdateProgress;
 
   factory SettingsState.fromEnv() {
     // ignore: unnecessary_cast
@@ -37,6 +59,7 @@ abstract class SettingsState implements TaskService {
       timezoneService: TimezoneService(),
       dateTimeService: DateTimeService(),
       brightnessService: BrightnessService(),
+      channelService: ChannelService(),
     ) as SettingsState;
   }
 
@@ -50,4 +73,8 @@ abstract class SettingsState implements TaskService {
   // TODO(fxb/113485): add keyboard shortcuts for brightness
   void increaseBrightness();
   void decreaseBrightness();
+  // Channel
+  void showChannelSettings();
+  void setTargetChannel(String channel);
+  void checkForUpdates();
 }

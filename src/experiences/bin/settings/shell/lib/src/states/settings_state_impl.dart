@@ -14,6 +14,7 @@ import 'package:internationalization/strings.dart';
 import 'package:intl/intl.dart';
 import 'package:mobx/mobx.dart';
 import 'package:shell_settings/src/services/brightness_service.dart';
+import 'package:shell_settings/src/services/channel_service.dart';
 import 'package:shell_settings/src/services/datetime_service.dart';
 import 'package:shell_settings/src/services/task_service.dart';
 import 'package:shell_settings/src/services/timezone_service.dart';
@@ -75,16 +76,52 @@ class SettingsStateImpl with Disposable implements SettingsState, TaskService {
   final Observable<IconData> _brightnessIcon =
       Icons.brightness_auto.asObservable();
 
+  // Channel
+  @override
+  bool get channelPageVisible => _channelPageVisible.value;
+  late final _channelPageVisible =
+      (() => settingsPage.value == SettingsPage.channel).asComputed();
+
+  @override
+  String get currentChannel => _currentChannel.value;
+  set currentChannel(String value) => _currentChannel.value = value;
+  final Observable<String> _currentChannel = Observable<String>('');
+
+  @override
+  final List<String> availableChannels = ObservableList<String>();
+
+  @override
+  String get targetChannel => _targetChannel.value;
+  set targetChannel(String value) => _targetChannel.value = value;
+  final Observable<String> _targetChannel = Observable<String>('');
+
+  @override
+  ChannelState get channelState => _channelState.value;
+  set channelState(ChannelState value) => _channelState.value = value;
+  final _channelState = Observable<ChannelState>(ChannelState.idle);
+
+  @override
+  bool? get optedIntoUpdates => _optedIntoUpdates.value;
+  set optedIntoUpdates(bool? value) => _optedIntoUpdates.value = value;
+  final Observable<bool?> _optedIntoUpdates = Observable<bool?>(null);
+
+  @override
+  double get systemUpdateProgress => _systemUpdateProgress.value;
+  set systemUpdateProgress(double value) => _systemUpdateProgress.value = value;
+  final _systemUpdateProgress = Observable<double>(0);
+
   // Services
+  final BrightnessService brightnessService;
   final DateTimeService dateTimeService;
   final TimezoneService timezoneService;
-  final BrightnessService brightnessService;
+  final ChannelService channelService;
 
   // Constructor
   SettingsStateImpl({
     required this.dateTimeService,
     required this.timezoneService,
     required this.brightnessService,
+    required this.channelService,
   })  : _timezones = _loadTimezones(),
         _selectedTimezone = timezoneService.timezone.asObservable() {
     dateTimeService.onChanged = updateDateTime;
@@ -95,6 +132,39 @@ class SettingsStateImpl with Disposable implements SettingsState, TaskService {
         brightnessLevel = brightnessService.brightness;
         brightnessAuto = brightnessService.auto;
         brightnessIcon = brightnessService.icon;
+      });
+    };
+    channelService.onChanged = () {
+      runInAction(() {
+        optedIntoUpdates = channelService.optedIntoUpdates;
+        currentChannel = channelService.currentChannel;
+        systemUpdateProgress = channelService.updateProgress;
+        List<String> channels;
+        // FIDL messages are unmodifiable so we need to copy the list of
+        // channels here.
+        channels = channelService.channels.toList();
+        // Sort channels for readability
+        channels.sort();
+        availableChannels
+          ..clear()
+          ..addAll(channels);
+        targetChannel = channelService.targetChannel;
+        // Monitor state of update
+        if (channelService.checkingForUpdates) {
+          channelState = ChannelState.checkingForUpdates;
+        } else if (channelService.errorCheckingForUpdate) {
+          channelState = ChannelState.errorCheckingForUpdate;
+        } else if (channelService.noUpdateAvailable) {
+          channelState = ChannelState.noUpdateAvailable;
+        } else if (channelService.installationDeferredByPolicy) {
+          channelState = ChannelState.installationDeferredByPolicy;
+        } else if (channelService.installingUpdate) {
+          channelState = ChannelState.installingUpdate;
+        } else if (channelService.waitingForReboot) {
+          channelState = ChannelState.waitingForReboot;
+        } else if (channelService.installationError) {
+          channelState = ChannelState.installationError;
+        }
       });
     };
 
@@ -117,6 +187,7 @@ class SettingsStateImpl with Disposable implements SettingsState, TaskService {
       dateTimeService.start(),
       timezoneService.start(),
       brightnessService.start(),
+      channelService.start(),
     ]);
   }
 
@@ -126,6 +197,7 @@ class SettingsStateImpl with Disposable implements SettingsState, TaskService {
     await dateTimeService.stop();
     await timezoneService.stop();
     await brightnessService.stop();
+    await channelService.stop();
     _dateTimeNow = null;
   }
 
@@ -135,6 +207,7 @@ class SettingsStateImpl with Disposable implements SettingsState, TaskService {
     dateTimeService.dispose();
     timezoneService.dispose();
     brightnessService.dispose();
+    channelService.dispose();
   }
 
   // All
@@ -182,4 +255,16 @@ class SettingsStateImpl with Disposable implements SettingsState, TaskService {
 
   @override
   void setBrightnessAuto() => runInAction(() => brightnessService.auto = true);
+
+  // Channel
+  @override
+  void showChannelSettings() =>
+      runInAction(() => settingsPage.value = SettingsPage.channel);
+
+  @override
+  void setTargetChannel(String value) =>
+      runInAction(() => channelService.targetChannel = value);
+
+  @override
+  void checkForUpdates() => runInAction(channelService.checkForUpdates);
 }

@@ -19,6 +19,8 @@
                 "fuchsia.intl.PropertyProvider",
                 "fuchsia.settings.Intl",
                 "fuchsia.ui.brightness.Control",
+                "fuchsia.update.channelcontrol.ChannelControl",
+                "fuchsia.update.Manager",
             ],
         },
     ],

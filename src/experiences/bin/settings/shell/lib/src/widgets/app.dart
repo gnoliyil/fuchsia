@@ -14,6 +14,7 @@ import 'package:internationalization/strings.dart';
 import 'package:mobx/mobx.dart';
 import 'package:shell_settings/src/states/settings_state.dart';
 import 'package:shell_settings/src/utils/themes.dart';
+import 'package:shell_settings/src/widgets/channel_settings.dart';
 import 'package:shell_settings/src/widgets/timezone_settings.dart';
 
 /// Defines a widget to display shell settings.
@@ -99,6 +100,13 @@ class App extends StatelessWidget {
                     onChange: state.updateTimezone,
                   ),
                 ),
+              if (state.channelPageVisible)
+                Expanded(
+                  child: ChannelSettings(
+                    state: state,
+                    onChange: state.setTargetChannel,
+                  ),
+                ),
             ],
           );
         }),
@@ -122,6 +130,29 @@ class _ListSettings extends StatelessWidget {
           Expanded(
             child: ListView(
               children: [
+                // Channel
+                ListTile(
+                  enabled: true,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 24),
+                  leading: Icon(Icons.cloud_download),
+                  title: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(Strings.channel),
+                      SizedBox(width: 48),
+                      Expanded(
+                        child: Text(
+                          settingsState.currentChannel,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                          maxLines: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                  trailing: Icon(Icons.arrow_right),
+                  onTap: settingsState.showChannelSettings,
+                ),
                 // Brightness
                 Observer(builder: (_) {
                   return ListTile(
