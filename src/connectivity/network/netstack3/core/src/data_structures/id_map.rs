@@ -312,20 +312,14 @@ impl<T> IdMap<T> {
     }
 
     /// Creates an iterator over the containing items and their associated keys.
-    pub fn iter(&self) -> impl Iterator<Item = (Key, &T)> {
-        self.data.iter().enumerate().filter_map(|(k, v)| match v {
-            IdMapEntry::Allocated(t) => Some((k, t)),
-            IdMapEntry::Free(_) => None,
-        })
+    pub fn iter(&self) -> Iter<'_, T> {
+        IntoIterator::into_iter(self)
     }
 
     /// Creates a mutable iterator over the containing items and their
     /// associated keys.
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = (Key, &mut T)> {
-        self.data.iter_mut().enumerate().filter_map(|(k, v)| match v {
-            IdMapEntry::Allocated(t) => Some((k, t)),
-            IdMapEntry::Free(_) => None,
-        })
+    pub fn iter_mut(&mut self) -> IterMut<'_, T> {
+        IntoIterator::into_iter(self)
     }
 
     /// Gets the given key's corresponding entry in the map for in-place
@@ -435,6 +429,56 @@ impl<T> IdMap<T> {
 impl<T> Default for IdMap<T> {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// An iterator over the keys and values stored in an [`IdMap`].
+pub struct Iter<'s, T>(core::iter::Enumerate<core::slice::Iter<'s, IdMapEntry<T>>>);
+
+impl<'a, T> Iterator for Iter<'a, T> {
+    type Item = (Key, &'a T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let Self(it) = self;
+        it.filter_map(|(k, v)| match v {
+            IdMapEntry::Allocated(t) => Some((k, t)),
+            IdMapEntry::Free(_) => None,
+        })
+        .next()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a IdMap<T> {
+    type Item = (Key, &'a T);
+    type IntoIter = Iter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Iter(self.data.iter().enumerate())
+    }
+}
+
+/// An iterator over the keys and mutable values stored in an [`IdMap`].
+pub struct IterMut<'s, T>(core::iter::Enumerate<core::slice::IterMut<'s, IdMapEntry<T>>>);
+
+impl<'a, T> Iterator for IterMut<'a, T> {
+    type Item = (Key, &'a mut T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let Self(it) = self;
+        it.filter_map(|(k, v)| match v {
+            IdMapEntry::Allocated(t) => Some((k, t)),
+            IdMapEntry::Free(_) => None,
+        })
+        .next()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a mut IdMap<T> {
+    type Item = (Key, &'a mut T);
+    type IntoIter = IterMut<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IterMut(self.data.iter_mut().enumerate())
     }
 }
 

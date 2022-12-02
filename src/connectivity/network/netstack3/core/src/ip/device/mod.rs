@@ -345,12 +345,11 @@ where
         cb: F,
     ) -> O;
 
+    type DevicesIter<'s>: Iterator<Item = Self::DeviceId> + 's;
+
     /// Calls the function with an [`Iterator`] of IDs for all initialized
     /// devices.
-    fn with_devices<O, F: FnOnce(Box<dyn Iterator<Item = Self::DeviceId> + '_>) -> O>(
-        &self,
-        cb: F,
-    ) -> O;
+    fn with_devices<O, F: FnOnce(Self::DevicesIter<'_>) -> O>(&self, cb: F) -> O;
 
     /// Gets the MTU for a device.
     ///

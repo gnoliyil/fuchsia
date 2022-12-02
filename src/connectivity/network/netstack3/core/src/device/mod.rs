@@ -12,7 +12,6 @@ pub(crate) mod ndp;
 pub mod queue;
 mod state;
 
-use alloc::boxed::Box;
 use core::{
     fmt::{self, Debug, Display, Formatter},
     hash::{Hash, Hasher},
@@ -34,7 +33,10 @@ use packet_formats::ethernet::EthernetIpExt;
 
 use crate::{
     context::{FrameContext, InstantContext, RecvFrameContext},
-    data_structures::{id_map::IdMap, id_map_collection::IdMapCollectionKey},
+    data_structures::{
+        id_map::{self, IdMap},
+        id_map_collection::IdMapCollectionKey,
+    },
     device::{
         ethernet::{
             EthernetDeviceState, EthernetDeviceStateBuilder, EthernetLinkDevice, EthernetTimerId,
@@ -200,26 +202,6 @@ fn with_ip_device_state<
     }
 }
 
-fn with_devices<
-    NonSyncCtx: NonSyncContext,
-    O,
-    F: FnOnce(Box<dyn Iterator<Item = DeviceId<NonSyncCtx::Instant>> + '_>) -> O,
->(
-    ctx: &SyncCtx<NonSyncCtx>,
-    cb: F,
-) -> O {
-    let Devices { ethernet, loopback } = &*ctx.state.device.devices.read();
-
-    cb(Box::new(
-        ethernet
-            .iter()
-            .map(|(id, state)| EthernetDeviceId(id, ReferenceCounted::downgrade(state)).into())
-            .chain(loopback.iter().map(|state| {
-                DeviceIdInner::Loopback(LoopbackDeviceId(ReferenceCounted::downgrade(state))).into()
-            })),
-    ))
-}
-
 fn get_mtu<NonSyncCtx: NonSyncContext>(
     mut ctx: &SyncCtx<NonSyncCtx>,
     device: &DeviceId<NonSyncCtx::Instant>,
@@ -281,6 +263,30 @@ impl<NonSyncCtx: NonSyncContext> DualStackDeviceContext<NonSyncCtx> for &'_ Sync
     }
 }
 
+/// Iterator over devices.
+///
+/// Implements `Iterator<Item=DeviceId<I>>` by pulling from provided loopback
+/// and ethernet device ID iterators. This struct only exists as a named type
+/// so it can be an associated type on impls of the [`IpDeviceContext`] trait.
+pub(crate) struct DevicesIter<'s, I: Instant> {
+    ethernet: id_map::Iter<'s, ReferenceCounted<IpLinkDeviceState<I, EthernetDeviceState>>>,
+    loopback: core::option::Iter<'s, ReferenceCounted<IpLinkDeviceState<I, LoopbackDeviceState>>>,
+}
+
+impl<'s, I: Instant> Iterator for DevicesIter<'s, I> {
+    type Item = DeviceId<I>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let Self { ethernet, loopback } = self;
+        ethernet
+            .map(|(id, state)| EthernetDeviceId(id, ReferenceCounted::downgrade(state)).into())
+            .chain(loopback.map(|state| {
+                DeviceIdInner::Loopback(LoopbackDeviceId(ReferenceCounted::downgrade(state))).into()
+            }))
+            .next()
+    }
+}
+
 impl<NonSyncCtx: NonSyncContext> IpDeviceContext<Ipv4, NonSyncCtx> for &'_ SyncCtx<NonSyncCtx> {
     fn with_ip_device_state<O, F: FnOnce(&Ipv4DeviceState<NonSyncCtx::Instant>) -> O>(
         &self,
@@ -298,14 +304,12 @@ impl<NonSyncCtx: NonSyncContext> IpDeviceContext<Ipv4, NonSyncCtx> for &'_ SyncC
         with_ip_device_state(self, device, |state| cb(&mut state.ipv4.write()))
     }
 
-    fn with_devices<
-        O,
-        F: FnOnce(Box<dyn Iterator<Item = DeviceId<NonSyncCtx::Instant>> + '_>) -> O,
-    >(
-        &self,
-        cb: F,
-    ) -> O {
-        with_devices(self, cb)
+    type DevicesIter<'s> = DevicesIter<'s, NonSyncCtx::Instant>;
+
+    fn with_devices<O, F: FnOnce(Self::DevicesIter<'_>) -> O>(&self, cb: F) -> O {
+        let Devices { ethernet, loopback } = &*self.state.device.devices.read();
+
+        cb(DevicesIter { ethernet: ethernet.iter(), loopback: loopback.iter() })
     }
 
     fn get_mtu(&self, device_id: &Self::DeviceId) -> u32 {
@@ -460,14 +464,12 @@ impl<NonSyncCtx: NonSyncContext> IpDeviceContext<Ipv6, NonSyncCtx> for &'_ SyncC
         with_ip_device_state(self, device, |state| cb(&mut state.ipv6.write()))
     }
 
-    fn with_devices<
-        O,
-        F: FnOnce(Box<dyn Iterator<Item = DeviceId<NonSyncCtx::Instant>> + '_>) -> O,
-    >(
-        &self,
-        cb: F,
-    ) -> O {
-        with_devices(self, cb)
+    type DevicesIter<'s> = DevicesIter<'s, NonSyncCtx::Instant>;
+
+    fn with_devices<O, F: FnOnce(Self::DevicesIter<'_>) -> O>(&self, cb: F) -> O {
+        let Devices { ethernet, loopback } = &*self.state.device.devices.read();
+
+        cb(DevicesIter { ethernet: ethernet.iter(), loopback: loopback.iter() })
     }
 
     fn get_mtu(&self, device_id: &Self::DeviceId) -> u32 {
