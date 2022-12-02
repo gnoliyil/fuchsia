@@ -5053,6 +5053,42 @@ mod test {
         }
     }
 
+    #[test]
+    fn decode_result_unknown_tag() {
+        use std::result::Result;
+        let ctx = &Context { wire_format_version: WireFormatVersion::V2 };
+
+        let bytes: &[u8] = &[
+            // Ordinal 3 (not known to result) ----------|
+            0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            // inline value -----|  NHandles |  Flags ---|
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
+        ];
+        let handle_buf = &mut Vec::<HandleInfo>::new();
+
+        let mut out = Result::<(), u32>::new_empty();
+        let res = Decoder::decode_with_context(ctx, bytes, handle_buf, &mut out);
+        assert_matches!(res, Err(Error::UnknownUnionTag));
+    }
+
+    #[test]
+    fn decode_result_success_invalid_empty_struct() {
+        use std::result::Result;
+        let ctx = &Context { wire_format_version: WireFormatVersion::V2 };
+
+        let bytes: &[u8] = &[
+            // Ordinal 1 (success) ----------------------|
+            0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            // inline value -----|  NHandles |  Flags ---|
+            0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
+        ];
+        let handle_buf = &mut Vec::<HandleInfo>::new();
+
+        let mut out = Result::<(), u32>::new_empty();
+        let res = Decoder::decode_with_context(ctx, bytes, handle_buf, &mut out);
+        assert_matches!(res, Err(Error::NonZeroPadding { padding_start: 8 }));
+    }
+
     #[derive(Debug, PartialEq)]
     struct Foo {
         byte: u8,
@@ -5535,6 +5571,7 @@ mod zx_test {
     use super::test::*;
     use super::*;
     use crate::handle::AsHandleRef;
+    use assert_matches::assert_matches;
     use fuchsia_zircon as zx;
 
     fn to_handle_info(handles: &mut Vec<HandleDisposition<'static>>) -> Vec<HandleInfo> {
@@ -5579,6 +5616,58 @@ mod zx_test {
             .expect("Decoding failed");
 
             assert_eq!(raw_handle, handle_out.into_inner().raw_handle());
+        }
+    }
+
+    #[test]
+    fn decode_too_few_handles() {
+        for ctx in DECODE_ONLY_CONTEXTS {
+            let bytes: &[u8] = &[0xff; 8];
+            let handle_buf = &mut Vec::<HandleInfo>::new();
+
+            let mut handle_out = Handle::new_empty();
+            let res = Decoder::decode_with_context(ctx, bytes, handle_buf, &mut handle_out);
+            assert_matches!(res, Err(Error::OutOfRange));
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    struct TestSampleTable {
+        #[deprecated = "Use `..TestSampleTable::EMPTY` to construct and `..` to match."]
+        #[doc(hidden)]
+        __non_exhaustive: (),
+    }
+
+    impl TestSampleTable {
+        /// An empty table with every field set to `None`.
+        #[allow(deprecated)]
+        pub const EMPTY: Self = Self { __non_exhaustive: () };
+    }
+
+    fidl_table! {
+        name: TestSampleTable,
+        members: [
+        ],
+    }
+
+    #[test]
+    fn decode_too_few_handles_unknown_envelope() {
+        for ctx in DECODE_ONLY_CONTEXTS {
+            let bytes: &[u8] = &[
+                // Table Size 1 -----------------------------|
+                0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                // Table data ptr present -------------------|
+                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                // Out of line vector of table data:
+                // First envelope:
+                // Inline handle ----|  NHandles |  Flags ---|
+                0xff, 0xff, 0xff, 0xff, 0x01, 0x00, 0x01, 0x00,
+            ];
+            let handle_buf = &mut Vec::<HandleInfo>::new();
+
+            let mut out = TestSampleTable::new_empty();
+            let res = Decoder::decode_with_context(ctx, bytes, handle_buf, &mut out);
+            assert_matches!(res, Err(Error::OutOfRange));
         }
     }
 
