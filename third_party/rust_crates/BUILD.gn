@@ -406,7 +406,7 @@ if (current_os == "fuchsia") {
 }
 
 group("indexmap") {
-  public_deps = [ ":indexmap-v1_7_0" ]
+  public_deps = [ ":indexmap-v1_9_2" ]
 }
 
 if (!(current_os == "fuchsia")) {
@@ -4826,10 +4826,10 @@ rust_library("handlebars-v4_3_5") {
   visibility = [ ":*" ]
 }
 
-rust_library("hashbrown-v0_11_2") {
+rust_library("hashbrown-v0_12_3") {
   crate_name = "hashbrown"
-  crate_root = "//third_party/rust_crates/vendor/hashbrown-0.11.2/src/lib.rs"
-  output_name = "hashbrown-3f4ceb31128bcd3d"
+  crate_root = "//third_party/rust_crates/vendor/hashbrown-0.12.3/src/lib.rs"
+  output_name = "hashbrown-159c93b40eceb50a"
   configs -= [ "//build/config/rust:2018_idioms" ]
 
   deps = []
@@ -4838,9 +4838,9 @@ rust_library("hashbrown-v0_11_2") {
 
   rustflags = [
     "--cap-lints=allow",
-    "--edition=2018",
-    "-Cmetadata=3f4ceb31128bcd3d",
-    "-Cextra-filename=-3f4ceb31128bcd3d",
+    "--edition=2021",
+    "-Cmetadata=159c93b40eceb50a",
+    "-Cextra-filename=-159c93b40eceb50a",
     "--cfg=feature=\"raw\"",
   ]
 
@@ -5238,23 +5238,23 @@ rust_library("idna-v0_2_3") {
   visibility = [ ":*" ]
 }
 
-rust_library("indexmap-v1_7_0") {
+rust_library("indexmap-v1_9_2") {
   crate_name = "indexmap"
-  crate_root = "//third_party/rust_crates/vendor/indexmap-1.7.0/src/lib.rs"
-  output_name = "indexmap-701c6bd73c75516d"
+  crate_root = "//third_party/rust_crates/vendor/indexmap-1.9.2/src/lib.rs"
+  output_name = "indexmap-48d3353175399349"
   configs -= [ "//build/config/rust:2018_idioms" ]
 
   deps = []
-  deps += [ ":hashbrown-v0_11_2" ]
+  deps += [ ":hashbrown-v0_12_3" ]
   deps += [ ":serde-v1_0_147" ]
 
   rustenv = []
 
   rustflags = [
     "--cap-lints=allow",
-    "--edition=2018",
-    "-Cmetadata=701c6bd73c75516d",
-    "-Cextra-filename=-701c6bd73c75516d",
+    "--edition=2021",
+    "-Cmetadata=48d3353175399349",
+    "-Cextra-filename=-48d3353175399349",
     "--cfg=feature=\"serde\"",
     "--cfg=feature=\"serde-1\"",
     "--cfg=has_std",
@@ -7210,7 +7210,7 @@ rust_library("petgraph-v0_6_2") {
 
   deps = []
   deps += [ ":fixedbitset-v0_4_2" ]
-  deps += [ ":indexmap-v1_7_0" ]
+  deps += [ ":indexmap-v1_9_2" ]
 
   rustenv = []
 
@@ -9386,7 +9386,7 @@ rust_library("schemars-v0_8_10") {
   deps = []
   deps += [ ":chrono-v0_4_19" ]
   deps += [ ":dyn-clone-v1_0_5" ]
-  deps += [ ":indexmap-v1_7_0" ]
+  deps += [ ":indexmap-v1_9_2" ]
   deps += [ ":schemars_derive-v0_8_10($host_toolchain)" ]
   deps += [ ":serde-v1_0_147" ]
   deps += [ ":serde_json-v1_0_87" ]
@@ -9796,7 +9796,7 @@ rust_library("serde_yaml-v0_8_23") {
   configs -= [ "//build/config/rust:2018_idioms" ]
 
   deps = []
-  deps += [ ":indexmap-v1_7_0" ]
+  deps += [ ":indexmap-v1_9_2" ]
   deps += [ ":ryu-v1_0_3" ]
   deps += [ ":serde-v1_0_147" ]
   deps += [ ":yaml-rust-v0_4_5" ]

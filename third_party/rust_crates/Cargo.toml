@@ -123,7 +123,7 @@ http = "0.2.4"
 # currently not using it on Fuchsia. Please see this ticket if you want to
 # enable it.
 hyper = { version = "0.14.19", default-features = false, features = ["stream", "http1", "client", "server"] }
-indexmap = "1.7.0"
+indexmap = "1.9.2"
 iota = "0.2.2"
 itertools = "0.10"
 itoa = "0.4"
@@ -484,7 +484,7 @@ group_visibility = { import = "//src/experiences/session_shells/gazelle/build/vi
 [gn.package.httparse."1.7.1"]
 rustflags = ["--cfg=httparse_simd"]
 
-[gn.package.indexmap."1.7.0"]
+[gn.package.indexmap."1.9.2"]
 rustflags = ["--cfg=has_std"]
 
 [gn.package.js-sys."0.3.40"]
