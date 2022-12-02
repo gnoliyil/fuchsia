@@ -22,6 +22,8 @@
 #include <fbl/ref_ptr.h>
 #include <zxtest/zxtest.h>
 
+#include "src/devices/testing/fake-object/internal.h"
+
 namespace fake_object {
 
 class FakeObject : public zxtest::Test {

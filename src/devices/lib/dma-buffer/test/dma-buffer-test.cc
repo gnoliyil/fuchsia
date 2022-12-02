@@ -43,7 +43,7 @@ extern "C" {
 zx_status_t zx_vmo_create_contiguous(zx_handle_t bti_handle, size_t size, uint32_t alignment_log2,
                                      zx_handle_t* out) {
   zx::vmo vmo = {};
-  zx_status_t status = REAL_SYSCALL(zx_vmo_create)(size, 0, vmo.reset_and_get_address());
+  zx_status_t status = _zx_vmo_create(size, 0, vmo.reset_and_get_address());
   if (status != ZX_OK) {
     return status;
   }
@@ -61,7 +61,7 @@ zx_status_t zx_vmo_create_contiguous(zx_handle_t bti_handle, size_t size, uint32
 
 zx_status_t zx_vmo_create(uint64_t size, uint32_t options, zx_handle_t* out) {
   zx::vmo vmo = {};
-  zx_status_t status = REAL_SYSCALL(zx_vmo_create)(size, options, vmo.reset_and_get_address());
+  zx_status_t status = _zx_vmo_create(size, options, vmo.reset_and_get_address());
   if (status != ZX_OK) {
     return status;
   }
@@ -84,8 +84,8 @@ zx_status_t zx_vmar_map(zx_handle_t vmar_handle, zx_vm_option_t options, uint64_
   }
   auto vmo = fbl::RefPtr<VmoWrapper>::Downcast(std::move(get_res.value()));
 
-  zx_status_t status = REAL_SYSCALL(zx_vmar_map)(vmar_handle, options, vmar_offset,
-                                                 vmo->vmo()->get(), vmo_offset, len, mapped_addr);
+  zx_status_t status = _zx_vmar_map(vmar_handle, options, vmar_offset, vmo->vmo()->get(),
+                                    vmo_offset, len, mapped_addr);
   if (status == ZX_OK) {
     vmo->metadata().virt = reinterpret_cast<void*>(*mapped_addr);
   }

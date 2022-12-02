@@ -158,15 +158,6 @@ zx::result<zx_handle_t> fake_object_create();
 zx::result<zx_handle_t> fake_object_create_typed(zx_obj_type_t type);
 zx::result<zx_koid_t> fake_object_get_koid(zx_handle_t);
 
-void* FindRealSyscall(const char* name);
-
 }  // namespace fake_object
-
-#define REAL_SYSCALL(name)                                                          \
-  ([]() {                                                                           \
-    static const auto real_syscall =                                                \
-        reinterpret_cast<decltype(name)*>(fake_object::FindRealSyscall("_" #name)); \
-    return real_syscall;                                                            \
-  }())
 
 #endif  // SRC_DEVICES_TESTING_FAKE_OBJECT_INCLUDE_LIB_FAKE_OBJECT_OBJECT_H_
