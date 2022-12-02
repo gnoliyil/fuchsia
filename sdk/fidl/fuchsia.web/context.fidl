@@ -274,7 +274,11 @@ type CreateFrameParams = resource table {
     /// [`CreateFrame`] will fail with `ZX_ERR_NOT_SUPPORTED` if the value specified is not
     /// supported by the [`Context`].
     @deprecated("use fuchsia.web/Frame.SetContentAreaSettings instead")
+    @available(deprecated=8, removed=10)
     3: autoplay_policy AutoplayPolicy;
+
+    @available(added=10)
+    3: reserved;
 
     /// Enables automatic blocking of navigations to explicit sites, and specifies the error page
     /// content, in HTML, to be loaded in the Frame when a navigation is canceled by the filter.

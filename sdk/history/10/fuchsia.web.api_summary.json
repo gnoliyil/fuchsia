@@ -394,12 +394,6 @@
     },
     {
         "kind": "table/member",
-        "name": "fuchsia.web/CreateFrameParams.autoplay_policy",
-        "ordinal": "3",
-        "type": "fuchsia.web/AutoplayPolicy"
-    },
-    {
-        "kind": "table/member",
         "name": "fuchsia.web/CreateFrameParams.debug_name",
         "ordinal": "2",
         "type": "string"
@@ -613,12 +607,6 @@
     },
     {
         "kind": "protocol/member",
-        "name": "fuchsia.web/Frame.SetMediaSessionId",
-        "ordinal": "6362174322077420729",
-        "type": "(uint64 session_id)"
-    },
-    {
-        "kind": "protocol/member",
         "name": "fuchsia.web/Frame.SetMediaSettings",
         "ordinal": "9054620876951306563",
         "type": "(fuchsia.web/FrameMediaSettings settings)"
@@ -643,12 +631,6 @@
     },
     {
         "kind": "protocol/member",
-        "name": "fuchsia.web/Frame.SetPageScale",
-        "ordinal": "418962821528855579",
-        "type": "(float32 scale)"
-    },
-    {
-        "kind": "protocol/member",
         "name": "fuchsia.web/Frame.SetPermissionState",
         "ordinal": "1826014565696225103",
         "type": "(fuchsia.web/PermissionDescriptor permission,string:65536 web_origin,fuchsia.web/PermissionState state)"
@@ -658,12 +640,6 @@
         "name": "fuchsia.web/Frame.SetPopupFrameCreationListener",
         "ordinal": "3809460682245661354",
         "type": "(client_end:<fuchsia.web/PopupFrameCreationListener,optional> listener)"
-    },
-    {
-        "kind": "protocol/member",
-        "name": "fuchsia.web/Frame.SetPreferredTheme",
-        "ordinal": "8606177604664893896",
-        "type": "(fuchsia.settings/ThemeType theme)"
     },
     {
         "kind": "protocol/member",
@@ -1004,12 +980,6 @@
         "kind": "union",
         "name": "fuchsia.web/MessagePort_PostMessage_Result",
         "strictness": "strict"
-    },
-    {
-        "kind": "protocol/member",
-        "name": "fuchsia.web/NavigationController.GetVisibleEntry",
-        "ordinal": "1829712777919809079",
-        "type": "() -> (fuchsia.web/NavigationState entry)"
     },
     {
         "kind": "protocol/member",
