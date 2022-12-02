@@ -285,10 +285,10 @@ async fn perform_scan(
     }
 
     if !requested_active_scan_ids.is_empty() {
-        let requested_active_scan_ssids =
-            requested_active_scan_ids.iter().map(|id| id.ssid.to_vec()).collect();
+        let requested_active_scan_ssids: Vec<types::Ssid> =
+            requested_active_scan_ids.iter().map(|id| id.ssid.clone()).collect();
         let scan_request = fidl_sme::ScanRequest::Active(fidl_sme::ActiveScanRequest {
-            ssids: requested_active_scan_ssids,
+            ssids: requested_active_scan_ssids.iter().map(|s| s.to_vec()).collect(),
             channels: vec![],
         });
         let sme_proxy = iface_manager.lock().await.get_sme_proxy_for_scan().await.map_err(|_| {
@@ -307,7 +307,7 @@ async fn perform_scan(
         match sme_scan_result {
             Ok(results) => {
                 record_directed_scan_results(
-                    requested_active_scan_ids,
+                    requested_active_scan_ssids,
                     &results,
                     saved_networks_manager,
                 )
@@ -394,7 +394,7 @@ async fn perform_directed_active_scan(
 /// Figure out which saved networks we actively scanned for and did not get results for, and update
 /// their configs to update the rate at which we would actively scan for these networks.
 async fn record_directed_scan_results(
-    target_ids: Vec<types::NetworkIdentifier>,
+    target_ssids: Vec<types::Ssid>,
     scan_result_list: &Vec<wlan_common::scan::ScanResult>,
     saved_networks_manager: Arc<dyn SavedNetworksManagerApi>,
 ) {
@@ -405,7 +405,7 @@ async fn record_directed_scan_results(
             security_type: scan_result.bss_description.protection().into(),
         })
         .collect();
-    saved_networks_manager.record_scan_result(ScanResultType::Directed(target_ids), ids).await;
+    saved_networks_manager.record_scan_result(ScanResultType::Directed(target_ssids), ids).await;
 }
 
 /// The location sensor module uses scan results to help determine the

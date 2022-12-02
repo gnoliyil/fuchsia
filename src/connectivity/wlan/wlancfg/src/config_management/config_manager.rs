@@ -59,9 +59,8 @@ pub struct SavedNetworksManager {
 type NetworkConfigMap = HashMap<NetworkIdentifier, Vec<NetworkConfig>>;
 
 pub enum ScanResultType {
-    #[allow(dead_code)]
     Undirected,
-    Directed(Vec<types::NetworkIdentifier>), // Contains list of target SSIDs
+    Directed(Vec<types::Ssid>), // Contains list of target SSIDs
 }
 
 #[async_trait]
@@ -524,17 +523,17 @@ impl SavedNetworksManagerApi for SavedNetworksManager {
                     }
                 }
             }
-            ScanResultType::Directed(target_ids) => {
-                // For each config of each targeted ID, check whether there is a scan result that
-                // could be used to connect. If not, update the hidden probability.
-                for target_id in target_ids.into_iter() {
-                    let configs = match saved_networks.get_mut(&target_id.clone()) {
-                        Some(configs) => configs,
-                        None => continue,
-                    };
+            ScanResultType::Directed(target_ssids) => {
+                for (id, configs) in saved_networks.iter_mut() {
+                    // Only consider saved networks that match one of the targeted SSIDs
+                    if !target_ssids.contains(&id.ssid) {
+                        continue;
+                    }
+                    // For each config, check whether there is a scan result that
+                    // could be used to connect. If not, update the hidden probability.
                     let potential_scans = results
                         .iter()
-                        .filter(|scan_id| scan_id.ssid == target_id.ssid)
+                        .filter(|scan_id| scan_id.ssid == id.ssid)
                         .collect::<Vec<_>>();
                     for config in configs {
                         if !potential_scans.iter().any(|scan_id| {
@@ -1479,10 +1478,7 @@ mod tests {
             ssid: id.ssid.clone(),
             security_type: types::SecurityTypeDetailed::Wpa2Personal,
         }];
-        let target = vec![types::NetworkIdentifier {
-            ssid: id.ssid.clone(),
-            security_type: types::SecurityType::Wpa,
-        }];
+        let target = vec![id.ssid.clone()];
         saved_networks.record_scan_result(ScanResultType::Directed(target), seen_networks).await;
 
         let config = saved_networks.lookup(&id).await.pop().expect("failed to lookup config");
@@ -1511,10 +1507,7 @@ mod tests {
 
         // Record directed scan results. The seen network does not match the saved network even
         // though security is compatible, since the security type is not compatible with the PSK.
-        let target = vec![types::NetworkIdentifier {
-            ssid: id.ssid.clone(),
-            security_type: types::SecurityType::Wpa2,
-        }];
+        let target = vec![id.ssid.clone()];
         let seen_networks = vec![types::NetworkIdentifierDetailed {
             ssid: id.ssid.clone(),
             security_type: types::SecurityTypeDetailed::Wpa3Personal,
@@ -1548,10 +1541,7 @@ mod tests {
         assert_eq!(config.hidden_probability, PROB_HIDDEN_DEFAULT);
 
         // Record directed scan results. We target the saved network but see a different one.
-        let target = vec![types::NetworkIdentifier {
-            ssid: id.ssid.clone(),
-            security_type: types::SecurityType::Wpa2,
-        }];
+        let target = vec![id.ssid.clone()];
         let seen_networks = vec![types::NetworkIdentifierDetailed {
             ssid: diff_ssid,
             security_type: types::SecurityTypeDetailed::Wpa2Personal,
@@ -1584,10 +1574,7 @@ mod tests {
 
         // Record directed scan results. We see one network with the same SSID that doesn't match,
         // and one that does match.
-        let target = vec![types::NetworkIdentifier {
-            ssid: id.ssid.clone(),
-            security_type: types::SecurityType::Wpa2,
-        }];
+        let target = vec![id.ssid.clone()];
         let seen_networks = vec![
             types::NetworkIdentifierDetailed {
                 ssid: id.ssid.clone(),
@@ -2016,7 +2003,7 @@ mod tests {
         assert_eq!(config_4.hidden_probability, PROB_HIDDEN_DEFAULT);
 
         let seen_ids = vec![];
-        let not_seen_ids = vec![id_1.clone(), id_2.clone(), id_3.clone()];
+        let not_seen_ids = vec![id_1.ssid.clone(), id_2.ssid.clone(), id_3.ssid.clone()];
         saved_networks.record_scan_result(ScanResultType::Directed(not_seen_ids), seen_ids).await;
 
         // Check that the configs' hidden probability has decreased
