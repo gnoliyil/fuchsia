@@ -70,13 +70,38 @@ fn new_storage_manager(fs: &mut ServingMultiVolumeFilesystem) -> Fxfs {
     )
 }
 
+async fn write_file(root_dir: &fio::DirectoryProxy) -> Result<(), Error> {
+    let expected_contents = b"some data";
+
+    let file = fuchsia_fs::directory::open_file(
+        root_dir,
+        "test",
+        fio::OpenFlags::CREATE | fio::OpenFlags::RIGHT_READABLE | fio::OpenFlags::RIGHT_WRITABLE,
+    )
+    .await?;
+
+    let bytes_written = file.write(expected_contents).await?.map_err(Status::from_raw)?;
+
+    assert_eq!(bytes_written, expected_contents.len() as u64);
+    Ok(())
+}
+
+async fn read_file(root_dir: &fio::DirectoryProxy) -> Result<(), Error> {
+    let expected_contents = b"some data";
+
+    let file =
+        fuchsia_fs::directory::open_file(root_dir, "test", fio::OpenFlags::RIGHT_READABLE).await?;
+    let actual_contents = fuchsia_fs::file::read(&file).await?;
+    assert_eq!(&actual_contents, expected_contents);
+    Ok(())
+}
+
 #[fuchsia::test]
 async fn test_lifecycle() -> Result<(), Error> {
     let (_ramdisk, _filesystem, mut fs): (_, _, _) = make_ramdisk_and_filesystem().await?;
     let fxfs_storage_manager = new_storage_manager(&mut fs);
 
     let key = new_key();
-    let expected_contents = b"some data";
 
     // "/volumes/account" doesn't exist yet.
     assert!(!fs.has_volume(ACCOUNT_LABEL).await.expect("has_volume failed"));
@@ -90,26 +115,7 @@ async fn test_lifecycle() -> Result<(), Error> {
     {
         let root_dir = fxfs_storage_manager.get_root_dir().await.unwrap();
 
-        // We can write a file to it,
-        {
-            let file = fuchsia_fs::directory::open_file(
-                &root_dir,
-                "test",
-                fio::OpenFlags::CREATE
-                    | fio::OpenFlags::RIGHT_READABLE
-                    | fio::OpenFlags::RIGHT_WRITABLE,
-            )
-            .await
-            .expect("create file");
-
-            let bytes_written = file
-                .write(expected_contents)
-                .await
-                .expect("file write")
-                .map_err(Status::from_raw)
-                .expect("failed to write content");
-            assert_eq!(bytes_written, expected_contents.len() as u64);
-        }
+        write_file(&root_dir).await?;
 
         // Drop |root_dir| when it falls out-of-scope here, which allows us to
         // close channels to the directory and eventually unmount the volume.
@@ -128,13 +134,7 @@ async fn test_lifecycle() -> Result<(), Error> {
     // And view that same file.
     {
         let root_dir = fxfs_storage_manager.get_root_dir().await.unwrap();
-        let file =
-            fuchsia_fs::directory::open_file(&root_dir, "test", fio::OpenFlags::RIGHT_READABLE)
-                .await
-                .expect("create file");
-
-        let actual_contents = fuchsia_fs::file::read(&file).await.expect("read file");
-        assert_eq!(&actual_contents, expected_contents);
+        read_file(&root_dir).await?;
     }
 
     // Finally, destroy the storage manager,...
@@ -174,5 +174,74 @@ async fn test_get_root_dir_while_locked() -> Result<(), Error> {
     assert_matches!(fxfs_storage_manager.get_root_dir().await, Err(_));
 
     let () = fs.shutdown().await.unwrap();
+    Ok(())
+}
+
+#[fuchsia::test]
+async fn test_file_should_not_persist_across_destruction_new_sm() -> Result<(), Error> {
+    let (_ramdisk, _filesystem, mut fs): (_, _, _) = make_ramdisk_and_filesystem().await?;
+    let key = new_key();
+
+    {
+        let sm = new_storage_manager(&mut fs);
+
+        // Make a new volume and write a file to it. Then destroy the volume.
+        assert_matches!(sm.provision(&key).await, Ok(()));
+        {
+            let root_dir = sm.get_root_dir().await.unwrap();
+            write_file(&root_dir).await?;
+            read_file(&root_dir).await?;
+        }
+        assert_matches!(sm.destroy().await, Ok(()));
+    }
+
+    // Reading that same file back should fail -- just because this is a new
+    // volume with the same account name does not mean that files should persist
+    // across destruction.
+    {
+        // Make a new storagemanager on the same filesystem with the same key.
+        let sm = new_storage_manager(&mut fs);
+        assert_matches!(sm.provision(&key).await, Ok(()));
+
+        {
+            let root_dir = sm.get_root_dir().await.unwrap();
+            assert_matches!(read_file(&root_dir).await, Err(_));
+        }
+        assert_matches!(sm.destroy().await, Ok(()));
+    }
+
+    let () = fs.shutdown().await.unwrap();
+
+    Ok(())
+}
+
+#[fuchsia::test]
+async fn test_file_should_not_persist_across_destruction_reuse_sm() -> Result<(), Error> {
+    // This test is same as the one above, except that we reuse the same storage
+    // manager instead of creating a new one. We want to demonstrate that the
+    // file is destroyed no matter what.
+
+    let (_ramdisk, _filesystem, mut fs): (_, _, _) = make_ramdisk_and_filesystem().await?;
+    let key = new_key();
+
+    let sm = new_storage_manager(&mut fs);
+
+    assert_matches!(sm.provision(&key).await, Ok(()));
+    {
+        let root_dir = sm.get_root_dir().await.unwrap();
+        write_file(&root_dir).await?;
+        read_file(&root_dir).await?;
+    }
+    assert_matches!(sm.destroy().await, Ok(()));
+
+    assert_matches!(sm.provision(&key).await, Ok(()));
+    {
+        let root_dir = sm.get_root_dir().await.unwrap();
+        assert_matches!(read_file(&root_dir).await, Err(_));
+    }
+    assert_matches!(sm.destroy().await, Ok(()));
+
+    let () = fs.shutdown().await.unwrap();
+
     Ok(())
 }

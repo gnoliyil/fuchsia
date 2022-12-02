@@ -244,7 +244,7 @@ impl StorageManagerTrait for Fxfs {
             return Err(AccountManagerError::new(AccountApiError::Internal));
         }
 
-        let fxfs_inner: FxfsInner = match state_lock.try_destroy().log_info_then(
+        let fxfs_inner: FxfsInner = match state_lock.try_destroy().log_error_then(
             "Failed to destroy FxfsStorageManager state",
             faccount::Error::Internal,
         )? {
@@ -258,12 +258,10 @@ impl StorageManagerTrait for Fxfs {
             }
         };
 
-        // First shut down the FXFS filesystem which contains this volume by
-        // calling Admin.shutdown on the filesystem directory (as opposed to the
-        // outgoing directory for the volume itself, as we do in
-        // ::lock_storage() above).
         let mut failed = false;
-        match connect_to_protocol_at_dir_root::<AdminMarker>(&self.filesystem_dir) {
+
+        // First unmount the volume.
+        match connect_to_protocol_at_dir_svc::<AdminMarker>(&fxfs_inner.outgoing_dir) {
             Ok(proxy) => {
                 if let Err(e) = proxy.shutdown().await {
                     error!("shutdown failed: {:?}", e);
@@ -276,7 +274,30 @@ impl StorageManagerTrait for Fxfs {
             }
         }
 
-        // Then destroy the crypt component permanently, forgetting the keys.
+        // Then remove the volume from the filesystem.
+        match connect_to_protocol_at_dir_root::<VolumesMarker>(&self.filesystem_dir) {
+            Ok(proxy) => {
+                match proxy.remove(&self.volume_label).await {
+                    Err(e) => {
+                        error!("remove FIDL failed: {:?}", e);
+                        failed = true;
+                    }
+                    Ok(Err(e)) => {
+                        error!("remove failed: {:?}", e);
+                        failed = true;
+                    }
+                    Ok(Ok(())) => {
+                        // The call to Volumes.Remove succeeded.
+                    }
+                }
+            }
+            Err(e) => {
+                error!("Connect to Volumes protocol failed: {:?}", e);
+                failed = true;
+            }
+        }
+
+        // Finally destroy the crypt component permanently, forgetting the keys.
         if let Err(e) = fxfs_inner.cryptkeeper.destroy().await {
             error!("Destroy crypt component failed: {:?}", e);
             failed = true;
