@@ -23,16 +23,6 @@
 
 namespace {
 
-uint32_t GetParameter(const char* key) {
-  char value[32];
-  // TODO(fxb/115160): Pass device argument to device_get_variable.
-  auto status = device_get_variable(nullptr, key, value, sizeof(value), nullptr);
-  if (status != ZX_OK) {
-    return 0;
-  }
-  return static_cast<uint32_t>(strtoul(value, nullptr, 0));
-}
-
 __PRINTFLIKE(3, 4) void LogTrace(const char* file, int line, const char* format, ...) {
   va_list args;
   va_start(args, format);
@@ -71,7 +61,7 @@ __PRINTFLIKE(3, 4) void LogError(const char* file, int line, const char* format,
 class NandDriverImpl final : public ftl::NandDriver {
  public:
   NandDriverImpl(const nand_protocol_t* parent, const bad_block_protocol_t* bad_block,
-                 ftl::OperationCounters* counters)
+                 ftl::OperationCounters* counters, uint32_t ftl_original_size)
       : NandDriver(FtlLogger{
             .trace = &LogTrace,
             .debug = &LogDebug,
@@ -81,7 +71,8 @@ class NandDriverImpl final : public ftl::NandDriver {
         }),
         parent_(parent),
         bad_block_protocol_(bad_block),
-        counters_(counters) {}
+        counters_(counters),
+        ftl_original_size_(ftl_original_size) {}
   ~NandDriverImpl() final {}
 
   // NdmDriver interface:
@@ -112,6 +103,7 @@ class NandDriverImpl final : public ftl::NandDriver {
   const bad_block_protocol_t* bad_block_protocol_;
   fbl::Array<uint32_t> bad_blocks_;
   ftl::OperationCounters* counters_ = nullptr;
+  uint32_t ftl_original_size_;
 };
 
 const char* NandDriverImpl::Init() {
@@ -358,7 +350,7 @@ void NandDriverImpl::TryEraseRange(uint32_t start_block, uint32_t end_block) {
 
 bool NandDriverImpl::HandleAlternateConfig(const ftl::Volume* ftl_volume,
                                            ftl::VolumeOptions options) {
-  uint32_t num_blocks = GetParameter("driver.ftl.original-size");
+  uint32_t num_blocks = ftl_original_size_;
   if (!num_blocks || num_blocks >= info_.num_blocks) {
     return false;
   }
@@ -441,14 +433,18 @@ namespace ftl {
 
 // Static.
 std::unique_ptr<NandDriver> NandDriver::Create(const nand_protocol_t* parent,
-                                               const bad_block_protocol_t* bad_block) {
-  return std::unique_ptr<NandDriver>(new NandDriverImpl(parent, bad_block, nullptr));
+                                               const bad_block_protocol_t* bad_block,
+                                               uint32_t ftl_original_size) {
+  return std::unique_ptr<NandDriver>(
+      new NandDriverImpl(parent, bad_block, nullptr, ftl_original_size));
 }
 
 std::unique_ptr<NandDriver> NandDriver::CreateWithCounters(const nand_protocol_t* parent,
                                                            const bad_block_protocol_t* bad_block,
-                                                           OperationCounters* counters) {
-  return std::unique_ptr<NandDriver>(new NandDriverImpl(parent, bad_block, counters));
+                                                           OperationCounters* counters,
+                                                           uint32_t ftl_original_size) {
+  return std::unique_ptr<NandDriver>(
+      new NandDriverImpl(parent, bad_block, counters, ftl_original_size));
 }
 
 }  // namespace ftl.

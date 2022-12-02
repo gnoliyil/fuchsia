@@ -8,6 +8,7 @@
 #include <fuchsia/hardware/badblock/c/banjo.h>
 #include <fuchsia/hardware/nand/c/banjo.h>
 #include <inttypes.h>
+#include <lib/ddk/device.h>
 #include <zircon/compiler.h>
 #include <zircon/types.h>
 
@@ -32,11 +33,13 @@ struct OperationCounters {
 class NandDriver : public ftl::NdmBaseDriver {
  public:
   static std::unique_ptr<NandDriver> Create(const nand_protocol_t* parent,
-                                            const bad_block_protocol_t* bad_block);
+                                            const bad_block_protocol_t* bad_block,
+                                            uint32_t ftl_original_size = 0);
 
   static std::unique_ptr<NandDriver> CreateWithCounters(const nand_protocol_t* parent,
                                                         const bad_block_protocol_t* bad_block,
-                                                        OperationCounters* counters);
+                                                        OperationCounters* counters,
+                                                        uint32_t ftl_original_size = 0);
 
   virtual const nand_info_t& info() const = 0;
 
