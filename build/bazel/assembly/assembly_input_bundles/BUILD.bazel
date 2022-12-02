@@ -6,7 +6,10 @@ load("@rules_fuchsia//fuchsia/private/assembly:assembly_bundle.bzl", "assembly_b
 load("//build/bazel/assembly:platform_aib.bzl", "platform_aib")
 load("//build/bazel/assembly:platform_aibs.bzl", "platform_aibs")
 
-package(default_visibility = ["//build/bazel/assembly:__pkg__"])
+package(default_visibility = [
+    "//build/bazel/assembly:__pkg__",
+    "//vendor/google:__subpackages__",
+])
 
 assembly_bundle(
     name = "legacy_fuchsia",

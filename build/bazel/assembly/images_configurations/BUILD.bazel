@@ -16,7 +16,10 @@ load(
     "fuchsia_zbi",
 )
 
-package(default_visibility = ["//build/bazel/assembly:__pkg__"])
+package(default_visibility = [
+    "//build/bazel/assembly:__pkg__",
+    "//vendor/google:__subpackages__",
+])
 
 filegroup(
     name = "fuchsia_key_and_metadata",
