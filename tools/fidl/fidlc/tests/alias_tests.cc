@@ -353,15 +353,9 @@ TEST(AliasTests, BadCannotBoundTwice) {
 }
 
 TEST(AliasTests, BadCannotNullTwice) {
-  TestLibrary library(R"FIDL(
-library example;
+  TestLibrary library;
+  library.AddFile("bad/fi-0160.test.fidl");
 
-type Message = struct {
-    f alias_of_vector_nullable:optional;
-};
-
-alias alias_of_vector_nullable = vector<string>:optional;
-)FIDL");
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrCannotIndicateOptionalTwice);
 }
 
