@@ -2,7 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use {super::*, fidl_fuchsia_ui_pointer as fptr};
+use fidl_fuchsia_ui_pointer as fptr;
+
+use super::*;
 
 impl PointerFusionState {
     pub(super) fn fuse_touch(&mut self, event: fptr::TouchEvent) -> Vec<PointerEvent> {

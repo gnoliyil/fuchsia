@@ -2,7 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use {super::*, fidl_fuchsia_ui_pointer as fptr, fuchsia_zircon as zx, std::collections::HashSet};
+use std::collections::HashSet;
+
+use fidl_fuchsia_ui_pointer as fptr;
+use fuchsia_zircon as zx;
+
+use super::*;
 
 const SCROLL_OFFSET_MULTIPLIER: i64 = 20;
 
@@ -29,7 +34,6 @@ impl PointerFusionState {
                     phase,
                     self.view_parameters.as_ref().unwrap(),
                     self.mouse_device_info.get(&id).unwrap(),
-                    self.pixel_ratio,
                 );
 
                 let sanitized_events = self.sanitize_pointer(pointer_event);
@@ -62,7 +66,6 @@ fn create_mouse_draft(
     phase: Phase,
     view_parameters: &fptr::ViewParameters,
     device_info: &fptr::MouseDeviceInfo,
-    pixel_ratio: f32,
 ) -> PointerEvent {
     assert!(has_valid_mouse_sample(event));
 
@@ -74,10 +77,10 @@ fn create_mouse_draft(
     pointer.kind = DeviceKind::Mouse;
     pointer.device_id = sample.device_id.unwrap_or(0);
 
-    let [logical_x, logical_y] =
+    let [x, y] =
         viewport_to_view_coordinates(sample.position_in_viewport.unwrap(), view_parameters);
-    pointer.physical_x = logical_x * pixel_ratio;
-    pointer.physical_y = logical_y * pixel_ratio;
+    pointer.physical_x = x;
+    pointer.physical_y = y;
 
     if sample.pressed_buttons.is_some() && device_info.buttons.is_some() {
         let mut pointer_buttons: i64 = 0;

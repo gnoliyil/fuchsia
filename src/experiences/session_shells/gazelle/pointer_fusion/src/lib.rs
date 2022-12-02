@@ -7,14 +7,14 @@ mod pointer;
 #[cfg(test)]
 mod tests;
 
-use {
-    crate::pointer::PointerFusionState,
-    fidl_fuchsia_ui_pointer as fptr, fuchsia_zircon as zx,
-    futures::{
-        channel::mpsc::{self, UnboundedSender},
-        stream, Stream, StreamExt,
-    },
+use fidl_fuchsia_ui_pointer as fptr;
+use fuchsia_zircon as zx;
+use futures::{
+    channel::mpsc::{self, UnboundedSender},
+    stream, Stream, StreamExt,
 };
+
+use crate::pointer::PointerFusionState;
 
 #[derive(Clone, Default, Debug, PartialEq)]
 pub enum DeviceKind {

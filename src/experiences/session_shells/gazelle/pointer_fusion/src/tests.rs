@@ -41,19 +41,35 @@ async fn test_mouse_event_without_device_info() {
 
 #[fuchsia::test]
 async fn test_pixel_ratio() {
-    let mouse_event = InputEvent::mouse()
-        .view(1024.0, 600.0)
-        .device_info(42)
-        .position(512.0, 300.0)
-        .button_down();
+    // Touch.
+    {
+        let touch_event =
+            InputEvent::touch().view(1024.0, 600.0).device_info(42).position(256.0, 150.0);
 
-    let (sender, mut receiver) = pointer_fusion(2.0);
-    sender.unbounded_send(mouse_event).unwrap();
+        let (sender, mut receiver) = pointer_fusion(2.0);
+        sender.unbounded_send(touch_event).unwrap();
 
-    let pointer_event = receiver.next().await.unwrap();
-    assert!(matches!(pointer_event.phase, Phase::Add));
-    assert!(pointer_event.physical_x - 1024.0 < std::f32::EPSILON);
-    assert!(pointer_event.physical_y - 600.0 < std::f32::EPSILON);
+        let pointer_event = receiver.next().await.unwrap();
+        assert!(matches!(pointer_event.phase, Phase::Add));
+        assert!(pointer_event.physical_x - 512.0 < std::f32::EPSILON);
+        assert!(pointer_event.physical_y - 300.0 < std::f32::EPSILON);
+    }
+    // Mouse.
+    {
+        let mouse_event = InputEvent::mouse()
+            .view(1024.0, 600.0)
+            .device_info(42)
+            .position(512.0, 300.0)
+            .button_down();
+
+        let (sender, mut receiver) = pointer_fusion(2.0);
+        sender.unbounded_send(mouse_event).unwrap();
+
+        let pointer_event = receiver.next().await.unwrap();
+        assert!(matches!(pointer_event.phase, Phase::Add));
+        assert!(pointer_event.physical_x - 1024.0 < std::f32::EPSILON);
+        assert!(pointer_event.physical_y - 600.0 < std::f32::EPSILON);
+    }
 }
 
 #[fuchsia::test]

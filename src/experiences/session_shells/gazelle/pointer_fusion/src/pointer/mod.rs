@@ -5,12 +5,15 @@
 mod mouse;
 mod touch;
 
-use {
-    super::*,
-    fidl_fuchsia_ui_pointer as fptr, num,
-    std::collections::{HashMap, HashSet},
-    std::f32::EPSILON,
+use std::{
+    collections::{HashMap, HashSet},
+    f32::EPSILON,
 };
+
+use fidl_fuchsia_ui_pointer as fptr;
+use num;
+
+use super::*;
 
 pub struct PointerFusionState {
     pixel_ratio: f32,
