@@ -132,8 +132,6 @@ struct Formatter<T, std::enable_if_t<std::is_base_of_v<zx::object_base, T>>> {
         return os << "msi(" << handle_value << ")";
       case ZX_OBJ_TYPE_PAGER:
         return os << "pager(" << handle_value << ")";
-      case ZX_OBJ_TYPE_PCI_DEVICE:
-        return os << "pci_device(" << handle_value << ")";
       case ZX_OBJ_TYPE_PMT:
         return os << "pmt(" << handle_value << ")";
       case ZX_OBJ_TYPE_PORT:

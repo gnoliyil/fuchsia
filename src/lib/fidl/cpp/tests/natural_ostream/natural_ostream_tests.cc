@@ -4,6 +4,32 @@
 
 #include <fidl/test.types/cpp/natural_ostream.h>
 #include <lib/fidl/cpp/wire/channel.h>
+#include <lib/zx/bti.h>
+#include <lib/zx/channel.h>
+#include <lib/zx/clock.h>
+#include <lib/zx/debuglog.h>
+#include <lib/zx/event.h>
+#include <lib/zx/eventpair.h>
+#include <lib/zx/exception.h>
+#include <lib/zx/fifo.h>
+#include <lib/zx/guest.h>
+#include <lib/zx/interrupt.h>
+#include <lib/zx/iommu.h>
+#include <lib/zx/job.h>
+#include <lib/zx/msi.h>
+#include <lib/zx/pager.h>
+#include <lib/zx/pmt.h>
+#include <lib/zx/port.h>
+#include <lib/zx/process.h>
+#include <lib/zx/profile.h>
+#include <lib/zx/resource.h>
+#include <lib/zx/socket.h>
+#include <lib/zx/stream.h>
+#include <lib/zx/suspend_token.h>
+#include <lib/zx/thread.h>
+#include <lib/zx/timer.h>
+#include <lib/zx/vcpu.h>
+#include <lib/zx/vmar.h>
 #include <lib/zx/vmo.h>
 
 #include <sstream>
@@ -67,25 +93,50 @@ TEST(NaturalOStream, Array) {
   EXPECT_EQ(fidl_string(bools), "[ true, false, ]");
 }
 
+// Helper function that creates a handle wrapper object with an arbitrary handle value, checks its
+// string representation, and safely discards it without sending garbage to the kernel.
+template <typename H>
+void check_handle_string(const char* name) {
+  static_assert(std::is_base_of_v<zx::object_base, H>);
+  char expected[128];
+  const zx_handle_t raw = 1234;
+  H handle(raw);
+  snprintf(expected, 128, "%s(%u)", name, raw);
+  EXPECT_EQ(expected, fidl_string(handle));
+  zx_handle_t returned = handle.release();
+  ASSERT_EQ(raw, returned);
+}
+
 TEST(NaturalOStream, Handle) {
-  char buf[128];
+  check_handle_string<zx::bti>("bti");
+  check_handle_string<zx::channel>("channel");
+  check_handle_string<zx::clock>("clock");
+  check_handle_string<zx::event>("event");
+  check_handle_string<zx::eventpair>("eventpair");
+  check_handle_string<zx::exception>("exception");
+  check_handle_string<zx::fifo>("fifo");
+  check_handle_string<zx::guest>("guest");
+  check_handle_string<zx::interrupt>("interrupt");
+  check_handle_string<zx::iommu>("iommu");
+  check_handle_string<zx::job>("job");
+  check_handle_string<zx::debuglog>("debuglog");
+  check_handle_string<zx::msi>("msi");
+  check_handle_string<zx::pager>("pager");
+  check_handle_string<zx::pmt>("pmt");
+  check_handle_string<zx::port>("port");
+  check_handle_string<zx::process>("process");
+  check_handle_string<zx::profile>("profile");
+  check_handle_string<zx::resource>("resource");
+  check_handle_string<zx::socket>("socket");
+  check_handle_string<zx::stream>("stream");
+  check_handle_string<zx::suspend_token>("suspend_token");
+  check_handle_string<zx::thread>("thread");
+  check_handle_string<zx::timer>("timer");
+  check_handle_string<zx::vcpu>("vcpu");
+  check_handle_string<zx::vmar>("vmar");
+  check_handle_string<zx::vmo>("vmo");
 
-  zx::vmo vmo_handle;
-  ASSERT_EQ(zx::vmo::create(1024, 0, &vmo_handle), ZX_OK);
-  snprintf(buf, 128, "vmo(%u)", vmo_handle.get());
-  EXPECT_EQ(fidl_string(vmo_handle), buf);
-
-  zx::event event_handle;
-  ASSERT_EQ(zx::event::create(0, &event_handle), ZX_OK);
-  snprintf(buf, 128, "event(%u)", event_handle.get());
-  EXPECT_EQ(fidl_string(event_handle), buf);
-
-  zx::channel channel_handle1, channel_handle2;
-  ASSERT_EQ(zx::channel::create(0, &channel_handle1, &channel_handle2), ZX_OK);
-  snprintf(buf, 128, "channel(%u)", channel_handle1.get());
-  EXPECT_EQ(fidl_string(channel_handle1), buf);
-  snprintf(buf, 128, "channel(%u)", channel_handle2.get());
-  EXPECT_EQ(fidl_string(channel_handle2), buf);
+  check_handle_string<zx::handle>("handle");
 
   EXPECT_EQ(fidl_string(zx::handle()), "handle(0)");
 }
@@ -133,6 +184,11 @@ TEST(NaturalOStream, Table) {
             "test_types::TableMaxOrdinal3WithReserved2{ }");
   EXPECT_EQ(to_string(test_types::TableMaxOrdinal3WithReserved2({.field_1 = 23, .field_3 = 42})),
             "test_types::TableMaxOrdinal3WithReserved2{ field_1 = 23, field_3 = 42, }");
+
+  test_types::TableWithSubTables twst;
+  EXPECT_EQ(fidl_string(twst.t()), "null");
+  twst.t() = test_types::SampleTable({.x = 23});
+  EXPECT_EQ(fidl_string(twst.t()), "test_types::SampleTable{ x = 23, }");
 }
 
 TEST(NaturalOStream, Union) {
@@ -151,5 +207,18 @@ TEST(NaturalOStream, Protocol) {
   snprintf(buf, 128, "ClientEnd<test_types::TypesTest>(%u)", endpoints->client.channel().get());
   EXPECT_EQ(to_string(endpoints->client), buf);
   snprintf(buf, 128, "ServerEnd<test_types::TypesTest>(%u)", endpoints->server.channel().get());
-  EXPECT_EQ(to_string(endpoints->server), buf);
+  EXPECT_EQ(fidl_string(endpoints->server), buf);
+}
+
+TEST(NaturalOStream, Optionals) {
+  test_types::StructOfOptionals optionals{};
+  EXPECT_EQ(to_string(optionals), "test_types::StructOfOptionals{ s = null, v = null, t = null, }");
+
+  optionals.s() = "hello";
+  optionals.v() = std::vector<uint32_t>{1, 2, 3};
+  optionals.t() = std::make_unique<test_types::CopyableStruct>();
+
+  EXPECT_EQ(
+      to_string(optionals),
+      "test_types::StructOfOptionals{ s = \"hello\", v = [ 1, 2, 3, ], t = test_types::CopyableStruct{ x = 0, }, }");
 }
