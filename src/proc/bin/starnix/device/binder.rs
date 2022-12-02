@@ -245,6 +245,10 @@ impl FileOps for BinderConnection {
 
 #[derive(Debug, Default)]
 struct BinderProcessState {
+    /// Maximum number of thread to spawn.
+    max_thread_count: usize,
+    /// Whether a new thread has been requested, but not registered yet.
+    thread_requested: bool,
     /// The set of threads that are interacting with the binder driver.
     thread_pool: ThreadPool,
     /// Binder objects hosted by the process shared with other processes.
@@ -679,6 +683,19 @@ impl<'a> BinderProcessGuard<'a> {
         not_implemented_log_once!(current_task, "{} {:?}", msg, &object);
         Ok(())
     }
+
+    /// Whether the driver should request that the client starts a new thread.
+    fn should_request_thread(&mut self, thread: &Arc<BinderThread>) -> bool {
+        !self.thread_requested
+            && self.thread_pool.0.len() < self.max_thread_count
+            && thread.read().is_registered()
+            && !self.thread_pool.has_available_thread()
+    }
+
+    /// Called back when the driver successfully asked the client to start a new thread.
+    fn did_request_thread(&mut self) {
+        self.thread_requested = true;
+    }
 }
 
 impl Drop for BinderProcess {
@@ -944,6 +961,10 @@ impl ThreadPool {
             }
         }
         None
+    }
+
+    fn has_available_thread(&self) -> bool {
+        self.0.values().any(|t| t.read().is_available())
     }
 }
 
@@ -1218,8 +1239,12 @@ impl BinderThreadState {
         }
     }
 
+    pub fn is_registered(&self) -> bool {
+        self.registration.intersects(RegistrationState::MAIN | RegistrationState::REGISTERED)
+    }
+
     pub fn is_available(&self) -> bool {
-        if !self.registration.intersects(RegistrationState::MAIN | RegistrationState::REGISTERED) {
+        if !self.is_registered() {
             log_trace!("thread {:?} not registered {:?}", self.tid, self.registration);
             return false;
         }
@@ -1242,12 +1267,14 @@ impl BinderThreadState {
     /// This makes the binder thread eligible for receiving commands from the driver.
     pub fn handle_looper_registration(
         &mut self,
+        binder_process: &mut BinderProcessGuard<'_>,
         registration: RegistrationState,
     ) -> Result<(), Errno> {
-        if self.registration.intersects(RegistrationState::MAIN | RegistrationState::REGISTERED) {
+        if self.is_registered() {
             // This thread is already registered.
             error!(EINVAL)
         } else {
+            binder_process.thread_requested = false;
             self.registration |= registration;
             Ok(())
         }
@@ -1376,6 +1403,8 @@ enum Command {
     DeadReply,
     /// Notifies a binder process that a binder object has died.
     DeadBinder(binder_uintptr_t),
+    /// Notified the binder process that it should spawn a new looper.
+    SpawnLooper,
 }
 
 impl Command {
@@ -1395,6 +1424,7 @@ impl Command {
             Self::FailedReply => binder_driver_return_protocol_BR_FAILED_REPLY,
             Self::DeadReply => binder_driver_return_protocol_BR_DEAD_REPLY,
             Self::DeadBinder(..) => binder_driver_return_protocol_BR_DEAD_BINDER,
+            Self::SpawnLooper => binder_driver_return_protocol_BR_SPAWN_LOOPER,
         }
     }
 
@@ -1458,7 +1488,8 @@ impl Command {
             Self::TransactionComplete
             | Self::OnewayTransactionComplete
             | Self::FailedReply
-            | Self::DeadReply => {
+            | Self::DeadReply
+            | Self::SpawnLooper => {
                 if buffer.length < std::mem::size_of::<binder_driver_return_protocol>() {
                     return error!(ENOMEM);
                 }
@@ -2062,7 +2093,12 @@ impl BinderDriver {
                 Ok(SUCCESS)
             }
             uapi::BINDER_SET_MAX_THREADS => {
-                not_implemented!(current_task, "binder ignoring SET_MAX_THREADS ioctl");
+                if user_arg.is_null() {
+                    return error!(EINVAL);
+                }
+
+                let user_ref = UserRef::<u32>::new(user_arg);
+                binder_proc.lock().max_thread_count = current_task.read_object(user_ref)? as usize;
                 Ok(SUCCESS)
             }
             uapi::BINDER_ENABLE_ONEWAY_SPAM_DETECTION => {
@@ -2103,10 +2139,16 @@ impl BinderDriver {
         let command = cursor.read_object::<binder_driver_command_protocol>()?;
         match command {
             binder_driver_command_protocol_BC_ENTER_LOOPER => {
-                binder_thread.write().handle_looper_registration(RegistrationState::MAIN)
+                let mut proc_state = binder_proc.lock();
+                binder_thread
+                    .write()
+                    .handle_looper_registration(&mut proc_state, RegistrationState::MAIN)
             }
             binder_driver_command_protocol_BC_REGISTER_LOOPER => {
-                binder_thread.write().handle_looper_registration(RegistrationState::REGISTERED)
+                let mut proc_state = binder_proc.lock();
+                binder_thread
+                    .write()
+                    .handle_looper_registration(&mut proc_state, RegistrationState::REGISTERED)
             }
             binder_driver_command_protocol_BC_INCREFS
             | binder_driver_command_protocol_BC_ACQUIRE
@@ -2380,6 +2422,16 @@ impl BinderDriver {
         read_buffer: &UserBuffer,
     ) -> Result<usize, Errno> {
         loop {
+            {
+                let mut binder_proc_state = binder_proc.lock();
+                if binder_proc_state.should_request_thread(binder_thread) {
+                    let bytes_written =
+                        Command::SpawnLooper.write_to_memory(current_task, read_buffer)?;
+                    binder_proc_state.did_request_thread();
+                    return Ok(bytes_written);
+                }
+            }
+
             // THREADING: Always acquire the [`BinderThread::state`] lock before the
             // [`BinderProcess::command_queue`] lock or else it may lead to deadlock.
             let mut thread_state = binder_thread.write();
@@ -2398,7 +2450,6 @@ impl BinderDriver {
             if let Some(command) = command_queue.pop_front() {
                 // Attempt to write the command to the thread's buffer.
                 let bytes_written = command.write_to_memory(current_task, read_buffer)?;
-
                 match command {
                     Command::Transaction { sender, .. } => {
                         // The transaction is synchronous and we're expected to give a reply, so
@@ -2422,7 +2473,8 @@ impl BinderDriver {
                     | Command::Error(..)
                     | Command::FailedReply
                     | Command::DeadReply
-                    | Command::DeadBinder(..) => {}
+                    | Command::DeadBinder(..)
+                    | Command::SpawnLooper => {}
                 }
 
                 return Ok(bytes_written);
