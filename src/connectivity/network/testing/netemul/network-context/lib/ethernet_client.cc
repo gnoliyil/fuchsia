@@ -283,10 +283,14 @@ static zx_status_t WatchCb(int dirfd, int event, const char* fn, void* cookie) {
             fdio_service_connect_at(caller.directory().channel()->get(), fn,
                                     controller.NewRequest().TakeChannel().release());
         status != ZX_OK) {
-      return status;
+      fprintf(stderr, "failed to connect to controller for %s/%s: %s\n", args->base_dir.c_str(), fn,
+              zx_status_get_string(status));
+      return ZX_OK;
     }
     if (zx_status_t status = controller->OpenSession(device.NewRequest()); status != ZX_OK) {
-      return status;
+      fprintf(stderr, "failed to open session for %s/%s: %s\n", args->base_dir.c_str(), fn,
+              zx_status_get_string(status));
+      return ZX_OK;
     }
   }
 
