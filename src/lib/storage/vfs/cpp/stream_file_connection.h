@@ -13,7 +13,6 @@
 #include <lib/zx/result.h>
 
 #include "src/lib/storage/vfs/cpp/file_connection.h"
-#include "src/lib/storage/vfs/cpp/vfs.h"
 #include "src/lib/storage/vfs/cpp/vfs_types.h"
 #include "src/lib/storage/vfs/cpp/vnode.h"
 
@@ -53,6 +52,7 @@ class StreamFileConnection final : public FileConnection {
   zx_status_t WriteAtInternal(const void* data, size_t len, size_t offset, size_t* out_actual);
   zx::result<fuchsia_io::wire::OpenFlags> GetFlagsInternal();
   zx::result<> SetFlagsInternal(fuchsia_io::wire::OpenFlags flags);
+  zx::result<VnodeRepresentation> NodeDescribe() final;
 
   zx::stream stream_;
 };

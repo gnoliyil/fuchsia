@@ -37,9 +37,6 @@ namespace internal {
 class FidlTransaction;
 class Binding;
 
-zx::result<VnodeRepresentation> Describe(const fbl::RefPtr<Vnode>& vnode, VnodeProtocol protocol,
-                                         VnodeConnectionOptions options);
-
 // Perform basic flags sanitization.
 // Returns false if the flags combination is invalid.
 bool PrevalidateFlags(fuchsia_io::wire::OpenFlags flags);
@@ -97,6 +94,8 @@ class Connection : public fbl::DoublyLinkedListable<std::unique_ptr<Connection>>
   zx_koid_t GetChannelOwnerKoid();
 
   fbl::RefPtr<fs::Vnode>& vnode() { return vnode_; }
+
+  zx::result<VnodeRepresentation> GetNodeRepresentation() { return NodeDescribe(); }
 
  protected:
   // Subclasses of |Connection| should implement a particular |fuchsia.io| protocol. This is a
@@ -195,7 +194,7 @@ class Connection : public fbl::DoublyLinkedListable<std::unique_ptr<Connection>>
   void NodeClone(fuchsia_io::wire::OpenFlags flags, fidl::ServerEnd<fuchsia_io::Node> server_end);
   zx::result<> NodeClose();
   fidl::VectorView<uint8_t> NodeQuery();
-  zx::result<VnodeRepresentation> NodeDescribe();
+  virtual zx::result<VnodeRepresentation> NodeDescribe();
   void NodeSync(fit::callback<void(zx_status_t)> callback);
   zx::result<VnodeAttributes> NodeGetAttr();
   zx::result<> NodeSetAttr(fuchsia_io::wire::NodeAttributeFlags flags,

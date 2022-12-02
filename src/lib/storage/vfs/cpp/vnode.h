@@ -239,15 +239,18 @@ class Vnode : public VnodeRefCounted<Vnode>, public fbl::Recyclable<Vnode> {
   virtual zx_status_t WatchDir(Vfs* vfs, fuchsia_io::wire::WatchMask mask, uint32_t options,
                                fidl::ServerEnd<fuchsia_io::DirectoryWatcher> watcher);
 
-  // Create a |zx::stream| for reading and writing this vnode.
+  // Create a |zx::stream| for reading and writing to this vnode.
   //
   // If this function returns |ZX_OK|, then all |Read|, |Write|, and |Append| operations will be
   // directed to the stream returned via |out_stream| rather than to the |Read|, |Write|, and
-  // |Append| methods on the vnode. The |zx::stream| might be transported to a remote process to
-  // improve performance.
+  // |Append| methods on the vnode.
   //
-  // If the client modifies the underlying data for this node via the returned |zx::stream|, the
-  // node will be notified via |DidModifyStream|.
+  // If |SupportsClientSideStreams| is true then the |zx::stream| will be transported to a remote
+  // process to improve performance. The |zx::vmo| backing the |zx::stream| will itself need to be
+  // |zx::pager| backed in order to detect writes made to the |zx::stream|.
+  //
+  // If |SupportsClientSideStreams| is false then the node will be notified of writes made to the
+  // |zx::stream| via |DidModifyStream|.
   //
   // Implementations should pass the given |stream_options| as the options to |zx::stream::create|.
   // These options ensure that the created |zx::stream| object has the appropriate rights for the
@@ -301,6 +304,10 @@ class Vnode : public VnodeRefCounted<Vnode>, public fbl::Recyclable<Vnode> {
   // for the time being. In the future, we might switch to using a usermode pager to provide that
   // notification.
   virtual void DidModifyStream();
+
+  // Indicates if the |zx::stream| returned by |CreateStream| can be transported to another process
+  // to improve performance.
+  virtual bool SupportsClientSideStreams();
 
   // Change the size of the vnode.
   virtual zx_status_t Truncate(size_t len);

@@ -219,6 +219,8 @@ zx_status_t Vnode::Append(const void* data, size_t len, size_t* out_end, size_t*
 
 void Vnode::DidModifyStream() {}
 
+bool Vnode::SupportsClientSideStreams() { return false; }
+
 zx_status_t Vnode::Lookup(std::string_view name, fbl::RefPtr<Vnode>* out) {
   return ZX_ERR_NOT_SUPPORTED;
 }

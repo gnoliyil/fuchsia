@@ -24,7 +24,6 @@
 #include <fbl/ref_ptr.h>
 
 #include "src/lib/storage/vfs/cpp/connection.h"
-#include "src/lib/storage/vfs/cpp/debug.h"
 #include "src/lib/storage/vfs/cpp/directory_connection.h"
 #include "src/lib/storage/vfs/cpp/node_connection.h"
 #include "src/lib/storage/vfs/cpp/remote_file_connection.h"
@@ -325,33 +324,18 @@ zx_status_t FuchsiaVfs::Serve(fbl::RefPtr<Vnode> vnode, zx::channel server_end,
     protocol = vnode->Negotiate(candidate_protocols);
   }
 
-  // Send an |fuchsia.io/OnOpen| event if requested.
-  if (options->flags.describe) {
-    zx::result<VnodeRepresentation> result = internal::Describe(vnode, protocol, *options);
-    if (result.is_error()) {
-      // Ignore errors since there is nothing we can do if this fails.
-      [[maybe_unused]] auto unused_result =
-          fidl::WireSendEvent(fidl::ServerEnd<fuchsia_io::Node>(std::move(server_end)))
-              ->OnOpen(result.status_value(), fio::wire::NodeInfoDeprecated());
-      return result.status_value();
-    }
-    ConvertToIoV1NodeInfo(std::move(result).value(), [&](fio::wire::NodeInfoDeprecated&& info) {
-      // The channel may switch from |Node| protocol back to a custom protocol, after sending the
-      // event, in the case of |VnodeProtocol::kConnector|.
-      fidl::ServerEnd<fuchsia_io::Node> typed_server_end(std::move(server_end));
-      // We ignore the error and continue here in case the far end has queued open requests and
-      // immediately closed the connection.  If the caller is doing that, they shouldn't have used
-      // the describe flag, but there have been cases where this happened in the past and so we
-      // preserve that behaviour for now.
-      [[maybe_unused]] auto result =
-          fidl::WireSendEvent(typed_server_end)->OnOpen(ZX_OK, std::move(info));
-      server_end = typed_server_end.TakeChannel();
-    });
-  }
-
   // If |node_reference| is specified, serve |fuchsia.io/Node| even for |VnodeProtocol::kConnector|
   // nodes. Otherwise, connect the raw channel to the custom service.
   if (!options->flags.node_reference && protocol == VnodeProtocol::kConnector) {
+    if (options->flags.describe) {
+      fidl::ServerEnd<fuchsia_io::Node> typed_server_end(std::move(server_end));
+      auto response = fidl::WireSendEvent(typed_server_end)
+                          ->OnOpen(ZX_OK, fio::wire::NodeInfoDeprecated::WithService({}));
+      if (!response.ok()) {
+        return response.status();
+      }
+      server_end = typed_server_end.TakeChannel();
+    }
     return vnode->ConnectService(std::move(server_end));
   }
 
@@ -390,6 +374,30 @@ zx_status_t FuchsiaVfs::Serve(fbl::RefPtr<Vnode> vnode, zx::channel server_end,
   }());
   if (status != ZX_OK) {
     return status;
+  }
+
+  // Send an |fuchsia.io/OnOpen| event if requested.
+  if (options->flags.describe) {
+    zx::result<VnodeRepresentation> result = connection->GetNodeRepresentation();
+    if (result.is_error()) {
+      // Ignore errors since there is nothing we can do if this fails.
+      [[maybe_unused]] auto unused_result =
+          fidl::WireSendEvent(fidl::ServerEnd<fuchsia_io::Node>(std::move(server_end)))
+              ->OnOpen(result.status_value(), fio::wire::NodeInfoDeprecated());
+      return result.status_value();
+    }
+    ConvertToIoV1NodeInfo(std::move(result).value(), [&](fio::wire::NodeInfoDeprecated&& info) {
+      // The channel may switch from |Node| protocol back to a custom protocol, after sending the
+      // event, in the case of |VnodeProtocol::kConnector|.
+      fidl::ServerEnd<fuchsia_io::Node> typed_server_end(std::move(server_end));
+      // We ignore the error and continue here in case the far end has queued open requests and
+      // immediately closed the connection.  If the caller is doing that, they shouldn't have used
+      // the describe flag, but there have been cases where this happened in the past and so we
+      // preserve that behaviour for now.
+      [[maybe_unused]] auto result =
+          fidl::WireSendEvent(typed_server_end)->OnOpen(ZX_OK, std::move(info));
+      server_end = typed_server_end.TakeChannel();
+    });
   }
 
   return RegisterConnection(std::move(connection), std::move(server_end));

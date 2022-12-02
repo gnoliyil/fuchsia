@@ -16,6 +16,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <zircon/assert.h>
+#include <zircon/rights.h>
 
 #include <memory>
 #include <type_traits>
@@ -23,8 +24,8 @@
 
 #include <fbl/string_buffer.h>
 
+#include "src/lib/storage/vfs/cpp/connection.h"
 #include "src/lib/storage/vfs/cpp/debug.h"
-#include "src/lib/storage/vfs/cpp/fidl_transaction.h"
 #include "src/lib/storage/vfs/cpp/file_connection.h"
 #include "src/lib/storage/vfs/cpp/vfs_types.h"
 #include "src/lib/storage/vfs/cpp/vnode.h"
@@ -231,6 +232,25 @@ zx::result<> StreamFileConnection::SetFlagsInternal(fuchsia_io::wire::OpenFlags 
     set_append(append);
   }
   return status;
+}
+
+zx::result<VnodeRepresentation> StreamFileConnection::NodeDescribe() {
+  zx::result representation = Connection::NodeDescribe();
+  if (representation.is_error()) {
+    return representation.take_error();
+  }
+  if (representation->is_file()) {
+    ZX_DEBUG_ASSERT_MSG(!representation->file().stream.is_valid(),
+                        "The stream should only be set by the connection");
+    if (vnode()->SupportsClientSideStreams()) {
+      if (zx_status_t status =
+              stream_.duplicate(ZX_RIGHT_SAME_RIGHTS, &representation->file().stream);
+          status != ZX_OK) {
+        return zx::error(status);
+      }
+    }
+  }
+  return representation;
 }
 
 }  // namespace internal

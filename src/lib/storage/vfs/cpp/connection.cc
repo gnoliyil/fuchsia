@@ -47,19 +47,6 @@ constexpr zx_signals_t kWakeSignals =
 
 namespace internal {
 
-zx::result<VnodeRepresentation> Describe(const fbl::RefPtr<Vnode>& vnode, VnodeProtocol protocol,
-                                         VnodeConnectionOptions options) {
-  if (options.flags.node_reference) {
-    return zx::ok(VnodeRepresentation::Connector());
-  }
-  fs::VnodeRepresentation representation;
-  zx_status_t status = vnode->GetNodeInfoForProtocol(protocol, options.rights, &representation);
-  if (status != ZX_OK) {
-    return zx::error(status);
-  }
-  return zx::ok(std::move(representation));
-}
-
 bool PrevalidateFlags(fio::wire::OpenFlags flags) {
   if (flags & fio::wire::OpenFlags::kNodeReference) {
     // Explicitly reject VNODE_REF_ONLY together with any invalid flags.
@@ -334,7 +321,16 @@ fidl::VectorView<uint8_t> Connection::NodeQuery() {
 }
 
 zx::result<VnodeRepresentation> Connection::NodeDescribe() {
-  return Describe(vnode(), protocol(), options());
+  if (options().flags.node_reference) {
+    return zx::ok(VnodeRepresentation::Connector());
+  }
+  fs::VnodeRepresentation representation;
+  zx_status_t status =
+      vnode()->GetNodeInfoForProtocol(protocol(), options().rights, &representation);
+  if (status != ZX_OK) {
+    return zx::error(status);
+  }
+  return zx::ok(std::move(representation));
 }
 
 void Connection::NodeSync(fit::callback<void(zx_status_t)> callback) {
