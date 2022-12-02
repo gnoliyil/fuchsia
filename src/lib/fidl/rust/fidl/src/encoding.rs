@@ -812,7 +812,8 @@ pub trait Layout {
     /// matches the FIDL wire format, and (2) no validation is required. This is
     /// the case for (arrays of) primitive integer types, because both FIDL and
     /// Rust (we assume) use little-endian byte order, two's complement integer
-    /// representation, and arrays with no padding.
+    /// representation, and arrays with no padding. It is also true for
+    /// `#[repr(C)]` structs with simple-copiable fields and no padding.
     ///
     /// For more information:
     /// https://doc.rust-lang.org/reference/type-layout.html#primitive-data-layout
@@ -2572,9 +2573,10 @@ macro_rules! fidl_struct {
     }
 }
 
-/// Implements the FIDL `Encodable` and `Decodable` traits for a struct
-/// representing a FIDL struct, encoding and decoding by simple copy. See
-/// Layout::supports_simple_copy for more info.
+/// Implements the FIDL `Encodable` and `Decodable` traits for a `#[repr(C)]`
+/// struct representing a FIDL struct, encoding and decoding by copying. If
+/// there is no padding, it does it with a single memcpy (via
+/// Layout::supports_simple_copy). Otherwise, it copies individual fields.
 #[macro_export]
 macro_rules! fidl_struct_copy {
     (
@@ -4149,6 +4151,7 @@ pub fn decode_transaction_header(bytes: &[u8]) -> Result<(TransactionHeader, &[u
 
 /// Header for RFC-0120 persistent FIDL messages.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(C)]
 pub struct WireMetadata {
     /// Must be zero.
     disambiguator: u8,
