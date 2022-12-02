@@ -11,10 +11,10 @@ Get information about lights and control their brightness and color.
 ## Usage {#usage}
 
 ```none
-lights-cli print <id>
-lights-cli set <id> <brightness>
-lights-cli set <id> <red> <green> <blue>
-lights-cli summary
+lights-cli <device_path> print <id>
+lights-cli <device_path> set <id> <brightness>
+lights-cli <device_path> set <id> <red> <green> <blue>
+lights-cli <device_path> summary
 ```
 
 ## Commands {#commands}
@@ -22,7 +22,7 @@ lights-cli summary
 ### print {#print}
 
 ```none
-lights-cli print <id>
+lights-cli <device_path> print <id>
 ```
 
 View the brightness and color (if applicable) of a light. The reported values
@@ -32,7 +32,7 @@ on).
 ### set {#set}
 
 ```none
-lights-cli set <id> <brightness>
+lights-cli <device_path> set <id> <brightness>
 ```
 
 Set the brightness of a light. For lights that support pulse-width modulation
@@ -41,7 +41,7 @@ Set the brightness of a light. For lights that support pulse-width modulation
 `<brightness>` should only be `0.0` (off) or `1.0` (on).
 
 ```none
-lights-cli set <id> <red> <green> <blue>
+lights-cli <device_path> set <id> <red> <green> <blue>
 ```
 
 Set the color of a light. `<red>` `<green>` and `<blue>` can be any number
@@ -50,7 +50,7 @@ between `0.0` and `1.0` to control the intensity of each color component.
 ### summary {#summary}
 
 ```none
-lights-cli summary
+lights-cli <device_path> summary
 ```
 
 View the total light count as well as the brightness and capabilities of each
@@ -65,34 +65,34 @@ states.
 ### View the brightness of a light
 
 ```none {:.devsite-disable-click-to-copy}
-$ lights-cli print AMBER_LED
+$ lights-cli /dev/class/light/000 print AMBER_LED
 Value of AMBER_LED: Brightness 1.000000
 ```
 ### View the brightness and color of a light
 
 ```none {:.devsite-disable-click-to-copy}
-$ lights-cli print 1
+$ lights-cli /dev/class/light/000 print 1
 Value of lp50xx-led-1: Brightness 0.745098 RGB 0.235294 0.176471 0.164706
 ```
 
 ### Set the brightness of a light
 
 ```none {:.devsite-disable-click-to-copy}
-$ lights-cli set AMBER_LED 0.5
+$ lights-cli /dev/class/light/000 set AMBER_LED 0.5
 # This command exits silently.
 ```
 
 ### Set a light to display the color purple
 
 ```none {:.devsite-disable-click-to-copy}
-$ lights-cli set 5 0.5 0 0.5
+$ lights-cli /dev/class/light/000 set 5 0.5 0 0.5
 # This command exits silently.
 ```
 
 ### View the total light count and each light's brightness and capabilities
 
 ```none {:.devsite-disable-click-to-copy}
-$ lights-cli summary
+$ lights-cli /dev/class/light/000 summary
 Total 1 lights
 Value of AMBER_LED: Brightness 0.500000
     Capabilities: Brightness

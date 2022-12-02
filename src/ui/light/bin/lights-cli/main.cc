@@ -14,14 +14,12 @@
 
 #include "lights-cli.h"
 
-constexpr char kLightsDevicePath[] = "/dev/class/light/000";
-
 // LINT.IfChange
 constexpr char kUsageMessage[] = R"""(Usage:
-  lights-cli print <id>
-  lights-cli set <id> <brightness>
-  lights-cli set <id> <red> <green> <blue>
-  lights-cli summary
+  lights-cli <device_path> print <id>
+  lights-cli <device_path> set <id> <brightness>
+  lights-cli <device_path> set <id> <red> <green> <blue>
+  lights-cli <device_path> summary
 
 Get information about lights and control their brightness.
 
@@ -45,23 +43,23 @@ Commands:
 
 Examples:
   View the brightness of a light:
-  $ lights-cli print AMBER_LED
+  $ lights-cli /dev/class/light/000 print AMBER_LED
   Value of AMBER_LED: Brightness 1.000000
 
   View the brightness and color of a light:
-  $ lights-cli print 1
+  $ lights-cli /dev/class/light/000 print 1
   Value of lp50xx-led-1: Brightness 0.745098 RGB 0.235294 0.176471 0.164706
 
   Set the brightness of a light:
-  $ lights-cli set AMBER_LED 0.5
+  $ lights-cli /dev/class/light/000 set AMBER_LED 0.5
   # This command exits silently.
 
   Set a light to display the color purple:
-  $ lights-cli set 5 0.5 0 0.5
+  $ lights-cli /dev/class/light/000 set 5 0.5 0 0.5
   # This command exits silently.
 
   View the total light count and each light's brightness and capabilities:
-  $ lights-cli summary
+  $ lights-cli /dev/class/light/000 summary
   Total 1 lights
   Value of AMBER_LED: Brightness 0.500000
       Capabilities: Brightness
@@ -86,28 +84,28 @@ zx_status_t GetDeviceHandle(const char* path, zx::channel* handle) {
 }
 
 int main(int argc, char** argv) {
-  zx::channel channel;
-  zx_status_t status = GetDeviceHandle(kLightsDevicePath, &channel);
-  if (status != ZX_OK) {
-    printf("Failed to open lights device at '%s'\n", kLightsDevicePath);
+  if (argc <= 2) {
+    printf("%s expects at least 3 arguments\n", argv[0]);
+    printf(kUsageMessage);
     return 1;
   }
 
-  if (argc <= 1) {
-    printf("%s expects at least 1 argument\n", argv[0]);
-    printf(kUsageMessage);
+  zx::channel channel;
+  zx_status_t status = GetDeviceHandle(argv[1], &channel);
+  if (status != ZX_OK) {
+    printf("Failed to open lights device at '%s'\n", argv[1]);
     return 1;
   }
 
   LightsCli lights_cli(std::move(channel));
 
-  if (strcmp(argv[1], "print") == 0 && argc == 3) {
-    status = lights_cli.PrintValue(atoi(argv[2]));
-  } else if (strcmp(argv[1], "set") == 0 && argc == 4) {
-    status = lights_cli.SetBrightness(atoi(argv[2]), atof(argv[3]));
-  } else if (strcmp(argv[1], "set") == 0 && argc == 6) {
-    status = lights_cli.SetRgb(atoi(argv[2]), atof(argv[3]), atof(argv[4]), atof(argv[5]));
-  } else if (strcmp(argv[1], "summary") == 0 && argc == 2) {
+  if (strcmp(argv[2], "print") == 0 && argc == 4) {
+    status = lights_cli.PrintValue(atoi(argv[3]));
+  } else if (strcmp(argv[2], "set") == 0 && argc == 5) {
+    status = lights_cli.SetBrightness(atoi(argv[3]), atof(argv[4]));
+  } else if (strcmp(argv[2], "set") == 0 && argc == 7) {
+    status = lights_cli.SetRgb(atoi(argv[3]), atof(argv[4]), atof(argv[5]), atof(argv[6]));
+  } else if (strcmp(argv[2], "summary") == 0 && argc == 3) {
     status = lights_cli.Summary();
   } else {
     printf("%s", kUsageMessage);
