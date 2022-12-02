@@ -4,15 +4,8 @@
 
 //! This file tests FIDL's persistent encoding/decoding API.
 
-use fidl::{
-    encoding::{
-        convert_handle_dispositions_to_infos, persist, standalone_decode, standalone_encode,
-        unpersist,
-    },
-    AsHandleRef,
-};
-use fidl_fidl_rust_test_external::{Coordinate, FlexibleValueThing, StructWithHandles};
-use fuchsia_zircon as zx;
+use fidl::encoding::{persist, standalone_decode, standalone_encode, unpersist};
+use fidl_fidl_rust_test_external::{Coordinate, FlexibleValueThing, ValueRecord};
 
 // TODO(fxbug.dev/45252): Remove this.
 fn transform_new_to_old_header(buf: &mut Vec<u8>) {
@@ -41,6 +34,14 @@ fn persist_unpersist() {
 }
 
 #[test]
+fn persist_unpersist_presence() {
+    let mut body = ValueRecord { name: Some("testing".to_string()), ..ValueRecord::EMPTY };
+    let buf = persist(&mut body).expect("encoding failed");
+    let body_out = unpersist::<ValueRecord>(&buf).expect("decoding failed");
+    assert_eq!(body, body_out);
+}
+
+#[test]
 fn persist_unpersist_with_old_header() {
     let mut body = Coordinate { x: 1, y: 2 };
     let mut buf = persist(&mut body).expect("encoding failed");
@@ -59,23 +60,32 @@ fn standalone_encode_decode_value() {
     assert_eq!(value, value_out);
 }
 
-#[test]
-fn standalone_encode_decode_resource() {
-    let (c1, c2) = zx::Channel::create().expect("creating channel failed");
-    let c1_koid = c1.get_koid();
-    let c2_koid = c2.get_koid();
+#[cfg(target_os = "fuchsia")]
+mod zx {
+    use super::*;
+    use fidl::{encoding::convert_handle_dispositions_to_infos, AsHandleRef};
+    use fidl_fidl_rust_test_external::StructWithHandles;
+    use fuchsia_zircon as zx;
 
-    let mut value = StructWithHandles { v: vec![c1, c2] };
+    #[test]
+    fn standalone_encode_decode_resource() {
+        let (c1, c2) = zx::Channel::create().expect("creating channel failed");
+        let c1_koid = c1.get_koid();
+        let c2_koid = c2.get_koid();
 
-    let (bytes, handle_dispositions, metadata) =
-        standalone_encode(&mut value).expect("encoding failed");
-    assert_eq!(handle_dispositions.len(), 2);
+        let mut value = StructWithHandles { v: vec![c1, c2] };
 
-    let mut handle_infos = convert_handle_dispositions_to_infos(handle_dispositions)
-        .expect("converting to handle infos failed");
-    let value_out = standalone_decode::<StructWithHandles>(&bytes, &mut handle_infos, &metadata)
-        .expect("decoding failed");
+        let (bytes, handle_dispositions, metadata) =
+            standalone_encode(&mut value).expect("encoding failed");
+        assert_eq!(handle_dispositions.len(), 2);
 
-    assert_eq!(value_out.v[0].get_koid(), c1_koid);
-    assert_eq!(value_out.v[1].get_koid(), c2_koid);
+        let mut handle_infos = convert_handle_dispositions_to_infos(handle_dispositions)
+            .expect("converting to handle infos failed");
+        let value_out =
+            standalone_decode::<StructWithHandles>(&bytes, &mut handle_infos, &metadata)
+                .expect("decoding failed");
+
+        assert_eq!(value_out.v[0].get_koid(), c1_koid);
+        assert_eq!(value_out.v[1].get_koid(), c2_koid);
+    }
 }
