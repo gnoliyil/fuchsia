@@ -2336,7 +2336,7 @@ pub struct Offer {
 /// ],
 /// ```
 ///
-/// [component-url]: /docs/concepts/components/component_urls.md
+/// [component-url]: /docs/reference/components/url.md
 /// [doc-eager]: /docs/development/components/connect.md#eager
 /// [doc-reboot-on-terminate]: /docs/development/components/connect.md#reboot-on-terminate
 #[derive(ReferenceDoc, Deserialize, Debug, PartialEq, Serialize)]
