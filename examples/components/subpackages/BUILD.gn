@@ -14,7 +14,7 @@ group("tests") {
   # This Subpackages example will only work if subpackage resolution is enabled
   # in the full-resolver.
   if (full_resolver_enable_subpackages) {
-    deps = [ ":package-with-subs" ]
+    deps = [ ":subpackage-examples" ]
   }
 }
 
@@ -24,19 +24,12 @@ rustc_test("bin") {
 
   deps = [
     "//src/lib/fuchsia",
-    "//src/lib/fuchsia-component-test",
+    "//src/lib/fuchsia-component-test:lib",
     "//src/sys/lib/component-events",
     "//third_party/rust_crates:tracing",
   ]
 
   sources = [ "src/lib.rs" ]
-}
-
-fuchsia_component("parent-component") {
-  testonly = true
-  manifest = "meta/parent_realm.cml"
-  component_name = "parent-realm"
-  deps = [ ":bin" ]
 }
 
 fuchsia_package_with_default_component("echo_client_with_subpackaged_server") {
@@ -46,14 +39,14 @@ fuchsia_package_with_default_component("echo_client_with_subpackaged_server") {
 }
 
 # Run with `fx test subpackage-examples` or
-# `ffx test run fuchsia-pkg://fuchsia.com/subpackage-examples#meta/parent-realm.cm`
-fuchsia_test_package("package-with-subs") {
-  package_name = "subpackage-examples"
-  test_components = [ ":parent-component" ]
-
+# `ffx test run fuchsia-pkg://fuchsia.com/subpackage-examples#meta/default.cm`
+fuchsia_test_package_with_default_component("subpackage-examples") {
+  manifest = "meta/parent_realm.cml"
+  deps = [ ":bin" ]
   subpackages = [
     "//examples/components/routing/rust/echo_client",
     ":echo_client_with_subpackaged_server",
+    "//src/lib/fuchsia-component-test/realm_builder_server:fuchsia-component-test",
   ]
   renameable_subpackages = [
     {
