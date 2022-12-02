@@ -151,11 +151,7 @@ func (a *allocatorBuilder) visitStruct(value gidlir.Record, decl *gidlmixer.Stru
 	}
 
 	for _, field := range value.Fields {
-		fieldDecl, ok := decl.Field(field.Key.Name)
-		if !ok {
-			panic(fmt.Sprintf("field %s not found", field.Key.Name))
-		}
-		fieldRhs := a.visit(field.Value, fieldDecl)
+		fieldRhs := a.visit(field.Value, decl.Field(field.Key.Name))
 		a.write("%s%s%s = %s;\n", s, op, field.Key.Name, fieldRhs)
 	}
 
@@ -174,10 +170,7 @@ func (a *allocatorBuilder) visitTable(value gidlir.Record, decl *gidlmixer.Table
 			panic(fmt.Sprintf("table %s: unknown ordinal %d: LLCPP cannot construct tables with unknown fields",
 				decl.Name(), field.Key.UnknownOrdinal))
 		}
-		fieldDecl, ok := decl.Field(field.Key.Name)
-		if !ok {
-			panic(fmt.Sprintf("field %s not found", field.Key.Name))
-		}
+		fieldDecl := decl.Field(field.Key.Name)
 		fieldRhs := a.visit(field.Value, fieldDecl)
 		if fieldDecl.IsInlinableInEnvelope() {
 			a.write("%s%sset_%s(%s);\n", t, op, fidlgen.ToSnakeCase(field.Key.Name), fieldRhs)
@@ -204,10 +197,7 @@ func (a *allocatorBuilder) visitUnion(value gidlir.Record, decl *gidlmixer.Union
 			panic(fmt.Sprintf("union %s: unknown ordinal %d: LLCPP cannot construct unions with unknown fields",
 				decl.Name(), field.Key.UnknownOrdinal))
 		}
-		fieldDecl, ok := decl.Field(field.Key.Name)
-		if !ok {
-			panic(fmt.Sprintf("field %s not found", field.Key.Name))
-		}
+		fieldDecl := decl.Field(field.Key.Name)
 		fieldRhs := a.visit(field.Value, fieldDecl)
 		if fieldDecl.IsInlinableInEnvelope() {
 			a.write("%s = %s::With%s(%s);\n", s, typeNameIgnoreNullable(decl), fidlgen.ToUpperCamelCase(field.Key.Name), fieldRhs)

@@ -206,12 +206,8 @@ func (b *equalityCheckBuilder) visitStruct(actualExpr string, expectedValue gidl
 		b.assertPresent(actualVar)
 	}
 	for _, field := range expectedValue.Fields {
-		fieldDecl, ok := decl.Field(field.Key.Name)
-		if !ok {
-			panic(fmt.Sprintf("field %q not found", field.Key.Name))
-		}
 		actualFieldExpr := fmt.Sprintf("%s%s%s()", actualVar, op, field.Key.Name)
-		b.visit(actualFieldExpr, field.Value, fieldDecl)
+		b.visit(actualFieldExpr, field.Value, decl.Field(field.Key.Name))
 	}
 }
 
@@ -227,14 +223,10 @@ func (b *equalityCheckBuilder) visitTable(actualExpr string, expectedValue gidli
 		expectedFieldValues[field.Key.Name] = field.Value
 	}
 	for _, fieldName := range decl.FieldNames() {
-		fieldDecl, ok := decl.Field(fieldName)
-		if !ok {
-			panic(fmt.Sprintf("field decl %s not found", fieldName))
-		}
 		if expectedFieldValue, ok := expectedFieldValues[fieldName]; ok {
 			b.assertTrue(fmt.Sprintf("%s.%s().has_value()", actualVar, fieldName))
 			actualFieldExpr := fmt.Sprintf("%s.%s().value()", actualVar, fieldName)
-			b.visit(actualFieldExpr, expectedFieldValue, fieldDecl)
+			b.visit(actualFieldExpr, expectedFieldValue, decl.Field(fieldName))
 		} else {
 			b.assertFalse(fmt.Sprintf("%s.%s().has_value()", actualVar, fieldName))
 		}
@@ -258,16 +250,12 @@ func (b *equalityCheckBuilder) visitUnion(actualExpr string, expectedValue gidli
 		b.assertTrue(fmt.Sprintf("%s%sIsUnknown()", actualVar, op))
 		return
 	}
-	fieldDecl, ok := decl.Field(field.Key.Name)
-	if !ok {
-		panic(fmt.Sprintf("field %q not found", field.Key.Name))
-	}
 	b.assertEquals(
 		fmt.Sprintf("%s%sWhich()", actualVar, op),
 		fmt.Sprintf("%s::Tag::k%s", declName(decl), fidlgen.ToUpperCamelCase(field.Key.Name)))
 	b.assertTrue(fmt.Sprintf("%s%s%s().has_value()", actualVar, op, fidlgen.ToSnakeCase(field.Key.Name)))
 	actualFieldExpr := fmt.Sprintf("%s%s%s().value()", actualVar, op, fidlgen.ToSnakeCase(field.Key.Name))
-	b.visit(actualFieldExpr, field.Value, fieldDecl)
+	b.visit(actualFieldExpr, field.Value, decl.Field(field.Key.Name))
 }
 
 func (b *equalityCheckBuilder) visitList(actualExpr string, expectedValue []gidlir.Value, decl gidlmixer.ListDeclaration) {

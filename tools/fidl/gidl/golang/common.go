@@ -249,12 +249,8 @@ func onRecord(value gidlir.Record, decl gidlmixer.RecordDeclaration) string {
 			continue
 		}
 		fieldName := fidlgen.ToUpperCamelCase(field.Key.Name)
-		fieldDecl, ok := decl.Field(field.Key.Name)
-		if !ok {
-			panic(fmt.Sprintf("field %s not found", field.Key.Name))
-		}
-		fields = append(fields,
-			fmt.Sprintf("%s: %s", fieldName, visit(field.Value, fieldDecl)))
+		fieldRhs := visit(field.Value, decl.Field(field.Key.Name))
+		fields = append(fields, fmt.Sprintf("%s: %s", fieldName, fieldRhs))
 		if isTable && field.Value != nil {
 			fields = append(fields, fmt.Sprintf("%sPresent: true", fieldName))
 		}

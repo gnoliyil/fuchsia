@@ -113,9 +113,12 @@ type RecordDeclaration interface {
 	// AllFields returns the names of all fields in the type.
 	FieldNames() []string
 
-	// Field returns the declaration for the field with the given name. It
+	// LookupField returns the declaration for the field with the given name. It
 	// returns false if no field with that name exists.
-	Field(name string) (Declaration, bool)
+	LookupField(name string) (Declaration, bool)
+
+	// Field is like LookupField but panics if the field doesn't exist.
+	Field(name string) Declaration
 }
 
 // Assert that wrappers conform to the RecordDeclaration interface.
@@ -479,13 +482,20 @@ func (decl *StructDecl) FieldNames() []string {
 	return names
 }
 
-func (decl *StructDecl) Field(name string) (Declaration, bool) {
+func (decl *StructDecl) LookupField(name string) (Declaration, bool) {
 	for _, member := range decl.structDecl.Members {
 		if string(member.Name) == name {
 			return decl.schema.lookupDeclByType(member.Type)
 		}
 	}
 	return nil, false
+}
+
+func (decl *StructDecl) Field(name string) Declaration {
+	if fieldDecl, ok := decl.LookupField(name); ok {
+		return fieldDecl
+	}
+	panic(fmt.Sprintf("struct '%s' has no field '%s'", decl.Name(), name))
 }
 
 // recordConforms is a helper function for implementing Declarations.conforms on
@@ -522,7 +532,7 @@ func (decl *StructDecl) conforms(value gidlir.Value, ctx context) error {
 		if field.Key.IsUnknown() {
 			return fmt.Errorf("field %d: ordinal keys are invalid in structs", field.Key.UnknownOrdinal)
 		}
-		if fieldDecl, ok := decl.Field(field.Key.Name); !ok {
+		if fieldDecl, ok := decl.LookupField(field.Key.Name); !ok {
 			return fmt.Errorf("field %s: unknown", field.Key.Name)
 		} else if err := fieldDecl.conforms(field.Value, ctx); err != nil {
 			return fmt.Errorf("field %s: %s", field.Key.Name, err)
@@ -565,13 +575,20 @@ func (decl *TableDecl) FieldNames() []string {
 	return names
 }
 
-func (decl *TableDecl) Field(name string) (Declaration, bool) {
+func (decl *TableDecl) LookupField(name string) (Declaration, bool) {
 	for _, member := range decl.tableDecl.Members {
 		if string(member.Name) == name {
 			return decl.schema.lookupDeclByType(*member.Type)
 		}
 	}
 	return nil, false
+}
+
+func (decl *TableDecl) Field(name string) Declaration {
+	if fieldDecl, ok := decl.LookupField(name); ok {
+		return fieldDecl
+	}
+	panic(fmt.Sprintf("table '%s' has no field '%s'", decl.Name(), name))
 }
 
 func (decl *TableDecl) fieldByOrdinal(ordinal uint64) (Declaration, bool) {
@@ -608,7 +625,7 @@ func (decl *TableDecl) conforms(value gidlir.Value, ctx context) error {
 			}
 			continue
 		}
-		if fieldDecl, ok := decl.Field(field.Key.Name); !ok {
+		if fieldDecl, ok := decl.LookupField(field.Key.Name); !ok {
 			return fmt.Errorf("field %s: unknown", field.Key.Name)
 		} else if err := fieldDecl.conforms(field.Value, ctx); err != nil {
 			return fmt.Errorf("field %s: %s", field.Key.Name, err)
@@ -645,13 +662,20 @@ func (decl *UnionDecl) FieldNames() []string {
 	return names
 }
 
-func (decl *UnionDecl) Field(name string) (Declaration, bool) {
+func (decl *UnionDecl) LookupField(name string) (Declaration, bool) {
 	for _, member := range decl.unionDecl.Members {
 		if string(member.Name) == name {
 			return decl.schema.lookupDeclByType(*member.Type)
 		}
 	}
 	return nil, false
+}
+
+func (decl *UnionDecl) Field(name string) Declaration {
+	if fieldDecl, ok := decl.LookupField(name); ok {
+		return fieldDecl
+	}
+	panic(fmt.Sprintf("union '%s' has no field '%s'", decl.Name(), name))
 }
 
 func (decl *UnionDecl) fieldByOrdinal(ordinal uint64) (Declaration, bool) {
@@ -684,7 +708,7 @@ func (decl *UnionDecl) conforms(value gidlir.Value, ctx context) error {
 			}
 			continue
 		}
-		if fieldDecl, ok := decl.Field(field.Key.Name); !ok {
+		if fieldDecl, ok := decl.LookupField(field.Key.Name); !ok {
 			return fmt.Errorf("field %s: unknown", field.Key.Name)
 		} else if err := fieldDecl.conforms(field.Value, ctx); err != nil {
 			return fmt.Errorf("field %s: %s", field.Key.Name, err)

@@ -153,11 +153,7 @@ func (b *builder) visitStructOrTable(value gidlir.Record, decl gidlmixer.RecordD
 	}
 
 	for _, field := range value.Fields {
-		fieldDecl, ok := decl.Field(field.Key.Name)
-		if !ok {
-			panic(fmt.Sprintf("field %s not found", field.Key.Name))
-		}
-		fieldRhs := b.visit(field.Value, fieldDecl)
+		fieldRhs := b.visit(field.Value, decl.Field(field.Key.Name))
 		b.write("%s%s%s() = %s;\n", s, op, field.Key.Name, fieldRhs)
 	}
 
@@ -174,11 +170,7 @@ func (a *builder) visitUnion(value gidlir.Record, decl *gidlmixer.UnionDecl, isP
 		panic(fmt.Sprintf("union %s: unknown ordinal %d: C++ cannot construct unions with unknown fields",
 			decl.Name(), field.Key.UnknownOrdinal))
 	}
-	fieldDecl, ok := decl.Field(field.Key.Name)
-	if !ok {
-		panic(fmt.Sprintf("field %s not found", field.Key.Name))
-	}
-	fieldRhs := a.visit(field.Value, fieldDecl)
+	fieldRhs := a.visit(field.Value, decl.Field(field.Key.Name))
 
 	varName := a.assignNew(typeNameIgnoreNullable(decl), isPointer, "%s::With%s(%s)", typeNameIgnoreNullable(decl), fidlgen.ToUpperCamelCase(field.Key.Name), fieldRhs)
 	return fmt.Sprintf("std::move(%s)", varName)

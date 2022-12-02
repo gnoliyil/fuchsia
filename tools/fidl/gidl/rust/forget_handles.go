@@ -41,11 +41,8 @@ func (b *forgetHandleBuilder) visit(expr string, value gidlir.Value, decl gidlmi
 		switch decl.(type) {
 		case *gidlmixer.StructDecl:
 			for _, field := range value.Fields {
-				fieldDecl, ok := decl.Field(field.Key.Name)
-				if !ok {
-					panic(fmt.Sprintf("field %s not found", field.Key.Name))
-				}
-				b.visit(fmt.Sprintf("(&mut %s.%s)", expr, field.Key.Name), field.Value, fieldDecl)
+				fieldExpr := fmt.Sprintf("(&mut %s.%s)", expr, field.Key.Name)
+				b.visit(fieldExpr, field.Value, decl.Field(field.Key.Name))
 			}
 		case *gidlmixer.TableDecl:
 			hasUnknown := false
@@ -54,11 +51,8 @@ func (b *forgetHandleBuilder) visit(expr string, value gidlir.Value, decl gidlmi
 					hasUnknown = true
 					continue
 				}
-				fieldDecl, ok := decl.Field(field.Key.Name)
-				if !ok {
-					panic(fmt.Sprintf("field %s not found", field.Key.Name))
-				}
-				b.visit(fmt.Sprintf("%s.%s.as_mut().unwrap()", expr, field.Key.Name), field.Value, fieldDecl)
+				fieldExpr := fmt.Sprintf("%s.%s.as_mut().unwrap()", expr, field.Key.Name)
+				b.visit(fieldExpr, field.Value, decl.Field(field.Key.Name))
 			}
 			if decl.IsResourceType() && hasUnknown {
 				b.write(`for data in %s.unknown_data.as_mut().unwrap().values_mut() {
@@ -72,15 +66,11 @@ func (b *forgetHandleBuilder) visit(expr string, value gidlir.Value, decl gidlmi
 			}
 			field := value.Fields[0]
 			if field.Key.IsKnown() {
-				fieldDecl, ok := decl.Field(field.Key.Name)
 				fieldName := fidlgen.ToUpperCamelCase(field.Key.Name)
-				if !ok {
-					panic(fmt.Sprintf("field %s not found", field.Key.Name))
-				}
 				// Use another builder so that we only emit the match statement
 				// if there are any handles within to forget.
 				var inner forgetHandleBuilder
-				inner.visit("x", field, fieldDecl)
+				inner.visit("x", field, decl.Field(field.Key.Name))
 				if inner.Len() == 0 {
 					break
 				}

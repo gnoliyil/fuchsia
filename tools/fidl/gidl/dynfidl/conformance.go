@@ -86,8 +86,7 @@ func isSupported(decl gidlmixer.Declaration) bool {
 			return false
 		}
 		for _, fieldName := range decl.FieldNames() {
-			fieldDecl, _ := decl.Field(fieldName)
-			if !isSupportedStructField(fieldDecl) {
+			if !isSupportedStructField(decl.Field(fieldName)) {
 				return false
 			}
 		}
@@ -211,8 +210,7 @@ func visit(value gidlir.Value, decl gidlmixer.Declaration) visitResult {
 		decl := decl.(*gidlmixer.StructDecl)
 		valueStr := "Structure::default()"
 		for _, field := range value.Fields {
-			fieldDecl, _ := decl.Field(field.Key.Name)
-			fieldResult := visit(field.Value, fieldDecl)
+			fieldResult := visit(field.Value, decl.Field(field.Key.Name))
 			valueStr += fmt.Sprintf(
 				".field(Field::%s(%s(%s)))",
 				fieldResult.OuterVariant,

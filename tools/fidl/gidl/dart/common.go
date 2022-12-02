@@ -135,11 +135,7 @@ func onRecord(value gidlir.Record, decl gidlmixer.RecordDeclaration) string {
 			unknownTableFields = append(unknownTableFields, field)
 			continue
 		}
-		fieldDecl, ok := decl.Field(field.Key.Name)
-		if !ok {
-			panic(fmt.Sprintf("field %s not found", field.Key.Name))
-		}
-		val := visit(field.Value, fieldDecl)
+		val := visit(field.Value, decl.Field(field.Key.Name))
 		args = append(args, fmt.Sprintf("%s: %s", fidlgen.ToLowerCamelCase(field.Key.Name), val))
 	}
 	if len(unknownTableFields) > 0 {
@@ -160,11 +156,7 @@ func onUnion(value gidlir.Record, decl *gidlmixer.UnionDecl) string {
 				buildBytes(unknownData.Bytes),
 				buildHandleValues(unknownData.Handles))
 		}
-		fieldDecl, ok := decl.Field(field.Key.Name)
-		if !ok {
-			panic(fmt.Sprintf("field %s not found", field.Key.Name))
-		}
-		val := visit(field.Value, fieldDecl)
+		val := visit(field.Value, decl.Field(field.Key.Name))
 		return fmt.Sprintf("%s.with%s(%s)", value.Name, fidlgen.ToUpperCamelCase(field.Key.Name), val)
 	}
 	// Not currently possible to construct a union in dart with an invalid value.

@@ -180,12 +180,8 @@ func (b *equalityCheckBuilder) visitStruct(actualExpr string, expectedValue gidl
 	}
 	actualVar := b.createAndAssignVar(actualExpr)
 	for _, field := range expectedValue.Fields {
-		fieldDecl, ok := decl.Field(field.Key.Name)
-		if !ok {
-			panic(fmt.Sprintf("field %q not found", field.Key.Name))
-		}
 		actualFieldExpr := fmt.Sprintf("%s%s%s", actualVar, op, field.Key.Name)
-		b.visit(actualFieldExpr, field.Value, fieldDecl)
+		b.visit(actualFieldExpr, field.Value, decl.Field(field.Key.Name))
 	}
 }
 
@@ -199,14 +195,10 @@ func (b *equalityCheckBuilder) visitTable(actualExpr string, expectedValue gidli
 		expectedFieldValues[field.Key.Name] = field.Value
 	}
 	for _, fieldName := range decl.FieldNames() {
-		fieldDecl, ok := decl.Field(fieldName)
-		if !ok {
-			panic(fmt.Sprintf("field decl %s not found", fieldName))
-		}
 		if expectedFieldValue, ok := expectedFieldValues[fieldName]; ok {
 			b.assertTrue(fmt.Sprintf("%s.has_%s()", actualVar, fieldName))
 			actualFieldExpr := fmt.Sprintf("%s.%s()", actualVar, fieldName)
-			b.visit(actualFieldExpr, expectedFieldValue, fieldDecl)
+			b.visit(actualFieldExpr, expectedFieldValue, decl.Field(fieldName))
 		} else {
 			b.assertFalse(fmt.Sprintf("%s.has_%s()", actualVar, fieldName))
 		}
@@ -234,15 +226,11 @@ func (b *equalityCheckBuilder) visitUnion(actualExpr string, expectedValue gidli
 		}
 		return
 	}
-	fieldDecl, ok := decl.Field(field.Key.Name)
-	if !ok {
-		panic(fmt.Sprintf("field %q not found", field.Key.Name))
-	}
 	b.assertEquals(
 		fmt.Sprintf("%s%sWhich()", actualVar, op),
 		fmt.Sprintf("%s::Tag::k%s", declName(decl), fidlgen.ToUpperCamelCase(field.Key.Name)))
 	actualFieldExpr := fmt.Sprintf("%s%s%s()", actualVar, op, field.Key.Name)
-	b.visit(actualFieldExpr, field.Value, fieldDecl)
+	b.visit(actualFieldExpr, field.Value, decl.Field(field.Key.Name))
 }
 
 func (b *equalityCheckBuilder) visitList(actualExpr string, expectedValue []gidlir.Value, decl gidlmixer.ListDeclaration) {

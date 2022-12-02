@@ -218,11 +218,7 @@ func onStruct(value gidlir.Record, decl *gidlmixer.StructDecl) string {
 		}
 		providedKeys[field.Key.Name] = struct{}{}
 		fieldName := fidlgen.ToSnakeCase(field.Key.Name)
-		fieldDecl, ok := decl.Field(field.Key.Name)
-		if !ok {
-			panic(fmt.Sprintf("field %s not found", field.Key.Name))
-		}
-		fieldValueStr := visit(field.Value, fieldDecl)
+		fieldValueStr := visit(field.Value, decl.Field(field.Key.Name))
 		structFields = append(structFields, fmt.Sprintf("%s: %s", fieldName, fieldValueStr))
 	}
 	for _, key := range decl.FieldNames() {
@@ -243,11 +239,7 @@ func onTable(value gidlir.Record, decl *gidlmixer.TableDecl) string {
 				decl.Name(), field.Key.UnknownOrdinal))
 		}
 		fieldName := fidlgen.ToSnakeCase(field.Key.Name)
-		fieldDecl, ok := decl.Field(field.Key.Name)
-		if !ok {
-			panic(fmt.Sprintf("field %s not found", field.Key.Name))
-		}
-		fieldValueStr := visit(field.Value, fieldDecl)
+		fieldValueStr := visit(field.Value, decl.Field(field.Key.Name))
 		tableFields = append(tableFields, fmt.Sprintf("%s: Some(%s)", fieldName, fieldValueStr))
 	}
 	tableName := declName(decl)
@@ -272,11 +264,7 @@ func onUnion(value gidlir.Record, decl *gidlmixer.UnionDecl) string {
 		)
 	} else {
 		fieldName := fidlgen.ToUpperCamelCase(field.Key.Name)
-		fieldDecl, ok := decl.Field(field.Key.Name)
-		if !ok {
-			panic(fmt.Sprintf("field %s not found", field.Key.Name))
-		}
-		fieldValueStr := visit(field.Value, fieldDecl)
+		fieldValueStr := visit(field.Value, decl.Field(field.Key.Name))
 		valueStr = fmt.Sprintf("%s::%s(%s)", declName(decl), fieldName, fieldValueStr)
 	}
 	return wrapNullable(decl, valueStr)

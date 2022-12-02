@@ -225,11 +225,7 @@ func (b *cppValueBuilder) visitRecord(value gidlir.Record, decl gidlmixer.Record
 			continue
 		}
 
-		fieldDecl, ok := decl.Field(field.Key.Name)
-		if !ok {
-			panic(fmt.Sprintf("field %s not found", field.Key.Name))
-		}
-		fieldVar := b.visit(field.Value, fieldDecl)
+		fieldVar := b.visit(field.Value, decl.Field(field.Key.Name))
 
 		switch decl.(type) {
 		case *gidlmixer.StructDecl:

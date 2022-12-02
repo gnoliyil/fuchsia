@@ -223,12 +223,9 @@ func (b *equalityCheckBuilder) visitStruct(actualExpr fidlExpr, expectedValue gi
 	actualVar := b.createAndAssignVar(actualExpr)
 	var fieldEquality []boolExpr
 	for _, field := range expectedValue.Fields {
-		fieldDecl, ok := decl.Field(field.Key.Name)
-		if !ok {
-			panic(fmt.Sprintf("field %s not found", field.Key.Name))
-		}
 		actualFieldExpr := fidlSprintf("%s%s%s", actualVar, op, field.Key.Name)
-		fieldEquality = append(fieldEquality, b.visit(actualFieldExpr, field.Value, fieldDecl))
+		fieldEquality = append(fieldEquality,
+			b.visit(actualFieldExpr, field.Value, decl.Field(field.Key.Name)))
 	}
 	return boolJoin(fieldEquality)
 }
@@ -244,14 +241,11 @@ func (b *equalityCheckBuilder) visitTable(actualExpr fidlExpr, expectedValue gid
 		expectedFieldValues[field.Key.Name] = field.Value
 	}
 	for _, fieldName := range decl.FieldNames() {
-		fieldDecl, ok := decl.Field(fieldName)
-		if !ok {
-			panic(fmt.Sprintf("field decl %s not found", fieldName))
-		}
 		if expectedFieldValue, ok := expectedFieldValues[fieldName]; ok {
 			fieldEquality = append(fieldEquality, boolSprintf("%s.has_%s()", actualVar, fieldName))
 			actualFieldExpr := fidlSprintf("%s.%s()", actualVar, fieldName)
-			fieldEquality = append(fieldEquality, b.visit(actualFieldExpr, expectedFieldValue, fieldDecl))
+			fieldEquality = append(fieldEquality,
+				b.visit(actualFieldExpr, expectedFieldValue, decl.Field(fieldName)))
 		} else {
 			fieldEquality = append(fieldEquality, boolSprintf("!%s.has_%s()", actualVar, fieldName))
 		}
@@ -271,10 +265,6 @@ func (b *equalityCheckBuilder) visitUnion(actualExpr fidlExpr, expectedValue gid
 	if field.Key.IsUnknown() {
 		panic("LLCPP does not support constructing unknown fields")
 	}
-	fieldDecl, ok := decl.Field(field.Key.Name)
-	if !ok {
-		panic(fmt.Sprintf("field %s not found", field.Key.Name))
-	}
 	op := "."
 	presenceCheck := ""
 	if decl.IsNullable() {
@@ -282,7 +272,7 @@ func (b *equalityCheckBuilder) visitUnion(actualExpr fidlExpr, expectedValue gid
 		presenceCheck = fmt.Sprintf("%s.has_value() && ", actualVar)
 	}
 	actualFieldExpr := fidlSprintf("%s%s%s()", actualVar, op, fidlgen.ToSnakeCase(field.Key.Name))
-	fieldEquality := b.visit(actualFieldExpr, field.Value, fieldDecl)
+	fieldEquality := b.visit(actualFieldExpr, field.Value, decl.Field(field.Key.Name))
 	return boolSprintf("(%s%s%sWhich() == %s::Tag::%s && %s)",
 		presenceCheck, actualVar, op, declName(decl), fidlgen.ConstNameToKCamelCase(field.Key.Name), fieldEquality)
 }

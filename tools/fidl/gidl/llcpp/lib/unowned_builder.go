@@ -130,13 +130,8 @@ func (b *unownedBuilder) visitStruct(value gidlir.Record, decl *gidlmixer.Struct
 	b.write(
 		"%s %s{};\n", declName(decl), containerVar)
 	for _, field := range value.Fields {
-		fieldDecl, ok := decl.Field(field.Key.Name)
-		if !ok {
-			panic(fmt.Sprintf("field %s not found", field.Key.Name))
-		}
-
 		stringBeforeVisitField := b.String()
-		fieldValue := b.visit(field.Value, fieldDecl)
+		fieldValue := b.visit(field.Value, decl.Field(field.Key.Name))
 		// if visiting the field does not write any data to the string builder
 		// then its return value is a temporary object and so cannot be moved
 		// (which will prevent copy elision)
@@ -172,10 +167,7 @@ func (b *unownedBuilder) visitTable(value gidlir.Record, decl *gidlmixer.TableDe
 		if field.Key.IsUnknown() {
 			panic("LLCPP does not support constructing unknown fields")
 		}
-		fieldDecl, ok := decl.Field(field.Key.Name)
-		if !ok {
-			panic(fmt.Sprintf("field %s not found", field.Key.Name))
-		}
+		fieldDecl := decl.Field(field.Key.Name)
 		fieldVar := b.visit(field.Value, fieldDecl)
 		storageVar := b.newVar()
 		b.write("auto %s = std::move(%s);\n", storageVar, fieldVar)
@@ -198,10 +190,7 @@ func (b *unownedBuilder) visitUnion(value gidlir.Record, decl *gidlmixer.UnionDe
 		if field.Key.IsUnknown() {
 			panic("LLCPP does not support constructing unknown fields")
 		}
-		fieldDecl, ok := decl.Field(field.Key.Name)
-		if !ok {
-			panic(fmt.Sprintf("field %s not found", field.Key.Name))
-		}
+		fieldDecl := decl.Field(field.Key.Name)
 		fieldVar := b.visit(field.Value, fieldDecl)
 		storageVar := b.newVar()
 		b.write("auto %s = std::move(%s);\n", storageVar, fieldVar)

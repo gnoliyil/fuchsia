@@ -201,11 +201,7 @@ func containsUnionOrTableInternal(decl gidlmixer.Declaration, depth int) bool {
 		return true
 	case *gidlmixer.StructDecl:
 		for _, fieldName := range decl.FieldNames() {
-			fieldDecl, ok := decl.Field(fieldName)
-			if !ok {
-				panic(fmt.Sprintf("field %s not found", fieldName))
-			}
-			if containsUnionOrTableInternal(fieldDecl, depth+1) {
+			if containsUnionOrTableInternal(decl.Field(fieldName), depth+1) {
 				return true
 			}
 		}
