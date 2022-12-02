@@ -11,7 +11,6 @@
 #include "fuchsia/process/lifecycle/cpp/fidl.h"
 #include "lib/fidl/cpp/interface_request.h"
 #include "lib/sys/cpp/component_context.h"
-#include "src/cobalt/bin/app/activity_listener_impl.h"
 #include "src/cobalt/bin/app/aggregate_and_upload_impl.h"
 #include "src/cobalt/bin/app/diagnostics_impl.h"
 #include "src/cobalt/bin/app/metric_event_logger_factory_impl.h"
@@ -70,8 +69,7 @@ CobaltConfig CobaltApp::CreateCobaltConfig(
     size_t event_aggregator_backfill_days, bool test_dont_backfill_empty_reports,
     bool use_memory_observation_store, size_t max_bytes_per_observation_store,
     StorageQuotas storage_quotas, const std::string& product_name, const std::string& board_name,
-    const std::string& version, std::unique_ptr<ActivityListenerImpl> listener,
-    std::unique_ptr<DiagnosticsImpl> diagnostics) {
+    const std::string& version, std::unique_ptr<DiagnosticsImpl> diagnostics) {
   // |target_pipeline| is the pipeline used for sending data to cobalt. In particular, it is the
   // source of the encryption keys, as well as determining the destination for generated
   // observations (either clearcut, or the local filesystem).
@@ -124,7 +122,6 @@ CobaltConfig CobaltApp::CreateCobaltConfig(
 
       .validated_clock = system_clock,
 
-      .activity_listener = std::move(listener),
       .diagnostics = std::move(diagnostics),
 
       .enable_replacement_metrics = configuration_data.GetEnableReplacementMetrics(),
@@ -166,7 +163,7 @@ lib::statusor::StatusOr<std::unique_ptr<CobaltApp>> CobaltApp::CreateCobaltApp(
           },
           upload_schedule_cfg, event_aggregator_backfill_days, test_dont_backfill_empty_reports,
           use_memory_observation_store, max_bytes_per_observation_store, storage_quotas,
-          product_name, board_name, version, std::make_unique<ActivityListenerImpl>(),
+          product_name, board_name, version,
           std::make_unique<DiagnosticsImpl>(inspect_node.CreateChild("core")))));
 
   cobalt_service->SetDataCollectionPolicy(configuration_data.GetDataCollectionPolicy());

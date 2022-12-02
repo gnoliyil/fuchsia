@@ -21,7 +21,6 @@
 #include "lib/fidl/cpp/binding_set.h"
 #include "lib/fidl/cpp/interface_request.h"
 #include "lib/sys/cpp/component_context.h"
-#include "src/cobalt/bin/app/activity_listener_impl.h"
 #include "src/cobalt/bin/app/aggregate_and_upload_impl.h"
 #include "src/cobalt/bin/app/cobalt_controller_impl.h"
 #include "src/cobalt/bin/app/configuration_data.h"
@@ -110,7 +109,7 @@ class CobaltApp {
       bool test_dont_backfill_empty_reports, bool use_memory_observation_store,
       size_t max_bytes_per_observation_store, StorageQuotas storage_quotas,
       const std::string& product_name, const std::string& board_name, const std::string& version,
-      std::unique_ptr<ActivityListenerImpl> listener, std::unique_ptr<DiagnosticsImpl> diagnostics);
+      std::unique_ptr<DiagnosticsImpl> diagnostics);
 
   CobaltApp(std::unique_ptr<sys::ComponentContext> context, async_dispatcher_t* dispatcher,
             fidl::InterfaceRequest<fuchsia::process::lifecycle::Lifecycle> lifecycle_handle,

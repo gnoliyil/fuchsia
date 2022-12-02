@@ -42,7 +42,6 @@ build_type_config_data("build_type") {
 
 source_set("lib") {
   sources = [
-    "activity_listener_impl.h",
     "aggregate_and_upload_impl.cc",
     "aggregate_and_upload_impl.h",
     "cobalt_app.cc",
@@ -86,7 +85,6 @@ source_set("lib") {
     "//third_party/cobalt/src/lib/util:pem_util",
     "//third_party/cobalt/src/lib/util:posix_file_system",
     "//third_party/cobalt/src/logger",
-    "//third_party/cobalt/src/public:activity_listener_interface",
     "//third_party/cobalt/src/public:cobalt_config",
     "//third_party/cobalt/src/public:cobalt_service",
     "//third_party/cobalt/src/public:cobalt_service_interface",

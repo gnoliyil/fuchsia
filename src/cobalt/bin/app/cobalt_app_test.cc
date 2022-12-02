@@ -13,7 +13,6 @@
 #include <sdk/lib/sys/cpp/testing/service_directory_provider.h>
 
 #include "fuchsia/process/lifecycle/cpp/fidl.h"
-#include "src/cobalt/bin/app/activity_listener_impl.h"
 #include "src/cobalt/bin/app/diagnostics_impl.h"
 #include "src/cobalt/bin/app/testapp_metrics_registry.cb.h"
 #include "src/cobalt/bin/testing/fake_clock.h"
@@ -66,7 +65,6 @@ class CreateCobaltConfigTest : public gtest::TestLoopFixture {
         event_aggregator_backfill_days, /*test_dont_backfill_empty_reports=*/false,
         use_memory_observation_store, max_bytes_per_observation_store,
         cobalt::kDefaultStorageQuotas, product_name, board_name, version,
-        std::make_unique<ActivityListenerImpl>(),
         std::make_unique<DiagnosticsImpl>(inspect::Node()));
   }
 

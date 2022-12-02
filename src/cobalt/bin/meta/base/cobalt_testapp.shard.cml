@@ -15,10 +15,6 @@
     },
     children: [
         {
-            name: "activity",
-            url: "fuchsia-pkg://fuchsia.com/activity#meta/activity.cm",
-        },
-        {
             name: "sysinfo",
             url: "fuchsia-boot:///#meta/sysinfo.cm",
         },
@@ -54,20 +50,12 @@
                 "fuchsia.tracing.provider.Registry",
             ],
             from: "parent",
-            to: [
-                "#activity",
-                "#sysinfo",
-            ],
+            to: [ "#sysinfo" ],
         },
         {
             protocol: "fuchsia.boot.WriteOnlyLog",
             from: "parent",
             to: "#sysinfo",
-        },
-        {
-            protocol: "fuchsia.ui.activity.Provider",
-            from: "#activity",
-            to: "#realm_builder",
         },
         {
             protocol: "fuchsia.sysinfo.SysInfo",
