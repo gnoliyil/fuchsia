@@ -47,6 +47,7 @@ type responseAndMetadata struct {
 
 type OmahaTool struct {
 	Args      OmahaToolArgs
+	port      string
 	serverURL string
 	cmd       *exec.Cmd
 	stdoutBuf *bytes.Buffer
@@ -161,6 +162,7 @@ func NewOmahaServer(ctx context.Context, args OmahaToolArgs, providedStdout io.W
 	}
 	o := OmahaTool{
 		Args:      args,
+		port:      port,
 		serverURL: serverURL,
 		cmd:       cmd,
 	}
@@ -226,6 +228,10 @@ func (o *OmahaTool) SetPkgURL(ctx context.Context, updatePkgURL string) error {
 		return err
 	}
 
-	_, err = http.Post(o.URL()+"/set_responses_by_appid", "application/json", bytes.NewBuffer(req))
+	_, err = http.Post(
+		fmt.Sprintf("http://localhost:%s/set_responses_by_appid", o.port),
+		"application/json",
+		bytes.NewBuffer(req),
+	)
 	return err
 }
