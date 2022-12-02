@@ -19,7 +19,7 @@ declare_args() {
 }
 
 group("starnix") {
-  if (target_cpu == "x64" && !is_asan) {
+  if (target_cpu == "x64") {
     deps = [ ":starnix_runner_bin" ]
   }
 }
@@ -27,12 +27,12 @@ group("starnix") {
 group("tests") {
   testonly = true
 
-  if (target_cpu == "x64" && !is_asan) {
+  if (target_cpu == "x64") {
     deps = [ ":starnix-tests" ]
   }
 }
 
-if (target_cpu == "x64" && !is_asan) {
+if (target_cpu == "x64") {
   static_library("restricted_trampoline") {
     sources = [ "execution/trampoline_x64.S" ]
   }
@@ -41,6 +41,7 @@ if (target_cpu == "x64" && !is_asan) {
     name = "starnix_runner"
     edition = "2021"
     with_unit_tests = true
+    exclude_toolchain_tags = [ "asan" ]
 
     source_root = "main.rs"
     deps = [
