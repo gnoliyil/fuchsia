@@ -60,7 +60,6 @@ legacy_base_package_labels += [
   "//src/diagnostics/config/triage:triage-detect",
   "//src/diagnostics/detect:triage-detect",
   "//src/diagnostics/kcounter:diagnostics-kcounter",
-  "//src/diagnostics/persistence:diagnostics-persistence",
 
   "//src/diagnostics/sampler",
   "//src/hwinfo:default_product_config",
