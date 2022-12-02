@@ -1206,8 +1206,8 @@ required the include:
 
   ```none {:.devsite-disable-click-to-copy}
   $ fx gn path $(fx get-build-dir) //examples/components/routing/rust/echo_server //sdk/lib/inspect:client_includes --with-data
-  //examples/components/routing/rust/echo_server:echo_server --[public]-->
-  //examples/components/routing/rust/echo_server:echo_server.actual --[private]-->
+  //examples/components/routing/rust/echo_server:bin --[public]-->
+  //examples/components/routing/rust/echo_server:bin.actual --[private]-->
   //src/lib/diagnostics/inspect/runtime/rust:rust --[public]-->
   //src/lib/diagnostics/inspect/runtime/rust:lib --[public]-->
   //src/lib/diagnostics/inspect/runtime/rust:lib.actual --[private]-->

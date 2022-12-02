@@ -26,7 +26,8 @@ rustc_binary("bin") {
 # [END executable]
 
 # [START component]
-fuchsia_component("echo_client_component") {
+# Unpackaged component "#meta/echo_client.cm"
+fuchsia_component("echo_client_cmp") {
   component_name = "echo_client"
   manifest = "meta/echo_client.cml"
   deps = [ ":bin" ]
@@ -34,9 +35,8 @@ fuchsia_component("echo_client_component") {
 
 # [END component]
 
-# Subpackagable
-fuchsia_package_with_default_component("echo_client_package") {
-  package_name = "echo_client"
+# Subpackaged component "echo_client#meta/default.cm"
+fuchsia_package_with_default_component("echo_client") {
   manifest = "meta/echo_client.cml"
   deps = [ ":bin" ]
 }

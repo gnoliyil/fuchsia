@@ -24,7 +24,8 @@ executable("bin") {
 # [END executable]
 
 # [START component]
-fuchsia_component("echo_server_component") {
+# Unpackaged component "#meta/echo_server.cm"
+fuchsia_component("echo_server_cmp") {
   component_name = "echo_server"
   manifest = "meta/echo_server.cml"
   deps = [ ":bin" ]
@@ -32,9 +33,8 @@ fuchsia_component("echo_server_component") {
 
 # [END component]
 
-# Subpackagable
-fuchsia_package_with_default_component("echo_server_package") {
-  package_name = "echo_server"
+# Subpackaged component "echo_server#meta/default.cm"
+fuchsia_package_with_default_component("echo_server") {
   manifest = "meta/echo_server.cml"
   deps = [ ":bin" ]
 }

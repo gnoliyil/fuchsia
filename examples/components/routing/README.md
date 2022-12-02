@@ -23,15 +23,15 @@ purposes). The `run` command will also resolve and start the
 
 -   **C++**
 
-    ```bash
-    $ ffx component run /core/ffx-laboratory:echo_realm fuchsia-pkg://fuchsia.com/components-routing-example-cpp#meta/echo_realm.cm
-    ```
+```bash
+$ ffx component run /core/ffx-laboratory:echo_realm fuchsia-pkg://fuchsia.com/components-routing-example-cpp#meta/echo_realm.cm
+```
 
 -   **Rust**
 
-    ```bash
-    $ ffx component run /core/ffx-laboratory:echo_realm fuchsia-pkg://fuchsia.com/components-routing-example-rust#meta/echo_realm.cm
-    ```
+```bash
+$ ffx component run /core/ffx-laboratory:echo_realm fuchsia-pkg://fuchsia.com/components-routing-example-rust#meta/echo_realm.cm
+```
 
 Start the client component instance by passing its moniker to
 `ffx component start`:
@@ -60,15 +60,15 @@ package. Use the `ffx test run` command to run the tests on a target device:
 
 -   **C++**
 
-    ```bash
-    $ ffx test run fuchsia-pkg://fuchsia.com/echo_integration_test_cpp#meta/echo_integration_test.cm
-    ```
+```bash
+$ ffx test run fuchsia-pkg://fuchsia.com/echo_integration_test_cpp#meta/echo_integration_test.cm
+```
 
 -   **Rust**
 
-    ```bash
-    $ ffx test run fuchsia-pkg://fuchsia.com/echo_integration_test_rust#meta/echo_integration_test.cm
-    ```
+```bash
+$ ffx test run fuchsia-pkg://fuchsia.com/echo_integration_test_rust#meta/echo_integration_test.cm
+```
 
 You should see the integration tests execute and pass:
 

@@ -69,20 +69,20 @@ command to run the tests on a target device:
 
 -   **C++**
 
-    ```bash
-    $ ffx test run fuchsia-pkg://fuchsia.com/subpackaged_echo_integration_test_cpp#meta/default.cm
-    ```
+```bash
+$ ffx test run fuchsia-pkg://fuchsia.com/subpackaged_echo_integration_test_cpp#meta/default.cm
+```
 
 -   **Rust**
 
-    ```bash
-    $ ffx test run fuchsia-pkg://fuchsia.com/subpackaged_echo_integration_test_rust#meta/default.cm
-    ```
+```bash
+$ ffx test run fuchsia-pkg://fuchsia.com/subpackaged_echo_integration_test_rust#meta/default.cm
+```
 
 You should see the integration tests execute and pass:
 
 ```
-Running test 'fuchsia-pkg://fuchsia.com/subpackaged_echo_integration_test#meta/echo_integration_test_rust.cm'
+Running test 'fuchsia-pkg://fuchsia.com/subpackaged_echo_integration_test_(rust|cpp)#meta/default.cm'
 [RUNNING]	echo_integration_test
 [PASSED]	echo_integration_test
 

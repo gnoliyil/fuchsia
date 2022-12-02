@@ -23,15 +23,15 @@ for development purposes:
 
 -   **C++**
 
-    ```bash
-    ffx component run /core/ffx-laboratory:lifecycle fuchsia-pkg://fuchsia.com/lifecycle-example-cpp#meta/lifecycle.cm
-    ```
+```bash
+$ ffx component run /core/ffx-laboratory:lifecycle fuchsia-pkg://fuchsia.com/lifecycle_cpp#meta/default.cm
+```
 
 -   **Rust**
 
-    ```bash
-    $ ffx component run /core/ffx-laboratory:lifecycle fuchsia-pkg://fuchsia.com/lifecycle-example-rust#meta/lifecycle.cm
-    ```
+```bash
+$ ffx component run /core/ffx-laboratory:lifecycle fuchsia-pkg://fuchsia.com/lifecycle_rust#meta/default.cm
+```
 
 When the above command is run, you can see the following output with `fx log`:
 
@@ -46,9 +46,16 @@ To stop the component, use `ffx component stop`:
 $ ffx component stop /core/ffx-laboratory:lifecycle
 ```
 
-When the above command is run, you can see the following output with `fx log`:
+To destroy the component, so you can `run` it again, use `ffx component destroy`:
 
 ```bash
+$ ffx component destroy /core/ffx-laboratory:lifecycle
+```
+
+When either of these two commands is run, you can see the following output with
+`fx log`:
+
+```
 [lifecycle] INFO: Received request to stop.
 ```
 
@@ -59,15 +66,15 @@ for development purposes:
 
 -   **C++**
 
-    ```bash
-    ffx component run /core/ffx-laboratory:lifecycle_manager fuchsia-pkg://fuchsia.com/lifecycle-example-cpp#meta/lifecycle_manager.cm
-    ```
+```bash
+$ ffx component run /core/ffx-laboratory:lifecycle_manager fuchsia-pkg://fuchsia.com/lifecycle-example-cpp#meta/lifecycle_manager.cm
+```
 
 -   **Rust**
 
-    ```bash
-    $ ffx component run /core/ffx-laboratory:lifecycle_manager fuchsia-pkg://fuchsia.com/lifecycle-example-rust#meta/lifecycle_manager.cm
-    ```
+```bash
+$ ffx component run /core/ffx-laboratory:lifecycle_manager fuchsia-pkg://fuchsia.com/lifecycle-example-rust#meta/lifecycle_manager.cm
+```
 
 When the above command is run, you can see the following output with `fx log`:
 
@@ -93,6 +100,6 @@ $ ffx component destroy /core/ffx-laboratory:lifecycle_manager
 
 When the above command is run, you can see the following output with `fx log`:
 
-```bash
+```
 [lifecycle_manager/lifecycle][I] Received request to stop. Shutting down.
 ```

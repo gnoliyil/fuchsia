@@ -20,16 +20,16 @@ fuchsia_component("echo_realm") {
 fuchsia_package("components-routing-example-rust") {
   deps = [
     ":echo_realm",
-    "rust/echo_client:echo_client_component",
-    "rust/echo_server:echo_server_component",
+    "rust/echo_client:echo_client_cmp",
+    "rust/echo_server:echo_server_cmp",
   ]
 }
 
 fuchsia_package("components-routing-example-cpp") {
   deps = [
     ":echo_realm",
-    "cpp/echo_client:echo_client_component",
-    "cpp/echo_server:echo_server_component",
+    "cpp/echo_client:echo_client_cmp",
+    "cpp/echo_server:echo_server_cmp",
   ]
 }
 

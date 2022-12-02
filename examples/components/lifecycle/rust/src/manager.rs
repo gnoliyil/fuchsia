@@ -74,7 +74,7 @@ async fn create_dynamic_child() {
     let mut collection_ref = CollectionRef { name: String::from("echo") };
     let child_decl = Child {
         name: Some(String::from("lifecycle_dynamic")),
-        url: Some(String::from("#meta/echo_server.cm")),
+        url: Some(String::from("echo_server#meta/default.cm")),
         startup: Some(StartupMode::Lazy),
         ..Child::EMPTY
     };

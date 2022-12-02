@@ -49,7 +49,7 @@ class ChildRequestManager {
     };
     fuchsia::component::decl::Child child_decl;
     child_decl.set_name("lifecycle_dynamic");
-    child_decl.set_url("#meta/echo_server.cm");
+    child_decl.set_url("echo_server#meta/default.cm");
     child_decl.set_startup(fuchsia::component::decl::StartupMode::LAZY);
 
     realm_proxy_->CreateChild(std::move(collection_ref), std::move(child_decl),

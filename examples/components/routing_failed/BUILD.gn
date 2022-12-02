@@ -28,7 +28,7 @@ fuchsia_package("components-routing-failed-example-rust") {
     ":echo_realm",
     ":echo_server_bad",
     "rust:echo_client",
-    "//examples/components/routing/rust/echo_server:echo_server_component",
+    "//examples/components/routing/rust/echo_server:echo_server_cmp",
   ]
 }
 
@@ -37,6 +37,6 @@ fuchsia_package("components-routing-failed-example-cpp") {
     ":echo_realm",
     ":echo_server_bad",
     "cpp:echo_client",
-    "//examples/components/routing/cpp/echo_server:echo_server_component",
+    "//examples/components/routing/cpp/echo_server:echo_server_cmp",
   ]
 }

@@ -313,10 +313,7 @@ group("output_dir_leaking_allowlist") {
 # subpackages) when Fuchsia makes subpackages generally available.
 group("declare_subpackages_allowlist") {
   visibility = [
-    "//examples/components/routing/integration_tests/cpp:*",
-    "//examples/components/routing/integration_tests/rust:*",
-    "//examples/components/routing/with_subpackages:*",
-    "//examples/components/subpackages:*",
+    "//examples/*",
 
     # CTF targets that need visibility
     "//sdk/ctf/release:*",

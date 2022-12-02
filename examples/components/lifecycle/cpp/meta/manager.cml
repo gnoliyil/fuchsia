@@ -31,7 +31,7 @@
     children: [
         {
             name: "lifecycle",
-            url: "#meta/lifecycle.cm",
+            url: "lifecycle#meta/default.cm",
         },
     ],
 

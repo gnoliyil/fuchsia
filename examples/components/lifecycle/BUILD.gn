@@ -9,21 +9,33 @@ group("lifecycle-example") {
   deps = [
     ":lifecycle-example-cpp",
     ":lifecycle-example-rust",
+    "cpp:lifecycle",
+    "rust:lifecycle",
   ]
 }
 
 fuchsia_package("lifecycle-example-cpp") {
-  deps = [
-    "cpp:lifecycle-component",
-    "cpp:manager-component",
-    "//examples/components/routing/cpp/echo_server:echo_server_component",
+  deps = [ "cpp:manager-component" ]
+  renameable_subpackages = [
+    {
+      name = "lifecycle"
+      package = "cpp:lifecycle"
+    },
+    {
+      package = "//examples/components/routing/cpp/echo_server"
+    },
   ]
 }
 
 fuchsia_package("lifecycle-example-rust") {
-  deps = [
-    "rust:lifecycle-component",
-    "rust:manager-component",
-    "//examples/components/routing/rust/echo_server:echo_server_component",
+  deps = [ "rust:manager-component" ]
+  renameable_subpackages = [
+    {
+      name = "lifecycle"
+      package = "rust:lifecycle"
+    },
+    {
+      package = "//examples/components/routing/rust/echo_server"
+    },
   ]
 }

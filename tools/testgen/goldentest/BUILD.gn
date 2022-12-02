@@ -24,7 +24,7 @@ group("tests") {
 # To generate new golden ex: cpp_mock
 # fx set core.qemu-x64 --with //examples/components/echo:echo-example --with //tools/testgen/goldentest:tests
 # fx build
-# ./out/default/host_x64/testgen -l ./out/default/obj/examples/components/routing/rust/echo_server/cml/echo_server_component_component_manifest_compile/echo_server.cm -o tools/testgen/goldentest/cpp_mock -c -m
+# ./out/default/host_x64/testgen -l ./out/default/obj/examples/components/routing/rust/echo_server/cml/echo_server_cmp_component_manifest_compile/echo_server.cm -o tools/testgen/goldentest/cpp_mock -c -m
 if (is_host) {
   _tools_out = "${target_gen_dir}/goldentest/host_tools"
   host_test_data("copy_testgen") {
@@ -34,22 +34,22 @@ if (is_host) {
   }
 
   _example_out = "${target_gen_dir}/goldentest/echo"
-  host_test_data("copy_echo_server_component") {
+  host_test_data("copy_echo_server_cmp") {
     sources = [ get_label_info(
-                    "//examples/components/routing/rust/echo_server:echo_server_component(${target_toolchain})",
+                    "//examples/components/routing/rust/echo_server:echo_server_cmp(${target_toolchain})",
                     "target_out_dir") +
-                "/echo_server_component_component_manifest/echo_server.cm" ]
+                "/echo_server_cmp_component_manifest/echo_server.cm" ]
     outputs = [ "${_example_out}/{{source_file_part}}" ]
-    deps = [ "//examples/components/routing/rust/echo_server:echo_server_component(${target_toolchain})" ]
+    deps = [ "//examples/components/routing/rust/echo_server:echo_server_cmp(${target_toolchain})" ]
   }
 
-  host_test_data("copy_echo_client_component") {
+  host_test_data("copy_echo_client_cmp") {
     sources = [ get_label_info(
-                    "//examples/components/routing/rust/echo_client:echo_client_component(${target_toolchain})",
+                    "//examples/components/routing/rust/echo_client:echo_client_cmp(${target_toolchain})",
                     "target_out_dir") +
-                "/echo_client_component_component_manifest/echo_client.cm" ]
+                "/echo_client_cmp_component_manifest/echo_client.cm" ]
     outputs = [ "${_example_out}/{{source_file_part}}" ]
-    deps = [ "//examples/components/routing/rust/echo_client:echo_client_component(${target_toolchain})" ]
+    deps = [ "//examples/components/routing/rust/echo_client:echo_client_cmp(${target_toolchain})" ]
   }
 
   _golden_rust_mock_path = "${target_gen_dir}/rust_mock"
@@ -97,12 +97,12 @@ if (is_host) {
   # To generate new golden
   # fx set core.qemu-x64 --with //examples/components/routing:components-routing-example --with //tools/testgen/goldentest:tests
   # fx build
-  # fx testgen -l ./out/default/obj/examples/components/routing/echo_server/cml/echo_server_component_component_manifest_compile/echo_server.cm -o tools/testgen/goldentest/rust_nomock
+  # fx testgen -l ./out/default/obj/examples/components/routing/echo_server/cml/echo_server_cmp_component_manifest_compile/echo_server.cm -o tools/testgen/goldentest/rust_nomock
   go_test("goldentest_rust_nomock") {
     library = ":goldentest_lib"
     output_name = "goldentest_rust_nomock"
     non_go_deps = [
-      ":copy_echo_server_component",
+      ":copy_echo_server_cmp",
       ":copy_testgen",
       ":golden_rust_nomock",
     ]
@@ -121,12 +121,12 @@ if (is_host) {
   # To generate new golden
   # fx set core.qemu-x64 --with //examples/components/routing:components-routing-example --with //tools/testgen/goldentest:tests
   # fx build
-  # fx testgen -l ./out/default/obj/examples/components/routing/echo_client/cml/echo_client_component_component_manifest_compile/echo_client.cm -o tools/testgen/goldentest/rust_mock -m
+  # fx testgen -l ./out/default/obj/examples/components/routing/echo_client/cml/echo_client_cmp_component_manifest_compile/echo_client.cm -o tools/testgen/goldentest/rust_mock -m
   go_test("goldentest_rust_mock") {
     library = ":goldentest_lib"
     output_name = "goldentest_rust_mock"
     non_go_deps = [
-      ":copy_echo_client_component",
+      ":copy_echo_client_cmp",
       ":copy_testgen",
       ":golden_rust_mock",
     ]
@@ -147,7 +147,7 @@ if (is_host) {
     library = ":goldentest_lib"
     output_name = "goldentest_cpp_nomock"
     non_go_deps = [
-      ":copy_echo_server_component",
+      ":copy_echo_server_cmp",
       ":copy_testgen",
       ":golden_cpp_nomock",
     ]
@@ -167,7 +167,7 @@ if (is_host) {
     library = ":goldentest_lib"
     output_name = "goldentest_cpp_mock"
     non_go_deps = [
-      ":copy_echo_server_component",
+      ":copy_echo_server_cmp",
       ":copy_testgen",
       ":golden_cpp_mock",
     ]
