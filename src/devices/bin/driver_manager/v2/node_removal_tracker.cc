@@ -35,6 +35,13 @@ void NodeRemovalTracker::NotifyRemovalComplete(void* node_ptr) {
   } else {
     LOGF(ERROR, "Tried to NotifyNoChildren without registering!");
   }
+  CheckRemovalDone();
+}
+
+void NodeRemovalTracker::CheckRemovalDone() {
+  if (fully_enumerated_ == false) {
+    return;
+  }
   int pkg_count = 0, all_count = 0;
   for (auto [ptr, value] : nodes_) {
     auto [name, node_collection, state] = value;
@@ -62,6 +69,11 @@ void NodeRemovalTracker::set_pkg_callback(fit::callback<void()> callback) {
 }
 void NodeRemovalTracker::set_all_callback(fit::callback<void()> callback) {
   all_callback_ = std::move(callback);
+}
+
+void NodeRemovalTracker::FinishEnumeration() {
+  fully_enumerated_ = true;
+  CheckRemovalDone();
 }
 
 }  // namespace dfv2

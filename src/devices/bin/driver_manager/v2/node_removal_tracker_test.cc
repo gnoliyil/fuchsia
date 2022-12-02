@@ -33,6 +33,7 @@ TEST(NodeRemovalTracker, RegisterOneNode) {
   int all_callbacks = 0;
   tracker.set_pkg_callback([&package_callbacks]() { package_callbacks++; });
   tracker.set_all_callback([&all_callbacks]() { all_callbacks++; });
+  tracker.FinishEnumeration();
   tracker.NotifyRemovalComplete(&node1);
 
   EXPECT_EQ(package_callbacks, 1);
@@ -50,6 +51,7 @@ TEST(NodeRemovalTracker, RegisterManyNodes) {
   int all_callbacks = 0;
   tracker.set_pkg_callback([&package_callbacks]() { package_callbacks++; });
   tracker.set_all_callback([&all_callbacks]() { all_callbacks++; });
+  tracker.FinishEnumeration();
   EXPECT_EQ(package_callbacks, 0);
   EXPECT_EQ(all_callbacks, 0);
   node_bank.NotifyRemovalComplete();
@@ -73,6 +75,7 @@ TEST(NodeRemovalTracker, CallbacksCallOrder) {
   tracker.set_all_callback([&all_callbacks]() { all_callbacks++; });
   EXPECT_EQ(package_callbacks, 0);
   EXPECT_EQ(all_callbacks, 0);
+  tracker.FinishEnumeration();
 
   package_node_bank.NotifyRemovalComplete();
 
@@ -97,7 +100,32 @@ TEST(NodeRemovalTracker, CallbackDeadlock) {
     package_callbacks++;
     tracker.set_all_callback([&all_callbacks]() { all_callbacks++; });
   });
+  tracker.FinishEnumeration();
   tracker.NotifyRemovalComplete(&node1);
+
+  EXPECT_EQ(package_callbacks, 1);
+  EXPECT_EQ(all_callbacks, 1);
+}
+
+// Make sure callbacks are not called until FinishEnumeration is called
+TEST(NodeRemovalTracker, FinishEnumeration) {
+  dfv2::NodeRemovalTracker tracker;
+  NodeBank node_bank(&tracker);
+  node_bank.AddNode(dfv2::Collection::kBoot, dfv2::NodeState::kRunning);
+  node_bank.AddNode(dfv2::Collection::kBoot, dfv2::NodeState::kRunning);
+  node_bank.AddNode(dfv2::Collection::kPackage, dfv2::NodeState::kRunning);
+  node_bank.AddNode(dfv2::Collection::kPackage, dfv2::NodeState::kRunning);
+  int package_callbacks = 0;
+  int all_callbacks = 0;
+  tracker.set_pkg_callback([&package_callbacks]() { package_callbacks++; });
+  tracker.set_all_callback([&all_callbacks]() { all_callbacks++; });
+  EXPECT_EQ(package_callbacks, 0);
+  EXPECT_EQ(all_callbacks, 0);
+  node_bank.NotifyRemovalComplete();
+
+  EXPECT_EQ(package_callbacks, 0);
+  EXPECT_EQ(all_callbacks, 0);
+  tracker.FinishEnumeration();
 
   EXPECT_EQ(package_callbacks, 1);
   EXPECT_EQ(all_callbacks, 1);

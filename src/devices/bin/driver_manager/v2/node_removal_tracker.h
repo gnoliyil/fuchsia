@@ -18,10 +18,15 @@ class NodeRemovalTracker {
   void RegisterNode(void* node_ptr, Collection node_collection, std::string name, NodeState state);
   void NotifyNoChildren(void* node_ptr);
   void NotifyRemovalComplete(void* node_ptr);
+  void FinishEnumeration();
+
   void set_pkg_callback(fit::callback<void()> callback);
   void set_all_callback(fit::callback<void()> callback);
 
  private:
+  void CheckRemovalDone();
+
+  bool fully_enumerated_ = false;
   std::map<void*, std::tuple<std::string, Collection, NodeState>> nodes_;
   fit::callback<void()> pkg_callback_;
   fit::callback<void()> all_callback_;

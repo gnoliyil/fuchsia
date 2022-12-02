@@ -87,10 +87,12 @@ class DriverRunner : public fidl::WireServer<fuchsia_component_runner::Component
   void ShutdownAllDrivers(fit::callback<void()> callback) override {
     removal_tracker_.set_all_callback(std::move(callback));
     root_node_->Remove(RemovalSet::kAll, &removal_tracker_);
+    removal_tracker_.FinishEnumeration();
   }
   void ShutdownPkgDrivers(fit::callback<void()> callback) override {
     removal_tracker_.set_pkg_callback(std::move(callback));
     root_node_->Remove(RemovalSet::kPackage, &removal_tracker_);
+    removal_tracker_.FinishEnumeration();
   }
 
  private:
