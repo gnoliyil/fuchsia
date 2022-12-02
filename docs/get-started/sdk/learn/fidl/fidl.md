@@ -92,7 +92,7 @@ structure:
 ```none {:.devsite-disable-click-to-copy}
 //fuchsia-codelab/echo-fidl
                   |- BUILD.bazel
-                  |- echo.fidl.cc
+                  |- echo.fidl
 ```
 
 Add a new FIDL interface file called `echo.fidl` with the following contents:
@@ -120,7 +120,7 @@ target:
 Run `bazel build` and verify that the build completes successfully:
 
 ```posix-terminal
-bazel build //fuchsia-codelab/echo-fidl:examples.routing.echo.fidl_cc
+bazel build --config=fuchsia_x64 //fuchsia-codelab/echo-fidl:examples.routing.echo.fidl_cc
 ```
 
 ### Examine the FIDL bindings
