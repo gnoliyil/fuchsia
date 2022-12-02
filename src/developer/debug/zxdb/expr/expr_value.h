@@ -65,8 +65,6 @@ class ExprValue {
   ExprValue(fxl::RefPtr<Type> symbol_type, TaggedData data,
             const ExprValueSource& source = ExprValueSource());
 
-  ~ExprValue();
-
   // Used for tests. If a SymbolType is defined, the string representation is compared since the
   // pointers may not match in practice.
   bool operator==(const ExprValue& other) const;

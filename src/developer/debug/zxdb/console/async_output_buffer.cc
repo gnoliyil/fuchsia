@@ -74,7 +74,7 @@ void AsyncOutputBuffer::Complete(fxl::RefPtr<AsyncOutputBuffer> buf) {
 }
 
 void AsyncOutputBuffer::Complete(Syntax syntax, std::string str) {
-  Append(std::move(str));
+  Append(syntax, std::move(str));
   Complete();
 }
 

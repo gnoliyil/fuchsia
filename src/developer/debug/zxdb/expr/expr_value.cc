@@ -71,8 +71,6 @@ ExprValue::ExprValue(fxl::RefPtr<Type> type, std::vector<uint8_t> data,
 ExprValue::ExprValue(fxl::RefPtr<Type> type, TaggedData buffer, const ExprValueSource& source)
     : type_(std::move(type)), source_(source), data_(std::move(buffer)) {}
 
-ExprValue::~ExprValue() = default;
-
 bool ExprValue::operator==(const ExprValue& other) const {
   // Currently this does a comparison of the raw bytes of the value. This will be fine for most
   // primitive values but will be incorrect for some composite structs.

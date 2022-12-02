@@ -6,6 +6,7 @@
 
 #include <inttypes.h>
 
+#include "src/developer/debug/zxdb/common/ref_ptr_to.h"
 #include "src/developer/debug/zxdb/expr/eval_context.h"
 #include "src/developer/debug/zxdb/expr/expr_value.h"
 #include "src/developer/debug/zxdb/expr/resolve_collection.h"
@@ -177,7 +178,8 @@ ErrOr<std::string> GetActiveRustVariantName(const fxl::RefPtr<EvalContext>& cont
 }
 
 ErrOrValue ResolveSingleVariantValue(const fxl::RefPtr<EvalContext>& context,
-                                     const ExprValue& value) {
+                                     const ExprValue& value,
+                                     fxl::RefPtr<DataMember>* member_to_return) {
   fxl::RefPtr<Type> concrete = context->GetConcreteType(value.type());
   if (!concrete)
     return Err("Missing type information.");
@@ -202,6 +204,9 @@ ErrOrValue ResolveSingleVariantValue(const fxl::RefPtr<EvalContext>& context,
   const DataMember* member = variant->data_members()[0].Get()->As<DataMember>();
   if (!member)
     return Err("Invalid data member in variant symbol.");
+
+  if (member_to_return)
+    *member_to_return = RefPtrTo(member);
 
   return ResolveNonstaticMember(context, value, FoundMember(collection, member));
 }

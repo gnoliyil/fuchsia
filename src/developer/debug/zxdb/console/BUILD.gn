@@ -25,6 +25,8 @@ static_library("console") {
     "command_utils.h",
     "commands/verb_aspace.cc",
     "commands/verb_aspace.h",
+    "commands/verb_async_backtrace.cc",
+    "commands/verb_async_backtrace.h",
     "commands/verb_attach.cc",
     "commands/verb_attach.h",
     "commands/verb_auth.cc",

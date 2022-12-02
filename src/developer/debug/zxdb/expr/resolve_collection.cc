@@ -262,7 +262,7 @@ ErrOrValue ResolveNonstaticMember(const fxl::RefPtr<EvalContext>& context, const
     if (result.has_error())
       return result.err();
 
-    cur = std::move(result.take_value());
+    cur = result.take_value();
   }
   return cur;
 }

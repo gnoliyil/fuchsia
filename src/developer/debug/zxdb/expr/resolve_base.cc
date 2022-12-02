@@ -4,19 +4,24 @@
 
 #include "src/developer/debug/zxdb/expr/resolve_base.h"
 
+#include "src/developer/debug/zxdb/common/ref_ptr_to.h"
 #include "src/developer/debug/zxdb/common/string_util.h"
 #include "src/developer/debug/zxdb/expr/cast.h"
 #include "src/developer/debug/zxdb/expr/eval_context.h"
+#include "src/developer/debug/zxdb/expr/expr_language.h"
 #include "src/developer/debug/zxdb/expr/expr_parser.h"
+#include "src/developer/debug/zxdb/expr/expr_value.h"
 #include "src/developer/debug/zxdb/expr/find_name.h"
 #include "src/developer/debug/zxdb/expr/resolve_collection.h"
 #include "src/developer/debug/zxdb/expr/resolve_ptr_ref.h"
 #include "src/developer/debug/zxdb/expr/resolve_type.h"
+#include "src/developer/debug/zxdb/symbols/arch.h"
 #include "src/developer/debug/zxdb/symbols/collection.h"
 #include "src/developer/debug/zxdb/symbols/data_member.h"
 #include "src/developer/debug/zxdb/symbols/elf_symbol.h"
 #include "src/developer/debug/zxdb/symbols/location.h"
 #include "src/developer/debug/zxdb/symbols/modified_type.h"
+#include "src/developer/debug/zxdb/symbols/symbol.h"
 #include "src/developer/debug/zxdb/symbols/symbol_utils.h"
 
 namespace zxdb {
@@ -32,6 +37,77 @@ const char kVtableMemberPrefix[] = "_vptr";
 // The Clang demangler produces this prefix for vtable symbols.
 const char kVtableSymbolNamePrefix[] = "vtable for ";
 
+// The Rust compiler produces this prefix for fat pointers.
+const char kFatPointerTypePrefix[] = "*mut dyn ";
+
+void PromoteRustDynPtrToDerived(const fxl::RefPtr<EvalContext>& context, ExprValue value,
+                                EvalCallback cb) {
+  // Rust fat pointer is a struct that looks like
+  //
+  // 0x000957c3:   DW_TAG_structure_type
+  //                 DW_AT_name	("*mut dyn core::future::future::Future<Output=()>")
+  //                 DW_AT_byte_size	(0x10)
+  //                 DW_AT_alignment	(8)
+  //
+  // 0x000957ca:     DW_TAG_member
+  //                   DW_AT_name	("pointer")
+  //                   DW_AT_type	(0x000957e1 "dyn core::future::future::Future<Output=()> *")
+  //                   DW_AT_alignment	(8)
+  //                   DW_AT_data_member_location	(0x00)
+  //
+  // 0x000957d5:     DW_TAG_member
+  //                   DW_AT_name	("vtable")
+  //                   DW_AT_type	(0x00094332 "usize (*)[3]")
+  //                   DW_AT_alignment	(8)
+  //                   DW_AT_data_member_location	(0x08)
+  //
+  // 0x000957e0:     NULL
+
+  fxl::RefPtr<Collection> coll_type = context->GetConcreteTypeAs<Collection>(value.type());
+  if (!coll_type || !StringStartsWith(coll_type->GetAssignedName(), kFatPointerTypePrefix))
+    return cb(std::move(value));
+
+  // Extract pointer and vtable from the fat pointer.
+  ErrOrValue pointer_val = ResolveNonstaticMember(context, value, {"pointer"});
+  ErrOrValue vtable_val = ResolveNonstaticMember(context, value, {"vtable"});
+  TargetPointer vtable = 0;
+  if (pointer_val.has_error() || vtable_val.has_error() ||
+      vtable_val.value().PromoteTo64(&vtable).has_error())
+    return cb(std::move(value));
+
+  // Derive types from the vtable.
+  //
+  // One approach is to find the DW_TAG_variable at the address |vtable|, but we don't have such
+  // index to resolve addresses to variables. Instead, we read the first member of the vtable which
+  // is the address of |core::ptr::drop_in_place<DerivedType>(DerivedType*)| and get the type of
+  // the first parameter.
+
+  // Read the memory directly to bypass type manipulations.
+  context->GetDataProvider()->GetMemoryAsync(
+      vtable, sizeof(TargetPointer),
+      [cb = std::move(cb), value, context, pointer = pointer_val.value()](
+          const Err& err, std::vector<uint8_t> data) mutable {
+        if (err.has_error())
+          return cb(std::move(value));
+
+        // Assume the same endian.
+        TargetPointer drop_in_place_addr = *reinterpret_cast<TargetPointer*>(data.data());
+        Location loc = context->GetLocationForAddress(drop_in_place_addr);
+        if (!loc.symbol())
+          return cb(std::move(value));
+
+        const Function* func = loc.symbol().Get()->As<Function>();
+        if (!func || func->parameters().empty())
+          return cb(std::move(value));
+
+        // Function parameter is a Variable.
+        const Type* derived = func->parameters()[0].Get()->As<Variable>()->type().Get()->As<Type>();
+        if (!derived)
+          return cb(std::move(value));
+        return cb(ExprValue(RefPtrTo(derived), pointer.data(), pointer.source()));
+      });
+}
+
 }  // namespace
 
 // The code would be a little simpler if we just tried to dereference the pointer/reference and
@@ -44,6 +120,11 @@ void PromotePtrRefToDerived(const fxl::RefPtr<EvalContext>& context, PromoteToDe
   // promotion has failed, but we can still handle the original base class pointer.
   if (!value.type())
     return cb(std::move(value));
+
+  // Rust uses a fat pointer (which is a struct type) that encodes vtable directly.
+  if (context->GetLanguage() == ExprLanguage::kRust) {
+    return PromoteRustDynPtrToDerived(context, value, std::move(cb));
+  }
 
   // Type must be the right match pointer or a reference.
   fxl::RefPtr<ModifiedType> mod_type = context->GetConcreteTypeAs<ModifiedType>(value.type());

@@ -15,7 +15,7 @@ namespace zxdb {
 class Type : public Symbol {
  public:
   // Symbol overrides.
-  const std::string& GetAssignedName() const { return assigned_name_; }
+  const std::string& GetAssignedName() const override { return assigned_name_; }
 
   // Strips "const" and "volatile", and "atomic" qualifiers, as well as the uncommon "restrict" C
   // qualifier. See StripCVT() for why most callers will want a "concrete" type. This function does
