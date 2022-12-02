@@ -1183,6 +1183,15 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn sync_client_into_channel() -> Result<(), Error> {
+        let (client_end, _server_end) = zx::Channel::create().context("chan create")?;
+        let client_end_raw = client_end.raw_handle();
+        let client = sync::Client::new(client_end, "test_protocol");
+        assert_eq!(client.into_channel().raw_handle(), client_end_raw);
+        Ok(())
+    }
+
     #[fasync::run_singlethreaded(test)]
     async fn client() {
         let (client_end, server_end) = zx::Channel::create().unwrap();
@@ -1826,6 +1835,19 @@ mod tests {
                 DynamicFlags::empty(),
             );
         }
+
+        assert!(client.into_channel().is_err());
+    }
+
+    #[fasync::run_singlethreaded(test)]
+    async fn client_into_channel_active_clone() {
+        // This test doesn't actually do any async work, but the fuchsia
+        // executor must be set up in order to create the channel.
+        let (client_end, _server_end) = zx::Channel::create().unwrap();
+        let client_end = AsyncChannel::from_channel(client_end).unwrap();
+        let client = Client::new(client_end, "test_protocol");
+
+        let _cloned_client = client.clone();
 
         assert!(client.into_channel().is_err());
     }
