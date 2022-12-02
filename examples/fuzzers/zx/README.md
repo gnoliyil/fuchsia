@@ -35,7 +35,7 @@ fx log
 In terminal 4, start the component:
 
 ```bash
-ffx component run fuchsia-pkg://fuchsia.com/example-fuzzers#meta/hello-fuzzy-world.cm --recreate
+ffx component run /core/ffx-laboratory:hello-fuzzy-world fuchsia-pkg://fuchsia.com/example-fuzzers#meta/hello-fuzzy-world.cm --recreate
 ```
 
 The log should show the component issuing many pointless system calls. The
