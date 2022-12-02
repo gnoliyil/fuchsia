@@ -5,6 +5,7 @@
 // which is a test which connects to this injected server, tests it and
 // passes back result using `fuchsia.test.Suite`
 {
+    include: [ "syslog/offer.shard.cml" ],
     children: [
         {
             name: "echo_server",
@@ -19,11 +20,6 @@
         {
             protocol: "fidl.examples.routing.echo.Echo",
             from: "#echo_server",
-            to: "#echo_gtest_client",
-        },
-        {
-            protocol: "fuchsia.logger.LogSink",
-            from: "parent",
             to: "#echo_gtest_client",
         },
     ],

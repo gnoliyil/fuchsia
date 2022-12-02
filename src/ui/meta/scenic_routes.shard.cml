@@ -23,7 +23,10 @@
 // (3) Routes **FROM** scenic to other components in the ui realm; these
 //     routes belong in the target components' routing shards.
 {
-    include: [ "//src/ui/meta/scenic_base_routes.shard.cml" ],
+    include: [
+        "//src/ui/meta/scenic_base_routes.shard.cml",
+        "syslog/offer.shard.cml",
+    ],
     children: [
         {
             // DO NOT CHANGE THIS NAME -- OTHER SHARDS DEPEND ON IT.

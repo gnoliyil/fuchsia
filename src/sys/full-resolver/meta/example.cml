@@ -4,6 +4,7 @@
 
 // [START sample]
 {
+    include: [ "syslog/offer.shard.cml" ],
     children: [
         {
             name: "full-resolver",

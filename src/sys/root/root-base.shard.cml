@@ -27,6 +27,16 @@
             to: "#startup",
         },
 
+        // We route LogSink from void to bootstrap to satisfy the requirement
+        // that LogSink is routed everywhere. Bootstrap is exposing LogSink,
+        // so it doesn't need to have a LogSink routed to it.
+        {
+            protocol: "fuchsia.logger.LogSink",
+            from: "void",
+            to: "#bootstrap",
+            availability: "optional",
+        },
+
         // Capabilities routed from "parent" at the root are either provided by
         // bootsvc through component_manager's namespace or by component_manager
         // itself as a builtin service

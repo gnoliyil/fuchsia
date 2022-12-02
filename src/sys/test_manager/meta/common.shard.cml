@@ -215,7 +215,6 @@
             protocol: [
                 // Tests can write to debug logs
                 "fuchsia.boot.WriteOnlyLog",
-                "fuchsia.logger.LogSink",
                 "fuchsia.process.Launcher",
 
                 // Tests can produce trace.
@@ -270,7 +269,6 @@
                 "fuchsia.device.NameProvider",
                 "fuchsia.feedback.CrashReporter",
                 "fuchsia.intl.PropertyProvider",
-                "fuchsia.logger.LogSink",
                 "fuchsia.net.name.Lookup",
                 "fuchsia.posix.socket.Provider",
                 "fuchsia.tracing.provider.Registry",
@@ -351,30 +349,6 @@
             ],
             from: "parent",
             to: "#system-tests",
-        },
-        {
-            protocol: "fuchsia.logger.LogSink",
-            from: "parent",
-            to: [
-                "#debug_data",
-                "#early_boot_instrumentation",
-                "#elf_test_ambient_exec_runner",
-                "#elf_test_runner",
-                "#fuzz_test_runner",
-                "#go_test_runner",
-                "#gtest_runner",
-                "#gunit_runner",
-                "#inspect_test_runner",
-                "#legacy_test_runner",
-                "#lib_loader_cache",
-                "#netemul_test_runner",
-                "#runner_memfs",
-                "#rust_test_next_vdso_runner",
-                "#rust_test_runner",
-                "#starnix_test_runners",
-                "#stress_test_runner",
-                "#test_tmpfs",
-            ],
         },
         {
             protocol: [

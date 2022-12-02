@@ -122,8 +122,9 @@ template("cm") {
 
     # Add required offer lint flags
     if (!defined(required_offers)) {
-      # TODO(fxbug.dev/93346): After soft-migration: required_offers = [ "fuchsia.logger.LogSink" ]
-      required_offers = []
+      # These offers are required in all CML that does not explicitly disable it.
+      # This behavior will eventually be the default everywhere: fxbug.dev/93346
+      required_offers = [ "fuchsia.logger.LogSink" ]
     }
 
     foreach(offer, required_offers) {

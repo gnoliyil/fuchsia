@@ -35,6 +35,11 @@ fuchsia_component("battery_manager_test") {
 
 fuchsia_test_package("battery-manager-gotests") {
   test_components = [ ":battery_manager_test" ]
+  test_specs = {
+    log_settings = {
+      max_severity = "ERROR"
+    }
+  }
   deps = [
     ":battery_manager_test_driver",
     "//src/power/battery-manager:battery_manager",

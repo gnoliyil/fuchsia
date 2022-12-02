@@ -7,6 +7,7 @@
     include: [
         // Add capabilities used by legacy sys realm and legacy shells
         "//src/sys/core/meta/svc_for_sys.core_shard.cml",
+        "syslog/offer.shard.cml",
     ],
     children: [
         {
@@ -365,44 +366,6 @@
             to: "#network",
         },
         {
-            protocol: [ "fuchsia.logger.LogSink" ],
-            from: "parent",
-            to: [
-                "#activity",
-                "#agis",
-                "#bluetooth-core",
-                "#brightness_manager",
-                "#cobalt",
-                "#cobalt_system_metrics",
-                "#debug-dash-launcher",
-                "#debug_serial",
-                "#detect",
-                "#diagnostics-kcounter",
-                "#diagnostics-persistence",
-                "#font_provider",
-                "#full-resolver",
-                "#hwinfo",
-                "#log-stats",
-                "#mdns",
-                "#network",
-                "#overnetstack",
-                "#pkg-resolver",
-                "#regulatory_region",
-                "#remote-control",
-                "#sampler",
-                "#sl4f_bridge_server",
-                "#ssh-key-manager",
-                "#starnix_manager",
-                "#stash",
-                "#stash2",
-                "#stash_secure",
-                "#sysmem_connector",
-                "#system-update-committer",
-                "#timekeeper",
-                "#vulkan_loader",
-            ],
-        },
-        {
             protocol: "fuchsia.hardware.pty.Device",
             from: "parent",
             to: "#debug-dash-launcher",
@@ -483,7 +446,6 @@
         {
             protocol: [
                 "fuchsia.diagnostics.ArchiveAccessor",
-                "fuchsia.logger.LogSink",
                 "fuchsia.sys2.RealmExplorer.root",
                 "fuchsia.sys2.RealmQuery.root",
             ],

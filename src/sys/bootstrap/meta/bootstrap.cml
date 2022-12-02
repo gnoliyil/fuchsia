@@ -157,6 +157,13 @@
         },
     ],
     offer: [
+        // Disable the required offer for Archivist
+        {
+            protocol: "fuchsia.logger.LogSink",
+            from: "void",
+            to: "#archivist",
+            availability: "optional",
+        },
         {
             protocol: [
                 "fuchsia.boot.Arguments",
@@ -804,6 +811,7 @@
             to: [
                 "#base_resolver",
                 "#boot-drivers",
+                "#console",
                 "#console-launcher",
                 "#cr50_agent",
                 "#device_name_provider",
@@ -813,14 +821,19 @@
                 "#flashmap",
                 "#fshost",
                 "#live_usb",
+                "#miscsvc",
                 "#netsvc",
                 "#pkg-drivers",
                 "#pkg_cache_resolver",
                 "#power_manager",
+                "#ptysvc",
                 "#pwrbtn-monitor",
+                "#shutdown_shim",
                 "#svchost",
+                "#sysinfo",
                 "#universe-pkg-drivers",
                 "#vboot-fwparam",
+                "#virtual_console",
             ],
         },
         {

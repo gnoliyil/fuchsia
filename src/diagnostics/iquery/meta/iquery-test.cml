@@ -5,7 +5,7 @@
     include: [
         "//src/sys/test_runners/rust/default.shard.cml",
         "//src/sys/test_runners/tmp_storage.shard.cml",
-        "syslog/client.shard.cml",
+        "syslog/use.shard.cml",
     ],
     program: {
         binary: "bin/iquery_test",

@@ -5,6 +5,7 @@
 // Example realm that provisions an Echo client and service and eagerly runs the client.
 // There is an "intended" capability route between the client and server, but it is broken.
 {
+    include: [ "syslog/offer.shard.cml" ],
     children: [
         {
             name: "echo_server",
@@ -20,14 +21,6 @@
         },
     ],
     offer: [
-        {
-            protocol: "fuchsia.logger.LogSink",
-            from: "parent",
-            to: [
-                "#echo_client",
-                "#echo_server",
-            ],
-        },
         {
             protocol: "fidl.examples.routing.echo.Echo.oops",
             from: "#echo_server",

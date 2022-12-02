@@ -6,6 +6,7 @@
 // but from other places where it is actually unavailable. We then expect the
 // children to get errors when they try to use the unavailable capability.
 {
+    include: [ "syslog/offer.shard.cml" ],
     children: [
         // A child which wants Trigger and the parent offers it from its parent
         // which doesn't actually offer Trigger to the parent.
@@ -37,15 +38,6 @@
         },
     ],
     offer: [
-        {
-            protocol: [ "fuchsia.logger.LogSink" ],
-            from: "parent",
-            to: [
-                "#child-for-offer-from-parent",
-                "#child-for-offer-from-sibling",
-                "#child-open-unrequested",
-            ],
-        },
         {
             protocol: [ "fidl.test.components.Trigger" ],
             from: "parent",

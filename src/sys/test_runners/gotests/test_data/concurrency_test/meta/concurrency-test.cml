@@ -5,6 +5,7 @@
 // to be executed in parallel to succeed as echo server will only reply back once it gets
 // 5 requests.
 {
+    include: [ "syslog/offer.shard.cml" ],
     children: [
         {
             name: "echo_server",
@@ -19,11 +20,6 @@
         {
             protocol: "fidl.examples.routing.echo.Echo",
             from: "#echo_server",
-            to: "#concurrency_test_driver",
-        },
-        {
-            protocol: "fuchsia.logger.LogSink",
-            from: "parent",
             to: "#concurrency_test_driver",
         },
     ],
