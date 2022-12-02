@@ -65,6 +65,24 @@ import("//build/group_with_inputs.gni")
 #   testonly
 #   visibility
 template("product_assembly_configuration") {
+  # Board-provided drivers shouldn't be part of the product assembly config,
+  # but we don't yet have that mechanism in place, so we will insert them here
+  # as if they are product-provided.
+  #
+  # But only include them on "minimal" feature_set_level products.  This is
+  # the default if `platform` is omitted, or `platform.feature_set_level` is
+  # unspecified.  include_board_drivers = true
+  include_board_drivers = true
+  if (defined(invoker.platform)) {
+    _platform = invoker.platform
+    if (defined(_platform.feature_set_level) &&
+        _platform.feature_set_level != "minimal") {
+      include_board_drivers = false
+    } else {
+      not_needed([ "_platform" ])
+    }
+  }
+
   labels = {
     # So it can be reused.
     target_name = target_name
@@ -121,8 +139,10 @@ template("product_assembly_configuration") {
     # This is a GN arg defined in `//build/board.gni`, and is set in the _board_
     # gni files that are imported into `args.gni`.
     board_driver_package_labels = []
-    foreach(package, board_provided_drivers) {
-      board_driver_package_labels += [ package.package_target ]
+    if (include_board_drivers) {
+      foreach(package, board_provided_drivers) {
+        board_driver_package_labels += [ package.package_target ]
+      }
     }
   }
 
@@ -244,25 +264,28 @@ template("product_assembly_configuration") {
     # is not necessary here.
     board_driver_packages = []
     board_driver_package_manifests = []
-    foreach(driver_package, board_provided_drivers) {
-      assert(defined(driver_package.package_target),
-             "board driver did not supply a package target: ${driver_package}")
-      _package_out_dir =
-          get_label_info(driver_package.package_target, "target_out_dir")
-      _package_name = get_label_info(driver_package.package_target, "name")
-      _manifest_path =
-          "${_package_out_dir}/${_package_name}/package_manifest.json"
-      _manifest_path_rebased = rebase_path(_manifest_path, root_build_dir)
+    if (include_board_drivers) {
+      foreach(driver_package, board_provided_drivers) {
+        assert(
+            defined(driver_package.package_target),
+            "board driver did not supply a package target: ${driver_package}")
+        _package_out_dir =
+            get_label_info(driver_package.package_target, "target_out_dir")
+        _package_name = get_label_info(driver_package.package_target, "name")
+        _manifest_path =
+            "${_package_out_dir}/${_package_name}/package_manifest.json"
+        _manifest_path_rebased = rebase_path(_manifest_path, root_build_dir)
 
-      board_driver_package_manifests += [ _manifest_path ]
-      board_driver_packages += [
-        # This scope needs to serialize to json and deserialize
-        # to a DriverDetails Assembly config struct
-        {
-          package = _manifest_path_rebased
-          components = driver_package.driver_components
-        },
-      ]
+        board_driver_package_manifests += [ _manifest_path ]
+        board_driver_packages += [
+          # This scope needs to serialize to json and deserialize
+          # to a DriverDetails Assembly config struct
+          {
+            package = _manifest_path_rebased
+            components = driver_package.driver_components
+          },
+        ]
+      }
     }
   }
 
