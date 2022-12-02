@@ -64,6 +64,7 @@ pub struct RunParams {
 }
 
 /// Sets the behavior of the overall run if a suite terminates with a timeout.
+#[derive(PartialEq)]
 pub enum TimeoutBehavior {
     /// Immediately terminate any suites that haven't started.
     TerminateRemaining,

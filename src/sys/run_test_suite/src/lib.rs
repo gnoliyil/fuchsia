@@ -4,6 +4,7 @@
 
 mod artifacts;
 mod cancel;
+mod connector;
 pub mod diagnostics;
 mod outcome;
 pub mod output;
@@ -14,7 +15,8 @@ mod stream_util;
 mod trace;
 
 pub use {
-    outcome::{Outcome, RunTestSuiteError, UnexpectedEventError},
+    connector::{RunBuilderConnector, SingleRunConnector},
+    outcome::{ConnectionError, Outcome, RunTestSuiteError, UnexpectedEventError},
     params::{RunParams, TestParams, TimeoutBehavior},
     run::{create_reporter, run_tests_and_get_outcome, DirectoryReporterOptions},
 };

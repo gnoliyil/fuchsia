@@ -63,6 +63,7 @@ rustc_library("lib") {
   sources = [
     "src/artifacts.rs",
     "src/cancel.rs",
+    "src/connector.rs",
     "src/diagnostics.rs",
     "src/lib.rs",
     "src/outcome.rs",

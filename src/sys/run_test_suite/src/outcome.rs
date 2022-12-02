@@ -74,6 +74,8 @@ pub enum RunTestSuiteError {
     Io(#[from] std::io::Error),
     #[error("unexpected event: {0:?}")]
     UnexpectedEvent(#[from] UnexpectedEventError),
+    #[error("Error connecting to RunBuilder protocol: {0:?}")]
+    Connection(#[from] ConnectionError),
 }
 
 /// An error returned when test manager reports an unexpected event.
@@ -122,6 +124,10 @@ pub enum UnexpectedEventError {
     MissingRequiredField { containing_struct: &'static str, field: &'static str },
 }
 
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct ConnectionError(pub anyhow::Error);
+
 /// Lifecycle of a test suite or test case.
 /// This is internal implementation for ::crate::run, but is located here so it can be reported
 /// for debugging via RunTestSuiteError.
@@ -143,6 +149,7 @@ impl RunTestSuiteError {
             Self::Launch(_) => false,
             Self::Io(_) => true,
             Self::UnexpectedEvent(_) => true,
+            Self::Connection(_) => true,
         }
     }
 }

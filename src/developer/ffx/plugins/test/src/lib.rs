@@ -2,13 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use std::fmt::Debug;
-
-use suite_definition::TestParamsOptions;
-
+mod connector;
 mod suite_definition;
 
 use {
+    crate::{connector::RunConnector, suite_definition::TestParamsOptions},
     anyhow::{anyhow, format_err, Context, Result},
     either::Either,
     errors::{ffx_bail, ffx_bail_with_code, ffx_error, ffx_error_with_code, FfxError},
@@ -23,7 +21,10 @@ use {
         consts::signal::{SIGINT, SIGTERM},
         iterator::Signals,
     },
-    std::io::{stdout, Write},
+    std::{
+        fmt::Debug,
+        io::{stdout, Write},
+    },
 };
 
 lazy_static! {
@@ -32,6 +33,16 @@ lazy_static! {
     /// Error code returned if tests time out.
     pub static ref TIMED_OUT_CODE: i32 = -fidl::Status::TIMED_OUT.into_raw();
 }
+
+/// Max number of test suites to run using a single RunBuilder connection.
+/// Since we need to make n SuiteController channels when running tests on a
+/// single RunBuilder channel, this max limits the number of channels that need
+/// to be opened before any tests are run, allowing tests to start running faster.
+/// It also limits the maximum resources that overnet needs to handle at once.
+/// This isn't set to 1 as (1 RunBuilder connection) = (1 set of debug data). Since
+/// pulling debug data off device is expensive we also want to limit the number of
+/// times this occurs.
+const SUITE_BATCH_SIZE: usize = 100;
 
 #[ffx_plugin()]
 pub async fn test(
@@ -42,12 +53,7 @@ pub async fn test(
     let remote_control =
         remote_control_result.map_err(|e| ffx_error_with_code!(*SETUP_FAILED_CODE, "{:?}", e))?;
     match cmd.subcommand {
-        TestSubCommand::Run(run) => {
-            let run_builder_proxy = testing_lib::connect_to_run_builder(&remote_control)
-                .await
-                .map_err(|e| ffx_error_with_code!(*SETUP_FAILED_CODE, "{:?}", e))?;
-            run_test(run_builder_proxy, writer, run).await
-        }
+        TestSubCommand::Run(run) => run_test(remote_control, writer, run).await,
         TestSubCommand::List(list) => {
             let query_proxy = testing_lib::connect_to_query(&remote_control)
                 .await
@@ -88,7 +94,7 @@ impl Experiments {
 }
 
 async fn run_test<W: 'static + Write + Send + Sync>(
-    proxy: ftest_manager::RunBuilderProxy,
+    remote_control: fremotecontrol::RemoteControlProxy,
     mut writer: W,
     cmd: RunCommand,
 ) -> Result<()> {
@@ -162,7 +168,7 @@ async fn run_test<W: 'static + Write + Send + Sync>(
 
     let start_time = std::time::Instant::now();
     let result = match run_test_suite_lib::run_tests_and_get_outcome(
-        proxy,
+        RunConnector::new(remote_control, SUITE_BATCH_SIZE),
         test_definitions,
         run_params,
         reporter,
@@ -179,10 +185,14 @@ async fn run_test<W: 'static + Write + Send + Sync>(
         }
         run_test_suite_lib::Outcome::Cancelled => ffx_bail!("Tests cancelled."),
         run_test_suite_lib::Outcome::Inconclusive => ffx_bail!("Inconclusive test result."),
-        run_test_suite_lib::Outcome::Error { origin } => match origin.is_internal_error() {
-            // Using anyhow instead of ffx_bail here prints a message to file a bug.
-            true => Err(anyhow!("There was an internal error running tests: {:?}", origin)),
-            false => ffx_bail!("There was an error running tests: {:?}", origin),
+        run_test_suite_lib::Outcome::Error { origin } => match &*origin {
+            run_test_suite_lib::RunTestSuiteError::Connection(conn_err) => {
+                ffx_bail_with_code!(*SETUP_FAILED_CODE, "{:?}", conn_err)
+            }
+            other if other.is_internal_error() => {
+                Err(anyhow!("There was an internal error running tests: {:?}", other))
+            }
+            other => ffx_bail!("There was an error running tests: {:?}", other),
         },
     };
     tracing::info!("run test suite duration: {:?}", start_time.elapsed().as_secs_f32());

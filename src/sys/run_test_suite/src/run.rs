@@ -6,6 +6,7 @@ use {
     crate::{
         artifacts,
         cancel::{Cancelled, NamedFutureExt, OrCancel},
+        connector::RunBuilderConnector,
         diagnostics::{self, LogDisplayConfiguration},
         outcome::{Outcome, RunTestSuiteError},
         output::{self, RunReporter, SuiteId, Timestamp},
@@ -37,19 +38,89 @@ async fn request_scheduling_options(
     Ok(())
 }
 
+struct RunState<'a> {
+    run_params: &'a RunParams,
+    final_outcome: Option<Outcome>,
+    failed_suites: u32,
+    timeout_occurred: bool,
+    cancel_occurred: bool,
+    internal_error_occurred: bool,
+}
+
+impl<'a> RunState<'a> {
+    fn new(run_params: &'a RunParams) -> Self {
+        Self {
+            run_params,
+            final_outcome: None,
+            failed_suites: 0,
+            timeout_occurred: false,
+            cancel_occurred: false,
+            internal_error_occurred: false,
+        }
+    }
+
+    fn cancel(&mut self) {
+        self.final_outcome = Some(Outcome::Cancelled);
+        self.cancel_occurred = true;
+    }
+
+    fn record_next_outcome(&mut self, next_outcome: Outcome) {
+        if next_outcome != Outcome::Passed {
+            self.failed_suites += 1;
+        }
+        match &next_outcome {
+            Outcome::Timedout => self.timeout_occurred = true,
+            Outcome::Cancelled => self.cancel_occurred = true,
+            Outcome::Error { origin } if origin.is_internal_error() => {
+                self.internal_error_occurred = true;
+            }
+            Outcome::Passed
+            | Outcome::Failed
+            | Outcome::Inconclusive
+            | Outcome::DidNotFinish
+            | Outcome::Error { .. } => (),
+        }
+
+        self.final_outcome = match (self.final_outcome.take(), next_outcome) {
+            (None, first_outcome) => Some(first_outcome),
+            (Some(outcome), Outcome::Passed) => Some(outcome),
+            (Some(_), failing_outcome) => Some(failing_outcome),
+        };
+    }
+
+    fn should_stop_run(&mut self) -> bool {
+        let stop_due_to_timeout = self.run_params.timeout_behavior
+            == TimeoutBehavior::TerminateRemaining
+            && self.timeout_occurred;
+        let stop_due_to_failures = match self.run_params.stop_after_failures.as_ref() {
+            Some(threshold) => self.failed_suites >= threshold.get(),
+            None => false,
+        };
+        stop_due_to_timeout
+            || stop_due_to_failures
+            || self.cancel_occurred
+            || self.internal_error_occurred
+    }
+
+    fn final_outcome(self) -> Outcome {
+        self.final_outcome.unwrap_or(Outcome::Passed)
+    }
+}
+
 /// Schedule and run the tests specified in |test_params|, and collect the results.
 /// Note this currently doesn't record the result or call finished() on run_reporter,
 /// the caller should do this instead.
-async fn run_tests<'a, F: 'a + Future<Output = ()> + Unpin>(
+async fn run_test_chunk<'a, F: 'a + Future<Output = ()> + Unpin>(
     builder_proxy: RunBuilderProxy,
-    test_params: impl IntoIterator<Item = TestParams>,
-    run_params: RunParams,
+    test_chunk: Vec<(TestParams, SuiteId)>,
+    run_state: &'a mut RunState<'_>,
+    run_params: &'a RunParams,
     run_reporter: &'a RunReporter,
     cancel_fut: F,
-) -> Result<Outcome, RunTestSuiteError> {
+) -> Result<(), RunTestSuiteError> {
     let mut suite_start_futs = FuturesUnordered::new();
     let mut suite_reporters = HashMap::new();
-    for (suite_id_raw, params) in test_params.into_iter().enumerate() {
+    for (params, suite_id) in test_chunk {
         let timeout = params
             .timeout_seconds
             .map(|seconds| std::time::Duration::from_secs(seconds.get() as u64));
@@ -62,8 +133,6 @@ async fn run_tests<'a, F: 'a + Future<Output = ()> + Unpin>(
             log_iterator: Some(run_params.log_protocol.unwrap_or_else(diagnostics::get_type)),
             ..fidl_fuchsia_test_manager::RunOptions::EMPTY
         };
-
-        let suite_id = SuiteId(suite_id_raw as u32);
         let suite = run_reporter.new_suite(&params.test_url, &suite_id).await?;
         suite.set_tags(params.tags).await;
         suite_reporters.insert(suite_id, suite);
@@ -84,13 +153,10 @@ async fn run_tests<'a, F: 'a + Future<Output = ()> + Unpin>(
     let (run_controller, run_server_end) = fidl::endpoints::create_proxy()?;
     let run_controller_ref = &run_controller;
     builder_proxy.build(run_server_end)?;
-    run_reporter.started(Timestamp::Unknown).await?;
     let cancel_fut = cancel_fut.shared();
     let cancel_fut_clone = cancel_fut.clone();
 
     let handle_suite_fut = async move {
-        let mut num_failed = 0;
-        let mut final_outcome = None;
         let mut stopped_prematurely = false;
         // for now, we assume that suites are run serially.
         loop {
@@ -105,7 +171,7 @@ async fn run_tests<'a, F: 'a + Future<Output = ()> + Unpin>(
                 Ok(None) => break,
                 Err(Cancelled(_)) => {
                     stopped_prematurely = true;
-                    final_outcome = Some(Outcome::Cancelled);
+                    run_state.cancel();
                     break;
                 }
             };
@@ -127,35 +193,8 @@ async fn run_tests<'a, F: 'a + Future<Output = ()> + Unpin>(
             let suite_outcome = result.unwrap_or_else(|err| Outcome::error(err));
             // We should always persist results, even if something failed.
             suite_reporter.finished().await?;
-
-            num_failed = match suite_outcome {
-                Outcome::Passed => num_failed,
-                _ => num_failed + 1,
-            };
-            let stop_due_to_timeout = match run_params.timeout_behavior {
-                TimeoutBehavior::TerminateRemaining => suite_outcome == Outcome::Timedout,
-                TimeoutBehavior::Continue => false,
-            };
-            let stop_due_to_failures = match run_params.stop_after_failures.as_ref() {
-                Some(threshold) => num_failed >= threshold.get(),
-                None => false,
-            };
-            let stop_due_to_cancellation = matches!(&suite_outcome, Outcome::Cancelled);
-            let stop_due_to_internal_error = match &suite_outcome {
-                Outcome::Error { origin } => origin.is_internal_error(),
-                _ => false,
-            };
-
-            final_outcome = match (final_outcome.take(), suite_outcome) {
-                (None, first_outcome) => Some(first_outcome),
-                (Some(outcome), Outcome::Passed) => Some(outcome),
-                (Some(_), failing_outcome) => Some(failing_outcome),
-            };
-            if stop_due_to_timeout
-                || stop_due_to_failures
-                || stop_due_to_cancellation
-                || stop_due_to_internal_error
-            {
+            run_state.record_next_outcome(suite_outcome);
+            if run_state.should_stop_run() {
                 stopped_prematurely = true;
                 break;
             }
@@ -170,7 +209,7 @@ async fn run_tests<'a, F: 'a + Future<Output = ()> + Unpin>(
                 reporter.finished().await?;
             }
         }
-        Ok(final_outcome.unwrap_or(Outcome::Passed))
+        Ok(())
     };
 
     let handle_run_events_fut = async move {
@@ -232,8 +271,54 @@ async fn run_tests<'a, F: 'a + Future<Output = ()> + Unpin>(
     // Use join instead of try_join as we want to poll the futures to completion
     // even if one fails.
     match futures::future::join(handle_suite_fut, cancellable_run_events_fut).await {
-        (Ok(outcome), Ok(())) => Ok(outcome),
+        (Ok(()), Ok(())) => Ok(()),
         (Err(e), _) | (_, Err(e)) => Err(e),
+    }
+}
+
+async fn run_tests<'a, F: 'a + Future<Output = ()> + Unpin>(
+    connector: impl RunBuilderConnector,
+    test_params: impl IntoIterator<Item = TestParams>,
+    run_params: RunParams,
+    run_reporter: &'a RunReporter,
+    cancel_fut: F,
+) -> Result<Outcome, RunTestSuiteError> {
+    let mut run_state = RunState::new(&run_params);
+    let mut test_param_iter = test_params
+        .into_iter()
+        .enumerate()
+        .map(|(id, param)| (param, SuiteId(id as u32)))
+        .peekable();
+    let cancel_fut = cancel_fut.shared();
+    loop {
+        match (test_param_iter.peek().is_some(), run_state.should_stop_run()) {
+            (false, _) => return Ok(run_state.final_outcome()),
+            (true, true) => {
+                // This indicates there are suites left, but we need to terminate early.
+                // These weren't recorded at all, so we need to drain and record they weren't
+                // started.
+                for (params, suite_id) in test_param_iter {
+                    let suite_reporter =
+                        run_reporter.new_suite(&params.test_url, &suite_id).await?;
+                    suite_reporter.set_tags(params.tags).await;
+                    suite_reporter.finished().await?;
+                }
+                return Ok(run_state.final_outcome());
+            }
+            (true, false) => {
+                let builder_proxy = connector.connect().await?;
+                let next_chunk = test_param_iter.by_ref().take(connector.batch_size()).collect();
+                run_test_chunk(
+                    builder_proxy,
+                    next_chunk,
+                    &mut run_state,
+                    &run_params,
+                    run_reporter,
+                    cancel_fut.clone(),
+                )
+                .await?;
+            }
+        }
     }
 }
 
@@ -248,14 +333,18 @@ async fn run_tests<'a, F: 'a + Future<Output = ()> + Unpin>(
 /// future resolves by passing in the receiver end of a `future::channel::oneshot`
 /// channel.
 pub async fn run_tests_and_get_outcome<F: Future<Output = ()>>(
-    builder_proxy: RunBuilderProxy,
+    connector: impl RunBuilderConnector,
     test_params: impl IntoIterator<Item = TestParams>,
     run_params: RunParams,
     run_reporter: RunReporter,
     cancel_fut: F,
 ) -> Outcome {
+    match run_reporter.started(Timestamp::Unknown).await {
+        Ok(()) => (),
+        Err(e) => return Outcome::error(e),
+    }
     let test_outcome = match run_tests(
-        builder_proxy,
+        connector,
         test_params,
         run_params,
         &run_reporter,
@@ -316,7 +405,10 @@ pub fn create_reporter<W: 'static + Write + Send + Sync>(
 mod test {
     use {
         super::*,
-        crate::output::{EntityId, InMemoryReporter},
+        crate::{
+            connector::SingleRunConnector,
+            output::{EntityId, InMemoryReporter},
+        },
         assert_matches::assert_matches,
         fidl::endpoints::create_proxy_and_stream,
         futures::future::join,
@@ -444,7 +536,7 @@ mod test {
 
     async fn call_run_tests(params: ParamsForRunTests) -> Outcome {
         run_tests_and_get_outcome(
-            params.builder_proxy,
+            SingleRunConnector::new(params.builder_proxy),
             params.test_params,
             RunParams {
                 timeout_behavior: TimeoutBehavior::Continue,
@@ -464,7 +556,7 @@ mod test {
 
     #[fuchsia::test]
     async fn empty_run_no_events() {
-        let (builder_proxy, run_builder_stream) =
+        let (builder_proxy, _run_builder_stream) =
             create_proxy_and_stream::<ftest_manager::RunBuilderMarker>()
                 .expect("create builder proxy");
 
@@ -472,10 +564,9 @@ mod test {
         let run_reporter = RunReporter::new(reporter.clone());
         let run_fut =
             call_run_tests(ParamsForRunTests { builder_proxy, test_params: vec![], run_reporter });
-        let fake_fut =
-            fake_running_all_suites_and_return_run_events(run_builder_stream, hashmap! {}, vec![]);
 
-        assert_eq!(join(run_fut, fake_fut).await.0, Outcome::Passed,);
+        // This should pass without ever calling test manager.
+        assert_eq!(run_fut.await, Outcome::Passed);
 
         let reports = reporter.get_reports();
         assert_eq!(1usize, reports.len());

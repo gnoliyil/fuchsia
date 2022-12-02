@@ -17,6 +17,7 @@ ffx_plugin("ffx_test") {
     "//src/lib/fidl/rust/fidl",
     "//src/lib/testing/test_list",
     "//src/sys/run_test_suite:lib",
+    "//third_party/rust_crates:async-trait",
     "//third_party/rust_crates:either",
     "//third_party/rust_crates:futures",
     "//third_party/rust_crates:lazy_static",
@@ -34,6 +35,7 @@ ffx_plugin("ffx_test") {
   args_sources = [ "src/args.rs" ]
 
   sources = [
+    "src/connector.rs",
     "src/lib.rs",
     "src/suite_definition.rs",
   ]

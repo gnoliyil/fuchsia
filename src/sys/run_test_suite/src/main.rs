@@ -157,7 +157,7 @@ async fn main() {
         .expect("connecting to RunBuilderProxy");
     let start_time = std::time::Instant::now();
     let outcome = run_test_suite_lib::run_tests_and_get_outcome(
-        proxy,
+        run_test_suite_lib::SingleRunConnector::new(proxy),
         vec![
             run_test_suite_lib::TestParams {
                 test_url,

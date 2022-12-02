@@ -55,7 +55,7 @@ fn get_name(cmd: &TestCommand) -> String {
 /// Calls on the `ffx test` library to run the given set of tests.
 async fn run_tests(
     tests: Vec<parser::TestInfo>,
-    run_proxy: ftm::RunBuilderProxy,
+    builder_proxy: ftm::RunBuilderProxy,
     output_dir: &Path,
 ) -> Result<run_test_suite_lib::Outcome> {
     let writer = Box::new(stdout());
@@ -80,7 +80,7 @@ async fn run_tests(
         Some(run_test_suite_lib::DirectoryReporterOptions { root_path: output_dir.to_path_buf() });
 
     Ok(run_test_suite_lib::run_tests_and_get_outcome(
-        run_proxy,
+        run_test_suite_lib::SingleRunConnector::new(builder_proxy),
         test_params,
         run_test_suite_lib::RunParams {
             timeout_behavior: run_test_suite_lib::TimeoutBehavior::Continue,
