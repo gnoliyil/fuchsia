@@ -43,19 +43,14 @@ pub fn validate<P: AsRef<Path>>(
     files: &[P],
     extra_schemas: &[(P, Option<String>)],
     features: &FeatureSet,
-    experimental_protocol_requirements: ProtocolRequirements<'_>,
+    protocol_requirements: ProtocolRequirements<'_>,
 ) -> Result<(), Error> {
     if files.is_empty() {
         return Err(Error::invalid_args("No files provided"));
     }
 
     for filename in files {
-        validate_file(
-            filename.as_ref(),
-            extra_schemas,
-            features,
-            &experimental_protocol_requirements,
-        )?;
+        validate_file(filename.as_ref(), extra_schemas, features, &protocol_requirements)?;
     }
     Ok(())
 }
@@ -65,9 +60,9 @@ pub fn validate_cml(
     document: &cml::Document,
     file: &Path,
     features: &FeatureSet,
-    experimental_protocol_requirements: &ProtocolRequirements<'_>,
+    protocol_requirements: &ProtocolRequirements<'_>,
 ) -> Result<(), Error> {
-    let mut ctx = ValidationContext::new(&document, features, experimental_protocol_requirements);
+    let mut ctx = ValidationContext::new(&document, features, protocol_requirements);
     let mut res = ctx.validate();
     if let Err(Error::Validate { filename, .. }) = &mut res {
         *filename = Some(file.to_string_lossy().into_owned());
@@ -80,7 +75,7 @@ fn validate_file<P: AsRef<Path>>(
     file: &Path,
     extra_schemas: &[(P, Option<String>)],
     features: &FeatureSet,
-    experimental_protocol_requirements: &ProtocolRequirements<'_>,
+    protocol_requirements: &ProtocolRequirements<'_>,
 ) -> Result<(), Error> {
     const BAD_EXTENSION: &str = "Input file does not have a component manifest extension \
                                  (.cml or .cmx)";
@@ -110,7 +105,7 @@ fn validate_file<P: AsRef<Path>>(
         }
         Some("cml") => {
             let document = util::read_cml(file)?;
-            validate_cml(&document, &file, features, experimental_protocol_requirements)?;
+            validate_cml(&document, &file, features, protocol_requirements)?;
         }
         _ => {
             return Err(Error::invalid_args(BAD_EXTENSION));

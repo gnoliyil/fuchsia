@@ -87,8 +87,8 @@ _`object` (optional)_
 The `disable` section disables certain features in a particular CML that are
 otherwise enforced by cmc.
 
-- `must_offer_protocol`: (_optional array of `string`_) Lists protocols for which the option "experimental_must_offer_protocol" is disabled.
-- `must_use_protocol`: (_optional array of `string`_) Lists protocols for which the option "experimental_must_use_protocol" is disabled.
+- `must_offer_protocol`: (_optional array of `string`_) Lists protocols for which the option "--must-offer-protocol" is disabled.
+- `must_use_protocol`: (_optional array of `string`_) Lists protocols for which the option "--must-use-protocol" is disabled.
 
 Example:
 

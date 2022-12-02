@@ -32,21 +32,21 @@ pub enum Commands {
         /// separator and the message after the path.
         extra_schemas: Vec<(PathBuf, Option<String>)>,
 
-        #[structopt(long = "experimental-must-offer-protocol")]
-        /// protocols to verify that all children and collections are offered
+        #[structopt(long = "must-offer-protocol")]
+        /// verifies that all children and collections are offered the given protocols
         ///
-        /// If specified, for each offer named, cmc will require that all children or collections
-        /// in `files` have been offered a capability named for the offer specified.  This can be
-        /// used to help find missing offers of important capabilities, like fuchsia.logger.LogSink
-        experimental_must_offer_protocol: Vec<String>,
+        /// If specified, for each protocol named, cmc will require that all children
+        /// or collections in `files` have been offered the given protocol. This can be
+        /// used to help find missing offers of capabilities like `fuchsia.logger.LogSink`
+        must_offer_protocol: Vec<String>,
 
-        #[structopt(long = "experimental-must-use-protocol")]
-        /// protocols to verify that all children and collections are used
+        #[structopt(long = "must-use-protocol")]
+        /// verifies that components use the given protocols
         ///
-        /// If specified, for each offer named, cmc will require that the offer is in a use block.
-        /// This can be used to help find missing usages of important capabilities, like
-        /// fuchsia.logger.LogSink
-        experimental_must_use_protocol: Vec<String>,
+        /// If specified, for each protocol named, cmc will require that each component in
+        /// `files` uses the given protocol. This can be used to help find missing usages
+        /// of capabilities like `fuchsia.logger.LogSink`
+        must_use_protocol: Vec<String>,
     },
 
     #[structopt(name = "validate-references")]
@@ -228,21 +228,21 @@ pub enum Commands {
         /// EXPERIMENTAL and subject to removal without warning.
         experimental_force_runner: Option<String>,
 
-        #[structopt(long = "experimental-must-offer-protocol")]
+        #[structopt(long = "must-offer-protocol")]
         /// protocols to verify that all children and collections are offered
         ///
         /// If specified, for each offer named, cmc will require that all children or collections
         /// in `files` have been offered a capability named for the offer specified.  This can be
         /// used to help find missing offers of important capabilities, like fuchsia.logger.LogSink
-        experimental_must_offer_protocol: Vec<String>,
+        must_offer_protocol: Vec<String>,
 
-        #[structopt(long = "experimental-must-use-protocol")]
+        #[structopt(long = "must-use-protocol")]
         /// protocols to verify that all children and collections are used
         ///
         /// If specified, for each offer named, cmc will require that the offer is in a use block.
         /// This can be used to help find missing usages of important capabilities, like
         /// fuchsia.logger.LogSink
-        experimental_must_use_protocol: Vec<String>,
+        must_use_protocol: Vec<String>,
     },
 
     #[structopt(name = "print-cml-reference")]

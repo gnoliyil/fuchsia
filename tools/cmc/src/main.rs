@@ -49,15 +49,15 @@ fn run_cmc() -> Result<(), Error> {
         opts::Commands::Validate {
             files,
             extra_schemas,
-            experimental_must_offer_protocol,
-            experimental_must_use_protocol,
+            must_offer_protocol,
+            must_use_protocol,
         } => validate::validate(
             &files,
             &extra_schemas,
             &features::FeatureSet::empty(),
             validate::ProtocolRequirements {
-                must_offer: &experimental_must_offer_protocol,
-                must_use: &experimental_must_use_protocol,
+                must_offer: &must_offer_protocol,
+                must_use: &must_use_protocol,
             },
         )?,
         opts::Commands::ValidateReferences { component_manifest, package_manifest, context } => {
@@ -112,8 +112,8 @@ fn run_cmc() -> Result<(), Error> {
             config_package_path,
             features,
             experimental_force_runner,
-            experimental_must_offer_protocol,
-            experimental_must_use_protocol,
+            must_offer_protocol,
+            must_use_protocol,
         } => {
             path_exists(&file)?;
             compile::compile(
@@ -126,8 +126,8 @@ fn run_cmc() -> Result<(), Error> {
                 &features.into(),
                 &experimental_force_runner,
                 validate::ProtocolRequirements {
-                    must_offer: &experimental_must_offer_protocol,
-                    must_use: &experimental_must_use_protocol,
+                    must_offer: &must_offer_protocol,
+                    must_use: &must_use_protocol,
                 },
             )?
         }

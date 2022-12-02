@@ -129,7 +129,7 @@ template("cm") {
 
     foreach(offer, required_offers) {
       args += [
-        "--experimental-must-offer-protocol",
+        "--must-offer-protocol",
         offer,
       ]
     }
@@ -140,7 +140,7 @@ template("cm") {
 
     foreach(use_decl, required_uses) {
       args += [
-        "--experimental-must-use-protocol",
+        "--must-use-protocol",
         use_decl,
       ]
     }

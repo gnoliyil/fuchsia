@@ -2388,11 +2388,11 @@ pub struct Child {
 #[serde(deny_unknown_fields)]
 #[reference_doc(fields_as = "list", top_level_doc_after_fields)]
 pub struct Disable {
-    /// Lists protocols for which the option "experimental_must_offer_protocol" is disabled.
+    /// Lists protocols for which the option "--must-offer-protocol" is disabled.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub must_offer_protocol: Option<Vec<String>>,
 
-    /// Lists protocols for which the option "experimental_must_use_protocol" is disabled.
+    /// Lists protocols for which the option "--must-use-protocol" is disabled.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub must_use_protocol: Option<Vec<String>>,
 }
