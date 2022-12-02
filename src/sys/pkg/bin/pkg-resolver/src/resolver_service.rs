@@ -447,7 +447,6 @@ pub async fn run_resolver_service(
                         dir,
                         &package_resolver,
                         &pkg_cache,
-                        base_package_index.as_ref(),
                         eager_package_manager.as_ref().as_ref(),
                         cobalt_sender.clone(),
                     )

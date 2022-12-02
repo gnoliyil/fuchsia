@@ -14,7 +14,6 @@ pub(super) async fn resolve_with_context(
     dir: fidl::endpoints::ServerEnd<fio::DirectoryMarker>,
     package_resolver: &QueuedResolver,
     pkg_cache: &pkg::cache::Client,
-    base_package_index: &pkg::BasePackageIndex,
     eager_package_manager: Option<&async_lock::RwLock<EagerPackageManager<QueuedResolver>>>,
     cobalt_sender: fidl_contrib::protocol_connector::ProtocolSender<fmetrics::MetricEvent>,
 ) -> Result<fpkg::ResolutionContext, pkg::ResolveError> {
@@ -39,7 +38,7 @@ pub(super) async fn resolve_with_context(
             .await
         }
         fuchsia_url::PackageUrl::Relative(url) => {
-            resolve_relative(&url, &context, dir, pkg_cache, base_package_index).await
+            resolve_relative(&url, &context, dir, pkg_cache).await
         }
     }
 }
@@ -49,21 +48,17 @@ async fn resolve_relative(
     context: &fpkg::ResolutionContext,
     dir: fidl::endpoints::ServerEnd<fio::DirectoryMarker>,
     pkg_cache: &pkg::cache::Client,
-    base_package_index: &pkg::BasePackageIndex,
 ) -> Result<fpkg::ResolutionContext, pkg::ResolveError> {
-    resolve_relative_impl(url, context, dir, pkg_cache, base_package_index)
-        .await
-        .map(Into::into)
-        .map_err(|e| {
-            let fidl_err = e.to_fidl_err();
-            error!(
-                "failed to resolve relative url {} with context {:?} {:#}",
-                url,
-                context,
-                anyhow!(e)
-            );
-            fidl_err
-        })
+    resolve_relative_impl(url, context, dir, pkg_cache).await.map(Into::into).map_err(|e| {
+        let fidl_err = e.to_fidl_err();
+        error!(
+            "failed to resolve relative url {} with context {:?} {:#}",
+            url,
+            context,
+            anyhow!(e)
+        );
+        fidl_err
+    })
 }
 
 async fn resolve_relative_impl(
@@ -71,7 +66,6 @@ async fn resolve_relative_impl(
     context: &fpkg::ResolutionContext,
     dir: fidl::endpoints::ServerEnd<fio::DirectoryMarker>,
     pkg_cache: &pkg::cache::Client,
-    _base_package_index: &pkg::BasePackageIndex,
 ) -> Result<pkg::ResolutionContext, ResolveWithContextError> {
     let context: pkg::ResolutionContext = context.try_into()?;
     let super_blob = if let Some(blob) = context.blob_id() {
@@ -90,19 +84,16 @@ async fn resolve_relative_impl(
         return Err(ResolveWithContextError::NotASubpackage);
     };
 
-    // Look up the subpackage and return a `MissingSubpackage` error if not
-    // found (regardless of whether it is in base or not).
-    let pkg_dir = pkg_cache
+    // Resolving the superpackage resolves all subpackages and superpackages protect subpackages
+    // from GC, so the subpackage should already be cached.
+    // https://fuchsia.dev/fuchsia-src/contribute/governance/rfcs/0154_subpackages#eager_package_loading
+    let () = pkg_cache
         .get_already_cached(subpackage)
         .await
-        .map_err(ResolveWithContextError::MissingSubpackage)?;
+        .map_err(ResolveWithContextError::MissingSubpackage)?
+        .reopen(dir)
+        .map_err(ResolveWithContextError::Reopen)?;
 
-    // The subpackages are implicitly in the same package set as their
-    // superpackage. But like blobs, may be present in the system due to
-    // different packages in different package sets.  They inherit their package
-    // set membership from their superpackage.
-
-    let () = pkg_dir.reopen(dir).map_err(ResolveWithContextError::Reopen)?;
     Ok(subpackage.into())
 }
 
