@@ -20,7 +20,4 @@
             from: "self",
         },
     ],
-    config: {
-        max_file_size: { type: "uint64" },
-    },
 }

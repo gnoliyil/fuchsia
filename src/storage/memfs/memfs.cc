@@ -4,8 +4,19 @@
 
 #include "src/storage/memfs/memfs.h"
 
+#include <fidl/fuchsia.fs/cpp/common_types.h>
+#include <lib/async/dispatcher.h>
+#include <lib/zx/event.h>
+#include <lib/zx/result.h>
+
+#include <memory>
+#include <string_view>
+
+#include <fbl/ref_ptr.h>
 #include <safemath/safe_math.h>
 
+#include "src/lib/storage/vfs/cpp/fuchsia_vfs.h"
+#include "src/lib/storage/vfs/cpp/managed_vfs.h"
 #include "src/storage/memfs/dnode.h"
 #include "src/storage/memfs/vnode_dir.h"
 
@@ -14,32 +25,6 @@ namespace memfs {
 size_t GetPageSize() {
   static const size_t kPageSize = static_cast<size_t>(zx_system_get_page_size());
   return kPageSize;
-}
-
-zx_status_t Memfs::GrowVMO(zx::vmo& vmo, size_t current_size, size_t request_size,
-                           size_t* actual_size) {
-  if (request_size <= current_size) {
-    *actual_size = current_size;
-    return ZX_OK;
-  }
-
-  size_t page_size = GetPageSize();
-  size_t aligned_len = fbl::round_up(request_size, page_size);
-  ZX_DEBUG_ASSERT(current_size % page_size == 0);
-
-  if (!vmo.is_valid()) {
-    if (zx_status_t status = zx::vmo::create(aligned_len, ZX_VMO_RESIZABLE, &vmo);
-        status != ZX_OK) {
-      return status;
-    }
-  } else {
-    if (zx_status_t status = vmo.set_size(aligned_len); status != ZX_OK) {
-      return status;
-    }
-  }
-  // vmo operation succeeded
-  *actual_size = aligned_len;
-  return ZX_OK;
 }
 
 zx::result<fs::FilesystemInfo> Memfs::GetFilesystemInfo() {
@@ -67,18 +52,12 @@ zx::result<fs::FilesystemInfo> Memfs::GetFilesystemInfo() {
 
 zx_status_t Memfs::Create(async_dispatcher_t* dispatcher, std::string_view fs_name,
                           std::unique_ptr<memfs::Memfs>* out_vfs, fbl::RefPtr<VnodeDir>* out_root) {
-  return CreateWithOptions(dispatcher, fs_name, Options(), out_vfs, out_root);
-}
-
-zx_status_t Memfs::CreateWithOptions(async_dispatcher_t* dispatcher, std::string_view fs_name,
-                                     Memfs::Options options, std::unique_ptr<memfs::Memfs>* out_vfs,
-                                     fbl::RefPtr<VnodeDir>* out_root) {
   auto fs = std::unique_ptr<memfs::Memfs>(new memfs::Memfs(dispatcher));
 
-  fbl::RefPtr<VnodeDir> root = fbl::MakeRefCounted<VnodeDir>(options.max_file_size);
+  fbl::RefPtr<VnodeDir> root = fbl::MakeRefCounted<VnodeDir>();
   std::unique_ptr<Dnode> dn = Dnode::Create(fs_name, root);
   root->dnode_ = dn.get();
-  root->dnode_parent_ = dn.get()->GetParent();
+  root->dnode_parent_ = dn->GetParent();
   fs->root_ = std::move(dn);
 
   if (zx_status_t status = zx::event::create(0, &fs->fs_id_); status != ZX_OK)
@@ -90,8 +69,6 @@ zx_status_t Memfs::CreateWithOptions(async_dispatcher_t* dispatcher, std::string
 }
 
 Memfs::Memfs(async_dispatcher_t* dispatcher) : fs::ManagedVfs(dispatcher) {}
-
-Memfs::~Memfs() = default;
 
 zx_status_t Memfs::CreateFromVmo(VnodeDir* parent, std::string_view name, zx_handle_t vmo,
                                  zx_off_t off, zx_off_t len) {

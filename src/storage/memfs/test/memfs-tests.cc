@@ -4,15 +4,25 @@
 
 #include <lib/async-loop/cpp/loop.h>
 #include <lib/async-loop/default.h>
+#include <lib/zx/stream.h>
+#include <lib/zx/vmo.h>
 #include <sys/stat.h>
+#include <zircon/errors.h>
+#include <zircon/types.h>
 
-#include <zxtest/zxtest.h>
+#include <limits>
 
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+
+#include "src/lib/testing/predicates/status.h"
 #include "src/storage/memfs/memfs.h"
 #include "src/storage/memfs/vnode_dir.h"
 
 namespace memfs {
 namespace {
+
+constexpr uint64_t kMaxFileSize = std::numeric_limits<zx_off_t>::max() - (1ull << 17) + 1;
 
 TEST(MemfsTest, DirectoryLifetime) {
   async::Loop loop(&kAsyncLoopConfigAttachToCurrentThread);
@@ -118,8 +128,8 @@ TEST(MemfsTest, LocalClone) {
   zx_off_t vmo_offset = vmo_size / 2;
 
   // Offset is required to be page aligned and non-zero.
-  ASSERT_EQ(vmo_offset % zx_system_get_page_size(), 0);
-  ASSERT_NE(vmo_offset, 0);
+  ASSERT_EQ(vmo_offset % zx_system_get_page_size(), 0ull);
+  ASSERT_NE(vmo_offset, 0ull);
 
   zx::vmo vmo;
   ASSERT_OK(zx::vmo::create(vmo_size, 0, &vmo));
@@ -150,6 +160,89 @@ TEST(MemfsTest, LocalClone) {
   ASSERT_OK(vnode_vmo.get_info(ZX_INFO_HANDLE_BASIC, &vnode_vmo_info, sizeof(vnode_vmo_info),
                                nullptr, nullptr));
   EXPECT_NE(original_vmo_info.koid, vnode_vmo_info.koid);
+}
+
+TEST(MemfsTest, TruncateZerosTail) {
+  async::Loop loop(&kAsyncLoopConfigAttachToCurrentThread);
+
+  std::unique_ptr<Memfs> vfs;
+  fbl::RefPtr<VnodeDir> root;
+  ASSERT_OK(Memfs::Create(loop.dispatcher(), "<tmp>", &vfs, &root));
+
+  fbl::RefPtr<fs::Vnode> file;
+  ASSERT_OK(root->Create("file", S_IFREG, &file));
+
+  zx::stream stream;
+  ASSERT_OK(file->CreateStream(ZX_STREAM_MODE_READ | ZX_STREAM_MODE_WRITE, &stream));
+
+  std::string data = "file-contents";
+  zx_iovec_t iov = {
+      .buffer = data.data(),
+      .capacity = data.size(),
+  };
+  size_t actual = 0;
+  ASSERT_OK(stream.writev_at(0, 500, &iov, 1, &actual));
+  ASSERT_EQ(actual, data.size());
+
+  // Shrink the file to before the write.
+  file->Truncate(300);
+  // Grow the file back to after the write.
+  file->Truncate(600);
+
+  // Verify the data is gone.
+  std::vector<char> file_contents(data.size(), 0);
+  iov.buffer = file_contents.data();
+  ASSERT_OK(stream.readv_at(0, 500, &iov, 1, &actual));
+  ASSERT_EQ(actual, data.size());
+  EXPECT_THAT(file_contents, testing::Each('\0'));
+}
+
+TEST(MemfsTest, WriteMaxFileSize) {
+  async::Loop loop(&kAsyncLoopConfigAttachToCurrentThread);
+
+  std::unique_ptr<Memfs> vfs;
+  fbl::RefPtr<VnodeDir> root;
+  ASSERT_OK(Memfs::Create(loop.dispatcher(), "<tmp>", &vfs, &root));
+
+  fbl::RefPtr<fs::Vnode> file;
+  ASSERT_OK(root->Create("file", S_IFREG, &file));
+
+  zx::stream stream;
+  ASSERT_OK(file->CreateStream(ZX_STREAM_MODE_READ | ZX_STREAM_MODE_WRITE, &stream));
+
+  std::string data = "1";
+  zx_iovec_t iov = {
+      .buffer = data.data(),
+      .capacity = data.size(),
+  };
+  size_t actual = 0;
+  ASSERT_OK(stream.writev_at(0, kMaxFileSize - 1, &iov, 1, &actual));
+  ASSERT_EQ(actual, data.size());
+  fs::VnodeAttributes attributes;
+  ASSERT_OK(file->GetAttributes(&attributes));
+  ASSERT_EQ(attributes.content_size, kMaxFileSize);
+
+  // Try to write beyond the max file size.
+  ASSERT_STATUS(stream.writev_at(0, kMaxFileSize, &iov, 1, &actual), ZX_ERR_OUT_OF_RANGE);
+}
+
+TEST(MemfsTest, TruncateToMaxFileSize) {
+  async::Loop loop(&kAsyncLoopConfigAttachToCurrentThread);
+
+  std::unique_ptr<Memfs> vfs;
+  fbl::RefPtr<VnodeDir> root;
+  ASSERT_OK(Memfs::Create(loop.dispatcher(), "<tmp>", &vfs, &root));
+
+  fbl::RefPtr<fs::Vnode> file;
+  ASSERT_OK(root->Create("file", S_IFREG, &file));
+
+  ASSERT_OK(file->Truncate(kMaxFileSize));
+  fs::VnodeAttributes attributes;
+  ASSERT_OK(file->GetAttributes(&attributes));
+  ASSERT_EQ(attributes.content_size, kMaxFileSize);
+
+  // Try to truncate beyond the max file size.
+  ASSERT_STATUS(file->Truncate(kMaxFileSize + 1), ZX_ERR_OUT_OF_RANGE);
 }
 
 }  // namespace

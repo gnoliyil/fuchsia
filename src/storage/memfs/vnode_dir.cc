@@ -12,7 +12,7 @@
 
 namespace memfs {
 
-VnodeDir::VnodeDir(uint64_t max_file_size) : max_file_size_(max_file_size) {
+VnodeDir::VnodeDir() {
   link_count_ = 1;  // Implied '.'
 }
 
@@ -93,11 +93,10 @@ zx_status_t VnodeDir::Create(std::string_view name, uint32_t mode, fbl::RefPtr<f
   fbl::AllocChecker ac;
   fbl::RefPtr<memfs::Vnode> vn;
   {
-    std::lock_guard lock(mutex_);
     if (S_ISDIR(mode)) {
-      vn = fbl::AdoptRef(new (&ac) memfs::VnodeDir(max_file_size_));
+      vn = fbl::AdoptRef(new (&ac) memfs::VnodeDir());
     } else {
-      vn = fbl::AdoptRef(new (&ac) memfs::VnodeFile(max_file_size_));
+      vn = fbl::AdoptRef(new (&ac) memfs::VnodeFile());
     }
   }
 
@@ -144,7 +143,7 @@ zx_status_t VnodeDir::Rename(fbl::RefPtr<fs::Vnode> _newdir, std::string_view ol
   auto newdir = fbl::RefPtr<Vnode>::Downcast(std::move(_newdir));
 
   if (!IsDirectory() || !newdir->IsDirectory()) {
-    // Not linked into the directory hierachy.
+    // Not linked into the directory hierarchy.
     return ZX_ERR_NOT_FOUND;
   }
 

@@ -71,7 +71,6 @@ class MemfsFilesystem : public fs_test::FilesystemImpl<MemfsFilesystem> {
         .in_memory = true,
         .is_case_sensitive = true,
         .is_journaled = false,
-        .max_file_size = INT64_C(512) * 1024 * 1024,
         .name = "memfs",
         .supports_hard_links = true,
         .supports_mmap = true,

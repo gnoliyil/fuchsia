@@ -5,18 +5,20 @@
 #ifndef SRC_STORAGE_MEMFS_VNODE_FILE_H_
 #define SRC_STORAGE_MEMFS_VNODE_FILE_H_
 
+#include <lib/zx/vmo.h>
+
+#include "src/lib/storage/vfs/cpp/vfs_types.h"
 #include "src/storage/memfs/vnode.h"
 
 namespace memfs {
 
 class VnodeFile final : public Vnode {
  public:
-  explicit VnodeFile(uint64_t max_file_size);
-  ~VnodeFile() override;
+  VnodeFile() = default;
+  ~VnodeFile() final = default;
 
   fs::VnodeProtocolSet GetProtocols() const final;
 
- private:
   zx_status_t CreateStream(uint32_t stream_options, zx::stream* out_stream) final;
   void DidModifyStream() final;
 
@@ -26,14 +28,10 @@ class VnodeFile final : public Vnode {
                                      fs::VnodeRepresentation* info) final;
   zx_status_t GetVmo(fuchsia_io::wire::VmoFlags flags, zx::vmo* out_vmo) final;
 
+ private:
   zx_status_t CreateBackingStoreIfNeeded();
-  size_t GetContentSize() const;
+  uint64_t GetContentSize() const;
 
-  // Ensure the underlying vmo is filled with zero from:
-  // [start, round_up(end, PAGE_SIZE)).
-  void ZeroTail(size_t start, size_t end);
-
-  const uint64_t max_file_size_;
   zx::vmo vmo_;
 };
 

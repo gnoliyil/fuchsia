@@ -5,20 +5,22 @@
 #ifndef SRC_STORAGE_MEMFS_MEMFS_H_
 #define SRC_STORAGE_MEMFS_MEMFS_H_
 
+#include <lib/async/dispatcher.h>
+#include <lib/zx/event.h>
+#include <lib/zx/result.h>
 #include <zircon/types.h>
 
+#include <memory>
 #include <string_view>
 
 #include <fbl/ref_ptr.h>
 
+#include "src/lib/storage/vfs/cpp/fuchsia_vfs.h"
 #include "src/lib/storage/vfs/cpp/managed_vfs.h"
-#include "src/lib/storage/vfs/cpp/vfs.h"
-#include "src/lib/storage/vfs/cpp/vfs_types.h"
-#include "src/lib/storage/vfs/cpp/watcher.h"
+#include "src/storage/memfs/dnode.h"
 
 namespace memfs {
 
-class Dnode;
 class VnodeDir;
 
 // Returns the page size used by Memfs (this is just the system memory page size).
@@ -29,28 +31,13 @@ class Memfs : public fs::ManagedVfs {
   static zx_status_t Create(async_dispatcher_t* dispatcher, std::string_view fs_name,
                             std::unique_ptr<Memfs>* out_vfs, fbl::RefPtr<VnodeDir>* out_root);
 
-  struct Options {
-    uint64_t max_file_size = uint64_t{512} * 1024 * 1024;
-  };
-  static zx_status_t CreateWithOptions(async_dispatcher_t* dispatcher, std::string_view fs_name,
-                                       Options options, std::unique_ptr<Memfs>* out_vfs,
-                                       fbl::RefPtr<VnodeDir>* out_root);
-
-  ~Memfs();
+  ~Memfs() override = default;
 
   // Creates a VnodeVmo under |parent| with |name| which is backed by |vmo|.
   // N.B. The VMO will not be taken into account when calculating
   // number of allocated pages in this Memfs.
   zx_status_t CreateFromVmo(VnodeDir* parent, std::string_view name, zx_handle_t vmo, zx_off_t off,
                             zx_off_t len);
-
-  // Increases the size of the |vmo| to at least |request_size| bytes.
-  // If the VMO is invalid, it will try to create it.
-  // |current_size| is the current size of the VMO in number of bytes. It should be
-  // a multiple of page size. The new size of the VMO is returned via |actual_size|.
-  // If the new size would cause us to exceed the limit on number of pages or if the system
-  // ran out of memory, an error is returned.
-  zx_status_t GrowVMO(zx::vmo& vmo, size_t current_size, size_t request_size, size_t* actual_size);
 
   // fs::FuchsiaVfs override:
   zx::result<fs::FilesystemInfo> GetFilesystemInfo() override;

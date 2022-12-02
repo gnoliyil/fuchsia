@@ -12,7 +12,7 @@ namespace memfs {
 
 class VnodeDir final : public Vnode {
  public:
-  explicit VnodeDir(uint64_t max_file_size);
+  VnodeDir();
   ~VnodeDir() override;
 
   fs::VnodeProtocolSet GetProtocols() const final;
@@ -50,7 +50,6 @@ class VnodeDir final : public Vnode {
                                      fs::VnodeRepresentation* info) final;
   zx_status_t GetVmo(fuchsia_io::wire::VmoFlags flags, zx::vmo* out_vmo) final;
 
-  const uint64_t max_file_size_;
   fs::WatcherContainer watcher_;
 };
 

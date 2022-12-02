@@ -139,6 +139,10 @@ TEST_P(MaxFileTest, WritingBeyondMaxSupportedOffset) {
   if (!fs().GetTraits().supports_sparse_files) {
     return;
   }
+  if (fs().GetTraits().name == "memfs") {
+    // TODO(fxbug.dev/116484): Remove this when the memfs file size limit is back under off_t::max.
+    return;
+  }
   fbl::unique_fd fd(open(GetPath("foo").c_str(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR));
   ASSERT_TRUE(fd);
   ASSERT_EQ(pwrite(fd.get(), "h", 1, fs().GetTraits().max_file_size), -1);

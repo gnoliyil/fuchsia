@@ -14,8 +14,8 @@ class Dnode;
 
 class Vnode : public fs::Vnode {
  public:
-  virtual zx_status_t SetAttributes(fs::VnodeAttributesUpdate a) final;
-  virtual void Sync(SyncCallback closure) final;
+  zx_status_t SetAttributes(fs::VnodeAttributesUpdate a) final;
+  void Sync(SyncCallback closure) final;
 
   // To be more specific: Is this vnode connected into the directory hierarchy?
   // VnodeDirs can be unlinked, and this method will subsequently return false.
