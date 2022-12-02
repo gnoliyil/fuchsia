@@ -59,9 +59,10 @@ impl watch::Responder<DoNotDisturbSettings, fuchsia_zircon::Status> for DoNotDis
 }
 
 fn to_request(settings: DoNotDisturbSettings) -> Request {
-    let mut dnd_info = DoNotDisturbInfo::empty();
-    dnd_info.user_dnd = settings.user_initiated_do_not_disturb;
-    dnd_info.night_mode_dnd = settings.night_mode_initiated_do_not_disturb;
+    let dnd_info = DoNotDisturbInfo {
+        user_dnd: settings.user_initiated_do_not_disturb,
+        night_mode_dnd: settings.night_mode_initiated_do_not_disturb,
+    };
     Request::SetDnD(dnd_info)
 }
 
