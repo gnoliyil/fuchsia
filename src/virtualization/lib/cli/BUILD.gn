@@ -50,6 +50,7 @@ rustc_library("guest_cli") {
     "src/platform/host.rs",
     "src/platform/mod.rs",
     "src/stop.rs",
+    "src/wipe.rs",
   ]
 }
 

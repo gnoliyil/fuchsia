@@ -11,6 +11,7 @@ ffx_plugin("ffx_guest") {
   plugin_deps = [
     "list:ffx_guest_list",
     "stop:ffx_guest_stop",
+    "wipe:ffx_guest_wipe",
   ]
   args_sources = [ "src/args.rs" ]
 }

@@ -60,7 +60,6 @@ rustc_binary("bin") {
     "src/vsh/termina.rs",
     "src/vsh/util.rs",
     "src/vsockperf.rs",
-    "src/wipe.rs",
   ]
 }
 

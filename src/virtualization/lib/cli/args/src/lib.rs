@@ -10,7 +10,7 @@ use {
 #[cfg(not(target_os = "fuchsia"))]
 use ffx_core::ffx_command;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum GuestType {
     Debian,
     Termina,
@@ -108,7 +108,7 @@ pub enum SubCommands {
     SocatListen(SocatListenArgs),
     Vsh(VshArgs),
     VsockPerf(VsockPerfArgs),
-    Wipe(WipeArgs),
+    Wipe(crate::wipe_args::WipeArgs),
 }
 
 #[derive(FromArgs, PartialEq, Debug)]
@@ -193,13 +193,17 @@ pub struct VshArgs {
     pub args: Vec<String>,
 }
 
-#[derive(FromArgs, PartialEq, Debug)]
-/// Clears the stateful data for the target guest. Currently only termina is supported.
-#[argh(subcommand, name = "wipe")]
-pub struct WipeArgs {
-    #[argh(positional)]
-    /// type of the guest
-    pub guest_type: GuestType,
+pub mod wipe_args {
+    use super::*;
+    #[derive(FromArgs, PartialEq, Debug)]
+    /// Clears the stateful data for the target guest. Currently only termina is supported.
+    #[argh(subcommand, name = "wipe")]
+    #[cfg_attr(not(target_os = "fuchsia"), ffx_command())]
+    pub struct WipeArgs {
+        #[argh(positional)]
+        /// type of the guest
+        pub guest_type: GuestType,
+    }
 }
 
 #[derive(FromArgs, PartialEq, Debug)]

@@ -26,5 +26,5 @@ pub enum SubCommands {
     SocatListen(SocatListenArgs),
     Vsh(VshArgs),
     VsockPerf(VsockPerfArgs),
-    Wipe(WipeArgs),
+    Wipe(wipe_args::WipeArgs),
 }
