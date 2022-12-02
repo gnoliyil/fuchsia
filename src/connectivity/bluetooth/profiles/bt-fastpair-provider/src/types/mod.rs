@@ -102,11 +102,13 @@ impl From<&SharedSecret> for AccountKey {
     }
 }
 
-/// The maximum number of Account Keys that can be managed Account Keys will be evicted in an
-/// LRU manner as described in the GFPS specification.
+/// The maximum number of Account Keys that can be managed by the Fast Pair server. Account Keys
+/// will be evicted in an LRU manner as described in the GFPS specification.
+/// This limit is chosen as the minimum required by any implementation and provides ample space
+/// in the LE advertisement packet.
 /// See https://developers.google.com/nearby/fast-pair/specifications/configuration#AccountKeyList
 /// for more details.
-const MAX_ACCOUNT_KEYS: usize = 10;
+const MAX_ACCOUNT_KEYS: usize = 5;
 
 /// Manages the set of saved Account Keys.
 ///

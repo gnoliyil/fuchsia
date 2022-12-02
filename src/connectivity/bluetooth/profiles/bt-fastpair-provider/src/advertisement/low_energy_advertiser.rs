@@ -141,7 +141,10 @@ impl Stream for LowEnergyAdvertisement {
             // Per the `le.Peripheral` docs, the lifetime of the advertisement is tied to the
             // `advertise_fut`.
             self.terminated = true;
-            debug!("Low Energy advertisement finished with result: {:?}", result);
+            match result {
+                Ok(_) => debug!("LE advertisement terminated"),
+                Err(e) => warn!("LE advertisement terminated with error: {e:?}"),
+            }
             return Poll::Ready(None);
         }
 
