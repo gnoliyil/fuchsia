@@ -25,6 +25,5 @@ include /third_party/rust_crates/vendor/blocking-1.0.2/OWNERS
 include /third_party/rust_crates/vendor/pem-0.8.3/OWNERS
 include /third_party/rust_crates/vendor/tokio-1.19.2/OWNERS
 include /tools/auto_owners/OWNERS
-include /tools/cmx2cml/OWNERS
 include /tools/shush/OWNERS
 include /tools/update_crates/OWNERS
