@@ -20,6 +20,7 @@ import 'package:fuchsia_internationalization_flutter/internationalization.dart';
 import 'package:fuchsia_logger/logger.dart';
 import 'package:fuchsia_scenic/views.dart';
 import 'package:fuchsia_services/services.dart';
+import 'package:mime/mime.dart';
 
 // List of default app entries to use when app_launch_entries.json is not found.
 const _kAppDefaultEntries = <Map<String, String>>[
@@ -80,6 +81,8 @@ class StartupService extends activity.Listener {
 
   String _buildVersion = '--';
   late final List<Map<String, String>> appLaunchEntries;
+
+  late String webServerUrl;
 
   StartupService()
       : componentContext = ComponentContext.create(),
@@ -168,6 +171,9 @@ class StartupService extends activity.Listener {
         onPowerBtnPressed();
       }
     });
+
+    // Start a web server to serve static content like: license.html.
+    _startWebServer();
   }
 
   void _initPowerBtnAction() async {
@@ -248,5 +254,27 @@ class StartupService extends activity.Listener {
     _disableIdleAtStartupTimer?.cancel();
 
     onIdle(idle: state == activity.State.idle);
+  }
+
+  void _startWebServer() async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    webServerUrl = 'http://${server.address.address}:${server.port}';
+    await for (final request in server) {
+      final fileName = request.uri.path.substring(1); // eleminates '/'
+      final mimeType = lookupMimeType(fileName);
+
+      try {
+        final data = await rootBundle.load('assets/$fileName');
+        if (mimeType != null) {
+          request.response.headers.contentType = ContentType.parse(mimeType);
+        }
+        request.response.add(data.buffer.asUint8List());
+        await request.response.flush();
+      } on Exception catch (e) {
+        log.warning('Failed to load $fileName: $e');
+        request.response.statusCode = 404;
+      }
+      await request.response.close();
+    }
   }
 }

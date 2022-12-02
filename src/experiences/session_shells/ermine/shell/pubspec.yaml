@@ -9,6 +9,8 @@ environment:
 
 flutter:
   assets:
+    - assets/license.html
+    - assets/favicon.ico
     - images/Chromium-icon-2x.png
     - images/Default-icon-2x.png
     - images/Fuchsia-logo-2x.png

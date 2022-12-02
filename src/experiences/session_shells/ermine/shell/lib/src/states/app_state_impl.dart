@@ -44,8 +44,7 @@ class AppStateImpl with Disposable implements AppState {
   static const kFeedbackUrl =
       'https://fuchsia.dev/fuchsia-src/contribute/report-issue';
   static const kChromeElementManager = 'fuchsia.element.Manager-chrome';
-  static const kLicenseUrl =
-      'fuchsia-pkg://fuchsia.com/license_settings#meta/license_settings.cm';
+  static const kLicenseFileUri = 'license.html';
   static const kScreenSaverUrl =
       'fuchsia-pkg://fuchsia.com/screensaver#meta/screensaver.cm';
   static const kEnableUserFeedbackMarkerFile =
@@ -519,7 +518,8 @@ class AppStateImpl with Disposable implements AppState {
   }
 
   @override
-  void launchLicense() => launch(Strings.license, kLicenseUrl);
+  void launchLicense() => launch(
+      Strings.license, '${startupService.webServerUrl}/$kLicenseFileUri');
 
   @override
   void setTheme({bool darkTheme = true}) => _setTheme([darkTheme]);
