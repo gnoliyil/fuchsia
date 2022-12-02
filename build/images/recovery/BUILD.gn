@@ -7,6 +7,7 @@ import("//build/board.gni")
 import("//build/images/paths.gni")
 import("//build/images/vboot/vboot.gni")
 import("//build/images/zedboot/zedboot_args.gni")
+import("//build/info/info.gni")
 import("//build/testing/host_test_data.gni")
 import("//src/sys/appmgr/core_shards.gni")
 import("//src/sys/core/build/core.gni")
@@ -144,7 +145,7 @@ if (is_fuchsia) {
   }
 
   recovery_packages = board_recovery_package_labels + [
-                        "//build/info:build-info",
+                        ":build-info-recovery",
                         "//src/connectivity/location/regulatory_region:regulatory_region",
                         "//src/connectivity/network",
                         "//src/connectivity/network/netcfg:config-default",
@@ -365,5 +366,50 @@ if (is_fuchsia) {
     fshost_config = {
       gpt_all = true
     }
+  }
+
+  recovery_build_info_product = "${target_gen_dir}/product.txt"
+
+  generated_file("recovery_build_info_product") {
+    outputs = [ recovery_build_info_product ]
+    contents = "${build_info_product}_recovery"
+  }
+
+  resource_group("build-info-resources") {
+    files = [
+      {
+        source = recovery_build_info_product
+        dest = "data/product"
+      },
+      {
+        source = build_info_files.board
+        dest = "data/board"
+      },
+      {
+        source = build_info_files.version
+        dest = "data/version"
+      },
+      {
+        source = build_info_files.jiri_snapshot
+        dest = "data/snapshot"
+      },
+      {
+        source = build_info_files.latest_commit_date
+        dest = "data/latest-commit-date"
+      },
+      {
+        source = build_info_files.minimum_utc_stamp
+        dest = "data/minimum-utc-stamp"
+      },
+    ]
+    deps = [
+      ":recovery_build_info_product",
+      "//build/info:latest-commit-date",
+    ]
+  }
+
+  fuchsia_package("build-info-recovery") {
+    package_name = "build-info"
+    deps = [ ":build-info-resources" ]
   }
 }
