@@ -8,33 +8,16 @@
 #include <lib/ddk/debug.h>
 #include <lib/ddk/metadata.h>
 
-#include <fbl/auto_lock.h>
+#include <fbl/alloc_checker.h>
 
+#include "spi-child.h"
 #include "src/devices/spi/drivers/spi/spi_bind.h"
 
 namespace spi {
 
-void SpiDevice::Shutdown() {
-  fbl::AutoLock lock(&lock_);
-  if (!shutdown_) {
-    shutdown_ = true;
-    // Stop the loop so that all unbind hooks run, and all child references are released.
-    loop_.Shutdown();
-    children_.reset();
-  }
-}
+void SpiDevice::DdkRelease() { delete this; }
 
-void SpiDevice::DdkUnbind(ddk::UnbindTxn txn) {
-  Shutdown();
-  txn.Reply();
-}
-
-void SpiDevice::DdkRelease() {
-  Shutdown();
-  delete this;
-}
-
-zx_status_t SpiDevice::Create(void* ctx, zx_device_t* parent) {
+zx_status_t SpiDevice::Create(void* ctx, zx_device_t* parent, async_dispatcher_t* dispatcher) {
   ddk::SpiImplProtocolClient spi(parent);
   if (!spi.is_valid()) {
     return ZX_ERR_NO_RESOURCES;
@@ -59,8 +42,6 @@ zx_status_t SpiDevice::Create(void* ctx, zx_device_t* parent) {
     return status;
   }
 
-  async_dispatcher_t* dispatcher =
-      fdf_dispatcher_get_async_dispatcher(fdf_dispatcher_get_current_dispatcher());
   device->AddChildren(spi, dispatcher);
 
   [[maybe_unused]] auto* dummy = device.release();
@@ -82,8 +63,6 @@ void SpiDevice::AddChildren(const ddk::SpiImplProtocolClient& spi, async_dispatc
   }
   zxlogf(INFO, "%zu channels supplied.", metadata.channels().count());
 
-  fbl::AutoLock lock(&lock_);
-
   bool has_siblings = metadata.channels().count() > 1;
   for (auto& channel : metadata.channels()) {
     const auto bus_id = channel.has_bus_id() ? channel.bus_id() : 0;
@@ -98,7 +77,7 @@ void SpiDevice::AddChildren(const ddk::SpiImplProtocolClient& spi, async_dispatc
     const auto did = channel.has_did() ? channel.did() : 0;
 
     fbl::AllocChecker ac;
-    auto dev = fbl::MakeRefCountedChecked<SpiChild>(&ac, zxdev(), spi, cs, this, has_siblings);
+    std::unique_ptr<SpiChild> dev(new (&ac) SpiChild(zxdev(), spi, cs, has_siblings));
     if (!ac.check()) {
       zxlogf(ERROR, "Out of memory");
       return;
@@ -124,8 +103,11 @@ void SpiDevice::AddChildren(const ddk::SpiImplProtocolClient& spi, async_dispatc
       return;
     }
 
+    // Owned by the framework now.
+    [[maybe_unused]] auto ptr = dev.release();
+
     // Create the FIDL child.
-    auto fidl_dev = std::make_unique<SpiFidlChild>(dev->zxdev(), dev.get(), dispatcher);
+    auto fidl_dev = std::make_unique<SpiFidlChild>(ptr->zxdev(), ptr, dispatcher);
 
     auto endpoints = fidl::CreateEndpoints<fuchsia_io::Directory>();
     if (endpoints.is_error()) {
@@ -133,9 +115,9 @@ void SpiDevice::AddChildren(const ddk::SpiImplProtocolClient& spi, async_dispatc
       return;
     }
 
-    status = fidl_dev->SetUpOutgoingDirectory(std::move(endpoints->server));
+    status = fidl_dev->ServeOutgoingDirectory(std::move(endpoints->server));
     if (status != ZX_OK) {
-      zxlogf(ERROR, "could not set up outgoing directory: %s", zx_status_get_string(status));
+      zxlogf(ERROR, "could not serve outgoing directory: %s", zx_status_get_string(status));
       return;
     }
 
@@ -154,10 +136,10 @@ void SpiDevice::AddChildren(const ddk::SpiImplProtocolClient& spi, async_dispatc
     }
 
     // Owned by the framework now.
-    [[maybe_unused]] auto ptr = fidl_dev.release();
+    [[maybe_unused]] auto fidl_ptr = fidl_dev.release();
 
     // Create the Banjo child.
-    auto banjo_dev = std::make_unique<SpiBanjoChild>(dev->zxdev(), dev.get());
+    auto banjo_dev = std::make_unique<SpiBanjoChild>(ptr->zxdev(), ptr);
     if (vid || pid || did) {
       // BIND_PROTOCOL is manually specified in the bind properties instead of using the proto_id
       // arg to DdkAdd to avoid creating a /dev/class/spi entry for this node; instead, the
@@ -185,40 +167,17 @@ void SpiDevice::AddChildren(const ddk::SpiImplProtocolClient& spi, async_dispatc
     }
 
     // Owned by the framework now.
-    [[maybe_unused]] auto ptr2 = banjo_dev.release();
-
-    dev->AddRef();  // DdkAdd succeeded -- increment the counter now that the DDK has a reference.
-
-    // save a reference for cleanup
-    children_.push_back(dev);
+    [[maybe_unused]] auto banjo_ptr = banjo_dev.release();
   }
-}
-
-void SpiDevice::ConnectServer(fidl::ServerEnd<fuchsia_hardware_spi::Device> server,
-                              const fbl::RefPtr<SpiChild>& child) {
-  fbl::AutoLock lock(&lock_);
-  if (shutdown_) {
-    server.Close(ZX_ERR_ALREADY_BOUND);
-    return;
-  }
-
-  if (!loop_started_) {
-    if (zx_status_t status = loop_.StartThread("spi-child-thread"); status != ZX_OK) {
-      zxlogf(ERROR, "Failed to start async loop: %d", status);
-    } else {
-      loop_started_ = true;
-    }
-  }
-
-  fidl::BindServer(loop_.dispatcher(), std::move(server), child.get(),
-                   [child](SpiChild*, fidl::UnbindInfo,
-                           fidl::ServerEnd<fuchsia_hardware_spi::Device>) { child->DdkClose(0); });
 }
 
 static zx_driver_ops_t driver_ops = []() {
   zx_driver_ops_t ops = {};
   ops.version = DRIVER_OPS_VERSION;
-  ops.bind = SpiDevice::Create;
+  ops.bind = [](void* ctx, zx_device_t* parent) {
+    return SpiDevice::Create(
+        ctx, parent, fdf_dispatcher_get_async_dispatcher(fdf_dispatcher_get_current_dispatcher()));
+  };
   return ops;
 }();
 

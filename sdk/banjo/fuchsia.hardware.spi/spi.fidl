@@ -31,10 +31,4 @@ protocol Spi {
         status zx.status;
         rxdata vector<uint8>:MAX;
     });
-
-    /// Tells the SPI driver to start listening for fuchsia.hardware.spi messages on server.
-    /// See sdk/fidl/fuchsia.hardware.spi/spi.fidl.
-    ConnectServer(resource struct {
-        server zx.handle:CHANNEL;
-    }) -> ();
 };

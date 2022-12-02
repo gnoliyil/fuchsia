@@ -6,44 +6,26 @@
 #define SRC_DEVICES_SPI_DRIVERS_SPI_SPI_H_
 
 #include <fuchsia/hardware/spiimpl/cpp/banjo.h>
-#include <lib/async-loop/cpp/loop.h>
-#include <lib/zircon-internal/thread_annotations.h>
 
 #include <ddktl/device.h>
-#include <fbl/mutex.h>
-#include <fbl/ref_ptr.h>
-#include <fbl/vector.h>
-
-#include "spi-child.h"
 
 namespace spi {
 
 class SpiDevice;
-using SpiDeviceType = ddk::Device<SpiDevice, ddk::Unbindable>;
+using SpiDeviceType = ddk::Device<SpiDevice>;
 
 class SpiDevice : public SpiDeviceType {
  public:
-  SpiDevice(zx_device_t* parent, uint32_t bus_id)
-      : SpiDeviceType(parent), bus_id_(bus_id), loop_(&kAsyncLoopConfigNeverAttachToThread) {}
+  SpiDevice(zx_device_t* parent, uint32_t bus_id) : SpiDeviceType(parent), bus_id_(bus_id) {}
 
-  static zx_status_t Create(void* ctx, zx_device_t* parent);
+  static zx_status_t Create(void* ctx, zx_device_t* parent, async_dispatcher_t* dispatcher);
 
-  void DdkUnbind(ddk::UnbindTxn txn);
   void DdkRelease();
-
-  void ConnectServer(fidl::ServerEnd<fuchsia_hardware_spi::Device> server,
-                     const fbl::RefPtr<SpiChild>& child);
 
  private:
   void AddChildren(const ddk::SpiImplProtocolClient& spi, async_dispatcher_t* dispatcher);
-  void Shutdown();
 
-  fbl::Mutex lock_;
-  fbl::Vector<fbl::RefPtr<SpiChild>> children_ TA_GUARDED(lock_);  // Must outlive loop_
   const uint32_t bus_id_;
-  async::Loop loop_ TA_GUARDED(lock_);
-  bool loop_started_ TA_GUARDED(lock_) = false;
-  bool shutdown_ TA_GUARDED(lock_) = false;
 };
 
 }  // namespace spi

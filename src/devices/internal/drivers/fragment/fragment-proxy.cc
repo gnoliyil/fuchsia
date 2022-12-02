@@ -814,17 +814,6 @@ zx_status_t FragmentProxy::SpiExchange(const uint8_t* txdata_list, size_t txdata
   return ZX_OK;
 }
 
-void FragmentProxy::SpiConnectServer(zx::channel server) {
-  SpiProxyRequest req = {};
-  req.header.proto_id = ZX_PROTOCOL_SPI;
-  req.op = SpiOp::CONNECT_SERVER;
-
-  SpiProxyResponse resp = {};
-  zx_handle_t in_handles[] = {server.release()};
-  Rpc(&req.header, sizeof(req), &resp.header, sizeof(resp), in_handles, std::size(in_handles),
-      nullptr, 0, nullptr);
-}
-
 zx_status_t FragmentProxy::SysmemConnect(zx::channel allocator2_request) {
   SysmemProxyRequest req = {};
   ProxyResponse resp = {};

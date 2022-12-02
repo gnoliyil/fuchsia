@@ -9,12 +9,10 @@
 #include <fuchsia/hardware/spi/cpp/banjo.h>
 #include <fuchsia/hardware/spiimpl/cpp/banjo.h>
 #include <lib/sys/component/cpp/outgoing_directory.h>
-#include <lib/zircon-internal/thread_annotations.h>
+
+#include <variant>
 
 #include <ddktl/device.h>
-#include <fbl/mutex.h>
-#include <fbl/ref_counted.h>
-#include <fbl/ref_ptr.h>
 
 // This header defines three classes: SpiChild, SpiFidlChild, and SpiBanjoChild. They are arranged
 // in the node topology as follows:
@@ -36,15 +34,11 @@ class SpiChild;
 using SpiChildType = ddk::Device<SpiChild, ddk::Messageable<fuchsia_hardware_spi::Device>::Mixin,
                                  ddk::Unbindable, ddk::Openable, ddk::Closable>;
 
-class SpiChild : public SpiChildType, public fbl::RefCounted<SpiChild> {
+class SpiChild : public SpiChildType {
  public:
   SpiChild(zx_device_t* parent, ddk::SpiImplProtocolClient spi, uint32_t chip_select,
-           SpiDevice* spi_parent, bool has_siblings)
-      : SpiChildType(parent),
-        spi_(spi),
-        cs_(chip_select),
-        spi_parent_(*spi_parent),
-        has_siblings_(has_siblings) {}
+           bool has_siblings)
+      : SpiChildType(parent), spi_(spi), cs_(chip_select), has_siblings_(has_siblings) {}
 
   void DdkUnbind(ddk::UnbindTxn txn);
   void DdkRelease();
@@ -73,7 +67,9 @@ class SpiChild : public SpiChildType, public fbl::RefCounted<SpiChild> {
                          size_t* out_rxdata_actual);
   zx_status_t SpiExchange(const uint8_t* txdata_list, size_t txdata_count, uint8_t* out_rxdata_list,
                           size_t rxdata_count, size_t* out_rxdata_actual);
-  void SpiConnectServer(zx::channel server);
+
+  void Bind(async_dispatcher_t* dispatcher,
+            fidl::ServerEnd<fuchsia_hardware_spi::Device> server_end);
 
   zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags);
   zx_status_t DdkClose(uint32_t flags);
@@ -81,19 +77,23 @@ class SpiChild : public SpiChildType, public fbl::RefCounted<SpiChild> {
  private:
   const ddk::SpiImplProtocolClient spi_;
   const uint32_t cs_;
-  SpiDevice& spi_parent_;
   // False if this child is the only device on the bus.
   const bool has_siblings_;
 
-  fbl::Mutex lock_;
-  bool connected_ TA_GUARDED(lock_) = false;
-  bool shutdown_ = false;
+  using Binding = struct {
+    fidl::ServerBindingRef<fuchsia_hardware_spi::Device> binding;
+    std::optional<ddk::UnbindTxn> unbind_txn;
+  };
+  // Tri-state exclusive ownership:
+  //
+  // - std::nullopt if unowned.
+  // - std::monostate if owned by DdkOpen.
+  // - Binding if owned by `SpiFidlChild`.
+  std::optional<std::variant<std::monostate, Binding>> owner_;
 };
 
 class SpiFidlChild;
-using SpiFidlChildType =
-    ddk::Device<SpiFidlChild, ddk::Messageable<fuchsia_hardware_spi::Device>::Mixin,
-                ddk::Unbindable>;
+using SpiFidlChildType = ddk::Device<SpiFidlChild>;
 
 // An SPI child device that serves the fuchsia.hardware.spi/Device FIDL
 // protocol. Note that while SpiChild also serves this protocol, it does not
@@ -104,34 +104,11 @@ using SpiFidlChildType =
 // See SpiBanjoChild for the corresponding Banjo sibling device.
 class SpiFidlChild : public SpiFidlChildType {
  public:
-  SpiFidlChild(zx_device_t* parent, SpiChild* spi, async_dispatcher_t* dispatcher)
-      : SpiFidlChildType(parent),
-        spi_(spi),
-        outgoing_(component::OutgoingDirectory::Create(dispatcher)) {}
+  SpiFidlChild(zx_device_t* parent, SpiChild* spi, async_dispatcher_t* dispatcher);
 
-  void DdkUnbind(ddk::UnbindTxn txn);
-  void DdkRelease() { delete this; }
+  void DdkRelease();
 
-  void TransmitVector(TransmitVectorRequestView request,
-                      TransmitVectorCompleter::Sync& completer) override;
-  void ReceiveVector(ReceiveVectorRequestView request,
-                     ReceiveVectorCompleter::Sync& completer) override;
-  void ExchangeVector(ExchangeVectorRequestView request,
-                      ExchangeVectorCompleter::Sync& completer) override;
-
-  void RegisterVmo(RegisterVmoRequestView request, RegisterVmoCompleter::Sync& completer) override;
-  void UnregisterVmo(UnregisterVmoRequestView request,
-                     UnregisterVmoCompleter::Sync& completer) override;
-
-  void Transmit(TransmitRequestView request, TransmitCompleter::Sync& completer) override;
-  void Receive(ReceiveRequestView request, ReceiveCompleter::Sync& completer) override;
-  void Exchange(ExchangeRequestView request, ExchangeCompleter::Sync& completer) override;
-
-  void CanAssertCs(CanAssertCsCompleter::Sync& completer) override;
-  void AssertCs(AssertCsCompleter::Sync& completer) override;
-  void DeassertCs(DeassertCsCompleter::Sync& completer) override;
-
-  zx_status_t SetUpOutgoingDirectory(fidl::ServerEnd<fuchsia_io::Directory> server_end);
+  zx_status_t ServeOutgoingDirectory(fidl::ServerEnd<fuchsia_io::Directory> server_end);
 
  private:
   // SpiChild is the parent of SpiFidlChild so it is guaranteed to outlive it,
@@ -141,13 +118,12 @@ class SpiFidlChild : public SpiFidlChildType {
 };
 
 class SpiBanjoChild;
-using SpiBanjoChildType = ddk::Device<SpiBanjoChild, ddk::GetProtocolable, ddk::Unbindable>;
+using SpiBanjoChildType = ddk::Device<SpiBanjoChild, ddk::GetProtocolable>;
 
 class SpiBanjoChild : public SpiBanjoChildType, public ddk::SpiProtocol<SpiBanjoChild> {
  public:
   SpiBanjoChild(zx_device_t* parent, SpiChild* spi) : SpiBanjoChildType(parent), spi_(spi) {}
 
-  void DdkUnbind(ddk::UnbindTxn txn);
   void DdkRelease() { delete this; }
   zx_status_t DdkGetProtocol(uint32_t proto_id, void* out_protocol);
 
@@ -157,7 +133,6 @@ class SpiBanjoChild : public SpiBanjoChildType, public ddk::SpiProtocol<SpiBanjo
                          size_t* out_rxdata_actual);
   zx_status_t SpiExchange(const uint8_t* txdata_list, size_t txdata_count, uint8_t* out_rxdata_list,
                           size_t rxdata_count, size_t* out_rxdata_actual);
-  void SpiConnectServer(zx::channel server);
 
  private:
   // SpiChild is the parent of SpiBanjoChild so it is guaranteed to outlive it,

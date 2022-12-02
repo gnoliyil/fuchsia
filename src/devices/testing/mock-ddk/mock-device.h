@@ -333,7 +333,7 @@ namespace mock_ddk {
 // returns an error if there was a problem waiting for UnbindReply to be called.
 // This function will call unbind devices that are to be removed, and block
 // until device_unbind_reply is called.
-zx_status_t ReleaseFlaggedDevices(MockDevice* device);
+zx_status_t ReleaseFlaggedDevices(MockDevice* device, async_dispatcher_t* dispatcher = nullptr);
 
 // Sets the global minimum severity for mock-ddk logging.
 void SetMinLogSeverity(fx_log_severity_t severity);

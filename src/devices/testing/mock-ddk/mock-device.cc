@@ -4,9 +4,11 @@
 
 #include "src/devices/testing/mock-ddk/mock-device.h"
 
+#include <lib/async/cpp/task.h>
 #include <lib/component/incoming/cpp/service_client.h>
 
 #include <algorithm>
+#include <latch>
 
 MockDevice::MockDevice(device_add_args_t* args, MockDevice* parent)
     : parent_(parent), ops_(args->ops), ctx_(args->ctx), name_(args->name) {
@@ -320,11 +322,20 @@ size_t MockDevice::descendant_count() const {
 // helper functions:
 namespace {
 
-zx_status_t ProcessDeviceRemoval(MockDevice* device) {
-  device->UnbindOp();
+zx_status_t ProcessDeviceRemoval(MockDevice* device, async_dispatcher_t* dispatcher) {
+  if (dispatcher != nullptr) {
+    std::latch done(1);
+    async::PostTask(dispatcher, [&]() {
+      device->UnbindOp();
+      done.count_down();
+    });
+    done.wait();
+  } else {
+    device->UnbindOp();
+  }
   // deleting children, so use a while loop:
   while (!device->children().empty()) {
-    auto status = ProcessDeviceRemoval(device->children().back().get());
+    auto status = ProcessDeviceRemoval(device->children().back().get(), dispatcher);
     if (status != ZX_OK) {
       return status;
     }
@@ -335,21 +346,30 @@ zx_status_t ProcessDeviceRemoval(MockDevice* device) {
       return status;
     }
   }
-  device->ReleaseOp();
+  if (dispatcher != nullptr) {
+    std::latch done(1);
+    async::PostTask(dispatcher, [&]() {
+      device->ReleaseOp();
+      done.count_down();
+    });
+    done.wait();
+  } else {
+    device->ReleaseOp();
+  }
   return ZX_OK;
 }
 }  // anonymous namespace
 
-zx_status_t mock_ddk::ReleaseFlaggedDevices(MockDevice* device) {
+zx_status_t mock_ddk::ReleaseFlaggedDevices(MockDevice* device, async_dispatcher_t* dispatcher) {
   if (device->AsyncRemoveCalled()) {
-    return ProcessDeviceRemoval(device);
+    return ProcessDeviceRemoval(device, dispatcher);
   }
   // Make a vector of the child device pointers, because we might delete the child:
   std::vector<MockDevice*> children;
   std::transform(device->children().begin(), device->children().end(), std::back_inserter(children),
                  [](std::shared_ptr<MockDevice> c) -> MockDevice* { return c.get(); });
   for (auto child : children) {
-    auto ret = ReleaseFlaggedDevices(child);
+    auto ret = ReleaseFlaggedDevices(child, dispatcher);
     if (ret != ZX_OK) {
       return ret;
     }
