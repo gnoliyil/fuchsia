@@ -56,6 +56,8 @@ class FakePciroot : public ddk::PcirootProtocol<FakePciroot> {
     info_.legacy_irqs_count = legacy_irqs_.size();
     info_.irq_routing_list = routing_entries_.data();
     info_.irq_routing_count = routing_entries_.size();
+    info_.acpi_bdfs_list = acpi_devices_.data();
+    info_.acpi_bdfs_count = acpi_devices_.size();
     return info_;
   }
   FakeEcam& ecam() { return ecam_; }
@@ -66,6 +68,7 @@ class FakePciroot : public ddk::PcirootProtocol<FakePciroot> {
   auto& legacy_irqs() { return legacy_irqs_; }
   auto& routing_entries() { return routing_entries_; }
   auto& allocation_eps() { return allocation_eps_; }
+  auto& acpi_devices() { return acpi_devices_; }
 
   // Protocol methods.
   zx_status_t PcirootGetBti(uint32_t bdf, uint32_t index, zx::bti* bti) {
@@ -227,6 +230,7 @@ class FakePciroot : public ddk::PcirootProtocol<FakePciroot> {
   zx::channel sysmem_;
   std::vector<pci_legacy_irq_t> legacy_irqs_;
   std::vector<pci_irq_routing_entry_t> routing_entries_;
+  std::vector<pci_bdf_t> acpi_devices_;
 
   // Switches so tests can test error paths of PCIRoot usage.
   bool enable_get_bti_ = true;

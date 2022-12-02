@@ -4,6 +4,7 @@
 
 #include <fuchsia/hardware/pci/c/banjo.h>
 #include <fuchsia/hardware/pciroot/cpp/banjo.h>
+#include <lib/inspect/testing/cpp/zxtest/inspect.h>
 #include <lib/mmio/mmio.h>
 #include <lib/zx/bti.h>
 #include <lib/zx/clock.h>
@@ -20,12 +21,8 @@
 #include <zxtest/zxtest.h>
 
 #include "src/devices/bus/drivers/pci/bus.h"
-#include "src/devices/bus/drivers/pci/capabilities/power_management.h"
-#include "src/devices/bus/drivers/pci/common.h"
 #include "src/devices/bus/drivers/pci/test/fakes/fake_ecam.h"
 #include "src/devices/bus/drivers/pci/test/fakes/fake_pciroot.h"
-#include "src/devices/bus/drivers/pci/test/fakes/fake_upstream_node.h"
-#include "src/devices/bus/drivers/pci/upstream_node.h"
 #include "src/devices/testing/mock-ddk/mock-device.h"
 
 namespace pci {
@@ -88,7 +85,7 @@ class PciBusTests : public zxtest::Test {
 };
 
 // An encapsulated pci::Bus to allow inspection of some internal state.
-class TestBus : public pci::Bus {
+class TestBus : public inspect::InspectTestHelper, public pci::Bus {
  public:
   TestBus(zx_device_t* parent, const pciroot_protocol_t* pciroot, const pci_platform_info_t info,
           std::optional<fdf::MmioBuffer> ecam)
@@ -345,6 +342,34 @@ TEST_F(PciBusTests, ObeysHeaderTypeMultiFn) {
   ASSERT_OK(owned_bus->Initialize());
   auto* bus = owned_bus.release();
   ASSERT_EQ(bus->GetDeviceCount(), 3);
+}
+
+TEST_F(PciBusTests, Inspect) {
+  // Ensure that the Bus has at least one entry in every inspect category by setting up IRQs
+  pciroot().acpi_devices().push_back({0x0, 0x0, 0x1});
+  uint8_t vector = 0x10;
+  [[maybe_unused]] zx::interrupt bus_interrupt = AddLegacyIrqToBus(vector);
+  AddRoutingEntryToBus(/*p_dev=*/std::nullopt, /*p_func=*/std::nullopt, /*dev_id=*/0, /*a=*/vector,
+                       /*b=*/0, /*c=*/0, /*d=*/0);
+  auto owned_bus = std::make_unique<TestBus>(parent(), pciroot().proto(), pciroot().info(),
+                                             pciroot().ecam().CopyEcam());
+  ASSERT_OK(owned_bus->Initialize());
+  ASSERT_NO_FATAL_FAILURE(owned_bus->ReadInspect(owned_bus->GetInspectVmo()));
+
+  [[maybe_unused]] auto bus_node =
+      owned_bus->hierarchy().GetByPath({BusInspect::kBus.Data().data()});
+  ASSERT_NOT_NULL(bus_node);
+  EXPECT_NOT_NULL(
+      bus_node->node().get_property<inspect::StringPropertyValue>(BusInspect::kName.Data().data()));
+  EXPECT_NOT_NULL(bus_node->node().get_property<inspect::StringPropertyValue>(
+      BusInspect::kBusStart.Data().data()));
+  EXPECT_NOT_NULL(bus_node->node().get_property<inspect::StringPropertyValue>(
+      BusInspect::kBusEnd.Data().data()));
+  EXPECT_NOT_NULL(bus_node->node().get_property<inspect::StringPropertyValue>(
+      BusInspect::kSegmentGroup.Data().data()));
+  EXPECT_NOT_NULL(
+      bus_node->node().get_property<inspect::StringPropertyValue>(BusInspect::kEcam.Data().data()));
+  [[maybe_unused]] auto* bus = owned_bus.release();
 }
 
 }  // namespace pci

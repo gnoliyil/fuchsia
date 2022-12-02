@@ -24,6 +24,7 @@ source_set("user_pci") {
     "bridge.cc",
     "bus.cc",
     "bus_device_interface.cc",
+    "bus_inspect.cc",
     "capabilities/msix.cc",
     "capabilities/power_management.cc",
     "config.cc",

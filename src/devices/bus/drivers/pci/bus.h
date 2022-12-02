@@ -29,7 +29,7 @@
 #include <fbl/intrusive_wavl_tree.h>
 #include <fbl/vector.h>
 
-#include "src/devices/bus/drivers/pci/bridge.h"
+#include "lib/inspect/cpp/vmo/types.h"
 #include "src/devices/bus/drivers/pci/bus_device_interface.h"
 #include "src/devices/bus/drivers/pci/config.h"
 #include "src/devices/bus/drivers/pci/device.h"
@@ -61,6 +61,29 @@ using LegacyIrqs = std::unordered_map<uint32_t, pci_legacy_irq>;
 using SharedIrqMap = std::unordered_map<uint32_t, std::unique_ptr<SharedVector>>;
 namespace PciFidl = fuchsia_hardware_pci;
 
+class BusInspect {
+ public:
+  inline static const inspect::StringReference kBus = inspect::StringReference("Bus");
+  inline static const inspect::StringReference kDevices = inspect::StringReference("Devices");
+  inline static const inspect::StringReference kAcpiDevices =
+      inspect::StringReference("acpi devices");
+  inline static const inspect::StringReference kName = inspect::StringReference("name");
+  inline static const inspect::StringReference kBusStart = inspect::StringReference("bus start");
+  inline static const inspect::StringReference kBusEnd = inspect::StringReference("bus end");
+  inline static const inspect::StringReference kSegmentGroup =
+      inspect::StringReference("segment group");
+  inline static const inspect::StringReference kEcam = inspect::StringReference("ecam");
+  inline static const inspect::StringReference kVectors = inspect::StringReference("vectors");
+  inline static const inspect::StringReference kIrqRoutingEntries =
+      inspect::StringReference("irq routing entries");
+  inline static const inspect::StringReference kPortDeviceId =
+      inspect::StringReference("port device id");
+  inline static const inspect::StringReference kPortFunctionId =
+      inspect::StringReference("port function id");
+  inline static const inspect::StringReference kDeviceId = inspect::StringReference("device id");
+  inline static const inspect::StringReference kPins = inspect::StringReference("pins");
+};
+
 // A tree of all pci Device objects in the bus topology.
 using DeviceTree =
     fbl::WAVLTree<pci_bdf_t, fbl::RefPtr<pci::Device>, pci::Device::KeyTraitsSortByBdf>;
@@ -69,7 +92,8 @@ class Bus;
 using PciBusType = ddk::Device<Bus, ddk::Messageable<PciFidl::Bus>::Mixin>;
 class Bus : public PciBusType,
             public ddk::EmptyProtocol<ZX_PROTOCOL_PCI>,
-            public BusDeviceInterface {
+            public BusDeviceInterface,
+            public BusInspect {
  public:
   static zx_status_t Create(zx_device_t* parent);
   Bus(zx_device_t* parent, const pciroot_protocol_t* pciroot, const pci_platform_info_t info,
@@ -134,6 +158,10 @@ class Bus : public PciBusType,
   // Queues a packet informing the IRQ worker that it should exit.
   zx_status_t StopIrqWorker();
 
+  // Diagnostic methods
+  void InspectInit();
+  void InspectRecordPlatformInformation();
+
   // members
   ddk::PcirootProtocolClient pciroot_;
   const pci_platform_info_t info_;
@@ -158,6 +186,9 @@ class Bus : public PciBusType,
 
   // Diagnostics.
   inspect::Inspector inspector_;
+  inspect::Node bus_node_;
+  inspect::Node devices_node_;
+  inspect::StringArray acpi_node_;
 };
 
 zx_status_t pci_bus_bind(void* ctx, zx_device_t* parent);

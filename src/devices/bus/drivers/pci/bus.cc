@@ -104,6 +104,9 @@ zx_status_t Bus::Initialize() {
   irq_routing_entries_ =
       cpp20::span<const pci_irq_routing_entry_t>(info_.irq_routing_list, info_.irq_routing_count);
 
+  InspectInit();
+  InspectRecordPlatformInformation();
+
   // Begin our bus scan starting at our root
   ScanDownstream();
   status = ConfigureLegacyIrqs();
@@ -220,7 +223,7 @@ void Bus::ScanBus(BusScanEntry entry, std::list<BusScanEntry>* scan_list) {
       zxlogf(TRACE, "\tfound %s at %02x:%02x.%1x", (is_bridge) ? "bridge" : "device", bus_id,
              dev_id, func_id);
 
-      inspect::Node node = inspector_.GetRoot().CreateChild(config->addr());
+      inspect::Node node = devices_node_.CreateChild(config->addr());
       // If we found a bridge, add it to our bridge list and initialize /
       // enumerate it after we finish scanning this bus
       if (is_bridge) {
