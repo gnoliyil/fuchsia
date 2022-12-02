@@ -5,8 +5,9 @@
 use {
     crate::presentation_loop,
     euclid::{Point2D, Transform2D},
-    fidl::endpoints::create_proxy,
+    fidl::endpoints::{create_proxy, create_request_stream},
     fidl_fuchsia_math as fmath, fidl_fuchsia_ui_composition as ui_comp,
+    fidl_fuchsia_ui_input3::{self as ui_input3, KeyEvent},
     fidl_fuchsia_ui_pointer::{
         self as ui_pointer, MouseEvent, TouchEvent, TouchInteractionId, TouchInteractionStatus,
         TouchResponse,
@@ -16,6 +17,7 @@ use {
     fuchsia_component::client::connect_to_protocol,
     fuchsia_scenic as scenic,
     futures::channel::{mpsc, oneshot},
+    futures::StreamExt,
     once_cell::unsync::OnceCell,
     parking_lot::Mutex,
     std::collections::HashMap,
@@ -106,6 +108,12 @@ pub(super) struct View {
 
     /// Proxy to forward mouse events to test.
     mouse_input_listener: Option<test_input::MouseInputListenerProxy>,
+
+    /// Task to poll continuously for keyboard events.
+    keyboard_watched_task: OnceCell<fasync::Task<()>>,
+
+    /// Proxy to forward keyboard events to test.
+    keyboard_input_listener: Option<test_input::KeyboardInputListenerProxy>,
 }
 
 impl View {
@@ -113,6 +121,7 @@ impl View {
         mut view_creation_token: ui_views::ViewCreationToken,
         touch_input_listener: Option<test_input::TouchInputListenerProxy>,
         mouse_input_listener: Option<test_input::MouseInputListenerProxy>,
+        keyboard_input_listener: Option<test_input::KeyboardInputListenerProxy>,
     ) -> Rc<Mutex<Self>> {
         let (flatland, presentation_sender) = connect_to_flatland_and_presenter();
         let mut id_generator = scenic::flatland::IdGenerator::new();
@@ -124,15 +133,16 @@ impl View {
         let (touch_source, touch_source_request) = create_proxy::<ui_pointer::TouchSourceMarker>()
             .expect("failed to create touch source channel");
         let (mouse_source, mouse_source_request) = create_proxy::<ui_pointer::MouseSourceMarker>()
-            .expect("failed to create touch source channel");
+            .expect("failed to create mouse source channel");
         let view_bound_protocols = ui_comp::ViewBoundProtocols {
             touch_source: Some(touch_source_request),
             mouse_source: Some(mouse_source_request),
             ..ui_comp::ViewBoundProtocols::EMPTY
         };
-        let mut view_identity = ui_views::ViewIdentityOnCreation::from(
-            scenic::ViewRefPair::new().expect("failed to create view ref pair"),
-        );
+        let view_ref_pair = scenic::ViewRefPair::new().expect("failed to create view ref pair");
+        let view_ref = scenic::duplicate_view_ref(&view_ref_pair.view_ref)
+            .expect("failed to duplicate view ref");
+        let mut view_identity = ui_views::ViewIdentityOnCreation::from(view_ref_pair);
 
         // Create root transform ID.
         let root_transform_id = Self::create_transform(flatland.clone(), &mut id_generator);
@@ -183,6 +193,8 @@ impl View {
             touch_input_listener,
             mouse_watched_task: OnceCell::new(),
             mouse_input_listener,
+            keyboard_watched_task: OnceCell::new(),
+            keyboard_input_listener,
         }));
 
         let view_events_task = fasync::Task::local(Self::listen_for_view_events(
@@ -208,6 +220,13 @@ impl View {
             .mouse_watched_task
             .set(mouse_task)
             .expect("set mouse watcher task more than once");
+
+        let keyboard_task =
+            fasync::Task::local(Self::listen_for_key_events(this.clone(), view_ref));
+        this.lock()
+            .keyboard_watched_task
+            .set(keyboard_task)
+            .expect("set keyboard watcher task more than once");
 
         this
     }
@@ -545,6 +564,74 @@ impl View {
                 }
                 _ => {
                     info!("MouseSource connection closed");
+                    return;
+                }
+            }
+        }
+    }
+
+    fn get_key_report(
+        &self,
+        key_event: KeyEvent,
+    ) -> Option<test_input::KeyboardInputListenerReportTextInputRequest> {
+        if key_event.type_ != Some(fidl_fuchsia_ui_input3::KeyEventType::Pressed) {
+            return None;
+        }
+        let s = match key_event.key_meaning.unwrap() {
+            ui_input3::KeyMeaning::Codepoint(code) => {
+                char::from_u32(code).expect("key event is not a valid char").to_string()
+            }
+            ui_input3::KeyMeaning::NonPrintableKey(_) => {
+                panic!("not support NonPrintableKey");
+            }
+        };
+        Some(test_input::KeyboardInputListenerReportTextInputRequest {
+            text: Some(s),
+            ..test_input::KeyboardInputListenerReportTextInputRequest::EMPTY
+        })
+    }
+
+    fn process_key_event(&mut self, event: KeyEvent) {
+        let report = self.get_key_report(event);
+        match &self.keyboard_input_listener {
+            Some(listener) => match report {
+                Some(event) => {
+                    listener
+                        .report_text_input(event)
+                        .expect("failed to send keyboard input report");
+                }
+                None => {}
+            },
+            None => {
+                info!("no keyboard event listener");
+            }
+        }
+    }
+
+    async fn listen_for_key_events(this: Rc<Mutex<Self>>, mut view_ref: ui_views::ViewRef) {
+        let keyboard = connect_to_protocol::<fidl_fuchsia_ui_input3::KeyboardMarker>()
+            .expect("failed to connect to Keyboard service");
+        let (keyboard_client, mut keyboard_stream) =
+            create_request_stream::<ui_input3::KeyboardListenerMarker>()
+                .expect("failed to create keyboard source channel");
+
+        keyboard
+            .add_listener(&mut view_ref, keyboard_client)
+            .await
+            .expect("failed to add keyboard listener");
+        loop {
+            let listener_request = keyboard_stream.next().await;
+            match listener_request {
+                Some(Ok(ui_input3::KeyboardListenerRequest::OnKeyEvent {
+                    event,
+                    responder,
+                    ..
+                })) => {
+                    responder.send(fidl_fuchsia_ui_input3::KeyEventStatus::Handled).expect("send");
+                    this.lock().process_key_event(event);
+                }
+                _ => {
+                    info!("keyboard connection closed");
                     return;
                 }
             }
