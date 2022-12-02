@@ -23,6 +23,11 @@
 
 namespace {
 
+template <typename SyncCompleter>
+fit::callback<void(zx_status_t)> ToCallback(SyncCompleter& completer) {
+  return [completer = completer.ToAsync()](zx_status_t status) mutable { completer.Close(status); };
+}
+
 // Get the power resource from the root resource service. Not receiving the
 // startup handle is logged, but not fatal.  In test environments, it would not
 // be present.
@@ -84,15 +89,13 @@ void ShutdownManager::OnUnbound(const char* connection, fidl::UnbindInfo info) {
     LOGF(ERROR, "%s connection to ShutdownManager got unbound: %s", connection,
          info.FormatDescription().c_str());
   }
-  if (shutdown_state_ == State::kRunning) {
-    StartShutdown();
-  }
+  SignalBootShutdown(nullptr);
 }
 
 void ShutdownManager::Publish(component::OutgoingDirectory& outgoing,
                               fidl::ClientEnd<fuchsia_io::Directory> dev_io) {
   auto result = outgoing.AddProtocol<fuchsia_device_manager::Administrator>(this);
-  ZX_ASSERT(result.is_ok());
+  ZX_ASSERT_MSG(result.is_ok(), "%s", result.status_string());
 
   // We advertise the SystemStateTransition protocol in case the shutdown shim needs
   // to connect to us.
@@ -133,45 +136,50 @@ void ShutdownManager::Publish(component::OutgoingDirectory& outgoing,
 }
 
 void ShutdownManager::OnPackageShutdownComplete() {
-  // This should only be called when we are in the kPackageStopping state:
+  LOGF(INFO, "Package shutdown complete");
   ZX_ASSERT(shutdown_state_ == State::kPackageStopping);
-  shutdown_state_ = State::kBootStopping;
-  // If we have the completer from fshost, complete it
-  // Tell Driver Manager to shutdown boot drivers
-  unregister_storage_completer_->Reply(ZX_OK);
-  node_remover_->ShutdownAllDrivers(
-      fit::bind_member(this, &ShutdownManager::OnBootShutdownComplete));
+  shutdown_state_ = State::kPackageStopped;
+  for (auto& callback : package_shutdown_complete_callbacks_) {
+    callback(ZX_OK);
+  }
+  package_shutdown_complete_callbacks_.clear();
+  if (received_boot_shutdown_signal_) {
+    shutdown_state_ = State::kBootStopping;
+    // In the middle of package shutdown we were told to shutdown everything.
+    node_remover_->ShutdownAllDrivers(
+        fit::bind_member(this, &ShutdownManager::OnBootShutdownComplete));
+  }
 }
 
 void ShutdownManager::OnBootShutdownComplete() {
   ZX_ASSERT(shutdown_state_ == State::kBootStopping);
   shutdown_state_ = State::kStopped;
   SystemExecute();
+  for (auto& callback : boot_shutdown_complete_callbacks_) {
+    callback(ZX_OK);
+  }
+  boot_shutdown_complete_callbacks_.clear();
 }
 
 void ShutdownManager::UnregisterSystemStorageForShutdown(
     UnregisterSystemStorageForShutdownCompleter::Sync& completer) {
-  if (unregister_storage_completer_) {
-    // Calling Unregister twice is not allowed.
-    completer.Reply(ZX_ERR_NOT_SUPPORTED);
-  }
-  // We should never get this call after all the drivers have stopped.
-  ZX_ASSERT(shutdown_state_ != State::kStopped);
+  SignalPackageShutdown(ToCallback(completer));
+}
 
-  if (shutdown_state_ == State::kBootStopping) {
-    // We already finished stopping the drivers that rely on storage.
-    // Return right away.
-    completer.Reply(ZX_OK);
-    return;
-  }
-  // Expected case: we get the call during StorageStopping, or right before.
+void ShutdownManager::SignalPackageShutdown(fit::callback<void(zx_status_t)> cb) {
+  // Expected case: we get the call during kPackageStopping, or right before.
   // Store the completer for when we finish.
   if (shutdown_state_ == State::kRunning || shutdown_state_ == State::kPackageStopping) {
-    unregister_storage_completer_ = completer.ToAsync();
+    package_shutdown_complete_callbacks_.emplace_back(std::move(cb));
     if (shutdown_state_ == State::kRunning) {
-      StartShutdown();
+      shutdown_state_ = State::kPackageStopping;
+      node_remover_->ShutdownPkgDrivers(
+          fit::bind_member(this, &ShutdownManager::OnPackageShutdownComplete));
     }
-    return;
+  } else {
+    // Otherwise, we already finished package shutdown or we have already jumped
+    // to doing a full shutdown. Notify the callback.
+    cb(ZX_OK);
   }
 }
 
@@ -180,24 +188,27 @@ void ShutdownManager::SuspendWithoutExit(SuspendWithoutExitCompleter::Sync& comp
 }
 
 void ShutdownManager::Stop(StopCompleter::Sync& completer) {
-  ZX_ASSERT(!stop_completer_);
-
-  stop_completer_ = completer.ToAsync();
-  // Expected case: we get the call while running
-  // Store the completer for when we finish.
-  if (shutdown_state_ == State::kRunning) {
-    StartShutdown();
-  } else {
-    LOGF(ERROR, "Lifecycle::Stop() called during shutdown.");
-  }
+  lifecycle_stop_ = true;
+  SignalBootShutdown(ToCallback(completer));
 }
 
-void ShutdownManager::StartShutdown() {
-  ZX_ASSERT(shutdown_state_ == State::kRunning);
-  shutdown_state_ = State::kPackageStopping;
-  // May want to launch this as a task, to prevent re-entry.
-  node_remover_->ShutdownPkgDrivers(
-      fit::bind_member(this, &ShutdownManager::OnPackageShutdownComplete));
+void ShutdownManager::SignalBootShutdown(fit::callback<void(zx_status_t)> cb) {
+  if (cb) {
+    if (shutdown_state_ == State::kStopped) {
+      cb(ZX_OK);
+    } else {
+      boot_shutdown_complete_callbacks_.emplace_back(std::move(cb));
+    }
+  }
+  received_boot_shutdown_signal_ = true;
+  // Expected case: we get the call while running, or after we shutdown the package drivers.
+  if (shutdown_state_ == State::kRunning || shutdown_state_ == State::kPackageStopped) {
+    shutdown_state_ = State::kBootStopping;
+    node_remover_->ShutdownAllDrivers(
+        fit::bind_member(this, &ShutdownManager::OnBootShutdownComplete));
+  } else if (shutdown_state_ == State::kBootStopping) {
+    LOGF(ERROR, "SignalBootShutdown() called during shutdown.");
+  }
 }
 
 void ShutdownManager::SetTerminationSystemState(

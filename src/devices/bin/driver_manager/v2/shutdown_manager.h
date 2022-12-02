@@ -14,6 +14,8 @@
 #include <lib/zx/resource.h>
 #include <lib/zx/vmo.h>
 
+#include <list>
+
 #include "src/devices/bin/driver_manager/v2/node_remover.h"
 
 namespace dfv2 {
@@ -24,27 +26,21 @@ using fuchsia_hardware_power_statecontrol::wire::SystemPowerState;
 //   - The process could be terminated, resulting in a signal from the Lifecycle channel
 //   - The administrator interface could signal UnregisterSystemStorageForShutdown, or
 //     SuspendWithoutExit
-//   - Any of the three fidl connections could be dropped
-//  If any of these evens happen, the shutdown procedure should be started, if it is not
-//  already in progress.
-//  The state transition table is then:
+//   - Any of the fidl connections could be dropped
+//  These events can cause one of two stages of the driver shutdown to be triggered:
+//  Package Shutdown:  The shutdown manager signals the node_remover to shut down all package
+//  drivers; ie: drivers that depend on storage and fshost.
+//  Boot/All Shutdown:  The shutdown manager signals the node_remover to shut down all drivers.
 //
-//  [kRunning]
-//      |
-//  StartShutdown <--- Some event that triggers shutdown
-//     \|/
-//  [kPackageStopping]---OnPackageShutdownComplete
-//                                 \|/
-//                            [kBootStopping] ----OnBootShutdownComplete
-//                                                         \|/
-//                                                     [kStopped]
-//
-//  OnPackageShutdownComplete and OnBootShutdownComplete are callbacks from the entity in charge
-//  of shutting down drivers.  Shutdown triggering events that occur while shutdown is in progress
-//  have no effect on the shutdown process, although some events may cause an error to be logged.
-//  After shutting down the package and boot drivers, the system is signalled to stop in some
-//  manner, dictated by what is set by SetTerminationSystemState.  The default state, which is
-//  invoked if there is some error, is REBOOT.
+//  When the node_remover signals it has completed removing the package drivers,
+//  The Shutdown Manager will transition to kPackageStopped.  If something has signaled the
+//  Shutdown Manager to shutdown the boot drivers in that time, the shutdown manager will
+//  transition to shutting down boot drivers immediately after the package drivers are removed.
+//  Otherwise, the Shutdown Manager will wait for an invocation of SignalBootShutdown before
+//  shutting down boot drivers.
+//  Either way, when boot drivers are fully shutdown, the Shutdown Manager will signal the
+//  system to stop in some manner, dictated by what is set by SetTerminationSystemState.
+//  The default state, which is invoked if there is some error, is REBOOT.
 //  Any errors in the shutdown process are logged, but ulimately do not stop the shutdown.
 //  SetTerminationSystemState and SetMexecZbis are accepted in all stages except STOPPED
 //  The ShutdownManager is not thread safe. It assumes that all channels will be dispatched
@@ -60,10 +56,12 @@ class ShutdownManager : public fidl::WireServer<fuchsia_device_manager::Administ
     // The devices whose's drivers live in storage are stopped or in the middle of being
     // stopped.
     kPackageStopping = 1u,
+    // Package drivers have been stopped, but we haven't started shutting down boot drivers yet.
+    kPackageStopped = 2u,
     // The entire system is in the middle of being stopped.
-    kBootStopping = 2u,
+    kBootStopping = 3u,
     // The entire system is stopped.
-    kStopped = 2u,
+    kStopped = 4u,
   };
 
   ShutdownManager(NodeRemover* node_remover, async_dispatcher_t* dispatcher);
@@ -82,6 +80,32 @@ class ShutdownManager : public fidl::WireServer<fuchsia_device_manager::Administ
   void OnBootShutdownComplete();
 
  private:
+  // All external shutdown signals (except SetTerminationSystemState) ultimately
+  // call either SignalBootShutdown or SignalPackageShutdown.  These two functions
+  // interact with the ShutdownManager state machine and signal the node_remover
+  // to remove nodes.
+  //  SignalPackageShutdown interacts with the ShutdownManager state machine thusly:
+  //  State:           |      Action
+  //  ---------------------------------------------
+  //  kRunning:        |  Transition to kPackageStopping.
+  //                   |  Signal the nove_remover to remove package drivers.
+  //                   |  Add callback to list to be called when all package drivers are removed
+  //  kPackageStopping |  Add callback to list to be called when all package drivers are removed
+  //  All other states |  Immediately call callback
+  void SignalPackageShutdown(fit::callback<void(zx_status_t)> cb);
+  //  When the shutdown manager receives the SignalBootShutdown:
+  //  State:           |      Action
+  //  ---------------------------------------------
+  //  kRunning or      |  Transition to kBootStopping.
+  //   kPackageStopped |  Signal the nove_remover to remove all drivers.
+  //                   |  Add callback to list to be called when all drivers are removed
+  //  kPackageStopping |  Add callback to list to be called when all drivers are removed
+  //                   |  Set flag so that when the packages are fully removed, we will
+  //                   |  continue to remove the boot drivers
+  //  kBootStopping    |  Add callback to list to be called when all drivers are removed
+  //  All other states |  Immediately call callback
+  void SignalBootShutdown(fit::callback<void(zx_status_t)> cb);
+
   // fuchsia.device.manager/Administrator interface
   // TODO(fxbug.dev/68529): Remove this API.
   // This is a temporary API until DriverManager can ensure that base drivers
@@ -139,12 +163,6 @@ class ShutdownManager : public fidl::WireServer<fuchsia_device_manager::Administ
   void SetMexecZbis(SetMexecZbisRequestView request,
                     SetMexecZbisCompleter::Sync& completer) override;
 
-  // Start the shutdown procedure
-  // This should only be called once.  This will transition the state:
-  // State::kRunning -> State::kPackageStopping
-  // The caller must ensure that shutdown_state_ == State::kRunning before calling.
-  void StartShutdown();
-
   // Execute the shutdown strategy set in shutdown_system_state_.
   // This should be done after all attempts at shutting down drivers has been made.
   void SystemExecute();
@@ -159,12 +177,15 @@ class ShutdownManager : public fidl::WireServer<fuchsia_device_manager::Administ
   std::optional<fidl::ServerBindingRef<fuchsia_process_lifecycle::Lifecycle>> lifecycle_binding_;
   std::optional<fidl::ServerBindingRef<fuchsia_device_manager::SystemStateTransition>>
       sys_state_binding_;
-  std::optional<UnregisterSystemStorageForShutdownCompleter::Async> unregister_storage_completer_;
-  std::optional<StopCompleter::Async> stop_completer_;
+  std::list<fit::callback<void(zx_status_t)>> package_shutdown_complete_callbacks_;
+  std::list<fit::callback<void(zx_status_t)>> boot_shutdown_complete_callbacks_;
 
   // The type of shutdown to perform.  Default to REBOOT, in the case of errors, channel closing
   SystemPowerState shutdown_system_state_ = SystemPowerState::kReboot;
   State shutdown_state_ = State::kRunning;
+  // After package shutdown completes, wait for separate boot shutdown signal
+  bool received_boot_shutdown_signal_ = false;
+
   zx::vmo mexec_kernel_zbi_, mexec_data_zbi_;
   async_dispatcher_t* dispatcher_;
   zx::resource mexec_resource_, power_resource_;
