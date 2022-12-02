@@ -2,43 +2,24 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <fbl/algorithm.h>
-#include <fbl/array.h>
+#include <fcntl.h>
+
 #include <gtest/gtest.h>
 
-#include "src/storage/fs_test/fs_test.h"
-#include "src/storage/fs_test/test_filesystem.h"
-#include "src/storage/memfs/test/memfs_fs_test.h"
+#include "src/lib/files/directory.h"
+#include "src/lib/files/file.h"
+#include "src/lib/files/scoped_temp_dir.h"
 #include "src/storage/tools/blobfs-compression/blobfs-compression.h"
 
 namespace blobfs_compress {
 namespace {
-using namespace fs_test;
-
-}  // namespace
 
 class CliOptionValidationTest : public ::testing::Test {
  public:
-  CliOptionValidationTest() : fs_(CreateTestFilesystem()) {}
+  CliOptionValidationTest() : test_dir_(files::ScopedTempDir("/tmp")) {}
 
  protected:
-  TestFilesystem fs_;
-
-  void CreateFile(const std::string& file_path, const std::string& file_content = "") {
-    fbl::unique_fd fd(open(file_path.c_str(), O_RDWR | O_CREAT, S_IRUSR));
-    ASSERT_TRUE(fd.is_valid());
-    ASSERT_EQ(write(fd.get(), file_content.c_str(), file_content.length()),
-              static_cast<int>(file_content.length()));
-    ASSERT_EQ(close(fd.get()), ZX_OK);
-  }
-
- private:
-  TestFilesystem CreateTestFilesystem() {
-    auto fs_options = memfs::DefaultMemfsTestOptions();
-    fs_options.description = "fake_memfs";
-    auto fs_or = TestFilesystem::Create(fs_options);
-    return std::move(fs_or).value();
-  }
+  files::ScopedTempDir test_dir_;
 };
 
 TEST_F(CliOptionValidationTest, NoSourceFileNoOutputFile) {
@@ -54,8 +35,8 @@ TEST_F(CliOptionValidationTest, OutputFileOnly) {
 }
 
 TEST_F(CliOptionValidationTest, ValidSourceFileNoOutputFile) {
-  const std::string file_path = fs_.mount_path() + "valid_file";
-  CreateFile(file_path, "hello");
+  const std::string file_path = test_dir_.path() + "/valid_file";
+  ASSERT_TRUE(files::WriteFile(file_path, "hello"));
   CompressionCliOptionStruct options_valid = {
       .source_file = file_path,
   };
@@ -64,8 +45,8 @@ TEST_F(CliOptionValidationTest, ValidSourceFileNoOutputFile) {
 }
 
 TEST_F(CliOptionValidationTest, ValidEmptyExistingSourceFileNoOutputFile) {
-  const std::string file_path = fs_.mount_path() + "valid_empty_file";
-  CreateFile(file_path);
+  const std::string file_path = test_dir_.path() + "/valid_empty_file";
+  ASSERT_TRUE(files::WriteFile(file_path, ""));
   CompressionCliOptionStruct options_valid = {
       .source_file = file_path,
   };
@@ -74,8 +55,8 @@ TEST_F(CliOptionValidationTest, ValidEmptyExistingSourceFileNoOutputFile) {
 }
 
 TEST_F(CliOptionValidationTest, SourceFileIsDirectory) {
-  const std::string dir_path = fs_.mount_path() + "directory";
-  ASSERT_EQ(mkdir(dir_path.c_str(), S_IRUSR), ZX_OK);
+  const std::string dir_path = test_dir_.path() + "/directory";
+  ASSERT_TRUE(files::CreateDirectory(dir_path));
   CompressionCliOptionStruct options_valid = {
       .source_file = dir_path,
   };
@@ -84,9 +65,9 @@ TEST_F(CliOptionValidationTest, SourceFileIsDirectory) {
 }
 
 TEST_F(CliOptionValidationTest, ValidSourceFileValidOutputFile) {
-  const std::string source_path = fs_.mount_path() + "source_file";
-  const std::string output_path = fs_.mount_path() + "output_file";
-  CreateFile(source_path, "hello");
+  const std::string source_path = test_dir_.path() + "/source_file";
+  const std::string output_path = test_dir_.path() + "/output_file";
+  ASSERT_TRUE(files::WriteFile(source_path, "hello"));
   CompressionCliOptionStruct options_valid = {
       .source_file = source_path,
       .compressed_file = output_path,
@@ -98,10 +79,10 @@ TEST_F(CliOptionValidationTest, ValidSourceFileValidOutputFile) {
 }
 
 TEST_F(CliOptionValidationTest, ValidSourceFileInvalidOutputFile) {
-  const std::string source_path = fs_.mount_path() + "source_file";
-  const std::string invalid_output_path = fs_.mount_path() + "output_directory";
-  CreateFile(source_path, "hello");
-  ASSERT_EQ(mkdir(invalid_output_path.c_str(), S_IRUSR), ZX_OK);
+  const std::string source_path = test_dir_.path() + "/source_file";
+  const std::string invalid_output_path = test_dir_.path() + "/output_directory";
+  ASSERT_TRUE(files::WriteFile(source_path, "hello"));
+  ASSERT_TRUE(files::CreateDirectory(invalid_output_path));
   CompressionCliOptionStruct options_valid = {
       .source_file = source_path,
       .compressed_file = invalid_output_path,
@@ -113,4 +94,5 @@ TEST_F(CliOptionValidationTest, ValidSourceFileInvalidOutputFile) {
   ASSERT_EQ(ValidateCliOptions(options_valid), ZX_ERR_BAD_PATH);
 }
 
+}  // namespace
 }  // namespace blobfs_compress

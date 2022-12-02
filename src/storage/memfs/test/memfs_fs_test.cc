@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "src/storage/memfs/test/memfs_fs_test.h"
-
 #include <lib/async-loop/cpp/loop.h>
 #include <lib/fdio/namespace.h>
 
@@ -88,15 +86,6 @@ class MemfsFilesystem : public fs_test::FilesystemImpl<MemfsFilesystem> {
 };
 
 }  // namespace
-
-namespace memfs {
-
-fs_test::TestFilesystemOptions DefaultMemfsTestOptions() {
-  return fs_test::TestFilesystemOptions{.description = "Memfs",
-                                        .filesystem = &MemfsFilesystem::SharedInstance()};
-}
-
-}  // namespace memfs
 
 __EXPORT std::unique_ptr<fs_test::Filesystem> GetFilesystem() {
   return std::make_unique<MemfsFilesystem>();

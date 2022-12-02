@@ -29,14 +29,10 @@ fuchsia_unittest_component("blobfs-compression-tests-component") {
 test("cli-option-validation-test") {
   sources = [ "cli-option-validation-test.cc" ]
   deps = [
-    "//src/lib/chunked-compression",
+    "//src/lib/files",
     "//src/lib/fxl/test:gtest_main",
-    "//src/storage/fs_test",
-    "//src/storage/memfs/test:memfs_fs_test",
     "//src/storage/tools/blobfs-compression:common",
-    "//zircon/system/ulib/async-loop",
-    "//zircon/system/ulib/fbl",
-    "//zircon/system/ulib/id_allocator",
+    "//src/sys/test_runners:tmp_storage",
   ]
 }
 

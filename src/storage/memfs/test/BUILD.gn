@@ -56,10 +56,7 @@ fuchsia_unittest_package("memfs-tests") {
 
 shared_library("memfs_fs_test") {
   testonly = true
-  sources = [
-    "memfs_fs_test.cc",
-    "memfs_fs_test.h",
-  ]
+  sources = [ "memfs_fs_test.cc" ]
   deps = [
     "//src/storage/fs_test",
     "//src/storage/memfs",
