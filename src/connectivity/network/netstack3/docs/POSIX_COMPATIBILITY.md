@@ -51,6 +51,19 @@ controls the interface used for sending and receiving, including
 - [`IPV6_MULTICAST_IF`] and [`IP_MULTICAST_IF`],
 - for an IPv6 socket, the scope ID associated with its local or remote address,
 
+### `SO_SNDBUF` and `SO_RCVBUF`
+
+Netstack3 supports the [`SO_SNDBUF` and `SO_RCVBUF`][POSIX buffer sizes] socket
+options for setting a socket's send and receive buffer sizes, respectively. On
+Linux, the value provided when setting one of these options
+[is doubled][Linux buffer sizes], so reading the value for the same option
+returns a different value. Netstack3 handles setting one of these buffer sizes
+by using the value to set the variable-size portion of a socket's buffer.
+Reading the same buffer size value reports the sum of the variable and any
+fixed-size portion of the socket's buffer.
+
+Note that like on other platforms, the value applied when setting these options
+is limited by system-defined minimums and maximums.
 
 [Fuchsia RFC-0184]: /docs/contribute/governance/rfcs/0184_posix_compatibility_for_the_system_netstack
 [`fuchsia.posix.socket`]: /sdk/fidl/fuchsia.posix.socket/socket.fidl
@@ -58,3 +71,5 @@ controls the interface used for sending and receiving, including
 [`getpeername`]: https://pubs.opengroup.org/onlinepubs/9699919799/functions/getpeername.html
 [`IPV6_MULTICAST_IF`]: https://pubs.opengroup.org/onlinepubs/9699919799/functions/V2_chap02.html
 [`IP_MULTICAST_IF`]: https://man7.org/linux/man-pages/man7/ip.7.html
+[POSIX buffer sizes]: https://pubs.opengroup.org/onlinepubs/9699919799/functions/V2_chap02.html#tagtcjh_8
+[Linux buffer sizes]: https://man7.org/linux/man-pages/man7/socket.7.html
