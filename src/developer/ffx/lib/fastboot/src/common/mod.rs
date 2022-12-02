@@ -15,7 +15,6 @@ use {
     async_trait::async_trait,
     chrono::{DateTime, Duration, Utc},
     errors::ffx_bail,
-    ffx_config::sdk::SdkVersion,
     fidl::{
         endpoints::{create_endpoints, ServerEnd},
         Error as FidlError,
@@ -26,6 +25,7 @@ use {
     },
     futures::prelude::*,
     futures::try_join,
+    sdk::SdkVersion,
     std::convert::Into,
     std::io::Write,
     termion::{color, style},

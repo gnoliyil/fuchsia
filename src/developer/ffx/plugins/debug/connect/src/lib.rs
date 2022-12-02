@@ -96,7 +96,7 @@ pub async fn connect(
 
     let mut zxdb = match cmd.debugger {
         Some(debugger) => {
-            if *sdk.get_version() != ffx_config::sdk::SdkVersion::InTree {
+            if *sdk.get_version() != sdk::SdkVersion::InTree {
                 // OOT doesn't provide symbols for zxdb.
                 ffx_bail!("--debugger only works in-tree.");
             }

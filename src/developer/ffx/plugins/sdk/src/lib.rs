@@ -4,13 +4,10 @@
 
 use {
     anyhow::{Context, Result},
-    ffx_config::{
-        query,
-        sdk::{Sdk, SdkVersion},
-        ConfigLevel,
-    },
+    ffx_config::{query, ConfigLevel},
     ffx_core::ffx_plugin,
     ffx_sdk_args::{SdkCommand, SetCommand, SetRootCommand, SetSubCommand, SubCommand},
+    sdk::{Sdk, SdkVersion},
     std::io::{stdout, Write},
 };
 

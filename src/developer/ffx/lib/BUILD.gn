@@ -2,63 +2,54 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-if (is_host) {
-  libs = [
-    "addr",
-    "buildid",
-    "daemonize",
-    "diagnostics",
-    "doctor_utils",
-    "errors",
-    "fastboot",
-    "fho",
-    "fidl-fuchsia-developer-ffx-ext",
-    "fms",
-    "isolate",
-    "metrics",
-    "netext",
-    "pbms",
-    "pkg",
-    "port_picker",
-    "protocols",
-    "rcs",
-    "schema",
-    "selector-maps",
-    "stream_util",
-    "symbol-index",
-    "tasks",
-    "testing",
-    "timeout",
-    "version",
-    "writer",
-    "target",
-  ]
+assert(is_host)
 
-  group("tests") {
-    testonly = true
+libs = [
+  "addr",
+  "buildid",
+  "daemonize",
+  "diagnostics",
+  "doctor_utils",
+  "errors",
+  "fastboot",
+  "fho",
+  "fidl-fuchsia-developer-ffx-ext",
+  "fms",
+  "isolate",
+  "metrics",
+  "netext",
+  "pbms",
+  "pkg",
+  "port_picker",
+  "protocols",
+  "rcs",
+  "schema",
+  "sdk",
+  "selector-maps",
+  "stream_util",
+  "symbol-index",
+  "tasks",
+  "testing",
+  "timeout",
+  "version",
+  "writer",
+  "target",
+]
 
-    deps = []
-    foreach(lib, libs) {
-      deps += [ "${lib}:tests" ]
-    }
+group("tests") {
+  testonly = true
+
+  deps = []
+  foreach(lib, libs) {
+    deps += [ "${lib}:tests" ]
   }
+}
 
-  group("lib") {
-    testonly = true
+group("lib") {
+  testonly = true
 
-    deps = []
-    foreach(lib, libs) {
-      deps += [ lib ]
-    }
-  }
-} else {
-  group("lib") {
-    testonly = true
-    deps = [ ":lib($host_toolchain)" ]
-  }
-
-  group("tests") {
-    testonly = true
-    deps = [ ":tests($host_toolchain)" ]
+  deps = []
+  foreach(lib, libs) {
+    deps += [ lib ]
   }
 }

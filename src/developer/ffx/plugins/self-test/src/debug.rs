@@ -63,7 +63,7 @@ pub mod include_target {
         let isolate = new_isolate("target-debug-run-crasher").await?;
         let mut config = "sdk.root=".to_owned();
         config.push_str(sdk.get_path_prefix().to_str().unwrap());
-        if sdk.get_version() == &ffx_config::sdk::SdkVersion::InTree {
+        if sdk.get_version() == &sdk::SdkVersion::InTree {
             config.push_str(",sdk.type=in-tree");
         }
         let mut child = isolate

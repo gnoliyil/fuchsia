@@ -17,7 +17,6 @@ pub mod environment;
 pub mod lockfile;
 pub mod logging;
 pub mod runtime;
-pub mod sdk;
 
 mod cache;
 mod mapping;
@@ -31,7 +30,7 @@ pub use config_macros::FfxConfigBacked;
 
 pub use cache::{global_env, global_env_context, init, test_init, TestEnv};
 pub use environment::{Environment, EnvironmentContext};
-pub use sdk::{Sdk, SdkRoot};
+pub use sdk::{self, Sdk, SdkRoot};
 pub use storage::ConfigMap;
 
 pub use ssh_key::SshKeyFiles;

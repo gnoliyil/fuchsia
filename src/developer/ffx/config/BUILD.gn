@@ -16,6 +16,7 @@ if (is_host) {
       "//src/connectivity/overnet/lib/hoist",
       "//src/developer/ffx/lib/buildid:lib",
       "//src/developer/ffx/lib/errors:lib",
+      "//src/developer/ffx/lib/sdk:lib",
       "//src/developer/ffx/lib/version:lib",
       "//src/lib/analytics/rust:lib",
       "//src/lib/fuchsia-async",
@@ -73,7 +74,6 @@ if (is_host) {
       "src/nested.rs",
       "src/paths.rs",
       "src/runtime.rs",
-      "src/sdk.rs",
       "src/ssh_key.rs",
       "src/storage.rs",
     ]

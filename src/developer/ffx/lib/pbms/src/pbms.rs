@@ -14,10 +14,10 @@ use {
     ::gcs::client::{DirectoryProgress, FileProgress, ProgressResponse, ProgressResult, Throttle},
     anyhow::{bail, Context, Result},
     async_fs::File,
-    ffx_config::sdk::SdkVersion,
     fms::{find_product_bundle, Entries},
     futures::{AsyncWriteExt as _, TryStreamExt as _},
     hyper::{header::CONTENT_LENGTH, StatusCode},
+    sdk::SdkVersion,
     sdk_metadata::Metadata,
     std::{
         fs,

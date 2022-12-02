@@ -19,7 +19,7 @@ group("ffx") {
   public_deps = [
     ":ffx_tool",
     ":tests",
-    "lib",
+    "lib($host_toolchain)",
     "tools($host_toolchain)",
   ]
 }

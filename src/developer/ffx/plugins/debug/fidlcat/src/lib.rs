@@ -2,14 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use {
-    anyhow::{Context, Result},
-    errors::ffx_error,
-    ffx_config::sdk::SdkVersion,
-    ffx_debug_connect::DebugAgentSocket,
-    fuchsia_async::unblock,
-    std::process::Command,
-};
+use anyhow::{Context, Result};
+use errors::ffx_error;
+use ffx_debug_connect::DebugAgentSocket;
+use fuchsia_async::unblock;
+use sdk::SdkVersion;
+use std::process::Command;
 
 struct ProcessArguments {
     arguments: Vec<String>,

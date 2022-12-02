@@ -2,16 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use {
-    anyhow::{anyhow, bail, Result},
-    errors::ffx_error,
-    glob::glob as _glob,
-    serde::{Deserialize, Serialize},
-    std::{
-        collections::HashSet,
-        fs::File,
-        path::{Path, PathBuf},
-    },
+use anyhow::{anyhow, bail, Result};
+use errors::ffx_error;
+use glob::glob as _glob;
+use sdk::Sdk;
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashSet,
+    fs::File,
+    path::{Path, PathBuf},
 };
 
 pub fn global_symbol_index_path() -> Result<String> {
@@ -20,11 +19,11 @@ pub fn global_symbol_index_path() -> Result<String> {
 }
 
 // Ensures that symbols in sdk.root are registered in the global symbol index.
-pub async fn ensure_symbol_index_registered(sdk: &ffx_config::Sdk) -> Result<()> {
+pub async fn ensure_symbol_index_registered(sdk: &Sdk) -> Result<()> {
     let mut symbol_index_path_str: Option<String> = None;
     let mut default_symbol_server: Option<&'static str> = None;
     let mut build_id_dir_str: Option<String> = None;
-    if sdk.get_version() == &ffx_config::sdk::SdkVersion::InTree {
+    if sdk.get_version() == &sdk::SdkVersion::InTree {
         let symbol_index_path = sdk.get_path_prefix().join(".symbol-index.json");
         if !symbol_index_path.exists() {
             bail!("Required {:?} doesn't exist", symbol_index_path);

@@ -3,11 +3,11 @@
 // found in the LICENSE file.
 
 use crate::lockfile::{Lockfile, LockfileCreateError};
-use crate::sdk::{Sdk, SdkRoot};
-use crate::{query, sdk, BuildOverride};
+use crate::{query, BuildOverride};
 use crate::{ConfigLevel, ConfigMap};
 use anyhow::{bail, Context, Result};
 use errors::ffx_error;
+use sdk::{Sdk, SdkRoot};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -21,6 +21,14 @@ use std::{
 };
 use thiserror::Error;
 use tracing::{error, info};
+
+const SDK_TYPE_IN_TREE: &str = "in-tree";
+const SDK_NOT_FOUND_HELP: &str = "\
+SDK directory could not be found. Please set with
+`ffx sdk set root <PATH_TO_SDK_DIR>`\n
+If you are developing in the fuchsia tree, ensure \
+that you are running the `ffx` command (in $FUCHSIA_DIR/.jiri_root) or `fx ffx`, not a built binary.
+Running the binary directly is not supported in the fuchsia tree.\n\n";
 
 /// A name for the type used as an environment variable mapping for isolation override
 type EnvVars = HashMap<String, String>;
@@ -155,7 +163,7 @@ impl EnvironmentContext {
             let runtime_sdk = runtime_args.get("sdk").and_then(Value::as_object);
             let runtime_type = runtime_sdk.and_then(|sdk| sdk.get("type")).and_then(Value::as_str);
 
-            let build_dir = if runtime_type == Some(sdk::SDK_TYPE_IN_TREE) {
+            let build_dir = if runtime_type == Some(SDK_TYPE_IN_TREE) {
                 // if we were told a location of an "in-tree" sdk, that's our build directory.
                 Self::load_build_dir(&runtime_args, &tree_root)?
             } else {
@@ -238,7 +246,7 @@ impl EnvironmentContext {
                 let module = query("sdk.module").get().await.ok();
                 Ok(SdkRoot::InTree { manifest, module })
             }
-            (_, runtime_root) => SdkRoot::from_config(runtime_root.as_deref()).await,
+            (_, runtime_root) => sdk_from_config(runtime_root.as_deref()).await,
         }
     }
 
@@ -354,6 +362,60 @@ impl EnvironmentContext {
             Some(found) if found.is_dir() => Ok(Some(found)),
             _ => Ok(None),
         }
+    }
+}
+
+fn find_sdk_root(start_path: &Path) -> Result<Option<PathBuf>> {
+    let mut path = std::fs::canonicalize(start_path)
+        .context(format!("canonicalizing ffx path {:?}", start_path))?;
+
+    loop {
+        path =
+            if let Some(parent) = path.parent() { parent.to_path_buf() } else { return Ok(None) };
+
+        if path.join("meta").join("manifest.json").exists() {
+            return Ok(Some(path));
+        }
+    }
+}
+
+/// Gets the basic information about the sdk as configured, without diving deeper into the sdk's own configuration.
+async fn sdk_from_config(sdk_root: Option<&Path>) -> Result<SdkRoot> {
+    // All gets in this function should declare that they don't want the build directory searched, because
+    // if there is a build directory it *is* generally the sdk.
+    let manifest = match sdk_root {
+        Some(root) => root.to_owned(),
+        _ => {
+            let path = std::env::current_exe().map_err(|e| {
+                errors::ffx_error!(
+                    "{}Error was: failed to get current ffx exe path for SDK root: {:?}",
+                    SDK_NOT_FOUND_HELP,
+                    e
+                )
+            })?;
+
+            match find_sdk_root(&path) {
+                Ok(Some(root)) => root,
+                Ok(None) => {
+                    errors::ffx_bail!(
+                        "{}Could not find an SDK manifest in any parent of ffx's directory.",
+                        SDK_NOT_FOUND_HELP,
+                    );
+                }
+                Err(e) => {
+                    errors::ffx_bail!("{}Error was: {:?}", SDK_NOT_FOUND_HELP, e);
+                }
+            }
+        }
+    };
+    let sdk_type: Option<String> =
+        query("sdk.type").build(Some(BuildOverride::NoBuild)).get().await.ok();
+    match sdk_type.as_deref() {
+        Some(SDK_TYPE_IN_TREE) => {
+            let module = query("sdk.module").build(Some(BuildOverride::NoBuild)).get().await.ok();
+            Ok(SdkRoot::InTree { manifest, module })
+        }
+        _ => Ok(SdkRoot::Packaged(manifest)),
     }
 }
 
@@ -668,6 +730,7 @@ mod test {
     use super::*;
     use crate::test_init;
     use std::fs;
+    use tempfile::tempdir;
 
     const ENVIRONMENT: &'static str = r#"
         {
@@ -789,5 +852,34 @@ mod test {
         } else {
             panic!("No build configurations set after setting a configuration value");
         }
+    }
+
+    #[fuchsia_async::run_singlethreaded(test)]
+    async fn test_find_sdk_root_finds_root() {
+        let temp = tempdir().unwrap();
+        let temp_path = std::fs::canonicalize(temp.path()).expect("canonical temp path");
+
+        let start_path = temp_path.join("test1").join("test2");
+        std::fs::create_dir_all(start_path.clone()).unwrap();
+
+        let meta_path = temp_path.join("meta");
+        std::fs::create_dir(meta_path.clone()).unwrap();
+
+        std::fs::write(meta_path.join("manifest.json"), "").unwrap();
+
+        assert_eq!(find_sdk_root(&start_path).unwrap().unwrap(), temp_path);
+    }
+
+    #[fuchsia_async::run_singlethreaded(test)]
+    async fn test_find_sdk_root_no_manifest() {
+        let temp = tempdir().unwrap();
+
+        let start_path = temp.path().to_path_buf().join("test1").join("test2");
+        std::fs::create_dir_all(start_path.clone()).unwrap();
+
+        let meta_path = temp.path().to_path_buf().join("meta");
+        std::fs::create_dir(meta_path).unwrap();
+
+        assert!(find_sdk_root(&start_path).unwrap().is_none());
     }
 }

@@ -12,7 +12,10 @@ ffx_plugin("ffx_sdk") {
 
   args_sources = [ "src/args.rs" ]
 
-  deps = [ "//src/developer/ffx/config:lib" ]
+  deps = [
+    "//src/developer/ffx/config:lib",
+    "//src/developer/ffx/lib/sdk:lib",
+  ]
   test_deps = [ "//src/lib/fuchsia-async" ]
 
   sources = [ "src/lib.rs" ]
