@@ -27,6 +27,7 @@ rustc_library("vfs") {
     "//third_party/rust_crates:slab",
     "//third_party/rust_crates:static_assertions",
     "//third_party/rust_crates:thiserror",
+    "//third_party/rust_crates:tracing",
   ]
 
   with_unit_tests = true
@@ -103,6 +104,11 @@ rustc_library("vfs") {
 
 fuchsia_unittest_package("vfs-tests") {
   deps = [ ":vfs_test" ]
+  test_specs = {
+    log_settings = {
+      max_severity = "ERROR"
+    }
+  }
 }
 
 group("tests") {
