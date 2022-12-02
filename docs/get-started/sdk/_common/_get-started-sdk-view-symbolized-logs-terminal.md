@@ -17,13 +17,13 @@ Do the following:
    nano src/hello_world/hello_world.cc
    ```
 
-1. Just above the line `return 0;`, add the following line:
+1. Above the line `return 0;`, add the following line:
 
    ```
    abort();
    ```
 
-   The `main()` method should look like below:
+   The `main()` method now should look like below:
 
    ```none {:.devsite-disable-click-to-copy}
    int main() {

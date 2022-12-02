@@ -10,15 +10,16 @@ The tasks include:
 
 In VS Code, do the following:
 
-1. Click the **Explorer** icon on the left side of VS Code.
-1. Open the `src/hello_world/hello_world.cc` file.
-1. Just above the line `return 0;`, add the following line:
+1. Select the `src/hello_world/hello_world.cc` file from the **OPEN EDITORS**
+   view at the top of VS Code.
+
+1. Above the line `return 0;`, add the following line:
 
    ```
    abort();
    ```
 
-   The `main()` method should look like below:
+   The `main()` method now should look like below:
 
    ```none {:.devsite-disable-click-to-copy}
    int main() {
@@ -31,7 +32,7 @@ In VS Code, do the following:
    This update will cause the component to crash immediately after printing a
    message.
 
-1. To save the file, press `CTRL+S` (or `CMD+S` on macOS).
+1. To save the file, press `CTRL+S` (or `Command+S` on macOS).
 
 1. Click the **TERMINAL** tab on the VS Code panel.
 
@@ -63,11 +64,9 @@ In VS Code, do the following:
    **Enter**.
 
 1. Verify that the sample component's crash stack is symbolized in the kernel
-   logs:
+   logs.
 
-   <img class="vscode-image vscode-image-center"
-   alt="This figure shows the kernel logs of the Fuchsia emulator device."
-   src="images/get-started-vscode-symbolized-logs.png"/>
+   ![Symbolized logs](images/get-started-vscode-symbolized-logs.png "Symbolized Fuchsia logs shown in VS Code"){: .screenshot}
 
    Verify that the lines in the kernel logs show the exact filenames and line
    numbers (for example, `main() src/hello_world/hello_world.cc:9`) that

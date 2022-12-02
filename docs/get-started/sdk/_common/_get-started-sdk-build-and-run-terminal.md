@@ -88,7 +88,7 @@ Do the following:
 
 1. Change the message to `"Hello again, World!"`.
 
-   The `main()` method should look like below:
+   The `main()` method now should look like below:
 
    ```none {:.devsite-disable-click-to-copy}
    int main() {

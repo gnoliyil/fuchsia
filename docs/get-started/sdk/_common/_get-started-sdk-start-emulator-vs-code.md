@@ -82,22 +82,18 @@ In VS Code, do the following:
    fuchsia-emulator    <unknown>    workstation_eng.qemu-x64    Product    [10.0.2.15]    Y
    ```
 
-1. Click the **Not connected** icon at the bottom of VS Code:
+1. Click the **Not connected** icon at the bottom of VS Code.
 
-   <img class="vscode-image vscode-image-center"
-     alt="This image shows the Not connect icon at the bottom of VS Code"
-     src="images/get-started-vscode-not-connected.png"/>
+   ![Not connected](images/get-started-vscode-not-connected.png "The Not connect icon at the bottom of VS Code"){: .screenshot}
 
    This opens the Command Palette at the top of VS Code.
 
 1. Click **Set fuchsia-emulator as default** in the Command Palette.
 
 1. Verify that `fuchsia-emulator`is set as the default target
-   at the bottom of VS Code:
+   at the bottom of VS Code.
 
-   <img class="vscode-image vscode-image-center"
-     alt="This image shows that VS Code is connected to the Fuchsia emulator"
-     src="images/get-started-vscode-connected-to-fuchsia-emulator.png"/>
+   ![Connected](images/get-started-vscode-connected-to-fuchsia-emulator.png "The fuchsia-emulator icon at the bottom of VS Code"){: .screenshot}
 
 1. In the terminal, to verify that you can establish an SSH connection
    to the emulator instance, run the following command:

@@ -10,11 +10,9 @@ The tasks include:
 
 In VS Code, do the following:
 
-1. Click the **Run and Debug** icon on the left side of VS Code:
+1. Click the **Run and Debug** icon on the left side of VS Code.
 
-   <img class="vscode-image-center"
-   alt="This figure shows the Run and Debug option of VS Code."
-   src="/docs/reference/tools/editors/vscode/images/extensions/ext-start-debug.png">
+   ![Run and Debug](images/get-started-vscode-run-and-debug-icon.png "The Run and Debug icon in VS Code"){: .screenshot width="400"}
 
 1. Click the **Show all automatic debug configurations** link.
 
@@ -31,42 +29,39 @@ In VS Code, do the following:
 1. Update this `launch.json` file to the following configuration:
 
    ```json5 {:.devsite-disable-click-to-copy}
-   {
-     "configurations": [
+   "configurations": [
        {
-         "name": "{{ '<strong>' }}Fuchsia getting started{{ '</strong>' }}",
-         "type": "zxdb",
-         "request": "launch",
-         "launchCommand": "{{ '<strong>' }}tools/bazel run //src/hello_world:pkg.component{{ '</strong>' }}",
-         "process": "{{ '<strong>' }}hello_world{{ '</strong>' }}"
+           "name": "{{ '<strong>' }}Fuchsia getting started{{ '</strong>' }}",
+           "type": "zxdb",
+           "request": "launch",
+           "launchCommand": "{{ '<strong>' }}tools/bazel run //src/hello_world:pkg.component{{ '</strong>' }}",
+           "process": "{{ '<strong>' }}hello_world{{ '</strong>' }}"
        }
-     ]
-   }
+   ]
    ```
 
    This configuration is set to start the `hello_world`
    component and attach the debugger to it.
 
-1. To save the file, press `CTRL+S` (or `CMD+S` on macOS)
+1. To save the file, press `CTRL+S` (or `Command+S` on macOS).
 
-1. Click the **Explorer** icon on the left side of VS Code.
-
-1. Open the `src/hello_world/hello_world.cc` file.
+1. Select the `src/hello_world/hello_world.cc` file from the **OPEN EDITORS**
+   view at the top of VS Code.
 
 1. To set a breakpoint at the `main()` method, click the space to the left of
    the line number.
 
-   <img class="vscode-image vscode-image-center"
-   alt="This figure shows the Run and Debug option of VS Code."
-   src="images/get-started-vscode-breakpoint.png">
+   ![Breakpoint](images/get-started-vscode-breakpoint.png "A breakpoint in VS Code"){: .screenshot width="500"}
 
    When a breakpoint is set, a red dot appears.
 
-1. At the top of the **Run and Debug** panel, select the
-   **Fuchsia getting started** launch configuration.
+1. At the top of the **Run and Debug** panel, select
+   the **Fuchsia getting started** option in the dropdown memu.
 
 1. At the top of the **Run and Debug** panel, click
-   the **Play** icon to launch the debugger - it's to the left of the dropdown menu.
+   the **Play** icon to launch the debugger.
+
+   ![Play](images/get-started-vscode-debug-play-icon.png "A breakpoint in VS Code"){: .screenshot width="400"}
 
    This builds and runs the `hello_world` component, which causes
    the debugger to pause at the line where the breakpoint is set
@@ -74,9 +69,7 @@ In VS Code, do the following:
 
 1. Click the **DEBUG CONSOLE** tab on the VS Code panel.
 
-   <img class="vscode-image vscode-image-center"
-   alt="This figure shows the debug console."
-   src="images/get-started-vscode-debug-console.png">
+   ![Debug console](images/get-started-vscode-debug-console.png "The Debug console panel in VS Code"){: .screenshot}
 
    This shows the console output of the Fuchsia debugger (`zxdb`).
 
@@ -90,13 +83,15 @@ In VS Code, do the following:
 1. At the top right corner of the **FUCHSIA LOGS** panel,
    click the **Clear logs** icon.
 
-1. In the debug toolbar at the top of VS Code, click the **Continue** icon:
+1. In the debug toolbar at the top of VS Code, click the **Step Over** icon.
 
-   <img class="vscode-image vscode-image-center"
-   alt="This figure shows the continue button of the debug toolbar."
-   src="images/get-started-vscode-debug-continue.png">
+   ![Step over](images/get-started-vscode-step-over-icon.png "The Step Over icon in VS Code"){: .screenshot width="300"}
 
 1. In the **FUCHSIA LOGS** panel, verify that a new `Hello again, World!`
    entry is printed in the logs.
 
+   ![Hello again](images/get-started-vscode-debug-hello-again-world.png "Hello again, World in the Fuchsia logs panel of VS Code"){: .screenshot}
+
 1. To exit the debugger, click the **Stop** icon in the debug toolbar.
+
+   This causes the component to finish the execution of the rest of the code.

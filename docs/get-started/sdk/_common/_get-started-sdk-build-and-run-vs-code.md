@@ -63,12 +63,9 @@ In VS Code, do the following:
    The output shows that the `hello_world` component has run and is now
    terminated (`Stopped`).
 
-1. Click the **fuchsia-emulator** icon at the bottom of VS Code:
+1. Click the **fuchsia-emulator** icon at the bottom of VS Code.
 
-   <img class="vscode-image vscode-image-center"
-     alt="This image shows that the Fuchsia emulator icon at the bottom of
-     VS Code"
-     src="images/get-started-vscode-connected-to-fuchsia-emulator.png"/>
+   ![Connected](images/get-started-vscode-connected-to-fuchsia-emulator.png "The fuchsia-emualtor icon at the bottom of VS Code"){: .screenshot}
 
    This opens the Command Palette at the top of VS Code.
 
@@ -77,10 +74,7 @@ In VS Code, do the following:
    This opens the **FUCHSIA LOGS** panel and streams the device logs of
    your current Fuchsia target.
 
-   <img class="vscode-image vscode-image-center"
-   alt="This figure shows the how to connect the Fuchsia VS Code extension
-   to a Fuchsia device."
-   src="/docs/reference/tools/editors/vscode/images/extensions/ext-view-logs.png"/>
+   ![Fuchsia logs](images/get-started-vscode-fuchsia-logs-panel.png "The Fuchsia logs panel in VS Code"){: .screenshot}
 
    Note: It may take a few minutes to load all the logs cached on the host
    machine. To stop the streaming of logs, click the
@@ -93,9 +87,7 @@ In VS Code, do the following:
 1. In the **Filter logs** text box, type `hello_world` and
    press **Enter**.
 
-   <img class="vscode-image vscode-image-center"
-   alt="This figure shows the 'Hello, World!' message in the Fuchsia logs."
-   src="images/get-started-vscode-hello-world-log.png"/>
+   ![Hello World](images/get-started-vscode-hello-world.png "Hello, World! shown in the Fuchsia logs panel of VS Code"){: .screenshot}
 
    Notice that `Hello, World!` is printed from the `hello_world` component.
 
@@ -108,7 +100,7 @@ In VS Code, do the following:
 
 1. Change the message to `"Hello again, World!"`.
 
-   The `main()` method should look like below:
+   The `main()` method now should look like below:
 
    ```none {:.devsite-disable-click-to-copy}
    int main() {
@@ -117,7 +109,7 @@ In VS Code, do the following:
    }
    ```
 
-1. To save the file, press `CTRL+S` (or `CMD+S` on macOS).
+1. To save the file, press `CTRL+S` (or `Command+S` on macOS).
 
 1. Click the **TERMINAL** tab on the VS Code panel.
 
@@ -129,11 +121,9 @@ In VS Code, do the following:
 
 1. Click the **FUCHSIA LOGS** tab on the VS Code panel.
 
-1. Verify that `Hello again, World!` is printed in the logs:
+1. Verify that `Hello again, World!` is printed in the logs.
 
-   <img class="vscode-image vscode-image-center"
-   alt="This figure shows the 'Hello again, World!' message in the Fuchsia logs."
-   src="images/get-started-vscode-hello-again-world-log.png"/>
+   ![Hello again, World](images/get-started-vscode-hello-again-world.png "Hello again, World! shown in the Fuchsia logs panel of VS Code"){: .screenshot}
 
 <!-- Reference links -->
 
