@@ -13,7 +13,9 @@ use crate::fs::{
     FileSystem, FileSystemHandle, FileSystemOps, FsNode, FsNodeOps, FsStr, MemoryDirectoryFile,
     NamespaceNode, SeekOrigin, SpecialNode, WaitAsyncOptions,
 };
-use crate::lock::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use crate::lock::{
+    Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
+};
 use crate::logging::*;
 use crate::mm::vmo::round_up_to_increment;
 use crate::mm::{
@@ -604,12 +606,10 @@ impl<'a> BinderProcessGuard<'a> {
     where
         F: Fn(&BinderThreadState) -> bool,
     {
-        {
-            if let Some(mut thread) = self.thread_pool.find_available_thread(filter) {
-                thread.enqueue_command(command);
-                return;
-            };
-        };
+        if let Some(thread) = self.thread_pool.find_available_thread(filter) {
+            RwLockUpgradableReadGuard::upgrade(thread).enqueue_command(command);
+            return;
+        }
         self.enqueue_process_command(command);
     }
 
@@ -929,12 +929,12 @@ impl ThreadPool {
     fn find_available_thread<'a, F>(
         &'a self,
         filter: F,
-    ) -> Option<RwLockWriteGuard<'a, BinderThreadState>>
+    ) -> Option<RwLockUpgradableReadGuard<'a, BinderThreadState>>
     where
         F: Fn(&BinderThreadState) -> bool,
     {
         for thread in self.0.values() {
-            let thread_state = thread.write();
+            let thread_state = thread.upgradable_read();
             if !filter(&thread_state) {
                 log_trace!("thread {:?} is filtered out", thread_state.tid);
                 continue;
@@ -1175,6 +1175,11 @@ impl BinderThread {
     /// Acquire a reader lock to the binder thread's mutable state.
     pub fn read(&self) -> RwLockReadGuard<'_, BinderThreadState> {
         self.state.read()
+    }
+
+    /// Acquire an upgradable reader lock to the binder thread's mutable state.
+    pub fn upgradable_read(&self) -> RwLockUpgradableReadGuard<'_, BinderThreadState> {
+        self.state.upgradable_read()
     }
 
     /// Acquire a writer lock to the binder thread's mutable state.
