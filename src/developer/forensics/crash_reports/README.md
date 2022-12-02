@@ -16,11 +16,12 @@ do not upload it.
 To test your changes, on a real device, we have some unit tests and some helper
 programs to simulate various crashes.
 
-For the helper programs, you first need to add the package wrapping the config
-telling to upload to a crash server and which server to upload to.
+For the helper programs, you first need to add the package wrapping a config
+which enables crash report uploading and give your device consent to share data
+in its settings.
 
 ```sh
-(host)$ fx set core.x64 --with-base //src/developer/forensics:crash_reports_upload_to_prod_server_config
+(host)$ fx set core.x64 --with-base //src/developer/forensics:userdebug_configs
 ```
 
 Then, after running each one of the helper programs (see commands in sections
