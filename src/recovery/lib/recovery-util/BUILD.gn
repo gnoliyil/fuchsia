@@ -4,11 +4,25 @@
 
 import("//build/components.gni")
 import("//build/rust/rustc_library.gni")
+import("//third_party/cobalt/metrics_registry.gni")
+
+metrics_registry("recovery_metrics_registry") {
+  # ID of the 'recovery' project from the //third_party/cobalt_config/projects.yaml file
+  project_id = 17
+
+  # The namespace to use in the generated code
+  namespace = "cobalt_registry"
+
+  # Generates a rust target called 'recovery_metrics_rustlib'
+  generate_rust = true
+}
 
 rustc_library("recovery-util") {
   edition = "2021"
   with_unit_tests = true
   deps = [
+    ":recovery_metrics_registry_rustlib",
+    "//sdk/fidl/fuchsia.cobalt:fuchsia.cobalt_rust",
     "//sdk/fidl/fuchsia.device:fuchsia.device_rust",
     "//sdk/fidl/fuchsia.feedback:fuchsia.feedback_rust",
     "//sdk/fidl/fuchsia.hardware.block:fuchsia.hardware.block_rust",
@@ -16,6 +30,7 @@ rustc_library("recovery-util") {
     "//sdk/fidl/fuchsia.hwinfo:fuchsia.hwinfo_rust",
     "//sdk/fidl/fuchsia.intl:fuchsia.intl_rust",
     "//sdk/fidl/fuchsia.location.namedplace:fuchsia.location.namedplace_rust",
+    "//sdk/fidl/fuchsia.metrics:fuchsia.metrics_rust",
     "//sdk/fidl/fuchsia.recovery:fuchsia.recovery_rust",
     "//sdk/fidl/fuchsia.settings:fuchsia.settings_rust",
     "//sdk/fidl/fuchsia.wlan.common:fuchsia.wlan.common_rust",
@@ -30,15 +45,18 @@ rustc_library("recovery-util") {
     "//third_party/rust_crates:futures",
     "//third_party/rust_crates:mockall",
     "//third_party/rust_crates:thiserror",
+    "//third_party/rust_crates:tracing",
   ]
   test_deps = [
     "//src/lib/fuchsia",
+    "//src/sys/pkg/testing/mock-metrics",
     "//third_party/rust_crates:assert_matches",
     "//third_party/rust_crates:async-trait",
     "//third_party/rust_crates:lazy_static",
   ]
   sources = [
     "src/block.rs",
+    "src/cobalt.rs",
     "src/crash.rs",
     "src/lib.rs",
     "src/ota/action.rs",

@@ -8,6 +8,7 @@ use crate::wlan::{create_network_info, WifiConnect, WifiConnectImpl};
 use anyhow::Error;
 use fuchsia_async::{DurationExt, Task};
 use fuchsia_zircon::Duration;
+use recovery_metrics_registry::cobalt_registry as metrics;
 
 /// Connects to a Wifi network.
 /// Asynchronously ends event Connected or Error as appropriate.
@@ -32,7 +33,12 @@ impl WifiConnectAction {
     ) {
         let task = async move {
             match connect_to_wifi(&*wifi_service, &network, &password).await {
-                Result::Ok(_) => event_sender.send(Event::WiFiConnected),
+                Result::Ok(_) => {
+                    event_sender.send(Event::WiFiConnected);
+                    event_sender.send_recovery_stage_event(
+                        metrics::RecoveryEventMetricDimensionResult::WiFiConnected,
+                    );
+                }
                 Result::Err(error) => {
                     // Let the "Connecting" message stay there for a second so the
                     // user can see that something was tried.
@@ -76,6 +82,7 @@ mod tests {
     use fuchsia_zircon::Duration;
     use futures::future;
     use mockall::predicate::eq;
+    use recovery_metrics_registry::cobalt_registry as metrics;
 
     struct FakeWifiConnectImpl {
         connected: bool,
@@ -108,6 +115,11 @@ mod tests {
         let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
         let mut event_sender = MockSendEvent::new();
         event_sender.expect_send().with(eq(Event::WiFiConnected)).times(1).return_const(());
+        event_sender
+            .expect_send_recovery_stage_event()
+            .with(eq(metrics::RecoveryEventMetricDimensionResult::WiFiConnected))
+            .times(1)
+            .return_const(());
         let event_sender: Box<dyn SendEvent> = Box::new(event_sender);
         WifiConnectAction::run_with_wifi_service(
             event_sender,

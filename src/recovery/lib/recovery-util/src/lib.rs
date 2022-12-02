@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 pub mod block;
+pub mod cobalt;
 pub mod crash;
 pub mod ota;
 pub mod reboot;

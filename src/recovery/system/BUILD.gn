@@ -10,7 +10,6 @@ import("//build/rust/rustc_library.gni")
 import("//build/testing/environments.gni")
 import("//src/recovery/system/system_recovery_args.gni")
 import("//src/sys/core/build/core_shard.gni")
-import("//third_party/cobalt/metrics_registry.gni")
 
 # Generate rust library for the config
 fuchsia_component_manifest("ui_config_manifest") {
@@ -24,17 +23,6 @@ fuchsia_component_manifest("ui_config_manifest") {
 
 fuchsia_structured_config_rust_lib("recovery_ui_config") {
   cm_label = ":ui_config_manifest"
-}
-
-metrics_registry("recovery_metrics_registry") {
-  # ID of the 'recovery' project from the //third_party/cobalt_config/projects.yaml file
-  project_id = 17
-
-  # The namespace to use in the generated code
-  namespace = "cobalt_registry"
-
-  # Generates a rust target called 'recovery_metrics_rustlib'
-  generate_rust = true
 }
 
 group("system") {
@@ -198,11 +186,8 @@ rustc_binary("bin") {
   deps = [
     ":fdr_lib",
     ":ota_lib",
-    ":recovery_metrics_registry_rustlib",
     ":recovery_ui_config",
-    "//sdk/fidl/fuchsia.cobalt:fuchsia.cobalt_rust",
     "//sdk/fidl/fuchsia.input.report:fuchsia.input.report_rust",
-    "//sdk/fidl/fuchsia.metrics:fuchsia.metrics_rust",
     "//sdk/fidl/fuchsia.recovery.policy:fuchsia.recovery.policy_rust",
     "//sdk/fidl/fuchsia.recovery.ui:fuchsia.recovery.ui_rust",
     "//sdk/fidl/fuchsia.wlan.policy:fuchsia.wlan.policy_rust",
@@ -220,22 +205,17 @@ rustc_binary("bin") {
     "//third_party/rust_crates:async-channel",
     "//third_party/rust_crates:euclid",
     "//third_party/rust_crates:futures",
-    "//third_party/rust_crates:tracing",
   ]
   test_deps = [
     "//src/lib/fuchsia",
     "//src/storage/testing:storage_driver_test_realm",
-    "//src/sys/pkg/testing/mock-metrics",
     "//third_party/rust_crates:async-trait",
   ]
   features = [
     "debug_console",
     "http_setup_server",
   ]
-  sources = [
-    "src/cobalt.rs",
-    "src/main.rs",
-  ]
+  sources = [ "src/main.rs" ]
   if (enable_recovery_ui_v2) {
     deps += [
       ":icons",

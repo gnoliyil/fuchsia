@@ -13,7 +13,6 @@ use {
     fuchsia_component::client::connect_channel_to_protocol,
     fuchsia_component::client::connect_to_protocol,
     fuchsia_zircon as zx,
-    recovery_metrics_registry::cobalt_registry as metrics,
     tracing::error,
 };
 
@@ -128,7 +127,8 @@ macro_rules! log_metric {
     };
 }
 
-pub(crate) use log_metric;
+pub use log_metric;
+pub use recovery_metrics_registry::cobalt_registry as metrics;
 
 #[cfg(test)]
 mod tests {

@@ -43,8 +43,6 @@ use {
     },
 };
 
-#[cfg(feature = "http_setup_server")]
-mod cobalt;
 #[cfg(feature = "ota_ui")]
 mod ui_v2;
 
@@ -57,13 +55,12 @@ use {
     fuchsia_async::DurationExt,
     fuchsia_runtime::{take_startup_handle, HandleType},
     ota_lib::{ota, setup, OtaComponent, OtaManager, OtaStatus},
-    recovery_metrics_registry::cobalt_registry as metrics,
     recovery_ui::{
         button::{Button, ButtonMessages, ButtonOptions, ButtonShape, SceneBuilderButtonExt},
         keyboard::{KeyboardMessages, KeyboardViewAssistant},
         proxy_view_assistant::ProxyMessages,
     },
-    recovery_util::{reboot::request_reboot, regulatory},
+    recovery_util::{cobalt, cobalt::metrics, reboot::request_reboot, regulatory},
     std::sync::Arc,
 };
 

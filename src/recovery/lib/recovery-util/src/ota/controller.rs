@@ -2,12 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+use crate::cobalt;
 use crate::ota::state_machine::{Event, EventProcessor, StateHandler};
 use fuchsia_async::{self as fasync, Task};
 use futures::channel::mpsc;
 use futures::SinkExt;
 use futures::StreamExt;
 use mockall::automock;
+use recovery_metrics_registry::cobalt_registry as metrics;
 
 #[derive(Clone)]
 pub struct EventSender {
@@ -23,6 +25,7 @@ impl EventSender {
 #[automock]
 pub trait SendEvent {
     fn send(&mut self, event: Event);
+    fn send_recovery_stage_event(&mut self, status: metrics::RecoveryEventMetricDimensionResult);
 }
 
 impl SendEvent for EventSender {
@@ -33,6 +36,12 @@ impl SendEvent for EventSender {
             if let Err(error) = sender.send(event).await {
                 eprintln!("Failed to send event {:?}: {}", event_clone, error);
             }
+        })
+        .detach();
+    }
+    fn send_recovery_stage_event(&mut self, status: metrics::RecoveryEventMetricDimensionResult) {
+        fasync::Task::local(async move {
+            cobalt::log_metric!(cobalt::log_recovery_stage, status);
         })
         .detach();
     }
