@@ -1,0 +1,7 @@
+{
+    "platform": {
+        "feature_set_level": "bringup",
+        "build_type": "user"
+    },
+    "product": {}
+}
