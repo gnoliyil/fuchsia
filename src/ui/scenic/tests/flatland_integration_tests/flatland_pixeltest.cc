@@ -38,10 +38,10 @@ fuc::ColorRgba GetColorInFloat(ui_testing::Pixel color) {
 // Asserts whether the BGRA channel value difference between |actual| and |expected| is at most
 // |kEpsilon|.
 void CompareColor(ui_testing::Pixel actual, ui_testing::Pixel expected) {
-  ASSERT_NEAR(actual.blue, expected.blue, kEpsilon);
-  ASSERT_NEAR(actual.green, expected.green, kEpsilon);
-  ASSERT_NEAR(actual.red, expected.red, kEpsilon);
-  ASSERT_NEAR(actual.alpha, expected.alpha, kEpsilon);
+  EXPECT_NEAR(actual.blue, expected.blue, kEpsilon);
+  EXPECT_NEAR(actual.green, expected.green, kEpsilon);
+  EXPECT_NEAR(actual.red, expected.red, kEpsilon);
+  EXPECT_NEAR(actual.alpha, expected.alpha, kEpsilon);
 }
 
 // Test fixture that sets up an environment with a Scenic we can connect to.
