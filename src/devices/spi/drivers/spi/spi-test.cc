@@ -10,6 +10,7 @@
 #include <lib/ddk/metadata.h>
 #include <lib/fidl/cpp/wire/client.h>
 #include <lib/spi/spi.h>
+#include <zircon/errors.h>
 
 #include <map>
 
@@ -240,22 +241,19 @@ TEST_F(SpiDeviceTest, SpiTest) {
   for (auto it = spi_bus->children().begin(); it != spi_bus->children().end(); it++, i++) {
     spi_impl_.current_test_cs_ = i;
 
-    zx::channel client, server;
-    ASSERT_OK(zx::channel::create(0, &client, &server));
-    fidl::BindServer<fuchsia_hardware_spi::Device>(loop_.dispatcher(), std::move(server),
-                                                   (*it)->GetDeviceContext<SpiChild>());
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Device>();
+    ASSERT_OK(endpoints);
+    auto& [client, server] = endpoints.value();
+    fidl::BindServer(loop_.dispatcher(), std::move(server), (*it)->GetDeviceContext<SpiChild>());
 
     spi_impl_.test_mode_ = FakeDdkSpiImpl::SpiTestMode::kTransmit;
-    zx_status_t status = spilib_transmit(client.get(), txbuf, sizeof txbuf);
-    EXPECT_OK(status, "");
+    EXPECT_OK(spilib_transmit(client, txbuf, sizeof txbuf));
 
     spi_impl_.test_mode_ = FakeDdkSpiImpl::SpiTestMode::kReceive;
-    status = spilib_receive(client.get(), rxbuf, sizeof rxbuf);
-    EXPECT_OK(status, "");
+    EXPECT_OK(spilib_receive(client, rxbuf, sizeof rxbuf));
 
     spi_impl_.test_mode_ = FakeDdkSpiImpl::SpiTestMode::kExchange;
-    status = spilib_exchange(client.get(), txbuf, rxbuf, sizeof txbuf);
-    EXPECT_OK(status, "");
+    EXPECT_OK(spilib_exchange(client, txbuf, rxbuf, sizeof txbuf));
   }
 
   // clean it up
@@ -277,18 +275,20 @@ TEST_F(SpiDeviceTest, SpiFidlVmoTest) {
   fidl::WireSharedClient<fuchsia_hardware_spi::Device> cs0_client, cs1_client;
 
   {
-    zx::channel client, server;
-    ASSERT_OK(zx::channel::create(0, &client, &server));
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Device>();
+    ASSERT_OK(endpoints);
+    auto& [client, server] = endpoints.value();
     const auto& child0 = spi_bus->children().front();
-    child0->GetDeviceContext<SpiChild>()->SpiConnectServer(std::move(server));
+    child0->GetDeviceContext<SpiChild>()->SpiConnectServer(server.TakeChannel());
     cs0_client.Bind(std::move(client), loop_.dispatcher());
   }
 
   {
-    zx::channel client, server;
-    ASSERT_OK(zx::channel::create(0, &client, &server));
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Device>();
+    ASSERT_OK(endpoints);
+    auto& [client, server] = endpoints.value();
     const auto& child1 = *++spi_bus->children().begin();
-    child1->GetDeviceContext<SpiChild>()->SpiConnectServer(std::move(server));
+    child1->GetDeviceContext<SpiChild>()->SpiConnectServer(server.TakeChannel());
     cs1_client.Bind(std::move(client), loop_.dispatcher());
   }
 
@@ -301,8 +301,8 @@ TEST_F(SpiDeviceTest, SpiFidlVmoTest) {
     ASSERT_OK(cs0_vmo.duplicate(ZX_RIGHT_SAME_RIGHTS, &vmo.vmo));
     auto result = cs0_client.sync()->RegisterVmo(1, std::move(vmo),
                                                  SharedVmoRight::kRead | SharedVmoRight::kWrite);
-    ASSERT_TRUE(result.ok());
-    EXPECT_TRUE(result->is_ok());
+    ASSERT_OK(result.status());
+    EXPECT_TRUE(result.value().is_ok());
   }
 
   {
@@ -310,8 +310,8 @@ TEST_F(SpiDeviceTest, SpiFidlVmoTest) {
     ASSERT_OK(cs1_vmo.duplicate(ZX_RIGHT_SAME_RIGHTS, &vmo.vmo));
     auto result = cs1_client.sync()->RegisterVmo(2, std::move(vmo),
                                                  SharedVmoRight::kRead | SharedVmoRight::kWrite);
-    ASSERT_TRUE(result.ok());
-    EXPECT_TRUE(result->is_ok());
+    ASSERT_OK(result.status());
+    EXPECT_TRUE(result.value().is_ok());
   }
 
   ASSERT_OK(cs0_vmo.write(kTestData, 1024, sizeof(kTestData)));
@@ -327,8 +327,8 @@ TEST_F(SpiDeviceTest, SpiFidlVmoTest) {
             .offset = 2048,
             .size = sizeof(kTestData),
         });
-    ASSERT_TRUE(result.ok());
-    EXPECT_TRUE(result->is_ok());
+    ASSERT_OK(result.status());
+    EXPECT_TRUE(result.value().is_ok());
 
     uint8_t buf[sizeof(kTestData)];
     ASSERT_OK(cs0_vmo.read(buf, 2048, sizeof(buf)));
@@ -342,8 +342,8 @@ TEST_F(SpiDeviceTest, SpiFidlVmoTest) {
         .offset = 1024,
         .size = sizeof(kTestData),
     });
-    ASSERT_TRUE(result.ok());
-    EXPECT_TRUE(result->is_ok());
+    ASSERT_OK(result.status());
+    EXPECT_TRUE(result.value().is_ok());
   }
 
   {
@@ -352,8 +352,8 @@ TEST_F(SpiDeviceTest, SpiFidlVmoTest) {
         .offset = 1024,
         .size = sizeof(kTestData),
     });
-    ASSERT_TRUE(result.ok());
-    EXPECT_TRUE(result->is_ok());
+    ASSERT_OK(result.status());
+    EXPECT_TRUE(result.value().is_ok());
 
     uint8_t buf[sizeof(kTestData)];
     ASSERT_OK(cs0_vmo.read(buf, 1024, sizeof(buf)));
@@ -362,14 +362,14 @@ TEST_F(SpiDeviceTest, SpiFidlVmoTest) {
 
   {
     auto result = cs0_client.sync()->UnregisterVmo(1);
-    ASSERT_TRUE(result.ok());
-    EXPECT_TRUE(result->is_ok());
+    ASSERT_OK(result.status());
+    EXPECT_TRUE(result.value().is_ok());
   }
 
   {
     auto result = cs1_client.sync()->UnregisterVmo(2);
-    ASSERT_TRUE(result.ok());
-    EXPECT_TRUE(result->is_ok());
+    ASSERT_OK(result.status());
+    EXPECT_TRUE(result.value().is_ok());
   }
 
   spi_bus->ReleaseOp();
@@ -386,18 +386,20 @@ TEST_F(SpiDeviceTest, SpiFidlVectorTest) {
   EXPECT_EQ(spi_bus->child_count(), std::size(kSpiChannels));
 
   {
-    zx::channel client, server;
-    ASSERT_OK(zx::channel::create(0, &client, &server));
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Device>();
+    ASSERT_OK(endpoints);
+    auto& [client, server] = endpoints.value();
     const auto& child0 = spi_bus->children().front();
-    child0->GetDeviceContext<SpiChild>()->SpiConnectServer(std::move(server));
+    child0->GetDeviceContext<SpiChild>()->SpiConnectServer(server.TakeChannel());
     cs0_client.Bind(std::move(client), loop_.dispatcher());
   }
 
   {
-    zx::channel client, server;
-    ASSERT_OK(zx::channel::create(0, &client, &server));
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Device>();
+    ASSERT_OK(endpoints);
+    auto& [client, server] = endpoints.value();
     const auto& child1 = *++spi_bus->children().begin();
-    child1->GetDeviceContext<SpiChild>()->SpiConnectServer(std::move(server));
+    child1->GetDeviceContext<SpiChild>()->SpiConnectServer(server.TakeChannel());
     cs1_client.Bind(std::move(client), loop_.dispatcher());
   }
 
@@ -447,18 +449,20 @@ TEST_F(SpiDeviceTest, SpiFidlVectorErrorTest) {
   EXPECT_EQ(spi_bus->child_count(), std::size(kSpiChannels));
 
   {
-    zx::channel client, server;
-    ASSERT_OK(zx::channel::create(0, &client, &server));
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Device>();
+    ASSERT_OK(endpoints);
+    auto& [client, server] = endpoints.value();
     const auto& child0 = spi_bus->children().front();
-    child0->GetDeviceContext<SpiChild>()->SpiConnectServer(std::move(server));
+    child0->GetDeviceContext<SpiChild>()->SpiConnectServer(server.TakeChannel());
     cs0_client.Bind(std::move(client), loop_.dispatcher());
   }
 
   {
-    zx::channel client, server;
-    ASSERT_OK(zx::channel::create(0, &client, &server));
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Device>();
+    ASSERT_OK(endpoints);
+    auto& [client, server] = endpoints.value();
     const auto& child1 = *++spi_bus->children().begin();
-    child1->GetDeviceContext<SpiChild>()->SpiConnectServer(std::move(server));
+    child1->GetDeviceContext<SpiChild>()->SpiConnectServer(server.TakeChannel());
     cs1_client.Bind(std::move(client), loop_.dispatcher());
   }
 
@@ -508,54 +512,56 @@ TEST_F(SpiDeviceTest, AssertCsWithSiblingTest) {
   EXPECT_EQ(spi_bus->child_count(), std::size(kSpiChannels));
 
   {
-    zx::channel client, server;
-    ASSERT_OK(zx::channel::create(0, &client, &server));
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Device>();
+    ASSERT_OK(endpoints);
+    auto& [client, server] = endpoints.value();
     const auto& child0 = spi_bus->children().front();
-    child0->GetDeviceContext<SpiChild>()->SpiConnectServer(std::move(server));
+    child0->GetDeviceContext<SpiChild>()->SpiConnectServer(server.TakeChannel());
     cs0_client.Bind(std::move(client), loop_.dispatcher());
   }
 
   {
-    zx::channel client, server;
-    ASSERT_OK(zx::channel::create(0, &client, &server));
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Device>();
+    ASSERT_OK(endpoints);
+    auto& [client, server] = endpoints.value();
     const auto& child1 = *++spi_bus->children().begin();
-    child1->GetDeviceContext<SpiChild>()->SpiConnectServer(std::move(server));
+    child1->GetDeviceContext<SpiChild>()->SpiConnectServer(server.TakeChannel());
     cs1_client.Bind(std::move(client), loop_.dispatcher());
   }
 
   {
     auto result = cs0_client.sync()->CanAssertCs();
-    ASSERT_TRUE(result.ok());
+    ASSERT_OK(result.status());
     ASSERT_FALSE(result.value().can);
   }
 
   {
     auto result = cs1_client.sync()->CanAssertCs();
-    ASSERT_TRUE(result.ok());
+    ASSERT_OK(result.status());
     ASSERT_FALSE(result.value().can);
   }
 
   {
     auto result = cs0_client.sync()->AssertCs();
-    ASSERT_TRUE(result.ok());
+    ASSERT_OK(result.status());
     ASSERT_STATUS(result.value().status, ZX_ERR_NOT_SUPPORTED);
   }
 
   {
     auto result = cs1_client.sync()->AssertCs();
-    ASSERT_TRUE(result.ok());
+    ASSERT_OK(result.status());
     ASSERT_STATUS(result.value().status, ZX_ERR_NOT_SUPPORTED);
   }
 
   {
     auto result = cs0_client.sync()->DeassertCs();
-    ASSERT_TRUE(result.ok());
+    ASSERT_OK(result.status());
     ASSERT_STATUS(result.value().status, ZX_ERR_NOT_SUPPORTED);
   }
 
   {
     auto result = cs1_client.sync()->DeassertCs();
-    ASSERT_TRUE(result.ok());
+    ASSERT_OK(result.status());
     ASSERT_STATUS(result.value().status, ZX_ERR_NOT_SUPPORTED);
   }
 }
@@ -571,28 +577,29 @@ TEST_F(SpiDeviceTest, AssertCsNoSiblingTest) {
   EXPECT_EQ(spi_bus->child_count(), 1);
 
   {
-    zx::channel client, server;
-    ASSERT_OK(zx::channel::create(0, &client, &server));
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Device>();
+    ASSERT_OK(endpoints);
+    auto& [client, server] = endpoints.value();
     const auto& child0 = spi_bus->children().front();
-    child0->GetDeviceContext<SpiChild>()->SpiConnectServer(std::move(server));
+    child0->GetDeviceContext<SpiChild>()->SpiConnectServer(server.TakeChannel());
     cs0_client.Bind(std::move(client), loop_.dispatcher());
   }
 
   {
     auto result = cs0_client.sync()->CanAssertCs();
-    ASSERT_TRUE(result.ok());
+    ASSERT_OK(result.status());
     ASSERT_TRUE(result.value().can);
   }
 
   {
     auto result = cs0_client.sync()->AssertCs();
-    ASSERT_TRUE(result.ok());
+    ASSERT_OK(result.status());
     ASSERT_OK(result.value().status);
   }
 
   {
     auto result = cs0_client.sync()->DeassertCs();
-    ASSERT_TRUE(result.ok());
+    ASSERT_OK(result.status());
     ASSERT_OK(result.value().status);
   }
 }
@@ -620,27 +627,27 @@ TEST_F(SpiDeviceTest, OneClient) {
 
   // Establish a FIDL connection and verify that it works.
   {
-    zx::channel client, server;
-    ASSERT_OK(zx::channel::create(0, &client, &server));
-    spi_child->SpiConnectServer(std::move(server));
-    cs0_client = fidl::WireSyncClient<fuchsia_hardware_spi::Device>(std::move(client));
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Device>();
+    ASSERT_OK(endpoints);
+    auto& [client, server] = endpoints.value();
+    spi_child->SpiConnectServer(server.TakeChannel());
+    cs0_client.Bind(std::move(client));
   }
 
   {
     auto result = cs0_client->CanAssertCs();
-    ASSERT_TRUE(result.ok());
+    ASSERT_OK(result.status());
     ASSERT_TRUE(result.value().can);
   }
 
   // Trying to make a new connection should fail.
   {
-    zx::channel client, server;
-    ASSERT_OK(zx::channel::create(0, &client, &server));
-    spi_child->SpiConnectServer(std::move(server));
-    fidl::WireSyncClient<fuchsia_hardware_spi::Device> cs0_client_1(std::move(client));
-
-    auto result = cs0_client_1->CanAssertCs();
-    EXPECT_FALSE(result.ok());
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Device>();
+    ASSERT_OK(endpoints);
+    auto& [client, server] = endpoints.value();
+    spi_child->SpiConnectServer(server.TakeChannel());
+    fidl::WireSyncClient cs0_client_1(std::move(client));
+    EXPECT_STATUS(cs0_client_1->CanAssertCs().status(), ZX_ERR_PEER_CLOSED);
   }
 
   EXPECT_FALSE(spi_impl_.vmos_released_since_last_call());
@@ -651,21 +658,24 @@ TEST_F(SpiDeviceTest, OneClient) {
   // We don't know when the driver will be ready for a new client, just loop
   // until the connection is established.
   for (;;) {
-    zx::channel client, server;
-    ASSERT_OK(zx::channel::create(0, &client, &server));
-    spi_child->SpiConnectServer(std::move(server));
-    cs0_client = fidl::WireSyncClient<fuchsia_hardware_spi::Device>(std::move(client));
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Device>();
+    ASSERT_OK(endpoints);
+    auto& [client, server] = endpoints.value();
+    spi_child->SpiConnectServer(server.TakeChannel());
+    cs0_client.Bind(std::move(client));
 
     auto result = cs0_client->CanAssertCs();
     if (result.ok()) {
       break;
     }
+    EXPECT_STATUS(result.status(), ZX_ERR_PEER_CLOSED);
+    cs0_client = {};
   }
 
   EXPECT_TRUE(spi_impl_.vmos_released_since_last_call());
 
   // DdkOpen should fail when another client is connected
-  EXPECT_NOT_OK(spi_child->DdkOpen(nullptr, 0));
+  EXPECT_STATUS(spi_child->DdkOpen(nullptr, 0), ZX_ERR_ALREADY_BOUND);
 
   // Close the first client and make sure DdkOpen now works
   cs0_client = {};
@@ -678,27 +688,26 @@ TEST_F(SpiDeviceTest, OneClient) {
   // FIDL clients shouldn't be able to connect, and calling DdkOpen a second
   // time should fail
   {
-    zx::channel client, server;
-    ASSERT_OK(zx::channel::create(0, &client, &server));
-    spi_child->SpiConnectServer(std::move(server));
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Device>();
+    ASSERT_OK(endpoints);
+    auto& [client, server] = endpoints.value();
+    spi_child->SpiConnectServer(server.TakeChannel());
 
-    fidl::WireSyncClient<fuchsia_hardware_spi::Device> cs0_client_1(std::move(client));
-
-    auto result = cs0_client_1->CanAssertCs();
-    EXPECT_FALSE(result.ok());
+    fidl::WireSyncClient cs0_client_1(std::move(client));
+    EXPECT_STATUS(cs0_client_1->CanAssertCs().status(), ZX_ERR_PEER_CLOSED);
   }
 
-  EXPECT_NOT_OK(spi_child->DdkOpen(nullptr, 0));
+  EXPECT_STATUS(spi_child->DdkOpen(nullptr, 0), ZX_ERR_ALREADY_BOUND);
 
   // Call DdkClose and make sure that a new client can now connect.
   spi_child->DdkClose(0);
 
   for (;;) {
-    zx::channel client, server;
-    ASSERT_OK(zx::channel::create(0, &client, &server));
-    spi_child->SpiConnectServer(std::move(server));
-
-    cs0_client = fidl::WireSyncClient<fuchsia_hardware_spi::Device>(std::move(client));
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Device>();
+    ASSERT_OK(endpoints);
+    auto& [client, server] = endpoints.value();
+    spi_child->SpiConnectServer(server.TakeChannel());
+    cs0_client.Bind(std::move(client));
 
     auto result = cs0_client->CanAssertCs();
     if (result.ok()) {
@@ -722,15 +731,16 @@ TEST_F(SpiDeviceTest, DdkLifecycle) {
   auto* const child0 = spi_bus->children().front()->GetDeviceContext<SpiChild>();
 
   {
-    zx::channel client, server;
-    ASSERT_OK(zx::channel::create(0, &client, &server));
-    child0->SpiConnectServer(std::move(server));
-    cs0_client = fidl::WireSyncClient<fuchsia_hardware_spi::Device>(std::move(client));
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Device>();
+    ASSERT_OK(endpoints);
+    auto& [client, server] = endpoints.value();
+    child0->SpiConnectServer(server.TakeChannel());
+    cs0_client.Bind(std::move(client));
   }
 
   {
     auto result = cs0_client->AssertCs();
-    ASSERT_TRUE(result.ok());
+    ASSERT_OK(result.status());
     EXPECT_OK(result.value().status);
   }
 
@@ -739,9 +749,11 @@ TEST_F(SpiDeviceTest, DdkLifecycle) {
 
   {
     auto result = cs0_client->DeassertCs();
-    ASSERT_TRUE(result.ok());
+    ASSERT_OK(result.status());
     // DdkUnbind has been called, the child device should respond with errors.
-    EXPECT_NOT_OK(result.value().status);
+    //
+    // This does not appear to be testing the right thing.
+    EXPECT_STATUS(result.value().status, ZX_ERR_NOT_SUPPORTED);
   }
 
   spi_bus->children().front()->ReleaseOp();
@@ -751,9 +763,9 @@ TEST_F(SpiDeviceTest, DdkLifecycle) {
 
   {
     auto result = cs0_client->DeassertCs();
-    ASSERT_TRUE(result.ok());
+    ASSERT_OK(result.status());
     // The child should still exist and reply since the parent holds a reference to it.
-    EXPECT_NOT_OK(result.value().status);
+    EXPECT_STATUS(result.value().status, ZX_ERR_NOT_SUPPORTED);
   }
 
   spi_bus->UnbindOp();

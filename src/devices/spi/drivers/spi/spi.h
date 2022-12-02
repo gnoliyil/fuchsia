@@ -31,7 +31,8 @@ class SpiDevice : public SpiDeviceType {
   void DdkUnbind(ddk::UnbindTxn txn);
   void DdkRelease();
 
-  void ConnectServer(zx::channel server, fbl::RefPtr<SpiChild> child);
+  void ConnectServer(fidl::ServerEnd<fuchsia_hardware_spi::Device> server,
+                     const fbl::RefPtr<SpiChild>& child);
 
  private:
   void AddChildren(const ddk::SpiImplProtocolClient& spi, async_dispatcher_t* dispatcher);

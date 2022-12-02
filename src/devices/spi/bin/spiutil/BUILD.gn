@@ -5,7 +5,7 @@
 executable("spiutil") {
   sources = [ "spiutil.cc" ]
   deps = [
-    "//sdk/lib/fdio",
+    "//sdk/lib/component/incoming/cpp",
     "//src/lib/ddk",
     "//zircon/system/ulib/spi",
   ]

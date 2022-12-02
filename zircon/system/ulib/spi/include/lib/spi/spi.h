@@ -5,17 +5,15 @@
 #ifndef LIB_SPI_SPI_H_
 #define LIB_SPI_SPI_H_
 
-#include <zircon/compiler.h>
-#include <zircon/types.h>
+#include <fidl/fuchsia.hardware.spi/cpp/wire.h>
 
-__BEGIN_CDECLS
+zx_status_t spilib_transmit(fidl::UnownedClientEnd<fuchsia_hardware_spi::Device> device, void* data,
+                            size_t length);
 
-zx_status_t spilib_transmit(zx_handle_t channel, void* data, size_t length);
+zx_status_t spilib_receive(fidl::UnownedClientEnd<fuchsia_hardware_spi::Device> device, void* data,
+                           uint32_t length);
 
-zx_status_t spilib_receive(zx_handle_t channel, void* data, size_t length);
-
-zx_status_t spilib_exchange(zx_handle_t channel, void* txdata, void* rxdata, size_t length);
-
-__END_CDECLS
+zx_status_t spilib_exchange(fidl::UnownedClientEnd<fuchsia_hardware_spi::Device> device,
+                            void* txdata, void* rxdata, size_t length);
 
 #endif  // LIB_SPI_SPI_H_

@@ -6,46 +6,51 @@
 
 #include <fidl/fuchsia.hardware.spi/cpp/wire.h>
 
-__BEGIN_CDECLS
-
-zx_status_t spilib_transmit(zx_handle_t channel, void* data, size_t length) {
-  auto result = fidl::WireCall(fidl::UnownedClientEnd<fuchsia_hardware_spi::Device>(channel))
-                    ->TransmitVector(fidl::VectorView<uint8_t>::FromExternal(
-                        reinterpret_cast<uint8_t*>(data), length));
-  if (result.status() != ZX_OK) {
+zx_status_t spilib_transmit(fidl::UnownedClientEnd<fuchsia_hardware_spi::Device> device, void* data,
+                            size_t length) {
+  const fidl::WireResult result = fidl::WireCall(device)->TransmitVector(
+      fidl::VectorView<uint8_t>::FromExternal(reinterpret_cast<uint8_t*>(data), length));
+  if (!result.ok()) {
     return result.status();
   }
-  if (result->status != ZX_OK) {
-    return result->status;
+  const fidl::WireResponse response = result.value();
+  return response.status;
+}
+
+zx_status_t spilib_receive(fidl::UnownedClientEnd<fuchsia_hardware_spi::Device> device, void* data,
+                           uint32_t length) {
+  const fidl::WireResult result = fidl::WireCall(device)->ReceiveVector(length);
+  if (!result.ok()) {
+    return result.status();
   }
+  const fidl::WireResponse response = result.value();
+  if (zx_status_t status = response.status; status != ZX_OK) {
+    return status;
+  }
+  if (response.data.count() > length) {
+    return ZX_ERR_IO_OVERRUN;
+  }
+  memcpy(data, response.data.data(), response.data.count());
   return ZX_OK;
 }
 
-zx_status_t spilib_receive(zx_handle_t channel, void* data, size_t length) {
-  auto result = fidl::WireCall(fidl::UnownedClientEnd<fuchsia_hardware_spi::Device>(channel))
-                    ->ReceiveVector(length);
+zx_status_t spilib_exchange(fidl::UnownedClientEnd<fuchsia_hardware_spi::Device> device,
+                            void* txdata, void* rxdata, size_t length) {
+  const fidl::WireResult result = fidl::WireCall(device)->ExchangeVector(
+      fidl::VectorView<uint8_t>::FromExternal(reinterpret_cast<uint8_t*>(txdata), length));
   if (result.status() != ZX_OK) {
     return result.status();
   }
-  if (result->status != ZX_OK) {
-    return result->status;
-  }
-  memcpy(data, result->data.data(), result->data.count());
-  return ZX_OK;
-}
-
-zx_status_t spilib_exchange(zx_handle_t channel, void* txdata, void* rxdata, size_t length) {
-  auto result = fidl::WireCall(fidl::UnownedClientEnd<fuchsia_hardware_spi::Device>(channel))
-                    ->ExchangeVector(fidl::VectorView<uint8_t>::FromExternal(
-                        reinterpret_cast<uint8_t*>(txdata), length));
-  if (result.status() != ZX_OK) {
+  if (!result.ok()) {
     return result.status();
   }
-  if (result->status != ZX_OK) {
-    return result->status;
+  const fidl::WireResponse response = result.value();
+  if (zx_status_t status = response.status; status != ZX_OK) {
+    return status;
   }
-  memcpy(rxdata, result->rxdata.data(), result->rxdata.count());
+  if (response.rxdata.count() > length) {
+    return ZX_ERR_IO_OVERRUN;
+  }
+  memcpy(rxdata, response.rxdata.data(), response.rxdata.count());
   return ZX_OK;
 }
-
-__END_CDECLS

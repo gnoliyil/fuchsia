@@ -11,7 +11,4 @@ zx_library("spi") {
   public_deps =
       [ "//sdk/fidl/fuchsia.hardware.spi:fuchsia.hardware.spi_cpp_wire" ]
   deps = [ "//sdk/fidl/fuchsia.hardware.spi:fuchsia.hardware.spi_cpp_wire" ]
-
-  # TODO(https://fxbug.dev/58162): delete the below and fix compiler warnings
-  configs += [ "//build/config:Wno-conversion" ]
 }

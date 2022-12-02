@@ -194,32 +194,25 @@ void SpiDevice::AddChildren(const ddk::SpiImplProtocolClient& spi, async_dispatc
   }
 }
 
-void SpiDevice::ConnectServer(zx::channel server, fbl::RefPtr<SpiChild> child) {
+void SpiDevice::ConnectServer(fidl::ServerEnd<fuchsia_hardware_spi::Device> server,
+                              const fbl::RefPtr<SpiChild>& child) {
   fbl::AutoLock lock(&lock_);
   if (shutdown_) {
-    fidl::ServerEnd<fuchsia_hardware_spi::Device>(std::move(server)).Close(ZX_ERR_ALREADY_BOUND);
+    server.Close(ZX_ERR_ALREADY_BOUND);
     return;
   }
 
   if (!loop_started_) {
-    zx_status_t status;
-    if ((status = loop_.StartThread("spi-child-thread")) != ZX_OK) {
+    if (zx_status_t status = loop_.StartThread("spi-child-thread"); status != ZX_OK) {
       zxlogf(ERROR, "Failed to start async loop: %d", status);
     } else {
       loop_started_ = true;
     }
   }
 
-  // Make sure that the child reference counter doesn't get decreased when it goes out of scope
-  // here. The dispatcher now holds a pointer to the child, so the child can't be freed until after
-  // the callback runs.
-  fidl::BindServer<fuchsia_hardware_spi::Device>(
-      loop_.dispatcher(), std::move(server), fbl::ExportToRawPtr(&child),
-      [](SpiChild* ref_counted_child, fidl::UnbindInfo info,
-         fidl::ServerEnd<fuchsia_hardware_spi::Device> server) {
-        fbl::RefPtr<SpiChild> child_ref_ptr = fbl::ImportFromRawPtr(ref_counted_child);
-        child_ref_ptr->DdkClose(0);
-      });
+  fidl::BindServer(loop_.dispatcher(), std::move(server), child.get(),
+                   [child](SpiChild*, fidl::UnbindInfo,
+                           fidl::ServerEnd<fuchsia_hardware_spi::Device>) { child->DdkClose(0); });
 }
 
 static zx_driver_ops_t driver_ops = []() {

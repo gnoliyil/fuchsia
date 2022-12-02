@@ -16,8 +16,6 @@
 
 namespace spi {
 
-namespace sharedmemory = fuchsia_hardware_sharedmemory;
-
 void SpiChild::TransmitVector(TransmitVectorRequestView request,
                               TransmitVectorCompleter::Sync& completer) {
   if (shutdown_) {
@@ -48,7 +46,7 @@ void SpiChild::ReceiveVector(ReceiveVectorRequestView request,
   zx_status_t status = spi_.Exchange(cs_, nullptr, 0, rxdata.begin(), request->size, &rx_actual);
   if (status == ZX_OK && rx_actual == request->size) {
     auto rx_vector = fidl::VectorView<uint8_t>::FromExternal(rxdata.data(), request->size);
-    completer.Reply(ZX_OK, std::move(rx_vector));
+    completer.Reply(ZX_OK, rx_vector);
   } else {
     completer.Reply(status == ZX_OK ? ZX_ERR_INTERNAL : status, fidl::VectorView<uint8_t>());
   }
@@ -69,7 +67,7 @@ void SpiChild::ExchangeVector(ExchangeVectorRequestView request,
       spi_.Exchange(cs_, request->txdata.data(), size, rxdata.begin(), size, &rx_actual);
   if (status == ZX_OK && rx_actual == size) {
     auto rx_vector = fidl::VectorView<uint8_t>::FromExternal(rxdata.data(), size);
-    completer.Reply(ZX_OK, std::move(rx_vector));
+    completer.Reply(ZX_OK, rx_vector);
   } else {
     completer.Reply(status == ZX_OK ? ZX_ERR_INTERNAL : status, fidl::VectorView<uint8_t>());
   }
@@ -202,12 +200,13 @@ void SpiChild::DeassertCs(DeassertCsCompleter::Sync& completer) {
 }
 
 void SpiChild::SpiConnectServer(zx::channel server) {
+  fidl::ServerEnd<fuchsia_hardware_spi::Device> server_end(std::move(server));
   fbl::AutoLock lock(&lock_);
   if (!shutdown_ && !connected_) {
-    spi_parent_.ConnectServer(std::move(server), fbl::RefPtr(this));
+    spi_parent_.ConnectServer(std::move(server_end), fbl::RefPtr(this));
     connected_ = true;
   } else {
-    fidl::ServerEnd<fuchsia_hardware_spi::Device>(std::move(server)).Close(ZX_ERR_ALREADY_BOUND);
+    server_end.Close(ZX_ERR_ALREADY_BOUND);
   }
 }
 

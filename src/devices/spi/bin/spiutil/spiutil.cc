@@ -5,14 +5,15 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <lib/fdio/fdio.h>
-#include <lib/fdio/unsafe.h>
+#include <lib/component/incoming/cpp/service_client.h>
 #include <lib/spi/spi.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <zircon/status.h>
+
+#include <string>
 
 void usage(char* prog) {
   fprintf(stderr, "usage:\n");
@@ -30,9 +31,7 @@ void convert_args(char** argv, size_t length, uint8_t* buffer) {
 void print_buffer(uint8_t* buffer, size_t length) {
   char ascii[16];
   char* a = ascii;
-  size_t i;
-
-  for (i = 0; i < length; i++) {
+  for (size_t i = 0; i < length; i++) {
     if (i % 16 == 0) {
       printf("%04zx: ", i);
       a = ascii;
@@ -40,7 +39,7 @@ void print_buffer(uint8_t* buffer, size_t length) {
 
     printf("%02x ", buffer[i]);
     if (isprint(buffer[i])) {
-      *a++ = buffer[i];
+      *a++ = static_cast<char>(buffer[i]);
     } else {
       *a++ = '.';
     }
@@ -52,7 +51,7 @@ void print_buffer(uint8_t* buffer, size_t length) {
     }
   }
 
-  int rem = i % 16;
+  int rem = static_cast<int>(length) % 16;
   if (rem != 0) {
     int spaces = (16 - rem) * 3;
     if (rem < 8) {
@@ -65,44 +64,32 @@ void print_buffer(uint8_t* buffer, size_t length) {
 int main(int argc, char** argv) {
   if (argc < 4) {
     usage(argv[0]);
-    return ZX_ERR_INTERNAL;
+    return -1;
   }
 
-  int fd = open(argv[1], O_RDWR);
-  if (fd < 0) {
-    fprintf(stderr, "%s: %s\n", argv[1], strerror(errno));
-    usage(argv[0]);
-    return ZX_ERR_INTERNAL;
+  zx::result device = component::Connect<fuchsia_hardware_spi::Device>(argv[1]);
+  if (device.is_error()) {
+    fprintf(stderr, "%s: %s\n", argv[1], device.status_string());
+    return -1;
   }
-
-  fdio_t* io = fdio_unsafe_fd_to_io(fd);
-  if (io == nullptr) {
-    fprintf(stderr, "%s: fdio conversion failed\n", argv[1]);
-    close(fd);
-    return ZX_ERR_INTERNAL;
-  }
-
-  zx_status_t status;
-
   switch (argv[2][0]) {
     case 'r': {
-      size_t length = strtoull(argv[3], nullptr, 0);
+      uint32_t length = static_cast<uint32_t>(std::stoul(argv[3], nullptr, 0));
       uint8_t buffer[length];
-      status = spilib_receive(fdio_unsafe_borrow_channel(io), buffer, length);
-      if (status == ZX_OK) {
-        print_buffer(buffer, length);
-      } else {
+      if (zx_status_t status = spilib_receive(device.value(), buffer, length); status != ZX_OK) {
         fprintf(stderr, "error: spilib_receive failed: %s\n", zx_status_get_string(status));
+        return -1;
       }
+      print_buffer(buffer, length);
       break;
     }
     case 'w': {
       size_t length = argc - 3;
       uint8_t buffer[length];
       convert_args(&argv[3], length, buffer);
-      status = spilib_transmit(fdio_unsafe_borrow_channel(io), buffer, length);
-      if (status != ZX_OK) {
+      if (zx_status_t status = spilib_transmit(device.value(), buffer, length); status != ZX_OK) {
         fprintf(stderr, "error: spilib_transmit failed: %s\n", zx_status_get_string(status));
+        return -1;
       }
       break;
     }
@@ -111,21 +98,19 @@ int main(int argc, char** argv) {
       uint8_t send[length];
       uint8_t recv[length];
       convert_args(&argv[3], length, send);
-      status = spilib_exchange(fdio_unsafe_borrow_channel(io), send, recv, length);
-      if (status == ZX_OK) {
-        print_buffer(recv, length);
-      } else {
+      if (zx_status_t status = spilib_exchange(device.value(), send, recv, length);
+          status != ZX_OK) {
         fprintf(stderr, "error: spilib_exchange failed: %s\n", zx_status_get_string(status));
+        return -1;
       }
+      print_buffer(recv, length);
       break;
     }
     default:
       fprintf(stderr, "%c: unrecognized command\n", argv[2][0]);
       usage(argv[0]);
-      status = ZX_ERR_INTERNAL;
+      return -1;
   }
 
-  fdio_unsafe_release(io);
-  close(fd);
-  return status;
+  return 0;
 }
