@@ -313,24 +313,11 @@ impl TestServer {
         Ok(disabled_tests.contains(test_name))
     }
 
-    #[cfg(panic = "unwind")]
-    async fn run_test(
-        &self,
-        _test: &str,
-        _test_component: &Component,
-        _test_stdout: &mut SocketLogWriter,
-    ) -> Result<ftest::Result_, RunTestError> {
-        // this will go away soon, so no use of supporting it when we can't
-        // even test this code.
-        panic!("not supported");
-    }
-
     /// Launches a process that actually runs the test and parses the resulting JSON output.
     ///
     /// The mechanism by which Rust tests are launched in individual processes ignores whether a
     /// particular test was marked `#[ignore]`, so this method preemptively checks whether a
     /// the given test is disabled and returns early if the test should be skipped.
-    #[cfg(panic = "abort")]
     async fn run_test<'a>(
         &'a self,
         test: &str,
