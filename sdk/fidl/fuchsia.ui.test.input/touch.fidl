@@ -9,14 +9,12 @@ using zx;
 
 /// A tool to inject touch events into Input Pipeline.
 ///
-/// NOTE: The fake touch screen's logical coordinate space spans [-1000, 1000] on
-/// both the x and y axes.
-///
 /// Please extend as necessary.
 protocol TouchScreen {
     /// Simulates a tap at the requested location.
     SimulateTap(table {
-        /// Location of the tap event, in the input device's logical coordinate space.
+        /// Location of the tap event, in the coordinate units specified during
+        /// registration.
         1: tap_location fuchsia.math.Vec;
     }) -> ();
 
@@ -31,10 +29,12 @@ protocol TouchScreen {
     /// observed delay between successive events will be approximately equal to the
     /// time required to inject a single event.
     SimulateSwipe(table {
-        /// Starting location of the swipe, in the input device's logical coordinate space.
+        /// Starting location of the swipe, in the coordinate units specified during
+        /// registration.
         1: start_location fuchsia.math.Vec;
 
-        /// End location of the swipe, in the input device's logical coordinate space.
+        /// End location of the swipe, in the coordinate units specified during
+        /// registration.
         2: end_location fuchsia.math.Vec;
 
         /// Number of move events in the swipe.

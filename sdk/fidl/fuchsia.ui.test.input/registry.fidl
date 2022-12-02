@@ -4,6 +4,33 @@
 
 library fuchsia.ui.test.input;
 
+/// Indicates the units used to specify spatial event parameters (unless otherwise
+/// noted).
+@available(added=11)
+type CoordinateUnit = flexible enum {
+    /// The physical display is mapped to a coordinate space spanning [-1000, 1000]
+    /// on both the x and y axes, where positive x extends rightward and positive y
+    /// extends downward.
+    ///
+    /// Example: (500, -500) in the default coordinate space maps to the center of
+    /// the top-right quadrant of the physical display.
+    DEFAULT = 0;
+
+    /// The physical display is mapped to a coordinate space spanning (0, 0) -
+    /// (dispaly width, display height), where positive x extends rightward and
+    /// positive y extends downward.
+    ///
+    /// Test writers should use `fuchsia.ui.display.singleton.Info` to retrieve
+    /// the physical dimensions of the display.
+    ///
+    /// Note that this space matches both the size AND orientation of the physical
+    /// display, so it will NOT mirror any rotations applied to the scene graph.
+    ///
+    /// In general, test writers should NOT assume that a particular view's logical
+    /// coordinate space matches the physical coordinate space.
+    PHYSICAL_PIXELS = 1;
+};
+
 /// *** This protocol must not be used in production. ***
 ///
 /// Enables clients to register fake input devices, which can be used to
@@ -22,6 +49,10 @@ protocol Registry {
     /// if the `Registry` connection closes.
     RegisterTouchScreen(resource table {
         1: device server_end:TouchScreen;
+
+        /// Indicates the coordinate space in which to describe touch events.
+        @available(added=11)
+        2: coordinate_unit CoordinateUnit;
     }) -> ();
 
     /// Enables the client to inject media buttons events using the
