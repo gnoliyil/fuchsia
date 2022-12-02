@@ -626,6 +626,9 @@ class EmptyService final {
     // Construct an instance handler for a FIDL service. It is expected that every member
     // contained in |members| is initialized with a handler.
     InstanceHandler(Members members) {
+      // This should always be ZX_OK. That's because the only possible
+      // error is ZX_ERR_ALREADY_EXISTS which is impossible to occur as fidlc
+      // won't allow service declarations with duplicated names.
     }
   };
 
@@ -744,8 +747,21 @@ class SingleMemberService final {
     // Construct an instance handler for a FIDL service. It is expected that every member
     // contained in |members| is initialized with a handler.
     InstanceHandler(Members members) {
-      // TODO(https://fxbug.dev/102973): Handle member registration failure.
-      (void)this->AddMember<::test_service::FirstProtocol>(std::move(members.single_member), "single_member");
+      // This should always be ZX_OK. That's because the only possible
+      // error is ZX_ERR_ALREADY_EXISTS which is impossible to occur as fidlc
+      // won't allow service declarations with duplicated names.
+      ZX_ASSERT(add_single_member(std::move(members.single_member)).status_value() == ZX_OK);
+    }
+
+    // Adds member "single_member" to the service instance. |handler| will be
+    // invoked on connection attempts.
+    //
+    // # Errors
+    //
+    // Returns ZX_ERR_ALREADY_EXISTS if the member was already added.
+    ::zx::result<> add_single_member(
+        MemberHandler<::test_service::FirstProtocol> handler) {
+      return this->AddMember<::test_service::FirstProtocol>(std::move(handler), "single_member");
     }
   };
 
@@ -924,10 +940,33 @@ class MultiHeterogeneousMemberService final {
     // Construct an instance handler for a FIDL service. It is expected that every member
     // contained in |members| is initialized with a handler.
     InstanceHandler(Members members) {
-      // TODO(https://fxbug.dev/102973): Handle member registration failure.
-      (void)this->AddMember<::test_service::FirstProtocol>(std::move(members.first_member), "first_member");
-      // TODO(https://fxbug.dev/102973): Handle member registration failure.
-      (void)this->AddMember<::test_service::SecondProtocol>(std::move(members.second_member), "second_member");
+      // This should always be ZX_OK. That's because the only possible
+      // error is ZX_ERR_ALREADY_EXISTS which is impossible to occur as fidlc
+      // won't allow service declarations with duplicated names.
+      ZX_ASSERT(add_first_member(std::move(members.first_member)).status_value() == ZX_OK);
+      ZX_ASSERT(add_second_member(std::move(members.second_member)).status_value() == ZX_OK);
+    }
+
+    // Adds member "first_member" to the service instance. |handler| will be
+    // invoked on connection attempts.
+    //
+    // # Errors
+    //
+    // Returns ZX_ERR_ALREADY_EXISTS if the member was already added.
+    ::zx::result<> add_first_member(
+        MemberHandler<::test_service::FirstProtocol> handler) {
+      return this->AddMember<::test_service::FirstProtocol>(std::move(handler), "first_member");
+    }
+
+    // Adds member "second_member" to the service instance. |handler| will be
+    // invoked on connection attempts.
+    //
+    // # Errors
+    //
+    // Returns ZX_ERR_ALREADY_EXISTS if the member was already added.
+    ::zx::result<> add_second_member(
+        MemberHandler<::test_service::SecondProtocol> handler) {
+      return this->AddMember<::test_service::SecondProtocol>(std::move(handler), "second_member");
     }
   };
 
@@ -1106,10 +1145,33 @@ class MultiHomogeneousMemberService final {
     // Construct an instance handler for a FIDL service. It is expected that every member
     // contained in |members| is initialized with a handler.
     InstanceHandler(Members members) {
-      // TODO(https://fxbug.dev/102973): Handle member registration failure.
-      (void)this->AddMember<::test_service::FirstProtocol>(std::move(members.first_member), "first_member");
-      // TODO(https://fxbug.dev/102973): Handle member registration failure.
-      (void)this->AddMember<::test_service::FirstProtocol>(std::move(members.second_member), "second_member");
+      // This should always be ZX_OK. That's because the only possible
+      // error is ZX_ERR_ALREADY_EXISTS which is impossible to occur as fidlc
+      // won't allow service declarations with duplicated names.
+      ZX_ASSERT(add_first_member(std::move(members.first_member)).status_value() == ZX_OK);
+      ZX_ASSERT(add_second_member(std::move(members.second_member)).status_value() == ZX_OK);
+    }
+
+    // Adds member "first_member" to the service instance. |handler| will be
+    // invoked on connection attempts.
+    //
+    // # Errors
+    //
+    // Returns ZX_ERR_ALREADY_EXISTS if the member was already added.
+    ::zx::result<> add_first_member(
+        MemberHandler<::test_service::FirstProtocol> handler) {
+      return this->AddMember<::test_service::FirstProtocol>(std::move(handler), "first_member");
+    }
+
+    // Adds member "second_member" to the service instance. |handler| will be
+    // invoked on connection attempts.
+    //
+    // # Errors
+    //
+    // Returns ZX_ERR_ALREADY_EXISTS if the member was already added.
+    ::zx::result<> add_second_member(
+        MemberHandler<::test_service::FirstProtocol> handler) {
+      return this->AddMember<::test_service::FirstProtocol>(std::move(handler), "second_member");
     }
   };
 

@@ -145,11 +145,27 @@ class {{ .Name }} final {
     // Construct an instance handler for a FIDL service. It is expected that every member
     // contained in |members| is initialized with a handler.
     InstanceHandler(Members members) {
+      // This should always be ZX_OK. That's because the only possible
+      // error is ZX_ERR_ALREADY_EXISTS which is impossible to occur as fidlc
+      // won't allow service declarations with duplicated names.
       {{- range .Members }}
-        // TODO(https://fxbug.dev/102973): Handle member registration failure.
-        (void) this->AddMember<{{ .ProtocolType }}>(std::move(members.{{ .Name }}), "{{ .Name }}");
+        ZX_ASSERT(add_{{ .Name }}(std::move(members.{{ .Name }})).status_value() == ZX_OK);
       {{- end }}
     }
+
+    {{- range .Members }}
+    {{ "" }}
+    // Adds member "{{ .Name }}" to the service instance. |handler| will be
+    // invoked on connection attempts.
+    //
+    // # Errors
+    //
+    // Returns ZX_ERR_ALREADY_EXISTS if the member was already added.
+    ::zx::result<> add_{{ .Name }}(
+        MemberHandler<{{ .ProtocolType }}> handler) {
+      return this->AddMember<{{ .ProtocolType }}>(std::move(handler), "{{ .Name }}");
+    }
+    {{- end }}
 
   };
   {{ EndifFuchsia }}

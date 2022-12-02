@@ -69,6 +69,9 @@ class EmptyService final {
     // Construct an instance handler for a FIDL service. It is expected that every member
     // contained in |members| is initialized with a handler.
     InstanceHandler(Members members) {
+      // This should always be ZX_OK. That's because the only possible
+      // error is ZX_ERR_ALREADY_EXISTS which is impossible to occur as fidlc
+      // won't allow service declarations with duplicated names.
     }
   };
 
