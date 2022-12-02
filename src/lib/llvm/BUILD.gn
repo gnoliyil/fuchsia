@@ -48,8 +48,6 @@ group("LLVM") {
 }
 
 config("LLVMHeader_config") {
-  visibility = [ ":*" ]
-
   # elflib depends on LLVM headers and is compiled on target. Since we don't have Fuchsia variant
   # of LLVM library yet, always use host_platform's include directory for now.
   # It should make no difference as headers are the same across different platforms.
@@ -61,10 +59,6 @@ config("LLVMHeader_config") {
   if (using_old_prebuilt) {
     defines = [ "LLVM_USING_OLD_PREBUILT" ]
   }
-}
-
-group("LLVMHeaderOnly") {
-  public_configs = [ ":LLVMHeader_config" ]
 }
 
 template("llvm_library") {
