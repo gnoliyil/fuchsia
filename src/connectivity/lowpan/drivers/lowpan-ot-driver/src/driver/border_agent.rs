@@ -58,8 +58,8 @@ where
     // `rv` - Version of TXT record format.
     txt.push(("rv".to_string(), b"1".to_vec()));
 
-    // `tv` - Version of Thread specification.
-    txt.push(("tv".to_string(), b"1.2.0".to_vec()));
+    // `tv` - Version of Thread specification in use.
+    txt.push(("tv".to_string(), ot::get_thread_version_str().as_bytes().to_vec()));
 
     // `sb` - State bitmap
     txt.push(("sb".to_string(), border_agent_state.bits.to_be_bytes().to_vec()));

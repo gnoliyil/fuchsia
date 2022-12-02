@@ -180,6 +180,63 @@ pub fn set_logging_level(level: LogLevel) {
     }
 }
 
+/// Represents the thread version
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    Eq,
+    Ord,
+    PartialOrd,
+    PartialEq,
+    num_derive::FromPrimitive,
+    num_derive::ToPrimitive,
+)]
+#[repr(u16)]
+pub enum ThreadVersion {
+    /// Thread specification version 1.1.0.
+    ///
+    /// This is the functional equivalent of `OT_THREAD_VERSION_1_1`, which is not currently
+    /// exported as a part of the OpenThread C API.
+    V1_1 = 2,
+
+    /// Thread specification version 1.2.0.
+    ///
+    /// This is the functional equivalent of `OT_THREAD_VERSION_1_2`, which is not currently
+    /// exported as a part of the OpenThread C API.
+    V1_2 = 3,
+
+    /// Thread specification version 1.3.0.
+    ///
+    /// This is the functional equivalent of `OT_THREAD_VERSION_1_3`, which is not currently
+    /// exported as a part of the OpenThread C API.
+    V1_3 = 4,
+}
+
+/// Returns the version of the Thread specification that OpenThread
+/// is configured to use. This is the safe equivalent of
+/// [`otsys::otThreadGetVersion()`](crate::otsys::otThreadGetVersion()).
+pub fn get_thread_version() -> ThreadVersion {
+    use num::FromPrimitive;
+
+    // SAFETY: otThreadGetVersion() is guaranteed to be safe to call in any context.
+    let ver = unsafe { otThreadGetVersion() };
+
+    ThreadVersion::from_u16(ver).unwrap_or_else(|| panic!("Unknown Thread specification: {}", ver))
+}
+
+/// Returns a `'static`-scoped string slice describing the version of the
+/// Thread specification that is currently in use.
+///
+/// Format is suitable for use with MeshCop.
+pub fn get_thread_version_str() -> &'static str {
+    match get_thread_version() {
+        ThreadVersion::V1_1 => "1.1.0",
+        ThreadVersion::V1_2 => "1.2.0",
+        ThreadVersion::V1_3 => "1.3.0",
+    }
+}
+
 /// Converts a byte string into an ASCII [`String`], properly escaped.
 pub(crate) fn ascii_dump(data: &[u8]) -> String {
     let vec = data.iter().copied().flat_map(std::ascii::escape_default).collect::<Vec<_>>();
