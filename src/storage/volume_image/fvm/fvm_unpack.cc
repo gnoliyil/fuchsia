@@ -115,6 +115,13 @@ fpromise::result<void, std::string> UnpackRawFvm(const Reader& image,
   }
   const auto& metadata = metadata_or.take_value();
 
+  // Verify that the file is big enough before proceeding. The reads use pread which will silently
+  // read past the end of the file.
+  if (metadata.GetHeader().fvm_partition_size != image.length()) {
+    std::cerr << "Warning: The image file is " << image.length() << " bytes. Expected "
+              << metadata.GetHeader().fvm_partition_size << " bytes." << std::endl;
+  }
+
   // Find all used partitions
   size_t num_partitions = metadata.GetHeader().GetPartitionTableEntryCount();
   std::vector<std::optional<std::string>> names(num_partitions + 1);
