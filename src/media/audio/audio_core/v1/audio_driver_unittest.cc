@@ -21,8 +21,8 @@ class AudioDriverTest : public testing::ThreadingModelFixture {
     ASSERT_EQ(ZX_OK, zx::channel::create(0, &c1, &c2));
     remote_driver_ = std::make_unique<testing::FakeAudioDriver>(std::move(c1), dispatcher());
 
-    // Set fake non-zero fifo depth and external delay, to keep things interesting.
-    remote_driver_->set_fifo_depth(kFifoDepthFrames * kChannelCount * 2);
+    // Set fake non-zero internal and external delay, to keep things interesting.
+    remote_driver_->set_internal_delay(kInternalDelay);
     remote_driver_->set_external_delay(kExternalDelay);
 
     ASSERT_EQ(ZX_OK, driver_->Init(std::move(c2)));
@@ -38,7 +38,9 @@ class AudioDriverTest : public testing::ThreadingModelFixture {
   static constexpr auto kSampleFormat = fuchsia::media::AudioSampleFormat::SIGNED_16;
   static constexpr uint32_t kChannelCount = 2;
   static constexpr uint32_t kFramesPerSec = 48000;
-  static constexpr uint32_t kFifoDepthFrames = 173;
+  static constexpr zx::duration kInternalDelay = zx::usec(3604);
+  static constexpr uint32_t kInternalDelayFrames =
+      (kInternalDelay.to_usecs() * kFramesPerSec - 1) / zx::sec(1).to_usecs() + 1;  // 173
   static constexpr zx::duration kExternalDelay = zx::usec(47376);
   static constexpr auto kRingBufferMinDuration = zx::msec(200);
   static constexpr size_t kRingBufferFrames =
@@ -143,19 +145,21 @@ TEST_F(AudioDriverTest, SanityCheckTimelineMath) {
       this->driver_->ref_time_to_frac_safe_read_or_write_frame();
 
   // Get the driver's external delay and fifo depth expressed in frames.
-  uint32_t fifo_depth_frames = this->driver_->fifo_depth_frames();
   zx::duration external_delay = this->driver_->external_delay();
+  zx::duration internal_delay = this->driver_->internal_delay();
+  uint32_t internal_delay_frames = this->driver_->internal_delay_frames();
 
   // The fifo depth and external delay had better match what we told the fake
   // driver to report.
-  ASSERT_EQ(this->kFifoDepthFrames, fifo_depth_frames);
+  ASSERT_EQ(this->kInternalDelay, internal_delay);
   ASSERT_EQ(this->kExternalDelay, external_delay);
+  ASSERT_EQ(this->kInternalDelayFrames, internal_delay_frames);
 
   // At startup, the tx/rx position should be 0, and the safe read/write position
-  // should be fifo_depth_frames ahead of this.
+  // should be internal_delay_frames ahead of this.
   zx::time ref_now = this->driver_->ref_start_time();
   auto frac_frame = Fixed::FromRaw(ref_time_to_frac_safe_read_or_write_frame.Apply(ref_now.get()));
-  EXPECT_EQ(fifo_depth_frames, frac_frame.Floor());
+  EXPECT_EQ(internal_delay_frames, frac_frame.Floor());
 
   // After |external_delay| has passed, we should be at frame zero in the
   // pts/cts timeline.
@@ -167,7 +171,7 @@ TEST_F(AudioDriverTest, SanityCheckTimelineMath) {
   constexpr zx::duration kSomeTime = zx::usec(87654321);
   ref_now += kSomeTime;
 
-  // The safe_read_write_pos should still be fifo_depth_frames ahead of whatever
+  // The safe_read_write_pos should still be internal_delay_frames ahead of whatever
   // the tx/rx position is, so the tx/rx position should be the safe read/write
   // position minus the fifo depth (in frames).
   //
@@ -177,7 +181,7 @@ TEST_F(AudioDriverTest, SanityCheckTimelineMath) {
   // order to compare the two.
   int64_t safe_read_write_pos =
       Fixed::FromRaw(ref_time_to_frac_safe_read_or_write_frame.Apply(ref_now.get())).Floor();
-  int64_t txrx_pos = safe_read_write_pos - fifo_depth_frames;
+  int64_t txrx_pos = safe_read_write_pos - internal_delay_frames;
 
   ref_now += external_delay;
   int64_t ptscts_pos_frames =
@@ -187,7 +191,7 @@ TEST_F(AudioDriverTest, SanityCheckTimelineMath) {
 
 TEST_F(AudioDriverTest, RingBufferPropsEmpty) {
   remote_driver_->clear_external_delay();
-  remote_driver_->clear_fifo_depth();
+  remote_driver_->clear_internal_delay();
 
   zx_status_t res;
   remote_driver_->Start();
@@ -227,7 +231,7 @@ TEST_F(AudioDriverTest, RingBufferPropsEmpty) {
   ASSERT_EQ(driver_->state(), AudioDriver::State::Started);
 
   // These are unspecified by the driver so they should be zero.
-  ASSERT_EQ(0u, driver_->fifo_depth_frames());
+  ASSERT_EQ(zx::nsec(0), driver_->internal_delay());
   ASSERT_EQ(zx::nsec(0), driver_->external_delay());
 }
 

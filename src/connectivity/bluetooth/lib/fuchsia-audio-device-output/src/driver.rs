@@ -413,8 +413,6 @@ impl SoftPcmOutput {
         match request {
             RingBufferRequest::GetProperties { responder } => {
                 let prop = RingBufferProperties {
-                    // TODO(fxbug.dev/51726): Set external_delay and fifo_depth from outside the crate.
-                    fifo_depth: Some(0),
                     needs_cache_flush_or_invalidate: Some(false),
                     ..RingBufferProperties::EMPTY
                 };
@@ -494,6 +492,9 @@ impl SoftPcmOutput {
                     return Ok(());
                 }
                 let delay_info = DelayInfo::EMPTY;
+                // TODO(fxbug.dev/51726): Set actual external_delay and internal_delay values
+                // received from outside the crate, and support the hanging-get pattern in order to
+                // dynamically update these values as we learn more about the remote device.
                 responder.send(delay_info)?;
                 self.delay_info_replied = true;
             }
@@ -654,7 +655,6 @@ mod tests {
             Poll::Ready(Ok(v)) => v,
             x => panic!("expected Ready Ok from get_properties, got {:?}", x),
         };
-        assert_eq!(props2.fifo_depth, Some(0u32));
         assert_eq!(props2.needs_cache_flush_or_invalidate, Some(false));
 
         let result = exec.run_until_stalled(&mut ring_buffer.get_vmo(88200, 0)); // 2 seconds.

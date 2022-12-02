@@ -14,6 +14,7 @@
 #include <zircon/device/audio.h>
 
 #include <mutex>
+#include <optional>
 #include <string>
 
 #include "src/media/audio/audio_core/shared/reporter.h"
@@ -54,8 +55,9 @@ class AudioDriver {
     MissingDriverInfo,
     Unconfigured,
     Configuring_SettingFormat,
-    Configuring_GettingFifoDepth,
-    Configuring_GettingRingBuffer,
+    Configuring_GettingRingBufferProperties,
+    Configuring_GettingDelayInfo,
+    Configuring_GettingRingBufferVmo,
     Configured,
     Starting,
     Started,
@@ -89,9 +91,11 @@ class AudioDriver {
   // unable to figure out that the owner calling these methods is always the same as owner_.
   State state() const { return state_; }
   zx::time ref_start_time() const { return ref_start_time_; }
+
   zx::duration external_delay() const { return external_delay_; }
-  uint32_t fifo_depth_frames() const { return fifo_depth_frames_; }
-  zx::duration fifo_depth_duration() const { return fifo_depth_duration_; }
+  zx::duration internal_delay() const { return internal_delay_; }
+  uint32_t internal_delay_frames() const { return internal_delay_frames_; }
+
   zx_koid_t stream_channel_koid() const { return stream_channel_koid_; }
   const HwGainState& hw_gain_state() const { return hw_gain_state_; }
   uint32_t clock_domain() const { return clock_domain_; }
@@ -142,7 +146,10 @@ class AudioDriver {
   }
 
   std::shared_ptr<Clock> reference_clock() { return audio_clock_; }
-  zx::duration turn_on_delay() { return turn_on_delay_; }
+  zx::duration turn_on_delay() const { return turn_on_delay_; }
+
+  // TODO(fxbug.dev/113705): obey the flag when it is false. We behave as if it is always true.
+  bool needs_cache_flush_or_invalidate() const { return needs_cache_flush_or_invalidate_; }
   std::vector<ChannelAttributes> channel_config() { return configured_channel_config_; }
 
   zx_status_t SetActiveChannels(uint64_t chan_bit_mask);
@@ -162,6 +169,11 @@ class AudioDriver {
   static constexpr uint32_t kDriverInfoHasAll = kDriverInfoHasUniqueId | kDriverInfoHasMfrStr |
                                                 kDriverInfoHasProdStr | kDriverInfoHasGainState |
                                                 kDriverInfoHasFormats | kDriverInfoHasClockDomain;
+
+  void RequestRingBufferProperties() FXL_EXCLUSIVE_LOCKS_REQUIRED(owner_->mix_domain().token());
+  void RequestDelayInfo() FXL_EXCLUSIVE_LOCKS_REQUIRED(owner_->mix_domain().token());
+  void RequestRingBufferVmo(int64_t min_frames_64)
+      FXL_EXCLUSIVE_LOCKS_REQUIRED(owner_->mix_domain().token());
 
   void SetUpClocks();
   void ClockRecoveryUpdate(fuchsia::hardware::audio::RingBufferPositionInfo info);
@@ -216,11 +228,14 @@ class AudioDriver {
   // Configuration state.
   zx::time mono_start_time_;
   zx::time ref_start_time_;
-  zx::duration external_delay_;
   zx::duration min_ring_buffer_duration_;
-  uint32_t fifo_depth_frames_;
-  zx::duration fifo_depth_duration_;
+
+  zx::duration external_delay_ = zx::nsec(0);
+  zx::duration internal_delay_ = zx::nsec(0);
+  uint32_t internal_delay_frames_;
+
   zx::duration turn_on_delay_ = zx::nsec(0);
+  bool needs_cache_flush_or_invalidate_ = true;
   zx::time configuration_deadline_ = zx::time::infinite();
 
   // A stashed copy of current format, queryable by destinations (outputs or AudioCapturers) when

@@ -342,19 +342,19 @@ class Reporter::DeviceDriverInfo {
   DeviceDriverInfo(inspect::Node& parent_node, ObjectTracker&& object_tracker)
       : node_(parent_node.CreateChild("driver")),
         name_(node_.CreateString("name", "unknown")),
-        total_delay_(node_.CreateUint("external delay + fifo delay (ns)", 0)),
+        total_delay_(node_.CreateUint("external delay + internal delay (ns)", 0)),
         external_delay_(node_.CreateUint("external delay (ns)", 0)),
-        fifo_delay_(node_.CreateUint("fifo delay (ns)", 0)),
-        fifo_depth_(node_.CreateUint("fifo depth in frames", 0)),
+        internal_delay_(node_.CreateUint("internal delay (ns)", 0)),
+        internal_delay_frames_(node_.CreateUint("internal delay (frames)", 0)),
         format_(parent_node, "format"),
         object_tracker_(std::move(object_tracker)) {}
 
   void Set(const AudioDriverInfo& d) {
     name_.Set(d.manufacturer_name + ' ' + d.product_name);
-    total_delay_.Set((d.external_delay + d.fifo_depth_duration).get());
+    total_delay_.Set((d.external_delay + d.internal_delay).get());
     external_delay_.Set(d.external_delay.get());
-    fifo_delay_.Set(d.fifo_depth_duration.get());
-    fifo_depth_.Set(d.fifo_depth_frames);
+    internal_delay_.Set(d.internal_delay.get());
+    internal_delay_frames_.Set(d.internal_delay_frames);
     if (d.format.has_value()) {
       format_.Set(*d.format);
       object_tracker_.SetFormat(*d.format);
@@ -367,8 +367,8 @@ class Reporter::DeviceDriverInfo {
   inspect::StringProperty name_;
   inspect::UintProperty total_delay_;
   inspect::UintProperty external_delay_;
-  inspect::UintProperty fifo_delay_;
-  inspect::UintProperty fifo_depth_;
+  inspect::UintProperty internal_delay_;
+  inspect::UintProperty internal_delay_frames_;
   FormatInfo format_;
   ObjectTracker object_tracker_;
 };

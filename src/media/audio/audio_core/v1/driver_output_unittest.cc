@@ -255,10 +255,9 @@ TEST_F(DriverOutputTest, MixAtExpectedInterval) {
   supportedSampleFormat.number_of_channels = 2;
   supportedSampleFormat.frame_rate = 48000;
 
-  // 5ms at our chosen sample rate.
-  constexpr uint32_t kFifoDepth = 240;
+  constexpr zx::duration kInternalDelay = zx::msec(5);
   constexpr zx::duration kExternalDelay = zx::usec(47376);
-  driver_->set_fifo_depth(kFifoDepth);
+  driver_->set_internal_delay(kInternalDelay);
   driver_->set_external_delay(kExternalDelay);
   ConfigureDriverForSampleFormat(supportedSampleFormat);
 
@@ -334,10 +333,9 @@ TEST_F(DriverOutputTest, DISABLED_WriteSilenceToRingWhenMuted) {
   supportedSampleFormat.frame_rate = 48000;
   ConfigureDriverForSampleFormat(supportedSampleFormat);
 
-  // 5ms at our chosen sample rate.
-  constexpr uint32_t kFifoDepth = 240;
+  constexpr zx::duration kInternalDelay = zx::msec(5);
   constexpr zx::duration kExternalDelay = zx::usec(47376);
-  driver_->set_fifo_depth(kFifoDepth);
+  driver_->set_internal_delay(kInternalDelay);
   driver_->set_external_delay(kExternalDelay);
 
   threading_model().FidlDomain().ScheduleTask(output_->Startup());

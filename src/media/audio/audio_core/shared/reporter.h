@@ -63,8 +63,8 @@ class Reporter {
     std::string manufacturer_name;
     std::string product_name;
     zx::duration external_delay;
-    zx::duration fifo_depth_duration;
-    int64_t fifo_depth_frames;
+    zx::duration internal_delay;
+    int64_t internal_delay_frames;
     std::optional<Format> format;
   };
 

@@ -436,6 +436,8 @@ zx_status_t AudioDriver::Configure(const Format& format, zx::duration min_ring_b
                   << " Hz] for " << (is_input ? "INPUT" : "OUTPUT") << " driver " << this;
   }
 
+  FX_CHECK(state_ == State::Unconfigured);
+  state_ = State::Configuring_SettingFormat;
   stream_config_fidl_->CreateRingBuffer(std::move(fidl_format), std::move(request));
   // No need for timeout, there is no reply to this FIDL message.
 
@@ -453,8 +455,14 @@ zx_status_t AudioDriver::Configure(const Format& format, zx::duration min_ring_b
     ShutdownSelf("Ring buffer channel closed unexpectedly", status);
   });
 
+  RequestRingBufferProperties();
+  return ZX_OK;
+}
+
+void AudioDriver::RequestRingBufferProperties() {
   // Change state, setup our command timeout.
-  state_ = State::Configuring_GettingFifoDepth;
+  FX_CHECK(state_ == State::Configuring_SettingFormat);
+  state_ = State::Configuring_GettingRingBufferProperties;
   configuration_deadline_ = async::Now(owner_->mix_domain().dispatcher()) + kDefaultLongCmdTimeout;
   SetupCommandTimeout();
 
@@ -464,39 +472,69 @@ zx_status_t AudioDriver::Configure(const Format& format, zx::duration min_ring_b
     }
 
     OBTAIN_EXECUTION_DOMAIN_TOKEN(token, &owner_->mix_domain());
-    external_delay_ = zx::nsec(props.has_external_delay() ? props.external_delay() : 0);
     turn_on_delay_ = zx::nsec(props.has_turn_on_delay() ? props.turn_on_delay() : 0);
-    uint32_t fifo_depth_bytes = props.has_fifo_depth() ? props.fifo_depth() : 0;
+
+    // TODO(fxbug.dev/113705): obey the flag when it is false. We behave as if it is always true.
+    needs_cache_flush_or_invalidate_ = props.has_needs_cache_flush_or_invalidate()
+                                           ? props.needs_cache_flush_or_invalidate()
+                                           : true;
+
+    if constexpr (kLogDriverDelayProperties) {
+      FX_LOGS(INFO) << "Audio " << (owner_->is_input() ? " Input" : "Output")
+                    << " received turn_on_delay  " << std::setw(5) << turn_on_delay_.to_usecs()
+                    << " usec";
+    }
+
+    RequestDelayInfo();
+  });
+}
+
+void AudioDriver::RequestDelayInfo() {
+  // Change state, setup our command timeout.
+  FX_CHECK(state_ == State::Configuring_GettingRingBufferProperties);
+  state_ = State::Configuring_GettingDelayInfo;
+  configuration_deadline_ = async::Now(owner_->mix_domain().dispatcher()) + kDefaultLongCmdTimeout;
+  SetupCommandTimeout();
+
+  ring_buffer_fidl_->WatchDelayInfo([this](fuchsia::hardware::audio::DelayInfo info) {
+    if constexpr (kLogAudioDriverCallbacks) {
+      FX_LOGS(INFO) << "AudioDriver::ring_buffer_fidl::WatchDelayInfo callback";
+    }
+
+    OBTAIN_EXECUTION_DOMAIN_TOKEN(token, &owner_->mix_domain());
+    external_delay_ = zx::nsec(info.has_external_delay() ? info.external_delay() : 0);
+    internal_delay_ = zx::nsec(info.has_internal_delay() ? info.internal_delay() : 0);
+    internal_delay_frames_ = internal_delay_.to_nsecs()
+                                 // If internal_delay is non-zero, ceiling up to the next frame.
+                                 ? (internal_delay_.to_nsecs() * GetFormat()->frames_per_second() -
+                                    1) / zx::sec(1).to_nsecs() +
+                                       1
+                                 : 0;
+
+    if constexpr (kLogDriverDelayProperties) {
+      FX_LOGS(INFO) << "Audio " << (owner_->is_input() ? " Input" : "Output")
+                    << " received external_delay " << std::setw(5) << external_delay_.to_usecs()
+                    << " usec";
+      FX_LOGS(INFO) << "Audio " << (owner_->is_input() ? " Input" : "Output")
+                    << " received internal_delay " << std::setw(5) << internal_delay_.to_usecs()
+                    << " usec (" << internal_delay_frames_ << " frames)";
+    }
 
     auto format = GetFormat();
     auto bytes_per_frame = format->bytes_per_frame();
     auto frames_per_second = format->frames_per_second();
 
-    fifo_depth_frames_ = (fifo_depth_bytes + bytes_per_frame - 1) / bytes_per_frame;
-    fifo_depth_duration_ =
-        zx::nsec(TimelineRate(ZX_SEC(1), frames_per_second).Scale(fifo_depth_frames_));
-
-    if constexpr (kLogDriverDelayProperties) {
-      FX_LOGS(INFO) << "Received external_delay " << std::setw(5) << external_delay_.to_usecs()
-                    << " usec (" << (owner_->is_input() ? " Input" : "Output") << ")";
-      FX_LOGS(INFO) << "Received turn_on_delay  " << std::setw(5) << turn_on_delay_.to_usecs()
-                    << " usec (" << (owner_->is_input() ? " Input" : "Output") << ")";
-      FX_LOGS(INFO) << "Received fifo_depth_dur " << std::setw(5) << fifo_depth_duration_.to_usecs()
-                    << " usec (" << (owner_->is_input() ? " Input" : "Output") << ") based on "
-                    << fifo_depth_bytes << " bytes, " << bytes_per_frame << " bytes/frame, "
-                    << frames_per_second << " frames/sec (" << fifo_depth_frames_ << " frames)";
-    }
-
     // Figure out how many frames we need in our ring buffer.
     TimelineRate bytes_per_nanosecond(bytes_per_frame * frames_per_second, ZX_SEC(1));
-    int64_t min_frames_64 = bytes_per_nanosecond.Scale(min_ring_buffer_duration_.to_nsecs());
-    int64_t overhead = static_cast<int64_t>(fifo_depth_bytes) + bytes_per_frame - 1;
-    bool overflow = ((min_frames_64 == TimelineRate::kOverflow) ||
-                     (min_frames_64 > (std::numeric_limits<int64_t>::max() - overhead)));
+    int64_t min_bytes_64 = bytes_per_nanosecond.Scale(min_ring_buffer_duration_.to_nsecs());
+    bool overflow = ((min_bytes_64 == TimelineRate::kOverflow) ||
+                     (min_bytes_64 > (std::numeric_limits<int64_t>::max() -
+                                      (internal_delay_frames_ * bytes_per_frame))));
 
+    int64_t min_frames_64;
     if (!overflow) {
-      min_frames_64 += overhead;
-      min_frames_64 /= bytes_per_frame;
+      min_frames_64 = min_bytes_64 / bytes_per_frame;
+      min_frames_64 += internal_delay_frames_;
       overflow = min_frames_64 > std::numeric_limits<uint32_t>::max();
     }
 
@@ -505,74 +543,82 @@ zx_status_t AudioDriver::Configure(const Format& format, zx::duration min_ring_b
       FX_LOGS(ERROR) << "duration        : " << min_ring_buffer_duration_.get();
       FX_LOGS(ERROR) << "bytes per frame : " << bytes_per_frame;
       FX_LOGS(ERROR) << "frames per sec  : " << frames_per_second;
-      FX_LOGS(ERROR) << "fifo depth      : " << fifo_depth_bytes;
+      FX_LOGS(ERROR) << "int_delay_frames: " << internal_delay_frames_;
       return;
     }
 
-    state_ = State::Configuring_GettingRingBuffer;
+    RequestRingBufferVmo(min_frames_64);
 
-    auto num_notifications_per_ring =
-        ((clock_domain_ == fuchsia::hardware::audio::CLOCK_DOMAIN_MONOTONIC)) ? 0 : 2;
-    ring_buffer_fidl_->GetVmo(
-        static_cast<uint32_t>(min_frames_64), num_notifications_per_ring,
-        [this](fuchsia::hardware::audio::RingBuffer_GetVmo_Result result) {
-          if constexpr (kLogAudioDriverCallbacks) {
-            FX_LOGS(INFO) << "AudioDriver::ring_buffer_fidl::GetVmo callback";
-          }
-
-          OBTAIN_EXECUTION_DOMAIN_TOKEN(token, &owner_->mix_domain());
-          {
-            std::lock_guard<std::mutex> lock(ring_buffer_state_lock_);
-            auto format = GetFormat();
-            if (owner_->is_input()) {
-              readable_ring_buffer_ = BaseRingBuffer::CreateReadableHardwareBuffer(
-                  *format, versioned_ref_time_to_frac_presentation_frame_, reference_clock(),
-                  std::move(result.response().ring_buffer), result.response().num_frames, [this]() {
-                    OBTAIN_EXECUTION_DOMAIN_TOKEN(token, &owner_->mix_domain());
-                    auto t = reference_clock()->now();
-                    // Safe-read position: ring-buffer readers should never BEYOND this frame.
-                    // We Floor any fractional-frame position to be conservative ("safe").
-                    return Fixed::FromRaw(ref_time_to_frac_safe_read_or_write_frame_.Apply(t.get()))
-                        .Floor();
-                  });
-            } else {
-              writable_ring_buffer_ = BaseRingBuffer::CreateWritableHardwareBuffer(
-                  *format, versioned_ref_time_to_frac_presentation_frame_, reference_clock(),
-                  std::move(result.response().ring_buffer), result.response().num_frames, [this]() {
-                    OBTAIN_EXECUTION_DOMAIN_TOKEN(token, &owner_->mix_domain());
-                    auto t = reference_clock()->now();
-                    // Safe-write position: ring-buffer writers should always write AT/BEYOND this
-                    // frame. We Ceiling any fractional-frame position to be conservative ("safe").
-                    return Fixed::FromRaw(ref_time_to_frac_safe_read_or_write_frame_.Apply(t.get()))
-                        .Ceiling();
-                  });
-            }
-            if (!readable_ring_buffer_ && !writable_ring_buffer_) {
-              ShutdownSelf("Failed to allocate and map driver ring buffer", ZX_ERR_NO_MEMORY);
-              return;
-            }
-            FX_DCHECK(!versioned_ref_time_to_frac_presentation_frame_->get().first.invertible());
-
-            ring_buffer_size_bytes_ = format->bytes_per_frame() * result.response().num_frames;
-            running_pos_bytes_ = 0;
-            frac_frames_per_byte_ = TimelineRate(Fixed(1).raw_value(), format->bytes_per_frame());
-          }
-
-          // We are now Configured. Let our owner know about this important milestone.
-          state_ = State::Configured;
-          configuration_deadline_ = zx::time::infinite();
-          SetupCommandTimeout();
-          owner_->OnDriverConfigComplete();
-
-          RequestNextPlugStateChange();
-
-          if (clock_domain_ != Clock::kMonotonicDomain) {
-            RequestNextClockRecoveryUpdate();
-          }
-        });
+    // TODO(fxbug.dev/113710): Watch for subsequent delay updates.
   });
+}
 
-  return ZX_OK;
+void AudioDriver::RequestRingBufferVmo(int64_t min_frames_64) {
+  // Change state, setup our command timeout.
+  FX_CHECK(state_ == State::Configuring_GettingDelayInfo);
+  state_ = State::Configuring_GettingRingBufferVmo;
+  configuration_deadline_ = async::Now(owner_->mix_domain().dispatcher()) + kDefaultLongCmdTimeout;
+  SetupCommandTimeout();
+
+  auto num_notifications_per_ring =
+      ((clock_domain_ == fuchsia::hardware::audio::CLOCK_DOMAIN_MONOTONIC)) ? 0 : 2;
+  ring_buffer_fidl_->GetVmo(
+      static_cast<uint32_t>(min_frames_64), num_notifications_per_ring,
+      [this](fuchsia::hardware::audio::RingBuffer_GetVmo_Result result) {
+        if constexpr (kLogAudioDriverCallbacks) {
+          FX_LOGS(INFO) << "AudioDriver::ring_buffer_fidl::GetVmo callback";
+        }
+
+        OBTAIN_EXECUTION_DOMAIN_TOKEN(token, &owner_->mix_domain());
+        {
+          std::lock_guard<std::mutex> lock(ring_buffer_state_lock_);
+          auto format = GetFormat();
+          if (owner_->is_input()) {
+            readable_ring_buffer_ = BaseRingBuffer::CreateReadableHardwareBuffer(
+                *format, versioned_ref_time_to_frac_presentation_frame_, reference_clock(),
+                std::move(result.response().ring_buffer), result.response().num_frames, [this]() {
+                  OBTAIN_EXECUTION_DOMAIN_TOKEN(token, &owner_->mix_domain());
+                  auto t = reference_clock()->now();
+                  // Safe-read position: ring-buffer readers should never BEYOND this frame.
+                  // We Floor any fractional-frame position to be conservative ("safe").
+                  return Fixed::FromRaw(ref_time_to_frac_safe_read_or_write_frame_.Apply(t.get()))
+                      .Floor();
+                });
+          } else {
+            writable_ring_buffer_ = BaseRingBuffer::CreateWritableHardwareBuffer(
+                *format, versioned_ref_time_to_frac_presentation_frame_, reference_clock(),
+                std::move(result.response().ring_buffer), result.response().num_frames, [this]() {
+                  OBTAIN_EXECUTION_DOMAIN_TOKEN(token, &owner_->mix_domain());
+                  auto t = reference_clock()->now();
+                  // Safe-write position: ring-buffer writers should always write AT/BEYOND this
+                  // frame. We Ceiling any fractional-frame position to be conservative ("safe").
+                  return Fixed::FromRaw(ref_time_to_frac_safe_read_or_write_frame_.Apply(t.get()))
+                      .Ceiling();
+                });
+          }
+          if (!readable_ring_buffer_ && !writable_ring_buffer_) {
+            ShutdownSelf("Failed to allocate and map driver ring buffer", ZX_ERR_NO_MEMORY);
+            return;
+          }
+          FX_DCHECK(!versioned_ref_time_to_frac_presentation_frame_->get().first.invertible());
+
+          ring_buffer_size_bytes_ = format->bytes_per_frame() * result.response().num_frames;
+          running_pos_bytes_ = 0;
+          frac_frames_per_byte_ = TimelineRate(Fixed(1).raw_value(), format->bytes_per_frame());
+        }
+
+        // We are now Configured. Let our owner know about this important milestone.
+        state_ = State::Configured;
+        configuration_deadline_ = zx::time::infinite();
+        SetupCommandTimeout();
+        owner_->OnDriverConfigComplete();
+
+        RequestNextPlugStateChange();
+
+        if (clock_domain_ != Clock::kMonotonicDomain) {
+          RequestNextClockRecoveryUpdate();
+        }
+      });
 }
 
 void AudioDriver::RequestNextPlugStateChange() {
@@ -686,38 +732,60 @@ zx_status_t AudioDriver::Start() {
     auto format = GetFormat();
     auto frac_fps = TimelineRate(Fixed(format->frames_per_second()).raw_value(), zx::sec(1).get());
 
+    auto raw_internal_delay_frames = Fixed(internal_delay_frames_).raw_value();
     if (owner_->is_output()) {
-      // Abstractly, we can think of the hardware buffer as an infinitely
-      // long sequence of frames, where the hardware maintains three pointers
-      // into this sequence:
+      // Abstractly, we can think of the hardware buffer as an infinitely long sequence of frames,
+      // where the hardware maintains three pointers into this sequence:
       //
-      //        |<--- external delay --->|<--- FIFO depth --->|
-      //      +-+------------------------+-+------------------+-+
-      //  ... |P|                        |F|                  |W| ...
-      //      +-+------------------------+-+------------------+-+
+      //      |<--- external delay --->|<--- internal delay --->|
+      //      +-+----------------------+-+----------------------+-+
+      //  ... |P|                      |F|                      |W| ...
+      //      +-+----------------------+-+----------------------+-+
       //
-      // At P, the frame is being presented to the speaker.
-      // At F, the frame is at the head of the FIFO.
-      // At W, the frame is about to be enqueued into the FIFO.
+      // We use a timeline to understand the relationships (specifically the offsets) between three
+      // specific steps in the playback process, at any specific instant in time.
       //
-      // At ref_start_time_, F points at frame 0. As time advances one frame,
-      // each pointer shifts to the right by one frame. We define functions to
-      // locate W and P at a given time T:
+      // At that moment:
+      // W refers to the frame that is about to be consumed by the device.
+      // F refers to the frame that just exited the device's internal pipeline.
+      // P refers to the frame being presented to the speaker.
       //
-      //   ref_pts_to_frame(T) = P
-      //   ref_time_to_frac_safe_read_or_write_frame(T) = W
+      // When a frame is consumed by an audio output device, it is DMA'ed from the ring buffer and
+      // enters a device-internal pipeline. The pipeline generally starts with a hardware FIFO to
+      // receive DMA transfers; it may apply hardware-based audio processing; and it terminates
+      // at an "interconnect" (e.g. integrated DAC, external digital port, network interface).
+      // Assuming a non-zero internal delay, W is a higher ("later") frame number than F or P.
       //
-      // W is the lowest-numbered frame that may be written to the hardware buffer,
-      // aka the "first safe" write position.
+      // For built-in outputs where the pipeline ends at a DAC, external delay would be zero. For
+      // other device types, "device-external" steps may exist beyond the HDMI or S/PDIF port, or
+      // may occur after frames are emitted over Bluetooth.
+      // Assuming a non-zero external delay, F is a higher frame number (it is "later") than P.
+      //
+      // In the above diagram, a specific frame will move right-to-left over time:
+      // - "Internal delay" is the time needed for a frame to move from position W to position F;
+      // - "External delay" is the time needed for a frame to move from position F to position P.
+      //
+      // At ref_start_time_, we define the frame pointed to by F as "0". As time advances by one
+      // frame, each pointer shifts to the right by one frame. We define functions to locate W and P
+      // for any given time T:
+      //
+      //   ref_time_to_frac_presentation_frame(T) = P
+      //   ref_time_to_frac_safe_write_frame(T) = W
+      //
+      // It stands to reason that clients must write frames to the ring buffer BEFORE the hardware
+      // reads/processes/outputs them. Compared to frames being actively processed, client frames
+      // are later or "younger"; on our timeline, playback clients must stay "fully to the right".
+      // W is the lowest-numbered (soonest to be presented) frame that clients may write to the
+      // buffer, aka the "first safe" write position. (Device has already consumed frames beyond W.)
       ref_time_to_frac_presentation_frame_ = TimelineFunction(
-          0,                                          // first frame
-          (ref_start_time_ + external_delay_).get(),  // first frame presented after external delay
-          frac_fps                                    // fps in fractional frames
+          0,                                          // When playback begins, F is 0; we define
+          (ref_start_time_ + external_delay_).get(),  // P as occurring external_delay later.
+          frac_fps                                    // Converts fractional frames to seconds.
       );
       ref_time_to_frac_safe_read_or_write_frame_ = TimelineFunction(
-          Fixed(fifo_depth_frames_).raw_value(),  // first safe frame is one FIFO depth after start
-          ref_start_time_.get(),                  // start time
-          frac_fps                                // fps in fractional frames
+          raw_internal_delay_frames,  // F is 0, and first safe frame W is internal_delay more,
+          ref_start_time_.get(),      // at the moment that playback begins.
+          frac_fps                    // Converts fractional frames to seconds.
       );
 
       if constexpr (kLogDriverDelayProperties) {
@@ -727,39 +795,49 @@ zx_status_t AudioDriver::Start() {
             << external_delay_.to_usecs() << "-usec external delay, and frac-fps "
             << frac_fps.subject_delta() << "/" << frac_fps.reference_delta();
         FX_LOGS(INFO) << "Setting ref_time_to_frac_safe_read_or_write_frame_, based on "
-                      << Fixed(fifo_depth_frames_).raw_value() << " first frac-frame, "
+                      << raw_internal_delay_frames << " first frac-frame, "
                       << ref_start_time_.get() / 1000 << "-usec ref_start_time, and frac-fps "
                       << frac_fps.subject_delta() << "/" << frac_fps.reference_delta();
       }
     } else {
       // The capture buffer works in a similar way, with three analogous pointers:
       //
-      //        |<--- FIFO depth --->|<--- external delay --->|
-      //      +-+------------------+-+------------------------+-+
-      //  ... |R|                  |F|                        |C| ...
-      //      +-+------------------+-+------------------------+-+
+      //        |<--- internal delay --->|<--- external delay --->|
+      //      +-+----------------------+-+----------------------+-+
+      //  ... |R|                      |F|                      |C| ...
+      //      +-+----------------------+-+----------------------+-+
       //
-      // At C, the frame is being captured by the microphone.
-      // At F, the frame is at the tail of the FIFO.
-      // At R, the frame is just outside the FIFO.
+      // At a specific moment in time:
+      // R refers to the frame just written to the ring buffer, newly available to capture clients.
+      // F refers to the frame just emitted by the interconnect, entering any internal pipeline.
+      // C refers to the frame currently being captured by the microphone.
       //
-      // As above, F points at frame 0 at ref_start_time_, pointers shift to the right
-      // as time advances, and we define functions to locate C and R:
+      // As above, F is a larger frame number than R, because F is not yet available in the ring
+      // buffer (it will only be available after an additional "internal delay" has elapsed).
+      // As with playback, in our diagram any specific frame will move right-to-left over time:
+      // - "External delay" is the time needed for a frame to move from position C to position F;
+      // - "Internal delay" is the time needed for a frame to move from position F to position R.
       //
-      //   ref_pts_to_frame(T) = C
-      //   ref_time_to_frac_safe_read_or_write_frame(T) = R
+      // Just as with playback, we define F to a value of 0 at ref_start_time_. Pointers shift to
+      // the right as time advances, and we define functions to locate C and R:
       //
-      // R is the highest-numbered frame that may be read from the hardware buffer,
-      // aka the "last safe" read position.
+      //   ref_time_to_frac_presentation_frame(T) = C         more accurately "frac_capture_time"
+      //   ref_time_to_frac_safe_read_frame(T) = R
+      //
+      // It stands to reason that a client reads a frame from the ring buffer only AFTER a device
+      // captures and writes it; frames visible to the client are older than those being currently
+      // captured. Thus capture clients must stay "fully to the left", on our timeline.
+      // R is the highest-numbered (most recently captured) frame that a client may be read from the
+      // buffer, the "last safe" read position. (Device is still producing the frames beyond R.)
       ref_time_to_frac_presentation_frame_ = TimelineFunction(
-          0,                                          // first frame
-          (ref_start_time_ - external_delay_).get(),  // first frame presented external delay ago
-          frac_fps                                    // fps in fractional frames
+          0,                                          // When capture begins, F is 0; C is defined
+          (ref_start_time_ - external_delay_).get(),  // as having occurred external_delay earlier.
+          frac_fps                                    // Converts fractional frames to seconds.
       );
       ref_time_to_frac_safe_read_or_write_frame_ = TimelineFunction(
-          -Fixed(fifo_depth_frames_).raw_value(),  // first safe frame is one FIFO before start
-          ref_start_time_.get(),                   // start time
-          frac_fps                                 // fps in fractional frames
+          -raw_internal_delay_frames,  // We define R as internal_delay behind (less than) F,
+          ref_start_time_.get(),       // which is 0 at the moment that capture begins.
+          frac_fps                     // Converts fractional frames to seconds.
       );
 
       if constexpr (kLogDriverDelayProperties) {
@@ -769,7 +847,7 @@ zx_status_t AudioDriver::Start() {
             << external_delay_.to_usecs() << "-usec external delay, and frac-fps "
             << frac_fps.subject_delta() << "/" << frac_fps.reference_delta();
         FX_LOGS(INFO) << "Setting ref_time_to_frac_safe_read_or_write_frame_, based on "
-                      << -Fixed(fifo_depth_frames_).raw_value() << " first frac-frame, "
+                      << -raw_internal_delay_frames << " first frac-frame, "
                       << ref_start_time_.get() / 1000 << "-usec ref_start_time, and frac-fps "
                       << frac_fps.subject_delta() << "/" << frac_fps.reference_delta();
       }
@@ -1044,8 +1122,8 @@ Reporter::AudioDriverInfo AudioDriver::info_for_reporter() const {
       .manufacturer_name = manufacturer_name(),
       .product_name = product_name(),
       .external_delay = external_delay(),
-      .fifo_depth_duration = fifo_depth_duration(),
-      .fifo_depth_frames = fifo_depth_frames(),
+      .internal_delay = internal_delay(),
+      .internal_delay_frames = internal_delay_frames(),
       .format = GetFormat(),
   };
 }

@@ -49,7 +49,10 @@ class AdminTest : public TestBase {
 
   void WatchDelayAndExpectUpdate();
   void WatchDelayAndExpectNoUpdate();
-  void ExpectRingBufferPropsMatchesDelayInfo();
+  void ValidateInternalDelay();
+  void ValidateExternalDelay();
+  void ExpectInternalDelayMatchesFifoDepth();
+  void ExpectExternalDelayMatchesRingBufferProperties();
 
   fidl::InterfacePtr<fuchsia::hardware::audio::RingBuffer>& ring_buffer() { return ring_buffer_; }
   uint32_t ring_buffer_frames() const { return ring_buffer_frames_; }

@@ -224,13 +224,13 @@ TEST_F(ReporterTest, DeviceMetrics) {
           AllOf(NodeMatches(NameMatches("output devices")),
                 ChildrenMatch(UnorderedElementsAre(AllOf(
                     ChildrenMatch(UnorderedElementsAre(
-                        NodeMatches(AllOf(
-                            NameMatches("driver"),
-                            PropertyList(UnorderedElementsAre(
-                                UintIs("external delay (ns)", 0),
-                                UintIs("external delay + fifo delay (ns)", 0),
-                                UintIs("fifo delay (ns)", 0), UintIs("fifo depth in frames", 0),
-                                StringIs("name", "unknown"))))),
+                        NodeMatches(AllOf(NameMatches("driver"),
+                                          PropertyList(UnorderedElementsAre(
+                                              UintIs("external delay (ns)", 0),
+                                              UintIs("external delay + internal delay (ns)", 0),
+                                              UintIs("internal delay (ns)", 0),
+                                              UintIs("internal delay (frames)", 0),
+                                              StringIs("name", "unknown"))))),
                         NodeMatches(AllOf(
                             NameMatches("format"),
                             PropertyList(UnorderedElementsAre(StringIs("sample format", "unknown"),
