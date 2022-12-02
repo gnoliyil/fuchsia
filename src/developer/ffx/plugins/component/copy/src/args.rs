@@ -13,7 +13,7 @@ use {argh::FromArgs, ffx_core::ffx_command};
                    Paths may be a host or remote path and at least two paths must be supplied.",
     example = "To copy from target to host: \n\
                ffx component copy /some/moniker::/path/file./txt /path/on/host/file.txt \n\n\
-               To copy to target from host: 
+               To copy to target from host:
                ffx component copy /path/on/host/file.txt /some/moniker::/path/file.txt\n\n\
                Target to target is also supported.\n\
                To use wildcards in the above commands: \n\n
@@ -25,4 +25,7 @@ pub struct CopyComponentCommand {
     #[argh(positional)]
     /// paths containing a host filepath or a path in a component's namespace.
     pub paths: Vec<String>,
+    /// flag used to print output to the console.
+    #[argh(switch, short = 'v')]
+    pub verbose: bool,
 }

@@ -30,7 +30,7 @@ use {
 /// * File name for source could not be found
 /// * File already exist at destination
 /// * destination is not a directory
-pub async fn finalize_destination_to_filepath(
+pub async fn normalize_destination(
     storage_dir: &Directory,
     source: HostOrRemotePath,
     destination: HostOrRemotePath,
@@ -154,6 +154,10 @@ impl RemotePath {
 
     pub fn contains_wildcard(&self) -> bool {
         return self.to_string().contains("*");
+    }
+
+    pub fn relative_path_string(&self) -> String {
+        return self.relative_path.to_string_lossy().to_string();
     }
 }
 

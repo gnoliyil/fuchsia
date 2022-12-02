@@ -11,7 +11,7 @@ use {
     fuchsia_async::Task,
     futures::StreamExt,
     std::collections::HashMap,
-    std::fs::{create_dir, metadata, set_permissions, write},
+    std::fs::{create_dir, create_dir_all, metadata, set_permissions, write},
     std::path::PathBuf,
     tempfile::tempdir,
 };
@@ -21,6 +21,12 @@ pub struct File {
     pub on_host: bool,
     pub name: &'static str,
     pub data: &'static str,
+}
+
+#[derive(Clone)]
+pub enum SeedPath {
+    File(File),
+    Directory(String),
 }
 
 // Setup |RealmQuery| server with the given component instances.
@@ -69,19 +75,43 @@ pub fn create_tmp_path() -> String {
     return tmp_path;
 }
 
+// Converts a vector of Files to a vector of SeedPaths.
+pub fn generate_file_paths(file_paths: Vec<File>) -> Vec<SeedPath> {
+    file_paths.iter().map(|file| SeedPath::File(file.to_owned())).collect::<Vec<SeedPath>>()
+}
+
+// Converts a vector of directory strs to a vector of SeedPaths.
+pub fn generate_directory_paths(directory_paths: Vec<&str>) -> Vec<SeedPath> {
+    directory_paths
+        .iter()
+        .map(|dir| SeedPath::Directory(dir.to_string()))
+        .collect::<Vec<SeedPath>>()
+}
+
 // Create a new temporary directory to serve as the mock namespace.
 pub fn serve_realm_query_with_namespace(
     server: ServerEnd<fio::DirectoryMarker>,
-    seed_files: Vec<File>,
+    seed_files: Vec<SeedPath>,
     is_read_only: bool,
 ) -> Result<()> {
     let tmp_path = create_tmp_path();
     let () = create_dir(&tmp_path).unwrap();
-    let () = create_dir(format!("{}/data", &tmp_path)).unwrap();
 
-    for file in seed_files {
-        let other_file_path = format!("{}/data/{}", &tmp_path, &file.name);
-        write(&other_file_path, &file.data).unwrap();
+    for seed_path in seed_files {
+        match seed_path {
+            SeedPath::File(file) => {
+                if !file.on_host {
+                    let directory =
+                        PathBuf::from(&file.name).parent().unwrap().to_string_lossy().to_string();
+                    create_dir_all(format!("{}/{}", &tmp_path, &directory)).unwrap();
+                    let final_path = format!("{}/{}", &tmp_path, &file.name);
+                    write(&final_path, &file.data).unwrap();
+                }
+            }
+            SeedPath::Directory(directory) => {
+                create_dir(format!("{}/{}", &tmp_path, &directory)).unwrap()
+            }
+        }
     }
 
     let flags = if is_read_only {
@@ -100,14 +130,17 @@ pub fn serve_realm_query_with_namespace(
 }
 
 // Creates files with specified contents within a host directory.
-pub fn populate_host_with_file_contents(path: &str, mut seed_files: Vec<File>) -> Result<()> {
-    seed_files.retain(|file| file.on_host);
-
-    for file in seed_files.iter() {
-        if file.on_host {
-            let new_file_path = format!("{}/{}", path, &file.name);
-            write(&new_file_path, file.data.as_bytes().to_vec()).unwrap();
-        }
+pub fn populate_host_with_file_contents(path: &str, seed_files: Vec<SeedPath>) -> Result<()> {
+    for seed_path in seed_files {
+        match seed_path {
+            SeedPath::File(file) => {
+                if file.on_host {
+                    let new_file_path = format!("{}/{}", path, &file.name);
+                    write(&new_file_path, file.data.as_bytes().to_vec()).unwrap();
+                }
+            }
+            _ => (),
+        };
     }
     Ok(())
 }

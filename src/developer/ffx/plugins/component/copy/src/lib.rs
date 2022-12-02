@@ -14,9 +14,9 @@ pub async fn component_copy(
     cmd: CopyComponentCommand,
 ) -> Result<()> {
     let query_proxy = connect_to_realm_query(&rcs_proxy).await?;
-    let CopyComponentCommand { paths } = cmd;
+    let CopyComponentCommand { paths, verbose } = cmd;
 
-    match copy(&query_proxy, paths).await {
+    match copy(&query_proxy, paths, verbose).await {
         Ok(_) => Ok(()),
         Err(e) => ffx_bail!("{}", e),
     }
