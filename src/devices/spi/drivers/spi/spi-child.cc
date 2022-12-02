@@ -15,6 +15,10 @@
 
 namespace spi {
 
+void SpiChild::OpenSession(OpenSessionRequestView request, OpenSessionCompleter::Sync& completer) {
+  Bind(dispatcher_, std::move(request->session));
+}
+
 void SpiChild::TransmitVector(TransmitVectorRequestView request,
                               TransmitVectorCompleter::Sync& completer) {
   size_t rx_actual;
@@ -142,63 +146,34 @@ void SpiChild::DeassertCs(DeassertCsCompleter::Sync& completer) {
   }
 }
 
-zx_status_t SpiChild::DdkOpen(zx_device_t** dev_out, uint32_t flags) {
-  if (owner_.has_value()) {
-    return ZX_ERR_ALREADY_BOUND;
-  }
-  owner_ = std::monostate{};
-  return ZX_OK;
-}
-
 void SpiChild::Bind(async_dispatcher_t* dispatcher,
                     fidl::ServerEnd<fuchsia_hardware_spi::Device> server_end) {
-  if (owner_.has_value()) {
+  if (binding_.has_value()) {
     server_end.Close(ZX_ERR_ALREADY_BOUND);
     return;
   }
-  owner_ = Binding{
+  binding_ = Binding{
       .binding = fidl::BindServer(
           dispatcher, std::move(server_end), this,
           [](SpiChild* self, fidl::UnbindInfo, fidl::ServerEnd<fuchsia_hardware_spi::Device>) {
-            auto& owner = self->owner_;
-            if (!owner.has_value()) {
-              zxlogf(ERROR, "SpiChild: inconsistent binding state: missing owner");
-              return;
-            }
-            SpiChild::Binding* ptr = std::get_if<SpiChild::Binding>(&owner.value());
-            if (ptr == nullptr) {
-              zxlogf(ERROR, "SpiChild: inconsistent binding state: incorrect owner");
-              return;
-            }
-            SpiChild::Binding& binding = *ptr;
+            std::optional opt = std::exchange(self->binding_, {});
+            ZX_ASSERT(opt.has_value());
+
+            self->spi_.ReleaseRegisteredVmos(self->cs_);
+
+            // If the server is unbinding because DdkUnbind is being called, then reply to the
+            // unbind transaction so that it completes.
+            Binding& binding = opt.value();
             if (binding.unbind_txn.has_value()) {
               binding.unbind_txn.value().Reply();
-            } else {
-              self->spi_.ReleaseRegisteredVmos(self->cs_);
-              owner = {};
             }
           }),
   };
 }
 
-zx_status_t SpiChild::DdkClose(uint32_t flags) {
-  if (!owner_.has_value()) {
-    return ZX_ERR_BAD_STATE;
-  }
-  if (!std::holds_alternative<std::monostate>(owner_.value())) {
-    return ZX_ERR_BAD_STATE;
-  }
-  spi_.ReleaseRegisteredVmos(cs_);
-  owner_ = {};
-  return ZX_OK;
-}
-
 void SpiChild::DdkUnbind(ddk::UnbindTxn txn) {
-  if (owner_.has_value()) {
-    Binding* ptr = std::get_if<Binding>(&owner_.value());
-    // DdkUnbind should not be called if there's a DdkOpen outstanding.
-    ZX_ASSERT(ptr != nullptr);
-    Binding& binding = *ptr;
+  if (binding_.has_value()) {
+    Binding& binding = binding_.value();
     ZX_ASSERT(!binding.unbind_txn.has_value());
     binding.unbind_txn.emplace(std::move(txn));
     binding.binding.Unbind();

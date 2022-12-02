@@ -31,17 +31,24 @@ namespace spi {
 class SpiDevice;
 
 class SpiChild;
-using SpiChildType = ddk::Device<SpiChild, ddk::Messageable<fuchsia_hardware_spi::Device>::Mixin,
-                                 ddk::Unbindable, ddk::Openable, ddk::Closable>;
+using SpiChildType =
+    ddk::Device<SpiChild, ddk::Messageable<fuchsia_hardware_spi::Controller>::Mixin,
+                ddk::Unbindable>;
 
-class SpiChild : public SpiChildType {
+class SpiChild : public SpiChildType, public fidl::WireServer<fuchsia_hardware_spi::Device> {
  public:
   SpiChild(zx_device_t* parent, ddk::SpiImplProtocolClient spi, uint32_t chip_select,
-           bool has_siblings)
-      : SpiChildType(parent), spi_(spi), cs_(chip_select), has_siblings_(has_siblings) {}
+           bool has_siblings, async_dispatcher_t* dispatcher)
+      : SpiChildType(parent),
+        spi_(spi),
+        cs_(chip_select),
+        has_siblings_(has_siblings),
+        dispatcher_(dispatcher) {}
 
   void DdkUnbind(ddk::UnbindTxn txn);
   void DdkRelease();
+
+  void OpenSession(OpenSessionRequestView request, OpenSessionCompleter::Sync& completer) override;
 
   void TransmitVector(TransmitVectorRequestView request,
                       TransmitVectorCompleter::Sync& completer) override;
@@ -71,25 +78,18 @@ class SpiChild : public SpiChildType {
   void Bind(async_dispatcher_t* dispatcher,
             fidl::ServerEnd<fuchsia_hardware_spi::Device> server_end);
 
-  zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags);
-  zx_status_t DdkClose(uint32_t flags);
-
  private:
   const ddk::SpiImplProtocolClient spi_;
   const uint32_t cs_;
   // False if this child is the only device on the bus.
   const bool has_siblings_;
+  async_dispatcher_t* const dispatcher_;
 
   using Binding = struct {
     fidl::ServerBindingRef<fuchsia_hardware_spi::Device> binding;
     std::optional<ddk::UnbindTxn> unbind_txn;
   };
-  // Tri-state exclusive ownership:
-  //
-  // - std::nullopt if unowned.
-  // - std::monostate if owned by DdkOpen.
-  // - Binding if owned by `SpiFidlChild`.
-  std::optional<std::variant<std::monostate, Binding>> owner_;
+  std::optional<Binding> binding_;
 };
 
 class SpiFidlChild;

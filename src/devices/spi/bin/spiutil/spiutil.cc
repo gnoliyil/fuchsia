@@ -67,16 +67,29 @@ int main(int argc, char** argv) {
     return -1;
   }
 
-  zx::result device = component::Connect<fuchsia_hardware_spi::Device>(argv[1]);
-  if (device.is_error()) {
-    fprintf(stderr, "%s: %s\n", argv[1], device.status_string());
+  zx::result controller = component::Connect<fuchsia_hardware_spi::Controller>(argv[1]);
+  if (controller.is_error()) {
+    fprintf(stderr, "component::Connect(%s): %s\n", argv[1], controller.status_string());
     return -1;
   }
+  zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Device>();
+  if (endpoints.is_error()) {
+    fprintf(stderr, "fidl::CreateEndpoints(): %s\n", endpoints.status_string());
+    return -1;
+  }
+  auto& [device, server] = endpoints.value();
+
+  const fidl::Status result = fidl::WireCall(controller.value())->OpenSession(std::move(server));
+  if (!result.ok()) {
+    fprintf(stderr, "(%s)->OpenSession(): %s\n", argv[1], result.status_string());
+    return -1;
+  }
+
   switch (argv[2][0]) {
     case 'r': {
       uint32_t length = static_cast<uint32_t>(std::stoul(argv[3], nullptr, 0));
       uint8_t buffer[length];
-      if (zx_status_t status = spilib_receive(device.value(), buffer, length); status != ZX_OK) {
+      if (zx_status_t status = spilib_receive(device, buffer, length); status != ZX_OK) {
         fprintf(stderr, "error: spilib_receive failed: %s\n", zx_status_get_string(status));
         return -1;
       }
@@ -87,7 +100,7 @@ int main(int argc, char** argv) {
       size_t length = argc - 3;
       uint8_t buffer[length];
       convert_args(&argv[3], length, buffer);
-      if (zx_status_t status = spilib_transmit(device.value(), buffer, length); status != ZX_OK) {
+      if (zx_status_t status = spilib_transmit(device, buffer, length); status != ZX_OK) {
         fprintf(stderr, "error: spilib_transmit failed: %s\n", zx_status_get_string(status));
         return -1;
       }
@@ -98,8 +111,7 @@ int main(int argc, char** argv) {
       uint8_t send[length];
       uint8_t recv[length];
       convert_args(&argv[3], length, send);
-      if (zx_status_t status = spilib_exchange(device.value(), send, recv, length);
-          status != ZX_OK) {
+      if (zx_status_t status = spilib_exchange(device, send, recv, length); status != ZX_OK) {
         fprintf(stderr, "error: spilib_exchange failed: %s\n", zx_status_get_string(status));
         return -1;
       }

@@ -77,7 +77,7 @@ void SpiDevice::AddChildren(const ddk::SpiImplProtocolClient& spi, async_dispatc
     const auto did = channel.has_did() ? channel.did() : 0;
 
     fbl::AllocChecker ac;
-    std::unique_ptr<SpiChild> dev(new (&ac) SpiChild(zxdev(), spi, cs, has_siblings));
+    std::unique_ptr<SpiChild> dev(new (&ac) SpiChild(zxdev(), spi, cs, has_siblings, dispatcher));
     if (!ac.check()) {
       zxlogf(ERROR, "Out of memory");
       return;

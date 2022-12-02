@@ -683,24 +683,47 @@ TEST_F(SpiDeviceTest, OneClient) {
 
   EXPECT_TRUE(spi_impl_.vmos_released_since_last_call());
 
-  // DdkOpen should fail when another client is connected
-  EXPECT_STATUS(spi_child->GetDeviceContext<SpiChild>()->DdkOpen(nullptr, 0), ZX_ERR_ALREADY_BOUND);
+  // OpenSession should fail when another client is connected.
+  {
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Controller>();
+    ASSERT_OK(endpoints);
+    auto& [controller, server] = endpoints.value();
+    fidl::BindServer(loop_.dispatcher(), std::move(server),
+                     spi_child->GetDeviceContext<SpiChild>());
+    {
+      zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Device>();
+      ASSERT_OK(endpoints);
+      auto& [device, server] = endpoints.value();
+      ASSERT_OK(fidl::WireCall(controller)->OpenSession(std::move(server)));
+      ASSERT_STATUS(fidl::WireCall(device)->CanAssertCs(), ZX_ERR_PEER_CLOSED);
+    }
+  }
 
-  // Close the first client and make sure DdkOpen now works
+  // Close the first client and make sure OpenSession now works.
   cs0_client = {};
 
+  fidl::ClientEnd<fuchsia_hardware_spi::Device> device;
   while (true) {
-    zx_status_t status = spi_child->GetDeviceContext<SpiChild>()->DdkOpen(nullptr, 0);
-    if (status == ZX_OK) {
-      break;
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Controller>();
+    ASSERT_OK(endpoints);
+    auto& [controller, server] = endpoints.value();
+    fidl::BindServer(loop_.dispatcher(), std::move(server),
+                     spi_child->GetDeviceContext<SpiChild>());
+    {
+      zx::result server = fidl::CreateEndpoints<fuchsia_hardware_spi::Device>(&device);
+      ASSERT_OK(server);
+      ASSERT_OK(fidl::WireCall(controller)->OpenSession(std::move(server.value())));
+      auto result = fidl::WireCall(device)->CanAssertCs();
+      if (result.ok()) {
+        break;
+      }
+      ASSERT_STATUS(result, ZX_ERR_PEER_CLOSED);
     }
-    ASSERT_STATUS(status, ZX_ERR_ALREADY_BOUND);
   }
 
   EXPECT_TRUE(spi_impl_.vmos_released_since_last_call());
 
-  // FIDL clients shouldn't be able to connect, and calling DdkOpen a second
-  // time should fail
+  // FIDL clients shouldn't be able to connect, and calling OpenSession a second time should fail.
   {
     zx::result client = BindServer(spi_child);
     ASSERT_OK(client);
@@ -708,10 +731,23 @@ TEST_F(SpiDeviceTest, OneClient) {
     EXPECT_STATUS(cs0_client_1->CanAssertCs().status(), ZX_ERR_PEER_CLOSED);
   }
 
-  EXPECT_STATUS(spi_child->GetDeviceContext<SpiChild>()->DdkOpen(nullptr, 0), ZX_ERR_ALREADY_BOUND);
+  {
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Controller>();
+    ASSERT_OK(endpoints);
+    auto& [controller, server] = endpoints.value();
+    fidl::BindServer(loop_.dispatcher(), std::move(server),
+                     spi_child->GetDeviceContext<SpiChild>());
+    {
+      zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_spi::Device>();
+      ASSERT_OK(endpoints);
+      auto& [device, server] = endpoints.value();
+      ASSERT_OK(fidl::WireCall(controller)->OpenSession(std::move(server)));
+      ASSERT_STATUS(fidl::WireCall(device)->CanAssertCs(), ZX_ERR_PEER_CLOSED);
+    }
+  }
 
-  // Call DdkClose and make sure that a new client can now connect.
-  spi_child->GetDeviceContext<SpiChild>()->DdkClose(0);
+  // Close the open session and make sure that a new client can now connect.
+  device = {};
 
   for (;;) {
     zx::result client = BindServer(spi_child);

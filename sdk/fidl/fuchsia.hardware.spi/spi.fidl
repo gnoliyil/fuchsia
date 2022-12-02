@@ -52,6 +52,16 @@ protocol Device {
     compose fuchsia.hardware.sharedmemory.SharedVmoRegister;
 };
 
+protocol Controller {
+    /// Opens a new session on the device.
+    ///
+    /// At most one session is permitted at one time; the server end will be
+    /// closed with `ZX_ERR_ALREADY_BOUND` if a session already exists.
+    OpenSession(resource struct {
+        session server_end:Device;
+    });
+};
+
 service Service {
     device client_end:Device;
 };
