@@ -215,7 +215,11 @@
             protocol: [
                 "fuchsia.buildinfo.Provider",
                 "fuchsia.camera3.DeviceWatcher",
+                "fuchsia.device.NameProvider",
+                "fuchsia.feedback.ComponentDataRegister",
+                "fuchsia.feedback.CrashReportingProductRegister",
                 "fuchsia.fonts.Provider",
+                "fuchsia.hwinfo.Product",
                 "fuchsia.intl.PropertyProvider",
                 "fuchsia.kernel.VmexResource",
                 "fuchsia.logger.LogSink",
