@@ -96,7 +96,11 @@ template("rustc_test_internal") {
     crate_root = source_root
     clippy_crate_type = "bin"
     pass_through = {
-      forward_variables_from(invoker, [ "output_dir" ])
+      forward_variables_from(invoker,
+                             [
+                               "exclude_toolchain_tags",
+                               "output_dir",
+                             ])
       output_name = crate_name
     }
     crate_name = crate_name
