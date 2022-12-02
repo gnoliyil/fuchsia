@@ -7,9 +7,9 @@
 /// This module provides generalized rust implementations of the hanging get pattern for client side use.
 pub mod client;
 
-/// This module provides generalized rust implementations of the hanging get pattern for server side
-/// use. See `crate::hanging_get::server::HangingGetBroker` for documentation on how to use the
-/// server side API.
+/// Server-side hanging get implementation.
+///
+/// See [crate::hanging_get::server::HangingGet] for usage documentation.
 pub mod server;
 
 /// This module provides error types that may be used by the async hanging-get server.

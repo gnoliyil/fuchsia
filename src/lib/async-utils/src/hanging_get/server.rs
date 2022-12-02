@@ -9,11 +9,36 @@ use {
     std::{collections::HashMap, sync::Arc},
 };
 
-/// A broker used to create `Publishers` and `Subscribers` of updates to some state.
+/// A broker of updates to some state, using the hanging get pattern.
+///
+/// The broker stores a state, and mediates state changes between
+/// [Publisher]s and [Subscriber]s.  Any [Publisher] can change the state at any
+/// time.  When the state is changed, all [Subscriber]s are notified with the new
+/// state.
+///
+/// To follow the hanging get pattern, when a [Subscriber] is first created,
+/// the current state is sent immediately.  Subsequent updates to the same
+/// subscriber are only sent when the state is modified.
+///
+/// * Use [HangingGet::new] to create a new broker for a single state item.
+/// * Use [HangingGet::new_publisher] to create an object that allows you to
+///   update the state.
+/// * Use [HangingGet::new_subscriber] to create an object that monitors for
+///   updates to the state.
+///
+/// ## Type parameters
+///
+/// * `S`: the type of the stored hanging get state.  This is the state that gets
+///   communicated to subscribers.
+/// * `O`: The type of the object used to notify of state change.
+/// * `F`: The type of a function used to send the new state content to an instance
+///   of `O`.  `F` gets passed the content of the new state, the object that it
+///   needs to notify, and is expected to return `true` if the notification was
+///   a success; otherwise it must return `false`.
 pub struct HangingGet<S, O, F: Fn(&S, O) -> bool> {
     inner: Arc<Mutex<HangingGetInner<S, subscriber_key::Key, O, F>>>,
-    /// A `subscriber_key::Key` held by the broker to track the next unique key that the broker can
-    /// assign to a `Subscriber`.
+    /// A [subscriber_key::Key] held by the broker to track the next unique key that the broker can
+    /// assign to a [Subscriber].
     subscriber_key_generator: subscriber_key::Generator,
 }
 
@@ -22,8 +47,11 @@ where
     F: Fn(&S, O) -> bool,
 {
     /// Create a new broker.
-    /// `state` is the initial state of the HangingGet
-    /// `notify` is a `Fn` that is used to notify observers of state.
+    ///
+    /// ## Args:
+    ///
+    /// * `state` is the initial state of the [HangingGet].
+    /// * `notify` is a function to notify observers of state of the state change.
     pub fn new(state: S, notify: F) -> Self {
         Self {
             inner: Arc::new(Mutex::new(HangingGetInner::new(state, notify))),
@@ -31,20 +59,28 @@ where
         }
     }
 
-    /// Create a new `Publisher` that can make atomic updates to the state value.
+    /// Create a new [Publisher] that can make atomic updates to the state value.
     pub fn new_publisher(&self) -> Publisher<S, O, F> {
         Publisher { inner: self.inner.clone() }
     }
 
-    /// Create a unique `Subscriber` that represents a single hanging get client.
+    /// Create a new [Subscriber] that represents a single hanging get client.
+    ///
+    /// The newly-created subscriber will be notified with the current state
+    /// immediately.  After the first notification, the subscriber will be
+    /// notified only if the state changes.
     pub fn new_subscriber(&mut self) -> Subscriber<S, O, F> {
         Subscriber { inner: self.inner.clone(), key: self.subscriber_key_generator.next().unwrap() }
     }
 }
 
 /// A `Subscriber` can be used to register observation requests with the `HangingGet`.
-/// These observations will be fulfilled when the state changes or immediately the first time
+/// These will be notified when the state changes or immediately the first time
 /// a `Subscriber` registers an observation.
+///
+/// ## Type parameters
+///
+/// See [HangingGet] for the explanation of the type parameters `S`, `O`, `F`.
 pub struct Subscriber<S, O, F: Fn(&S, O) -> bool> {
     inner: Arc<Mutex<HangingGetInner<S, subscriber_key::Key, O, F>>>,
     key: subscriber_key::Key,
@@ -55,6 +91,7 @@ where
     F: Fn(&S, O) -> bool,
 {
     /// Register a new observation.
+    ///
     /// Errors occur when:
     /// * A Subscriber attempts to register an observation when there is already an outstanding
     ///   observation waiting on updates.
@@ -65,11 +102,18 @@ where
 
 /// A `Publisher` is used to make changes to the state contained within a `HangingGet`.
 /// It is designed to be cheaply cloned and `Send`.
+///
+/// ## Type parameters
+///
+/// See [HangingGet] for the explanation of the generic types `S`, `O`, `F`.
 pub struct Publisher<S, O, F: Fn(&S, O) -> bool> {
     inner: Arc<Mutex<HangingGetInner<S, subscriber_key::Key, O, F>>>,
 }
 
 impl<S, O, F: Fn(&S, O) -> bool> Clone for Publisher<S, O, F> {
+    /// Clones this [Publisher].
+    ///
+    /// It is cheap to clone a [Publisher].
     fn clone(&self) -> Self {
         Self { inner: self.inner.clone() }
     }
@@ -79,17 +123,20 @@ impl<S, O, F> Publisher<S, O, F>
 where
     F: Fn(&S, O) -> bool,
 {
-    /// `set` is a specialized form of `update` that sets the hanging get state to the value
-    /// passed in as the `state` parameter.
-    /// Any subscriber that has registered an observer will immediately be notified of the
-    /// update.
+    /// Set the stored state to `S`. Subscribers will be updated.
     pub fn set(&self, state: S) {
         self.inner.lock().set(state)
     }
 
     /// Pass a function to the hanging get that can update the hanging get state in place.
+    ///
     /// Any subscriber that has registered an observer will immediately be notified of the
     /// update.
+    ///
+    /// ## Type parameters
+    ///
+    /// * `UpdateFn`: an update function: gets passed the new state, and returns `true`
+    ///   if the state has been updated with success.
     pub fn update<UpdateFn>(&self, update: UpdateFn)
     where
         UpdateFn: FnOnce(&mut S) -> bool,
@@ -98,17 +145,17 @@ where
     }
 }
 
-/// A `HangingGetInner` object manages some internal state `S` and notifies observers of type `O`
+/// A [HangingGetInner] object manages some internal state `S` and notifies observers of type `O`
 /// when their view of the state is outdated.
 ///
-/// `S` - the type of State to be watched
-/// `O` - the type of Observers of `S`
-/// `F` - the type of observer notification behavior, where `F: Fn(&S, O)`
-/// `K` - the Key by which Observers are identified
-///
 /// While it _can_ be used directly, most API consumers will want to use the higher level
-/// `HangingGet` object. `HangingGet` and its companion types provide `Send`
+/// [HangingGet] object. `HangingGet` and its companion types provide `Send`
 /// for use from multiple threads or async tasks.
+///
+/// ## Type parameters
+///
+/// * `K` - the Key by which Observers are identified.
+/// * For other type args see [HangingGet].
 pub struct HangingGetInner<S, K, O, F: Fn(&S, O) -> bool> {
     state: S,
     notify: F,
