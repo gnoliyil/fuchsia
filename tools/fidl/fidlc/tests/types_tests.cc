@@ -634,14 +634,8 @@ type Foo = resource struct {
 }
 
 TEST(NewSyntaxTests, BadWantTypeLayoutParameter) {
-  TestLibrary library(R"FIDL(
-library example;
-
-type Foo = struct {
-    foo vector<3>;
-};
-)FIDL");
-
+  TestLibrary library;
+  library.AddFile("bad/fi-0165.test.fidl");
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrExpectedType);
 }
 

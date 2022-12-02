@@ -385,7 +385,7 @@ constexpr ErrorDef<163> ErrMultipleConstraintDefinitions(
     "cannot specify multiple constraint sets on a type");
 constexpr ErrorDef<164, flat::Name, size_t, size_t> ErrTooManyConstraints(
     "{} expected at most {} constraints, but got {}");
-constexpr UndocumentedErrorDef<165> ErrExpectedType("expected type but got a literal or constant");
+constexpr ErrorDef<165> ErrExpectedType("expected type but got a literal or constant");
 constexpr UndocumentedErrorDef<166, flat::Name> ErrUnexpectedConstraint(
     "{} failed to resolve constraint");
 constexpr ErrorDef<167, flat::Name> ErrCannotConstrainTwice("{} cannot add additional constraint");
