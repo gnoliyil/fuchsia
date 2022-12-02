@@ -266,25 +266,25 @@ TEST_F(AddressSpaceDeviceTest, OpenChildDriver) {
   Flush(ctrl_regs);
 
   // Create device.
-  ASSERT_OK(dut_->OpenChildDriver(fuchsia_hardware_goldfish::AddressSpaceChildDriverType::kDefault,
-                                  endpoints->server.TakeChannel()));
+  async::Loop loop(&kAsyncLoopConfigNeverAttachToThread);
+  ASSERT_OK(loop.StartThread("child_driver_thread"));
+  // Post a task to have the child be opened. Our FIDL servers are not thread safe, so they
+  // should be accessed on the same thread. We only have to worry about this in testing
+  // because the driver doesn't rely on multiple threads in a real environment.
+  // TODO(fxbug.dev/116594): Use one thread when mock-ddk doesn't block on unbind.
+  async::PostTask(loop.dispatcher(), [dispatcher = loop.dispatcher(),
+                                      server = std::move(endpoints->server),
+                                      dut = this->dut_]() mutable {
+    ASSERT_OK(dut->OpenChildDriver(dispatcher,
+                                   fuchsia_hardware_goldfish::AddressSpaceChildDriverType::kDefault,
+                                   std::move(server)));
+  });
+
   Flush(ctrl_regs);
   EXPECT_EQ(ctrl_regs->handle, kChildDriverHandle);
 
   // Test availability of the FIDL channel communication.
   fidl::WireSyncClient client{std::move(endpoints->client)};
-
-  // Bind server side:
-  async::Loop loop(&kAsyncLoopConfigNeverAttachToThread);
-  ASSERT_OK(loop.StartThread("child_driver_thread"));
-  auto child = dut_->zxdev()->GetLatestChild();
-  auto child_dev = child->GetDeviceContext<goldfish::AddressSpaceChildDriver>();
-  ASSERT_NE(child, nullptr);
-  auto binding =
-      fidl::BindServer(loop.dispatcher(),
-                       fidl::ServerEnd<fuchsia_hardware_goldfish::AddressSpaceChildDriver>(
-                           std::move(child->TakeClientRemote())),
-                       child_dev);
 
   // Set up return status and offset on the mock PCI device
   // to accept AllocateBlock() calls.

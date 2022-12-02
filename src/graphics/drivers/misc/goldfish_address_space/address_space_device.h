@@ -26,7 +26,7 @@
 namespace goldfish {
 
 class AddressSpaceDevice;
-using DeviceType = ddk::Device<AddressSpaceDevice>;
+using DeviceType = ddk::Device<AddressSpaceDevice, ddk::Unbindable>;
 
 // This device is a child of a AddressSpaceDevice device and acts as a
 // passthrough for FIDL requests for AddressSpaceDevice. The reason this device
@@ -38,11 +38,6 @@ using PassthroughDeviceType =
     ddk::Device<AddressSpacePassthroughDevice,
                 ddk::Messageable<fuchsia_hardware_goldfish::AddressSpaceDevice>::Mixin>;
 
-class AddressSpaceChildDriver;
-using ChildDriverType =
-    ddk::Device<AddressSpaceChildDriver,
-                ddk::Messageable<fuchsia_hardware_goldfish::AddressSpaceChildDriver>::Mixin>;
-
 class AddressSpaceDevice : public DeviceType {
  public:
   static zx_status_t Create(void* ctx, zx_device_t* parent);
@@ -51,6 +46,10 @@ class AddressSpaceDevice : public DeviceType {
   ~AddressSpaceDevice();
 
   zx_status_t Bind();
+
+  // Device protocol implementation.
+  void DdkUnbind(ddk::UnbindTxn txn);
+  void DdkRelease();
 
   uint32_t AllocateBlock(uint64_t* size, uint64_t* offset);
   uint32_t DeallocateBlock(uint64_t offset);
@@ -61,11 +60,10 @@ class AddressSpaceDevice : public DeviceType {
   uint32_t DestroyChildDriver(uint32_t handle);
   uint32_t ChildDriverPing(uint32_t handle);
 
-  // Device protocol implementation.
-  void DdkRelease();
-
-  zx_status_t OpenChildDriver(fuchsia_hardware_goldfish::wire::AddressSpaceChildDriverType type,
-                              zx::channel request);
+  zx_status_t OpenChildDriver(
+      async_dispatcher_t* dispatcher,
+      fuchsia_hardware_goldfish::wire::AddressSpaceChildDriverType type,
+      fidl::ServerEnd<fuchsia_hardware_goldfish::AddressSpaceChildDriver> request);
 
  private:
   uint32_t CommandMmioLocked(uint32_t cmd) TA_REQ(mmio_lock_);
@@ -81,6 +79,9 @@ class AddressSpaceDevice : public DeviceType {
   std::optional<svc::Outgoing> outgoing_;
   async_dispatcher_t* dispatcher_;
   async::Loop loop_{&kAsyncLoopConfigNeverAttachToThread};
+
+  fidl::ServerBindingGroup<fuchsia_hardware_goldfish::AddressSpaceChildDriver> bindings_;
+  std::optional<ddk::UnbindTxn> unbind_txn_;
 
   DISALLOW_COPY_ASSIGN_AND_MOVE(AddressSpaceDevice);
 };
@@ -102,7 +103,8 @@ class AddressSpacePassthroughDevice : public PassthroughDeviceType {
   AddressSpaceDevice* const device_;
 };
 
-class AddressSpaceChildDriver : public ChildDriverType {
+class AddressSpaceChildDriver
+    : public fidl::WireServer<fuchsia_hardware_goldfish::AddressSpaceChildDriver> {
  public:
   explicit AddressSpaceChildDriver(
       fuchsia_hardware_goldfish::wire::AddressSpaceChildDriverType type, AddressSpaceDevice* device,
@@ -118,8 +120,6 @@ class AddressSpaceChildDriver : public ChildDriverType {
   // to unpin the memory.
   ~AddressSpaceChildDriver();
 
-  zx_status_t Bind();
-
   // |fidl::WireServer<fuchsia_hardware_goldfish::AddressSpaceChildDriver>|
   void AllocateBlock(AllocateBlockRequestView request,
                      AllocateBlockCompleter::Sync& completer) override;
@@ -130,8 +130,6 @@ class AddressSpaceChildDriver : public ChildDriverType {
   void UnclaimSharedBlock(UnclaimSharedBlockRequestView request,
                           UnclaimSharedBlockCompleter::Sync& completer) override;
   void Ping(PingRequestView request, PingCompleter::Sync& completer) override;
-
-  void DdkRelease();
 
   struct Block {
    public:

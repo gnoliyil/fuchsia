@@ -219,6 +219,17 @@ uint32_t AddressSpaceDevice::AllocateBlock(uint64_t* size, uint64_t* offset) {
   return result;
 }
 
+void AddressSpaceDevice::DdkUnbind(ddk::UnbindTxn txn) {
+  ZX_ASSERT(!unbind_txn_.has_value());
+  ddk::UnbindTxn& unbind_txn = unbind_txn_.emplace(std::move(txn));
+  auto cleanup = fit::bind_member(&unbind_txn, &ddk::UnbindTxn::Reply);
+  bindings_.set_empty_set_handler(cleanup);
+  if (!bindings_.CloseAll(ZX_OK)) {
+    // Binding set was already empty.
+    cleanup();
+  }
+}
+
 uint32_t AddressSpaceDevice::DeallocateBlock(uint64_t offset) {
   fbl::AutoLock lock(&mmio_lock_);
 
@@ -280,7 +291,9 @@ uint32_t AddressSpaceDevice::ChildDriverPing(uint32_t handle) {
 }
 
 zx_status_t AddressSpaceDevice::OpenChildDriver(
-    fuchsia_hardware_goldfish::wire::AddressSpaceChildDriverType type, zx::channel request) {
+    async_dispatcher_t* dispatcher,
+    fuchsia_hardware_goldfish::wire::AddressSpaceChildDriverType type,
+    fidl::ServerEnd<fuchsia_hardware_goldfish::AddressSpaceChildDriver> request) {
   using fuchsia_hardware_goldfish::wire::AddressSpaceChildDriverPingMessage;
 
   ddk::IoBuffer io_buffer;
@@ -300,17 +313,10 @@ zx_status_t AddressSpaceDevice::OpenChildDriver(
 
   auto child_driver = std::make_unique<AddressSpaceChildDriver>(type, this, dma_region_paddr_,
                                                                 std::move(io_buffer), handle);
+  bindings_.AddBinding(
+      dispatcher, std::move(request), child_driver.get(),
+      [child = std::move(child_driver)](AddressSpaceChildDriver*, fidl::UnbindInfo info) {});
 
-  status = child_driver->DdkAdd(ddk::DeviceAddArgs("address-space-child")
-                                    .set_flags(DEVICE_ADD_INSTANCE)
-                                    .set_client_remote(std::move(request)));
-
-  if (status != ZX_OK) {
-    zxlogf(ERROR, "%s: failed to DdkAdd child driver: %d", kTag, status);
-    return status;
-  }
-
-  child_driver.release();
   return ZX_OK;
 }
 
@@ -326,7 +332,8 @@ AddressSpacePassthroughDevice::AddressSpacePassthroughDevice(AddressSpaceDevice*
 
 void AddressSpacePassthroughDevice::OpenChildDriver(OpenChildDriverRequestView request,
                                                     OpenChildDriverCompleter::Sync& completer) {
-  zx_status_t result = device_->OpenChildDriver(request->type, request->req.TakeChannel());
+  zx_status_t result = device_->OpenChildDriver(fdf::Dispatcher::GetCurrent()->async_dispatcher(),
+                                                request->type, std::move(request->req));
   completer.Close(result);
 }
 
@@ -335,8 +342,7 @@ void AddressSpacePassthroughDevice::DdkRelease() { delete this; }
 AddressSpaceChildDriver::AddressSpaceChildDriver(
     fuchsia_hardware_goldfish::wire::AddressSpaceChildDriverType type, AddressSpaceDevice* device,
     uint64_t dma_region_paddr, ddk::IoBuffer&& io_buffer, uint32_t child_device_handle)
-    : Device(device->zxdev()),
-      device_(device),
+    : device_(device),
       dma_region_paddr_(dma_region_paddr),
       io_buffer_(std::move(io_buffer)),
       handle_(child_device_handle) {}
@@ -346,11 +352,6 @@ AddressSpaceChildDriver::~AddressSpaceChildDriver() {
     device_->DeallocateBlock(block.second.offset);
   }
   device_->DestroyChildDriver(handle_);
-}
-
-zx_status_t AddressSpaceChildDriver::Bind() {
-  TRACE_DURATION("gfx", "Instance::Bind");
-  return DdkAdd("address-space", DEVICE_ADD_INSTANCE);
 }
 
 void AddressSpaceChildDriver::AllocateBlock(AllocateBlockRequestView request,
@@ -461,9 +462,6 @@ void AddressSpaceChildDriver::Ping(PingRequestView request, PingCompleter::Sync&
 
   completer.Reply(ZX_OK, *output);
 }
-
-// Device protocol implementation.
-void AddressSpaceChildDriver::DdkRelease() { delete this; }
 
 AddressSpaceChildDriver::Block::Block(uint64_t offset, uint64_t size, zx::pmt pmt)
     : offset(offset), size(size), pmt(std::move(pmt)) {}
