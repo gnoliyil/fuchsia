@@ -20,51 +20,21 @@ pub fn global_symbol_index_path() -> Result<String> {
 
 // Ensures that symbols in sdk.root are registered in the global symbol index.
 pub async fn ensure_symbol_index_registered(sdk: &Sdk) -> Result<()> {
-    let mut symbol_index_path_str: Option<String> = None;
-    let mut default_symbol_server: Option<&'static str> = None;
-    let mut build_id_dir_str: Option<String> = None;
-    if sdk.get_version() == &sdk::SdkVersion::InTree {
+    let symbol_index_path = if sdk.get_version() == &sdk::SdkVersion::InTree {
         let symbol_index_path = sdk.get_path_prefix().join(".symbol-index.json");
         if !symbol_index_path.exists() {
             bail!("Required {:?} doesn't exist", symbol_index_path);
         }
-        symbol_index_path_str = Some(pathbuf_to_string(symbol_index_path)?);
+        symbol_index_path
     } else {
-        let symbol_index_path = sdk.get_path_prefix().join("data/config/symbol-index/config.json");
-        if symbol_index_path.exists() {
-            // It's allowed that SDK do not provide a symbol-index config.
-            symbol_index_path_str = Some(pathbuf_to_string(symbol_index_path)?);
-        }
-        let build_id_dir = sdk.get_path_prefix().join(".build-id");
-        if build_id_dir.exists() {
-            build_id_dir_str = Some(pathbuf_to_string(build_id_dir)?)
-        }
-        // The default symbol server is only needed for SDK users.
-        default_symbol_server = Some("gs://fuchsia-artifacts/debug");
-    }
+        sdk.get_path_prefix().join("data/config/symbol-index*/config.json")
+    };
+    let symbol_index_path = pathbuf_to_string(symbol_index_path)?;
 
     let global_symbol_index = global_symbol_index_path()?;
     let mut index = SymbolIndex::load(&global_symbol_index).unwrap_or(SymbolIndex::new());
-    let mut needs_save = false;
-    if let Some(path) = symbol_index_path_str {
-        if !index.includes.contains(&path) {
-            index.includes.push(path);
-            needs_save = true;
-        }
-    }
-    if let Some(server) = default_symbol_server {
-        if !index.gcs_flat.iter().any(|gcs_flat| gcs_flat.url == server) {
-            index.gcs_flat.push(GcsFlat { url: server.to_owned(), require_authentication: false });
-            needs_save = true;
-        }
-    }
-    if let Some(path) = build_id_dir_str {
-        if !index.build_id_dirs.iter().any(|dir| dir.path == path) {
-            index.build_id_dirs.push(BuildIdDir { path, build_dir: None });
-            needs_save = true;
-        }
-    }
-    if needs_save {
+    if !index.includes.contains(&symbol_index_path) {
+        index.includes.push(symbol_index_path);
         index.save(&global_symbol_index)?;
     }
     return Ok(());
@@ -111,12 +81,18 @@ impl SymbolIndex {
         }
     }
 
-    /// Load a file at given path.
+    /// Load a file at given path as is.
     pub fn load(path: &str) -> Result<SymbolIndex> {
-        let mut index: SymbolIndex = serde_json::from_reader(
+        let index: SymbolIndex = serde_json::from_reader(
             File::open(path).map_err(|_| ffx_error!("Cannot open {}", path))?,
         )
         .map_err(|_| ffx_error!("Cannot parse {}", path))?;
+        Ok(index)
+    }
+
+    /// Load a file at given path and resolve relative paths.
+    pub fn load_resolve(path: &str) -> Result<SymbolIndex> {
+        let mut index = Self::load(path)?;
 
         // Resolve all paths to absolute.
         let mut base = PathBuf::from(path);
@@ -146,7 +122,7 @@ impl SymbolIndex {
         Ok(index)
     }
 
-    /// Load and aggregate all the includes.
+    /// Load the file, resolve paths and aggregate all the includes.
     pub fn load_aggregate(path: &str) -> Result<SymbolIndex> {
         let mut index = SymbolIndex::new();
         let mut visited: HashSet<String> = HashSet::new();
@@ -156,7 +132,7 @@ impl SymbolIndex {
             if visited.contains(&include) {
                 continue;
             }
-            match Self::load(&include) {
+            match Self::load_resolve(&include) {
                 Ok(mut sub) => {
                     index.includes.append(&mut sub.includes);
                     index.build_id_dirs.append(&mut sub.build_id_dirs);
@@ -215,7 +191,7 @@ pub fn resolve_path(base: &Path, relative: &str) -> String {
 }
 
 fn glob(path: String) -> Vec<String> {
-    // Only glob if "*" is in the string.
+    // Only glob if "*" is in the string, so nonexistent paths will still be preserved.
     if path.contains('*') {
         _glob(&path)
             .map(|paths| {
@@ -247,6 +223,13 @@ mod tests {
     #[test]
     fn test_load() {
         let index = SymbolIndex::load(&format!("{}/main.json", TEST_DATA_DIR)).unwrap();
+        assert_eq!(index.includes.len(), 2);
+        assert_eq!(index.includes[0], "./another.*");
+    }
+
+    #[test]
+    fn test_load_resolve() {
+        let index = SymbolIndex::load_resolve(&format!("{}/main.json", TEST_DATA_DIR)).unwrap();
         assert_eq!(index.includes.len(), 2);
         assert_eq!(index.build_id_dirs.len(), 1);
         assert_eq!(index.build_id_dirs[0].path, "/home/someone/.fuchsia/debug/symbol-cache");
