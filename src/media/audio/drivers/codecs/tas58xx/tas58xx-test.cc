@@ -1567,12 +1567,12 @@ TEST(Tas58xxTest, ExternalConfig) {
   metadata.init_sequence1[1].address = 0x56;
   metadata.init_sequence1[1].value = 0x78;
   metadata.number_of_writes2 = 3;
-  metadata.init_sequence2[0].address = 0x11;
+  metadata.init_sequence2[0].address = 0x02;
   metadata.init_sequence2[0].value = 0x22;
-  metadata.init_sequence2[1].address = 0x33;
-  metadata.init_sequence2[1].value = 0x44;
-  metadata.init_sequence2[2].address = 0x55;
-  metadata.init_sequence2[2].value = 0x66;
+  metadata.init_sequence2[1].address = 0x03;  // DeviceCtrl2 affects mute state.
+  metadata.init_sequence2[1].value = 0x33;
+  metadata.init_sequence2[2].address = 0x04;
+  metadata.init_sequence2[2].value = 0x44;
   fake_parent->SetMetadata(DEVICE_METADATA_PRIVATE, &metadata, sizeof(metadata));
 
   auto endpoints = fidl::CreateEndpoints<fuchsia_hardware_i2c::Device>();
@@ -1622,9 +1622,11 @@ TEST(Tas58xxTest, ExternalConfig) {
     format.bits_per_sample = 32;
     mock_i2c.ExpectWriteStop({0x33, 0x03});  // 32 bits.
     mock_i2c.ExpectWriteStop({0x34, 0x00});  // Keep data start sclk.
-    mock_i2c.ExpectWriteStop({0x11, 0x22});  // External config.
-    mock_i2c.ExpectWriteStop({0x33, 0x44});  // External config.
-    mock_i2c.ExpectWriteStop({0x55, 0x66});  // External config.
+    mock_i2c.ExpectWriteStop({0x02, 0x22});  // External config.
+    mock_i2c.ExpectWriteStop({0x03, 0x33});  // External config DeviceCtrl2 affects mute state.
+    mock_i2c.ExpectWriteStop({0x04, 0x44});  // External config.
+    mock_i2c.ExpectWrite({0x03}).ExpectReadStop({0x33}).ExpectWriteStop(
+        {0x03, 0x3b});  // Muted = true.
     auto formats = client.GetDaiFormats();
     ASSERT_TRUE(IsDaiFormatSupported(format, formats.value()));
     ASSERT_OK(client.SetDaiFormat(std::move(format)));

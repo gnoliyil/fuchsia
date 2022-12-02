@@ -807,8 +807,17 @@ zx::result<CodecFormatInfo> Tas58xx::SetDaiFormat(const DaiFormat& format) {
   // Run the second initialization sequence from metadata if available.
   // This allows for initialization sequences that are affected by the DAI format to be applied
   // after the DAI format is set.
-  for (size_t i = 0; i < metadata_.number_of_writes2; ++i) {
-    status = WriteReg(metadata_.init_sequence2[i].address, metadata_.init_sequence2[i].value);
+  if (metadata_.number_of_writes2) {
+    for (size_t i = 0; i < metadata_.number_of_writes2; ++i) {
+      status = WriteReg(metadata_.init_sequence2[i].address, metadata_.init_sequence2[i].value);
+      if (status != ZX_OK) {
+        return zx::error(status);
+      }
+    }
+    // Restore the mute state for cases when the initialization sequence affects it.
+    // TODO(fxbug.dev/116503): Create an alternative mechanism for external config to avoid having
+    // to restore state here.
+    status = SetMute(gain_state_.muted);
     if (status != ZX_OK) {
       return zx::error(status);
     }
