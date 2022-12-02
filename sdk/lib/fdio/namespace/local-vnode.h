@@ -42,20 +42,23 @@ class LocalVnode : public fbl::RefCounted<LocalVnode> {
 
   // Initializes a new vnode with a remote node_type, and attaches a reference to it
   // inside an (optional) parent.
+  template <class T, class... Args>
   static zx::result<fbl::RefPtr<LocalVnode>> Create(fbl::RefPtr<LocalVnode> parent,
-                                                    fidl::ClientEnd<fuchsia_io::Directory> remote,
-                                                    fbl::String name);
+                                                    fbl::String name,
+                                                    std::in_place_type_t<T> in_place,
+                                                    Args&&... args) {
+    fbl::RefPtr vn = fbl::AdoptRef(
+        new LocalVnode(std::move(parent), std::move(name), in_place, std::forward<Args>(args)...));
 
-  // Initializes a new vnode with a Local node_type, and attaches a reference to it
-  // inside an (optional) parent.
-  static zx::result<fbl::RefPtr<LocalVnode>> Create(fbl::RefPtr<LocalVnode> parent,
-                                                    fdio_open_local_func_t on_open, void* context,
-                                                    fbl::String name);
+    if (vn->parent_ != nullptr) {
+      zx_status_t status = vn->parent_->AddChild(vn);
+      if (status != ZX_OK) {
+        return zx::error(status);
+      }
+    }
 
-  // Initializes a new vnode with a Intermediate node_type, and attaches a reference to it
-  // inside an (optional) parent.
-  static zx::result<fbl::RefPtr<LocalVnode>> Create(fbl::RefPtr<LocalVnode> parent,
-                                                    fbl::String name);
+    return zx::ok(vn);
+  }
 
   // Recursively unlinks this Vnode's children, and detaches this node from
   // its parent.
@@ -172,10 +175,12 @@ class LocalVnode : public fbl::RefCounted<LocalVnode> {
   zx_status_t EnumerateInternal(fbl::StringBuffer<PATH_MAX>* path,
                                 const EnumerateCallback& func) const;
 
-  LocalVnode(fbl::RefPtr<LocalVnode> parent, zxio_storage_t storage, fbl::String name);
-  LocalVnode(fbl::RefPtr<LocalVnode> parent, fdio_open_local_func_t on_open, void* context,
-             fbl::String name);
-  LocalVnode(fbl::RefPtr<LocalVnode> parent, fbl::String name);
+  template <class T, class... Args>
+  LocalVnode(fbl::RefPtr<LocalVnode> parent, fbl::String name, std::in_place_type_t<T> in_place,
+             Args&&... args)
+      : node_type_(in_place, std::forward<Args>(args)...),
+        parent_(std::move(parent)),
+        name_(std::move(name)) {}
   ~LocalVnode();
 
   std::variant<Local, Intermediate, Remote> node_type_;

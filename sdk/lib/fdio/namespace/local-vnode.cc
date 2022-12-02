@@ -5,10 +5,11 @@
 #include "local-vnode.h"
 
 #include <lib/zx/channel.h>
-#include <lib/zxio/cpp/create_with_type.h>
 #include <lib/zxio/ops.h>
 #include <lib/zxio/zxio.h>
 #include <zircon/types.h>
+
+#include <utility>
 
 #include <fbl/auto_lock.h>
 #include <fbl/ref_counted.h>
@@ -20,58 +21,6 @@
 #include "sdk/lib/fdio/zxio.h"
 
 namespace fdio_internal {
-
-zx::result<fbl::RefPtr<LocalVnode>> LocalVnode::Create(
-    fbl::RefPtr<LocalVnode> parent, fidl::ClientEnd<fuchsia_io::Directory> remote,
-    fbl::String name) {
-  if (!remote.is_valid()) {
-    return zx::error(ZX_ERR_INVALID_ARGS);
-  }
-  zxio_storage_t remote_storage;
-  ::zxio::CreateDirectory(const_cast<zxio_storage_t*>(&remote_storage), std::move(remote));
-
-  fbl::RefPtr vn =
-      fbl::AdoptRef(new LocalVnode(std::move(parent), remote_storage, std::move(name)));
-
-  if (vn->parent_ != nullptr) {
-    zx_status_t status = vn->parent_->AddChild(vn);
-    if (status != ZX_OK) {
-      return zx::error(status);
-    }
-  }
-
-  return zx::ok(vn);
-}
-
-zx::result<fbl::RefPtr<LocalVnode>> LocalVnode::Create(fbl::RefPtr<LocalVnode> parent,
-                                                       fdio_open_local_func_t on_open,
-                                                       void* context, fbl::String name) {
-  fbl::RefPtr vn =
-      fbl::AdoptRef(new LocalVnode(std::move(parent), on_open, context, std::move(name)));
-
-  if (vn->parent_ != nullptr) {
-    zx_status_t status = vn->parent_->AddChild(vn);
-    if (status != ZX_OK) {
-      return zx::error(status);
-    }
-  }
-
-  return zx::ok(vn);
-}
-
-zx::result<fbl::RefPtr<LocalVnode>> LocalVnode::Create(fbl::RefPtr<LocalVnode> parent,
-                                                       fbl::String name) {
-  fbl::RefPtr vn = fbl::AdoptRef(new LocalVnode(std::move(parent), std::move(name)));
-
-  if (vn->parent_ != nullptr) {
-    zx_status_t status = vn->parent_->AddChild(vn);
-    if (status != ZX_OK) {
-      return zx::error(status);
-    }
-  }
-
-  return zx::ok(vn);
-}
 
 zx_status_t LocalVnode::AddChild(fbl::RefPtr<LocalVnode> child) {
   return std::visit(fdio::overloaded{
@@ -147,22 +96,6 @@ fbl::RefPtr<LocalVnode> LocalVnode::Intermediate::Lookup(std::string_view name) 
   }
   return nullptr;
 }
-
-LocalVnode::LocalVnode(fbl::RefPtr<LocalVnode> parent, zxio_storage_t storage, fbl::String name)
-    : node_type_(std::in_place_type_t<Remote>(), storage),
-      parent_(std::move(parent)),
-      name_(std::move(name)) {}
-
-LocalVnode::LocalVnode(fbl::RefPtr<LocalVnode> parent, fdio_open_local_func_t on_open,
-                       void* context, fbl::String name)
-    : node_type_(std::in_place_type_t<Local>(), on_open, context),
-      parent_(std::move(parent)),
-      name_(std::move(name)) {}
-
-LocalVnode::LocalVnode(fbl::RefPtr<LocalVnode> parent, fbl::String name)
-    : node_type_(std::in_place_type_t<Intermediate>()),
-      parent_(std::move(parent)),
-      name_(std::move(name)) {}
 
 LocalVnode::~LocalVnode() {
   std::visit(fdio::overloaded{
