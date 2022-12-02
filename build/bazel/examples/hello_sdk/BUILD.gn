@@ -10,12 +10,12 @@ import("//build/bazel/bazel_build_action.gni")
 bazel_build_action("hello_sdk_pkg_publish") {
   bazel_targets = [ "//build/bazel/examples/hello_sdk:pkg.publish" ]
   bazel_outputs = [
-    "build/bazel/examples/hello_sdk/pkg.publish_base.sh",
-    "build/bazel/examples/hello_sdk/pkg.publish_base_workflow.json",
+    "build/bazel/examples/hello_sdk/pkg.publish.sh",
+    "build/bazel/examples/hello_sdk/pkg.publish_workflow.json",
   ]
   ninja_outputs = [
-    "pkg.publish_base.sh",
-    "pkg.publish_base_workflow.json",
+    "pkg.publish.sh",
+    "pkg.publish_workflow.json",
   ]
 }
 

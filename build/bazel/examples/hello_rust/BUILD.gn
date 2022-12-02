@@ -10,24 +10,24 @@ import("//build/bazel/bazel_build_action.gni")
 bazel_build_action("hello_rust_pkg_publish") {
   bazel_targets = [ "//build/bazel/examples/hello_rust:pkg.publish" ]
   bazel_outputs = [
-    "build/bazel/examples/hello_rust/pkg.publish_base.sh",
-    "build/bazel/examples/hello_rust/pkg.publish_base_workflow.json",
+    "build/bazel/examples/hello_rust/pkg.publish.sh",
+    "build/bazel/examples/hello_rust/pkg.publish_workflow.json",
   ]
   ninja_outputs = [
-    "pkg.publish_base.sh",
-    "pkg.publish_base_workflow.json",
+    "pkg.publish.sh",
+    "pkg.publish_workflow.json",
   ]
 }
 
 bazel_build_action("hello_rust_test_pkg_publish") {
   bazel_targets = [ "//build/bazel/examples/hello_rust:test_pkg.publish" ]
   bazel_outputs = [
-    "build/bazel/examples/hello_rust/test_pkg.publish_base.sh",
-    "build/bazel/examples/hello_rust/test_pkg.publish_base_workflow.json",
+    "build/bazel/examples/hello_rust/test_pkg.publish.sh",
+    "build/bazel/examples/hello_rust/test_pkg.publish_workflow.json",
   ]
   ninja_outputs = [
-    "test_pkg.publish_base.sh",
-    "test_pkg.publish_base_workflow.json",
+    "test_pkg.publish.sh",
+    "test_pkg.publish_workflow.json",
   ]
 }
 

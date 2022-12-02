@@ -11,12 +11,12 @@ bazel_build_action("hello_fuchsia_pkg_publish") {
   bazel_targets =
       [ "//build/bazel/examples/hello_fuchsia:hello_fuchsia_package.publish" ]
   bazel_outputs = [
-    "build/bazel/examples/hello_fuchsia/hello_fuchsia_package.publish_base.sh",
-    "build/bazel/examples/hello_fuchsia/hello_fuchsia_package.publish_base_workflow.json",
+    "build/bazel/examples/hello_fuchsia/hello_fuchsia_package.publish.sh",
+    "build/bazel/examples/hello_fuchsia/hello_fuchsia_package.publish_workflow.json",
   ]
   ninja_outputs = [
-    "hello_fuchsia_package.publish_base.sh",
-    "hello_fuchsia_package.publish_base_workflow.json",
+    "hello_fuchsia_package.publish.sh",
+    "hello_fuchsia_package.publish_workflow.json",
   ]
 }
 
