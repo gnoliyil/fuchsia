@@ -73,7 +73,7 @@ impl Screens {
                 Some("Factory reset".to_string()),
                 Some("• A factory reset can fix a device problem\n• This will clear your data from the device and can't be undone".to_string()),
                 Some("Still having issues after factory reset?".to_string()),
-                vec![ButtonInfo::new("Start factory reset", Some(ICON_FACTORY_RESET), false, false, Event::StartFactoryReset)],
+                Some(vec![ButtonInfo::new("Start factory reset", Some(ICON_FACTORY_RESET), false, false, Event::StartFactoryReset)]),
                 Some(vec![ButtonInfo::new("Try another option", None, true, true, Event::TryAnotherWay)]),
                 None,
                 None,
@@ -102,10 +102,10 @@ impl Screens {
                 Some(text1.to_string()),
                 Some(text2.to_string()),
                 None,
-                vec![
+                Some(vec![
                     ButtonInfo::new("Cancel", None, false, true, Event::Cancel),
                     ButtonInfo::new("Try again", None, false, false, Event::TryAgain),
-                ],
+                ]),
                 None,
                 None,
                 Some(IMAGE_RESET_FAILED),
@@ -130,7 +130,7 @@ impl Screens {
                         .to_string(),
                 ),
                 None,
-                vec![
+                Some(vec![
                     ButtonInfo::new("Cancel", None, false, true, Event::Cancel),
                     ButtonInfo::new(
                         "Reinstall Software",
@@ -139,7 +139,7 @@ impl Screens {
                         false,
                         Event::Reinstall,
                     ),
-                ],
+                ]),
                 Some(vec![ButtonInfo::new("Power off", None, true, true, Event::Cancel)]),
                 None,
                 None,
@@ -182,7 +182,7 @@ impl Screens {
                 Some("Connecting Wi-Fi".to_string()),
                 Some("Sit tight. This may take a few\nseconds.".to_string()),
                 None,
-                vec![ButtonInfo::new("Cancel", None, false, true, Event::Cancel)],
+                Some(vec![ButtonInfo::new("Cancel", None, false, true, Event::Cancel)]),
                 None,
                 None,
                 Some(IMAGE_DEVICE_CONNECT),
@@ -240,10 +240,10 @@ impl Screens {
                         .to_string(),
                 ),
                 None,
-                vec![
+                Some(vec![
                     ButtonInfo::new("Cancel", None, false, true, Event::Cancel),
                     ButtonInfo::new("Reinstall Now", None, false, false, Event::Reinstall),
-                ],
+                ]),
                 None,
                 Some(vec![ButtonInfo::new(
                     "Permission",

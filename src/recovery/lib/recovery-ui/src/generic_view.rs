@@ -62,7 +62,7 @@ pub struct GenericSplitViewAssistant {
     text1: Option<String>,
     text2: Option<String>,
     text3: Option<String>,
-    button_infos1: ButtonInfos,
+    button_infos1: Option<ButtonInfos>,
     button_infos2: Option<ButtonInfos>,
     permission_button_infos: Option<ButtonInfos>,
     icon_name: Option<&'static str>,
@@ -82,7 +82,7 @@ impl GenericSplitViewAssistant {
         text1: Option<String>,
         text2: Option<String>,
         text3: Option<String>,
-        button_infos1: ButtonInfos,
+        button_infos1: Option<ButtonInfos>,
         button_infos2: Option<ButtonInfos>,
         permission_button_infos: Option<ButtonInfos>,
         icon_name: Option<&'static str>,
@@ -134,7 +134,10 @@ impl GenericSplitViewAssistant {
     }
 
     fn check_if_any_button_has_been_pressed(&self, text: &String) {
-        let mut found = self.check_if_a_button_in_array_has_been_pressed(text, &self.button_infos1);
+        let mut found = false;
+        if let Some(button_infos) = self.button_infos1.as_ref() {
+            found = self.check_if_a_button_in_array_has_been_pressed(text, button_infos);
+        }
         if !found {
             if let Some(button_infos) = self.button_infos2.as_ref() {
                 found = self.check_if_a_button_in_array_has_been_pressed(text, button_infos);
@@ -210,11 +213,13 @@ impl GenericSplitViewAssistant {
 
                 self.add_privacy_switch(&mut buttons, &face, builder, width1);
 
-                buttons.append(&mut self.add_buttons(
-                    builder,
-                    &self.button_infos1,
-                    LARGE_BUTTON_FONT_SIZE,
-                ));
+                if let Some(button_infos) = self.button_infos1.as_ref() {
+                    buttons.append(&mut self.add_buttons(
+                        builder,
+                        button_infos,
+                        LARGE_BUTTON_FONT_SIZE,
+                    ));
+                }
                 builder.space(size2(10.0, AFTER_MAIN_BUTTON_SPACE));
                 builder.start_group(
                     "bottom button row",
