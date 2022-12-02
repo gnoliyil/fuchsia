@@ -281,7 +281,8 @@ func (c *Client) Suspend(ctx context.Context) error {
 			// us the command ran, it will tell us the session
 			// exited without passing along an exit code. So,
 			// ignore that specific error.
-			if _, ok := err.(*ssh.ExitMissingError); ok {
+			var exitErr *ssh.ExitMissingError
+			if errors.As(err, &exitErr) {
 				logger.Infof(ctx, "ssh disconnected before returning a status")
 			} else {
 				return fmt.Errorf("failed to suspend: %w", err)
