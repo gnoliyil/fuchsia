@@ -15,7 +15,9 @@ zx_library("elfldltl") {
     "lib/elfldltl/container.h",
     "lib/elfldltl/diagnostics.h",
     "lib/elfldltl/dynamic.h",
+    "lib/elfldltl/fd.h",
     "lib/elfldltl/field.h",
+    "lib/elfldltl/file.h",
     "lib/elfldltl/fuzzer.h",
     "lib/elfldltl/gnu-hash.h",
     "lib/elfldltl/init-fini.h",
@@ -41,6 +43,7 @@ zx_library("elfldltl") {
     "lib/elfldltl/static-pie.h",
     "lib/elfldltl/static-vector.h",
     "lib/elfldltl/symbol.h",
+    "lib/elfldltl/vmo.h",
   ]
 
   sources = []
@@ -54,11 +57,16 @@ zx_library("elfldltl") {
   if (!is_kernel) {
     public_deps += [
       # <lib/elfldltl/mapped-fd-file.h> has #include <lib/fit/result.h>.
-      "//zircon/system/ulib/zx:headers",
-    ]
+      "//sdk/lib/fit:headers",
 
+      # <lib/elfldltl/fd.h> has #include <fbl/unique_fd.h>.
+      "//zircon/system/ulib/fbl:headers",
+    ]
     if (is_fuchsia) {
       public_deps += [
+        # <lib/elfldltl/mapped-vmo-file.h> has #include <lib/zx/status.h>.
+        "//zircon/system/ulib/zx:headers",
+
         # <lib/elfldltl/vmo.h> has #include <lib/zx/vmo.h>.
         "//zircon/system/ulib/zx:headers",
       ]
@@ -67,15 +75,15 @@ zx_library("elfldltl") {
 
   deps = []
   if (is_kernel) {
-    deps = [
+    deps += [
       "//zircon/kernel/lib/ktl",
       "//zircon/kernel/lib/libc",
     ]
   } else {
     sources += [ "mapped-fd-file.cc" ]
     deps += [
+      "//sdk/lib/fit",
       "//zircon/system/ulib/fbl",
-      "//zircon/system/ulib/zx",
     ]
     if (is_fuchsia) {
       sources += [ "mapped-vmo-file.cc" ]

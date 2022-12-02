@@ -56,7 +56,11 @@ source_set("unittests") {
 # real external filesystem.
 source_set("hosted-unittests") {
   visibility = [ ":*" ]
-  sources = [ "mapped-fd-file-tests.cc" ]
+  sources = [
+    "file-tests.cc",
+    "mapped-fd-file-tests.cc",
+    "tests.h",
+  ]
   deps = [
     "..",
     "//sdk/lib/stdcompat",
