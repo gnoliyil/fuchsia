@@ -5,7 +5,6 @@
 #include <endian.h>
 #include <fcntl.h>
 #include <fidl/fuchsia.device/cpp/wire.h>
-#include <fidl/fuchsia.hardware.ethernet/cpp/wire.h>
 #include <fidl/fuchsia.hardware.network/cpp/wire.h>
 #include <fidl/fuchsia.hardware.usb.peripheral/cpp/wire.h>
 #include <fuchsia/diagnostics/cpp/fidl.h>
@@ -23,7 +22,6 @@
 #include <lib/zx/fifo.h>
 #include <lib/zx/vmo.h>
 #include <unistd.h>
-#include <zircon/device/ethernet.h>
 #include <zircon/device/network.h>
 #include <zircon/status.h>
 #include <zircon/syscalls.h>
@@ -47,7 +45,6 @@ using fuchsia::diagnostics::Severity;
 using fuchsia::driver::test::DriverLog;
 using usb_virtual::BusLauncher;
 
-namespace ethernet = fuchsia_hardware_ethernet;
 constexpr const char kManufacturer[] = "Google";
 constexpr const char kProduct[] = "CDC Ethernet";
 constexpr const char kSerial[] = "ebfd5ad49d2a";
@@ -105,134 +102,15 @@ zx_status_t WaitForDevice(int dirfd, int event, const char* name, void* cookie) 
   return ZX_OK;
 }
 
-class EthernetInterface {
- public:
-  explicit EthernetInterface(fidl::UnownedClientEnd<fuchsia_io::Directory> directory,
-                             fbl::String path) {
-    zx::result controller = component::ConnectAt<ethernet::Controller>(directory, path);
-    ASSERT_OK(controller);
-    zx::result endpoints = fidl::CreateEndpoints<ethernet::Device>();
-    ASSERT_OK(endpoints);
-    auto& [client, server] = endpoints.value();
-    ASSERT_OK(fidl::WireCall(controller.value())->OpenSession(std::move(server)).status());
-    ethernet_client_.Bind(std::move(client));
-    // Get device information
-    {
-      const fidl::WireResult result = ethernet_client_->GetInfo();
-      ASSERT_OK(result);
-      const fuchsia_hardware_ethernet::wire::Info& info = result.value().info;
-      mtu_ = info.mtu;
-    }
-    const fidl::WireResult result = ethernet_client_->GetFifos();
-    ASSERT_OK(result);
-    const fit::result response = result.value();
-    ASSERT_TRUE(response.is_ok(), "%s", zx_status_get_string(response.error_value()));
-    fuchsia_hardware_ethernet::wire::Fifos& fifos = response.value()->fifos;
-    // Calculate optimal size of VMO, and set up RX and TX buffers.
-    size_t optimal_vmo_size = (fifos.rx_depth * mtu_) + (fifos.tx_depth * mtu_);
-    zx::vmo vmo;
-    ASSERT_OK(mapper_.CreateAndMap(optimal_vmo_size, ZX_VM_FLAG_PERM_READ | ZX_VM_FLAG_PERM_WRITE,
-                                   nullptr, &vmo));
-    io_buffer_ = static_cast<uint8_t*>(mapper_.start());
-    io_buffer_size_ = optimal_vmo_size;
-    auto set_io_buffer_result = ethernet_client_->SetIoBuffer(std::move(vmo));
-    ASSERT_OK(set_io_buffer_result.status());
-    auto start_result = ethernet_client_->Start();
-    ASSERT_OK(start_result.status());
-    tx_fifo_ = std::move(fifos.tx);
-    rx_fifo_ = std::move(fifos.rx);
-    tx_depth_ = fifos.tx_depth;
-    rx_depth_ = fifos.rx_depth;
-    io_buffer_offset_ = rx_depth_ * mtu_;
-
-    // Give all RX entries to the Ethernet driver
-    size_t count;
-    rx_entries_ = std::make_unique<eth_fifo_entry_t[]>(rx_depth_);
-    for (size_t i = 0; i < rx_depth_; i++) {
-      rx_entries_[i].offset = static_cast<uint32_t>(i * mtu_);
-      rx_entries_[i].length = static_cast<uint16_t>(mtu_);
-      rx_entries_[i].flags = 0;
-      rx_entries_[i].cookie = 0;
-    }
-    ASSERT_OK(rx_fifo_.write(sizeof(eth_fifo_entry_t), rx_entries_.get(), rx_depth_, &count));
-    ASSERT_EQ(count, rx_depth_);
-  }
-
-  // Receive data into a buffer. User is expected to call this function repeatedly until enough
-  // data is read or status other than ZX_OK is returned. Note that the receive data buffer would
-  // not affect the actual IO buffer.
-  zx_status_t ReceiveData(std::vector<uint8_t>& data) {
-    zx_status_t status;
-    zx_signals_t signals;
-
-    if ((status = rx_fifo_.wait_one(ZX_FIFO_READABLE | ZX_FIFO_PEER_CLOSED,
-                                    zx::deadline_after(zx::sec(10)), &signals)) < 0) {
-      if (!(signals & ZX_FIFO_READABLE)) {
-        return status;
-      }
-    }
-    size_t count;
-    if ((status = rx_fifo_.read(sizeof(eth_fifo_entry_t), rx_entries_.get(), rx_depth_, &count)) <
-        0) {
-      return status;
-    }
-    for (eth_fifo_entry_t* e = rx_entries_.get(); count-- > 0; e++) {
-      for (uint8_t* i = io_buffer_ + e->offset; i < io_buffer_ + e->offset + e->length; i++) {
-        data.push_back(*i);
-      }
-    }
-
-    return ZX_OK;
-  }
-
-  // Send data from a buffer.The data to be sent would be copied to the IO buffer and a new
-  // fifo_entry would be created to send the data.
-  zx_status_t SendData(std::vector<uint8_t> data) {
-    uint16_t length = static_cast<uint16_t>(data.size());
-    if (io_buffer_offset_ > io_buffer_size_ || io_buffer_offset_ > UINT32_MAX) {
-      // This should not happen.
-      return ZX_ERR_INTERNAL;
-    }
-    memcpy(io_buffer_ + io_buffer_offset_, data.data(), data.size());
-
-    eth_fifo_entry_t e = {
-        .offset = static_cast<uint32_t>(io_buffer_offset_),
-        .length = length,
-        .flags = 0,
-        .cookie = 1,
-    };
-    io_buffer_offset_ += data.size();
-
-    return tx_fifo_.write(sizeof(e), &e, 1, nullptr);
-  }
-
-  size_t mtu() const { return mtu_; }
-
-  uint32_t tx_depth() const { return tx_depth_; }
-
-  uint32_t rx_depth() const { return rx_depth_; }
-
- private:
-  fidl::WireSyncClient<ethernet::Device> ethernet_client_;
-  zx::fifo tx_fifo_;
-  zx::fifo rx_fifo_;
-  uint32_t tx_depth_;
-  uint32_t rx_depth_;
-  size_t mtu_;
-  std::unique_ptr<eth_fifo_entry_t[]> rx_entries_;
-  uint8_t* io_buffer_ = nullptr;
-  size_t io_buffer_size_ = 0;
-  size_t io_buffer_offset_ = 0;
-  fzl::VmoMapper mapper_;
-};
-
-class NetworkDeviceInterface : public ::loop_fixture::RealLoop {
+class NetworkDeviceInterface {
  public:
   explicit NetworkDeviceInterface(fidl::UnownedClientEnd<fuchsia_io::Directory> directory,
-                                  fbl::String path) {
+                                  fbl::String path, const std::string& session_name)
+      : loop_(&kAsyncLoopConfigNoAttachToCurrentThread) {
     zx::result controller =
         component::ConnectAt<fuchsia_hardware_network::DeviceInstance>(directory, path);
     ASSERT_OK(controller);
+
     zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_network::Device>();
     ASSERT_OK(endpoints.status_value());
     auto& [client_end, server_end] = endpoints.value();
@@ -241,11 +119,11 @@ class NetworkDeviceInterface : public ::loop_fixture::RealLoop {
         fidl::WireCall(controller.value())->GetDevice(std::move(server_end));
     ASSERT_OK(device_status.status());
 
-    netdevice_client_.emplace(std::move(client_end), dispatcher());
+    netdevice_client_.emplace(std::move(client_end), loop_.dispatcher());
     network::client::NetworkDeviceClient& client = netdevice_client_.value();
     {
       std::optional<zx_status_t> result;
-      client.OpenSession("usb-cdc-ecm-test", [&result](zx_status_t status) { result = status; });
+      client.OpenSession(session_name, [&result](zx_status_t status) { result = status; });
       RunLoopUntil([&result] { return result.has_value(); });
       ASSERT_OK(result.value());
     }
@@ -312,7 +190,7 @@ class NetworkDeviceInterface : public ::loop_fixture::RealLoop {
 
   zx::result<std::vector<uint8_t>> ReceiveData() {
     // Wait for the read callback registered with the Netdevice client to fill the queue.
-    RunLoopUntil([&] { return !rx_queue_.empty(); });
+    RunLoopUntil([this] { return !rx_queue_.empty(); });
 
     network::client::NetworkDeviceClient::Buffer buffer = std::move(rx_queue_.front());
     rx_queue_.pop();
@@ -344,13 +222,14 @@ class NetworkDeviceInterface : public ::loop_fixture::RealLoop {
     return zx::ok(std::move(output));
   }
 
-  uint32_t tx_depth() { return tx_depth_; }
+  uint32_t tx_depth() const { return tx_depth_; }
 
-  uint32_t rx_depth() { return rx_depth_; }
+  uint32_t rx_depth() const { return rx_depth_; }
 
   size_t mtu() { return mtu_.value(); }
 
  private:
+  async::Loop loop_;
   std::optional<network::client::NetworkDeviceClient> netdevice_client_;
   // Since the client receives data in a callback, we need to store the frames we receive.
   std::queue<network::client::NetworkDeviceClient::Buffer> rx_queue_;
@@ -359,6 +238,26 @@ class NetworkDeviceInterface : public ::loop_fixture::RealLoop {
   uint32_t tx_depth_;
   uint32_t rx_depth_;
   std::optional<size_t> mtu_;
+
+  // TODO(https://fxbug.dev/114107): remove this hand-rolled implementation (adapted
+  // from //zircon/system/ulib/async-loop/testing/real_loop.cc) once `loop_fixture::RealLoop`
+  // supports configuration.
+  void RunLoopUntil(fit::function<bool()> condition) {
+    while (loop_.GetState() == ASYNC_LOOP_RUNNABLE) {
+      if (condition()) {
+        loop_.ResetQuit();
+        return;
+      }
+      loop_.Run(zx::deadline_after(zx::msec(1)), true);
+    }
+    loop_.ResetQuit();
+    return;
+  }
+
+  void RunLoopUntilIdle() {
+    loop_.RunUntilIdle();
+    loop_.ResetQuit();
+  }
 };
 
 class UsbCdcEcmTest : public zxtest::Test {
@@ -438,7 +337,7 @@ class UsbCdcEcmTest : public zxtest::Test {
     };
     DevicePaths host_device_paths{.subdir = "class/network/", .query = "/usb-bus/"};
     // Attach to function-001, because it implements usb-cdc-ecm.
-    DevicePaths peripheral_device_paths{.subdir = "class/ethernet/",
+    DevicePaths peripheral_device_paths{.subdir = "class/network/",
                                         .query = "/usb-peripheral/function-001"};
 
     wait_for_device(host_device_paths);
@@ -449,64 +348,54 @@ class UsbCdcEcmTest : public zxtest::Test {
   }
 };
 
-TEST_F(UsbCdcEcmTest, PeripheralTransmitsToHost) {
-  fdio_cpp::UnownedFdioCaller caller(bus_->GetRootFd());
-  EthernetInterface peripheral(caller.directory(), peripheral_path_);
-  NetworkDeviceInterface host(caller.directory(), host_path_);
-
-  const uint32_t fifo_depth = std::min(peripheral.tx_depth(), host.rx_depth());
-  ASSERT_EQ(peripheral.mtu(), kEthernetMtu);
-  ASSERT_EQ(host.mtu(), kEthernetMtu);
-
+void TransmitAndReceive(NetworkDeviceInterface& a, NetworkDeviceInterface& b,
+                        const uint32_t fifo_depth) {
   uint8_t fill_data = 0;
   for (size_t i = 0; i < fifo_depth; ++i) {
     std::vector<uint8_t> data;
     for (size_t j = 0; j < kEthernetMtu; ++j) {
       data.push_back(fill_data++);
     }
-    ASSERT_OK(peripheral.SendData(data));
+    ASSERT_OK(a.SendData(data));
   }
-
   size_t received_bytes = 0;
   uint8_t read_data = 0;
   while (received_bytes < fifo_depth * kEthernetMtu) {
-    zx::result<std::vector<uint8_t>> received_data = host.ReceiveData();
+    zx::result<std::vector<uint8_t>> received_data = b.ReceiveData();
     ASSERT_OK(received_data.status_value());
-    ASSERT_EQ(kEthernetMtu, received_data.value().size());
     const std::vector<uint8_t>& data = received_data.value();
+    ASSERT_EQ(kEthernetMtu, data.size());
     received_bytes += data.size();
     for (const auto& b : data) {
       ASSERT_EQ(b, read_data++);
     }
   }
-  ASSERT_NO_FATAL_FAILURE();
 }
 
-TEST_F(UsbCdcEcmTest, HostTransmitsToPeripheral) {
+TEST_F(UsbCdcEcmTest, TransmitReceive) {
   fdio_cpp::UnownedFdioCaller caller(bus_->GetRootFd());
-  EthernetInterface peripheral(caller.directory(), peripheral_path_);
-  NetworkDeviceInterface host(caller.directory(), host_path_);
+  NetworkDeviceInterface peripheral(caller.directory(), peripheral_path_,
+                                    "usb-cdc-function-peripheral");
+  NetworkDeviceInterface host(caller.directory(), host_path_, "usb-cdc-ecm-host");
 
-  const uint32_t fifo_depth = std::min(peripheral.rx_depth(), host.tx_depth());
   ASSERT_EQ(peripheral.mtu(), kEthernetMtu);
   ASSERT_EQ(host.mtu(), kEthernetMtu);
 
-  uint8_t fill_data = 0;
-  for (size_t i = 0; i < fifo_depth; ++i) {
-    std::vector<uint8_t> data;
-    for (size_t j = 0; j < kEthernetMtu; ++j) {
-      data.push_back(fill_data++);
-    }
-    ASSERT_OK(host.SendData(data));
-  }
+  auto pick_transmit_depth = [](const NetworkDeviceInterface& sender,
+                                const NetworkDeviceInterface& receiver) -> uint32_t {
+    // NOTE: Netdevice core will double the number of device buffers to account
+    // for in-flight buffers with the higher layers. This is encoding knowledge
+    // at a distance here, but basically we don't want to send more than the
+    // actual underlying device's depth, which makes the transfer racy/fallible.
+    //
+    // TODO(https://fxbug.dev/116278): Improve this when we add a signal that we
+    // can observe for buffer readiness.
+    return std::min(sender.tx_depth(), receiver.rx_depth() / 2);
+  };
 
-  std::vector<uint8_t> received_data;
-  while (received_data.size() < fifo_depth * kEthernetMtu) {
-    ASSERT_OK(peripheral.ReceiveData(received_data));
-  }
-  for (size_t i = 0; i < received_data.size(); ++i) {
-    ASSERT_EQ(received_data[i], i % 256);
-  }
+  TransmitAndReceive(peripheral, host, pick_transmit_depth(peripheral, host));
+  TransmitAndReceive(host, peripheral, pick_transmit_depth(host, peripheral));
+
   ASSERT_NO_FATAL_FAILURE();
 }
 

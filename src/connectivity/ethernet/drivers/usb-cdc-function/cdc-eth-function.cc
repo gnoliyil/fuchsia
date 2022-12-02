@@ -990,10 +990,8 @@ zx_status_t usb_cdc_bind(void* ctx, zx_device_t* parent) {
   args.ops = &usb_cdc_proto;
   args.proto_id = ZX_PROTOCOL_ETHERNET_IMPL;
   args.proto_ops = &ethernet_impl_ops;
-  if (device_is_dfv2(parent)) {
-    args.str_props = props;
-    args.str_prop_count = std::size(props);
-  }
+  args.str_props = props;
+  args.str_prop_count = std::size(props);
 
   status = device_add(parent, &args, &cdc->zxdev);
   if (status != ZX_OK) {
