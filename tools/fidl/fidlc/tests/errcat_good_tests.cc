@@ -16,6 +16,12 @@ namespace {
 
 // LINT.IfChange
 
+TEST(ConstsTests, Good0003) {
+  TestLibrary library;
+  library.AddFile("good/fi-0003.test.fidl");
+  ASSERT_COMPILED(library);
+}
+
 TEST(ConstsTests, Good0004) {
   TestLibrary library;
   library.AddFile("good/fi-0004.test.fidl");

@@ -4,9 +4,9 @@
 library test.good.fi0017;
 
 type Foo = table {
-  1: foo string;
+    1: foo string;
 };
 
 type Bar = union {
-  1: foo string;
+    1: foo string;
 };

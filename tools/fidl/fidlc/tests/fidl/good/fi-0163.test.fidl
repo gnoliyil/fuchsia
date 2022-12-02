@@ -4,6 +4,6 @@
 library test.good.fi0163;
 
 type Person = struct {
-  name string;
-  favorite_color string:<30, optional>;
+    name string;
+    favorite_color string:<30, optional>;
 };
