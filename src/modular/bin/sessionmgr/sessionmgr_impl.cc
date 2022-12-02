@@ -405,18 +405,19 @@ void SessionmgrImpl::InitializeV2ModularAgents() {
   FX_DCHECK(agent_runner_.get());
 
   for (auto& entry : config_accessor_.sessionmgr_config().v2_modular_agents()) {
-    // Connect to Agent in |v2_service_directory_|.
-    fuchsia::modular::AgentPtr agent;
-    if (zx_status_t status =
-            v2_service_directory_->Connect(agent.NewRequest(), entry.service_name());
-        status != ZX_OK) {
-      FX_PLOGS(ERROR, status) << "Failed to connect to fuchia.modular.Agent under the name '"
-                              << entry.service_name() << "' for v2 agent with v1 URL "
-                              << entry.agent_url();
-      continue;
-    }
-
-    agent_runner_->AddAgentFromService(entry.agent_url(), std::move(agent));
+    agent_runner_->RegisterAgentConnector(
+        entry.agent_url(),
+        [this, agent_url = entry.agent_url(), service_name = entry.service_name()](auto request) {
+          if (terminating_) {
+            request.Close(ZX_ERR_UNAVAILABLE);
+            return;
+          }
+          if (zx_status_t status = v2_service_directory_->Connect(std::move(request), service_name);
+              status != ZX_OK) {
+            FX_PLOGS(ERROR, status) << "Failed to connect to fuchia.modular.Agent under the name '"
+                                    << service_name << "' for v2 agent with v1 URL " << agent_url;
+          }
+        });
   }
 }
 

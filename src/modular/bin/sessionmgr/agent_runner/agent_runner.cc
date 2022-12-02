@@ -138,21 +138,9 @@ void AgentRunner::AddRunningAgent(
           .second);
 }
 
-void AgentRunner::AddAgentFromService(std::string agent_url, fuchsia::modular::AgentPtr agent) {
-  // Start the agent and issue all callbacks.
-  ComponentContextInfo component_info = {this, session_agents_};
-  AgentContextInfo info = {component_info, launcher_, agent_services_factory_, sessionmgr_context_};
-  fuchsia::modular::session::AppConfig agent_config;
-  agent_config.set_url(agent_url);
-
-  FX_CHECK(
-      running_agents_
-          .emplace(
-              agent_url,
-              std::make_unique<AgentContextImpl>(
-                  info, agent_url, std::move(agent), session_inspect_node_->CreateChild(agent_url),
-                  ShouldRestartSessionOnCrash(agent_url) ? on_critical_agent_crash_ : nullptr))
-          .second);
+void AgentRunner::RegisterAgentConnector(
+    const std::string& agent_url, fidl::InterfaceRequestHandler<fuchsia::modular::Agent> handler) {
+  FX_CHECK(agent_connectors_.insert({agent_url, std::move(handler)}).second);
 }
 
 void AgentRunner::EnsureAgentIsRunning(const std::string& agent_url,
@@ -164,11 +152,12 @@ void AgentRunner::EnsureAgentIsRunning(const std::string& agent_url,
 
   auto agent_it = running_agents_.find(agent_url);
   if (agent_it != running_agents_.end()) {
-    switch (agent_it->second->state()) {
+    auto& agent_context_impl = agent_it->second;
+
+    switch (agent_context_impl->state()) {
       case AgentContextImpl::State::INITIALIZING:
       case AgentContextImpl::State::RUNNING:
-        // Agent is already running, so we can issue the
-        // callback immediately.
+        // Agent is already running, so we can issue the callback immediately.
         done(agent_url);
         break;
       case AgentContextImpl::State::TERMINATING:
@@ -179,7 +168,6 @@ void AgentRunner::EnsureAgentIsRunning(const std::string& agent_url,
     return;
   }
   run_agent_callbacks_[agent_url].push_back(std::move(done));
-
   RunAgent(agent_url);
 }
 
@@ -190,13 +178,26 @@ void AgentRunner::RunAgent(const std::string& agent_url) {
   fuchsia::modular::session::AppConfig agent_config;
   agent_config.set_url(agent_url);
 
-  FX_CHECK(
-      running_agents_
-          .emplace(agent_url,
-                   std::make_unique<AgentContextImpl>(
-                       info, std::move(agent_config), session_inspect_node_->CreateChild(agent_url),
-                       ShouldRestartSessionOnCrash(agent_url) ? on_critical_agent_crash_ : nullptr))
-          .second);
+  auto on_agent_crash_callback =
+      ShouldRestartSessionOnCrash(agent_url) ? on_critical_agent_crash_ : nullptr;
+
+  std::unique_ptr<AgentContextImpl> agent_context_impl;
+  auto agent_connector_it = agent_connectors_.find(agent_url);
+  if (agent_connector_it != agent_connectors_.end()) {
+    // Connect to `fuchsia.modular.Agent` via the connector function
+    fuchsia::modular::AgentPtr agent;
+    agent_connector_it->second(agent.NewRequest());
+    agent_context_impl = std::make_unique<AgentContextImpl>(
+        info, agent_url, std::move(agent), session_inspect_node_->CreateChild(agent_url),
+        std::move(on_agent_crash_callback));
+  } else {
+    // Launch the agent as a v1 component
+    agent_context_impl = std::make_unique<AgentContextImpl>(
+        info, std::move(agent_config), session_inspect_node_->CreateChild(agent_url),
+        std::move(on_agent_crash_callback));
+  }
+
+  FX_CHECK(running_agents_.emplace(agent_url, std::move(agent_context_impl)).second);
 
   auto run_callbacks_it = run_agent_callbacks_.find(agent_url);
   if (run_callbacks_it != run_agent_callbacks_.end()) {
@@ -208,7 +209,7 @@ void AgentRunner::RunAgent(const std::string& agent_url) {
 }
 
 void AgentRunner::ConnectToAgent(
-    std::string requestor_url, std::string agent_url,
+    std::string requestor_url, const std::string& agent_url,
     fidl::InterfaceRequest<fuchsia::sys::ServiceProvider> incoming_services_request,
     fidl::InterfaceRequest<fuchsia::modular::AgentController> agent_controller_request) {
   if (!incoming_services_request) {
@@ -216,15 +217,13 @@ void AgentRunner::ConnectToAgent(
                       "ConnectToAgent() by "
                    << requestor_url;
   }
-  EnsureAgentIsRunning(
-      std::move(agent_url), [this, requestor_url = std::move(requestor_url),
-                             incoming_services_request = std::move(incoming_services_request),
-                             agent_controller_request = std::move(agent_controller_request)](
-                                const std::string& agent_url) mutable {
-        running_agents_[agent_url]->NewAgentConnection(std::move(requestor_url),
-                                                       std::move(incoming_services_request),
-                                                       std::move(agent_controller_request));
-      });
+  EnsureAgentIsRunning(agent_url, [this, requestor_url = std::move(requestor_url),
+                                   incoming_services_request = std::move(incoming_services_request),
+                                   agent_controller_request = std::move(agent_controller_request)](
+                                      const std::string& agent_url) mutable {
+    running_agents_[agent_url]->NewAgentConnection(
+        requestor_url, std::move(incoming_services_request), std::move(agent_controller_request));
+  });
 }
 
 void AgentRunner::HandleAgentServiceNotFound(zx::channel channel, const std::string& service_name) {
@@ -237,14 +236,14 @@ void AgentRunner::HandleAgentServiceNotFound(zx::channel channel, const std::str
 }
 
 void AgentRunner::ConnectToService(
-    std::string requestor_url, std::string agent_url,
+    std::string requestor_url, const std::string& agent_url,
     fidl::InterfaceRequest<fuchsia::modular::AgentController> agent_controller_request,
     std::string service_name, zx::channel channel) {
   EnsureAgentIsRunning(
-      std::move(agent_url), [this, requestor_url = std::move(requestor_url),
-                             service_name = std::move(service_name), channel = std::move(channel),
-                             agent_controller_request = std::move(agent_controller_request)](
-                                const std::string& agent_url) mutable {
+      agent_url, [this, requestor_url = std::move(requestor_url),
+                  service_name = std::move(service_name), channel = std::move(channel),
+                  agent_controller_request =
+                      std::move(agent_controller_request)](const std::string& agent_url) mutable {
         running_agents_[agent_url]->ConnectToService(
             requestor_url, std::move(agent_controller_request), service_name, std::move(channel));
       });

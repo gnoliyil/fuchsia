@@ -5,7 +5,9 @@
 use {
     crate::fake_appmgr::{CreateComponentFn, FakeAppmgr},
     anyhow::{anyhow, Context, Error},
-    fidl::endpoints::{create_endpoints, create_proxy, ServerEnd},
+    fidl::endpoints::{
+        create_endpoints, create_proxy, ControlHandle, Proxy, RequestStream, ServerEnd,
+    },
     fidl_fuchsia_element as felement, fidl_fuchsia_examples as fexamples, fidl_fuchsia_io as fio,
     fidl_fuchsia_modular as fmodular, fidl_fuchsia_modular_internal as fmodular_internal,
     fidl_fuchsia_sys as fsys, fidl_fuchsia_ui_app as fapp, fuchsia_async as fasync,
@@ -18,9 +20,11 @@ use {
     },
     fuchsia_scenic as scenic, fuchsia_zircon as zx,
     fuchsia_zircon::Peered,
-    futures::{channel::mpsc, prelude::*},
+    futures::{self, channel::mpsc, lock::Mutex, prelude::*},
+    lazy_static::lazy_static,
     std::collections::HashMap,
     std::sync::Arc,
+    test_util::Counter,
     vfs::{directory::entry::DirectoryEntry, file::vmo::read_only_static, pseudo_directory},
 };
 
@@ -379,6 +383,205 @@ async fn test_v2_modular_agents() -> Result<(), Error> {
     Ok(())
 }
 
+// Tests that sessionmgr will reconnect to the `fuchsia.modular.Agent` protocol exposed by a v2
+// component after the initial connection is closed.
+#[fuchsia::test]
+async fn test_v2_modular_agent_reconnect() -> Result<(), Error> {
+    lazy_static! {
+        static ref AGENT_CONNECTION_COUNT: Counter = Counter::new(0);
+    }
+
+    // Number of times `mock_session_shell` will call Echo
+    const ECHO_CALL_COUNT: u32 = 2;
+
+    let fixture = TestFixture::new()
+        .await?
+        .with_config(
+            r#"{
+  "basemgr": {
+    "enable_cobalt": false,
+    "session_shells": [
+      {
+        "url": "fuchsia-pkg://fuchsia.com/test_session_shell#meta/test_session_shell.cmx"
+      }
+    ]
+  },
+  "sessionmgr": {
+    "enable_cobalt": false,
+    "agent_service_index": [
+      {
+        "service_name": "fuchsia.examples.Echo",
+        "agent_url": "fuchsia-pkg://fuchsia.com/test_agent#meta/test_agent.cmx"
+      }
+    ],
+    "v2_modular_agents": [
+      {
+        "service_name": "fuchsia.modular.Agent.test_agent",
+        "agent_url": "fuchsia-pkg://fuchsia.com/test_agent#meta/test_agent.cmx"
+      }
+    ],
+    "session_agents": [
+      "fuchsia-pkg://fuchsia.com/test_agent#meta/test_agent.cmx"
+    ]
+  }
+}"#,
+        )
+        .await?;
+
+    let (mut close_agent_sender, close_agent_receiver) = mpsc::channel::<()>(1);
+    let (mut call_echo_sender, call_echo_receiver) = mpsc::channel::<()>(1);
+    let (shell_called_echo_sender, mut shell_called_echo_receiver) = mpsc::channel(1);
+    let call_echo_receiver = Arc::new(Mutex::new(call_echo_receiver));
+    let close_agent_receiver = Arc::new(Mutex::new(close_agent_receiver));
+
+    let mock_session_shell: CreateComponentFn = Box::new(move |launch_info: fsys::LaunchInfo| {
+        let call_echo_receiver = call_echo_receiver.clone();
+        let mut shell_called_echo_sender = shell_called_echo_sender.clone();
+        fasync::Task::local(async move {
+            let mut outgoing_fs = ServiceFs::<ServiceObj<'_, ()>>::new();
+            outgoing_fs
+                .serve_connection(launch_info.directory_request.unwrap())
+                .expect("failed to serve outgoing fs");
+
+            let svc = launch_info.additional_services.unwrap();
+
+            assert!(svc.names.contains(&"fuchsia.examples.Echo".to_string()));
+
+            let provider =
+                svc.provider.unwrap().into_proxy().expect("failed to create ServiceProvider proxy");
+
+            // Connect to the agent controller so we can detect when it is removed
+            let (component_context, component_context_server_end) =
+                create_proxy::<fmodular::ComponentContextMarker>()
+                    .expect("failed to create ComponentContext endpoints");
+            provider
+                .connect_to_service(
+                    "fuchsia.modular.ComponentContext",
+                    component_context_server_end.into_channel(),
+                )
+                .expect("failed to call ConnectToService");
+
+            let (agent_controller, agent_controller_server_end) =
+                create_proxy::<fmodular::AgentControllerMarker>()
+                    .expect("failed to create AgentController endpoints");
+            let (_incoming_services, incoming_services_server_end) =
+                create_proxy::<fsys::ServiceProviderMarker>()
+                    .expect("failed to create ServiceProvider endpoints");
+            component_context
+                .deprecated_connect_to_agent(
+                    "fuchsia-pkg://fuchsia.com/test_agent#meta/test_agent.cmx",
+                    incoming_services_server_end,
+                    agent_controller_server_end,
+                )
+                .expect("failed to call DeprecatedConnectToAgent");
+
+            for _ in 1..=ECHO_CALL_COUNT {
+                // Wait for the test to tell this component to call Echo
+                let () = call_echo_receiver
+                    .lock()
+                    .await
+                    .next()
+                    .await
+                    .expect("expected call echo message");
+
+                let (echo, echo_server_end) = create_proxy::<fexamples::EchoMarker>()
+                    .expect("failed to create Echo endpoints");
+                provider
+                    .connect_to_service("fuchsia.examples.Echo", echo_server_end.into_channel())
+                    .expect("failed to call ConnectToService");
+
+                let result = echo.echo_string("hello").await.expect("failed to call EchoString");
+
+                assert_eq!("hello", result);
+
+                shell_called_echo_sender.try_send(()).expect("failed to send shell called echo");
+
+                // Wait for the AgentController to be closed, which signals that the agent
+                // terminated and was removed.
+                agent_controller
+                    .on_closed()
+                    .await
+                    .expect("failed to wait for AgentController on_closed");
+            }
+        })
+        .detach();
+    });
+
+    let mut mock_v1_components = HashMap::new();
+    mock_v1_components.insert(TEST_SESSION_SHELL_URL.to_string(), mock_session_shell);
+
+    let fake_appmgr = FakeAppmgr::new(mock_v1_components);
+    let fixture = fixture.with_fake_appmgr(fake_appmgr).await?;
+
+    let instance = fixture.builder.build().await?;
+
+    let (session_context_client_end, _session_context_server_end) =
+        create_endpoints::<fmodular_internal::SessionContextMarker>()?;
+    let (_services_from_sessionmgr, services_from_sessionmgr_server_end) =
+        create_proxy::<fio::DirectoryMarker>()?;
+    let mut link_token_pair = scenic::flatland::ViewCreationTokenPair::new()?;
+
+    // `fuchsia.modular.Agent.test_agent` represents a v2 component whose Agent protocol
+    // is routed to sessionmgr through /svc_for_v1_sessionmgr.
+    let mut services_for_agents_fs = ServiceFs::new();
+    services_for_agents_fs.add_fidl_service_at(
+        "fuchsia.modular.Agent.test_agent",
+        move |stream: fmodular::AgentRequestStream| {
+            let close_agent_receiver = close_agent_receiver.clone();
+            fasync::Task::local(async move {
+                AGENT_CONNECTION_COUNT.inc();
+                let control_handle = stream.control_handle();
+                let close_agent_fut = async move {
+                    close_agent_receiver.lock().await.next().await;
+                    control_handle.shutdown();
+                };
+                fasync::Task::local(close_agent_fut).detach();
+                fasync::Task::local(serve_echo_agent(stream)).detach();
+            })
+            .detach();
+        },
+    );
+
+    let sessionmgr_proxy = instance
+        .root
+        .connect_to_protocol_at_exposed_dir::<fmodular_internal::SessionmgrMarker>()?;
+    sessionmgr_proxy.initialize(
+        "test_session_id",
+        session_context_client_end,
+        &mut services_for_agents_fs.host_services_list()?,
+        services_from_sessionmgr_server_end,
+        &mut link_token_pair.view_creation_token,
+    )?;
+
+    fasync::Task::local(services_for_agents_fs.collect()).detach();
+
+    // Tell the shell component to call Echo.
+    call_echo_sender.try_send(()).expect("failed to send call echo message");
+
+    let () = shell_called_echo_receiver
+        .next()
+        .await
+        .ok_or_else(|| anyhow!("expected shell called echo message"))?;
+
+    // Close the `fuchsia.modular.Agent` connection.
+    close_agent_sender.try_send(()).expect("failed to send close agent");
+
+    // Tell the shell component to call Echo again.
+    call_echo_sender.try_send(()).expect("failed to send call echo message");
+
+    let () = shell_called_echo_receiver
+        .next()
+        .await
+        .ok_or_else(|| anyhow!("expected shell called echo message"))?;
+
+    // fuchsia.component.Agent should have been reconnected.
+    assert_eq!(2, AGENT_CONNECTION_COUNT.get());
+
+    instance.destroy().await?;
+
+    Ok(())
+}
+
 #[fuchsia::test]
 async fn test_v2_session_shell() -> Result<(), Error> {
     let fixture = TestFixture::new()
@@ -551,11 +754,8 @@ async fn serve_echo_agent(mut stream: fmodular::AgentRequestStream) {
     while let Some(fmodular::AgentRequest::Connect { services, .. }) =
         stream.try_next().await.expect("failed to serve Agent")
     {
-        fasync::Task::local(async move {
-            let stream = services.into_stream().expect("failed to create ServiceProvider stream");
-            serve_echo_serviceprovider(stream).await
-        })
-        .detach();
+        let stream = services.into_stream().expect("failed to create ServiceProvider stream");
+        fasync::Task::local(serve_echo_serviceprovider(stream)).detach();
     }
 }
 
@@ -567,15 +767,12 @@ async fn serve_echo_serviceprovider(mut stream: fsys::ServiceProviderRequestStre
     }) = stream.try_next().await.expect("failed to serve ServiceProvider")
     {
         assert_eq!("fuchsia.examples.Echo", service_name);
+        let stream: fexamples::EchoRequestStream = ServerEnd::<fexamples::EchoMarker>::new(channel)
+            .into_stream()
+            .expect("failed to create EchoRequestStream");
 
-        fasync::Task::local(async move {
-            let stream: fexamples::EchoRequestStream =
-                ServerEnd::<fexamples::EchoMarker>::new(channel)
-                    .into_stream()
-                    .expect("failed to create ServiceProvider stream");
-            serve_echo(stream).await.expect("failed to serve Echo")
-        })
-        .detach();
+        fasync::Task::local(async move { serve_echo(stream).await.expect("failed to serve Echo") })
+            .detach();
     }
 }
 

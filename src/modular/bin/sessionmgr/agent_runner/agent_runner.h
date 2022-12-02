@@ -74,14 +74,15 @@ class AgentRunner {
   void AddRunningAgent(std::string agent_url,
                        std::unique_ptr<AppClient<fuchsia::modular::Lifecycle>> app_client);
 
-  // Adds an agent that is already running and exposes the `fuchsia.modular.Agent` protocol
-  // at `agent` to list of agents managed by AgentRunner.
-  void AddAgentFromService(std::string agent_url, fuchsia::modular::AgentPtr agent);
+  // Registers a function that will be connect the `fuchsia.modular.Agent` protocol for the given
+  // agent URL, instead of starting it as a v1 component.
+  void RegisterAgentConnector(const std::string& agent_url,
+                              fidl::InterfaceRequestHandler<fuchsia::modular::Agent> handler);
 
   // Connects to an agent (and starts it up if it doesn't exist) through
   // |Agent.Connect|. Called using ComponentContext.
   void ConnectToAgent(
-      std::string requestor_url, std::string agent_url,
+      std::string requestor_url, const std::string& agent_url,
       fidl::InterfaceRequest<fuchsia::sys::ServiceProvider> incoming_services_request,
       fidl::InterfaceRequest<fuchsia::modular::AgentController> agent_controller_request);
 
@@ -115,7 +116,7 @@ class AgentRunner {
   // |channel| The channel associated with the requestor's pending service
   // request, to be used to communicate with the service, once connected.
   void ConnectToService(
-      std::string requestor_url, std::string agent_url,
+      std::string requestor_url, const std::string& agent_url,
       fidl::InterfaceRequest<fuchsia::modular::AgentController> agent_controller_request,
       std::string service_name, zx::channel channel);
 
@@ -149,6 +150,12 @@ class AgentRunner {
 
   // agent URL -> modular.fuchsia::modular::AgentContext
   std::map<std::string, std::unique_ptr<AgentContextImpl>> running_agents_;
+
+  // Mapping from an agent URL to a function that connects a request for the Agent protocol.
+  // This is used to connect to the Agent protocol exposed by a v2 component.
+  // When an agent is in this map, |EnsureAgentIsRunning()| will try to connect to it via the
+  // connector instead of starting it as a v1 component.
+  std::map<std::string, fidl::InterfaceRequestHandler<fuchsia::modular::Agent>> agent_connectors_;
 
   fuchsia::sys::Launcher* const launcher_;
   AgentServicesFactory* const agent_services_factory_;
