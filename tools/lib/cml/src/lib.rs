@@ -871,9 +871,9 @@ impl Right {
 ///
 /// A reference string takes the form of `#<name>`, where `<name>` refers to the name of a child:
 ///
-/// -   A [static child instance][doc-static-children] whose name is
+/// - A [static child instance][doc-static-children] whose name is
 ///     `<name>`, or
-/// -   A [collection][doc-collections] whose name is `<name>`.
+/// - A [collection][doc-collections] whose name is `<name>`.
 ///
 /// [doc-static-children]: /docs/concepts/components/v2/realms.md#static-children
 /// [doc-collections]: /docs/concepts/components/v2/realms.md#collections
@@ -951,9 +951,9 @@ pub struct Document {
     /// If the component uses the ELF runner, `program` must include the following
     /// properties, at a minimum:
     ///
-    /// -   `runner`: must be set to `"elf"`
-    /// -   `binary`: Package-relative path to the executable binary
-    /// -   `args` _(optional)_: List of arguments
+    /// - `runner`: must be set to `"elf"`
+    /// - `binary`: Package-relative path to the executable binary
+    /// - `args` _(optional)_: List of arguments
     ///
     /// Example:
     ///
@@ -1497,8 +1497,8 @@ pub struct Environment {
     pub name: Name,
 
     /// How the environment should extend this realm's environment.
-    /// -   `realm`: Inherit all properties from this compenent's environment.
-    /// -   `none`: Start with an empty environment, do not inherit anything.
+    /// - `realm`: Inherit all properties from this compenent's environment.
+    /// - `none`: Start with an empty environment, do not inherit anything.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extends: Option<EnvironmentExtends>,
 
@@ -1698,9 +1698,9 @@ pub struct RunnerRegistration {
     pub runner: Name,
 
     /// The source of the runner capability, one of:
-    /// -   `parent`: The component's parent.
-    /// -   `self`: This component.
-    /// -   `#<child-name>`: A [reference](#references) to a child component
+    /// - `parent`: The component's parent.
+    /// - `self`: This component.
+    /// - `#<child-name>`: A [reference](#references) to a child component
     ///     instance.
     pub from: RegistrationRef,
 
@@ -1718,9 +1718,9 @@ pub struct ResolverRegistration {
     pub resolver: Name,
 
     /// The source of the resolver capability, one of:
-    /// -   `parent`: The component's parent.
-    /// -   `self`: This component.
-    /// -   `#<child-name>`: A [reference](#references) to a child component
+    /// - `parent`: The component's parent.
+    /// - `self`: This component.
+    /// - `#<child-name>`: A [reference](#references) to a child component
     ///     instance.
     pub from: RegistrationRef,
 
@@ -1793,9 +1793,9 @@ pub struct Capability {
 
     /// (`storage` only) The source component of an existing directory capability backing this
     /// storage capability, one of:
-    /// -   `parent`: The component's parent.
-    /// -   `self`: This component.
-    /// -   `#<child-name>`: A [reference](#references) to a child component
+    /// - `parent`: The component's parent.
+    /// - `self`: This component.
+    /// - `#<child-name>`: A [reference](#references) to a child component
     ///     instance.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub from: Option<CapabilityFromRef>,
@@ -1811,10 +1811,10 @@ pub struct Capability {
     pub subdir: Option<RelativePath>,
 
     /// (`storage only`) The identifier used to isolated storage for a component, one of:
-    /// -   `static_instance_id`: The instance ID in the component ID index is used
+    /// - `static_instance_id`: The instance ID in the component ID index is used
     ///     as the key for a component's storage. Components which are not listed in
     ///     the component ID index will not be able to use this storage capability.
-    /// -   `static_instance_id_or_moniker`: If the component is listed in the
+    /// - `static_instance_id_or_moniker`: If the component is listed in the
     ///     component ID index, the instance ID is used as the key for a component's
     ///     storage. Otherwise, the component's relative moniker from the storage
     ///     capability is used.
@@ -1830,9 +1830,9 @@ pub struct DebugRegistration {
     pub protocol: Option<OneOrMany<Name>>,
 
     /// The source of the capability(s), one of:
-    /// -   `parent`: The component's parent.
-    /// -   `self`: This component.
-    /// -   `#<child-name>`: A [reference](#references) to a child component
+    /// - `parent`: The component's parent.
+    /// - `self`: This component.
+    /// - `#<child-name>`: A [reference](#references) to a child component
     ///     instance.
     pub from: OfferFromRef,
 
@@ -1992,14 +1992,14 @@ pub struct Use {
     pub event_stream: Option<OneOrMany<Name>>,
 
     /// The source of the capability. Defaults to `parent`.  One of:
-    /// -   `parent`: The component's parent.
-    /// -   `debug`: One of [`debug_capabilities`][fidl-environment-decl] in the
+    /// - `parent`: The component's parent.
+    /// - `debug`: One of [`debug_capabilities`][fidl-environment-decl] in the
     ///     environment assigned to this component.
-    /// -   `framework`: The Component Framework runtime.
-    /// -   `self`: This component.
-    /// -   `#<capability-name>`: The name of another capability from which the
+    /// - `framework`: The Component Framework runtime.
+    /// - `self`: This component.
+    /// - `#<capability-name>`: The name of another capability from which the
     ///     requested capability is derived.
-    /// -   `#<child-name>`: A [reference](#references) to a child component
+    /// - `#<child-name>`: A [reference](#references) to a child component
     ///     instance.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub from: Option<UseFromRef>,
@@ -2038,10 +2038,10 @@ pub struct Use {
 
     /// `dependency` _(optional)_: The type of dependency between the source and
     /// this component, one of:
-    /// -   `strong`: a strong dependency, which is used to determine shutdown
+    /// - `strong`: a strong dependency, which is used to determine shutdown
     ///     ordering. Component manager is guaranteed to stop the target before the
     ///     source. This is the default.
-    /// -   `weak_for_migration`: a weak dependency, which is ignored during
+    /// - `weak_for_migration`: a weak dependency, which is ignored during
     ///     shutdown. When component manager stops the parent realm, the source may
     ///     stop before the clients. Clients of weak dependencies must be able to
     ///     handle these dependencies becoming unavailable. This type exists to keep
@@ -2052,9 +2052,9 @@ pub struct Use {
 
     /// `availability` _(optional)_: The expectations around this capability's availability. One
     /// of:
-    /// -   `required` (default): a required dependency, the component is unable to perform its
+    /// - `required` (default): a required dependency, the component is unable to perform its
     ///     work without this capability.
-    /// -   `optional`: an optional dependency, the component will be able to function without this
+    /// - `optional`: an optional dependency, the component will be able to function without this
     ///     capability (although if the capability is unavailable some functionality may be
     ///     disabled).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -2117,10 +2117,10 @@ pub struct Expose {
     pub resolver: Option<OneOrMany<Name>>,
 
     /// `from`: The source of the capability, one of:
-    /// -   `self`: This component. Requires a corresponding
+    /// - `self`: This component. Requires a corresponding
     ///     [`capability`](#capabilities) declaration.
-    /// -   `framework`: The Component Framework runtime.
-    /// -   `#<child-name>`: A [reference](#references) to a child component
+    /// - `framework`: The Component Framework runtime.
+    /// - `#<child-name>`: A [reference](#references) to a child component
     ///     instance.
     pub from: OneOrMany<ExposeFromRef>,
 
@@ -2238,15 +2238,15 @@ pub struct Offer {
     pub event: Option<OneOrMany<Name>>,
 
     /// `from`: The source of the capability, one of:
-    /// -   `parent`: The component's parent. This source can be used for all
+    /// - `parent`: The component's parent. This source can be used for all
     ///     capability types.
-    /// -   `self`: This component. Requires a corresponding
+    /// - `self`: This component. Requires a corresponding
     ///     [`capability`](#capabilities) declaration.
-    /// -   `framework`: The Component Framework runtime.
-    /// -   `#<child-name>`: A [reference](#references) to a child component
+    /// - `framework`: The Component Framework runtime.
+    /// - `#<child-name>`: A [reference](#references) to a child component
     ///     instance. This source can only be used when offering protocol,
     ///     directory, or runner capabilities.
-    /// -   `void`: The source is intentionally omitted. Only valid when `availability` is not
+    /// - `void`: The source is intentionally omitted. Only valid when `availability` is not
     ///     `required`.
     pub from: OneOrMany<OfferFromRef>,
 
@@ -2262,10 +2262,10 @@ pub struct Offer {
 
     /// The type of dependency between the source and
     /// targets, one of:
-    /// -   `strong`: a strong dependency, which is used to determine shutdown
+    /// - `strong`: a strong dependency, which is used to determine shutdown
     ///     ordering. Component manager is guaranteed to stop the target before the
     ///     source. This is the default.
-    /// -   `weak_for_migration`: a weak dependency, which is ignored during
+    /// - `weak_for_migration`: a weak dependency, which is ignored during
     ///     shutdown. When component manager stops the parent realm, the source may
     ///     stop before the clients. Clients of weak dependencies must be able to
     ///     handle these dependencies becoming unavailable. This type exists to keep
@@ -2298,11 +2298,11 @@ pub struct Offer {
 
     /// `availability` _(optional)_: The expectations around this capability's availability. One
     /// of:
-    /// -   `required` (default): a required dependency, the target of this offer must receive this
+    /// - `required` (default): a required dependency, the target of this offer must receive this
     ///     capability.
-    /// -   `optional`: an optional dependency, the target of this offer may or may not receive
+    /// - `optional`: an optional dependency, the target of this offer may or may not receive
     ///     this capability, and the target must consume this capability as `optional`.
-    /// -   `same_as_target`: the availability expectations of this capability will match whatever
+    /// - `same_as_target`: the availability expectations of this capability will match whatever
     ///     the target's. If the target requires the capability, then this field is set to
     ///     `required`. If the target has an optional dependency on the capability, then the field
     ///     is set to `optional`.
@@ -2352,17 +2352,17 @@ pub struct Child {
     pub url: Url,
 
     /// The component instance's startup mode. One of:
-    /// -   `lazy` _(default)_: Start the component instance only if another
+    /// - `lazy` _(default)_: Start the component instance only if another
     ///     component instance binds to it.
-    /// -   [`eager`][doc-eager]: Start the component instance as soon as its parent
+    /// - [`eager`][doc-eager]: Start the component instance as soon as its parent
     ///     starts.
     #[serde(default)]
     #[serde(skip_serializing_if = "StartupMode::is_lazy")]
     pub startup: StartupMode,
 
     /// Determines the fault recovery policy to apply if this component terminates.
-    /// -   `none` _(default)_: Do nothing.
-    /// -   `reboot`: Gracefully reboot the system if the component terminates for
+    /// - `none` _(default)_: Do nothing.
+    /// - `reboot`: Gracefully reboot the system if the component terminates for
     ///     any reason. This is a special feature for use only by a narrow set of
     ///     components; see [Termination policies][doc-reboot-on-terminate] for more
     ///     information.
@@ -2417,9 +2417,9 @@ pub struct Collection {
     pub name: Name,
 
     /// The duration of child component instances in the collection.
-    /// -   `transient`: The instance exists until its parent is stopped or it is
+    /// - `transient`: The instance exists until its parent is stopped or it is
     ///     explicitly destroyed.
-    /// -   `single_run`: The instance is started when it is created, and destroyed
+    /// - `single_run`: The instance is started when it is created, and destroyed
     ///     when it is stopped.
     pub durability: Durability,
 
@@ -2431,9 +2431,9 @@ pub struct Collection {
 
     /// Constraints on the dynamic offers that target the components in this collection.
     /// Dynamic offers are specified when calling `fuchsia.component.Realm/CreateChild`.
-    /// -   `static_only`: Only those specified in this `.cml` file. No dynamic offers.
+    /// - `static_only`: Only those specified in this `.cml` file. No dynamic offers.
     ///     This is the default.
-    /// -   `static_and_dynamic`: Both static offers and those specified at runtime
+    /// - `static_and_dynamic`: Both static offers and those specified at runtime
     ///     with `CreateChild` are allowed.
     pub allowed_offers: Option<AllowedOffers>,
 

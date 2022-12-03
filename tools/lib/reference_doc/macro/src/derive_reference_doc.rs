@@ -9,6 +9,8 @@ use {
     syn,
 };
 
+const LIST_INDENT_SPACES: usize = 2;
+
 pub fn impl_derive_reference_doc(ast: syn::DeriveInput) -> Result<TokenStream2, syn::Error> {
     let mut parsed = ReferenceDocAttributes::from_derive_input(&ast).unwrap();
     let name = &parsed.ident;
@@ -136,11 +138,11 @@ pub fn impl_derive_reference_doc(ast: syn::DeriveInput) -> Result<TokenStream2, 
                 }
                 FieldOutputType::List => {
                     let doc = get_doc_attr(&self.attrs)
-                        .map(|s| indent_lines_with_spaces(&s, 2, 1))
+                        .map(|s| indent_lines_with_spaces(&s, LIST_INDENT_SPACES, 1))
                         .unwrap_or_default();
                     let trait_output = if self.recurse {
                         quote!(
-                            #rust_ty_path::get_reference_doc_markdown_with_options(#indent_headers, 2)
+                            #rust_ty_path::get_reference_doc_markdown_with_options(#indent_headers, #LIST_INDENT_SPACES)
                         )
                     } else {
                         quote!("")
