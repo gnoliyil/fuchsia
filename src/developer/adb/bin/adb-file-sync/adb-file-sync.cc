@@ -48,7 +48,7 @@ zx_status_t AdbFileSync::StartService(adb_file_sync_config::Config config) {
   file_sync->lifecycle_.Bind(std::move(lifecycle_ep->client));
 
   component::OutgoingDirectory outgoing =
-      component::OutgoingDirectory::Create(file_sync->loop_.dispatcher());
+      component::OutgoingDirectory(file_sync->loop_.dispatcher());
 
   auto result = outgoing.AddProtocol<fuchsia_hardware_adb::Provider>(
       [file_sync_ptr =

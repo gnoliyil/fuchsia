@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
   ConsumerAdapter consumer(ipc_host->service(), perfetto_task_runner.get(), &trace_provider);
 
   // Expose the FIDL server.
-  component::OutgoingDirectory outgoing = component::OutgoingDirectory::Create(dispatcher);
+  component::OutgoingDirectory outgoing = component::OutgoingDirectory(dispatcher);
   zx::result result = outgoing.AddProtocol<fuchsia_tracing_perfetto::ProducerConnector>(
       [dispatcher, service = &producer_connector_service](
           fidl::ServerEnd<fuchsia_tracing_perfetto::ProducerConnector> server_end) {

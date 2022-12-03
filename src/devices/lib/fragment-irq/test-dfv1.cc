@@ -50,7 +50,7 @@ class Dfv1Test : public gtest::TestLoopFixture, public fidl::Server<fint::Provid
 
  protected:
   std::shared_ptr<zx_device> root_;
-  component::OutgoingDirectory outgoing_ = component::OutgoingDirectory::Create(dispatcher());
+  component::OutgoingDirectory outgoing_ = component::OutgoingDirectory(dispatcher());
 };
 
 TEST_F(Dfv1Test, TestGetInterrupt) {

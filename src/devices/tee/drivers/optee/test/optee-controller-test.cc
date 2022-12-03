@@ -172,7 +172,7 @@ class FakeSysmem : public ddk::SysmemProtocol<FakeSysmem> {
 
 class FakeRpmbService {
  public:
-  FakeRpmbService() : outgoing_(component::OutgoingDirectory::Create(loop_.dispatcher())) {}
+  FakeRpmbService() : outgoing_(loop_.dispatcher()) {}
   ~FakeRpmbService() { loop_.Shutdown(); }
 
   fidl::ClientEnd<fuchsia_io::Directory> Connect() {

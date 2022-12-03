@@ -16,7 +16,7 @@ int main(int argc, char* argv[]) {
   async_dispatcher_t* dispatcher = loop.dispatcher();
 
   // Create an Outgoing class which will serve requests from the /svc/ directory.
-  component::OutgoingDirectory outgoing = component::OutgoingDirectory::Create(dispatcher);
+  component::OutgoingDirectory outgoing = component::OutgoingDirectory(dispatcher);
   zx::result<> status = outgoing.ServeFromStartupInfo();
   if (status.is_error()) {
     LOGF(ERROR, "error: ServeFromStartupInfo returned: %s", status.status_string());

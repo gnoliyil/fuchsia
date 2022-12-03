@@ -6,8 +6,8 @@
 #include <fuchsia/device/fs/cpp/fidl_test_base.h>
 #include <lib/async-loop/cpp/loop.h>
 #include <lib/async-loop/default.h>
-#include <lib/driver/devfs/cpp/exporter.h>
 #include <lib/driver/component/cpp/tests/test_base.h>
+#include <lib/driver/devfs/cpp/exporter.h>
 #include <lib/fidl/cpp/binding.h>
 #include <lib/sys/component/cpp/outgoing_directory.h>
 
@@ -106,7 +106,7 @@ TEST_F(DevfsExporterTest, Create) {
 
   svc_binding2.Bind(svc->server.TakeChannel(), dispatcher());
 
-  auto outgoing = component::OutgoingDirectory::Create(dispatcher());
+  auto outgoing = component::OutgoingDirectory(dispatcher());
   auto status =
       outgoing.AddProtocol<flogger::LogSink>([](fidl::ServerEnd<flogger::LogSink> request) {});
 
@@ -171,7 +171,7 @@ TEST_F(DevfsExporterTest, Create_ServiceFailure) {
 
   svc_binding2.Bind(svc->server.TakeChannel(), dispatcher());
 
-  auto outgoing = component::OutgoingDirectory::Create(dispatcher());
+  auto outgoing = component::OutgoingDirectory(dispatcher());
   auto status =
       outgoing.AddProtocol<flogger::LogSink>([](fidl::ServerEnd<flogger::LogSink> request) {});
   ASSERT_EQ(ZX_OK, status.status_value());

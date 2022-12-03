@@ -819,8 +819,7 @@ class FastbootRebootTest
       public fidl::testing::WireTestBase<fuchsia_hardware_power_statecontrol::Admin> {
  public:
   FastbootRebootTest()
-      : loop_(&kAsyncLoopConfigNoAttachToCurrentThread),
-        outgoing_(component::OutgoingDirectory::Create(loop_.dispatcher())) {
+      : loop_(&kAsyncLoopConfigNoAttachToCurrentThread), outgoing_(loop_.dispatcher()) {
     ASSERT_OK(outgoing_.AddProtocol<fuchsia_hardware_power_statecontrol::Admin>(this));
     ASSERT_OK(outgoing_.AddProtocol<fuchsia_paver::Paver>(this));
     auto endpoints = fidl::CreateEndpoints<fuchsia_io::Directory>();
@@ -941,8 +940,7 @@ class FastbootFshostTest : public FastbootDownloadTest,
                            public fidl::testing::WireTestBase<fuchsia_fshost::Admin> {
  public:
   FastbootFshostTest()
-      : loop_(&kAsyncLoopConfigNoAttachToCurrentThread),
-        outgoing_(component::OutgoingDirectory::Create(loop_.dispatcher())) {
+      : loop_(&kAsyncLoopConfigNoAttachToCurrentThread), outgoing_(loop_.dispatcher()) {
     ASSERT_OK(outgoing_.AddProtocol<fuchsia_fshost::Admin>(this));
     auto endpoints = fidl::CreateEndpoints<fuchsia_io::Directory>();
     ASSERT_TRUE(endpoints.is_ok());
@@ -1169,8 +1167,7 @@ class FastbootBuildInfoTest : public FastbootDownloadTest,
                               public fidl::testing::WireTestBase<fuchsia_buildinfo::Provider> {
  public:
   FastbootBuildInfoTest()
-      : loop_(&kAsyncLoopConfigNoAttachToCurrentThread),
-        outgoing_(component::OutgoingDirectory::Create(loop_.dispatcher())) {
+      : loop_(&kAsyncLoopConfigNoAttachToCurrentThread), outgoing_(loop_.dispatcher()) {
     ASSERT_OK(outgoing_.AddProtocol<fuchsia_buildinfo::Provider>(this));
     auto endpoints = fidl::CreateEndpoints<fuchsia_io::Directory>();
     ASSERT_TRUE(endpoints.is_ok());

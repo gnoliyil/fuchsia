@@ -447,7 +447,7 @@ int main(int argc, const char** argv) {
   std::cout << "CPP sync client: main" << std::endl;
   async::Loop loop(&kAsyncLoopConfigAttachToCurrentThread);
 
-  auto outgoing = component::OutgoingDirectory::Create(loop.dispatcher());
+  auto outgoing = component::OutgoingDirectory(loop.dispatcher());
   ZX_ASSERT(outgoing.ServeFromStartupInfo().is_ok());
   RunnerServer runner_server;
   auto result = outgoing.AddProtocol<fidl_clientsuite::Runner>(&runner_server);

@@ -414,7 +414,7 @@ TEST_F(MultipleDeviceTestCase, SetTerminationSystemState_svchost_fidl) {
   std::unique_ptr<component::OutgoingDirectory> outgoing;
   RunOnCoordinatorLoop([&] {
     outgoing = std::make_unique<component::OutgoingDirectory>(
-        component::OutgoingDirectory::Create(coordinator_loop()->dispatcher()));
+        component::OutgoingDirectory(coordinator_loop()->dispatcher()));
     coordinator().InitOutgoingServices(*outgoing);
     ASSERT_OK(outgoing->Serve(std::move(service_endpoints->server)).status_value());
   });

@@ -24,7 +24,7 @@ class ChromiumosEcLpc : public DeviceType {
   explicit ChromiumosEcLpc(zx_device_t* parent)
       : DeviceType(parent),
         loop_(&kAsyncLoopConfigNeverAttachToThread),
-        outgoing_(component::OutgoingDirectory::Create(loop_.dispatcher())) {}
+        outgoing_(loop_.dispatcher()) {}
   virtual ~ChromiumosEcLpc() = default;
 
   static zx_status_t Bind(void* ctx, zx_device_t* dev);

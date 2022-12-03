@@ -101,7 +101,7 @@ class AdbShellTest : public zxtest::Test {
     svc_loop_.StartThread("adb-shell-test-svc");
     shell_loop_.StartThread("adb-shell-test-shell");
     incoming_ = std::make_unique<component::OutgoingDirectory>(
-        component::OutgoingDirectory::Create(svc_loop_.dispatcher()));
+        component::OutgoingDirectory(svc_loop_.dispatcher()));
     auto svc_endpoints = fidl::CreateEndpoints<fuchsia_io::Directory>();
     ASSERT_TRUE(svc_endpoints.is_ok());
     SetupIncomingServices(std::move(svc_endpoints->server));

@@ -19,7 +19,7 @@ int main(int argc, const char** argv) {
 
   async::Loop loop(&kAsyncLoopConfigNeverAttachToThread);
 
-  component::OutgoingDirectory outgoing = component::OutgoingDirectory::Create(loop.dispatcher());
+  component::OutgoingDirectory outgoing = component::OutgoingDirectory(loop.dispatcher());
   if (const zx::result status = outgoing.AddProtocol<fuchsia_sysinfo::SysInfo>(
           [](fidl::ServerEnd<fuchsia_sysinfo::SysInfo> server_end) {
             constexpr char kSysInfoPath[] = "/dev/sys/platform";

@@ -173,7 +173,7 @@ TEST(Device, GuardPageCommandLine) {
 
 class FakeDdkSysmem : public zxtest::Test {
  public:
-  FakeDdkSysmem() : outgoing_(component::OutgoingDirectory::Create(pdev_loop_.dispatcher())) {}
+  FakeDdkSysmem() : outgoing_(pdev_loop_.dispatcher()) {}
 
   void SetUp() override {
     EXPECT_OK(pdev_loop_.StartThread());

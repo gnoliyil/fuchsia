@@ -46,9 +46,7 @@ class EchoCommon : public fidl::WireServer<Echo> {
 
 class ServerTest : public zxtest::Test {
  protected:
-  ServerTest()
-      : loop_(&kAsyncLoopConfigNoAttachToCurrentThread),
-        outgoing_(component::OutgoingDirectory::Create(loop_.dispatcher())) {}
+  ServerTest() : loop_(&kAsyncLoopConfigNoAttachToCurrentThread), outgoing_(loop_.dispatcher()) {}
 
   component::ServiceInstanceHandler SetUpInstance(fidl::WireServer<Echo>* foo_impl,
                                                   fidl::WireServer<Echo>* bar_impl) {

@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
   async::Loop loop(&kAsyncLoopConfigNeverAttachToThread);
   async_dispatcher_t* dispatcher = loop.dispatcher();
 
-  component::OutgoingDirectory outgoing = component::OutgoingDirectory::Create(dispatcher);
+  component::OutgoingDirectory outgoing = component::OutgoingDirectory(dispatcher);
   zx::result result = outgoing.ServeFromStartupInfo();
   if (result.is_error()) {
     FX_LOGS(ERROR) << "Failed to serve outgoing directory: " << result.status_string();

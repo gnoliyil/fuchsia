@@ -112,7 +112,7 @@ class Device : public DeviceType,
         bus_type_{args.bus_type_},
         bus_id_{args.bus_id_},
         pci_bdfs_{std::move(args.bdfs_)},
-        outgoing_{component::OutgoingDirectory::Create(args.manager_->fidl_dispatcher())} {}
+        outgoing_{component::OutgoingDirectory(args.manager_->fidl_dispatcher())} {}
 
   // DDK mix-in impls.
   void DdkRelease() { delete this; }

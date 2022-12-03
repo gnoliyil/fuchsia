@@ -35,7 +35,7 @@ class OutgoingDirectory final {
     ZX_ASSERT_MSG(dispatcher != nullptr,
                   "OutgoingDirectory::Create received nullptr |dispatcher|.");
     auto component_outgoing_dir =
-        component::OutgoingDirectory::Create(fdf_dispatcher_get_async_dispatcher(dispatcher));
+        component::OutgoingDirectory(fdf_dispatcher_get_async_dispatcher(dispatcher));
     return OutgoingDirectory(std::move(component_outgoing_dir), dispatcher);
   }
 

@@ -26,7 +26,7 @@ int main(int argc, char** argv) {
 
   adb_shell::AdbShell adb_shell(std::move(*svc), loop.dispatcher(), config);
 
-  auto outgoing = component::OutgoingDirectory::Create(loop.dispatcher());
+  auto outgoing = component::OutgoingDirectory(loop.dispatcher());
 
   zx::result result = outgoing.ServeFromStartupInfo();
   if (result.is_error()) {

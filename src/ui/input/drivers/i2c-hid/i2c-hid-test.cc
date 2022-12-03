@@ -295,7 +295,7 @@ class I2cHidTest : public zxtest::Test,
   fidl::ClientEnd<fuchsia_hardware_i2c::Device> i2c_;
   zx::interrupt irq_;
   async::Loop loop_;
-  component::OutgoingDirectory outgoing_ = component::OutgoingDirectory::Create(loop_.dispatcher());
+  component::OutgoingDirectory outgoing_ = component::OutgoingDirectory(loop_.dispatcher());
 };
 
 TEST_F(I2cHidTest, HidTestBind) {

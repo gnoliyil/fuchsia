@@ -37,7 +37,7 @@ int main(int argc, char** argv) {
   async::Loop loop(&kAsyncLoopConfigNeverAttachToThread);
   trace::TraceProviderWithFdio trace_provider(loop.dispatcher());
 
-  auto outgoing = component::OutgoingDirectory::Create(loop.dispatcher());
+  auto outgoing = component::OutgoingDirectory(loop.dispatcher());
 
   auto serve = outgoing.ServeFromStartupInfo();
   if (serve.is_error()) {

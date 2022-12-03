@@ -59,7 +59,7 @@ class Dfv2Test : public gtest::TestLoopFixture, public fidl::Server<fint::Provid
 
  protected:
   driver::Namespace ns_;
-  component::OutgoingDirectory outgoing_ = component::OutgoingDirectory::Create(dispatcher());
+  component::OutgoingDirectory outgoing_ = component::OutgoingDirectory(dispatcher());
 };
 
 TEST_F(Dfv2Test, TestGetInterrupt) {

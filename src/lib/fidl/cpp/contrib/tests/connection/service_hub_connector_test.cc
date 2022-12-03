@@ -188,8 +188,8 @@ class ServiceHubConnectorTest : public gtest::TestLoopFixture {
     ReplaceProtocol();
 
     // Serve ProtocolFactory
-    outgoing_directory_ = std::make_unique<component::OutgoingDirectory>(
-        component::OutgoingDirectory::Create(dispatcher()));
+    outgoing_directory_ =
+        std::make_unique<component::OutgoingDirectory>(component::OutgoingDirectory(dispatcher()));
     ASSERT_EQ(ZX_OK,
               outgoing_directory_
                   ->AddProtocol<test_protocol_connector::ProtocolFactory>(

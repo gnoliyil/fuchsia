@@ -20,7 +20,7 @@ zx_status_t RpmbDevice::Create(zx_device_t* parent, SdmmcBlockDevice* sdmmc,
     zxlogf(ERROR, "failed to start RPMB thread: %d", status);
     return status;
   }
-  device->outgoing_ = component::OutgoingDirectory::Create(device->loop_.dispatcher());
+  device->outgoing_ = component::OutgoingDirectory(device->loop_.dispatcher());
 
   component::ServiceInstanceHandler handler;
   fuchsia_hardware_rpmb::Service::Handler service(&handler);

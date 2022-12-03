@@ -133,7 +133,7 @@ int main(int argc, const char** argv) {
   fidl::BindServer(loop.dispatcher(), std::move(server),
                    static_cast<fidl::WireServer<fuchsia_logger::LogListenerSafe>*>(&console));
 
-  component::OutgoingDirectory outgoing = component::OutgoingDirectory::Create(loop.dispatcher());
+  component::OutgoingDirectory outgoing = component::OutgoingDirectory(loop.dispatcher());
   if (zx::result status = outgoing.AddProtocol<fuchsia_hardware_pty::Device>(&console);
       status.is_error()) {
     printf("console: outgoing.AddProtocol() = %s\n", status.status_string());

@@ -105,7 +105,7 @@ class Fragment : public FragmentBase {
         pci_client_(parent, ZX_PROTOCOL_PCI),
         power_sensor_client_(parent, ZX_PROTOCOL_POWER_SENSOR),
         dispatcher_(dispatcher),
-        outgoing_(component::OutgoingDirectory::Create(dispatcher)) {}
+        outgoing_(dispatcher) {}
 
   static zx_status_t Bind(void* ctx, zx_device_t* parent);
 

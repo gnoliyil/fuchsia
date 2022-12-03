@@ -26,7 +26,7 @@ class PlatformInterruptFragment : public InterruptDeviceType,
       : InterruptDeviceType(parent),
         pdev_(pdev),
         index_(index),
-        outgoing_(component::OutgoingDirectory::Create(dispatcher)),
+        outgoing_(dispatcher),
         dispatcher_(dispatcher) {}
 
   // Interrupt provider implementation.

@@ -48,7 +48,7 @@ class EchoImpl final : public fidl::WireServer<fuchsia_examples::Echo> {
 int main(int argc, const char** argv) {
   FX_LOGS(INFO) << "Starting echo service server";
   async::Loop loop(&kAsyncLoopConfigAttachToCurrentThread);
-  auto outgoing = component::OutgoingDirectory::Create(loop.dispatcher());
+  auto outgoing = component::OutgoingDirectory(loop.dispatcher());
 
   auto regular_echo = EchoImpl{/*reverse=*/false};
   auto reversed_echo = EchoImpl{/*reverse=*/true};

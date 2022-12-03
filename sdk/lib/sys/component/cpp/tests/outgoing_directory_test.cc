@@ -82,8 +82,8 @@ class NaturalEchoImpl final : public fidl::Server<fuchsia_examples::Echo> {
 class OutgoingDirectoryTest : public gtest::RealLoopFixture {
  public:
   void SetUp() override {
-    outgoing_directory_ = std::make_unique<component::OutgoingDirectory>(
-        component::OutgoingDirectory::Create(dispatcher()));
+    outgoing_directory_ =
+        std::make_unique<component::OutgoingDirectory>(component::OutgoingDirectory(dispatcher()));
     auto endpoints = fidl::CreateEndpoints<fuchsia_io::Directory>();
     ZX_ASSERT(outgoing_directory_->Serve(std::move(endpoints->server)).is_ok());
     client_end_ = std::move(endpoints->client);
@@ -143,8 +143,8 @@ class OutgoingDirectoryTest : public gtest::RealLoopFixture {
 };
 
 TEST_F(OutgoingDirectoryTest, MutualExclusionGuarantees_CheckOperations) {
-  auto outgoing_directory = std::make_unique<component::OutgoingDirectory>(
-      component::OutgoingDirectory::Create(dispatcher()));
+  auto outgoing_directory =
+      std::make_unique<component::OutgoingDirectory>(component::OutgoingDirectory(dispatcher()));
 
   // Cannot mutate it from a foreign thread.
   ASSERT_DEATH(
@@ -175,15 +175,14 @@ TEST_F(OutgoingDirectoryTest, MutualExclusionGuarantees_CheckOperations) {
 }
 
 TEST_F(OutgoingDirectoryTest, CanBeMovedSafely) {
-  auto outgoing_directory = component::OutgoingDirectory::Create(dispatcher());
+  auto outgoing_directory = component::OutgoingDirectory(dispatcher());
   auto endpoints = fidl::CreateEndpoints<fuchsia_io::Directory>();
   EchoImpl impl(/*reversed=*/false);
   ASSERT_EQ(outgoing_directory.AddProtocol<fuchsia_examples::Echo>(&impl).status_value(), ZX_OK);
   ZX_ASSERT(outgoing_directory.Serve(std::move(endpoints->server)).is_ok());
 
   component::OutgoingDirectory moved_in_constructor(std::move(outgoing_directory));
-  component::OutgoingDirectory moved_in_assignment =
-      component::OutgoingDirectory::Create(dispatcher());
+  component::OutgoingDirectory moved_in_assignment = component::OutgoingDirectory(dispatcher());
   moved_in_assignment = std::move(moved_in_constructor);
 
   auto client_end =
@@ -532,13 +531,12 @@ TEST_F(OutgoingDirectoryTest, ServeCanYieldMultipleConnections) {
 }
 
 TEST_F(OutgoingDirectoryTest, CreateFailsIfDispatcherIsNullptr) {
-  ASSERT_DEATH(
-      { auto outgoing_directory = component::OutgoingDirectory::Create(/*dispatcher=*/nullptr); },
-      "");
+  ASSERT_DEATH({ auto outgoing_directory = component::OutgoingDirectory(/*dispatcher=*/nullptr); },
+               "");
 }
 
 TEST_F(OutgoingDirectoryTest, ServeFailsIfHandleInvalid) {
-  auto outgoing_directory = component::OutgoingDirectory::Create(dispatcher());
+  auto outgoing_directory = component::OutgoingDirectory(dispatcher());
   auto endpoints = fidl::CreateEndpoints<fuchsia_io::Directory>();
   // Close server end in order to  invalidate channel.
   endpoints->server.reset();
@@ -688,7 +686,7 @@ class OutgoingDirectoryPathParameterizedFixture
 
 TEST_P(OutgoingDirectoryPathParameterizedFixture, BadServicePaths) {
   async::Loop loop(&kAsyncLoopConfigAttachToCurrentThread);
-  auto outgoing_directory = component::OutgoingDirectory::Create(loop.dispatcher());
+  auto outgoing_directory = component::OutgoingDirectory(loop.dispatcher());
   auto endpoints = fidl::CreateEndpoints<fuchsia_io::Directory>();
   ZX_ASSERT(outgoing_directory.Serve(std::move(endpoints->server)).is_ok());
   component::ServiceInstanceHandler service_handler;

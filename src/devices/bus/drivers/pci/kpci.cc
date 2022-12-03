@@ -524,9 +524,7 @@ zx_status_t KernelPciFidl::CreateComposite(zx_device_t* parent, kpci_device devi
 
 KernelPciFidl::KernelPciFidl(zx_device_t* parent, kpci_device device,
                              async_dispatcher_t* dispatcher)
-    : KernelPciFidlType(parent),
-      device_(device),
-      outgoing_(component::OutgoingDirectory::Create(dispatcher)) {}
+    : KernelPciFidlType(parent), device_(device), outgoing_(dispatcher) {}
 
 void KernelPciFidl::DdkRelease() {
   if (device_.handle != ZX_HANDLE_INVALID) {

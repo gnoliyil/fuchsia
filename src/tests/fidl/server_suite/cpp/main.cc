@@ -388,7 +388,7 @@ int main(int argc, const char** argv) {
   std::cout << "CPP server: main" << std::endl;
   async::Loop loop(&kAsyncLoopConfigAttachToCurrentThread);
 
-  auto outgoing = component::OutgoingDirectory::Create(loop.dispatcher());
+  auto outgoing = component::OutgoingDirectory(loop.dispatcher());
   ZX_ASSERT(outgoing.ServeFromStartupInfo().is_ok());
   RunnerServer runner_server(loop.dispatcher());
   auto result = outgoing.AddProtocol<fidl_serversuite::Runner>(&runner_server);

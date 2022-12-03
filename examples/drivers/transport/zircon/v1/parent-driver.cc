@@ -21,9 +21,7 @@ class ZirconTransportDevice : public DeviceType,
   static zx_status_t Create(void* ctx, zx_device_t* parent);
 
   explicit ZirconTransportDevice(zx_device_t* parent, async_dispatcher_t* dispatcher)
-      : DeviceType(parent),
-        outgoing_(component::OutgoingDirectory::Create(dispatcher)),
-        dispatcher_(dispatcher) {}
+      : DeviceType(parent), outgoing_(dispatcher), dispatcher_(dispatcher) {}
   virtual ~ZirconTransportDevice() = default;
 
   zx_status_t Bind();

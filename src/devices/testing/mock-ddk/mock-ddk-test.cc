@@ -594,7 +594,7 @@ TEST(MockDdk, SetFidlService) {
       test_device->DdkConnectFidlProtocol<fidl_examples_echo::EchoService::Echo>().is_ok());
 
   async::Loop loop{&kAsyncLoopConfigNeverAttachToThread};
-  auto outgoing = component::OutgoingDirectory::Create(loop.dispatcher());
+  auto outgoing = component::OutgoingDirectory(loop.dispatcher());
   EchoServer server;
 
   // So we add the necessary service to the parent:

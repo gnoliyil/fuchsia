@@ -54,7 +54,7 @@ class EchoImpl final : public fidl::WireServer<fuchsia_examples::Echo> {
 
 int main(int argc, const char** argv) {
   async::Loop loop(&kAsyncLoopConfigAttachToCurrentThread);
-  auto outgoing = component::OutgoingDirectory::Create(loop.dispatcher());
+  auto outgoing = component::OutgoingDirectory(loop.dispatcher());
 
   component::ServiceInstanceHandler handler;
   fuchsia_examples::EchoService::Handler my_service(&handler);

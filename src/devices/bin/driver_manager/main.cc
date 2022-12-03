@@ -191,7 +191,7 @@ int RunDfv1(DriverManagerParams driver_manager_params,
   };
 
   async::Loop loop(&kAsyncLoopConfigNeverAttachToThread);
-  auto outgoing = component::OutgoingDirectory::Create(loop.dispatcher());
+  auto outgoing = component::OutgoingDirectory(loop.dispatcher());
   InspectManager inspect_manager(loop.dispatcher());
 
   CoordinatorConfig config;

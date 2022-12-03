@@ -79,7 +79,7 @@ class Device : public DeviceParent, public fidl::WireServer<fidl_examples_echo::
   }
 
   Device(zx_device_t* parent, async_dispatcher_t* dispatcher)
-      : DeviceParent(parent), outgoing_dir_(component::OutgoingDirectory::Create(dispatcher)) {}
+      : DeviceParent(parent), outgoing_dir_(component::OutgoingDirectory(dispatcher)) {}
 
   void DdkUnbind(ddk::UnbindTxn txn) { txn.Reply(); }
   void DdkRelease() { delete this; }

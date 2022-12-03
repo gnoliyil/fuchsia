@@ -13,7 +13,7 @@ using inspect::ComponentInspector;
 int main() {
   async::Loop loop(&kAsyncLoopConfigAttachToCurrentThread);
   auto* dispatcher = loop.dispatcher();
-  auto out = component::OutgoingDirectory::Create(dispatcher);
+  auto out = component::OutgoingDirectory(dispatcher);
   auto inspector = ComponentInspector(out, dispatcher);
 
   inspector.root().RecordInt("val1", 1);

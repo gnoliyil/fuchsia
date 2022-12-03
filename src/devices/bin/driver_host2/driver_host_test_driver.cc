@@ -16,10 +16,7 @@ namespace ftest = fuchsia_driverhost_test;
 class TestDriver {
  public:
   explicit TestDriver(fdf_dispatcher_t* dispatcher)
-      : dispatcher_(dispatcher),
-        outgoing_(
-            component::OutgoingDirectory::Create(fdf_dispatcher_get_async_dispatcher(dispatcher))) {
-  }
+      : dispatcher_(dispatcher), outgoing_(fdf_dispatcher_get_async_dispatcher(dispatcher)) {}
 
   zx::result<> Init(fdf::wire::DriverStartArgs& start_args) {
     auto error = driver::SymbolValue<zx_status_t*>(start_args, "error");

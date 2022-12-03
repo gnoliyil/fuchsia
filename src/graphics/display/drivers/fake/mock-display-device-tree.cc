@@ -95,7 +95,7 @@ fidl::ClientEnd<fuchsia_io::Directory> MockDisplayDeviceTree::SetUpPDevFidlServe
 
   libsync::Completion serve_complete;
   async::TaskClosure serve_task([&] {
-    outgoing_ = component::OutgoingDirectory::Create(pdev_loop_.dispatcher());
+    outgoing_ = component::OutgoingDirectory(pdev_loop_.dispatcher());
     service_result =
         outgoing_->AddService<fuchsia_hardware_platform_device::Service>(std::move(handler));
     ZX_ASSERT(service_result.is_ok());

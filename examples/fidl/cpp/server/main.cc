@@ -130,7 +130,7 @@ int main(int argc, const char** argv) {
   // The |component::OutgoingDirectory| class serves the outgoing directory for
   // our component. This directory is where the outgoing FIDL protocols are
   // installed so that they can be provided to other components.
-  component::OutgoingDirectory outgoing = component::OutgoingDirectory::Create(dispatcher);
+  component::OutgoingDirectory outgoing = component::OutgoingDirectory(dispatcher);
 
   // The `ServeFromStartupInfo()` function sets up the outgoing directory with
   // the startup handle. The startup handle is a handle provided to every

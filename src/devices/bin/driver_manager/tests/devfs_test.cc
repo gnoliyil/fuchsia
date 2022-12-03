@@ -123,7 +123,7 @@ TEST(Devfs, Export_WithProtocol) {
   }
 
   std::vector<std::unique_ptr<Devnode>> out;
-  auto outgoing = component::OutgoingDirectory::Create(loop.dispatcher());
+  auto outgoing = component::OutgoingDirectory(loop.dispatcher());
   auto endpoints = fidl::CreateEndpoints<fio::Directory>();
   ASSERT_OK(endpoints.status_value());
   ASSERT_OK(outgoing.Serve(std::move(endpoints->server)));
@@ -199,7 +199,7 @@ TEST(Devfs, ExportWatcher_Export) {
   Devnode& root_node = root_slot.value();
 
   // Create a fake service at svc/test.
-  auto outgoing = component::OutgoingDirectory::Create(loop.dispatcher());
+  auto outgoing = component::OutgoingDirectory(loop.dispatcher());
   zx::channel service_channel;
   auto handler = [&service_channel, &loop](zx::channel server) {
     service_channel = std::move(server);
@@ -272,7 +272,7 @@ TEST(Devfs, ExportWatcher_Export_Invisible) {
   }
 
   // Create a fake service at svc/test.
-  auto outgoing = component::OutgoingDirectory::Create(loop.dispatcher());
+  auto outgoing = component::OutgoingDirectory(loop.dispatcher());
   zx::channel service_channel;
   auto handler = [&service_channel](zx::channel server) { service_channel = std::move(server); };
   ASSERT_EQ(outgoing.AddProtocol(std::move(handler), "test").status_value(), ZX_OK);

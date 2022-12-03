@@ -18,7 +18,7 @@ IrqFragment::IrqFragment(async_dispatcher_t* dispatcher, acpi::Device& parent, u
       device_(parent),
       irq_index_(irq_index),
       dispatcher_(dispatcher),
-      outgoing_(component::OutgoingDirectory::Create(dispatcher)) {}
+      outgoing_(dispatcher) {}
 
 zx::result<> IrqFragment::Create(async_dispatcher_t* dispatcher, acpi::Device& parent,
                                  uint32_t irq_index, uint32_t acpi_device_id) {

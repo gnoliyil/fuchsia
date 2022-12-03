@@ -152,7 +152,7 @@ zx_status_t TestRoot::Bind(const char* name, cpp20::span<const zx_device_prop_t>
   libsync::Completion init_complete;
   zx_status_t init_status;
   async::TaskClosure init_task([&] {
-    outgoing_ = component::OutgoingDirectory::Create(loop_.dispatcher());
+    outgoing_ = component::OutgoingDirectory(loop_.dispatcher());
     auto serve_status = outgoing_->AddProtocol<fuchsia_composite_test::Device>(&this->server_);
     if (serve_status.status_value() != ZX_OK) {
       init_status = serve_status.status_value();

@@ -1096,9 +1096,7 @@ zx_handle_t Device::SecureMemConnection::channel() {
 
 FidlDevice::FidlDevice(zx_device_t* parent, sysmem_driver::Device* sysmem_device,
                        async_dispatcher_t* dispatcher)
-    : DdkFidlDeviceType(parent),
-      sysmem_device_(sysmem_device),
-      outgoing_(component::OutgoingDirectory::Create(dispatcher)) {
+    : DdkFidlDeviceType(parent), sysmem_device_(sysmem_device), outgoing_(dispatcher) {
   ZX_DEBUG_ASSERT(parent_);
   ZX_DEBUG_ASSERT(sysmem_device_);
 }
