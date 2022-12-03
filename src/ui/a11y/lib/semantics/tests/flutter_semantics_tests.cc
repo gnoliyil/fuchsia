@@ -125,6 +125,8 @@ class FlutterSemanticsTests : public SemanticsIntegrationTestV2 {
                                     Protocol{fuchsia::sysmem::Allocator::Name_},
                                     Protocol{fuchsia::tracing::provider::Registry::Name_},
                                     Protocol{fuchsia::ui::scenic::Scenic::Name_},
+                                    Protocol{fuchsia::ui::composition::Allocator::Name_},
+                                    Protocol{fuchsia::ui::composition::Flatland::Name_},
                                     Protocol{fuchsia::vulkan::loader::Loader::Name_},
                                 },
                             .source = ParentRef{},

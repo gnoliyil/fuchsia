@@ -17,6 +17,7 @@
 #include <fuchsia/sys/cpp/fidl.h>
 #include <fuchsia/tracing/provider/cpp/fidl.h>
 #include <fuchsia/ui/app/cpp/fidl.h>
+#include <fuchsia/ui/composition/cpp/fidl.h>
 #include <fuchsia/ui/input/cpp/fidl.h>
 #include <fuchsia/ui/pointerinjector/cpp/fidl.h>
 #include <fuchsia/ui/policy/cpp/fidl.h>
@@ -98,6 +99,25 @@ std::vector<ui_testing::UITestRealm::Config> SemanticsIntegrationTestV2::UIConfi
     config.device_pixel_ratio = kDevicePixelRatio;
     config.scene_owner = ui_testing::UITestRealm::SceneOwnerType::SCENE_MANAGER;
     config.ui_to_client_services = {fuchsia::ui::scenic::Scenic::Name_};
+
+    config.passthrough_capabilities = {
+        {
+            Protocol{fuchsia::sys::Environment::Name_},
+        },
+    };
+    configs.push_back(config);
+  }
+
+  // Flatland x scene manager
+  {
+    ui_testing::UITestRealm::Config config;
+
+    config.use_flatland = true;
+    config.device_pixel_ratio = kDevicePixelRatio;
+    config.scene_owner = ui_testing::UITestRealm::SceneOwnerType::SCENE_MANAGER;
+    config.ui_to_client_services = {fuchsia::ui::composition::Allocator::Name_,
+                                    fuchsia::ui::composition::Flatland::Name_,
+                                    fuchsia::ui::scenic::Scenic::Name_};
 
     config.passthrough_capabilities = {
         {

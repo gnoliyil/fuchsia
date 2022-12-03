@@ -175,7 +175,9 @@ class WebSemanticsTest : public SemanticsIntegrationTestV2 {
                        .source = ChildRef{kNetstack},
                        .targets = {ChildRef{kWebView}}});
     realm()->AddRoute({.capabilities = {Protocol{fuchsia::logger::LogSink::Name_},
-                                        Protocol{fuchsia::ui::scenic::Scenic::Name_}},
+                                        Protocol{fuchsia::ui::scenic::Scenic::Name_},
+                                        Protocol{fuchsia::ui::composition::Allocator::Name_},
+                                        Protocol{fuchsia::ui::composition::Flatland::Name_}},
                        .source = ParentRef(),
                        .targets = {ChildRef{kWebView}}});
     realm()->AddRoute({.capabilities = {Protocol{fuchsia::web::ContextProvider::Name_}},
