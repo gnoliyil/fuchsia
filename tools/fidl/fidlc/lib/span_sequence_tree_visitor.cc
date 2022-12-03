@@ -427,7 +427,7 @@ void SpanSequenceTreeVisitor::OnAttribute(const std::unique_ptr<raw::Attribute>&
   // Special case: this attribute is actually a doc comment.  Treat it like any other comment type,
   // and ingest until the last newline in the doc comment.
   if (element->provenance == raw::Attribute::Provenance::kDocComment) {
-    auto doc_comment = IngestUpToAndIncluding(element->end_);
+    auto doc_comment = IngestUpToAndIncluding(element->end());
     if (doc_comment.has_value())
       building_.top().push_back(std::move(doc_comment.value()));
     return;
@@ -438,7 +438,7 @@ void SpanSequenceTreeVisitor::OnAttribute(const std::unique_ptr<raw::Attribute>&
   if (element->args.empty()) {
     const auto builder =
         SpanBuilder<AtomicSpanSequence>(this, *element, SpanSequence::Position::kNewlineUnindented);
-    const auto token_builder = TokenBuilder(this, element->start_, false);
+    const auto token_builder = TokenBuilder(this, element->start(), false);
     return;
   }
 
@@ -450,13 +450,13 @@ void SpanSequenceTreeVisitor::OnAttribute(const std::unique_ptr<raw::Attribute>&
   //           ("my very very ... very long arg 1"
   //           , "my very very ... very long arg 2")
   const auto builder = SpanBuilder<DivisibleSpanSequence>(
-      this, element->args[0]->start_, SpanSequence::Position::kNewlineUnindented);
+      this, element->args[0]->start(), SpanSequence::Position::kNewlineUnindented);
   auto as_atomic = static_cast<AtomicSpanSequence*>(building_.top().front().get());
   SetSpacesBetweenChildren(as_atomic->EditChildren(), false);
 
   std::optional<SpanBuilder<AtomicSpanSequence>> arg_builder;
   for (const auto& arg : element->args) {
-    auto postscript = IngestUpTo(arg->start_);
+    auto postscript = IngestUpTo(arg->start());
     if (postscript.has_value())
       building_.top().push_back(std::move(postscript.value()));
 
@@ -469,7 +469,7 @@ void SpanSequenceTreeVisitor::OnAttribute(const std::unique_ptr<raw::Attribute>&
   arg_builder.reset();
 
   // Ingest the closing ")" token, and append it to the final argument.
-  auto postscript = IngestUpToAndIncluding(element->end_);
+  auto postscript = IngestUpToAndIncluding(element->end());
   if (postscript.has_value()) {
     postscript.value()->SetTrailingSpace(true);
     auto last_argument_span_sequence =
@@ -570,7 +570,7 @@ void SpanSequenceTreeVisitor::OnConstDeclaration(
   // We need a separate scope for these two nodes, as they are meant to be their own
   // DivisibleSpanSequence, but no raw AST node or visitor exists for grouping them.
   {
-    const auto lhs_builder = SpanBuilder<DivisibleSpanSequence>(this, element->start_);
+    const auto lhs_builder = SpanBuilder<DivisibleSpanSequence>(this, element->start());
 
     // Keep the "const" keyword atomic with the name of the declaration.
     {
@@ -607,11 +607,11 @@ void SpanSequenceTreeVisitor::OnIdentifier(const std::unique_ptr<raw::Identifier
   if (already_seen_.insert(element.get()).second && !ignore) {
     const auto visiting = Visiting(this, VisitorKind::kIdentifier);
     if (IsInsideOf(VisitorKind::kCompoundIdentifier)) {
-      const auto builder = TokenBuilder(this, element->start_, false);
+      const auto builder = TokenBuilder(this, element->start(), false);
       TreeVisitor::OnIdentifier(element);
     } else {
       const auto span_builder = SpanBuilder<AtomicSpanSequence>(this, *element);
-      const auto token_builder = TokenBuilder(this, element->start_, false);
+      const auto token_builder = TokenBuilder(this, element->start(), false);
       TreeVisitor::OnIdentifier(element);
     }
   }
@@ -620,7 +620,7 @@ void SpanSequenceTreeVisitor::OnIdentifier(const std::unique_ptr<raw::Identifier
 void SpanSequenceTreeVisitor::OnLiteral(const std::unique_ptr<raw::Literal>& element) {
   const auto visiting = Visiting(this, VisitorKind::kLiteral);
   const auto trailing_space = IsInsideOf(VisitorKind::kBinaryOperatorFirstConstant);
-  const auto builder = TokenBuilder(this, element->start_, trailing_space);
+  const auto builder = TokenBuilder(this, element->start(), trailing_space);
   TreeVisitor::OnLiteral(element);
 }
 
@@ -667,7 +667,7 @@ void SpanSequenceTreeVisitor::OnLayout(const std::unique_ptr<raw::Layout>& eleme
   if (element->members.empty()) {
     if (element->subtype_ctor) {
       const auto subtype_builder =
-          SpanBuilder<AtomicSpanSequence>(this, element->subtype_ctor->start_);
+          SpanBuilder<AtomicSpanSequence>(this, element->subtype_ctor->start());
       auto postscript = IngestUpToAndIncludingTokenKind(Token::Kind::kRightCurly);
       if (postscript.has_value())
         building_.top().push_back(std::move(postscript.value()));
@@ -684,7 +684,7 @@ void SpanSequenceTreeVisitor::OnLayout(const std::unique_ptr<raw::Layout>& eleme
   }
 
   const auto builder =
-      SpanBuilder<MultilineSpanSequence>(this, element->members[0]->start_, element->end_);
+      SpanBuilder<MultilineSpanSequence>(this, element->members[0]->start(), element->end());
 
   // By default, `:` tokens do not have a space following the token.  However, in the case of
   // sub-typed layouts like `enum : uint32 {...`, we need to add this space in.  We can do this by
@@ -729,7 +729,7 @@ void SpanSequenceTreeVisitor::OnNamedLayoutReference(
 void SpanSequenceTreeVisitor::OnOrdinal64(raw::Ordinal64& element) {
   const auto visiting = Visiting(this, VisitorKind::kOrdinal64);
   const auto span_builder = SpanBuilder<AtomicSpanSequence>(this, element);
-  const auto token_builder = TokenBuilder(this, element.start_, false);
+  const auto token_builder = TokenBuilder(this, element.start(), false);
 }
 
 void SpanSequenceTreeVisitor::OnOrdinaledLayoutMember(
@@ -739,7 +739,7 @@ void SpanSequenceTreeVisitor::OnOrdinaledLayoutMember(
     OnAttributeList(element->attributes);
   }
 
-  const auto ordinal_digits = element->ordinal->start_.data().size();
+  const auto ordinal_digits = element->ordinal->start().data().size();
   {
     const auto builder = StatementBuilder<DivisibleSpanSequence>(
         this, *element, SpanSequence::Position::kNewlineIndented);
@@ -748,7 +748,7 @@ void SpanSequenceTreeVisitor::OnOrdinaledLayoutMember(
     // these two nodes, as they are meant to be their own AtomicSpanSequence, but no raw AST node or
     // visitor exists for grouping them.
     {
-      const auto ordinal_name_builder = SpanBuilder<AtomicSpanSequence>(this, element->start_);
+      const auto ordinal_name_builder = SpanBuilder<AtomicSpanSequence>(this, element->start());
       OnOrdinal64(*element->ordinal);
       building_.top().back()->SetTrailingSpace(true);
       if (!element->reserved)
@@ -774,7 +774,7 @@ void SpanSequenceTreeVisitor::OnParameterList(const std::unique_ptr<raw::Paramet
 
   const auto builder = SpanBuilder<AtomicSpanSequence>(this, *element);
   if (element->type_ctor) {
-    auto opening_paren = IngestUpTo(element->type_ctor->start_);
+    auto opening_paren = IngestUpTo(element->type_ctor->start());
     if (opening_paren.has_value())
       building_.top().push_back(std::move(opening_paren.value()));
   }
@@ -805,7 +805,7 @@ void SpanSequenceTreeVisitor::OnProtocolDeclaration(
   // Special case: an empty protocol definition should always be atomic.
   if (element->methods.empty() && element->composed_protocols.empty()) {
     const auto builder =
-        StatementBuilder<AtomicSpanSequence>(this, element->identifier->start_, element->end_,
+        StatementBuilder<AtomicSpanSequence>(this, element->identifier->start(), element->end(),
                                              SpanSequence::Position::kNewlineUnindented);
     ClearBlankLinesAfterAttributeList(element->attributes, building_.top());
     return;
@@ -815,18 +815,18 @@ void SpanSequenceTreeVisitor::OnProtocolDeclaration(
   if (!element->composed_protocols.empty() && !element->methods.empty()) {
     // If the protocol has both methods and compositions, compare the addresses of the first
     // character of the first element of each to determine which is the first child start token.
-    if (element->composed_protocols[0]->start_.data().data() <
-        element->methods[0]->start_.data().data()) {
-      first_child_start_token = element->composed_protocols[0]->start_;
+    if (element->composed_protocols[0]->start().data().data() <
+        element->methods[0]->start().data().data()) {
+      first_child_start_token = element->composed_protocols[0]->start();
     } else {
-      first_child_start_token = element->methods[0]->start_;
+      first_child_start_token = element->methods[0]->start();
     }
   } else if (element->composed_protocols.empty()) {
     // No compositions - the first token of the first method element is the first child start token.
-    first_child_start_token = element->methods[0]->start_;
+    first_child_start_token = element->methods[0]->start();
   } else {
     // No methods - the first token of the first compose element is the first child start token.
-    first_child_start_token = element->composed_protocols[0]->start_;
+    first_child_start_token = element->composed_protocols[0]->start();
   }
 
   const auto builder = StatementBuilder<MultilineSpanSequence>(
@@ -840,7 +840,7 @@ void SpanSequenceTreeVisitor::OnProtocolDeclaration(
   DeclarationOrderTreeVisitor::OnProtocolDeclaration(element);
 
   const auto closing_bracket_builder = SpanBuilder<AtomicSpanSequence>(
-      this, element->end_, SpanSequence::Position::kNewlineUnindented);
+      this, element->end(), SpanSequence::Position::kNewlineUnindented);
   ClearBlankLinesAfterAttributeList(element->attributes, building_.top());
 }
 
@@ -852,13 +852,13 @@ void SpanSequenceTreeVisitor::OnProtocolMethod(
   }
 
   const auto builder = StatementBuilder<AtomicSpanSequence>(
-      this, element->start_, SpanSequence::Position::kNewlineIndented);
+      this, element->start(), SpanSequence::Position::kNewlineIndented);
   if (element->maybe_request != nullptr) {
     const auto visiting_request = Visiting(this, VisitorKind::kProtocolRequest);
     // This is not an event - make sure to process the identifier into an AtomicSpanSequence with
     // the first parameter list, with no space between them.
-    const auto name_builder = SpanBuilder<AtomicSpanSequence>(this, element->identifier->start_,
-                                                              element->maybe_request->end_);
+    const auto name_builder = SpanBuilder<AtomicSpanSequence>(this, element->identifier->start(),
+                                                              element->maybe_request->end());
     OnIdentifier(element->identifier);
     OnParameterList(element->maybe_request);
   }
@@ -868,8 +868,8 @@ void SpanSequenceTreeVisitor::OnProtocolMethod(
     if (element->maybe_request == nullptr) {
       // This is an event - make sure to process the identifier into an AtomicSpanSequence with the
       // the second parameter list, with no space between them.
-      const auto name_builder = SpanBuilder<AtomicSpanSequence>(this, element->identifier->start_,
-                                                                element->maybe_response->end_);
+      const auto name_builder = SpanBuilder<AtomicSpanSequence>(this, element->identifier->start(),
+                                                                element->maybe_response->end());
       OnIdentifier(element->identifier);
       OnParameterList(element->maybe_response);
     } else {
@@ -898,16 +898,16 @@ void SpanSequenceTreeVisitor::OnResourceDeclaration(
   }
 
   const auto builder = StatementBuilder<MultilineSpanSequence>(
-      this, element->start_, SpanSequence::Position::kNewlineUnindented);
+      this, element->start(), SpanSequence::Position::kNewlineUnindented);
 
   // Build the opening "resource_definition ..." line.
   {
     const auto first_line_builder =
-        SpanBuilder<AtomicSpanSequence>(this, element->identifier->start_);
+        SpanBuilder<AtomicSpanSequence>(this, element->identifier->start());
     OnIdentifier(element->identifier);
     if (element->maybe_type_ctor != nullptr) {
       const auto subtype_builder =
-          SpanBuilder<AtomicSpanSequence>(this, element->maybe_type_ctor->start_);
+          SpanBuilder<AtomicSpanSequence>(this, element->maybe_type_ctor->start());
       auto postscript = IngestUpToAndIncludingTokenKind(Token::Kind::kLeftCurly);
       if (postscript.has_value())
         building_.top().push_back(std::move(postscript.value()));
@@ -928,18 +928,18 @@ void SpanSequenceTreeVisitor::OnResourceDeclaration(
   // Build the indented "property { ... }" portion.
   {
     const auto properties_builder = SpanBuilder<MultilineSpanSequence>(
-        this, element->properties.front()->start_, SpanSequence::Position::kNewlineIndented);
+        this, element->properties.front()->start(), SpanSequence::Position::kNewlineIndented);
     TreeVisitor::OnResourceDeclaration(element);
 
     const auto closing_bracket_builder = SpanBuilder<AtomicSpanSequence>(
-        this, element->properties.back()->end_, SpanSequence::Position::kNewlineUnindented);
+        this, element->properties.back()->end(), SpanSequence::Position::kNewlineUnindented);
     auto closing_bracket = IngestUpToAndIncludingSemicolon();
     if (closing_bracket.has_value())
       building_.top().push_back(std::move(closing_bracket.value()));
   }
 
   const auto closing_bracket_builder = SpanBuilder<AtomicSpanSequence>(
-      this, element->end_, SpanSequence::Position::kNewlineUnindented);
+      this, element->end(), SpanSequence::Position::kNewlineUnindented);
   ClearBlankLinesAfterAttributeList(element->attributes, building_.top());
 }
 
@@ -968,14 +968,14 @@ void SpanSequenceTreeVisitor::OnServiceDeclaration(
   // Special case: an empty service definition should always be atomic.
   if (element->members.empty()) {
     const auto builder =
-        StatementBuilder<AtomicSpanSequence>(this, element->identifier->start_, element->end_,
+        StatementBuilder<AtomicSpanSequence>(this, element->identifier->start(), element->end(),
                                              SpanSequence::Position::kNewlineUnindented);
     ClearBlankLinesAfterAttributeList(element->attributes, building_.top());
     return;
   }
 
   const auto builder = StatementBuilder<MultilineSpanSequence>(
-      this, element->members.front()->start_, SpanSequence::Position::kNewlineUnindented);
+      this, element->members.front()->start(), SpanSequence::Position::kNewlineUnindented);
 
   // We want to purposefully ignore this identifier, as it has already been captured by the prelude
   // to the StatementBuilder we created above.  By running this method now, we mark the Identifier
@@ -985,7 +985,7 @@ void SpanSequenceTreeVisitor::OnServiceDeclaration(
   TreeVisitor::OnServiceDeclaration(element);
 
   const auto closing_bracket_builder = SpanBuilder<AtomicSpanSequence>(
-      this, element->end_, SpanSequence::Position::kNewlineUnindented);
+      this, element->end(), SpanSequence::Position::kNewlineUnindented);
   ClearBlankLinesAfterAttributeList(element->attributes, building_.top());
 }
 

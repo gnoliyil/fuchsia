@@ -43,30 +43,30 @@ void DeclarationOrderTreeVisitor::OnFile(std::unique_ptr<File> const& element) {
     // in the file.  We then visit the declaration accordingly.
     m.clear();
     if (alias_decls_it != element->alias_list.end()) {
-      m[(*alias_decls_it)->start_.previous_end().data().data()] = alias_t;
+      m[(*alias_decls_it)->start().previous_end().data().data()] = alias_t;
     }
     if (const_decls_it != element->const_declaration_list.end()) {
-      m[(*const_decls_it)->start_.previous_end().data().data()] = const_t;
+      m[(*const_decls_it)->start().previous_end().data().data()] = const_t;
     }
     if (protocol_decls_it != element->protocol_declaration_list.end()) {
       if (*protocol_decls_it == nullptr) {
         // Used to indicate empty, so let's wind it forward.
         protocol_decls_it = element->protocol_declaration_list.end();
       } else {
-        m[(*protocol_decls_it)->start_.previous_end().data().data()] = protocol_t;
+        m[(*protocol_decls_it)->start().previous_end().data().data()] = protocol_t;
       }
     }
     if (resource_decls_it != element->resource_declaration_list.end()) {
-      m[(*resource_decls_it)->start_.previous_end().data().data()] = resource_t;
+      m[(*resource_decls_it)->start().previous_end().data().data()] = resource_t;
     }
     if (service_decls_it != element->service_declaration_list.end()) {
-      m[(*service_decls_it)->start_.previous_end().data().data()] = service_t;
+      m[(*service_decls_it)->start().previous_end().data().data()] = service_t;
     }
     if (type_decls_it != element->type_decls.end()) {
-      m[(*type_decls_it)->start_.previous_end().data().data()] = type_decl_t;
+      m[(*type_decls_it)->start().previous_end().data().data()] = type_decl_t;
     }
     if (using_decls_it != element->using_list.end()) {
-      m[(*using_decls_it)->start_.previous_end().data().data()] = using_t;
+      m[(*using_decls_it)->start().previous_end().data().data()] = using_t;
     }
     if (m.empty())
       break;
@@ -127,10 +127,10 @@ void DeclarationOrderTreeVisitor::OnProtocolDeclaration(
     // Sort in declaration order.
     m.clear();
     if (compose_it != element->composed_protocols.end()) {
-      m[(*compose_it)->start_.previous_end().data().data()] = compose_t;
+      m[(*compose_it)->start().previous_end().data().data()] = compose_t;
     }
     if (methods_it != element->methods.end()) {
-      m[(*methods_it)->start_.previous_end().data().data()] = method_t;
+      m[(*methods_it)->start().previous_end().data().data()] = method_t;
     }
     if (m.empty())
       return;

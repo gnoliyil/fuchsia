@@ -97,7 +97,7 @@ class Parser {
       parser_->suppress_gap_checks_ = suppress;
     }
     raw::SourceElement GetSourceElement() {
-      parser_->active_ast_scopes_.back().end_ = parser_->previous_token_;
+      parser_->active_ast_scopes_.back().set_end(parser_->previous_token_);
       if (!parser_->suppress_gap_checks_) {
         parser_->last_was_gap_start_ = true;
       }
@@ -129,7 +129,7 @@ class Parser {
 
       // If this is a start node, then the end of it will be the start of
       // a gap.
-      if (active_ast_scopes_.back().start_.kind() == Token::Kind::kNotAToken) {
+      if (active_ast_scopes_.back().start().kind() == Token::Kind::kNotAToken) {
         last_was_gap_start_ = true;
       }
     }
@@ -140,8 +140,8 @@ class Parser {
     }
 
     for (auto& scope : active_ast_scopes_) {
-      if (scope.start_.kind() == Token::Kind::kNotAToken) {
-        scope.start_ = token;
+      if (scope.start().kind() == Token::Kind::kNotAToken) {
+        scope.set_start(token);
       }
     }
 

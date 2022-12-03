@@ -14,11 +14,11 @@ namespace {
 class NoopTreeVisitor : public fidl::raw::DeclarationOrderTreeVisitor {
  public:
   void OnSourceElementStart(const fidl::raw::SourceElement& element) override {
-    OnSourceElementShared(element.start_);
+    OnSourceElementShared(element.start());
   }
 
   void OnSourceElementEnd(const fidl::raw::SourceElement& element) override {
-    OnSourceElementShared(element.end_);
+    OnSourceElementShared(element.end());
   }
   void OnSourceElementShared(const fidl::Token& current_token) {
     const char* ws_location = current_token.previous_end().data().data();

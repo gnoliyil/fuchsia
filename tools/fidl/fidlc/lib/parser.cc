@@ -73,7 +73,7 @@ std::nullptr_t Parser::Fail(const ErrorDef<Id, Args...>& err, const identity_t<A
 }
 
 template <ErrorId Id, typename... Args>
-std::nullptr_t Parser::Fail(const ErrorDef<Id, Args...>& err, Token token,
+std::nullptr_t Parser::Fail(const ErrorDef<Id, Args...>& err, const Token token,
                             const identity_t<Args>&... args) {
   return Fail(err, token.span(), args...);
 }
@@ -94,7 +94,7 @@ std::nullptr_t Parser::Fail(const UndocumentedErrorDef<Id, Args...>& err,
   return Fail(err, last_token_, args...);
 }
 template <ErrorId Id, typename... Args>
-std::nullptr_t Parser::Fail(const UndocumentedErrorDef<Id, Args...>& err, Token token,
+std::nullptr_t Parser::Fail(const UndocumentedErrorDef<Id, Args...>& err, const Token token,
                             const identity_t<Args>&... args) {
   return Fail(err, token.span(), args...);
 }
@@ -170,9 +170,9 @@ std::unique_ptr<raw::LibraryDecl> Parser::ParseLibraryDecl() {
     return Fail();
 
   for (const auto& component : library_name->components) {
-    std::string component_data(component->start_.data());
+    std::string component_data(component->start().data());
     if (!utils::IsValidLibraryComponent(component_data)) {
-      return Fail(ErrInvalidLibraryNameComponent, component->start_, component_data);
+      return Fail(ErrInvalidLibraryNameComponent, component->start(), component_data);
     }
   }
 
@@ -782,7 +782,7 @@ void Parser::ParseProtocolMember(
                                    : types::Strictness::kStrict;
           modifiers = std::make_unique<raw::Modifiers>(
               scope.GetSourceElement(),
-              raw::Modifier<types::Strictness>(as_strictness, maybe_modifier->start_));
+              raw::Modifier<types::Strictness>(as_strictness, maybe_modifier->start()));
           switch (Peek().kind()) {
             case Token::Kind::kArrow: {
               add(methods, [&] {
@@ -862,7 +862,7 @@ std::unique_ptr<raw::ProtocolDeclaration> Parser::ParseProtocolDeclaration(
         ZX_PANIC("expected openness token");
     }
     modifiers = std::make_unique<raw::Modifiers>(
-        scope.GetSourceElement(), raw::Modifier<types::Openness>(as_openness, modifier->start_));
+        scope.GetSourceElement(), raw::Modifier<types::Openness>(as_openness, modifier->start()));
   }
 
   ConsumeToken(IdentifierOfSubkind(Token::Subkind::kProtocol));
@@ -1239,27 +1239,27 @@ std::unique_ptr<raw::Layout> Parser::ParseLayout(
 
   if (identifier->span().data() == "bits") {
     if (modifiers != nullptr)
-      ValidateModifiers<types::Strictness>(modifiers, identifier->start_);
+      ValidateModifiers<types::Strictness>(modifiers, identifier->start());
     kind = raw::Layout::Kind::kBits;
     member_kind = raw::LayoutMember::Kind::kValue;
   } else if (identifier->span().data() == "enum") {
     if (modifiers != nullptr)
-      ValidateModifiers<types::Strictness>(modifiers, identifier->start_);
+      ValidateModifiers<types::Strictness>(modifiers, identifier->start());
     kind = raw::Layout::Kind::kEnum;
     member_kind = raw::LayoutMember::Kind::kValue;
   } else if (identifier->span().data() == "struct") {
     if (modifiers != nullptr)
-      ValidateModifiers<types::Resourceness>(modifiers, identifier->start_);
+      ValidateModifiers<types::Resourceness>(modifiers, identifier->start());
     kind = raw::Layout::Kind::kStruct;
     member_kind = raw::LayoutMember::Kind::kStruct;
   } else if (identifier->span().data() == "table") {
     if (modifiers != nullptr)
-      ValidateModifiers<types::Resourceness>(modifiers, identifier->start_);
+      ValidateModifiers<types::Resourceness>(modifiers, identifier->start());
     kind = raw::Layout::Kind::kTable;
     member_kind = raw::LayoutMember::Kind::kOrdinaled;
   } else if (identifier->span().data() == "union") {
     if (modifiers != nullptr)
-      ValidateModifiers<types::Strictness, types::Resourceness>(modifiers, identifier->start_);
+      ValidateModifiers<types::Strictness, types::Resourceness>(modifiers, identifier->start());
     kind = raw::Layout::Kind::kUnion;
     member_kind = raw::LayoutMember::Kind::kOrdinaled;
   } else {
@@ -1267,7 +1267,7 @@ std::unique_ptr<raw::Layout> Parser::ParseLayout(
   }
 
   if (member_kind != raw::LayoutMember::Kind::kValue && subtype_ctor != nullptr) {
-    return Fail(ErrCannotSpecifySubtype, identifier->start_.kind_and_subkind());
+    return Fail(ErrCannotSpecifySubtype, identifier->start().kind_and_subkind());
   }
 
   ConsumeToken(OfKind(Token::Kind::kLeftCurly));
@@ -1364,7 +1364,7 @@ raw::ConstraintOrSubtype Parser::ParseTokenAfterColon() {
   }
 
   auto subtype_element =
-      raw::SourceElement(constraint_or_subtype->start_, constraint_or_subtype->end_);
+      raw::SourceElement(constraint_or_subtype->start(), constraint_or_subtype->end());
   auto subtype_constant = static_cast<raw::IdentifierConstant*>(constraint_or_subtype.get());
   auto subtype_ref = std::make_unique<raw::NamedLayoutReference>(
       subtype_element, std::move(subtype_constant->identifier));
@@ -1433,7 +1433,7 @@ std::unique_ptr<raw::TypeConstructor> Parser::ParseTypeConstructor() {
           break;
         }
 
-        Token& modifier_token = maybe_modifier->start_;
+        const Token& modifier_token = maybe_modifier->start();
         switch (modifier_subkind) {
           case Token::Subkind::kFlexible:
           case Token::Subkind::kStrict: {
@@ -1454,7 +1454,7 @@ std::unique_ptr<raw::TypeConstructor> Parser::ParseTypeConstructor() {
               RecoverOneError();
               break;
             }
-            maybe_strictness.emplace(as_strictness, maybe_modifier->start_);
+            maybe_strictness.emplace(as_strictness, maybe_modifier->start());
             break;
           }
           case Token::Subkind::kResource: {
@@ -1467,7 +1467,7 @@ std::unique_ptr<raw::TypeConstructor> Parser::ParseTypeConstructor() {
             if (maybe_strictness == std::nullopt) {
               resourceness_comes_first = true;
             }
-            maybe_resourceness.emplace(types::Resourceness::kResource, maybe_modifier->start_);
+            maybe_resourceness.emplace(types::Resourceness::kResource, maybe_modifier->start());
             break;
           }
           default: {
@@ -1508,7 +1508,7 @@ std::unique_ptr<raw::TypeConstructor> Parser::ParseTypeConstructor() {
                            Fail(ErrMultipleConstraintDefinitions, previous_token_.span());
                          }
                          if (modifiers != nullptr)
-                           ValidateModifiers</* none */>(modifiers, identifier->start_);
+                           ValidateModifiers</* none */>(modifiers, identifier->start());
                          if (attributes != nullptr)
                            Fail(ErrCannotAttachAttributeToIdentifier, attributes->span());
                          constraints = std::move(constraint);
@@ -1532,7 +1532,7 @@ std::unique_ptr<raw::TypeConstructor> Parser::ParseTypeConstructor() {
       }
       default: {
         if (modifiers != nullptr)
-          ValidateModifiers</* none */>(modifiers, identifier->start_);
+          ValidateModifiers</* none */>(modifiers, identifier->start());
         if (attributes != nullptr)
           Fail(ErrCannotAttachAttributeToIdentifier, attributes->span());
         layout = std::move(identifier);
@@ -1547,7 +1547,7 @@ std::unique_ptr<raw::TypeConstructor> Parser::ParseTypeConstructor() {
   std::visit(fidl::utils::matchers{
                  [&](std::unique_ptr<raw::CompoundIdentifier>& named_layout) -> void {
                    layout_ref = std::make_unique<raw::NamedLayoutReference>(
-                       raw::SourceElement(named_layout->start_, named_layout->end_),
+                       raw::SourceElement(named_layout->start(), named_layout->end()),
                        std::move(named_layout));
                  },
                  [&](std::unique_ptr<raw::Layout>& inline_layout) -> void {

@@ -54,7 +54,7 @@ class TreeVisitor;
 
 class SourceElement {
  public:
-  explicit SourceElement(Token start, Token end) : start_(start), end_(end) {}
+  SourceElement(Token start, Token end) : start_(start), end_(end) {}
   virtual ~SourceElement() = default;
 
   bool has_span() const {
@@ -85,6 +85,15 @@ class SourceElement {
     end_ = element.end_;
   }
 
+  void set_start(Token token) { start_ = token; }
+
+  const Token& start() const { return start_; }
+
+  void set_end(Token token) { end_ = token; }
+
+  const Token& end() const { return end_; }
+
+ private:
   Token start_;
   Token end_;
 };
@@ -199,7 +208,7 @@ class Constant : public SourceElement {
 class IdentifierConstant final : public Constant {
  public:
   explicit IdentifierConstant(std::unique_ptr<CompoundIdentifier> identifier)
-      : Constant(SourceElement(identifier->start_, identifier->end_), Kind::kIdentifier),
+      : Constant(SourceElement(identifier->start(), identifier->end()), Kind::kIdentifier),
         identifier(std::move(identifier)) {}
 
   std::unique_ptr<CompoundIdentifier> identifier;
@@ -210,7 +219,7 @@ class IdentifierConstant final : public Constant {
 class LiteralConstant final : public Constant {
  public:
   explicit LiteralConstant(std::unique_ptr<Literal> literal)
-      : Constant(literal->start_, Kind::kLiteral), literal(std::move(literal)) {}
+      : Constant(literal->start(), Kind::kLiteral), literal(std::move(literal)) {}
 
   std::unique_ptr<Literal> literal;
 
@@ -222,7 +231,7 @@ class BinaryOperatorConstant final : public Constant {
   enum class Operator { kOr };
   explicit BinaryOperatorConstant(std::unique_ptr<Constant> left_operand,
                                   std::unique_ptr<Constant> right_operand, Operator op)
-      : Constant(SourceElement(left_operand->start_, right_operand->end_), Kind::kBinaryOperator),
+      : Constant(SourceElement(left_operand->start(), right_operand->end()), Kind::kBinaryOperator),
         left_operand(std::move(left_operand)),
         right_operand(std::move(right_operand)),
         op(op) {}

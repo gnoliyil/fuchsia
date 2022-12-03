@@ -111,7 +111,7 @@ class SpanSequenceTreeVisitor : public raw::DeclarationOrderTreeVisitor {
   // As we descend down a particular branch of the raw AST, we record the VisitorKind of each node
   // we visit in the ast_path_ member set.  Later, we can use this function to check if we are
   // "inside" of some raw AST node.  For example, we handle raw::Identifiers differently if they are
-  // inside of a raw::CompoundIdentifier.  Running `IsInsideOf(VisitorKind::kCompoundIndentifier)`
+  // inside of a raw::CompoundIdentifier.  Running `IsInsideOf(VisitorKind::kCompoundIdentifier)`
   // allows us to deduce if this special handling is necessary for any raw::Identifier we visit.
   bool IsInsideOf(VisitorKind visitor_kind);
 
@@ -196,7 +196,7 @@ class SpanSequenceTreeVisitor : public raw::DeclarationOrderTreeVisitor {
     // Use these constructors when the entire SourceElement will be ingested by the SpanBuilder.
     SpanBuilder(SpanSequenceTreeVisitor* ftv, const raw::SourceElement& element,
                 SpanSequence::Position position = SpanSequence::Position::kDefault)
-        : Builder<T>(ftv, element.start_, element.end_, true), position_(position) {}
+        : Builder<T>(ftv, element.start(), element.end(), true), position_(position) {}
     SpanBuilder(SpanSequenceTreeVisitor* ftv, const Token& start, const Token& end,
                 SpanSequence::Position position = SpanSequence::Position::kDefault)
         : Builder<T>(ftv, start, end, true), position_(position) {}
@@ -242,7 +242,7 @@ class SpanSequenceTreeVisitor : public raw::DeclarationOrderTreeVisitor {
     // Use this constructor when the entire SourceElement will be ingested by the StatementBuilder.
     StatementBuilder(SpanSequenceTreeVisitor* ftv, const raw::SourceElement& element,
                      SpanSequence::Position position = SpanSequence::Position::kDefault)
-        : Builder<T>(ftv, element.start_, element.end_, true), position_(position) {}
+        : Builder<T>(ftv, element.start(), element.end(), true), position_(position) {}
     StatementBuilder(SpanSequenceTreeVisitor* ftv, const Token& start, const Token& end,
                      SpanSequence::Position position = SpanSequence::Position::kDefault)
         : Builder<T>(ftv, start, end, true), position_(position) {}
