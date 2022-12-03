@@ -5,12 +5,12 @@
 #include <fcntl.h>
 #include <lib/device-watcher/cpp/device-watcher.h>
 
+#include <fbl/unique_fd.h>
 #include <gtest/gtest.h>
 
 TEST(PlatformDriverTestRealmTest, DriversExist) {
   fbl::unique_fd dev(open("/dev", O_RDONLY));
   ASSERT_TRUE(dev);
 
-  fbl::unique_fd out;
-  ASSERT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile(dev, "sys/platform", &out));
+  ASSERT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile(dev.get(), "sys/platform").status_value());
 }

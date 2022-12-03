@@ -9,6 +9,7 @@
 #include <lib/component/incoming/cpp/service_client.h>
 #include <lib/device-watcher/cpp/device-watcher.h>
 
+#include <fbl/unique_fd.h>
 #include <gtest/gtest.h>
 
 TEST(DdkFirmwaretest, DriverWasLoaded) {

@@ -14,6 +14,7 @@
 
 #include <thread>
 
+#include <fbl/unique_fd.h>
 #include <zxtest/zxtest.h>
 
 TEST(DriverTransportTest, ParentChildExists) {

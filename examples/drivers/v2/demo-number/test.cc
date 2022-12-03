@@ -13,6 +13,7 @@
 #include <lib/sys/component/cpp/testing/realm_builder_types.h>
 #include <lib/sys/cpp/component_context.h>
 
+#include <fbl/unique_fd.h>
 #include <zxtest/zxtest.h>
 
 TEST(DriverTestRealmTest, DriversExist) {

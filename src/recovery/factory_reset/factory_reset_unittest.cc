@@ -93,7 +93,9 @@ class FactoryResetTest : public Test {
 
   void CreateZxcrypt() {
     fbl::unique_fd fd;
-    WaitForDevice(fvm_block_path_, &fd);
+    zx::result channel = WaitForDevice(fvm_block_path_);
+    ASSERT_EQ(channel.status_value(), ZX_OK);
+    ASSERT_EQ(fdio_fd_create(channel.value().release(), fd.reset_and_get_address()), ZX_OK);
 
     zxcrypt::VolumeManager zxcrypt_volume(std::move(fd), devfs_root());
     zx::channel zxc_manager_chan;
@@ -111,8 +113,9 @@ class FactoryResetTest : public Test {
   }
 
   void CreateCorruptedZxcrypt() {
-    fbl::unique_fd fd;
-    WaitForDevice(fvm_block_path_, &fd);
+    zx::result channel = WaitForDevice(fvm_block_path_);
+    ASSERT_EQ(channel.status_value(), ZX_OK);
+    fidl::ClientEnd<fuchsia_hardware_block::Block> client_end(std::move(channel.value()));
 
     // Write just the zxcrypt magic at the start of the volume.
     // It will not be possible to unseal this device, but we want to ensure that
@@ -122,11 +125,11 @@ class FactoryResetTest : public Test {
     // Prepare a buffer of the native block size that starts with zxcrypt_magic.
     // Block reads and writes via fds must match the block size.
     ssize_t block_size;
-    GetBlockSize(fd, &block_size);
+    GetBlockSize(client_end, &block_size);
     std::unique_ptr block = std::make_unique<uint8_t[]>(block_size);
     memset(block.get(), 0, block_size);
     memcpy(block.get(), fs_management::kZxcryptMagic, sizeof(fs_management::kZxcryptMagic));
-    ASSERT_NO_FATAL_FAILURE(WriteBlocks(fd, block.get(), block_size, 0));
+    ASSERT_NO_FATAL_FAILURE(WriteBlocks(client_end, block.get(), block_size, 0));
   }
 
   void CreateFakeBlobfs() {
@@ -134,40 +137,42 @@ class FactoryResetTest : public Test {
     // else we expect to detect so we can see if the block gets randomized later
     // or not.
 
-    fbl::unique_fd fd;
-    WaitForDevice(fvm_block_path_, &fd);
+    zx::result channel = WaitForDevice(fvm_block_path_);
+    ASSERT_EQ(channel.status_value(), ZX_OK);
+    fidl::ClientEnd<fuchsia_hardware_block::Block> client_end(std::move(channel.value()));
 
     // Prepare a buffer of the native block size that starts with blobfs_magic.
     // Block reads and writes via fds must match the block size.
     ssize_t block_size;
-    GetBlockSize(fd, &block_size);
+    GetBlockSize(client_end, &block_size);
     std::unique_ptr block = std::make_unique<uint8_t[]>(block_size);
     memset(block.get(), 0, block_size);
     memcpy(block.get(), fs_management::kBlobfsMagic, sizeof(fs_management::kBlobfsMagic));
-    ASSERT_NO_FATAL_FAILURE(WriteBlocks(fd, block.get(), block_size, 0));
+    ASSERT_NO_FATAL_FAILURE(WriteBlocks(client_end, block.get(), block_size, 0));
   }
 
   void CreateFakeFxfs() {
     // Writes just the Fxfs magic byte sequence (FxfsSupr) so that we detect that the filesystem
     // is Fxfs and shred it accordingly.
-    fbl::unique_fd fd;
-    WaitForDevice(fvm_block_path_, &fd);
+    zx::result channel = WaitForDevice(fvm_block_path_);
+    ASSERT_EQ(channel.status_value(), ZX_OK);
+    fidl::ClientEnd<fuchsia_hardware_block::Block> client_end(std::move(channel.value()));
 
     ssize_t block_size;
-    GetBlockSize(fd, &block_size);
+    GetBlockSize(client_end, &block_size);
     std::unique_ptr block = std::make_unique<uint8_t[]>(block_size);
     memset(block.get(), 0, block_size);
 
     // Initialize one megabyte of NULL for the A/B super block extents.
     const size_t num_blocks = (1L << 20) / block_size;
     for (size_t i = 0; i < num_blocks; i++) {
-      ASSERT_NO_FATAL_FAILURE(WriteBlocks(fd, block.get(), block_size, i * block_size));
+      ASSERT_NO_FATAL_FAILURE(WriteBlocks(client_end, block.get(), block_size, i * block_size));
     }
 
     // Add magic bytes at the correct offsets.
     memcpy(block.get(), fs_management::kFxfsMagic, sizeof(fs_management::kFxfsMagic));
     for (off_t ofs : {0L, 512L << 10}) {
-      ASSERT_NO_FATAL_FAILURE(WriteBlocks(fd, block.get(), block_size, ofs));
+      ASSERT_NO_FATAL_FAILURE(WriteBlocks(client_end, block.get(), block_size, ofs));
     }
   }
 
@@ -179,31 +184,25 @@ class FactoryResetTest : public Test {
     // Second, wait for the data partition to be formatted.
     snprintf(data_block_path, sizeof(data_block_path), "%s/zxcrypt/unsealed/block",
              fvm_block_path_.c_str());
-    fbl::unique_fd fd;
-    WaitForDevice(data_block_path, &fd);
+    ASSERT_EQ(WaitForDevice(data_block_path).status_value(), ZX_OK);
   }
 
-  static void GetBlockSize(const fbl::unique_fd& fd, ssize_t* out_size) {
-    fdio_cpp::UnownedFdioCaller caller(fd.get());
-    ASSERT_TRUE(caller);
-    const fidl::WireResult result =
-        fidl::WireCall(caller.borrow_as<fuchsia_hardware_block::Block>())->GetInfo();
+  static void GetBlockSize(const fidl::ClientEnd<fuchsia_hardware_block::Block>& client_end,
+                           ssize_t* out_size) {
+    const fidl::WireResult result = fidl::WireCall(client_end)->GetInfo();
     ASSERT_TRUE(result.ok()) << result.status_string();
     const fit::result response = result.value();
     *out_size = response.value()->info.block_size;
   }
 
-  static void WriteBlocks(const fbl::unique_fd& fd, void* buffer, size_t buffer_size,
-                          size_t offset) {
-    fdio_cpp::UnownedFdioCaller caller(fd.get());
-    zx_status_t status = block_client::SingleWriteBytes(
-        caller.borrow_as<fuchsia_hardware_block::Block>(), buffer, buffer_size, offset);
+  static void WriteBlocks(const fidl::ClientEnd<fuchsia_hardware_block::Block>& client_end,
+                          void* buffer, size_t buffer_size, size_t offset) {
+    zx_status_t status = block_client::SingleWriteBytes(client_end, buffer, buffer_size, offset);
     ASSERT_EQ(status, ZX_OK) << zx_status_get_string(status);
   }
 
   void CreateRamdisk() {
-    fbl::unique_fd ramctl;
-    WaitForDevice(kRamCtlPath, &ramctl);
+    ASSERT_EQ(WaitForDevice(kRamCtlPath).status_value(), ZX_OK);
     ASSERT_EQ(ramdisk_create_at(devfs_root().get(), kBlockSize, kBlockCount, &ramdisk_client_),
               ZX_OK);
     ASSERT_EQ(
@@ -227,10 +226,10 @@ class FactoryResetTest : public Test {
 
   void CreateFvmPartition() {
     BindFvm();
-    fbl::unique_fd fvm_fd;
     char fvm_path[PATH_MAX];
     snprintf(fvm_path, PATH_MAX, "%s/fvm", ramdisk_get_path(ramdisk_client_));
-    WaitForDevice(fvm_path, &fvm_fd);
+    zx::result channel = WaitForDevice(fvm_path);
+    ASSERT_EQ(channel.status_value(), ZX_OK);
 
     // Allocate a FVM partition with the data guid but don't actually format the
     // partition.
@@ -245,12 +244,11 @@ class FactoryResetTest : public Test {
     fuchsia_hardware_block_partition::wire::Guid instance_guid;
     memcpy(instance_guid.value.data(), req.guid, BLOCK_GUID_LEN);
 
-    fdio_cpp::UnownedFdioCaller caller(fvm_fd.get());
-    auto response =
-        fidl::WireCall(fidl::UnownedClientEnd<fuchsia_hardware_block_volume::VolumeManager>(
-                           caller.borrow_channel()))
-            ->AllocatePartition(req.slice_count, type_guid, instance_guid,
-                                fidl::StringView::FromExternal(kDataName), req.flags);
+    fidl::ClientEnd<fuchsia_hardware_block_volume::VolumeManager> client_end(
+        std::move(channel.value()));
+    auto response = fidl::WireCall(client_end)
+                        ->AllocatePartition(req.slice_count, type_guid, instance_guid,
+                                            fidl::StringView::FromExternal(kDataName), req.flags);
     ASSERT_EQ(response.status(), ZX_OK);
     ASSERT_EQ(response.value().status, ZX_OK);
 
@@ -258,15 +256,12 @@ class FactoryResetTest : public Test {
     fvm_block_path_.append("/");
     fvm_block_path_.append(kDataName);
     fvm_block_path_.append("-p-1/block");
-    fbl::unique_fd fd;
-    WaitForDevice(fvm_block_path_, &fd);
+    ASSERT_EQ(WaitForDevice(fvm_block_path_).status_value(), ZX_OK);
   }
 
-  void WaitForDevice(const std::string& path, fbl::unique_fd* fd) {
+  zx::result<zx::channel> WaitForDevice(const std::string& path) {
     printf("wait for device %s\n", path.c_str());
-    ASSERT_EQ(device_watcher::RecursiveWaitForFile(devfs_root(), path.c_str(), fd), ZX_OK);
-
-    ASSERT_TRUE(*fd);
+    return device_watcher::RecursiveWaitForFile(devfs_root().get(), path.c_str());
   }
 
   ramdisk_client_t* ramdisk_client_;

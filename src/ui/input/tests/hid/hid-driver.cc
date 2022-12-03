@@ -53,13 +53,12 @@ class HidDriverTest : public zxtest::Test {
     ASSERT_OK(fdio_fd_create(dev.TakeChannel().release(), dev_fd_.reset_and_get_address()));
 
     // Wait for HidCtl to be created.
-    fbl::unique_fd hidctl_fd;
-    ASSERT_OK(device_watcher::RecursiveWaitForFile(dev_fd_, "sys/test/hidctl", &hidctl_fd));
+    zx::result hidctl_channel =
+        device_watcher::RecursiveWaitForFile(dev_fd_.get(), "sys/test/hidctl");
+    ASSERT_OK(hidctl_channel.status_value());
 
-    fdio_cpp::FdioCaller caller(std::move(hidctl_fd));
-    zx::result client_end = caller.take_as<fuchsia_hardware_hidctl::Device>();
-    ASSERT_OK(client_end);
-    hidctl_client_.Bind(std::move(client_end.value()));
+    fidl::ClientEnd<fuchsia_hardware_hidctl::Device> client_end(std::move(hidctl_channel.value()));
+    hidctl_client_.Bind(std::move(client_end));
   }
 
   async::Loop loop_ = async::Loop(&kAsyncLoopConfigNoAttachToCurrentThread);
@@ -117,19 +116,20 @@ TEST_F(HidDriverTest, BootMouseTest) {
 
   // Open the input-report device. We need to wait for this to exist so the test does not
   // shutdown while InputReport is still binding.
-  ASSERT_OK(device_watcher::RecursiveWaitForFile(dev_fd_, "class/input-report/000", &fd_device));
+  ASSERT_OK(
+      device_watcher::RecursiveWaitForFile(dev_fd_.get(), "class/input-report/000").status_value());
 
   // Open the corresponding /dev/class/input/ device
-  ASSERT_OK(device_watcher::RecursiveWaitForFile(dev_fd_, "class/input/000", &fd_device));
+  zx::result input_channel = device_watcher::RecursiveWaitForFile(dev_fd_.get(), "class/input/000");
+  ASSERT_OK(input_channel.status_value());
 
   // Open a FIDL channel to the HID device
   zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_input::Device>();
   ASSERT_OK(endpoints);
   auto& [device, server] = endpoints.value();
 
-  fdio_cpp::UnownedFdioCaller caller(fd_device);
-  ASSERT_OK(fidl::WireCall(caller.borrow_as<fuchsia_hardware_input::Controller>())
-                ->OpenSession(std::move(server)));
+  fidl::ClientEnd<fuchsia_hardware_input::Controller> client_end(std::move(input_channel.value()));
+  ASSERT_OK(fidl::WireCall(client_end)->OpenSession(std::move(server)));
 
   fidl::WireSyncClient client(std::move(device));
   // Make a synchronous FIDL call to ensure the session connection is alive.
@@ -195,12 +195,11 @@ TEST_F(HidDriverTest, BootMouseTestInputReport) {
   zx::socket hidctl_socket = std::move(result.value().report_socket);
 
   // Open the corresponding /dev/class/input/ device
-  fbl::unique_fd fd_device;
-  ASSERT_OK(device_watcher::RecursiveWaitForFile(dev_fd_, "class/input-report/000", &fd_device));
-  fdio_cpp::FdioCaller caller(std::move(fd_device));
-  zx::result client_end = caller.take_as<fuchsia_input_report::InputDevice>();
-  ASSERT_OK(client_end);
-  fidl::WireSyncClient client(std::move(client_end.value()));
+  zx::result input_channel =
+      device_watcher::RecursiveWaitForFile(dev_fd_.get(), "class/input-report/000");
+  ASSERT_OK(input_channel.status_value());
+  fidl::ClientEnd<fuchsia_input_report::InputDevice> client_end(std::move(input_channel.value()));
+  fidl::WireSyncClient client(std::move(client_end));
 
   auto reader_endpoints = fidl::CreateEndpoints<fuchsia_input_report::InputReportsReader>();
   ASSERT_OK(reader_endpoints.status_value());

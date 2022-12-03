@@ -12,6 +12,8 @@
 #include <lib/sys/component/cpp/testing/realm_builder.h>
 #include <lib/sys/component/cpp/testing/realm_builder_types.h>
 
+#include <fbl/unique_fd.h>
+
 #include "src/lib/testing/loop_fixture/test_loop_fixture.h"
 
 // [START example]

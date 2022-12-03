@@ -13,8 +13,6 @@
 #include <memory>
 #include <string_view>
 
-#include "device-watcher-deprecated.h"
-
 namespace device_watcher {
 
 // Waits for |file| to appear in the directory represented by |dir_fd|, and opens it.
@@ -65,8 +63,6 @@ class DirWatcher {
   // Creates a new |DirWatcher| instance to watch the directory represented by |dir_fd|.
   // This method does not take ownership of |dir_fd|.
   static zx_status_t Create(int dir_fd, std::unique_ptr<DirWatcher>* out_dir_watcher);
-  // TODO(fxbug.dev/89042): Remove this API once clients have migrated.
-  static zx_status_t Create(fbl::unique_fd dir_fd, std::unique_ptr<DirWatcher>* out_dir_watcher);
 
   // Users should call Create instead. This is public for make_unique.
   explicit DirWatcher(fidl::ClientEnd<fuchsia_io::DirectoryWatcher> client)

@@ -48,6 +48,6 @@ void StartDriverTestRealm() {
 TEST(DriverTestRealmCts, DriverWasLoaded) {
   syslog::SetTags({"driver_test_realm_test"});
   StartDriverTestRealm();
-  fbl::unique_fd out;
-  ASSERT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile("/dev/sys/test", &out));
+
+  ASSERT_EQ(ZX_OK, device_watcher::RecursiveWaitForFile("/dev/sys/test").status_value());
 }

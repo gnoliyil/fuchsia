@@ -82,9 +82,9 @@ void TestDevice::SetupDevmgr() {
   args.disable_block_watcher = true;
 
   ASSERT_EQ(driver_integration_test::IsolatedDevmgr::Create(&args, &devmgr_), ZX_OK);
-  fbl::unique_fd ctl;
-  ASSERT_EQ(device_watcher::RecursiveWaitForFile(devmgr_.devfs_root(),
-                                                 "sys/platform/00:00:2d/ramctl", &ctl),
+  ASSERT_EQ(device_watcher::RecursiveWaitForFile(devmgr_.devfs_root().get(),
+                                                 "sys/platform/00:00:2d/ramctl")
+                .status_value(),
             ZX_OK);
 }
 
@@ -159,7 +159,9 @@ void TestDevice::Rebind() {
     const fit::result response = result.value();
     ASSERT_TRUE(response.is_ok(), "%s", zx_status_get_string(response.error_value()));
 
-    ASSERT_EQ(device_watcher::RecursiveWaitForFile(devfs_root(), fvm_part_path_, &parent_), ZX_OK);
+    zx::result owned = device_watcher::RecursiveWaitForFile(devfs_root().get(), fvm_part_path_);
+    ASSERT_OK(owned.status_value());
+    ASSERT_OK(fdio_fd_create(owned.value().release(), parent_.reset_and_get_address()));
   } else {
     ASSERT_EQ(ramdisk_rebind(ramdisk_), ZX_OK);
 
@@ -283,7 +285,10 @@ void TestDevice::CreateRamdisk(size_t device_size, size_t block_size) {
 
   ASSERT_EQ(ramdisk_create_at(devfs_root().get(), block_size, count, &ramdisk_), ZX_OK);
 
-  device_watcher::RecursiveWaitForFile(devfs_root(), ramdisk_get_path(ramdisk_), &parent_);
+  zx::result owned =
+      device_watcher::RecursiveWaitForFile(devfs_root().get(), ramdisk_get_path(ramdisk_));
+  ASSERT_OK(owned.status_value());
+  ASSERT_OK(fdio_fd_create(owned.value().release(), parent_.reset_and_get_address()));
 
   block_size_ = block_size;
   block_count_ = count;
@@ -316,8 +321,10 @@ void TestDevice::CreateFvmPart(size_t device_size, size_t block_size) {
   // Wait for the FVM driver to expose a block device, then open it
   char path[PATH_MAX];
   snprintf(path, sizeof(path), "%s/fvm", ramdisk_get_path(ramdisk_));
+  zx::result fvm_channel = device_watcher::RecursiveWaitForFile(devfs_root().get(), path);
+  ASSERT_OK(fvm_channel.status_value());
   fbl::unique_fd fvm_fd;
-  ASSERT_EQ(device_watcher::RecursiveWaitForFile(devfs_root(), path, &fvm_fd), ZX_OK);
+  ASSERT_OK(fdio_fd_create(fvm_channel.value().release(), fvm_fd.reset_and_get_address()));
 
   // Allocate a FVM partition with the last slice unallocated.
   alloc_req_t req;

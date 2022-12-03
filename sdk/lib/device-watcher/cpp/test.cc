@@ -13,6 +13,7 @@
 #include <memory>
 
 #include <fbl/ref_ptr.h>
+#include <fbl/unique_fd.h>
 #include <zxtest/zxtest.h>
 
 #include "lib/async-loop/loop.h"
@@ -108,14 +109,14 @@ TEST(DeviceWatcherTest, DirWatcherWaitForRemoval) {
 
   // Verify removal of the root directory file
   std::unique_ptr<device_watcher::DirWatcher> root_watcher;
-  ASSERT_EQ(ZX_OK, device_watcher::DirWatcher::Create(std::move(dir), &root_watcher));
+  ASSERT_EQ(ZX_OK, device_watcher::DirWatcher::Create(dir.get(), &root_watcher));
 
   first->RemoveEntry("file");
   ASSERT_EQ(ZX_OK, root_watcher->WaitForRemoval("file", zx::duration::infinite()));
 
   // Verify removal of the subdirectory file
   std::unique_ptr<device_watcher::DirWatcher> sub_watcher;
-  ASSERT_EQ(ZX_OK, device_watcher::DirWatcher::Create(std::move(sub_dir), &sub_watcher));
+  ASSERT_EQ(ZX_OK, device_watcher::DirWatcher::Create(sub_dir.get(), &sub_watcher));
 
   third->RemoveEntry("file");
   ASSERT_EQ(ZX_OK, sub_watcher->WaitForRemoval("file", zx::duration::infinite()));

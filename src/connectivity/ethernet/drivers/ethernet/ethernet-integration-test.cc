@@ -909,12 +909,11 @@ int main(int argc, char** argv) {
     return status;
   }
 
-  fbl::unique_fd ctl;
-  if (zx_status_t status = device_watcher::RecursiveWaitForFile(devmgr.value().devfs_root(),
-                                                                "sys/test/tapctl", &ctl);
-      status != ZX_OK) {
-    fprintf(stderr, "sys/test/tapctl failed to enumerate: %d\n", status);
-    return status;
+  if (zx::result channel = device_watcher::RecursiveWaitForFile(devmgr.value().devfs_root().get(),
+                                                                "sys/test/tapctl");
+      channel.is_error()) {
+    fprintf(stderr, "sys/test/tapctl failed to enumerate: %s\n", channel.status_string());
+    return channel.status_value();
   }
 
   return RUN_ALL_TESTS(argc, argv);

@@ -16,6 +16,7 @@
 #include <lib/vfs/cpp/remote_dir.h>
 #include <zircon/status.h>
 
+#include <fbl/unique_fd.h>
 #include <gtest/gtest.h>
 
 namespace media::audio::test {

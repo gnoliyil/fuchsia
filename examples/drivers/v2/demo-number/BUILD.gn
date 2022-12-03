@@ -48,6 +48,7 @@ test("demo_number_test") {
     "//sdk/lib/driver_test_realm/realm_builder/cpp",
     "//sdk/lib/sys/cpp",
     "//zircon/system/ulib/async-loop:async-loop-cpp",
+    "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/zxtest",
   ]
 }

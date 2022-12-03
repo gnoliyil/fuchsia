@@ -28,6 +28,7 @@ test("test") {
     "//sdk/lib/sys/component/cpp",
     "//src/lib/fxl/test:gtest_main",
     "//src/lib/testing/loop_fixture",
+    "//zircon/system/ulib/fbl",
   ]
 }
 

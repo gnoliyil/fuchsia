@@ -8,6 +8,7 @@
 #include <time.h>
 #include <zircon/assert.h>
 
+#include <fbl/unique_fd.h>
 #include <zxtest/zxtest.h>
 
 bool gUseRamDisk = true;
