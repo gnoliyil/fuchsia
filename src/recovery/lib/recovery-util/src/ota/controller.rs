@@ -26,6 +26,7 @@ impl EventSender {
 pub trait SendEvent {
     fn send(&mut self, event: Event);
     fn send_recovery_stage_event(&mut self, status: metrics::RecoveryEventMetricDimensionResult);
+    fn send_ota_duration(&mut self, duration: i64);
 }
 
 impl SendEvent for EventSender {
@@ -39,9 +40,17 @@ impl SendEvent for EventSender {
         })
         .detach();
     }
+    // TODO (b/255587508): we have some idea to improve this, such as using a general function
+    // send_metric. It might require a mapping a metric type to a logging function.
     fn send_recovery_stage_event(&mut self, status: metrics::RecoveryEventMetricDimensionResult) {
         fasync::Task::local(async move {
             cobalt::log_metric!(cobalt::log_recovery_stage, status);
+        })
+        .detach();
+    }
+    fn send_ota_duration(&mut self, duration: i64) {
+        fasync::Task::local(async move {
+            cobalt::log_metric!(cobalt::log_ota_duration, duration);
         })
         .detach();
     }

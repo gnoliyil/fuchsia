@@ -4,8 +4,10 @@
 
 use crate::ota::controller::SendEvent;
 use crate::ota::state_machine::Event;
+use fuchsia_async as fasync;
 use fuchsia_async::Task;
 use ota_lib::OtaManager;
+use recovery_metrics_registry::cobalt_registry as metrics;
 use std::sync::Arc;
 
 /// Starts an OTA reinstall
@@ -27,16 +29,25 @@ impl OtaReinstallAction {
 }
 
 async fn run_ota(mut event_sender: Box<dyn SendEvent>, ota_manager: Arc<dyn OtaManager>) {
+    event_sender.send_recovery_stage_event(metrics::RecoveryEventMetricDimensionResult::OtaStarted);
+    let start_time = fasync::Time::now();
     let res = ota_manager.start_and_wait_for_result().await;
+    let end_time = fasync::Time::now();
+    let elapsed_time = (end_time - start_time).into_seconds();
 
     // Progress can be sent by sending Event::Progress(pcent) as seen below.
     let event = match res {
         Ok(_) => {
             println!("OTA Success!");
+            event_sender
+                .send_recovery_stage_event(metrics::RecoveryEventMetricDimensionResult::OtaSuccess);
+            event_sender.send_ota_duration(elapsed_time);
             Event::Progress(100)
         }
         Err(e) => {
             println!("OTA Error..... {:?}", e);
+            event_sender
+                .send_recovery_stage_event(metrics::RecoveryEventMetricDimensionResult::OtaFailed);
             Event::Error(e.to_string())
         }
     };
@@ -52,7 +63,9 @@ mod tests {
     use anyhow::{format_err, Error};
     use async_trait::async_trait;
     use futures::channel::oneshot;
+    use mockall::predicate::eq;
     use ota_lib::OtaManager;
+    use recovery_metrics_registry::cobalt_registry as metrics;
     use std::sync::Arc;
 
     struct FakeOtaManager {
@@ -87,6 +100,17 @@ mod tests {
     async fn ota_reinstall_sends_progress_event_on_successful_ota() {
         let (tx, on_event) = oneshot::channel::<Event>();
         let mut event_sender = MockSendEvent::new();
+        event_sender
+            .expect_send_recovery_stage_event()
+            .with(eq(metrics::RecoveryEventMetricDimensionResult::OtaStarted))
+            .times(1)
+            .return_const(());
+        event_sender
+            .expect_send_recovery_stage_event()
+            .with(eq(metrics::RecoveryEventMetricDimensionResult::OtaSuccess))
+            .times(1)
+            .return_const(());
+        event_sender.expect_send_ota_duration().times(1).return_const(());
         event_sender.expect_send().once().return_once(move |event| {
             tx.send(event).unwrap();
         });
@@ -101,6 +125,16 @@ mod tests {
     async fn ota_reinstall_sends_error_event_on_failed_ota() {
         let (tx, on_event) = oneshot::channel::<Event>();
         let mut event_sender = MockSendEvent::new();
+        event_sender
+            .expect_send_recovery_stage_event()
+            .with(eq(metrics::RecoveryEventMetricDimensionResult::OtaStarted))
+            .times(1)
+            .return_const(());
+        event_sender
+            .expect_send_recovery_stage_event()
+            .with(eq(metrics::RecoveryEventMetricDimensionResult::OtaFailed))
+            .times(1)
+            .return_const(());
         event_sender.expect_send().once().return_once(move |event| {
             tx.send(event).unwrap();
         });
