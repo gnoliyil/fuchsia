@@ -220,10 +220,16 @@ void Device::CreateIface(CreateIfaceRequestView request, fdf::Arena &arena,
         completer.buffer(arena).ReplyError(ZX_ERR_ALREADY_EXISTS);
         return;
       }
+      uint8_t mac_address[ETH_ALEN];
+      if (request->has_init_sta_addr()) {
+        memcpy(mac_address, request->init_sta_addr().data(), ETH_ALEN);
+      } else {
+        memcpy(mac_address, mac_address_, ETH_ALEN);
+      }
 
       WlanInterface *interface = nullptr;
       zx_status_t status = WlanInterface::Create(parent(), kClientInterfaceName, kClientInterfaceId,
-                                                 WLAN_MAC_ROLE_CLIENT, context_, mac_address_,
+                                                 WLAN_MAC_ROLE_CLIENT, context_, mac_address,
                                                  std::move(request->mlme_channel()), &interface);
       if (status != ZX_OK) {
         NXPF_ERR("Could not create client interface: %s", zx_status_get_string(status));
