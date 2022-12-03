@@ -75,7 +75,7 @@ like Flutter.
 
 Dart code written against the Fuchsia SDK should pass all the lint rules
 specified by the
-[analysis_options.yaml](https://fuchsia.googlesource.com/topaz/+/HEAD/tools/analysis_options.yaml)
+[analysis_options.yaml](https://fuchsia.googlesource.com/fuchsia/+/HEAD/analysis_options.yaml)
 file, which lives in the topaz repository. These lint rules will help to automate
 the review API review process. There are situations where a lint rule may be in
 conflict with a specific API and may need to be explicitly ignored. If a file is

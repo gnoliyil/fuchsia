@@ -46,7 +46,7 @@ const DISALLOWED_ALT_IMAGE_TEXT: [&str; 1] = [""];
 // TODO(fxbug.dev/113039): disallow "drawing, "image" for alt text";
 
 /// List of active repos under fuchsia.googlesource.com which can be linked to.
-const VALID_PROJECTS: [&str; 20] = [
+const VALID_PROJECTS: [&str; 19] = [
     "", // root page of all projects
     "cobalt",
     "drivers", // This is a family of projects.
@@ -62,7 +62,6 @@ const VALID_PROJECTS: [&str; 20] = [
     "jiri",
     "manifest",
     "third_party", // This is a family of projects, there are sub-repos below this path.
-    "topaz",
     "vscode-language-fidl",
     "workstation",
     "samples",
@@ -837,7 +836,15 @@ mod tests {
             Some([DocCheckError::new(1, PathBuf::from("/docs/README.md"),
              "Obsolete or invalid project garnet: https://fuchsia.googlesource.com/garnet/+/HEAD/src/file.cc")].to_vec())
         ),
-
+        (
+            DocContext::new(
+                PathBuf::from("/docs/README.md"),
+                "A reference link to [`topaz`][flutter-gni]\n\n\
+                [flutter-gni]: https://fuchsia.googlesource.com/topaz/+/HEAD/runtime/flutter_runner/flutter_app.gni \"Flutter GN build template\""
+            ),
+            Some([DocCheckError::new(1, PathBuf::from("/docs/README.md"),
+            "Obsolete or invalid project topaz: https://fuchsia.googlesource.com/topaz/+/HEAD/runtime/flutter_runner/flutter_app.gni")].to_vec())
+        ),
         (
             DocContext::new(
                 PathBuf::from("/docs/README.md"),
