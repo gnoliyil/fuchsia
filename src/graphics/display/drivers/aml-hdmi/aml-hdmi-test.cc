@@ -4,7 +4,7 @@
 
 #include "aml-hdmi.h"
 
-#include <lib/fake_ddk/fidl-helper.h>
+#include <lib/async-loop/cpp/loop.h>
 
 #include <queue>
 
@@ -64,16 +64,17 @@ class FakeAmlHdmiDevice : public AmlHdmiDevice {
   }
 
   explicit FakeAmlHdmiDevice(AmlHdmiTest* test, fdf::MmioBuffer mmio)
-      : AmlHdmiDevice(nullptr, std::move(mmio), std::make_unique<FakeHdmiDw>(this, test)) {}
-
-  static zx_status_t MessageOp(void* ctx, fidl_incoming_msg_t* msg, fidl_txn_t* txn) {
-    return static_cast<AmlHdmiDevice*>(ctx)->ddk_device_proto_.message(ctx, msg, txn);
+      : AmlHdmiDevice(nullptr, std::move(mmio), std::make_unique<FakeHdmiDw>(this, test)) {
+    loop_.StartThread("fake-aml-hdmi-test-thread");
   }
-  zx_status_t InitTest() { return messenger_.SetMessageOp(this, FakeAmlHdmiDevice::MessageOp); }
-  zx::channel& GetMessengerChannel() { return messenger_.local(); }
+
+  void BindServer(fidl::ServerEnd<fuchsia_hardware_hdmi::Hdmi> server) {
+    binding_ = fidl::BindServer(loop_.dispatcher(), std::move(server), this);
+  }
 
  private:
-  fake_ddk::FidlMessenger messenger_;
+  async::Loop loop_{&kAsyncLoopConfigNeverAttachToThread};
+  std::optional<fidl::ServerBindingRef<fuchsia_hardware_hdmi::Hdmi>> binding_;
 };
 
 class AmlHdmiTest : public zxtest::Test {
@@ -97,10 +98,11 @@ class AmlHdmiTest : public zxtest::Test {
 
     dut_ = FakeAmlHdmiDevice::Create(this, std::move(mmio));
     ASSERT_NOT_NULL(dut_);
-    ASSERT_OK(dut_->InitTest());
 
-    hdmi_client_ = fidl::WireSyncClient(
-        fidl::ClientEnd<fuchsia_hardware_hdmi::Hdmi>(std::move(dut_->GetMessengerChannel())));
+    auto endpoints = fidl::CreateEndpoints<fuchsia_hardware_hdmi::Hdmi>();
+    ASSERT_TRUE(endpoints.is_ok());
+    dut_->BindServer(std::move(endpoints->server));
+    hdmi_client_.Bind(std::move(endpoints->client));
   }
 
   void TearDown() override {
