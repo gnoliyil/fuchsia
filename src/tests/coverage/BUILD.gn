@@ -55,6 +55,10 @@ executable("clang_coverage_test_bin") {
   ]
   ldflags = cflags
   configs += [ ":disable_hwasan_globals" ]
+
+  # Coverage and profiling instrumentation are incompatible within the same TU,
+  # so ensure we don't instrument this test incorrectly by mixing them.
+  exclude_toolchain_tags = [ "profile" ]
 }
 
 clang_coverage_test_rspfile_on_host =
