@@ -25,7 +25,12 @@ assembly_bundle(
 
 platform_aib(
     name = "bazel_migration",
-    base_packages = ["//build/bazel/examples/hello_fuchsia:hello_fuchsia_package"],
+    base_packages = select(
+        {
+            "//build/bazel/platforms/arch:is_x64": ["//build/bazel/examples/hello_fuchsia:hello_fuchsia_package"],
+            "//conditions:default": [],
+        },
+    ),
 )
 
 platform_aibs(
