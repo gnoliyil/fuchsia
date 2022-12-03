@@ -29,7 +29,6 @@
 #include "src/lib/storage/vfs/cpp/pseudo_dir.h"
 #include "src/lib/storage/vfs/cpp/service.h"
 #include "src/lib/storage/vfs/cpp/synchronous_vfs.h"
-#include "src/lib/storage/vfs/cpp/vfs.h"
 #include "src/lib/storage/vfs/cpp/vfs_types.h"
 #include "src/lib/testing/loop_fixture/real_loop_fixture.h"
 
@@ -37,7 +36,17 @@ class LoaderUnittest : public gtest::RealLoopFixture {};
 
 class FakeMagmaDevice : public fuchsia::gpu::magma::testing::CombinedDevice_TestBase {
  public:
-  void NotImplemented_(const std::string& name) override { EXPECT_TRUE(false) << name; }
+  fidl::InterfaceRequestHandler<fuchsia::gpu::magma::CombinedDevice> GetHandler() {
+    return bindings_.GetHandler(this);
+  }
+
+  void CloseAll() { bindings_.CloseAll(); }
+
+ private:
+  void NotImplemented_(const std::string& name) override {
+    ADD_FAILURE() << "unexpected call to " << name;
+  }
+
   void GetIcdList(GetIcdListCallback callback) override {
     fuchsia::gpu::magma::IcdInfo info;
     info.set_component_url("a");
@@ -49,13 +58,7 @@ class FakeMagmaDevice : public fuchsia::gpu::magma::testing::CombinedDevice_Test
     vec.push_back(std::move(info));
     callback(std::move(vec));
   }
-  fidl::InterfaceRequestHandler<fuchsia::gpu::magma::CombinedDevice> GetHandler() {
-    return bindings_.GetHandler(this);
-  }
 
-  void CloseAll() { bindings_.CloseAll(); }
-
- private:
   fidl::BindingSet<fuchsia::gpu::magma::CombinedDevice> bindings_;
 };
 
@@ -97,7 +100,6 @@ TEST_F(LoaderUnittest, MagmaDevice) {
 
 class FakeGoldfishDevice : public fuchsia::hardware::goldfish::testing::PipeDevice_TestBase {
  public:
-  void NotImplemented_(const std::string& name) override { EXPECT_TRUE(false) << name; }
   fidl::InterfaceRequestHandler<fuchsia::hardware::goldfish::PipeDevice> GetHandler() {
     return bindings_.GetHandler(this);
   }
@@ -106,6 +108,10 @@ class FakeGoldfishDevice : public fuchsia::hardware::goldfish::testing::PipeDevi
   size_t GetBindingsSize() { return bindings_.size(); }
 
  private:
+  void NotImplemented_(const std::string& name) override {
+    ADD_FAILURE() << "unexpected call to " << name;
+  }
+
   fidl::BindingSet<fuchsia::hardware::goldfish::PipeDevice> bindings_;
 };
 
@@ -211,13 +217,6 @@ TEST(Icd, BadManifest) {
 
 class FakeMemoryPressureProvider : public fuchsia::memorypressure::testing::Provider_TestBase {
  public:
-  void NotImplemented_(const std::string& name) override { EXPECT_TRUE(false) << name; }
-  void RegisterWatcher(
-      ::fidl::InterfaceHandle<::fuchsia::memorypressure::Watcher> watcher) override {
-    fuchsia::memorypressure::WatcherSyncPtr watcher_sync;
-    watcher_sync.Bind(std::move(watcher));
-    watcher_sync->OnLevelChanged(fuchsia::memorypressure::Level::CRITICAL);
-  }
   fidl::InterfaceRequestHandler<fuchsia::memorypressure::Provider> GetHandler() {
     return bindings_.GetHandler(this);
   }
@@ -225,13 +224,37 @@ class FakeMemoryPressureProvider : public fuchsia::memorypressure::testing::Prov
   void CloseAll() { bindings_.CloseAll(); }
 
  private:
+  void NotImplemented_(const std::string& name) override {
+    ADD_FAILURE() << "unexpected call to " << name;
+  }
+
+  void RegisterWatcher(fidl::InterfaceHandle<fuchsia::memorypressure::Watcher> watcher) override {
+    fuchsia::memorypressure::WatcherSyncPtr watcher_sync;
+    watcher_sync.Bind(std::move(watcher));
+    watcher_sync->OnLevelChanged(fuchsia::memorypressure::Level::CRITICAL);
+  }
+
   fidl::BindingSet<fuchsia::memorypressure::Provider> bindings_;
 };
 
 class FakeMagmaDependencyInjection
     : public fuchsia::gpu::magma::testing::DependencyInjection_TestBase {
  public:
-  void NotImplemented_(const std::string& name) override { EXPECT_TRUE(false) << name; }
+  fidl::InterfaceRequestHandler<fuchsia::gpu::magma::DependencyInjection> GetHandler() {
+    return bindings_.GetHandler(this);
+  }
+
+  void WaitForMemoryPressureProvider() {
+    std::unique_lock lock(mutex_);
+    condition_.wait(lock, [this]() { return got_memory_pressure_provider_; });
+  }
+
+  void CloseAll() { bindings_.CloseAll(); }
+
+ private:
+  void NotImplemented_(const std::string& name) override {
+    ADD_FAILURE() << "unexpected call to " << name;
+  }
 
   void SetMemoryPressureProvider(
       fidl::InterfaceHandle<fuchsia::memorypressure::Provider> provider) override {
@@ -241,17 +264,7 @@ class FakeMagmaDependencyInjection
       condition_.notify_one();
     }
   }
-  void WaitForMemoryPressureProvider() {
-    std::unique_lock lock(mutex_);
-    condition_.wait(lock, [this]() { return got_memory_pressure_provider_; });
-  }
-  fidl::InterfaceRequestHandler<fuchsia::gpu::magma::DependencyInjection> GetHandler() {
-    return bindings_.GetHandler(this);
-  }
 
-  void CloseAll() { bindings_.CloseAll(); }
-
- private:
   fidl::BindingSet<fuchsia::gpu::magma::DependencyInjection> bindings_;
   std::condition_variable condition_;
   std::mutex mutex_;
