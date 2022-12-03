@@ -15,6 +15,11 @@ import("//build/bazel/bazel_build_action.gni")
 #    Type: string
 #    Default: target_name
 #
+#  extra_bazel_inputs (optional)
+#    Extra Bazel inputs (e.g. prebuilt packages) for this assembly target.
+#    Type: list(label)
+#    Default: empty
+#
 #  gn_image_name (required)
 #    Image name for this target as defined in GN. Bazel will inherit the same
 #    image name because it's reusing the images config from GN assembly.
@@ -77,6 +82,10 @@ template("bazel_assembled_system") {
       "//build/images/${invoker.gn_image_name}:${invoker.gn_image_name}.bazel_images_config_inputs",
       "//build/images/${invoker.gn_image_name}:${invoker.gn_image_name}.bazel_legacy_aib",
     ]
+
+    if (defined(invoker.extra_bazel_inputs)) {
+      bazel_inputs += invoker.extra_bazel_inputs
+    }
 
     _assembly_outputs = [
       "bootfs_files.list",
