@@ -33,13 +33,11 @@ config_data("config") {
 group("tests") {
   testonly = true
   deps = [
+    ":cobalt-fuzzers",
     ":cobalt-manual-tests",
     ":cobalt_tests",
-    "app",
-    "system-metrics",
-    "testapp",
-    "testing",
-    "utils",
+    "testing:tests",
+    "utils:tests",
   ]
 }
 

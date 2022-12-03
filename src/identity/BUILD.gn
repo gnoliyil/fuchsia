@@ -22,6 +22,12 @@ group("tests") {
     "tests/password_authenticator_integration",
     "tests/storage_manager_integration",
     "tools:tests",
+
+    # Needed for integration tests
+    #
+    # TODO(http://fxbug.dev/115592): Remove this dependency when the integration
+    # tests are once again hermetic.
+    "//src/identity/bin/account_handler",
   ]
 }
 

@@ -11,6 +11,11 @@ group("utils") {
   ]
 }
 
+group("tests") {
+  testonly = true
+  deps = [ ":cobalt_utils_unittests" ]
+}
+
 source_set("fuchsia_http_client") {
   sources = [
     "fuchsia_http_client.cc",

@@ -259,7 +259,7 @@ fuchsia_package("archivist-without-attribution") {
 
 fuchsia_package("archivist-for-embedding") {
   visibility = [
-    "//bundles/buildbot:*",
+    "//bundles/buildbot/*",
     "//src/sys/run_test_component:*",
   ]
   deps = [

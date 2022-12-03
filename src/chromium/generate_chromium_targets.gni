@@ -224,6 +224,10 @@ template("generate_chromium_targets") {
       deps = [
         ":web_engine",
         ":web_runner",
+
+        # web_engine_integration_tests needs the following packages (it's a
+        # non-hermetic test), which aren't otherwise included.
+        "//src/session/bin/cursor",
       ]
     }
 
@@ -233,6 +237,11 @@ template("generate_chromium_targets") {
       log_settings = {
         max_severity = "ERROR"
       }
+      deps = [
+        # This runner is needed for these tests, so include the runner when the
+        # test is included.
+        "//src/cast:cast_runner",
+      ]
     }
 
     icu_tzdata_config_data("tzdata_for_base_unittests") {
