@@ -175,10 +175,9 @@ To find out what formats are supported by a given driver, the client uses the
  four channels would report a vector with two elements `<2,4>`. Must be in ascending order.
 * A vector of sample formats, e.g. `PCM_SIGNED`.
 * A vector of rates. Frame rates, for example 44100, 48000, and 96000. Must be in ascending order.
-* A number of bits per channel/slot/container. Number of bits in each channel allocated
- to hold a sample, e.g. 32 bits per channel. Must be in ascending order.
-* A vector of bits per sample. Sample widths, this could be smaller than the channel
-e.g. 24 bits per sample in a 32 bits channel. Must be in ascending order.
+* A number of bytes per sample. Must be in ascending order.
+* A vector of bits per sample. Sample widths, this could be smaller than the
+  total available bytes, e.g. 24 bits in a 4-byte sample. Must be in ascending order.
 
 When not all combinations supported by the driver can be described with one
 `PcmSupportedFormats`, the driver returns more than one `PcmSupportedFormats` in
@@ -191,14 +190,14 @@ bits samples at either 48 or 96KHz, the driver would reply with 1
 `PcmSupportedFormats`: `<<16bits,32bits>,<48KHz,96KHz>>`.
 
 Additionally, it is assumed that bits per sample is always smaller or equal to
-bits per channel. Hence, a driver can report
-`<<16bits_per_channel,32bits_per_channel>,<16bits_per_sample,32bits_per_sample>>`
-and this does not imply that it is reporting that 32 bits per sample on 16 bits
+8 * bytes per sample. Hence, a driver can report
+`<<2bytes_per_sample,4bytes_per_sample>,<16bits_per_sample,32bits_per_sample>>`
+and this does not imply that it is reporting that 32 bits per sample on 2-byte
 samples is valid, it specifies only the 3 valid combinations:
 
-* 16 bits channels with 16 bits samples
-* 32 bits channels with 32 bits samples
-* 32 bits channels with 16 bits samples
+* 2-byte samples channels with 16 valid bits
+* 4-byte samples with 32 valid bits
+* 4-byte samples with 16 valid bits
 
 The client specifies the format to use with the `CreateRingBuffer` function based on
 information that the driver provides in `GetSupportedFormats` reply, what is supported
@@ -210,7 +209,7 @@ by the client, and any other requirements. This function takes a parameter that 
  i.e. both channels 0 and 1 are used.
 * A sample format.
 * A frame rate.
-* A number of bits per channel.
+* A number of bytes per sample.
 * A number of bits per sample.
 
 Notes:
@@ -225,10 +224,10 @@ Notes:
     [0x8000, 0x7FFF] with 0x0000 representing zero speaker deflection. If the
     `PCM_UNSIGNED` sample format is used, the bit values would range from [0x0000,
     0xFFFF] with 0x8000 representing zero deflection.
-*   When encoding a smaller sample size in a larger channel (e.g. 20 or 24bit in
-    32), the most significant bits of the 32 bit container are used while the
-    least significant bits will be ignored (left justified). e.g. a 20 bit sample would be mapped
-    onto the range \[12,31\] (bits \[0,11\] would be ignored) of the 32 bit container.
+*   When encoding a smaller sample size in a larger channel (e.g. 20 or 24-bit in
+    32), the most significant bits of the 32-bit container are used while the
+    least significant bits will be ignored (left justified). e.g. a 20-bit sample would be mapped
+    onto the range \[12,31\] (bits \[0,11\] would be ignored) of the 32-bit container.
 
 ### Setting the desired stream format
 

@@ -82,7 +82,7 @@ type PcmSupportedFormats = table {
     3: bytes_per_sample vector<uint8>:MAX_COUNT_SUPPORTED_BYTES_PER_SAMPLE;
 
     /// Vector of possible number of bits in a sample in ascending order, must be equal or smaller
-    /// than `bytes_per_channel` for samples to fit. If smaller, bits are left justified, and any
+    /// than `bytes_per_sample` for samples to fit. If smaller, bits are left justified, and any
     /// additional bits will be ignored. Required.
     4: valid_bits_per_sample vector<uint8>:MAX_COUNT_SUPPORTED_VALID_BITS_PER_SAMPLE;
 
@@ -96,7 +96,7 @@ type Format = table {
 };
 
 /// Format supporting non-compressed PCM audio. Frames are made up of `number_of_channels` samples
-/// which have `valid_bits_per_sample` bits of left-justified data within `bytes_per_channel`.
+/// which have `valid_bits_per_sample` bits of left-justified data within `bytes_per_sample`.
 /// bytes. For more detailed information see
 /// [Audio Driver Streaming Interface](https://fuchsia.dev/fuchsia-src/concepts/drivers/driver_architectures/audio_drivers/audio_streaming).
 type PcmFormat = struct {
