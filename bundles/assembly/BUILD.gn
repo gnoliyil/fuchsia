@@ -16,7 +16,6 @@ group("assembly") {
     ":prod_only",
 
     # The testonly assembly bundles
-    ":common_bringup_eng",
     ":common_minimal_eng",
     ":common_minimal_userdebug",
   ]
@@ -50,17 +49,6 @@ group("eng_and_userdebug") {
 # move them to other AIBs that are included by all other products.
 #
 assembly_input_bundle("common_bringup") {
-  bootfs_packages = []
-
-  # Create package and archive for use OOT.
-  create_aib_package = true
-  create_aib_archive = true
-}
-
-# This is common across all eng-mode products, including "bringup"
-# configurations
-#
-assembly_input_bundle("common_bringup_eng") {
   bootfs_packages = []
 
   # Create package and archive for use OOT.

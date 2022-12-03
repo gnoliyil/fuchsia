@@ -48,12 +48,11 @@ pub fn assemble(args: ProductArgs) -> Result<()> {
     let mut platform_bundles =
         match (&config.platform.feature_set_level, &config.platform.build_type) {
             (FeatureSupportLevel::Bringup, BuildType::Eng) => {
-                vec!["common_bringup", "common_bringup_eng"]
+                vec!["common_bringup"]
             }
             (FeatureSupportLevel::Minimal, BuildType::Eng) => {
                 vec![
                     "common_bringup",
-                    "common_bringup_eng",
                     "common_minimal",
                     "common_minimal_eng",
                     "common_minimal_userdebug",
