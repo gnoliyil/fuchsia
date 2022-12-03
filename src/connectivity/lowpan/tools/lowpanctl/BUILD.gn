@@ -27,6 +27,7 @@ rustc_binary("bin") {
     "//third_party/rust_crates:argh",
     "//third_party/rust_crates:futures",
     "//third_party/rust_crates:hex",
+    "//third_party/rust_crates/compat/rustyline",
   ]
 
   sources = [
@@ -51,6 +52,7 @@ rustc_binary("bin") {
     "src/make_joinable_command.rs",
     "src/mfg_command.rs",
     "src/network_scan_command.rs",
+    "src/otcli_command.rs",
     "src/provision_command.rs",
     "src/register_external_route_command.rs",
     "src/register_on_mesh_net_command.rs",

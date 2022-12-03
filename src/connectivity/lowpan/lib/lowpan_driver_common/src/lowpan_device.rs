@@ -166,6 +166,8 @@ pub trait Driver: Send + Sync {
     /// See [`fidl_fuchsia_factory_lowpan::FactoryDevice::send_mfg_command`] for more information.
     async fn send_mfg_command(&self, command: &str) -> ZxResult<String>;
 
+    async fn setup_ot_cli(&self, server_socket: fidl::Socket) -> ZxResult<()>;
+
     async fn replace_mac_address_filter_settings(
         &self,
         settings: MacAddressFilterSettings,
@@ -1113,10 +1115,9 @@ impl<T: Driver> ServeTo<FactoryDeviceRequestStream> for T {
                         .await
                         .context("error in send_mfg_command request")?;
                 }
-                FactoryDeviceRequest::SetupOtCli { responder, server_socket: _, .. } => {
+                FactoryDeviceRequest::SetupOtCli { responder, server_socket, .. } => {
                     let responder = ResponderNoShutdown::wrap(responder);
-                    // TODO(jiamingw): this call will be replaced by the correct implementation in the chained CL.
-                    self.reset()
+                    self.setup_ot_cli(server_socket)
                         .err_into::<Error>()
                         .and_then(|_| ready(responder.unwrap().send().map_err(Error::from)))
                         .await

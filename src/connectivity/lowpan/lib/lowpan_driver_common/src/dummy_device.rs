@@ -304,6 +304,12 @@ impl Driver for DummyDevice {
         Ok("error: The dummy driver currently has no manufacturing commands.".to_string())
     }
 
+    async fn setup_ot_cli(&self, _server_socket: fidl::Socket) -> ZxResult<()> {
+        fx_log_info!("Got setup_ot_cli request");
+
+        Ok(())
+    }
+
     async fn replace_mac_address_filter_settings(
         &self,
         _settings: MacAddressFilterSettings,

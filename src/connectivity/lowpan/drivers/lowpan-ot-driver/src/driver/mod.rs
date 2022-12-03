@@ -16,6 +16,7 @@ mod driver_state;
 mod error_adapter;
 mod host_to_thread;
 mod joiner;
+mod ot_ctl;
 mod srp_proxy;
 mod tasks;
 mod thread_to_host;
@@ -74,9 +75,6 @@ pub struct OtDriver<OT, NI, BI> {
     /// Backbone Interface. Provides support of bouder routing and TREL.
     backbone_if: BI,
 
-    /// Output receiver for OpenThread CLI
-    cli_output_receiver: futures::lock::Mutex<futures::channel::mpsc::UnboundedReceiver<String>>,
-
     /// Task for updating mDNS service for border agent
     border_agent_service: parking_lot::Mutex<Option<fasync::Task<Result<(), anyhow::Error>>>>,
 
@@ -90,18 +88,11 @@ pub struct OtDriver<OT, NI, BI> {
 
 impl<OT: ot::Cli, NI, BI> OtDriver<OT, NI, BI> {
     pub fn new(ot_instance: OT, net_if: NI, backbone_if: BI) -> Self {
-        let (cli_output_sender, cli_output_receiver) = futures::channel::mpsc::unbounded();
-
-        ot_instance.cli_init(move |c_str| {
-            cli_output_sender.unbounded_send(c_str.to_string_lossy().into_owned()).unwrap();
-        });
-
         OtDriver {
             driver_state: parking_lot::Mutex::new(DriverState::new(ot_instance)),
             driver_state_change: AsyncCondition::new(),
             net_if,
             backbone_if,
-            cli_output_receiver: futures::lock::Mutex::new(cli_output_receiver),
             border_agent_service: parking_lot::Mutex::new(None),
             border_agent_current_txt_entries: std::sync::Arc::new(futures::lock::Mutex::new(
                 vec![],

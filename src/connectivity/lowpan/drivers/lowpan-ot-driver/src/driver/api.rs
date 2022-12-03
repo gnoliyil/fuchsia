@@ -13,7 +13,6 @@ use lowpan_driver_common::AsyncConditionWait;
 use lowpan_driver_common::Driver as LowpanDriver;
 use lowpan_driver_common::ZxResult;
 use openthread::ot::LeaderData;
-use std::ffi::CString;
 
 /// Helpers for API-related tasks.
 impl<OT: Send, NI, BI: Send> OtDriver<OT, NI, BI> {
@@ -511,63 +510,61 @@ where
     }
 
     async fn send_mfg_command(&self, command: &str) -> ZxResult<String> {
-        // TODO(rquattle): For now we are sending manufacturing commands to the normal
-        //                 OpenThread CLI interface to unblock testing efforts.
-        //                 Long term we need to have this API connect to the manufacturing
-        //                 commands and have the normal CLI commands plumbed via a different
-        //                 route.
+        // For this method we are sending manufacturing commands to the normal
+        // OpenThread CLI interface one at a time
         const WAIT_FOR_RESPONSE_TIMEOUT: Duration = Duration::from_seconds(120);
 
         info!("CLI command: {:?}", command);
 
-        // Locking this receiver also prevents multiple outstanding CLI commands from racing.
-        let mut receiver = self.cli_output_receiver.lock().await;
+        let mut cmd = std::string::String::from(command);
+        cmd.push('\n');
 
-        let mut output = String::new();
+        let (server_socket_fidl, client_socket_fidl) =
+            fidl::Socket::create(fidl::SocketOpts::STREAM)?;
+        self.setup_ot_cli(server_socket_fidl).await?;
+        let mut client_socket = fuchsia_async::Socket::from_socket(client_socket_fidl)?;
 
         // Flush out any previous response. If we don't do this then we might get
         // unexpected text at the top of the command output, which would be confusing.
-        while let Some(Some(next)) = receiver.next().now_or_never() {
-            output.push_str(&next);
-        }
+        let mut inbound_buffer: Vec<u8> = Vec::new();
 
-        if !output.is_empty() {
-            warn!("Output from previous CLI command collected: {:?}", output);
-            output.clear();
-        }
-
-        // Execute the command.
-        self.driver_state.lock().ot_instance.cli_input_line(&CString::new(command).unwrap());
-
-        // Collect the response, waiting up to WAIT_FOR_RESPONSE_TIMEOUT after the last bit.
-        while let Some(Some(next)) = receiver
-            .next()
-            .map(Option::Some)
-            .on_timeout(fasync::Time::after(WAIT_FOR_RESPONSE_TIMEOUT), || None)
-            .await
-        {
-            output.push_str(&next);
-            if output.ends_with("Done\r\n")
-                || output.starts_with("Error ")
-                || output.contains("\r\nError ")
-            {
-                // Break early if we are done or there was an error
-                break;
+        client_socket.read_datagram(&mut inbound_buffer).now_or_never();
+        client_socket.write_all(cmd.as_bytes()).await?;
+        let fut = async {
+            loop {
+                client_socket.read_datagram(&mut inbound_buffer).await?;
+                if let Ok(output) = std::str::from_utf8(&inbound_buffer) {
+                    if output.ends_with("Done\r\n")
+                        || output.starts_with("Error ")
+                        || output.contains("\r\nError ")
+                    {
+                        // Break early if we are done or there was an error
+                        break;
+                    }
+                }
             }
-        }
+            Ok(())
+        };
 
-        // Collect any last bits that might be in the queue without awaiting.
-        while let Some(Some(next)) = receiver.next().now_or_never() {
-            output.push_str(&next);
-        }
+        fut.on_timeout(fasync::Time::after(WAIT_FOR_RESPONSE_TIMEOUT), || {
+            error!("Timeout");
+            Err(ZxStatus::TIMED_OUT)
+        })
+        .await?;
 
-        if output.is_empty() {
-            error!("CLI Command Timeout");
-            return Err(ZxStatus::TIMED_OUT);
-        } else {
-            info!("CLI output: {:?}", output);
+        match std::str::from_utf8(&inbound_buffer) {
+            Ok(result) => Ok(result.to_string()),
+            Err(_) => Ok("Error: invalid UTF-8 string".to_string()),
         }
-        Ok(output)
+    }
+
+    async fn setup_ot_cli(&self, server_socket: fidl::Socket) -> ZxResult<()> {
+        let driver_state = self.driver_state.lock();
+        let ot_instance = &driver_state.ot_instance;
+        let ot_ctl = &driver_state.ot_ctl;
+        ot_ctl
+            .replace_client_socket(fuchsia_async::Socket::from_socket(server_socket)?, ot_instance);
+        Ok(())
     }
 
     async fn replace_mac_address_filter_settings(

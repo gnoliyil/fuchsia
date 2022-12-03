@@ -10,11 +10,11 @@ use fuchsia_component::client::connect_to_protocol;
 use futures::never::Never;
 use futures::prelude::*;
 use lowpan_driver_common::lowpan_fidl::ConnectivityState;
-
 use lowpan_driver_common::net::BackboneInterface;
 use lowpan_driver_common::spinel::Canceled;
 use lowpan_driver_common::FutureExt;
 use openthread::ot::InfraInterface;
+use std::ffi::CString;
 
 impl<OT, NI, BI> OtDriver<OT, NI, BI>
 where
@@ -130,6 +130,20 @@ where
         let discovery_proxy_stream =
             self.driver_state.discovery_proxy_future().into_stream().map(|_: Never| unreachable!());
 
+        // Openthread CLI inbound task
+        let (cli_input_sender_local, mut cli_input_receiver) = futures::channel::mpsc::unbounded();
+        let openthread_cli_inbound_loop = async move {
+            loop {
+                while let Some(Some(next)) = cli_input_receiver.next().await {
+                    self.driver_state
+                        .lock()
+                        .ot_instance
+                        .cli_input_line(&CString::new(next).unwrap());
+                }
+            }
+        };
+        self.driver_state.lock().ot_ctl.cli_input_sender.replace(cli_input_sender_local);
+
         // SCAN WATCHDOG. Scans are somewhat blocking operations---the device cannot
         // actively participate on the network while one is in progress. Occasionally
         // we can run into bugs like <fxbug.dev/106509>, where the scan never finishes.
@@ -191,6 +205,7 @@ where
             state_machine_stream.boxed(),
             discovery_proxy_stream.boxed(),
             scan_watchdog.into_stream().boxed(),
+            openthread_cli_inbound_loop.into_stream().boxed(),
         ]))
     }
 

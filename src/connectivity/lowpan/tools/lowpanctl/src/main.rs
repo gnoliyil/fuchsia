@@ -22,6 +22,7 @@ pub mod list_command;
 pub mod make_joinable_command;
 pub mod mfg_command;
 pub mod network_scan_command;
+pub mod otcli_command;
 pub mod provision_command;
 pub mod register_external_route_command;
 pub mod register_on_mesh_net_command;

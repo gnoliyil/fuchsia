@@ -19,6 +19,8 @@ pub struct DriverState<OT> {
     pub srp_discovery_proxy: Option<DiscoveryProxy>,
 
     pub srp_advertising_proxy: Option<AdvertisingProxy>,
+
+    pub ot_ctl: ot_ctl::OtCtl,
 }
 
 impl<OT: AsRef<ot::Instance>> AsRef<ot::Instance> for DriverState<OT> {
@@ -79,6 +81,7 @@ impl<OT> DriverState<OT> {
             address_table: Default::default(),
             srp_discovery_proxy: None,
             srp_advertising_proxy: None,
+            ot_ctl: ot_ctl::OtCtl::new(),
         }
     }
 }

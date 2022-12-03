@@ -23,6 +23,7 @@ pub use crate::list_command::*;
 pub use crate::make_joinable_command::*;
 pub use crate::mfg_command::*;
 pub use crate::network_scan_command::*;
+pub use crate::otcli_command::*;
 pub use crate::provision_command::*;
 pub use crate::register_external_route_command::*;
 pub use crate::register_on_mesh_net_command::*;
@@ -93,6 +94,7 @@ pub enum CommandEnumWithRepeat {
     UnregisterExternalRoute(UnregisterExternalRouteCommand),
     GetExternalRoutes(GetExternalRoutesCommand),
     AttachAllNodesTo(AttachAllNodesToCommand),
+    OtCli(OtCliCommand),
 }
 
 impl CommandEnumWithRepeat {
@@ -126,6 +128,7 @@ impl CommandEnumWithRepeat {
             CommandEnumWithRepeat::UnregisterExternalRoute(x) => x.exec(context).await,
             CommandEnumWithRepeat::GetExternalRoutes(x) => x.exec(context).await,
             CommandEnumWithRepeat::AttachAllNodesTo(x) => x.exec(context).await,
+            CommandEnumWithRepeat::OtCli(x) => x.exec(context).await,
         }
     }
 }
@@ -162,6 +165,7 @@ pub enum CommandEnum {
     UnregisterExternalRoute(UnregisterExternalRouteCommand),
     GetExternalRoutes(GetExternalRoutesCommand),
     AttachAllNodesTo(AttachAllNodesToCommand),
+    OtCli(OtCliCommand),
 }
 
 impl CommandEnum {
@@ -193,6 +197,7 @@ impl CommandEnum {
             CommandEnum::UnregisterExternalRoute(x) => x.exec(context).await,
             CommandEnum::GetExternalRoutes(x) => x.exec(context).await,
             CommandEnum::AttachAllNodesTo(x) => x.exec(context).await,
+            CommandEnum::OtCli(x) => x.exec(context).await,
         }
     }
 }
