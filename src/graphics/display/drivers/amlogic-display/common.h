@@ -4,6 +4,9 @@
 
 #ifndef SRC_GRAPHICS_DISPLAY_DRIVERS_AMLOGIC_DISPLAY_COMMON_H_
 #define SRC_GRAPHICS_DISPLAY_DRIVERS_AMLOGIC_DISPLAY_COMMON_H_
+
+#include <lib/ddk/debug.h>
+
 #include <hwreg/mmio.h>
 
 #define DISPLAY_MASK(start, count) (((1 << (count)) - 1) << (start))

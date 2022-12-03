@@ -29,6 +29,7 @@ source_set("common_srcs") {
     "lcd.cc",
     "mipi-phy.cc",
     "osd.cc",
+    "rdma.cc",
     "vout.cc",
     "vpu.cc",
   ]

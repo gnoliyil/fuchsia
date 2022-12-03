@@ -216,6 +216,7 @@ class AmlogicDisplay
   // of inspect tree when defining selectors and metrics.
   inspect::Inspector inspector_;
   inspect::Node root_node_;
+  inspect::Node osd_node_;
 
   uint64_t display_id_ = PANEL_DISPLAY_ID;
   bool display_attached_ = false;
