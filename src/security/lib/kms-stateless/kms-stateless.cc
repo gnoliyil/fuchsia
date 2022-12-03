@@ -178,7 +178,7 @@ struct WatchTeeArgs {
 
 // Callback function called when a TEE device is found.
 zx_status_t WatchTee(int dirfd, int event, const char* filename, void* cookie) {
-  if (std::string_view{filename} == ".") {
+  if (std::string_view{filename} == "." || std::string_view{filename} == "") {
     return ZX_OK;
   }
   fbl::StringBuffer<kMaxPathLen> device_path;
