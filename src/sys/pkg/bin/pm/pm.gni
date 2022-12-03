@@ -151,7 +151,7 @@ template("pm_build") {
                            "repository",
                          ])
   if (!defined(package_api_level)) {
-    package_api_level = in_development_api_level
+    package_api_level = platform_version.in_development_api_level
   }
 
   if (!defined(package_name)) {
