@@ -9,7 +9,7 @@ use {
     fidl_fuchsia_wlan_policy as fidl_policy, fidl_fuchsia_wlan_sme as fidl_sme,
     fuchsia_zircon as zx,
     futures::stream::TryStreamExt,
-    log::{debug, info, warn},
+    log::{debug, info},
     measure_tape_for_scan_result::Measurable as _,
 };
 
@@ -81,9 +81,9 @@ pub fn scan_result_to_policy_scan_result(
                     ..fidl_policy::ScanResult::EMPTY
                 })
             } else {
-                warn!(
-                    "Unknown security type present in scan results: {:?}",
-                    internal.security_type_detailed
+                debug!(
+                    "Unknown security type present in scan results ({} BSSs)",
+                    internal.entries.len()
                 );
                 None
             }

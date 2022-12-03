@@ -26,6 +26,7 @@ use {
         select,
         stream::FuturesUnordered,
     },
+    itertools::Itertools,
     log::{debug, error, info, warn},
     std::{collections::HashMap, convert::TryFrom, sync::Arc},
     wlan_common,
@@ -140,8 +141,9 @@ pub async fn serve_scanning_loop(
                             ).boxed()
                         };
                         let fut = (async move {
-                            if let Err(e) = responder.send(scan_fut.await) {
-                                error!("could not respond to ScanRequest: {:?}", e);
+                            if let Err(_original_message) = responder.send(scan_fut.await) {
+                                // This occurs if the `ScanRequestApi::perform_scan` future is dropped
+                                debug!("could not respond to ScanRequest, channel was closed");
                             }
                         }).boxed();
                         operation_futures.push(fut);
@@ -454,10 +456,19 @@ fn insert_bss_to_network_bss_map(
     observed_in_passive_scan: bool,
 ) {
     for scan_result in scan_result_list.into_iter() {
+        let protection: types::SecurityTypeDetailed =
+            scan_result.bss_description.protection().into();
+        if (protection) == types::SecurityTypeDetailed::Unknown {
+            // Print a space-efficient version of the IEs
+            info!(
+                "Encountered unknown protection, ies: [{:?}]",
+                scan_result.bss_description.ies().iter().map(|n| n.to_string()).join(",")
+            );
+        };
         let entry = bss_by_network
             .entry(SmeNetworkIdentifier {
                 ssid: scan_result.bss_description.ssid.clone(),
-                protection: scan_result.bss_description.protection().into(),
+                protection: protection,
             })
             .or_insert(vec![]);
         // Check if this BSSID is already in the hashmap
