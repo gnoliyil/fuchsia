@@ -16,9 +16,11 @@ hardware_envs = chromebook_envs + [
                   vim3_env,
                 ]
 
-# These should be targeted by tests that MUST run on native audio hardware.
-built_in_input_hardware_envs = chromebook_envs + [
-                                 astro_env,
-                                 nelson_env,
-                                 sherlock_env,
-                               ]
+# These should be targeted by tests that MUST run on platforms with built-in
+# audio input hardware.
+built_in_input_hardware_envs = [
+  astro_env,
+  nelson_env,
+  sherlock_env,
+  atlas_env,
+]
