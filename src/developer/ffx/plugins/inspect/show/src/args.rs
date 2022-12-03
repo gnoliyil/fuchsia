@@ -25,10 +25,11 @@ pub struct ShowCommand {
     pub selectors: Vec<String>,
 
     #[argh(option)]
-    /// the filename we are interested in. If this is provided, the output will only
+    /// the filenames we are interested in. If any are provided, the output will only
     /// contain data from components which expose Inspect under the given file under
     /// their out/diagnostics directory.
-    pub file: Option<String>,
+    /// Supports shell globs expansions.
+    pub file: Vec<String>,
 
     #[argh(option)]
     /// the path from where to get the ArchiveAccessor connection. If the given path is a

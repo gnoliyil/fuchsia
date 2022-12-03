@@ -120,10 +120,11 @@ pub fn setup_fake_diagnostics_bridge(
 }
 
 pub fn make_inspects_for_lifecycle() -> Vec<InspectData> {
+    let fake_filename = "fake-filename";
     vec![
-        make_inspect_with_length(String::from("test/moniker1"), 1, 20),
-        make_inspect_with_length(String::from("test/moniker1"), 2, 30),
-        make_inspect_with_length(String::from("test/moniker3"), 3, 3),
+        make_inspect(String::from("test/moniker1"), 1, 20, fake_filename),
+        make_inspect(String::from("test/moniker1"), 2, 30, fake_filename),
+        make_inspect(String::from("test/moniker3"), 3, 3, fake_filename),
     ]
 }
 
@@ -156,6 +157,10 @@ pub fn setup_fake_rcs() -> RemoteControlProxy {
 }
 
 pub fn make_inspect_with_length(moniker: String, timestamp: i64, len: usize) -> InspectData {
+    make_inspect(moniker, timestamp, len, "fake-filename")
+}
+
+pub fn make_inspect(moniker: String, timestamp: i64, len: usize, file_name: &str) -> InspectData {
     let long_string = std::iter::repeat("a").take(len).collect::<String>();
     let hierarchy = DiagnosticsHierarchy::new(
         String::from("name"),
@@ -167,17 +172,18 @@ pub fn make_inspect_with_length(moniker: String, timestamp: i64, len: usize) -> 
         Some(hierarchy),
         timestamp,
         format!("fake-url://{}", moniker),
-        String::from("fake-filename"),
+        String::from(file_name),
         vec![],
     )
 }
 
 pub fn make_inspects() -> Vec<InspectData> {
+    let fake_filename = "fake-filename";
     vec![
-        make_inspect_with_length(String::from("test/moniker1"), 1, 20),
-        make_inspect_with_length(String::from("test/moniker2"), 2, 10),
-        make_inspect_with_length(String::from("test/moniker3"), 3, 30),
-        make_inspect_with_length(String::from("test/moniker1"), 20, 3),
+        make_inspect(String::from("test/moniker1"), 1, 20, fake_filename),
+        make_inspect(String::from("test/moniker2"), 2, 10, fake_filename),
+        make_inspect(String::from("test/moniker3"), 3, 30, fake_filename),
+        make_inspect(String::from("test/moniker1"), 20, 3, fake_filename),
     ]
 }
 

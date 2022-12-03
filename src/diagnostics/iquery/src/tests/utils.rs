@@ -5,11 +5,11 @@
 #![cfg(test)]
 
 use argh::FromArgs;
-use difference::{Changeset, Difference};
 use fuchsia_async as fasync;
 use fuchsia_component_test::{Capability, ChildOptions, RealmBuilder, RealmInstance, Ref, Route};
 use fuchsia_zircon::{self as zx, DurationNum};
 use iquery::{command_line::CommandLine, commands::*, types::Error};
+use pretty_assertions::assert_eq;
 use regex::Regex;
 use serde::ser::Serialize;
 use serde_json::ser::{PrettyFormatter, Serializer};
@@ -292,25 +292,7 @@ impl<'a> CommandAssertion<'a> {
     /// Validates that a command result matches the expected json string
     fn assert_result(&self, result: &str, expected: &str) {
         let clean_result = self.cleanup_variable_strings(result);
-        let Changeset { diffs, distance, .. } =
-            Changeset::new(&clean_result, expected.trim(), "\n");
-        if distance == 0 {
-            return;
-        }
-        for diff in &diffs {
-            match diff {
-                Difference::Same(ref x) => {
-                    eprintln!(" {}", x);
-                }
-                Difference::Add(ref x) => {
-                    eprintln!("+{}", x);
-                }
-                Difference::Rem(ref x) => {
-                    eprintln!("-{}", x);
-                }
-            }
-        }
-        assert_eq!(distance, 0);
+        assert_eq!(&clean_result, expected.trim());
     }
 
     /// Checks that the result string (cleaned) and the expected string are equal

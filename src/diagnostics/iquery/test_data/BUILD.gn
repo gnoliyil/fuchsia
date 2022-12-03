@@ -24,6 +24,7 @@ test_names = [
   "show_test",
   "show_test_with_file_deprecated_inspect",
   "show_test_with_file_root_inspect",
+  "show_test_with_file_glob",
 ]
 
 formats = [

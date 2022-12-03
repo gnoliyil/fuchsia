@@ -12,6 +12,7 @@ use {
     async_trait::async_trait,
     derivative::Derivative,
     diagnostics_data::{Inspect, InspectData},
+    glob,
     itertools::Itertools,
     serde::Serialize,
     std::{cmp::Ordering, ops::Deref},
@@ -37,7 +38,9 @@ impl PartialOrd for ShowCommandResultItem {
 
 impl Ord for ShowCommandResultItem {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.moniker.cmp(&other.moniker)
+        self.moniker
+            .cmp(&other.moniker)
+            .then_with(|| self.metadata.filename.cmp(&other.metadata.filename))
     }
 }
 
@@ -66,10 +69,11 @@ pub struct ShowCommand {
     pub selectors: Vec<String>,
 
     #[argh(option)]
-    /// the filename we are interested in. If this is provided, the output will only
+    /// the filenames we are interested in. If any are provided, the output will only
     /// contain data from components which expose Inspect under the given file under
     /// their out/diagnostics directory.
-    pub file: Option<String>,
+    /// Supports shell globs expansions.
+    pub file: Vec<String>,
 
     #[argh(option)]
     /// A selector specifying what `fuchsia.diagnostics.ArchiveAccessor` to connect to.
@@ -122,12 +126,19 @@ impl Command for ShowCommand {
         let inspect_data_iter =
             provider.snapshot::<Inspect>(&accessor, &selectors).await?.into_iter();
         // Filter out by filename on the Inspect metadata.
-        let filter_fn: Box<dyn Fn(&InspectData) -> bool> = match &self.file {
-            Some(file) => {
-                let file_clone = file.to_owned();
-                Box::new(move |d: &InspectData| &d.metadata.filename == &file_clone)
+        let filter_fn: Box<dyn Fn(&InspectData) -> bool> = if !&self.file.is_empty() {
+            let mut glob_patterns = vec![];
+            for file in self.file.iter() {
+                glob_patterns.push(
+                    glob::Pattern::new(&file)
+                        .map_err(|_e| Error::InvalidFilePattern(file.to_owned()))?,
+                )
             }
-            _ => Box::new(|_d: &InspectData| true),
+            Box::new(move |d: &InspectData| {
+                glob_patterns.iter().any(|glob| glob.matches(&d.metadata.filename))
+            })
+        } else {
+            Box::new(|_d: &InspectData| true)
         };
 
         let mut results = inspect_data_iter

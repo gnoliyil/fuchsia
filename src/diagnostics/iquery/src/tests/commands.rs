@@ -368,6 +368,32 @@ async fn show_test_with_invalid_file() {
 }
 
 #[fuchsia::test]
+async fn show_test_with_file_glob() {
+    let test = TestBuilder::new()
+        .await
+        .add_basic_component("basic")
+        .await
+        .add_test_component("test")
+        .await
+        .start()
+        .await;
+    let prefix = format!("realm_builder\\:{}", test.instance_child_name());
+    test.assert(AssertionParameters {
+        command: IqueryCommand::Show,
+        golden_basename: "show_test_with_file_glob",
+        iquery_args: vec![
+            "--accessor",
+            "archivist:expose:fuchsia.diagnostics.ArchiveAccessor",
+            "--file",
+            "*",
+            &format!("{}/test", &prefix),
+        ],
+        opts: vec![AssertionOption::Retry],
+    })
+    .await;
+}
+
+#[fuchsia::test]
 async fn empty_result_on_null_payload() {
     let test = TestBuilder::new().await.add_basic_component("basic").await.start().await;
     let prefix = format!("realm_builder\\:{}", test.instance_child_name());

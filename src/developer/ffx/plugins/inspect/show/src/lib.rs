@@ -30,7 +30,7 @@ mod test {
         super::*,
         errors::ResultExt as _,
         ffx_inspect_test_utils::{
-            inspect_bridge_data, make_inspect_with_length, make_inspects,
+            inspect_bridge_data, make_inspect, make_inspect_with_length, make_inspects,
             make_inspects_for_lifecycle, setup_fake_diagnostics_bridge, setup_fake_rcs,
         },
         ffx_writer::Format,
@@ -40,7 +40,7 @@ mod test {
     #[fuchsia::test]
     async fn test_show_no_parameters() {
         let writer = Writer::new_test(Some(Format::Json));
-        let cmd = ShowCommand { manifest: None, selectors: vec![], file: None, accessor: None };
+        let cmd = ShowCommand { manifest: None, selectors: vec![], file: vec![], accessor: None };
         let mut inspects = make_inspects();
         let inspect_data =
             inspect_bridge_data(ClientSelectorConfiguration::SelectAll(true), inspects.clone());
@@ -65,7 +65,7 @@ mod test {
         let cmd = ShowCommand {
             manifest: None,
             selectors: vec![],
-            file: Some(String::from("fuchsia.inspect.Tree")),
+            file: vec![String::from("fuchsia.inspect.Tree")],
             accessor: None,
         };
         let mut inspects = make_inspects();
@@ -91,12 +91,43 @@ mod test {
     }
 
     #[fuchsia::test]
+    async fn test_show_with_valid_file_glob() {
+        let writer = Writer::new_test(Some(Format::Json));
+        let cmd = ShowCommand {
+            manifest: None,
+            selectors: vec![],
+            file: vec![String::from("foo*")],
+            accessor: None,
+        };
+        let mut inspects = vec![
+            make_inspect("test/moniker1".to_owned(), 1, 20, "foo"),
+            make_inspect("test/moniker2".to_owned(), 2, 10, "foos"),
+            make_inspect("test/moniker3".to_owned(), 3, 10, "bar"),
+        ];
+        let inspect_data =
+            inspect_bridge_data(ClientSelectorConfiguration::SelectAll(true), inspects.clone());
+        run_command(
+            setup_fake_rcs(),
+            setup_fake_diagnostics_bridge(vec![inspect_data]),
+            iq::ShowCommand::from(cmd),
+            writer.clone(),
+        )
+        .await
+        .unwrap();
+
+        inspects.sort_by(|a, b| a.moniker.cmp(&b.moniker));
+        let expected = serde_json::to_string(&inspects[..2]).unwrap();
+        let output = writer.test_output().expect("unable to get test output.");
+        assert_eq!(output, expected);
+    }
+
+    #[fuchsia::test]
     async fn test_show_with_invalid_file_name() {
         let writer = Writer::new_test(Some(Format::Json));
         let cmd = ShowCommand {
             manifest: None,
             selectors: vec![],
-            file: Some(String::from("some_thing")),
+            file: vec![String::from("some_thing")],
             accessor: None,
         };
         let mut inspects = make_inspects();
@@ -127,7 +158,7 @@ mod test {
         let cmd = ShowCommand {
             manifest: Some(String::from("some-bad-moniker")),
             selectors: vec![],
-            file: None,
+            file: vec![],
             accessor: None,
         };
         let lifecycle_data = inspect_bridge_data(
@@ -155,7 +186,7 @@ mod test {
         let cmd = ShowCommand {
             manifest: Some(String::from("moniker1")),
             selectors: vec![],
-            file: None,
+            file: vec![],
             accessor: None,
         };
         let lifecycle_data = inspect_bridge_data(
@@ -194,7 +225,7 @@ mod test {
         let cmd = ShowCommand {
             manifest: None,
             selectors: vec![String::from("test/moniker1:name:hello_not_real")],
-            file: None,
+            file: vec![],
             accessor: None,
         };
         let lifecycle_data = inspect_bridge_data(
@@ -227,7 +258,7 @@ mod test {
         let cmd = ShowCommand {
             manifest: None,
             selectors: vec![String::from("test/moniker1:name:hello_6")],
-            file: None,
+            file: vec![],
             accessor: None,
         };
         let lifecycle_data = inspect_bridge_data(

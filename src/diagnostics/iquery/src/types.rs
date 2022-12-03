@@ -64,6 +64,9 @@ pub enum Error {
     #[error("Invalid component: {0}")]
     InvalidComponent(String),
 
+    #[error("Invalid file pattern: {0}")]
+    InvalidFilePattern(String),
+
     #[error("Timeout")]
     Timeout,
 }
