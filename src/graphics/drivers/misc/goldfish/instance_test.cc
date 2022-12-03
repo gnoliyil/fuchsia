@@ -10,6 +10,8 @@
 #include <fidl/fuchsia.hardware.goldfish/cpp/wire.h>
 #include <fidl/fuchsia.hardware.sysmem/cpp/wire_test_base.h>
 #include <fidl/fuchsia.sysmem/cpp/wire.h>
+#include <lib/async-loop/cpp/loop.h>
+#include <lib/async-loop/default.h>
 #include <lib/fake-bti/bti.h>
 #include <lib/fidl-async/cpp/bind.h>
 #include <lib/fidl/cpp/wire/connect_service.h>
@@ -27,7 +29,8 @@ namespace goldfish {
 
 class FakeInstance : public Instance {
  public:
-  FakeInstance(zx_device_t* parent, PipeDevice* pipe_device) : Instance(parent, pipe_device) {}
+  FakeInstance(zx_device_t* parent, PipeDevice* pipe_device, async_dispatcher_t* dispatcher)
+      : Instance(parent, pipe_device, dispatcher) {}
 
   zx_status_t Connect(async_dispatcher_t* dispatcher,
                       fidl::ServerEnd<fuchsia_hardware_goldfish::PipeDevice> server) {
@@ -39,8 +42,8 @@ class FakePipeDevice
     : public PipeDevice,
       public fidl::testing::WireTestBase<fuchsia_hardware_goldfish_pipe::GoldfishPipe> {
  public:
-  FakePipeDevice(zx_device_t* parent, acpi::Client client)
-      : PipeDevice(parent, std::move(client)) {}
+  FakePipeDevice(zx_device_t* parent, acpi::Client client, async_dispatcher_t* dispatcher)
+      : PipeDevice(parent, std::move(client), dispatcher) {}
 
   zx_status_t Create(int32_t* out_id, zx::vmo* out_vmo) {
     zx_status_t status = zx::vmo::create(16 * 1024, 0u, out_vmo);
@@ -102,12 +105,13 @@ class InstanceDeviceTest : public zxtest::Test {
         },
         "sysmem-fidl");
 
-    pipe_device_ =
-        std::make_unique<FakePipeDevice>(fake_root_.get(), std::move(acpi_result.value()));
+    pipe_device_ = std::make_unique<FakePipeDevice>(
+        fake_root_.get(), std::move(acpi_result.value()), loop_.dispatcher());
 
     loop_.StartThread("goldfish-pipe-thread");
 
-    auto dut = std::make_unique<FakeInstance>(fake_root_.get(), pipe_device_.get());
+    auto dut =
+        std::make_unique<FakeInstance>(fake_root_.get(), pipe_device_.get(), loop_.dispatcher());
     ASSERT_OK(dut->Bind());
     // dut is now managed by the Driver Framework so we release the unique
     // pointer. Note that pipe_device_ is not managed by the framework so we

@@ -74,12 +74,13 @@ uint32_t lower_32_bits(uint64_t n) { return static_cast<uint32_t>(n); }
 }  // namespace
 
 // static
-zx_status_t PipeDevice::Create(void* ctx, zx_device_t* device) {
-  auto acpi = acpi::Client::Create(device);
+zx_status_t PipeDevice::Create(void* ctx, zx_device_t* parent) {
+  auto acpi = acpi::Client::Create(parent);
   if (acpi.is_error()) {
     return acpi.status_value();
   }
-  auto pipe_device = std::make_unique<goldfish::PipeDevice>(device, std::move(acpi.value()));
+  auto pipe_device = std::make_unique<goldfish::PipeDevice>(
+      parent, std::move(acpi.value()), fdf::Dispatcher::GetCurrent()->async_dispatcher());
   zx_status_t status = pipe_device->ConnectToSysmem();
   if (status != ZX_OK) {
     zxlogf(ERROR, "Failed to connect to sysmem fidl: %s", zx_status_get_string(status));
@@ -120,8 +121,8 @@ zx_status_t PipeDevice::Create(void* ctx, zx_device_t* device) {
   return ZX_OK;
 }
 
-PipeDevice::PipeDevice(zx_device_t* parent, acpi::Client client)
-    : DeviceType(parent), acpi_fidl_(std::move(client)) {}
+PipeDevice::PipeDevice(zx_device_t* parent, acpi::Client client, async_dispatcher_t* dispatcher)
+    : DeviceType(parent), acpi_fidl_(std::move(client)), dispatcher_(dispatcher) {}
 
 PipeDevice::~PipeDevice() {
   if (irq_.is_valid()) {
@@ -206,8 +207,7 @@ zx_status_t PipeDevice::Bind() {
 
 zx_status_t PipeDevice::CreateChildDevice(cpp20::span<const zx_device_prop_t> props,
                                           const char* dev_name) {
-  auto* dispatcher = fdf_dispatcher_get_async_dispatcher(fdf_dispatcher_get_current_dispatcher());
-  auto child_device = std::make_unique<PipeChildDevice>(this, dispatcher);
+  auto child_device = std::make_unique<PipeChildDevice>(this, dispatcher_);
   zx_status_t status = child_device->Bind(props, dev_name);
   if (status == ZX_OK) {
     // devmgr now owns device.
@@ -410,25 +410,19 @@ void PipeDevice::Pipe::SignalEvent(uint32_t flags) const {
 }
 
 PipeChildDevice::PipeChildDevice(PipeDevice* parent, async_dispatcher_t* dispatcher)
-    : PipeChildDeviceType(parent->zxdev()), parent_(parent), dispatcher_(dispatcher) {
+    : PipeChildDeviceType(parent->zxdev()),
+      parent_(parent),
+      dispatcher_(dispatcher),
+      outgoing_(dispatcher) {
   ZX_DEBUG_ASSERT(parent_);
 }
 
 zx_status_t PipeChildDevice::Bind(cpp20::span<const zx_device_prop_t> props, const char* dev_name) {
-  zx_status_t status = loop_.StartThread("goldfish-pipe-child-device-thread");
-  if (status != ZX_OK) {
-    zxlogf(ERROR, "%s: failed to start thread: %s", kTag, zx_status_get_string(status));
-    return status;
-  }
-
-  outgoing_.emplace(loop_.dispatcher());
-  outgoing_->svc_dir()->AddEntry(
+  outgoing_.svc_dir()->AddEntry(
       fidl::DiscoverableProtocolName<fuchsia_hardware_goldfish_pipe::GoldfishPipe>,
       fbl::MakeRefCounted<fs::Service>(
-          [device = this](
-              fidl::ServerEnd<fuchsia_hardware_goldfish_pipe::GoldfishPipe> request) mutable {
-            auto status =
-                fidl::BindSingleInFlightOnly(device->dispatcher_, std::move(request), device);
+          [this](fidl::ServerEnd<fuchsia_hardware_goldfish_pipe::GoldfishPipe> request) mutable {
+            auto status = fidl::BindSingleInFlightOnly(dispatcher_, std::move(request), this);
             if (status != ZX_OK) {
               zxlogf(ERROR, "%s: failed to bind channel: %s", kTag, zx_status_get_string(status));
             }
@@ -440,7 +434,7 @@ zx_status_t PipeChildDevice::Bind(cpp20::span<const zx_device_prop_t> props, con
     return endpoints.status_value();
   }
 
-  status = outgoing_->Serve(std::move(endpoints->server));
+  zx_status_t status = outgoing_.Serve(std::move(endpoints->server));
   if (status != ZX_OK) {
     zxlogf(ERROR, "%s: failed to service the outgoing directory: %s", kTag,
            zx_status_get_string(status));
@@ -465,7 +459,7 @@ zx_status_t PipeChildDevice::Bind(cpp20::span<const zx_device_prop_t> props, con
 }
 
 zx_status_t PipeChildDevice::DdkOpen(zx_device_t** dev_out, uint32_t flags) {
-  auto instance = std::make_unique<Instance>(zxdev(), parent_);
+  auto instance = std::make_unique<Instance>(zxdev(), parent_, dispatcher_);
 
   zx_status_t status = instance->Bind();
   if (status != ZX_OK) {

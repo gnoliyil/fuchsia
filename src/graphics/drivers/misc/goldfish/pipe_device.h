@@ -7,8 +7,6 @@
 
 #include <fidl/fuchsia.hardware.goldfish.pipe/cpp/wire.h>
 #include <fidl/fuchsia.hardware.sysmem/cpp/wire.h>
-#include <lib/async-loop/cpp/loop.h>
-#include <lib/async-loop/loop.h>
 #include <lib/ddk/device.h>
 #include <lib/ddk/io-buffer.h>
 #include <lib/mmio/mmio.h>
@@ -42,7 +40,7 @@ class PipeDevice : public DeviceType {
  public:
   static zx_status_t Create(void* ctx, zx_device_t* parent);
 
-  explicit PipeDevice(zx_device_t* parent, acpi::Client client);
+  explicit PipeDevice(zx_device_t* parent, acpi::Client client, async_dispatcher_t* dispatcher);
   ~PipeDevice();
 
   zx_status_t Bind();
@@ -91,6 +89,7 @@ class PipeDevice : public DeviceType {
   // TODO(fxbug.dev/3213): This should be std::unordered_map.
   using PipeMap = std::map<int32_t, std::unique_ptr<Pipe>>;
   PipeMap pipes_ TA_GUARDED(pipes_lock_);
+  async_dispatcher_t* const dispatcher_;
 
   DISALLOW_COPY_ASSIGN_AND_MOVE(PipeDevice);
 };
@@ -104,7 +103,7 @@ using PipeChildDeviceType = ddk::Device<PipeChildDevice, ddk::Unbindable, ddk::O
 class PipeChildDevice : public PipeChildDeviceType,
                         public fidl::WireServer<fuchsia_hardware_goldfish_pipe::GoldfishPipe> {
  public:
-  explicit PipeChildDevice(PipeDevice* parent, async_dispatcher_t* dispatcher);
+  PipeChildDevice(PipeDevice* parent, async_dispatcher_t* dispatcher);
   ~PipeChildDevice() override = default;
 
   zx_status_t Bind(cpp20::span<const zx_device_prop_t> props, const char* dev_name);
@@ -125,10 +124,9 @@ class PipeChildDevice : public PipeChildDeviceType,
                           RegisterSysmemHeapCompleter::Sync& completer) override;
 
  private:
-  PipeDevice* parent_ = nullptr;
-  std::optional<svc::Outgoing> outgoing_;
-  async_dispatcher_t* dispatcher_;
-  async::Loop loop_{&kAsyncLoopConfigNeverAttachToThread};
+  PipeDevice* const parent_;
+  async_dispatcher_t* const dispatcher_;
+  svc::Outgoing outgoing_;
 };
 
 }  // namespace goldfish

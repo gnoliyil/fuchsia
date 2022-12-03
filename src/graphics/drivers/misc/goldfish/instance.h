@@ -7,8 +7,6 @@
 
 #include <fidl/fuchsia.hardware.goldfish.pipe/cpp/wire.h>
 #include <fidl/fuchsia.hardware.goldfish/cpp/wire.h>
-#include <lib/async-loop/cpp/loop.h>
-#include <lib/async-loop/default.h>
 #include <lib/ddk/device.h>
 #include <threads.h>
 #include <zircon/types.h>
@@ -32,7 +30,7 @@ using InstanceType =
 // to the virtual device.
 class Instance : public InstanceType {
  public:
-  explicit Instance(zx_device_t* parent, PipeDevice* pipe_device);
+  Instance(zx_device_t* parent, PipeDevice* pipe_device, async_dispatcher_t* dispatcher);
   ~Instance() override;
 
   zx_status_t Bind();
@@ -44,13 +42,10 @@ class Instance : public InstanceType {
   void DdkRelease();
 
  private:
-  int ClientThread();
-
-  thrd_t client_thread_{};
-  async::Loop client_loop_;
   using PipeMap = std::map<Pipe*, std::unique_ptr<Pipe>>;
-  PipeDevice* pipe_device_ = nullptr;
+  PipeDevice* const pipe_device_;
   PipeMap pipes_;
+  async_dispatcher_t* const dispatcher_;
 
   DISALLOW_COPY_ASSIGN_AND_MOVE(Instance);
 };
