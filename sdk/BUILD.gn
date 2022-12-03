@@ -559,6 +559,8 @@ sdk("fuchsia_dart") {
 
 # Tools Fuchsia driver developers used on the host platform; where host is often
 # Linux or Mac OS.
+# WARNING (fxbug.dev/116642): the driver SDK will soon be removed.
+# DO NOT ADD anything here!
 sdk_molecule("driver_host_tools") {
   visibility = [ ":*" ]
 
@@ -587,6 +589,8 @@ sdk_molecule("driver_host_tools") {
   }
 }
 
+# WARNING (fxbug.dev/116642): the driver SDK will soon be removed.
+# DO NOT ADD anything here!
 sdk_molecule("bind") {
   visibility = [ ":*" ]
   deps = [
@@ -599,6 +603,8 @@ sdk_molecule("bind") {
   ]
 }
 
+# WARNING (fxbug.dev/116642): the driver SDK will soon be removed.
+# DO NOT ADD anything here!
 sdk_molecule("driver_fidl") {
   visibility = [ ":*" ]
   deps = [
@@ -617,6 +623,8 @@ sdk_molecule("driver_fidl") {
 }
 
 # An experimental SDK for developing drivers.
+# WARNING (fxbug.dev/116642): the driver SDK will soon be removed.
+# DO NOT ADD anything here!
 sdk("driver") {
   id = sdk_id
 
