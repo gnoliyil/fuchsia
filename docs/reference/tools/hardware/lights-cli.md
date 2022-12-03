@@ -15,6 +15,7 @@ lights-cli <device_path> print <id>
 lights-cli <device_path> set <id> <brightness>
 lights-cli <device_path> set <id> <red> <green> <blue>
 lights-cli <device_path> summary
+lights-cli list
 ```
 
 ## Commands {#commands}
@@ -60,6 +61,14 @@ command's description. `Rgb` is the RGB value of the light. `Simple` indicates
 whether the light supports pulse-width modulation or only simple on and off
 states.
 
+### list {#list}
+
+```none
+lights-cli list
+```
+
+List the device paths of all lights.
+
 ## Examples
 
 ### View the brightness of a light
@@ -96,6 +105,13 @@ $ lights-cli /dev/class/light/000 summary
 Total 1 lights
 Value of AMBER_LED: Brightness 0.500000
     Capabilities: Brightness
+```
+
+### List the device paths of all lights
+
+```none {:.devsite-disable-click-to-copy}
+$ lights-cli list
+/dev/class/light/000
 ```
 
 ## Notes

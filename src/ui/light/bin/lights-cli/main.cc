@@ -10,9 +10,13 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include <filesystem>
+
 #include <fbl/unique_fd.h>
 
 #include "lights-cli.h"
+
+#define LIGHT_DEV_CLASS_PATH "/dev/class/light/"
 
 // LINT.IfChange
 constexpr char kUsageMessage[] = R"""(Usage:
@@ -40,6 +44,7 @@ Commands:
                     command's description. `Rgb` is the RGB value of the light.
                     `Simple` indicates whether the light supports pulse-width
                     modulation or only simple on and off states.
+  list              Lists the device paths of all lights.
 
 Examples:
   View the brightness of a light:
@@ -64,6 +69,10 @@ Examples:
   Value of AMBER_LED: Brightness 0.500000
       Capabilities: Brightness
 
+  List the device paths of all lights:
+  $ lights-cli list
+  /dev/class/light/000
+
 Notes:
   Source code for `lights-cli`: https://cs.opensource.google/fuchsia/fuchsia/+/main:src/ui/light/bin/lights-cli/
 )""";
@@ -84,10 +93,17 @@ zx_status_t GetDeviceHandle(const char* path, zx::channel* handle) {
 }
 
 int main(int argc, char** argv) {
-  if (argc <= 2) {
-    printf("%s expects at least 3 arguments\n", argv[0]);
+  if (argc < 2) {
+    printf("%s expects at least 2 arguments\n", argv[0]);
     printf(kUsageMessage);
     return 1;
+  }
+
+  if (strcmp(argv[1], "list") == 0 && argc == 2) {
+    for (auto const& dir_entry : std::filesystem::directory_iterator(LIGHT_DEV_CLASS_PATH)) {
+      printf("%s\n", dir_entry.path().c_str());
+    }
+    return 0;
   }
 
   zx::channel channel;
