@@ -8,6 +8,7 @@ import("//zircon/kernel/phys/efi/efi_executable.gni")
 
 source_set("lib") {
   sources = [
+    "acpi.h",
     "boot_zbi_items.cc",
     "boot_zbi_items.h",
     "device_path.cc",

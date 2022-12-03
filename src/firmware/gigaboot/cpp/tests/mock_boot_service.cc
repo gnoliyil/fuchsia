@@ -267,4 +267,6 @@ void SetGptEntryName(const char* name, gpt_entry_t& entry) {
                 reinterpret_cast<uint16_t*>(entry.name), &dst_len);
 }
 
+const EfiConfigTable kDefaultEfiConfigTable(2);
+
 }  // namespace gigaboot

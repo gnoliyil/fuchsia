@@ -10,6 +10,9 @@
 #include <lib/fit/defer.h>
 #include <zircon/hw/gpt.h>
 
+#include <array>
+#include <numeric>
+
 #include <efi/protocol/block-io.h>
 #include <efi/protocol/device-path.h>
 #include <efi/protocol/disk-io.h>
@@ -18,6 +21,7 @@
 #include <gtest/gtest.h>
 #include <phys/efi/protocol.h>
 
+#include "acpi.h"
 #include "utils.h"
 
 namespace gigaboot {
@@ -134,13 +138,65 @@ class MockStubService : public efi::StubBootServices {
   std::vector<efi_memory_descriptor> memory_map_;
 };
 
+class EfiConfigTable {
+ public:
+  explicit EfiConfigTable(uint8_t revision) {
+    rsdp_ = {
+        .checksum = 0,
+        .revision = revision,
+        .length = sizeof(rsdp_),
+        .extended_checksum = 0,
+    };
+
+    // The signature, in bytes, spells "RSD PTR "
+    memcpy(&rsdp_.signature, kAcpiRsdpSignature, sizeof(rsdp_.signature));
+
+    // The checksum sums all the bytes in the rsdp struct.
+    // It is valid if the sum is zero.
+    cpp20::span<const uint8_t> bytes(reinterpret_cast<const uint8_t*>(&rsdp_), kAcpiRsdpV1Size);
+    rsdp_.checksum = std::accumulate(bytes.begin(), bytes.end(), uint8_t{0}, std::minus());
+    bytes = {bytes.begin(), rsdp_.length};
+    rsdp_.extended_checksum = std::accumulate(bytes.begin(), bytes.end(), uint8_t{0}, std::minus());
+
+    efi_guid guid = ACPI_TABLE_GUID;
+    if (revision >= 2) {
+      guid = ACPI_20_TABLE_GUID;
+    }
+    table_.back() = efi_configuration_table{
+        .VendorGuid = guid,
+        .VendorTable = &rsdp_,
+    };
+  }
+
+  void CorruptChecksum() { rsdp_.checksum++; }
+  void CorruptV2Checksum() { rsdp_.extended_checksum++; }
+  void CorruptSignature() { rsdp_.signature++; }
+
+  efi_configuration_table const* Table() const { return table_.data(); }
+  size_t TableSize() const { return table_.size(); }
+  acpi_rsdp_t& rsdp() { return rsdp_; }
+
+ private:
+  acpi_rsdp_t rsdp_;
+
+  // Add multiple bogus entries so the lookup logic actually has to search.
+  std::array<efi_configuration_table, 4> table_;
+};
+
+extern const EfiConfigTable kDefaultEfiConfigTable;
+
 // The following overrides Efi global variables for test.
-inline auto SetupEfiGlobalState(MockStubService& stub, Device& image) {
+inline auto SetupEfiGlobalState(MockStubService& stub, Device& image,
+                                const EfiConfigTable& config = kDefaultEfiConfigTable) {
   EXPECT_FALSE(gEfiLoadedImage);
   EXPECT_FALSE(gEfiSystemTable);
   static efi_loaded_image_protocol loaded_image;
   static efi_system_table systab;
-  systab = {.BootServices = stub.services()};
+  systab = {
+      .BootServices = stub.services(),
+      .NumberOfTableEntries = config.TableSize(),
+      .ConfigurationTable = config.Table(),
+  };
   loaded_image.DeviceHandle = &image;
   gEfiLoadedImage = &loaded_image;
   gEfiSystemTable = &systab;
