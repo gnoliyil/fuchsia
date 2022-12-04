@@ -1032,7 +1032,7 @@ Controls whether to use the ML inliner in Clang to reduce size.
 
 **Current value (from the default):** `true`
 
-From //build/config/BUILD.gn:33
+From //build/config/clang/clang.gni:28
 
 ### clang_prefix
 The default clang toolchain provided by the prebuilt. This variable is
@@ -1150,9 +1150,9 @@ From [//third_party/crashpad/build/crashpad_buildconfig.gni:22](https://fuchsia.
 
 ### crashpad_http_transport_impl
 
-**Current value (from the default):** `"libcurl"`
+**Current value (from the default):** `"socket"`
 
-From [//third_party/crashpad/util/net/tls.gni:21](https://fuchsia.googlesource.com/third_party/crashpad/+/5d8e9274ea8927a7624cf3ed89177aa9bd9153e7/util/net/tls.gni#21)
+From [//third_party/crashpad/util/net/tls.gni:19](https://fuchsia.googlesource.com/third_party/crashpad/+/5d8e9274ea8927a7624cf3ed89177aa9bd9153e7/util/net/tls.gni#19)
 
 ### crashpad_use_boringssl_for_http_transport_socket
 
@@ -1449,7 +1449,7 @@ Controls whether to promote warnings to errors.
 
 **Current value (from the default):** `true`
 
-From //build/config/BUILD.gn:36
+From //build/config/BUILD.gn:33
 
 ### dev_bootfs_labels
 List of labels for objects to include in the ZBI.
