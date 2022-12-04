@@ -483,12 +483,6 @@ fidl/fuchsia.hardware.audio/overview.fidl
 fidl/fuchsia.hardware.audio/ring_buffer.fidl
 fidl/fuchsia.hardware.audio/stream.fidl
 fidl/fuchsia.hardware.audio/stream_config_connector.fidl
-fidl/fuchsia.hardware.goldfish/goldfish_address_space.fidl
-fidl/fuchsia.hardware.goldfish/goldfish_control.fidl
-fidl/fuchsia.hardware.goldfish/goldfish_pipe.fidl
-fidl/fuchsia.hardware.goldfish/goldfish_sync.fidl
-fidl/fuchsia.hardware.goldfish/meta.json
-fidl/fuchsia.hardware.goldfish/overview.fidl
 fidl/fuchsia.hardware.light/light.fidl
 fidl/fuchsia.hardware.light/meta.json
 fidl/fuchsia.hardware.network/device.fidl

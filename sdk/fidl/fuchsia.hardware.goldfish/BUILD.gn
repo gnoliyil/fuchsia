@@ -5,8 +5,6 @@
 import("//build/fidl/fidl.gni")
 
 fidl("fuchsia.hardware.goldfish") {
-  sdk_category = "partner"
-  api = "fuchsia.hardware.goldfish.api"
   sources = [
     "goldfish_address_space.fidl",
     "goldfish_control.fidl",

@@ -49,7 +49,6 @@ sdk_fidl_targets = [
   "//sdk/fidl/fuchsia.gpu.agis:fuchsia.gpu.agis",
   "//sdk/fidl/fuchsia.gpu.magma:fuchsia.gpu.magma",
   "//sdk/fidl/fuchsia.hardware.adc:fuchsia.hardware.adc",
-  "//sdk/fidl/fuchsia.hardware.goldfish:fuchsia.hardware.goldfish",
   "//sdk/fidl/fuchsia.hardware.light:fuchsia.hardware.light",
   "//sdk/fidl/fuchsia.hardware.power.statecontrol:fuchsia.hardware.power.statecontrol",
   "//sdk/fidl/fuchsia.hardware.radar:fuchsia.hardware.radar",
