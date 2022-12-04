@@ -34,7 +34,13 @@ fuchsia_wrap_rust_binary(
 fuchsia_component_manifest(
     name = "manifest",
     src = "meta/hello_rust.cml",
-    includes = ["@fuchsia_sdk//pkg/syslog:client"],
+    includes = [
+        "@fuchsia_sdk//pkg/syslog:client",
+        # TODO(fxbug.dev/116670): make the below implicit
+        # as transitive includes of the above.
+        "@fuchsia_sdk//pkg/syslog:offer",
+        "@fuchsia_sdk//pkg/syslog:use",
+    ],
 )
 
 fuchsia_component(
@@ -72,6 +78,10 @@ fuchsia_component_manifest(
     includes = [
         "@fuchsia_sdk//pkg/sys/testing:elf_test_runner",
         "@fuchsia_sdk//pkg/syslog:client",
+        # TODO(fxbug.dev/116670): make the below implicit
+        # as transitive includes of the above.
+        "@fuchsia_sdk//pkg/syslog:offer",
+        "@fuchsia_sdk//pkg/syslog:use",
     ],
 )
 
