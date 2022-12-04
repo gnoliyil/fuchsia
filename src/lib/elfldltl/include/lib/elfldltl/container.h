@@ -19,12 +19,11 @@
 // that the methods that can need to allocate (push_back, emplace_back,
 // emplace, and insert) take additional Diagnostics& and std::string_view
 // parameters first.  For an allocation failure, the Diagnostics object's
-// ResourceError or ResourceLimit<N> method will be called with the error
-// string (the std::string_view parameter).  The methods that usually return
-// void (push_back, emplace_back) instead return bool, with false indicating
-// allocation failure.  The methods that usually return an iterator (emplace,
-// insert) instead return std::optional<iterator>, with std::nullopt indicating
-// allocation failure.
+// ResourceLimit<N> method will be called with the error string
+// (the std::string_view parameter).  The methods that usually return void
+// (push_back, emplace_back) instead return bool, with false indicating allocation
+// failure.  The methods that usually return an iterator (emplace, insert) instead
+// return std::optional<iterator>, with std::nullopt indicating allocation failure.
 
 namespace elfldltl {
 

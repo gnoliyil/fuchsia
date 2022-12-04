@@ -167,17 +167,6 @@ TEST(ElfldltlDiagnosticsTests, FormatErrorVariadic) {
   }
 }
 
-TEST(ElfldltlDiagnosticsTests, ResourceError) {
-  {
-    ExpectedSingleError expected("error", ": cannot allocate ", 5);
-    expected.diag().ResourceError("error", 5);
-  }
-  {
-    ExpectedSingleError expected("error");
-    expected.diag().ResourceError("error");
-  }
-}
-
 TEST(ElfldltlDiagnosticsTests, ResourceLimit) {
   {
     ExpectedSingleError expected("error", ": maximum 501 < requested ", 723);

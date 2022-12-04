@@ -218,12 +218,6 @@ class Diagnostics {
 
   constexpr bool extra_checking() const { return flags_.extra_checking; }
 
-  constexpr bool ResourceError(std::string_view error, size_t requested) {
-    return FormatError(error, internal::ConstString(": cannot allocate "), requested);
-  }
-
-  constexpr bool ResourceError(std::string_view error) { return FormatError(error); }
-
   template <size_t MaxObjects>
   constexpr bool ResourceLimit(std::string_view error, size_t requested) {
     return FormatError(error,
