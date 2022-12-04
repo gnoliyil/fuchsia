@@ -132,10 +132,7 @@ impl<'a> GnBuildGraph<'a> {
                 for kind in &rust_target.kind {
                     let target_type = GnRustType::try_from(kind.as_str())?;
                     match target_type {
-                        GnRustType::Library
-                        | GnRustType::Rlib
-                        | GnRustType::ProcMacro
-                        | GnRustType::Binary => {
+                        GnRustType::Library | GnRustType::Rlib | GnRustType::ProcMacro => {
                             let gn_target = GnTarget::new(
                                 &node.id,
                                 &rust_target.name,
@@ -147,6 +144,44 @@ impl<'a> GnBuildGraph<'a> {
                                 node.features.as_slice(),
                                 build_script.clone(),
                                 dependencies.clone(),
+                            );
+                            self.targets.insert(gn_target);
+                        }
+                        GnRustType::Binary => {
+                            // If a crate contains both a library and binary targets,
+                            // cargo implicitly adds a dependency from each binary to the library.
+                            //
+                            // This logic imitates that behaviour.
+                            let mut deps = dependencies.clone();
+                            let maybe_library = package
+                                .targets
+                                .iter()
+                                .filter(|v| {
+                                    v.kind.iter().any(|kind| {
+                                        matches!(
+                                            GnRustType::try_from(kind.as_str()),
+                                            Ok(GnRustType::Library)
+                                        )
+                                    })
+                                })
+                                .next();
+                            if let Some(lib) = maybe_library {
+                                deps.entry(None).or_default().push((
+                                    &self.metadata[&node.id],
+                                    lib.name.clone().replace("-", "_"),
+                                ));
+                            }
+                            let gn_target = GnTarget::new(
+                                &node.id,
+                                &rust_target.name,
+                                &package.name,
+                                &package.edition,
+                                &rust_target.src_path,
+                                &package.version,
+                                target_type,
+                                node.features.as_slice(),
+                                build_script.clone(),
+                                deps,
                             );
                             self.targets.insert(gn_target);
                         }

@@ -24,6 +24,7 @@ executable("package-with-bin-foo-binary-v0_1_0") {
   }
 
   deps = []
+  deps += [ ":package-with-bin-v0_1_0" ]
 
   rustenv = []
 
