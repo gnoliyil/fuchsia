@@ -15,6 +15,7 @@ load(
     "tool_path",
 )
 load("@prebuilt_clang//:generated_constants.bzl", clang_constants = "constants")
+load("@//:build/bazel/toolchains/clang/sanitizer.bzl", "sanitizer_features")
 
 def _prebuilt_clang_cc_toolchain_config_impl(ctx):
     clang_binprefix = "bin/"
@@ -97,7 +98,29 @@ def _prebuilt_clang_cc_toolchain_config_impl(ctx):
             ),
         ],
     )
-    features = [dependency_file_feature]
+
+    ml_inliner_feature = feature(
+        name = "ml_inliner",
+        flag_sets = [
+            flag_set(
+                actions = [
+                    ACTION_NAMES.c_compile,
+                    ACTION_NAMES.cpp_compile,
+                    ACTION_NAMES.cpp_module_compile,
+                ],
+                flag_groups = [
+                    flag_group(
+                        flags = [
+                            "-mllvm",
+                            "-enable-ml-inliner=release",
+                        ],
+                    ),
+                ],
+            ),
+        ],
+    )
+
+    features = [dependency_file_feature] + sanitizer_features + ml_inliner_feature
 
     return cc_common.create_cc_toolchain_config_info(
         ctx = ctx,

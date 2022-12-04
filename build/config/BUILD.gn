@@ -29,9 +29,6 @@ declare_args() {
   # changed.  Set the version of the C++ standard to compile for, 17 or 20.
   experimental_cxx_version = 17
 
-  # Controls whether to use the ML inliner in Clang to reduce size.
-  clang_ml_inliner = true
-
   # Controls whether to promote warnings to errors.
   deny_warnings = true
 }

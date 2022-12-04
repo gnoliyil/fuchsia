@@ -23,6 +23,9 @@ declare_args() {
   # It is only useful for clang canary builders, and folks with a custom
   # clang.
   clang_enable_error_reproducers = false
+
+  # Controls whether to use the ML inliner in Clang to reduce size.
+  clang_ml_inliner = true
 }
 
 # The value of clang_prefix relative to root_build_dir, useful

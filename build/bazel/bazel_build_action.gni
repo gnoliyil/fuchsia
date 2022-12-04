@@ -4,6 +4,7 @@
 
 import("//build/bazel/bazel_workspace.gni")
 import("//build/bazel/legacy_ninja_build_outputs.gni")
+import("//build/config/clang/clang.gni")
 import("//build/config/compiler.gni")
 
 # Run a Bazel build action, which is run in the special workspace
@@ -174,19 +175,19 @@ template("bazel_build_action") {
 
     # Forward GN sanitizer configuration to Bazel
     if (is_asan) {
-      args += [ "--config=asan" ]
+      args += [ "--features=asan" ]
     }
     if (is_lsan) {
-      args += [ "--config=lsan" ]
+      args += [ "--features=lsan" ]
     }
     if (is_msan) {
-      args += [ "--config=msan" ]
+      args += [ "--features=msan" ]
     }
     if (is_tsan) {
-      args += [ "--config=tsan" ]
+      args += [ "--features=tsan" ]
     }
     if (is_ubsan) {
-      args += [ "--config=ubsan" ]
+      args += [ "--features=ubsan" ]
     }
 
     # Forward GN test coverage configuration to Bazel
@@ -205,6 +206,11 @@ template("bazel_build_action") {
       args += [ "--compilation_mode=opt" ]
     } else {
       assert("Unsupported mode optimize = $optimize")
+    }
+
+    # Forward ML inliner
+    if (clang_ml_inliner && optimize == "size") {
+      args += [ "--features=ml_inliner" ]
     }
 
     deps = _bazel_inputs +
