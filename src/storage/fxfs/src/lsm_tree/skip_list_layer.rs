@@ -7,6 +7,7 @@
 
 use {
     crate::{
+        drop_event::DropEvent,
         log::*,
         lsm_tree::{
             merge::{self, MergeFn},
@@ -19,7 +20,6 @@ use {
     },
     anyhow::{bail, Error},
     async_trait::async_trait,
-    async_utils::event::Event,
     futures::future::poll_fn,
     std::{
         cell::UnsafeCell,
@@ -102,7 +102,7 @@ pub struct SkipListLayer<K, V> {
     // The number of nodes that have been allocated.  This is only used for debugging purposes.
     allocated: AtomicU32,
 
-    close_event: Mutex<Option<Event>>,
+    close_event: Mutex<Option<Arc<DropEvent>>>,
 }
 
 // The writer needs to synchronize with the readers and this is done by keeping track of read
@@ -164,7 +164,7 @@ impl<K, V> SkipListLayer<K, V> {
             inner: std::sync::Mutex::new(Inner::new()),
             writer_lock: futures::lock::Mutex::new(()),
             allocated: AtomicU32::new(0),
-            close_event: Mutex::new(Some(Event::new())),
+            close_event: Mutex::new(Some(Arc::new(DropEvent::new()))),
         })
     }
 
@@ -218,16 +218,14 @@ impl<K: Key, V: Value> Layer<K, V> for SkipListLayer<K, V> {
         Ok(Box::new(SkipListLayerIter::new(self, bound)))
     }
 
-    fn lock(&self) -> Option<Event> {
+    fn lock(&self) -> Option<Arc<DropEvent>> {
         self.close_event.lock().unwrap().clone()
     }
 
     async fn close(&self) {
-        let _ = {
-            let event = self.close_event.lock().unwrap().take().expect("close already called");
-            event.wait_or_dropped()
-        }
-        .await;
+        let listener =
+            self.close_event.lock().unwrap().take().expect("close already called").listen();
+        listener.await;
     }
 
     fn get_version(&self) -> Version {

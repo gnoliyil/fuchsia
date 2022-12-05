@@ -4,6 +4,7 @@
 
 use {
     crate::{
+        drop_event::DropEvent,
         errors::FxfsError,
         log::*,
         lsm_tree::types::{
@@ -15,7 +16,6 @@ use {
     },
     anyhow::{bail, ensure, Context, Error},
     async_trait::async_trait,
-    async_utils::event::Event,
     byteorder::{ByteOrder, LittleEndian, ReadBytesExt, WriteBytesExt},
     serde::{Deserialize, Serialize},
     std::{
@@ -49,7 +49,7 @@ pub struct SimplePersistentLayer {
     object_handle: Arc<dyn ReadObjectHandle>,
     layer_info: LayerInfo,
     size: u64,
-    close_event: Mutex<Option<Event>>,
+    close_event: Mutex<Option<Arc<DropEvent>>>,
 }
 
 struct BufferCursor<'a> {
@@ -181,7 +181,7 @@ impl SimplePersistentLayer {
             object_handle: Arc::new(object_handle),
             layer_info,
             size,
-            close_event: Mutex::new(Some(Event::new())),
+            close_event: Mutex::new(Some(Arc::new(DropEvent::new()))),
         }))
     }
 }
@@ -264,16 +264,14 @@ impl<K: Key, V: Value> Layer<K, V> for SimplePersistentLayer {
         }
     }
 
-    fn lock(&self) -> Option<Event> {
+    fn lock(&self) -> Option<Arc<DropEvent>> {
         self.close_event.lock().unwrap().clone()
     }
 
     async fn close(&self) {
-        let _ = {
-            let event = self.close_event.lock().unwrap().take().expect("close already called");
-            event.wait_or_dropped()
-        }
-        .await;
+        let listener =
+            self.close_event.lock().unwrap().take().expect("close already called").listen();
+        listener.await;
     }
 
     fn get_version(&self) -> Version {

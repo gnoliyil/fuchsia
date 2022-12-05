@@ -54,7 +54,7 @@ use {
         trace_duration,
     },
     anyhow::{anyhow, bail, Context, Error},
-    async_utils::event::Event,
+    event_listener::Event,
     futures::{self, future::poll_fn, FutureExt},
     once_cell::sync::OnceCell,
     rand::Rng,
@@ -156,13 +156,13 @@ pub struct Journal {
     writer_mutex: futures::lock::Mutex<()>,
     sync_mutex: futures::lock::Mutex<()>,
     trace: AtomicBool,
+
+    // This event is used when we are waiting for a compaction to free up journal space.
+    reclaim_event: Event,
 }
 
 struct Inner {
     super_block_header: SuperBlockHeader,
-
-    // This event is used when we are waiting for a compaction to free up journal space.
-    reclaim_event: Option<Event>,
 
     // The offset that we can zero the journal up to now that it is no longer needed.
     zero_offset: Option<u64>,
@@ -218,7 +218,6 @@ impl Inner {
         if let Some(waker) = self.sync_waker.take() {
             waker.wake();
         }
-        self.reclaim_event = None;
     }
 }
 
@@ -244,7 +243,6 @@ impl Journal {
             super_block_manager: SuperBlockManager::new(),
             inner: Mutex::new(Inner {
                 super_block_header: SuperBlockHeader::default(),
-                reclaim_event: None,
                 zero_offset: None,
                 device_flushed_offset: 0,
                 needs_did_flush_device: false,
@@ -262,6 +260,7 @@ impl Journal {
             writer_mutex: futures::lock::Mutex::new(()),
             sync_mutex: futures::lock::Mutex::new(()),
             trace: AtomicBool::new(false),
+            reclaim_event: Event::new(),
         }
     }
 
@@ -1143,8 +1142,8 @@ impl Journal {
     /// Waits for there to be sufficient space in the journal.
     pub async fn check_journal_space(&self) -> Result<(), Error> {
         loop {
-            let _ = debug_assert_not_too_long!({
-                let mut inner = self.inner.lock().unwrap();
+            debug_assert_not_too_long!({
+                let inner = self.inner.lock().unwrap();
                 if inner.terminate {
                     // If the flush error is set, this will never make progress, since we can't
                     // extend the journal any more.
@@ -1159,8 +1158,7 @@ impl Journal {
                 if inner.disable_compactions {
                     break Err(anyhow!(FxfsError::JournalFlushError).context("Journal closed"));
                 }
-                let event = inner.reclaim_event.get_or_insert_with(|| Event::new());
-                event.wait_or_dropped()
+                self.reclaim_event.listen()
             });
         }
     }
@@ -1263,6 +1261,7 @@ impl Journal {
                     if let Err(e) = result {
                         info!(error = e.as_value(), "Flush error");
                         self.inner.lock().unwrap().terminate();
+                        self.reclaim_event.notify(usize::MAX);
                         flush_error = true;
                     }
                     flush_fut = None;
@@ -1278,7 +1277,7 @@ impl Journal {
                     }
                     compact_fut = None;
                     inner.compaction_running = false;
-                    inner.reclaim_event = None;
+                    self.reclaim_event.notify(usize::MAX);
                     pending = false;
                 }
             }
@@ -1319,14 +1318,13 @@ impl Journal {
 
     pub async fn stop_compactions(&self) {
         loop {
-            let _ = debug_assert_not_too_long!({
+            debug_assert_not_too_long!({
                 let mut inner = self.inner.lock().unwrap();
                 inner.disable_compactions = true;
                 if !inner.compaction_running {
                     return;
                 }
-                let event = inner.reclaim_event.get_or_insert_with(|| Event::new());
-                event.wait_or_dropped()
+                self.reclaim_event.listen()
             });
         }
     }
@@ -1334,6 +1332,7 @@ impl Journal {
     /// Terminate all journal activity.
     pub fn terminate(&self) {
         self.inner.lock().unwrap().terminate();
+        self.reclaim_event.notify(usize::MAX);
     }
 }
 

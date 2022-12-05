@@ -4,13 +4,13 @@
 
 use {
     crate::{
+        drop_event::DropEvent,
         lsm_tree::merge,
         object_handle::ReadObjectHandle,
         serialized_types::{Version, Versioned, VersionedLatest},
     },
     anyhow::Error,
     async_trait::async_trait,
-    async_utils::event::Event,
     serde::{Deserialize, Serialize},
     std::{fmt::Debug, sync::Arc},
     type_hash::TypeHash,
@@ -201,7 +201,7 @@ pub trait Layer<K, V>: Send + Sync {
     /// many locks concurrently.  The lock is purely advisory: seek will still work even if lock has
     /// not been called; it merely causes close to wait until all locks are released.  Returns None
     /// if close has been called for the layer.
-    fn lock(&self) -> Option<Event>;
+    fn lock(&self) -> Option<Arc<DropEvent>>;
 
     /// Waits for existing locks readers to finish and then returns.  Subsequent calls to lock will
     /// return None.

@@ -5,13 +5,13 @@
 use {
     crate::{
         async_enter,
+        drop_event::DropEvent,
         errors::FxfsError,
         object_handle::ReadObjectHandle,
         round::{round_down, round_up},
     },
     anyhow::Error,
     async_trait::async_trait,
-    async_utils::event::Event,
     either::Either::{Left, Right},
     futures::{
         future::try_join_all, pin_mut, stream::futures_unordered::FuturesUnordered, try_join,
@@ -374,7 +374,7 @@ impl PartialEq for Page {
 // same time.
 struct ReadContext {
     range: Range<u64>,
-    wait_event: Option<Event>,
+    wait_event: DropEvent,
 }
 
 impl MemDataBuffer {
@@ -417,7 +417,7 @@ impl MemDataBuffer {
             }
         }
 
-        readers.get(read_key).unwrap().wait_event.as_ref().map(|e| e.signal());
+        readers.get(read_key).unwrap().wait_event.notify(usize::MAX);
 
         f(&*inner);
 
@@ -483,12 +483,7 @@ impl MemDataBuffer {
                             // until the read has finished.
                             let read_key = page.read_key;
                             let read_context = inner.readers.get_mut(read_key).unwrap();
-                            Right(
-                                read_context
-                                    .wait_event
-                                    .get_or_insert_with(|| Event::new())
-                                    .wait_or_dropped(),
-                            )
+                            Right(read_context.wait_event.listen())
                         } else {
                             // The page is present and not pending a read so we can pass it to the
                             // callback.
@@ -766,8 +761,8 @@ impl ReadKeys {
         readers: &mut Slab<ReadContext>,
         mut new_page_fn: impl FnMut(BoxedPage),
     ) -> usize {
-        let read_key =
-            readers.insert(ReadContext { range: aligned_range.clone(), wait_event: None });
+        let read_key = readers
+            .insert(ReadContext { range: aligned_range.clone(), wait_event: DropEvent::new() });
         self.project().keys.push(read_key);
         for offset in aligned_range.step_by(PAGE_SIZE as usize) {
             new_page_fn(BoxedPage::new(offset, read_key));
@@ -846,12 +841,12 @@ mod tests {
         },
         anyhow::Error,
         async_trait::async_trait,
-        async_utils::event::Event,
+        event_listener::Event,
         fuchsia, fuchsia_async as fasync,
         futures::{future::poll_fn, join, FutureExt},
         std::{
             sync::{
-                atomic::{AtomicU8, Ordering},
+                atomic::{AtomicBool, AtomicU8, Ordering},
                 Arc,
             },
             task::Poll,
@@ -880,14 +875,35 @@ mod tests {
 
     struct FakeSource {
         device: Arc<dyn Device>,
-        go: Event,
+        started: AtomicBool,
+        wake: Event,
         counter: AtomicU8,
     }
 
     impl FakeSource {
         // `device` is only used to provide allocate_buffer; reads don't go to the device.
         fn new(device: Arc<dyn Device>) -> Self {
-            FakeSource { go: Event::new(), device, counter: AtomicU8::new(1) }
+            FakeSource {
+                started: AtomicBool::new(false),
+                wake: Event::new(),
+                device,
+                counter: AtomicU8::new(1),
+            }
+        }
+
+        fn start(&self) {
+            self.started.store(true, Ordering::SeqCst);
+            self.wake.notify(usize::MAX);
+        }
+
+        async fn wait_for_start(&self) {
+            while !self.started.load(Ordering::SeqCst) {
+                let listener = self.wake.listen();
+                if self.started.load(Ordering::SeqCst) {
+                    break;
+                }
+                listener.await;
+            }
         }
     }
 
@@ -896,7 +912,7 @@ mod tests {
         async fn read(&self, offset: u64, mut buf: MutableBufferRef<'_>) -> Result<usize, Error> {
             assert_eq!(offset % PAGE_SIZE, 0);
             assert_eq!(buf.len() % PAGE_SIZE as usize, 0);
-            let _ = self.go.wait_or_dropped().await;
+            self.wait_for_start().await;
             fill_buf(buf.as_mut_slice(), self.counter.fetch_add(1, Ordering::Relaxed));
             Ok(buf.len())
         }
@@ -928,7 +944,7 @@ mod tests {
         let mut buf = [0; PAGE_SIZE as usize];
 
         let source = FakeSource::new(device.clone());
-        source.go.signal();
+        source.start();
 
         data_buf.read(0, &mut buf, &source).await.expect("read failed");
         assert_eq!(&buf, make_buf(1, PAGE_SIZE).as_slice());
@@ -953,7 +969,7 @@ mod tests {
             },
             async {
                 fasync::Timer::new(std::time::Duration::from_millis(100)).await;
-                source.go.signal();
+                source.start();
             }
         );
         assert_eq!(&buf, make_buf(1, PAGE_SIZE).as_slice());
@@ -965,7 +981,7 @@ mod tests {
         let data_buf = MemDataBuffer::new(100 * PAGE_SIZE);
         let device = Arc::new(FakeDevice::new(100, 8192));
         let source = FakeSource::new(device.clone());
-        source.go.signal();
+        source.start();
         let mut buf = [0; 3 * PAGE_SIZE as usize];
         buf.fill(67);
         data_buf
@@ -995,7 +1011,7 @@ mod tests {
         let mut read_fut2 = data_buf.read(0, buf2.as_mut(), &source);
         poll_fn(|ctx| {
             assert!(read_fut.poll_unpin(ctx).is_pending());
-            source.go.signal();
+            source.start();
             assert!(read_fut2.poll_unpin(ctx).is_pending());
             Poll::Ready(())
         })
@@ -1013,7 +1029,7 @@ mod tests {
         let data_buf = MemDataBuffer::new(100 * PAGE_SIZE);
         let device = Arc::new(FakeDevice::new(100, PAGE_SIZE as u32));
         let source = FakeSource::new(device.clone());
-        source.go.signal();
+        source.start();
 
         let mut buf = [0; PAGE_SIZE as usize * 2];
         assert_eq!(
@@ -1048,7 +1064,7 @@ mod tests {
 
         poll_fn(|ctx| {
             assert!(read_fut.poll_unpin(ctx).is_pending());
-            source.go.signal();
+            source.start();
             assert!(read_fut2.poll_unpin(ctx).is_pending());
             Poll::Ready(())
         })
@@ -1115,7 +1131,7 @@ mod tests {
         data_buf.resize(PAGE_SIZE + 10).await;
 
         // Let the reads continue.
-        source.go.signal();
+        source.start();
 
         // All should return the truncated size.
         assert_eq!(read_fut.await.expect("read failed"), 20);
@@ -1134,7 +1150,7 @@ mod tests {
         let data_buf = MemDataBuffer::new(100 * PAGE_SIZE);
         let device = Arc::new(FakeDevice::new(100, 8192));
         let source = FakeSource::new(device.clone());
-        source.go.signal();
+        source.start();
         let mut buf = [0; PAGE_SIZE as usize];
         assert_eq!(
             data_buf.read(PAGE_SIZE, buf.as_mut(), &source).await.expect("read failed"),
@@ -1155,7 +1171,7 @@ mod tests {
         let data_buf = MemDataBuffer::new(100 * PAGE_SIZE);
         let device = Arc::new(FakeDevice::new(100, 8192));
         let source = FakeSource::new(device.clone());
-        source.go.signal();
+        source.start();
         let mut buf = [0; PAGE_SIZE as usize];
         assert_eq!(
             data_buf.read(10 * PAGE_SIZE, buf.as_mut(), &source).await.expect("read failed"),

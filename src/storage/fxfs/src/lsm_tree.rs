@@ -9,14 +9,13 @@ pub mod types;
 
 use {
     crate::{
+        drop_event::DropEvent,
         log::*,
         object_handle::{ReadObjectHandle, WriteBytes, WriteObjectHandle, Writer},
         serialized_types::{Version, LATEST_VERSION},
         trace_duration,
     },
     anyhow::Error,
-    async_utils::event::Event,
-    futures::FutureExt,
     simple_persistent_layer::SimplePersistentLayerWriter,
     std::{
         fmt,
@@ -58,9 +57,9 @@ pub enum Operation {
 pub type MutationCallback<K, V> = Option<Box<dyn Fn(Operation, &Item<K, V>) + Send + Sync>>;
 
 struct Inner<K, V> {
-    // The Event allows us to wait for any impending mutations to complete.  See the seal method
+    // The DropEvent allows us to wait for any impending mutations to complete.  See the seal method
     // below.
-    mutable_layer: (Event, Arc<dyn MutableLayer<K, V>>),
+    mutable_layer: (Arc<DropEvent>, Arc<dyn MutableLayer<K, V>>),
     layers: Vec<Arc<dyn Layer<K, V>>>,
     mutation_callback: MutationCallback<K, V>,
 }
@@ -79,7 +78,7 @@ impl<'tree, K: MergeableKey, V: Value> LSMTree<K, V> {
         LSMTree {
             data: RwLock::new(Inner {
                 mutable_layer: (
-                    Event::new(),
+                    Arc::new(DropEvent::new()),
                     skip_list_layer::SkipListLayer::new(SKIP_LIST_LAYER_ITEMS),
                 ),
                 layers: Vec::new(),
@@ -97,7 +96,7 @@ impl<'tree, K: MergeableKey, V: Value> LSMTree<K, V> {
         Ok(LSMTree {
             data: RwLock::new(Inner {
                 mutable_layer: (
-                    Event::new(),
+                    Arc::new(DropEvent::new()),
                     skip_list_layer::SkipListLayer::new(SKIP_LIST_LAYER_ITEMS),
                 ),
                 layers: layers_from_handles(handles).await?,
@@ -134,23 +133,26 @@ impl<'tree, K: MergeableKey, V: Value> LSMTree<K, V> {
         let mut data = self.data.write().unwrap();
         let (event, layer) = std::mem::replace(
             &mut data.mutable_layer,
-            (Event::new(), skip_list_layer::SkipListLayer::new(SKIP_LIST_LAYER_ITEMS)),
+            (
+                Arc::new(DropEvent::new()),
+                skip_list_layer::SkipListLayer::new(SKIP_LIST_LAYER_ITEMS),
+            ),
         );
         data.layers.insert(0, layer.as_layer());
         // The caller should wait for any mutations to the old mutable layer to complete and that's
         // done by waiting for the event to be dropped and ensuring that the event is cloned
         // whenever we plan to mutate the layer.
-        event.wait_or_dropped().map(|r| {
-            r.unwrap_err();
-        })
+        event.listen()
     }
 
     /// Resets the tree to an empty state.
     pub fn reset(&self) {
         let mut data = self.data.write().unwrap();
         data.layers = Vec::new();
-        data.mutable_layer =
-            (Event::new(), skip_list_layer::SkipListLayer::new(SKIP_LIST_LAYER_ITEMS));
+        data.mutable_layer = (
+            Arc::new(DropEvent::new()),
+            skip_list_layer::SkipListLayer::new(SKIP_LIST_LAYER_ITEMS),
+        );
     }
 
     /// Writes the items yielded by the iterator into the supplied object.
@@ -294,7 +296,7 @@ impl<'tree, K: MergeableKey, V: Value> LSMTree<K, V> {
 
 /// This is an RAII wrapper for a layer which holds a lock on the layer (via the Layer::lock
 /// method).
-pub struct LockedLayer<K, V>(Event, Arc<dyn Layer<K, V>>);
+pub struct LockedLayer<K, V>(Arc<DropEvent>, Arc<dyn Layer<K, V>>);
 
 impl<K, V> LockedLayer<K, V> {
     pub async fn close_layer(self) {

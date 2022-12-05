@@ -3,11 +3,11 @@
 // found in the LICENSE file.
 
 use {
-    crate::log::*,
+    crate::{drop_event::DropEvent, log::*},
     anyhow::{Context, Error},
     async_trait::async_trait,
-    async_utils::event::{Event, EventWaitResult},
     bitflags::bitflags,
+    event_listener::{Event, EventListener},
     fuchsia_async as fasync,
     fuchsia_zircon::{
         self as zx,
@@ -49,8 +49,8 @@ pub struct PagerExecutor {
 ///
 /// If [`PortThread::terminate()`] is not called, dropping this struct will join the thread.
 struct PortThread {
-    /// A future that can be waited on to know when the thread has terminated.
-    terminated_future: Mutex<Option<EventWaitResult>>,
+    /// An listener that fires when the thread has terminated.
+    terminate_wait: Mutex<Option<EventListener>>,
 
     /// The port on which the thread is polling.
     port: Arc<zx::Port>,
@@ -107,7 +107,7 @@ impl<T: PagerBackedVmo> From<Weak<T>> for FileHolder<T> {
 
 impl Drop for PagerExecutor {
     fn drop(&mut self) {
-        self.terminate_event.signal();
+        self.terminate_event.notify(usize::MAX);
 
         if let Some(handle) = self.primary_thread_handle.take() {
             handle
@@ -129,15 +129,11 @@ impl PagerExecutor {
         let (ehandle_tx, ehandle_rx) = oneshot::channel();
 
         let terminate_event = Event::new();
-        let terminate_or_dropped_event = terminate_event.wait_or_dropped();
-
+        let terminate_wait = terminate_event.listen();
         let primary_thread_handle = std::thread::spawn(move || {
             let mut executor = fasync::SendExecutor::new(Self::get_num_threads())
                 .expect("Failed to create executor for PagerExecutor");
-            executor.run(PagerExecutor::executor_worker_lifecycle(
-                ehandle_tx,
-                terminate_or_dropped_event,
-            ));
+            executor.run(PagerExecutor::executor_worker_lifecycle(ehandle_tx, terminate_wait));
         });
 
         let executor_handle =
@@ -159,7 +155,7 @@ impl PagerExecutor {
 
     async fn executor_worker_lifecycle(
         ehandle_tx: oneshot::Sender<fasync::EHandle>,
-        terminate_wait: EventWaitResult,
+        terminate_wait: EventListener,
     ) {
         let executor_handle = fasync::EHandle::local();
 
@@ -168,8 +164,8 @@ impl PagerExecutor {
 
         debug!("Pager executor started successfully");
 
-        // Keep executor alive until termination is signalled or the event is dropped.
-        terminate_wait.await.unwrap_or_default();
+        // Keep executor alive until termination is signalled.
+        terminate_wait.await;
 
         debug!("Pager executor received terminate signal and will terminate");
     }
@@ -188,13 +184,13 @@ impl PortThread {
         let port = Arc::new(zx::Port::create()?);
         let port_clone = port.clone();
 
-        let terminate_event = Event::new();
-        let terminated_future = terminate_event.wait_or_dropped();
+        let terminate_event = Arc::new(DropEvent::new());
+        let terminate_wait = Mutex::new(Some(terminate_event.listen()));
         std::thread::spawn(move || {
             Self::thread_lifecycle(executor, port_clone, inner, terminate_event)
         });
 
-        Ok(Self { terminated_future: Mutex::new(Some(terminated_future)), port })
+        Ok(Self { terminate_wait, port })
     }
 
     fn port(&self) -> &zx::Port {
@@ -205,7 +201,7 @@ impl PortThread {
         executor: Arc<PagerExecutor>,
         port: Arc<zx::Port>,
         inner: Arc<Mutex<Inner<T>>>,
-        terminate_event: Event,
+        terminate_event: Arc<DropEvent>,
     ) {
         debug!("Pager port thread started successfully");
 
@@ -247,7 +243,7 @@ impl PortThread {
         contents: PagerPacket,
         executor_handle: &fasync::EHandle,
         inner: Arc<Mutex<Inner<T>>>,
-        terminate_event: &Event,
+        terminate_event: &Arc<DropEvent>,
     ) {
         let command = contents.command();
         if command != ZX_PAGER_VMO_READ && command != ZX_PAGER_VMO_DIRTY {
@@ -327,16 +323,16 @@ impl PortThread {
             .queue(&zx::Packet::from_user_packet(0, 0, zx::UserPacket::from_u8_array([0; 32])))
             .unwrap();
 
-        let fut = self.terminated_future.lock().unwrap().take();
-        if let Some(fut) = fut {
-            let _ = fut.await;
+        let listener = self.terminate_wait.lock().unwrap().take();
+        if let Some(listener) = listener {
+            listener.await;
         }
     }
 }
 
 impl Drop for PortThread {
     fn drop(&mut self) {
-        assert!(self.terminated_future.get_mut().unwrap().is_none());
+        assert!(self.terminate_wait.get_mut().unwrap().is_none());
     }
 }
 

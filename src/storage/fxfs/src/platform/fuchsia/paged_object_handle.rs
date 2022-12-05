@@ -234,7 +234,7 @@ impl PagedObjectHandle {
         let previous_reservation = inner.reservation();
         let new_reservation = new_inner.reservation();
         let reservation_delta = new_reservation - previous_reservation;
-        // The reserved amount will never decrease but might the same.
+        // The reserved amount will never decrease but might be the same.
         if reservation_delta > 0 {
             match self.allocator().reserve(Some(self.store().store_object_id()), reservation_delta)
             {
