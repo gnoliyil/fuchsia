@@ -13,6 +13,11 @@ Notably, executing `fuchsia-fx-*` with the prefix argument `C-u` will give `fx`
 the `-i` argument, which runs the given `fx` command every time a source file
 changes.
 
+# `fidl-mode`
+
+`fidl-mode` adds basic syntax highlighting and indentation in buffers visiting
+`.fidl` files.
+
 # Setup
 
 ## Vanilla Emacs
@@ -25,6 +30,7 @@ Fuchsia source code.
 (push "<fuchsia source root>/scripts/emacs" load-path)
 
 (require 'fuchsia)
+(require 'fidl-mode)
 ```
 
 ## Doom Emacs
@@ -34,5 +40,7 @@ adding the below to your `~/.doom.d/` configurations:
 
 ```emacs-lisp
 (use-package! fuchsia
+  :load-path "<fuchsia source root>/scripts/emacs/")
+(use-package! fidl-mode
   :load-path "<fuchsia source root>/scripts/emacs/")
 ```
