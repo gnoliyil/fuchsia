@@ -301,7 +301,6 @@ class Device final
   void DropRemoveTask() { active_remove_ = nullptr; }
 
   bool has_outgoing_directory() { return outgoing_dir_.is_valid(); }
-  fidl::ClientEnd<fio::Directory> take_outgoing_dir() { return std::move(outgoing_dir_); }
   zx::result<fidl::ClientEnd<fio::Directory>> clone_outgoing_dir() {
     return component::Clone(outgoing_dir_);
   }
