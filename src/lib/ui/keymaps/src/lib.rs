@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 use anyhow::{format_err, Result};
-use fidl_fuchsia_input::{self, Key};
+use fidl_fuchsia_input::{self, Key, KeymapId};
 use fidl_fuchsia_ui_input3::{KeyEventType, KeyMeaning, LockState, Modifiers, NonPrintableKey};
 use lazy_static::lazy_static;
 use std::collections::{self, HashMap};
@@ -37,6 +37,18 @@ pub fn select_keymap<'a>(keymap: &Option<String>) -> &'a Keymap<'a> {
         Some(ref k) if k == "US_DVORAK" => &US_DVORAK,
         Some(ref k) if k == "US_COLEMAK" => &US_COLEMAK,
         _ => &US_QWERTY,
+    }
+}
+
+/// Converts the keymap string into a supported `KeymapId`.
+///
+/// An unknown keymap string always becomes [KeymapId::UsQwerty].
+pub fn into_keymap_id(keymap: &str) -> KeymapId {
+    match keymap {
+        "FR_AZERTY" => KeymapId::FrAzerty,
+        "US_DVORAK" => KeymapId::UsDvorak,
+        "US_COLEMAK" => KeymapId::UsColemak,
+        _ => KeymapId::UsQwerty,
     }
 }
 

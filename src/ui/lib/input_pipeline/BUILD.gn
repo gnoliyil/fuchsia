@@ -17,6 +17,7 @@ rustc_library("input_pipeline") {
     "//sdk/fidl/fuchsia.input.interaction:fuchsia.input.interaction_rust",
     "//sdk/fidl/fuchsia.input.interaction.observation:fuchsia.input.interaction.observation_rust",
     "//sdk/fidl/fuchsia.input.report:fuchsia.input.report_rust",
+    "//sdk/fidl/fuchsia.input.wayland:fuchsia.input.wayland_rust",
     "//sdk/fidl/fuchsia.io:fuchsia.io_rust",
     "//sdk/fidl/fuchsia.lightsensor:fuchsia.lightsensor_rust",
     "//sdk/fidl/fuchsia.media:fuchsia.media_rust",
@@ -144,6 +145,7 @@ rustc_library("input_pipeline") {
     "src/touch_binding.rs",
     "src/touch_injector_handler.rs",
     "src/utils.rs",
+    "src/wayland_handler.rs",
   ]
 }
 

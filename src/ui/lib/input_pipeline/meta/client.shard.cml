@@ -20,6 +20,7 @@
             protocol: [
                 "fuchsia.input.interaction.Notifier",
                 "fuchsia.input.interaction.observation.Aggregator",
+                "fuchsia.input.wayland.Keymap",
                 "fuchsia.lightsensor.Sensor",
                 "fuchsia.recovery.policy.Device",
                 "fuchsia.recovery.ui.FactoryResetCountdown",
@@ -85,6 +86,7 @@
             protocol: [
                 "fuchsia.input.interaction.Notifier",
                 "fuchsia.input.interaction.observation.Aggregator",
+                "fuchsia.input.wayland.Keymap",
                 "fuchsia.lightsensor.Sensor",
                 "fuchsia.recovery.policy.Device",
                 "fuchsia.recovery.ui.FactoryResetCountdown",
