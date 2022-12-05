@@ -178,16 +178,14 @@ class FakeDdkSysmem : public zxtest::Test {
   void SetUp() override {
     EXPECT_OK(pdev_loop_.StartThread());
     pdev_.UseFakeBti();
-    component::ServiceInstanceHandler handler;
-    fuchsia_hardware_platform_device::Service::Handler service(&handler);
-
     auto device_handler =
         [this](fidl::ServerEnd<fuchsia_hardware_platform_device::Device> request) {
           fidl::BindServer(pdev_loop_.dispatcher(), std::move(request), &pdev_);
         };
-    auto service_result = service.add_device(device_handler);
-    ZX_ASSERT((service_result.is_ok()));
-    service_result =
+    fuchsia_hardware_platform_device::Service::InstanceHandler handler(
+        {.device = std::move(device_handler)});
+
+    auto service_result =
         outgoing_.AddService<fuchsia_hardware_platform_device::Service>(std::move(handler));
     ZX_ASSERT(service_result.is_ok());
 

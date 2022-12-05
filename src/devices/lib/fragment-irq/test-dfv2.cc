@@ -18,17 +18,12 @@ namespace fcr = fuchsia_component_runner;
 class Dfv2Test : public gtest::TestLoopFixture, public fidl::Server<fint::Provider> {
  public:
   void SetUp() override {
-    component::ServiceInstanceHandler handler;
-    fint::Service::Handler service(&handler);
-
     auto provider_handler = [this](fidl::ServerEnd<fint::Provider> request) {
       fidl::BindServer(dispatcher(), std::move(request), this);
     };
+    fint::Service::InstanceHandler handler({.provider = std::move(provider_handler)});
 
-    auto result = service.add_provider(std::move(provider_handler));
-    ASSERT_TRUE(result.is_ok());
-
-    result =
+    auto result =
         outgoing_.AddService<fuchsia_hardware_interrupt::Service>(std::move(handler), "irq001");
     ASSERT_TRUE(result.is_ok());
 

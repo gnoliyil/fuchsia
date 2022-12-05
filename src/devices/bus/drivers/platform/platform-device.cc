@@ -574,20 +574,15 @@ zx_status_t PlatformDevice::Start() {
   args.set_props(props).set_proto_id(ZX_PROTOCOL_PDEV);
 
   if (type_ == Protocol) {
-    driver::ServiceInstanceHandler handler;
-    fuchsia_hardware_platform_bus::Service::Handler service(&handler);
+    auto protocol_handler =
+        [this](fdf::ServerEnd<fuchsia_hardware_platform_bus::PlatformBus> server_end) {
+          fdf::BindServer(fdf::Dispatcher::GetCurrent()->get(), std::move(server_end),
+                          restricted_.get());
+        };
+    fuchsia_hardware_platform_bus::Service::InstanceHandler handler(
+        {.platform_bus = std::move(protocol_handler)});
 
-    auto protocol = [this](fdf::ServerEnd<fuchsia_hardware_platform_bus::PlatformBus> server_end) {
-      fdf::BindServer(fdf::Dispatcher::GetCurrent()->get(), std::move(server_end),
-                      restricted_.get());
-    };
-
-    auto status = service.add_platform_bus(std::move(protocol));
-    if (status.is_error()) {
-      return status.error_value();
-    }
-
-    status = outgoing_.AddService<fuchsia_hardware_platform_bus::Service>(std::move(handler));
+    auto status = outgoing_.AddService<fuchsia_hardware_platform_bus::Service>(std::move(handler));
     if (status.is_error()) {
       return status.error_value();
     }

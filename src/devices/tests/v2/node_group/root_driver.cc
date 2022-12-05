@@ -191,16 +191,12 @@ class RootDriver : public driver::DriverBase {
     node_client_.Bind(std::move(node()), dispatcher());
     // Add service "left".
     {
-      component::ServiceInstanceHandler handler;
-      ft::Service::Handler service(&handler);
       auto device = [this](fidl::ServerEnd<ft::Device> server_end) mutable -> void {
         fidl::BindServer(dispatcher(), std::move(server_end), &this->left_server_);
       };
-      zx::result<> status = service.add_device(std::move(device));
-      if (status.is_error()) {
-        FDF_LOG(ERROR, "Failed to add device %s", status.status_string());
-      }
-      status = context().outgoing()->AddService<ft::Service>(std::move(handler), kLeftName);
+      ft::Service::InstanceHandler handler({.device = std::move(device)});
+      zx::result<> status =
+          context().outgoing()->AddService<ft::Service>(std::move(handler), kLeftName);
       if (status.is_error()) {
         FDF_LOG(ERROR, "Failed to add service %s", status.status_string());
       }
@@ -208,16 +204,12 @@ class RootDriver : public driver::DriverBase {
 
     // Add service "right".
     {
-      component::ServiceInstanceHandler handler;
-      ft::Service::Handler service(&handler);
       auto device = [this](fidl::ServerEnd<ft::Device> server_end) mutable -> void {
         fidl::BindServer(dispatcher(), std::move(server_end), &this->right_server_);
       };
-      zx::result<> status = service.add_device(std::move(device));
-      if (status.is_error()) {
-        FDF_LOG(ERROR, "Failed to add device %s", status.status_string());
-      }
-      status = context().outgoing()->AddService<ft::Service>(std::move(handler), kRightName);
+      ft::Service::InstanceHandler handler({.device = std::move(device)});
+      zx::result<> status =
+          context().outgoing()->AddService<ft::Service>(std::move(handler), kRightName);
       if (status.is_error()) {
         FDF_LOG(ERROR, "Failed to add service %s", status.status_string());
       }
@@ -225,16 +217,12 @@ class RootDriver : public driver::DriverBase {
 
     // Add service "optional".
     {
-      component::ServiceInstanceHandler handler;
-      ft::Service::Handler service(&handler);
       auto device = [this](fidl::ServerEnd<ft::Device> server_end) mutable -> void {
         fidl::BindServer(dispatcher(), std::move(server_end), &this->optional_server_);
       };
-      zx::result<> status = service.add_device(std::move(device));
-      if (status.is_error()) {
-        FDF_LOG(ERROR, "Failed to add device %s", status.status_string());
-      }
-      status = context().outgoing()->AddService<ft::Service>(std::move(handler), kOptionalName);
+      ft::Service::InstanceHandler handler({.device = std::move(device)});
+      zx::result<> status =
+          context().outgoing()->AddService<ft::Service>(std::move(handler), kOptionalName);
       if (status.is_error()) {
         FDF_LOG(ERROR, "Failed to add service %s", status.status_string());
       }

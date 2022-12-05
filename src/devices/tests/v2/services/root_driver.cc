@@ -17,28 +17,15 @@ class RootDriver : public driver::DriverBase,
       : driver::DriverBase("root", std::move(start_args), std::move(driver_dispatcher)) {}
 
   zx::result<> Start() override {
-    component::ServiceInstanceHandler handler;
-    ft::Device::Handler device(&handler);
-
     auto control = [this](fidl::ServerEnd<ft::ControlPlane> server_end) -> void {
       fidl::BindServer(dispatcher(), std::move(server_end), this);
     };
-    auto result = device.add_control(control);
-    if (result.is_error()) {
-      FDF_LOG(ERROR, "Failed to add control handler to Device service: %s", result.status_string());
-      return result.take_error();
-    }
-
     auto data = [this](fidl::ServerEnd<ft::DataPlane> server_end) -> void {
       fidl::BindServer(dispatcher(), std::move(server_end), this);
     };
-    result = device.add_data(data);
-    if (result.is_error()) {
-      FDF_LOG(ERROR, "Failed to add data handler to Device service: %s", result.status_string());
-      return result.take_error();
-    }
+    ft::Device::InstanceHandler handler({.control = std::move(control), .data = std::move(data)});
 
-    result = context().outgoing()->AddService<ft::Device>(std::move(handler));
+    auto result = context().outgoing()->AddService<ft::Device>(std::move(handler));
     if (result.is_error()) {
       FDF_LOG(ERROR, "Failed to add Device service: %s", result.status_string());
       return result.take_error();

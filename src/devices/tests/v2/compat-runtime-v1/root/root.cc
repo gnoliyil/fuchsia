@@ -46,17 +46,12 @@ class Root : public DeviceType, public fdf::Server<fuchsia_compat_runtime::Root>
   }
 
   zx_status_t Bind() {
-    driver::ServiceInstanceHandler handler;
-    fuchsia_compat_runtime::Service::Handler service(&handler);
-
     auto protocol = [this](fdf::ServerEnd<fuchsia_compat_runtime::Root> server_end) {
       fdf::BindServer(fdf::Dispatcher::GetCurrent()->get(), std::move(server_end), this);
     };
-    auto status = service.add_root(std::move(protocol));
-    if (status.is_error()) {
-      return status.status_value();
-    }
-    status = outgoing_.AddService<fuchsia_compat_runtime::Service>(std::move(handler));
+    fuchsia_compat_runtime::Service::InstanceHandler handler({.root = std::move(protocol)});
+
+    auto status = outgoing_.AddService<fuchsia_compat_runtime::Service>(std::move(handler));
     if (status.is_error()) {
       return status.status_value();
     }

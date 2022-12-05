@@ -77,18 +77,13 @@ zx_status_t Device::Bind(void* ctx, zx_device_t* device) {
   auto dispatcher = fdf::Dispatcher::GetCurrent();
   auto dev = std::make_unique<Device>(device, std::move(dispatcher));
 
-  driver::ServiceInstanceHandler handler;
-  fdtt::Service::Handler service(&handler);
-
   auto protocol =
       [dev = dev.get()](fdf::ServerEnd<fdtt::DriverTransportProtocol> server_end) mutable {
         fdf::BindServer(fdf::Dispatcher::GetCurrent()->get(), std::move(server_end), dev);
       };
-  auto add_status = service.add_driver_transport_protocol(std::move(protocol));
-  if (add_status.is_error()) {
-    return add_status.status_value();
-  }
-  add_status = dev->outgoing_.AddService<fdtt::Service>(std::move(handler));
+  fdtt::Service::InstanceHandler handler({.driver_transport_protocol = std::move(protocol)});
+
+  auto add_status = dev->outgoing_.AddService<fdtt::Service>(std::move(handler));
   if (add_status.is_error()) {
     return add_status.status_value();
   }

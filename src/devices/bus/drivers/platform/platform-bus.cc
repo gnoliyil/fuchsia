@@ -61,19 +61,14 @@ zx_status_t AddProtocolPassthrough(const char* name, cpp20::span<const zx_device
       .release = [](void* ctx) {},
   };
 
-  driver::ServiceInstanceHandler handler;
-  fuchsia_hardware_platform_bus::Service::Handler service(&handler);
+  auto protocol_handler =
+      [parent](fdf::ServerEnd<fuchsia_hardware_platform_bus::PlatformBus> server_end) {
+        fdf::BindServer(fdf::Dispatcher::GetCurrent()->get(), std::move(server_end), parent);
+      };
+  fuchsia_hardware_platform_bus::Service::InstanceHandler handler(
+      {.platform_bus = std::move(protocol_handler)});
 
-  auto protocol = [parent](fdf::ServerEnd<fuchsia_hardware_platform_bus::PlatformBus> server_end) {
-    fdf::BindServer(fdf::Dispatcher::GetCurrent()->get(), std::move(server_end), parent);
-  };
-
-  auto status = service.add_platform_bus(std::move(protocol));
-  if (status.is_error()) {
-    return status.error_value();
-  }
-
-  status =
+  auto status =
       parent->outgoing().AddService<fuchsia_hardware_platform_bus::Service>(std::move(handler));
   if (status.is_error()) {
     return status.error_value();

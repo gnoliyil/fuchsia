@@ -49,17 +49,13 @@ zx_status_t DeviceServer::GetMetadataSize(uint32_t type, size_t* out_size) {
 
 zx_status_t DeviceServer::Serve(async_dispatcher_t* dispatcher,
                                 component::OutgoingDirectory* outgoing) {
-  component::ServiceInstanceHandler handler;
-  fuchsia_driver_compat::Service::Handler compat_service(&handler);
   auto device = [this, dispatcher](
                     fidl::ServerEnd<fuchsia_driver_compat::Device> server_end) mutable -> void {
     fidl::BindServer(dispatcher, std::move(server_end), this);
   };
-  zx::result<> status = compat_service.add_device(std::move(device));
-  if (status.is_error()) {
-    return status.error_value();
-  }
-  status = outgoing->AddService<fuchsia_driver_compat::Service>(std::move(handler), name());
+  fuchsia_driver_compat::Service::InstanceHandler handler({.device = std::move(device)});
+  zx::result<> status =
+      outgoing->AddService<fuchsia_driver_compat::Service>(std::move(handler), name());
   if (status.is_error()) {
     return status.error_value();
   }
@@ -75,17 +71,13 @@ zx_status_t DeviceServer::Serve(async_dispatcher_t* dispatcher,
 
 zx_status_t DeviceServer::Serve(async_dispatcher_t* dispatcher,
                                 driver::OutgoingDirectory* outgoing) {
-  component::ServiceInstanceHandler handler;
-  fuchsia_driver_compat::Service::Handler compat_service(&handler);
   auto device = [this, dispatcher](
                     fidl::ServerEnd<fuchsia_driver_compat::Device> server_end) mutable -> void {
     fidl::BindServer(dispatcher, std::move(server_end), this);
   };
-  zx::result<> status = compat_service.add_device(std::move(device));
-  if (status.is_error()) {
-    return status.error_value();
-  }
-  status = outgoing->AddService<fuchsia_driver_compat::Service>(std::move(handler), name());
+  fuchsia_driver_compat::Service::InstanceHandler handler({.device = device});
+  zx::result<> status =
+      outgoing->AddService<fuchsia_driver_compat::Service>(std::move(handler), name());
   if (status.is_error()) {
     return status.error_value();
   }

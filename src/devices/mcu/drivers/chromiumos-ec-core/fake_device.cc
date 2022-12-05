@@ -31,8 +31,6 @@ void ChromiumosEcTestBase::InitDevice() {
   device_ = new ChromiumosEcCore(fake_root_.get());
   ASSERT_OK(device_->Bind());
 
-  component::ServiceInstanceHandler handler;
-  fuchsia_hardware_google_ec::Service::Handler ec_handler(&handler);
   auto ec_connector = [this](fidl::ServerEnd<fuchsia_hardware_google_ec::Device> server) {
     ec_binding_ = fidl::BindServer(loop_.dispatcher(), std::move(server), &fake_ec_,
                                    [this](FakeEcDevice*, fidl::UnbindInfo,
@@ -40,10 +38,11 @@ void ChromiumosEcTestBase::InitDevice() {
                                      sync_completion_signal(&ec_shutdown_);
                                    });
   };
+  fuchsia_hardware_google_ec::Service::InstanceHandler ec_handler(
+      {.device = std::move(ec_connector)});
 
-  ASSERT_OK(ec_handler.add_device(std::move(ec_connector)).status_value());
-  ASSERT_OK(
-      outgoing_.AddService<fuchsia_hardware_google_ec::Service>(std::move(handler)).status_value());
+  ASSERT_OK(outgoing_.AddService<fuchsia_hardware_google_ec::Service>(std::move(ec_handler))
+                .status_value());
 
   auto endpoints = fidl::CreateEndpoints<fuchsia_io::Directory>();
   ASSERT_OK(endpoints.status_value());
@@ -51,8 +50,6 @@ void ChromiumosEcTestBase::InitDevice() {
   fake_root_->AddFidlService(fuchsia_hardware_google_ec::Service::Name,
                              std::move(endpoints->client));
 
-  handler = {};
-  fuchsia_hardware_acpi::Service::Handler acpi_handler(&handler);
   auto acpi_connector = [this](fidl::ServerEnd<fuchsia_hardware_acpi::Device> server) {
     acpi_binding_ = fidl::BindServer(loop_.dispatcher(), std::move(server), &fake_acpi_,
                                      [this](acpi::mock::Device*, fidl::UnbindInfo,
@@ -60,10 +57,11 @@ void ChromiumosEcTestBase::InitDevice() {
                                        sync_completion_signal(&acpi_shutdown_);
                                      });
   };
+  fuchsia_hardware_acpi::Service::InstanceHandler acpi_handler(
+      {.device = std::move(acpi_connector)});
 
-  ASSERT_OK(acpi_handler.add_device(std::move(acpi_connector)).status_value());
   ASSERT_OK(
-      outgoing_.AddService<fuchsia_hardware_acpi::Service>(std::move(handler)).status_value());
+      outgoing_.AddService<fuchsia_hardware_acpi::Service>(std::move(acpi_handler)).status_value());
 
   endpoints = fidl::CreateEndpoints<fuchsia_io::Directory>();
   ASSERT_OK(endpoints.status_value());

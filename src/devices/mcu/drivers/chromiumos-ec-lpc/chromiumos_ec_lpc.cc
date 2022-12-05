@@ -71,20 +71,14 @@ zx_status_t ChromiumosEcLpc::Bind() {
   }
 
   // Set up forwarding of ACPI to our ACPI parent.
-  component::ServiceInstanceHandler handler;
-  fuchsia_hardware_acpi::Service::Handler service(&handler);
   auto provider_handler = [this](fidl::ServerEnd<fuchsia_hardware_acpi::Device> request) {
     device_connect_fragment_fidl_protocol2(
         parent(), "acpi", fuchsia_hardware_acpi::Service::Device::ServiceName,
         fuchsia_hardware_acpi::Service::Device::Name, request.TakeChannel().release());
   };
+  fuchsia_hardware_acpi::Service::InstanceHandler handler({.device = provider_handler});
 
-  auto result = service.add_device(std::move(provider_handler));
-  if (result.is_error()) {
-    return result.error_value();
-  }
-
-  result = outgoing_.AddService<fuchsia_hardware_acpi::Service>(std::move(handler));
+  auto result = outgoing_.AddService<fuchsia_hardware_acpi::Service>(std::move(handler));
   if (result.is_error()) {
     return result.error_value();
   }

@@ -37,24 +37,17 @@ class RootDriver : public driver::DriverBase,
         node_(fidl::WireClient(std::move(node()), dispatcher())) {}
 
   zx::result<> Start() override {
-    driver::ServiceInstanceHandler handler;
-    ft::Service::Handler service(&handler);
-
     auto setter = [this](fdf::ServerEnd<ft::Setter> server_end) mutable -> void {
       fdf::BindServer(driver_dispatcher()->get(), std::move(server_end), this);
     };
-    zx::result<> status = service.add_setter(std::move(setter));
-    if (status.is_error()) {
-      FDF_LOG(ERROR, "Failed to add device %s", status.status_string());
-    }
     auto getter = [this](fdf::ServerEnd<ft::Getter> server_end) mutable -> void {
       fdf::BindServer(driver_dispatcher()->get(), std::move(server_end), this);
     };
-    status = service.add_getter(std::move(getter));
-    if (status.is_error()) {
-      FDF_LOG(ERROR, "Failed to add device %s", status.status_string());
-    }
-    status = context().outgoing()->AddService<ft::Service>(std::move(handler), kChildName);
+    ft::Service::InstanceHandler handler(
+        {.setter = std::move(setter), .getter = std::move(getter)});
+
+    zx::result<> status =
+        context().outgoing()->AddService<ft::Service>(std::move(handler), kChildName);
     if (status.is_error()) {
       FDF_LOG(ERROR, "Failed to add service %s", status.status_string());
     }

@@ -87,8 +87,7 @@ zx::result<> Driver::Start() {
 zx::result<> Driver::Serve(std::string_view name, bool is_input) {
   // Serve the fuchsia.hardware.audio/CodecConnector protocol to clients through the
   // fuchsia.hardware.audio/CodecConnectorService wrapper.
-  component::ServiceInstanceHandler handler;
-  fuchsia_hardware_audio::CodecConnectorService::Handler service(&handler);
+  fuchsia_hardware_audio::CodecConnectorService::InstanceHandler handler;
 
   // For a given instance of this driver only one client is supported at the time, however before
   // any client connects to the server the framework opens the corresponding devfs nodes creating
@@ -101,7 +100,7 @@ zx::result<> Driver::Serve(std::string_view name, bool is_input) {
   } else {
     server_output_ = std::make_shared<ServerConnector>(logger_.get(), core_, false);
   }
-  auto result = service.add_codec_connector(
+  auto result = handler.add_codec_connector(
       [this, is_input](fidl::ServerEnd<fuchsia_hardware_audio::CodecConnector> request) -> void {
         auto on_unbound = [this](
                               ServerConnector*, fidl::UnbindInfo info,

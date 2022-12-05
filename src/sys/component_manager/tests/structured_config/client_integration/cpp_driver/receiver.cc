@@ -21,17 +21,12 @@ class ReceiverDriver : public driver::DriverBase,
         config_(take_config<receiver_config::Config>()) {}
 
   zx::result<> Start() override {
-    component::ServiceInstanceHandler handler;
-    scrs::ConfigService::Handler device(&handler);
-
     auto puppet = [this](fidl::ServerEnd<scr::ConfigReceiverPuppet> server_end) -> void {
       fidl::BindServer(dispatcher(), std::move(server_end), this);
     };
+    scrs::ConfigService::InstanceHandler handler({.puppet = std::move(puppet)});
 
-    auto result = device.add_puppet(puppet);
-    ZX_ASSERT(result.is_ok());
-
-    result = context().outgoing()->AddService<scrs::ConfigService>(std::move(handler));
+    auto result = context().outgoing()->AddService<scrs::ConfigService>(std::move(handler));
     ZX_ASSERT(result.is_ok());
 
     // Serve the inspect data

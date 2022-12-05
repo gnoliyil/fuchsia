@@ -52,17 +52,12 @@ class RootDriver : public driver::DriverBase, public fdf::Server<ft::Root> {
 
  private:
   zx_status_t ServeRuntimeProtocolForV1() {
-    driver::ServiceInstanceHandler handler;
-    ft::Service::Handler service(&handler);
-
     auto root = [this](fdf::ServerEnd<ft::Root> server_end) {
       fdf::BindServer(driver_dispatcher()->get(), std::move(server_end), this);
     };
-    auto status = service.add_root(std::move(root));
-    if (status.is_error()) {
-      return status.status_value();
-    }
-    status = context().outgoing()->AddService<ft::Service>(std::move(handler));
+    ft::Service::InstanceHandler handler({.root = std::move(root)});
+
+    auto status = context().outgoing()->AddService<ft::Service>(std::move(handler));
     if (status.is_error()) {
       return status.status_value();
     }

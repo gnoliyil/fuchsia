@@ -44,17 +44,15 @@ class ParentDriverTransportDriver : public driver::DriverBase {
     node_.Bind(std::move(node()));
 
     // Publish `fuchsia.examples.gizmo.Service` to the outgoing directory.
-    driver::ServiceInstanceHandler handler;
-    fuchsia_examples_gizmo::Service::Handler service(&handler);
-
     auto protocol_handler = [this](fdf::ServerEnd<fuchsia_examples_gizmo::Device> request) -> void {
       auto server_impl = std::make_unique<DriverTransportServer>();
       fdf::BindServer(driver_dispatcher()->get(), std::move(request), std::move(server_impl));
     };
-    auto result = service.add_device(protocol_handler);
-    ZX_ASSERT(result.is_ok());
+    fuchsia_examples_gizmo::Service::InstanceHandler handler(
+        {.device = std::move(protocol_handler)});
 
-    result = context().outgoing()->AddService<fuchsia_examples_gizmo::Service>(std::move(handler));
+    auto result =
+        context().outgoing()->AddService<fuchsia_examples_gizmo::Service>(std::move(handler));
     if (result.is_error()) {
       FDF_SLOG(ERROR, "Failed to add service", KV("status", result.status_string()));
       return result.take_error();
@@ -135,18 +133,15 @@ class ParentDriverTransportDriver : public driver::DriverBase {
   // Publish offered services for client components.
   zx::result<> ExportService(std::string_view node_name) {
     // Publish `fuchsia.gizmo.protocol.Service` to the outgoing directory.
-    component::ServiceInstanceHandler handler;
-    fuchsia_gizmo_protocol::Service::Handler service(&handler);
-
     auto protocol_handler =
         [this](fidl::ServerEnd<fuchsia_gizmo_protocol::TestingProtocol> request) -> void {
       auto server_impl = std::make_unique<TestProtocolServer>();
       fidl::BindServer(dispatcher(), std::move(request), std::move(server_impl));
     };
-    auto result = service.add_testing(protocol_handler);
-    ZX_ASSERT(result.is_ok());
+    fuchsia_gizmo_protocol::Service::InstanceHandler handler({.testing = protocol_handler});
 
-    result = context().outgoing()->AddService<fuchsia_gizmo_protocol::Service>(std::move(handler));
+    auto result =
+        context().outgoing()->AddService<fuchsia_gizmo_protocol::Service>(std::move(handler));
     if (result.is_error()) {
       FDF_SLOG(ERROR, "Failed to add service", KV("status", result.status_string()));
       return result.take_error();

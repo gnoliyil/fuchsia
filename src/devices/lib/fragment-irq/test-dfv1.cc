@@ -18,17 +18,12 @@ class Dfv1Test : public gtest::TestLoopFixture, public fidl::Server<fint::Provid
  public:
   void SetUp() override {
     root_ = MockDevice::FakeRootParent();
-    component::ServiceInstanceHandler handler;
-    fint::Service::Handler service(&handler);
-
     auto provider_handler = [this](fidl::ServerEnd<fint::Provider> request) {
       fidl::BindServer(dispatcher(), std::move(request), this);
     };
+    fint::Service::InstanceHandler handler({.provider = std::move(provider_handler)});
 
-    auto result = service.add_provider(std::move(provider_handler));
-    ASSERT_TRUE(result.is_ok());
-
-    result = outgoing_.AddService<fuchsia_hardware_interrupt::Service>(std::move(handler));
+    auto result = outgoing_.AddService<fuchsia_hardware_interrupt::Service>(std::move(handler));
     ASSERT_TRUE(result.is_ok());
 
     auto endpoints = fidl::CreateEndpoints<fuchsia_io::Directory>();

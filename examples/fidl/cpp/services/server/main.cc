@@ -56,21 +56,13 @@ int main(int argc, const char** argv) {
   async::Loop loop(&kAsyncLoopConfigAttachToCurrentThread);
   auto outgoing = component::OutgoingDirectory(loop.dispatcher());
 
-  component::ServiceInstanceHandler handler;
-  fuchsia_examples::EchoService::Handler my_service(&handler);
-
-  // Example of serving members of a service instance.
-  auto add_regular_result = my_service.add_regular_echo(
-      [&loop](fidl::ServerEnd<fuchsia_examples::Echo> request_channel) -> void {
-        new EchoImpl(false, loop.dispatcher(), std::move(request_channel));
-      });
-  ZX_ASSERT(add_regular_result.is_ok());
-
-  auto add_reversed_result = my_service.add_reversed_echo(
-      [&loop](fidl::ServerEnd<fuchsia_examples::Echo> request_channel) -> void {
-        new EchoImpl(true, loop.dispatcher(), std::move(request_channel));
-      });
-  ZX_ASSERT(add_reversed_result.is_ok());
+  fuchsia_examples::EchoService::InstanceHandler handler(
+      {.regular_echo = [&loop](fidl::ServerEnd<fuchsia_examples::Echo> request_channel) -> void {
+         new EchoImpl(false, loop.dispatcher(), std::move(request_channel));
+       },
+       .reversed_echo = [&loop](fidl::ServerEnd<fuchsia_examples::Echo> request_channel) -> void {
+         new EchoImpl(true, loop.dispatcher(), std::move(request_channel));
+       }});
 
   // Example of serving an instance of "EchoService".
   auto result = outgoing.AddService<fuchsia_examples::EchoService>(std::move(handler));

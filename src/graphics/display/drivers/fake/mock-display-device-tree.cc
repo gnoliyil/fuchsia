@@ -81,14 +81,11 @@ MockDisplayDeviceTree::~MockDisplayDeviceTree() {
 }
 
 fidl::ClientEnd<fuchsia_io::Directory> MockDisplayDeviceTree::SetUpPDevFidlServer() {
-  component::ServiceInstanceHandler handler;
-  fuchsia_hardware_platform_device::Service::Handler service(&handler);
-
   auto device_handler = [this](fidl::ServerEnd<fuchsia_hardware_platform_device::Device> request) {
     fidl::BindServer(pdev_loop_.dispatcher(), std::move(request), &pdev_fidl_);
   };
-  auto service_result = service.add_device(device_handler);
-  ZX_ASSERT((service_result.is_ok()));
+  fuchsia_hardware_platform_device::Service::InstanceHandler handler(
+      {.device = std::move(device_handler)});
 
   auto endpoints = fidl::CreateEndpoints<fuchsia_io::Directory>();
   ZX_ASSERT(endpoints.is_ok());
@@ -96,7 +93,7 @@ fidl::ClientEnd<fuchsia_io::Directory> MockDisplayDeviceTree::SetUpPDevFidlServe
   libsync::Completion serve_complete;
   async::TaskClosure serve_task([&] {
     outgoing_ = component::OutgoingDirectory(pdev_loop_.dispatcher());
-    service_result =
+    auto service_result =
         outgoing_->AddService<fuchsia_hardware_platform_device::Service>(std::move(handler));
     ZX_ASSERT(service_result.is_ok());
 

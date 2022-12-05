@@ -603,17 +603,6 @@ class EmptyService final {
    private:
 #endif  // __Fuchsia__
   };
-
-  // Facilitates member protocol registration for servers.
-  class Handler final {
-#ifdef __Fuchsia__
-   public:
-    // Constructs a FIDL Service-typed handler. Does not take ownership of |service_handler|.
-    explicit Handler(ServiceInstanceHandler* service_handler) { (void)service_handler; }
-
-   private:
-#endif  // __Fuchsia__
-  };
 #ifdef __Fuchsia__
   // Facilitates member protocol registration for servers.
   class InstanceHandler final : public fidl::ServiceInstanceHandler<::fidl::internal::ChannelTransport> {
@@ -706,31 +695,6 @@ class SingleMemberService final {
    private:
     ::zx::channel dir_;
     ::fidl::internal::ConnectMemberFunc connect_func_;
-
-#endif  // __Fuchsia__
-  };
-
-  // Facilitates member protocol registration for servers.
-  class Handler final {
-#ifdef __Fuchsia__
-   public:
-    // Constructs a FIDL Service-typed handler. Does not take ownership of |service_handler|.
-    explicit Handler(ServiceInstanceHandler* service_handler)
-        : service_handler_(service_handler) {}
-
-    // Adds member "single_member" to the service instance. |handler| will be invoked on connection
-    // attempts.
-    //
-    // # Errors
-    //
-    // Returns ZX_ERR_ALREADY_EXISTS if the member was already added.
-    ::zx::result<> add_single_member(
-        ServiceInstanceHandler::MemberHandler<::test_service::FirstProtocol> handler) {
-      return service_handler_->AddMember<::test_service::FirstProtocol>(std::move(handler), "single_member");
-    }
-
-   private:
-    ServiceInstanceHandler* service_handler_;  // not owned.
 
 #endif  // __Fuchsia__
   };
@@ -887,42 +851,6 @@ class MultiHeterogeneousMemberService final {
    private:
     ::zx::channel dir_;
     ::fidl::internal::ConnectMemberFunc connect_func_;
-
-#endif  // __Fuchsia__
-  };
-
-  // Facilitates member protocol registration for servers.
-  class Handler final {
-#ifdef __Fuchsia__
-   public:
-    // Constructs a FIDL Service-typed handler. Does not take ownership of |service_handler|.
-    explicit Handler(ServiceInstanceHandler* service_handler)
-        : service_handler_(service_handler) {}
-
-    // Adds member "first_member" to the service instance. |handler| will be invoked on connection
-    // attempts.
-    //
-    // # Errors
-    //
-    // Returns ZX_ERR_ALREADY_EXISTS if the member was already added.
-    ::zx::result<> add_first_member(
-        ServiceInstanceHandler::MemberHandler<::test_service::FirstProtocol> handler) {
-      return service_handler_->AddMember<::test_service::FirstProtocol>(std::move(handler), "first_member");
-    }
-
-    // Adds member "second_member" to the service instance. |handler| will be invoked on connection
-    // attempts.
-    //
-    // # Errors
-    //
-    // Returns ZX_ERR_ALREADY_EXISTS if the member was already added.
-    ::zx::result<> add_second_member(
-        ServiceInstanceHandler::MemberHandler<::test_service::SecondProtocol> handler) {
-      return service_handler_->AddMember<::test_service::SecondProtocol>(std::move(handler), "second_member");
-    }
-
-   private:
-    ServiceInstanceHandler* service_handler_;  // not owned.
 
 #endif  // __Fuchsia__
   };
@@ -1092,42 +1020,6 @@ class MultiHomogeneousMemberService final {
    private:
     ::zx::channel dir_;
     ::fidl::internal::ConnectMemberFunc connect_func_;
-
-#endif  // __Fuchsia__
-  };
-
-  // Facilitates member protocol registration for servers.
-  class Handler final {
-#ifdef __Fuchsia__
-   public:
-    // Constructs a FIDL Service-typed handler. Does not take ownership of |service_handler|.
-    explicit Handler(ServiceInstanceHandler* service_handler)
-        : service_handler_(service_handler) {}
-
-    // Adds member "first_member" to the service instance. |handler| will be invoked on connection
-    // attempts.
-    //
-    // # Errors
-    //
-    // Returns ZX_ERR_ALREADY_EXISTS if the member was already added.
-    ::zx::result<> add_first_member(
-        ServiceInstanceHandler::MemberHandler<::test_service::FirstProtocol> handler) {
-      return service_handler_->AddMember<::test_service::FirstProtocol>(std::move(handler), "first_member");
-    }
-
-    // Adds member "second_member" to the service instance. |handler| will be invoked on connection
-    // attempts.
-    //
-    // # Errors
-    //
-    // Returns ZX_ERR_ALREADY_EXISTS if the member was already added.
-    ::zx::result<> add_second_member(
-        ServiceInstanceHandler::MemberHandler<::test_service::FirstProtocol> handler) {
-      return service_handler_->AddMember<::test_service::FirstProtocol>(std::move(handler), "second_member");
-    }
-
-   private:
-    ServiceInstanceHandler* service_handler_;  // not owned.
 
 #endif  // __Fuchsia__
   };

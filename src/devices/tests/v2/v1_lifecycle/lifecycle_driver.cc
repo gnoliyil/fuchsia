@@ -51,15 +51,12 @@ class LifecycleDriver : public driver::DriverBase, public fidl::WireServer<ft::D
     }
 
     // Serve our Service.
-    component::ServiceInstanceHandler handler;
-    ft::Service::Handler service(&handler);
+    ft::Service::InstanceHandler handler(
+        {.device = [this](fidl::ServerEnd<ft::Device> request) -> void {
+          fidl::BindServer(dispatcher(), std::move(request), this);
+        }});
 
-    auto result = service.add_device([this](fidl::ServerEnd<ft::Device> request) -> void {
-      fidl::BindServer(dispatcher(), std::move(request), this);
-    });
-    ZX_ASSERT(result.is_ok());
-
-    result = context().outgoing()->AddService<ft::Service>(std::move(handler));
+    auto result = context().outgoing()->AddService<ft::Service>(std::move(handler));
     if (result.is_error()) {
       FDF_SLOG(ERROR, "Failed to add Demo service", KV("status", result.status_string()));
       return result.take_error();

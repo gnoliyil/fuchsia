@@ -22,17 +22,13 @@ zx_status_t RpmbDevice::Create(zx_device_t* parent, SdmmcBlockDevice* sdmmc,
   }
   device->outgoing_ = component::OutgoingDirectory(device->loop_.dispatcher());
 
-  component::ServiceInstanceHandler handler;
-  fuchsia_hardware_rpmb::Service::Handler service(&handler);
-
   auto device_handler = [device =
                              device.get()](fidl::ServerEnd<fuchsia_hardware_rpmb::Rpmb> request) {
     fidl::BindServer(device->loop_.dispatcher(), std::move(request), device);
   };
-  auto result = service.add_device(device_handler);
-  ZX_ASSERT(result.is_ok());
+  fuchsia_hardware_rpmb::Service::InstanceHandler handler({.device = std::move(device_handler)});
 
-  result = device->outgoing_->AddService<fuchsia_hardware_rpmb::Service>(std::move(handler));
+  auto result = device->outgoing_->AddService<fuchsia_hardware_rpmb::Service>(std::move(handler));
   if (result.is_error()) {
     zxlogf(ERROR, "Failed to add service to the outgoing directory");
     return result.status_value();

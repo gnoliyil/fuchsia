@@ -25,18 +25,16 @@ class ChildZirconTransportDriver : public driver::DriverBase {
 
   zx::result<> Start() override {
     // Publish `fuchsia.gizmo.protocol.Service` to the outgoing directory.
-    component::ServiceInstanceHandler handler;
-    fuchsia_gizmo_protocol::Service::Handler service(&handler);
-
     auto protocol_handler =
         [this](fidl::ServerEnd<fuchsia_gizmo_protocol::TestingProtocol> request) -> void {
       auto server_impl = std::make_unique<TestProtocolServer>();
       fidl::BindServer(dispatcher(), std::move(request), std::move(server_impl));
     };
-    auto result = service.add_testing(protocol_handler);
-    ZX_ASSERT(result.is_ok());
+    fuchsia_gizmo_protocol::Service::InstanceHandler handler(
+        {.testing = std::move(protocol_handler)});
 
-    result = context().outgoing()->AddService<fuchsia_gizmo_protocol::Service>(std::move(handler));
+    auto result =
+        context().outgoing()->AddService<fuchsia_gizmo_protocol::Service>(std::move(handler));
     if (result.is_error()) {
       FDF_SLOG(ERROR, "Failed to add service", KV("status", result.status_string()));
       return result.take_error();

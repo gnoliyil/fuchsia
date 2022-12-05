@@ -118,19 +118,16 @@ class DemoNumber : public driver::DriverBase {
   zx::result<> Start() override {
     // Add the fuchsia.hardware.demo/Demo protocol to be served as
     // "/svc/fuchsia.hardware.demo/default/demo"
-    component::ServiceInstanceHandler handler;
-    fuchsia_hardware_demo::Service::Handler service(&handler);
+    auto demo_handler = [this](fidl::ServerEnd<fuchsia_hardware_demo::Demo> request) -> void {
+      // Bind each connection request to a fuchsia.hardware.demo/Demo server instance.
+      auto demo_impl = std::make_unique<DemoNumberServer>(&logger());
+      fidl::BindServer(dispatcher(), std::move(request), std::move(demo_impl),
+                       std::mem_fn(&DemoNumberServer::OnUnbound));
+    };
+    fuchsia_hardware_demo::Service::InstanceHandler handler({.demo = std::move(demo_handler)});
 
     auto result =
-        service.add_demo([this](fidl::ServerEnd<fuchsia_hardware_demo::Demo> request) -> void {
-          // Bind each connection request to a fuchsia.hardware.demo/Demo server instance.
-          auto demo_impl = std::make_unique<DemoNumberServer>(&logger());
-          fidl::BindServer(dispatcher(), std::move(request), std::move(demo_impl),
-                           std::mem_fn(&DemoNumberServer::OnUnbound));
-        });
-    ZX_ASSERT(result.is_ok());
-
-    result = context().outgoing()->AddService<fuchsia_hardware_demo::Service>(std::move(handler));
+        context().outgoing()->AddService<fuchsia_hardware_demo::Service>(std::move(handler));
     if (result.is_error()) {
       FDF_SLOG(ERROR, "Failed to add Demo service", KV("status", result.status_string()));
       return result.take_error();

@@ -170,19 +170,15 @@ zx_status_t Device::Bind(void* ctx, zx_device_t* device) {
   auto dispatcher = fdf::Dispatcher::GetCurrent()->get();
   dev->outgoing_ = driver::OutgoingDirectory::Create(dispatcher);
 
-  driver::ServiceInstanceHandler handler;
-  fuchsia_device_runtime_test::Service::Handler service(&handler);
-
   auto protocol =
       [dev = dev.get()](
           fdf::ServerEnd<fuchsia_device_runtime_test::Parent> server_end) mutable -> void {
     dev->OnRuntimeConnect(server_end.TakeChannel());
   };
-  auto add_status = service.add_parent(std::move(protocol));
-  if (add_status.is_error()) {
-    return add_status.status_value();
-  }
-  add_status = dev->outgoing_->AddService<fuchsia_device_runtime_test::Service>(std::move(handler));
+  fuchsia_device_runtime_test::Service::InstanceHandler handler({.parent = std::move(protocol)});
+
+  auto add_status =
+      dev->outgoing_->AddService<fuchsia_device_runtime_test::Service>(std::move(handler));
   if (add_status.is_error()) {
     return add_status.status_value();
   }

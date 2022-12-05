@@ -59,11 +59,7 @@ zx_status_t ZirconTransportDevice::Bind() {
   }
 
   // Publish `fuchsia.examples.gizmo.Service` to the outgoing directory.
-  component::ServiceInstanceHandler handler;
-  fuchsia_examples_gizmo::Service::Handler service(&handler);
-
-  auto result = service.add_device(bind_handler(dispatcher_));
-  ZX_ASSERT(result.is_ok());
+  fuchsia_examples_gizmo::Service::InstanceHandler handler({.device = bind_handler(dispatcher_)});
 
   auto status = outgoing_.AddService<fuchsia_examples_gizmo::Service>(std::move(handler));
   if (status.is_error()) {

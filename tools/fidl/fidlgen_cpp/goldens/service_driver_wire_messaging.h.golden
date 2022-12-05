@@ -46,17 +46,6 @@ class EmptyService final {
    private:
 #endif  // __Fuchsia__
   };
-
-  // Facilitates member protocol registration for servers.
-  class Handler final {
-#ifdef __Fuchsia__
-   public:
-    // Constructs a FIDL Service-typed handler. Does not take ownership of |service_handler|.
-    explicit Handler(ServiceInstanceHandler* service_handler) { (void)service_handler; }
-
-   private:
-#endif  // __Fuchsia__
-  };
 #ifdef __Fuchsia__
   // Facilitates member protocol registration for servers.
   class InstanceHandler final : public fidl::ServiceInstanceHandler<::fidl::internal::ChannelTransport> {

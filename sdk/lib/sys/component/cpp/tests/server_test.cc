@@ -50,20 +50,13 @@ class ServerTest : public zxtest::Test {
 
   component::ServiceInstanceHandler SetUpInstance(fidl::WireServer<Echo>* foo_impl,
                                                   fidl::WireServer<Echo>* bar_impl) {
-    component::ServiceInstanceHandler handler;
-    EchoService::Handler my_service(&handler);
-
-    auto add_foo_result =
-        my_service.add_foo([this, foo_impl](fidl::ServerEnd<Echo> request_channel) -> void {
-          fidl::BindServer(loop_.dispatcher(), std::move(request_channel), foo_impl);
-        });
-    ZX_ASSERT(add_foo_result.is_ok());
-
-    auto add_bar_result =
-        my_service.add_bar([this, bar_impl](fidl::ServerEnd<Echo> request_channel) -> void {
-          fidl::BindServer(loop_.dispatcher(), std::move(request_channel), bar_impl);
-        });
-    ZX_ASSERT(add_bar_result.is_ok());
+    EchoService::InstanceHandler handler(
+        {.foo = [this, foo_impl](fidl::ServerEnd<Echo> request_channel) -> void {
+           fidl::BindServer(loop_.dispatcher(), std::move(request_channel), foo_impl);
+         },
+         .bar = [this, bar_impl](fidl::ServerEnd<Echo> request_channel) -> void {
+           fidl::BindServer(loop_.dispatcher(), std::move(request_channel), bar_impl);
+         }});
 
     return handler;
   }

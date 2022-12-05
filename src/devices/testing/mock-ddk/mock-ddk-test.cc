@@ -598,16 +598,13 @@ TEST(MockDdk, SetFidlService) {
   EchoServer server;
 
   // So we add the necessary service to the parent:
-  component::ServiceInstanceHandler handler;
-  fidl_examples_echo::EchoService::Handler service(&handler);
 
-  auto echo_handler = [&](fidl::ServerEnd<fidl_examples_echo::Echo> request) {
-    server.Bind(loop.dispatcher(), std::move(request));
-  };
   {
-    auto service_result = service.add_echo(echo_handler);
-    ASSERT_OK(service_result.status_value());
-    service_result = outgoing.AddService<fidl_examples_echo::EchoService>(std::move(handler));
+    auto echo_handler = [&](fidl::ServerEnd<fidl_examples_echo::Echo> request) {
+      server.Bind(loop.dispatcher(), std::move(request));
+    };
+    fidl_examples_echo::EchoService::InstanceHandler handler({.echo = std::move(echo_handler)});
+    auto service_result = outgoing.AddService<fidl_examples_echo::EchoService>(std::move(handler));
     ASSERT_OK(service_result.status_value());
   }
 

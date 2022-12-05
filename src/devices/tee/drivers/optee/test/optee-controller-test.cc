@@ -176,13 +176,10 @@ class FakeRpmbService {
   ~FakeRpmbService() { loop_.Shutdown(); }
 
   fidl::ClientEnd<fuchsia_io::Directory> Connect() {
-    component::ServiceInstanceHandler handler;
-    fuchsia_hardware_rpmb::Service::Handler service(&handler);
-
     auto device_handler = [](fidl::ServerEnd<fuchsia_hardware_rpmb::Rpmb> request) {};
-    auto service_result = service.add_device(device_handler);
-    ZX_ASSERT((service_result.is_ok()));
-    service_result = outgoing_.AddService<fuchsia_hardware_rpmb::Service>(std::move(handler));
+    fuchsia_hardware_rpmb::Service::InstanceHandler handler({.device = std::move(device_handler)});
+
+    auto service_result = outgoing_.AddService<fuchsia_hardware_rpmb::Service>(std::move(handler));
     ZX_ASSERT(service_result.is_ok());
 
     auto endpoints = fidl::CreateEndpoints<fuchsia_io::Directory>();

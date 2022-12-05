@@ -38,14 +38,11 @@ class Device : public DeviceParent, public fidl::WireServer<fidl_examples_echo::
     auto* dispatcher = fdf::Dispatcher::GetCurrent()->async_dispatcher();
     auto device = std::make_unique<Device>(parent, dispatcher);
 
-    component::ServiceInstanceHandler handler;
-    fidl_examples_echo::EchoService::Handler service(&handler);
-
     auto echo_handler = fit::bind_member(device.get(), &Device::EchoHandler);
-    auto result = service.add_echo(echo_handler);
-    ZX_ASSERT(result.is_ok());
+    fidl_examples_echo::EchoService::InstanceHandler handler({.echo = std::move(echo_handler)});
 
-    result = device->outgoing_dir_.AddService<fidl_examples_echo::EchoService>(std::move(handler));
+    auto result =
+        device->outgoing_dir_.AddService<fidl_examples_echo::EchoService>(std::move(handler));
     if (result.is_error()) {
       zxlogf(ERROR, "Failed to add service the outgoing directory");
       return result.status_value();

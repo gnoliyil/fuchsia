@@ -29,17 +29,13 @@ class RootDriver : public driver::DriverBase, public fidl::Server<ft::Handshake>
     node_.Bind(std::move(node()), dispatcher());
     // Setup the outgoing directory.
     {
-      component::ServiceInstanceHandler handler;
-      ft::Service::Handler service(&handler);
-
       auto device = [this](fidl::ServerEnd<ft::Handshake> server_end) -> void {
         fidl::BindServer(dispatcher(), std::move(server_end), this);
       };
-      zx::result<> status = service.add_device(std::move(device));
-      if (status.is_error()) {
-        FDF_LOG(ERROR, "Failed to add device %s", status.status_string());
-      }
-      status = context().outgoing()->AddService<ft::Service>(std::move(handler), kChildName);
+      ft::Service::InstanceHandler handler({.device = std::move(device)});
+
+      zx::result<> status =
+          context().outgoing()->AddService<ft::Service>(std::move(handler), kChildName);
       if (status.is_error()) {
         FDF_LOG(ERROR, "Failed to add service %s", status.status_string());
       }
