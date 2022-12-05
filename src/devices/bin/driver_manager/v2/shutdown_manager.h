@@ -80,6 +80,22 @@ class ShutdownManager : public fidl::WireServer<fuchsia_device_manager::Administ
   void OnBootShutdownComplete();
 
  private:
+  // Signal state for when devfs and fshost are shutdown.
+  class Lifecycle : public fidl::WireServer<fuchsia_process_lifecycle::Lifecycle> {
+   public:
+    explicit Lifecycle(fit::callback<void(fit::callback<void(zx_status_t)>)> on_stop)
+        : on_stop_(std::move(on_stop)) {}
+
+    void Stop(StopCompleter::Sync& completer) override {
+      on_stop_([completer = completer.ToAsync()](zx_status_t status) mutable {
+        completer.Close(status);
+      });
+    }
+
+   private:
+    fit::callback<void(fit::callback<void(zx_status_t)>)> on_stop_;
+  };
+
   // All external shutdown signals (except SetTerminationSystemState) ultimately
   // call either SignalBootShutdown or SignalPackageShutdown.  These two functions
   // interact with the ShutdownManager state machine and signal the node_remover
@@ -173,6 +189,13 @@ class ShutdownManager : public fidl::WireServer<fuchsia_device_manager::Administ
   // The driver runner should always be valid while the shutdown manager exists.
   // TODO(fxbug.dev/114374): ensure that this pointer is valid
   NodeRemover* node_remover_;
+
+  // Tracks when the devfs component is stopped by component manager. We shutdown all drivers upon
+  // receiving this signal.
+  Lifecycle devfs_lifecycle_;
+  // Tracks when the fshost component is stopped by component manager. We shutdown all packaged
+  // drivers upon receiving this signal.
+  Lifecycle fshost_lifecycle_;
 
   std::optional<fidl::ServerBindingRef<fuchsia_process_lifecycle::Lifecycle>> lifecycle_binding_;
   std::optional<fidl::ServerBindingRef<fuchsia_device_manager::SystemStateTransition>>

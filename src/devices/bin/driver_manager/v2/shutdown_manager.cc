@@ -63,7 +63,12 @@ zx::result<zx::resource> get_mexec_resource() {
 namespace dfv2 {
 
 ShutdownManager::ShutdownManager(NodeRemover* node_remover, async_dispatcher_t* dispatcher)
-    : node_remover_(node_remover), dispatcher_(dispatcher) {
+    : node_remover_(node_remover),
+      devfs_lifecycle_(
+          [this](fit::callback<void(zx_status_t)> cb) { SignalBootShutdown(std::move(cb)); }),
+      fshost_lifecycle_(
+          [this](fit::callback<void(zx_status_t)> cb) { SignalPackageShutdown(std::move(cb)); }),
+      dispatcher_(dispatcher) {
   if (zx::result power_resource = get_power_resource(); power_resource.is_error()) {
     LOGF(INFO, "Failed to get root resource, assuming test environment and continuing (%s)",
          power_resource.status_string());
@@ -95,6 +100,12 @@ void ShutdownManager::OnUnbound(const char* connection, fidl::UnbindInfo info) {
 void ShutdownManager::Publish(component::OutgoingDirectory& outgoing,
                               fidl::ClientEnd<fuchsia_io::Directory> dev_io) {
   auto result = outgoing.AddProtocol<fuchsia_device_manager::Administrator>(this);
+  ZX_ASSERT_MSG(result.is_ok(), "%s", result.status_string());
+
+  result = outgoing.AddProtocol(&devfs_lifecycle_, "fuchsia.device.fs.lifecycle.Lifecycle");
+  ZX_ASSERT_MSG(result.is_ok(), "%s", result.status_string());
+
+  result = outgoing.AddProtocol(&fshost_lifecycle_, "fuchsia.fshost.lifecycle.Lifecycle");
   ZX_ASSERT_MSG(result.is_ok(), "%s", result.status_string());
 
   // We advertise the SystemStateTransition protocol in case the shutdown shim needs
