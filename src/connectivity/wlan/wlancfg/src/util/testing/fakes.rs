@@ -14,7 +14,7 @@ use {
     async_trait::async_trait,
     fidl_fuchsia_wlan_sme as fidl_sme, fuchsia_async as fasync, fuchsia_zircon as zx,
     futures::{channel::mpsc, lock::Mutex},
-    log::info,
+    log::{info, warn},
     rand::Rng,
     std::{
         collections::{HashMap, VecDeque},
@@ -166,15 +166,25 @@ impl SavedNetworksManagerApi for FakeSavedNetworksManager {
 
     async fn lookup_compatible(
         &self,
-        _ssid: &client_types::Ssid,
+        ssid: &client_types::Ssid,
         _scan_security: client_types::SecurityTypeDetailed,
     ) -> Vec<NetworkConfig> {
-        self.lookup_compatible_response
-            .lock()
-            .await
-            .inner
-            .clone()
-            .expect("FakeSavedNetworksManager lookup_compatible response is not set")
+        let predetermined_response = self.lookup_compatible_response.lock().await.inner.clone();
+        match predetermined_response {
+            Some(resp) => resp,
+            None => {
+                warn!("FakeSavedNetworksManager lookup_compatible response is not set, returning all networks with matching SSID");
+                self.saved_networks
+                    .lock()
+                    .await
+                    .iter()
+                    .filter_map(
+                        |(id, config)| if id.ssid == *ssid { Some(config.clone()) } else { None },
+                    )
+                    .flatten()
+                    .collect()
+            }
+        }
     }
 
     /// Note that the configs-per-NetworkIdentifier limit is set to 1 in

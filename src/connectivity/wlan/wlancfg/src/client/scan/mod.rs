@@ -6,9 +6,7 @@
 use {
     crate::{
         client::types,
-        config_management::{
-            select_subset_potentially_hidden_networks, SavedNetworksManagerApi, ScanResultType,
-        },
+        config_management::{SavedNetworksManagerApi, ScanResultType},
         mode_management::iface_manager_api::{IfaceManagerApi, SmeForScan},
         telemetry::{ScanIssue, TelemetryEvent, TelemetrySender},
     },
@@ -135,8 +133,10 @@ pub async fn serve_scanning_loop(
                         } else {
                             perform_directed_active_scan(
                                 iface_manager.clone(),
+                                saved_networks_manager.clone(),
                                 ssids,
                                 channels,
+                                reason,
                                 Some(telemetry_sender.clone()),
                             ).boxed()
                         };
@@ -218,7 +218,7 @@ async fn perform_scan(
     iface_manager: Arc<Mutex<dyn IfaceManagerApi + Send>>,
     saved_networks_manager: Arc<dyn SavedNetworksManagerApi>,
     mut location_sensor_updater: impl ScanResultUpdate,
-    scan_reason: ScanReason,
+    _scan_reason: ScanReason,
     telemetry_sender: Option<TelemetrySender>,
 ) -> Result<Vec<types::ScanResult>, types::ScanError> {
     let mut bss_by_network: HashMap<SmeNetworkIdentifier, Vec<types::Bss>> = HashMap::new();
@@ -270,60 +270,6 @@ async fn perform_scan(
         }
     }
 
-    let requested_active_scan_ids: Vec<types::NetworkIdentifier> =
-        select_subset_potentially_hidden_networks(saved_networks_manager.get_networks().await);
-
-    // Record active scan decisions to metrics. This is optional, based on
-    // the scan reason and if the caller would like metrics logged.
-    if let Some(telemetry_sender) = telemetry_sender.clone() {
-        match scan_reason {
-            ScanReason::NetworkSelection => {
-                telemetry_sender.send(TelemetryEvent::ActiveScanRequested {
-                    num_ssids_requested: requested_active_scan_ids.len(),
-                });
-            }
-            _ => {}
-        }
-    }
-
-    if !requested_active_scan_ids.is_empty() {
-        let requested_active_scan_ssids: Vec<types::Ssid> =
-            requested_active_scan_ids.iter().map(|id| id.ssid.clone()).collect();
-        let scan_request = fidl_sme::ScanRequest::Active(fidl_sme::ActiveScanRequest {
-            ssids: requested_active_scan_ssids.iter().map(|s| s.to_vec()).collect(),
-            channels: vec![],
-        });
-        let sme_proxy = iface_manager.lock().await.get_sme_proxy_for_scan().await.map_err(|_| {
-            warn!("Failed to get sme proxy for active scan");
-            types::ScanError::GeneralError
-        });
-        let sme_scan_result = match sme_proxy.as_ref() {
-            Ok(proxy) => {
-                let result = sme_scan(proxy, scan_request, telemetry_sender).await;
-                report_scan_defect(proxy, &result).await;
-                result
-            }
-            Err(err) => Err(*err),
-        };
-
-        match sme_scan_result {
-            Ok(results) => {
-                record_directed_scan_results(
-                    requested_active_scan_ssids,
-                    &results,
-                    saved_networks_manager,
-                )
-                .await;
-                insert_bss_to_network_bss_map(&mut bss_by_network, results, false);
-            }
-            Err(scan_err) => {
-                // There was an error in the active scan, but our passive scan results are still
-                // valid. Return those.
-                info!("Proceeding with passive scan results, error in active scan {:?}", scan_err);
-            }
-        }
-    };
-
     let scan_results = network_bss_map_to_scan_result(bss_by_network);
 
     // Send scan results to Location, but include a timeout so that a stalled consumer doesn't
@@ -361,10 +307,24 @@ async fn record_undirected_scan_results(
 /// Perform a directed active scan for a given network on given channels.
 async fn perform_directed_active_scan(
     iface_manager: Arc<Mutex<dyn IfaceManagerApi + Send>>,
+    saved_networks_manager: Arc<dyn SavedNetworksManagerApi>,
     ssids: Vec<types::Ssid>,
     channels: Vec<types::WlanChan>,
+    scan_reason: ScanReason,
     telemetry_sender: Option<TelemetrySender>,
 ) -> Result<Vec<types::ScanResult>, types::ScanError> {
+    // Record active scan decisions to metrics. This is optional, based on
+    // the scan reason and if the caller would like metrics logged.
+    if let Some(telemetry_sender) = telemetry_sender.clone() {
+        match scan_reason {
+            ScanReason::NetworkSelection => {
+                telemetry_sender
+                    .send(TelemetryEvent::ActiveScanRequested { num_ssids_requested: ssids.len() });
+            }
+            _ => {}
+        }
+    }
+
     let scan_request = fidl_sme::ScanRequest::Active(fidl_sme::ActiveScanRequest {
         ssids: ssids.iter().map(|ssid| ssid.to_vec()).collect(),
         channels: channels.iter().map(|chan| chan.primary).collect(),
@@ -382,15 +342,20 @@ async fn perform_directed_active_scan(
 
     report_scan_defect(&sme_proxy, &sme_result).await;
 
-    sme_result.map(|results| {
-        let mut bss_by_network: HashMap<SmeNetworkIdentifier, Vec<types::Bss>> = HashMap::new();
-        insert_bss_to_network_bss_map(&mut bss_by_network, results, false);
+    match sme_result {
+        Ok(results) => {
+            record_directed_scan_results(ssids.clone(), &results, saved_networks_manager).await;
 
-        // The active scan targets a specific SSID, ensure only that SSID is present in results
-        bss_by_network.retain(|network_id, _| ssids.contains(&network_id.ssid));
+            let mut bss_by_network: HashMap<SmeNetworkIdentifier, Vec<types::Bss>> = HashMap::new();
+            insert_bss_to_network_bss_map(&mut bss_by_network, results, false);
 
-        network_bss_map_to_scan_result(bss_by_network)
-    })
+            // The active scan targets a specific SSID, ensure only that SSID is present in results
+            bss_by_network.retain(|network_id, _| ssids.contains(&network_id.ssid));
+
+            Ok(network_bss_map_to_scan_result(bss_by_network))
+        }
+        Err(e) => Err(e),
+    }
 }
 
 /// Figure out which saved networks we actively scanned for and did not get results for, and update
@@ -705,8 +670,6 @@ mod tests {
     struct MockScanData {
         passive_input_aps: Vec<fidl_sme::ScanResult>,
         passive_internal_aps: Vec<types::ScanResult>,
-        active_input_aps: Vec<fidl_sme::ScanResult>,
-        combined_internal_aps: Vec<types::ScanResult>,
     }
     fn create_scan_ap_data() -> MockScanData {
         let passive_result_1 = fidl_sme::ScanResult {
@@ -801,118 +764,7 @@ mod tests {
             },
         ];
 
-        let active_result_1 = fidl_sme::ScanResult {
-            compatibility: Some(Box::new(fidl_sme::Compatibility {
-                mutual_security_protocols: vec![fidl_security::Protocol::Wpa3Personal],
-            })),
-            timestamp_nanos: zx::Time::get_monotonic().into_nanos(),
-            bss_description: random_fidl_bss_description!(
-                Wpa3,
-                bssid: [9, 9, 9, 9, 9, 9],
-                ssid: types::Ssid::try_from("foo active ssid").unwrap(),
-                rssi_dbm: 0,
-                snr_db: 8,
-                channel: types::WlanChan::new(1, types::Cbw::Cbw20),
-            ),
-        };
-        let active_result_2 = fidl_sme::ScanResult {
-            compatibility: Some(Box::new(fidl_sme::Compatibility {
-                mutual_security_protocols: vec![fidl_security::Protocol::Wpa2Personal],
-            })),
-            timestamp_nanos: zx::Time::get_monotonic().into_nanos(),
-            bss_description: random_fidl_bss_description!(
-                Wpa2,
-                bssid: [8, 8, 8, 8, 8, 8],
-                ssid: types::Ssid::try_from("misc ssid").unwrap(),
-                rssi_dbm: 7,
-                snr_db: 9,
-                channel: types::WlanChan::new(8, types::Cbw::Cbw20),
-            ),
-        };
-        let active_input_aps = vec![active_result_1.clone(), active_result_2.clone()];
-        let combined_internal_aps = vec![
-            types::ScanResult {
-                ssid: types::Ssid::try_from("duplicated ssid").unwrap(),
-                security_type_detailed: types::SecurityTypeDetailed::Wpa3Personal,
-                entries: vec![
-                    types::Bss {
-                        bssid: types::Bssid([0, 0, 0, 0, 0, 0]),
-                        rssi: 0,
-                        timestamp: zx::Time::from_nanos(passive_result_1.timestamp_nanos),
-                        snr_db: 1,
-                        channel: types::WlanChan::new(1, types::Cbw::Cbw20),
-                        observation: types::ScanObservation::Passive,
-                        compatibility: Compatibility::expect_some([
-                            SecurityDescriptor::WPA3_PERSONAL,
-                        ]),
-                        bss_description: passive_result_1.bss_description.clone(),
-                    },
-                    types::Bss {
-                        bssid: types::Bssid([7, 8, 9, 10, 11, 12]),
-                        rssi: 13,
-                        timestamp: zx::Time::from_nanos(passive_result_3.timestamp_nanos),
-                        snr_db: 3,
-                        channel: types::WlanChan::new(11, types::Cbw::Cbw20),
-                        observation: types::ScanObservation::Passive,
-                        compatibility: None,
-                        bss_description: passive_result_3.bss_description.clone(),
-                    },
-                ],
-                compatibility: types::Compatibility::Supported,
-            },
-            types::ScanResult {
-                ssid: types::Ssid::try_from("foo active ssid").unwrap(),
-                security_type_detailed: types::SecurityTypeDetailed::Wpa3Personal,
-                entries: vec![types::Bss {
-                    bssid: types::Bssid([9, 9, 9, 9, 9, 9]),
-                    rssi: 0,
-                    timestamp: zx::Time::from_nanos(active_result_1.timestamp_nanos),
-                    snr_db: 8,
-                    channel: types::WlanChan::new(1, types::Cbw::Cbw20),
-                    observation: types::ScanObservation::Active,
-                    compatibility: Compatibility::expect_some([SecurityDescriptor::WPA3_PERSONAL]),
-                    bss_description: active_result_1.bss_description.clone(),
-                }],
-                compatibility: types::Compatibility::Supported,
-            },
-            types::ScanResult {
-                ssid: types::Ssid::try_from("misc ssid").unwrap(),
-                security_type_detailed: types::SecurityTypeDetailed::Wpa2Personal,
-                entries: vec![types::Bss {
-                    bssid: types::Bssid([8, 8, 8, 8, 8, 8]),
-                    rssi: 7,
-                    timestamp: zx::Time::from_nanos(active_result_2.timestamp_nanos),
-                    snr_db: 9,
-                    channel: types::WlanChan::new(8, types::Cbw::Cbw20),
-                    observation: types::ScanObservation::Active,
-                    compatibility: Compatibility::expect_some([SecurityDescriptor::WPA2_PERSONAL]),
-                    bss_description: active_result_2.bss_description.clone(),
-                }],
-                compatibility: types::Compatibility::Supported,
-            },
-            types::ScanResult {
-                ssid: types::Ssid::try_from("unique ssid").unwrap(),
-                security_type_detailed: types::SecurityTypeDetailed::Wpa2Personal,
-                entries: vec![types::Bss {
-                    bssid: types::Bssid([1, 2, 3, 4, 5, 6]),
-                    rssi: 7,
-                    timestamp: zx::Time::from_nanos(passive_result_2.timestamp_nanos),
-                    snr_db: 2,
-                    channel: types::WlanChan::new(8, types::Cbw::Cbw20),
-                    observation: types::ScanObservation::Passive,
-                    compatibility: Compatibility::expect_some([SecurityDescriptor::WPA2_PERSONAL]),
-                    bss_description: passive_result_2.bss_description.clone(),
-                }],
-                compatibility: types::Compatibility::Supported,
-            },
-        ];
-
-        MockScanData {
-            passive_input_aps,
-            passive_internal_aps,
-            active_input_aps,
-            combined_internal_aps,
-        }
+        MockScanData { passive_input_aps, passive_internal_aps }
     }
 
     fn create_telemetry_sender_and_receiver() -> (TelemetrySender, mpsc::Receiver<TelemetryEvent>) {
@@ -955,12 +807,8 @@ mod tests {
         assert_variant!(exec.run_until_stalled(&mut scan_fut), Poll::Pending);
 
         // Create mock scan data
-        let MockScanData {
-            passive_input_aps: input_aps,
-            passive_internal_aps: _,
-            active_input_aps: _,
-            combined_internal_aps: _,
-        } = create_scan_ap_data();
+        let MockScanData { passive_input_aps: input_aps, passive_internal_aps: _ } =
+            create_scan_ap_data();
         // Validate the SME received the scan_request and send back mock data
         assert_variant!(
             exec.run_until_stalled(&mut sme_stream.next()),
@@ -1009,12 +857,8 @@ mod tests {
         assert_variant!(exec.run_until_stalled(&mut scan_fut), Poll::Pending);
 
         // Create mock scan data
-        let MockScanData {
-            passive_input_aps: input_aps,
-            passive_internal_aps: _,
-            active_input_aps: _,
-            combined_internal_aps: _,
-        } = create_scan_ap_data();
+        let MockScanData { passive_input_aps: input_aps, passive_internal_aps: _ } =
+            create_scan_ap_data();
         // Validate the SME received the scan_request and send back mock data
         assert_variant!(
             exec.run_until_stalled(&mut sme_stream.next()),
@@ -1101,12 +945,8 @@ mod tests {
         assert_variant!(exec.run_until_stalled(&mut scan_fut), Poll::Pending);
 
         // Create mock scan data and send it via the SME
-        let MockScanData {
-            passive_input_aps: input_aps,
-            passive_internal_aps: internal_aps,
-            active_input_aps: _,
-            combined_internal_aps: _,
-        } = create_scan_ap_data();
+        let MockScanData { passive_input_aps: input_aps, passive_internal_aps: internal_aps } =
+            create_scan_ap_data();
         assert_variant!(
             exec.run_until_stalled(&mut sme_stream.next()),
             Poll::Ready(Some(Ok(fidl_sme::ClientSmeRequest::Scan {
@@ -1130,10 +970,6 @@ mod tests {
 
         // Since the scanning process went off without a hitch, there should not be any defect
         // metrics logged.
-        assert_variant!(
-            telemetry_receiver.try_next(),
-            Ok(Some(TelemetryEvent::ActiveScanRequested { num_ssids_requested: 0 }))
-        );
         assert_variant!(telemetry_receiver.try_next(), Ok(None));
     }
 
@@ -1200,12 +1036,8 @@ mod tests {
         let saved_networks_manager = Arc::new(FakeSavedNetworksManager::new());
 
         // Create passive scan info
-        let MockScanData {
-            passive_input_aps: input_aps,
-            passive_internal_aps: internal_aps,
-            active_input_aps: _,
-            combined_internal_aps: _,
-        } = create_scan_ap_data();
+        let MockScanData { passive_input_aps: input_aps, passive_internal_aps: internal_aps } =
+            create_scan_ap_data();
 
         // Save a network and set its hidden probability to 0
         let network_id = types::NetworkIdentifier {
@@ -1265,12 +1097,8 @@ mod tests {
         let saved_networks_manager = Arc::new(FakeSavedNetworksManager::new());
 
         // Create the passive scan info
-        let MockScanData {
-            passive_input_aps: input_aps,
-            passive_internal_aps: _,
-            active_input_aps: _,
-            combined_internal_aps: _,
-        } = create_scan_ap_data();
+        let MockScanData { passive_input_aps: input_aps, passive_internal_aps: _ } =
+            create_scan_ap_data();
 
         // Save a network that WILL be seen in the passive scan.
         let first_ap = wlan_common::scan::ScanResult::try_from(input_aps[0].clone()).unwrap();
@@ -1340,109 +1168,6 @@ mod tests {
 
         // Note: the decision to active scan is non-deterministic (using the hidden network probabilities),
         // no need to continue and verify the results in this test case.
-    }
-
-    /// Verify that an active scan is occurs when there is a saved network with a 1.0
-    /// hidden network probability, and that the probability is decreased when it
-    /// goes unseen.
-    #[fuchsia::test]
-    fn active_scan_due_to_high_hidden_network_probabilities() {
-        let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
-        let (client, mut sme_stream) = exec.run_singlethreaded(create_iface_manager());
-        let (location_sensor, _) = MockScanResultConsumer::new();
-        let saved_networks_manager = Arc::new(FakeSavedNetworksManager::new());
-
-        // Create the passive scan info
-        let MockScanData {
-            passive_input_aps,
-            passive_internal_aps,
-            active_input_aps: _,
-            combined_internal_aps: _,
-        } = create_scan_ap_data();
-
-        // Save a network that will NOT be seen in the either scan and set
-        // its initial hidden network probability to 1.0
-        let unseen_ssid = types::Ssid::try_from("some ssid").unwrap();
-        let unseen_network = types::NetworkIdentifier {
-            ssid: unseen_ssid.clone(),
-            security_type: types::SecurityType::Wpa3,
-        };
-        assert!(exec
-            .run_singlethreaded(
-                saved_networks_manager
-                    .store(unseen_network.clone(), Credential::Password(b"randompass".to_vec()))
-            )
-            .expect("failed to store network")
-            .is_none());
-
-        exec.run_singlethreaded(
-            saved_networks_manager.update_hidden_prob(unseen_network.clone(), 1.0),
-        );
-        let config = exec
-            .run_singlethreaded(saved_networks_manager.lookup(&unseen_network.clone()))
-            .pop()
-            .expect("failed to lookup");
-        assert_eq!(config.hidden_probability, 1.0);
-
-        // Issue request to scan.
-        let scan_fut = perform_scan(
-            client.clone(),
-            saved_networks_manager.clone(),
-            location_sensor,
-            ScanReason::NetworkSelection,
-            None,
-        );
-        pin_mut!(scan_fut);
-
-        // Progress scan handler
-        assert_variant!(exec.run_until_stalled(&mut scan_fut), Poll::Pending);
-
-        // Create mock scan data and send it via the SME
-        assert_variant!(
-            exec.run_until_stalled(&mut sme_stream.next()),
-            Poll::Ready(Some(Ok(fidl_sme::ClientSmeRequest::Scan {
-                req, responder,
-            }))) => {
-                assert_eq!(req, fidl_sme::ScanRequest::Passive(fidl_sme::PassiveScanRequest {}));
-                responder.send(&mut Ok(passive_input_aps.clone())).expect("failed to send scan data");
-            }
-        );
-
-        // Process response from SME
-        assert_variant!(exec.run_until_stalled(&mut scan_fut), Poll::Pending);
-
-        // Verify record passive scan result was called.
-        assert!(
-            *exec.run_singlethreaded(saved_networks_manager.passive_scan_result_recorded.lock())
-        );
-
-        // Create mock active scan data. This should verify that an active scan was
-        // issues based on the hidden network probabilties.
-        assert_variant!(
-            exec.run_until_stalled(&mut sme_stream.next()),
-            Poll::Ready(Some(Ok(fidl_sme::ClientSmeRequest::Scan {
-                req, responder,
-            }))) => {
-                assert_eq!(req, fidl_sme::ScanRequest::Active(fidl_sme::ActiveScanRequest {
-                    ssids: vec![unseen_ssid.to_vec()],
-                    channels: vec![],
-                }));
-                responder.send(&mut Ok(vec![])).expect("failed to send scan data");
-            }
-        );
-
-        // Get results from scans. Results should just be the passive results.
-        assert_variant!(exec.run_until_stalled(&mut scan_fut), Poll::Ready(results) => {
-            assert_eq!(results.unwrap(), passive_internal_aps);
-        });
-
-        // Verify that active scan results were recorded.
-        assert!(*exec.run_singlethreaded(saved_networks_manager.active_scan_result_recorded.lock()));
-
-        // Make sure the empty scan results were reported.
-        let logged_defects = get_fake_defects(&mut exec, client);
-        let expected_defects = vec![Defect::Iface(IfaceFailure::EmptyScanResults { iface_id: 0 })];
-        assert_eq!(logged_defects, expected_defects);
     }
 
     #[fuchsia::test]
@@ -1584,100 +1309,6 @@ mod tests {
         assert_eq!(bss_by_network[&expected_id], expected_bss);
     }
 
-    #[fuchsia::test]
-    fn scan_with_active_scan_failure() {
-        let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
-        let (client, mut sme_stream) = exec.run_singlethreaded(create_iface_manager());
-        let (location_sensor, location_sensor_results) = MockScanResultConsumer::new();
-        let saved_networks_manager = Arc::new(FakeSavedNetworksManager::new());
-
-        // Create the passive and active scan info
-        let MockScanData {
-            passive_input_aps,
-            passive_internal_aps,
-            active_input_aps: _,
-            combined_internal_aps: _,
-        } = create_scan_ap_data();
-
-        // Save a network with hidden probability 1.0, which will guarantee an
-        // active scan takes place
-        let unseen_ssid = types::Ssid::try_from("foobarbaz ssid").unwrap();
-        let unseen_network = types::NetworkIdentifier {
-            ssid: unseen_ssid.clone(),
-            security_type: types::SecurityType::Wpa3,
-        };
-        assert!(exec
-            .run_singlethreaded(
-                saved_networks_manager
-                    .store(unseen_network.clone(), Credential::Password(b"randompass".to_vec()))
-            )
-            .expect("failed to store network")
-            .is_none());
-
-        exec.run_singlethreaded(
-            saved_networks_manager.update_hidden_prob(unseen_network.clone(), 1.0),
-        );
-
-        // Issue request to scan.
-        let scan_fut = perform_scan(
-            client.clone(),
-            saved_networks_manager,
-            location_sensor,
-            ScanReason::NetworkSelection,
-            None,
-        );
-        pin_mut!(scan_fut);
-
-        // Progress scan handler
-        assert_variant!(exec.run_until_stalled(&mut scan_fut), Poll::Pending);
-
-        // Respond to the first (passive) scan request
-        assert_variant!(
-            exec.run_until_stalled(&mut sme_stream.next()),
-            Poll::Ready(Some(Ok(fidl_sme::ClientSmeRequest::Scan {
-                req, responder,
-            }))) => {
-                assert_eq!(req, fidl_sme::ScanRequest::Passive(fidl_sme::PassiveScanRequest {}));
-                responder.send(&mut Ok(passive_input_aps.clone())).expect("failed to send scan data");
-            }
-        );
-
-        // Process response from SME
-        assert_variant!(exec.run_until_stalled(&mut scan_fut), Poll::Pending);
-
-        // Check that a scan request was sent to the sme and send back an error
-        let expected_scan_request = fidl_sme::ScanRequest::Active(fidl_sme::ActiveScanRequest {
-            ssids: vec![unseen_ssid.to_vec()],
-            channels: vec![],
-        });
-        assert_variant!(
-            exec.run_until_stalled(&mut sme_stream.next()),
-            Poll::Ready(Some(Ok(fidl_sme::ClientSmeRequest::Scan {
-                req, responder,
-            }))) => {
-                assert_eq!(req, expected_scan_request);
-                // Send failed scan response.
-                responder.send(&mut Err(fidl_sme::ScanErrorCode::InternalError)).expect("failed to send scan error");
-            }
-        );
-
-        // Process scan handler
-        assert_variant!(exec.run_until_stalled(&mut scan_fut), Poll::Ready(results) => {
-            assert_eq!(results.unwrap(), passive_internal_aps);
-        });
-
-        // Check scan consumer got just the passive scan results, since the active scan failed
-        assert_eq!(
-            *exec.run_singlethreaded(location_sensor_results.lock()),
-            Some(passive_internal_aps.clone())
-        );
-
-        // Verify that a defect was logged.
-        let logged_defects = get_fake_defects(&mut exec, client);
-        let expected_defects = vec![Defect::Iface(IfaceFailure::FailedScan { iface_id: 0 })];
-        assert_eq!(logged_defects, expected_defects);
-    }
-
     #[test_case(
         fidl_sme::ScanErrorCode::InternalError,
         types::ScanError::GeneralError,
@@ -1783,12 +1414,8 @@ mod tests {
 
         if retry_succeeds {
             // Create mock scan data and send it via the SME
-            let MockScanData {
-                passive_input_aps: input_aps,
-                passive_internal_aps: internal_aps,
-                active_input_aps: _,
-                combined_internal_aps: _,
-            } = create_scan_ap_data();
+            let MockScanData { passive_input_aps: input_aps, passive_internal_aps: internal_aps } =
+                create_scan_ap_data();
             assert_variant!(
                 exec.run_until_stalled(&mut sme_stream.next()),
                 Poll::Ready(Some(Ok(fidl_sme::ClientSmeRequest::Scan {
@@ -1844,38 +1471,14 @@ mod tests {
         let (client, mut sme_stream) = exec.run_singlethreaded(create_iface_manager());
         let (location_sensor1, location_sensor_results1) = MockScanResultConsumer::new();
         let (location_sensor2, location_sensor_results2) = MockScanResultConsumer::new();
+        let saved_networks_manager = Arc::new(FakeSavedNetworksManager::new());
 
-        // Use separate saved network managers so only one expects an active scan
-        // based on saved networks.
-        let saved_networks_manager1 = Arc::new(FakeSavedNetworksManager::new());
-        let saved_networks_manager2 = Arc::new(FakeSavedNetworksManager::new());
-
-        // Save a network with 1.0 hidden network probability to guarantee an active scan for scan_fut1.
-        let active_ssid = types::Ssid::try_from("foo active ssid").unwrap();
-        let active_id = types::NetworkIdentifier {
-            ssid: active_ssid.clone(),
-            security_type: types::SecurityType::Wpa3,
-        };
-        assert!(exec
-            .run_singlethreaded(
-                saved_networks_manager2
-                    .store(active_id.clone(), Credential::Password(b"randompass".to_vec()))
-            )
-            .expect("failed to store network")
-            .is_none());
-        exec.run_singlethreaded(saved_networks_manager2.update_hidden_prob(active_id.clone(), 1.0));
-
-        let MockScanData {
-            passive_input_aps,
-            passive_internal_aps,
-            active_input_aps,
-            combined_internal_aps,
-        } = create_scan_ap_data();
+        let MockScanData { passive_input_aps, passive_internal_aps } = create_scan_ap_data();
 
         // Issue request to scan on both iterator.
         let scan_fut0 = perform_scan(
             client.clone(),
-            saved_networks_manager1.clone(),
+            saved_networks_manager.clone(),
             location_sensor1,
             ScanReason::NetworkSelection,
             None,
@@ -1884,7 +1487,7 @@ mod tests {
 
         let scan_fut1 = perform_scan(
             client.clone(),
-            saved_networks_manager2,
+            saved_networks_manager,
             location_sensor2,
             ScanReason::NetworkSelection,
             None,
@@ -1914,27 +1517,11 @@ mod tests {
                         assert_eq!(req, fidl_sme::ScanRequest::Passive(fidl_sme::PassiveScanRequest {}));
                         responder.send(&mut Ok(passive_input_aps.clone())).expect("failed to send scan data");
                     }
-                ); // for output_iter_fut1
-                // Process SME result.
-                assert_variant!(exec.run_until_stalled(&mut scan_fut1), Poll::Pending);
-                // The second request should now result in an active scan
-                assert_variant!(
-                    exec.run_until_stalled(&mut sme_stream.next()),
-                    Poll::Ready(Some(Ok(fidl_sme::ClientSmeRequest::Scan {
-                        req, responder,
-                    }))) => {
-                        // Validate the request
-                        assert_eq!(req, fidl_sme::ScanRequest::Active(fidl_sme::ActiveScanRequest {
-                            channels: vec![],
-                            ssids: vec![active_ssid.to_vec()],
-                        }));
-                        // Send all the APs
-                        responder.send(&mut Ok(active_input_aps.clone())).expect("failed to send scan data");
-                    }
                 );
+
                 // Process SME result.
                 assert_variant!(exec.run_until_stalled(&mut scan_fut1), Poll::Ready(results) => {
-                    assert_eq!(results.unwrap(), combined_internal_aps);
+                    assert_eq!(results.unwrap(), passive_internal_aps.clone());
                 });
 
                 // Send the APs for the first iterator
@@ -1954,7 +1541,7 @@ mod tests {
         );
         assert_eq!(
             *exec.run_singlethreaded(location_sensor_results2.lock()),
-            Some(combined_internal_aps.clone())
+            Some(passive_internal_aps.clone())
         );
     }
 
@@ -1962,14 +1549,17 @@ mod tests {
     fn directed_active_scan_filters_desired_network() {
         let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
         let (client, mut sme_stream) = exec.run_singlethreaded(create_iface_manager());
+        let saved_networks_manager = Arc::new(FakeSavedNetworksManager::new());
 
         // Issue request to scan.
         let desired_ssid = types::Ssid::try_from("test_ssid").unwrap();
         let desired_channels = vec![generate_channel(1), generate_channel(36)];
         let scan_fut = perform_directed_active_scan(
             client,
+            saved_networks_manager,
             vec![desired_ssid.clone()],
             desired_channels.clone(),
+            ScanReason::NetworkSelection,
             None,
         );
         pin_mut!(scan_fut);
@@ -2163,14 +1753,17 @@ mod tests {
     ) {
         let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
         let (client, mut sme_stream) = exec.run_singlethreaded(create_iface_manager());
+        let saved_networks_manager = Arc::new(FakeSavedNetworksManager::new());
 
         // Issue request to scan.
         let desired_ssid = types::Ssid::try_from("test_ssid").unwrap();
         let desired_channels = vec![];
         let scan_fut = perform_directed_active_scan(
             client.clone(),
+            saved_networks_manager,
             vec![desired_ssid.clone()],
             desired_channels.clone(),
+            ScanReason::NetworkSelection,
             None,
         );
         pin_mut!(scan_fut);
@@ -2199,6 +1792,7 @@ mod tests {
     fn active_scan_empty() {
         let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
         let (client, mut sme_stream) = exec.run_singlethreaded(create_iface_manager());
+        let saved_networks_manager = Arc::new(FakeSavedNetworksManager::new());
 
         // Issue request to scan.
         let ssid = "test_ssid";
@@ -2206,8 +1800,10 @@ mod tests {
         let desired_channels = vec![];
         let scan_fut = perform_directed_active_scan(
             client.clone(),
+            saved_networks_manager,
             vec![desired_ssid.clone()],
             desired_channels.clone(),
+            ScanReason::NetworkSelection,
             None,
         );
         pin_mut!(scan_fut);

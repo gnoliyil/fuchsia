@@ -11,7 +11,8 @@ use {
         },
         config_management::{
             network_config::{AddAndGetRecent, PastConnectionsByBssid},
-            ConnectFailure, Credential, FailureReason, SavedNetworksManagerApi,
+            select_subset_potentially_hidden_networks, ConnectFailure, Credential, FailureReason,
+            SavedNetworksManagerApi,
         },
         telemetry::{self, TelemetryEvent, TelemetrySender},
     },
@@ -269,13 +270,12 @@ impl NetworkSelector {
         &self,
         network: Option<types::NetworkIdentifier>,
     ) -> Vec<InternalBss> {
-        let scan_results = match network {
-            Some(ref network) => {
+        let scan_for_candidates = || async {
+            if let Some(ref network) = network {
                 self.scan_requester
                     .perform_scan(ScanReason::BssSelection, vec![network.ssid.clone()], vec![])
                     .await
-            }
-            None => {
+            } else {
                 let last_scan_result_time = *self.last_scan_result_time.lock().await;
                 let scan_age = zx::Time::get_monotonic() - last_scan_result_time;
                 if last_scan_result_time != zx::Time::ZERO {
@@ -289,10 +289,42 @@ impl NetworkSelector {
                         ctx: "NetworkSelector::perform_scan",
                     });
                 }
-                self.scan_requester.perform_scan(ScanReason::NetworkSelection, vec![], vec![]).await
+                let passive_scan_results = match self
+                    .scan_requester
+                    .perform_scan(ScanReason::NetworkSelection, vec![], vec![])
+                    .await
+                {
+                    Ok(scan_results) => scan_results,
+                    Err(e) => return Err(e),
+                };
+
+                let requested_active_scan_ssids: Vec<types::Ssid> =
+                    select_subset_potentially_hidden_networks(
+                        self.saved_network_manager.get_networks().await,
+                    )
+                    .drain(..)
+                    .map(|id| id.ssid)
+                    .collect();
+
+                if requested_active_scan_ssids.is_empty() {
+                    Ok(passive_scan_results)
+                } else {
+                    self.scan_requester
+                        .perform_scan(
+                            ScanReason::NetworkSelection,
+                            requested_active_scan_ssids,
+                            vec![],
+                        )
+                        .await
+                        .map(|mut scan_results| {
+                            scan_results.extend(passive_scan_results);
+                            scan_results
+                        })
+                }
             }
         };
 
+        let scan_results = scan_for_candidates().await;
         let candidates = match scan_results {
             Err(e) => {
                 warn!("Failed to get available BSSs, {:?}", e);
@@ -668,7 +700,8 @@ mod tests {
                 SavedNetworksManager,
             },
             util::testing::{
-                create_inspect_persistence_channel, create_wlan_hasher, fakes::FakeScanRequester,
+                create_inspect_persistence_channel, create_wlan_hasher,
+                fakes::{FakeSavedNetworksManager, FakeScanRequester},
                 generate_channel, generate_random_bss, generate_random_scan_result,
                 random_connection_data,
             },
@@ -689,14 +722,17 @@ mod tests {
 
     struct TestValues {
         network_selector: Arc<NetworkSelector>,
-        saved_network_manager: Arc<dyn SavedNetworksManagerApi>,
+        real_saved_network_manager: Arc<dyn SavedNetworksManagerApi>,
+        saved_network_manager: Arc<FakeSavedNetworksManager>,
         scan_requester: Arc<FakeScanRequester>,
         inspector: inspect::Inspector,
         telemetry_receiver: mpsc::Receiver<TelemetryEvent>,
     }
 
-    async fn test_setup() -> TestValues {
-        let saved_network_manager = Arc::new(SavedNetworksManager::new_for_test().await.unwrap());
+    async fn test_setup(use_real_save_network_manager: bool) -> TestValues {
+        let real_saved_network_manager =
+            Arc::new(SavedNetworksManager::new_for_test().await.unwrap());
+        let saved_network_manager = Arc::new(FakeSavedNetworksManager::new());
         let scan_requester = Arc::new(FakeScanRequester::new());
         let inspector = inspect::Inspector::new();
         let inspect_node = inspector.root().create_child("net_select_test");
@@ -704,7 +740,11 @@ mod tests {
         let (telemetry_sender, telemetry_receiver) = mpsc::channel::<TelemetryEvent>(100);
 
         let network_selector = Arc::new(NetworkSelector::new(
-            saved_network_manager.clone(),
+            if use_real_save_network_manager {
+                real_saved_network_manager.clone()
+            } else {
+                saved_network_manager.clone()
+            },
             scan_requester.clone(),
             create_wlan_hasher(),
             inspect_node,
@@ -714,6 +754,7 @@ mod tests {
 
         TestValues {
             network_selector,
+            real_saved_network_manager,
             saved_network_manager,
             scan_requester,
             inspector,
@@ -744,7 +785,7 @@ mod tests {
 
     #[fuchsia::test]
     async fn scan_results_merged_with_saved_networks() {
-        let test_values = test_setup().await;
+        let test_values = test_setup(true).await;
 
         // create some identifiers
         let test_ssid_1 = types::Ssid::try_from("foo").unwrap();
@@ -764,14 +805,14 @@ mod tests {
 
         // insert the saved networks
         assert!(test_values
-            .saved_network_manager
+            .real_saved_network_manager
             .store(test_id_1.clone(), credential_1.clone())
             .await
             .unwrap()
             .is_none());
 
         assert!(test_values
-            .saved_network_manager
+            .real_saved_network_manager
             .store(test_id_2.clone(), credential_2.clone())
             .await
             .unwrap()
@@ -798,7 +839,7 @@ mod tests {
 
         // mark the first one as having connected
         test_values
-            .saved_network_manager
+            .real_saved_network_manager
             .record_connect_result(
                 test_id_1.clone(),
                 &credential_1.clone(),
@@ -810,7 +851,7 @@ mod tests {
 
         // mark the second one as having a failure
         test_values
-            .saved_network_manager
+            .real_saved_network_manager
             .record_connect_result(
                 test_id_1.clone(),
                 &credential_1.clone(),
@@ -826,7 +867,7 @@ mod tests {
 
         // build our expected result
         let failure_time = test_values
-            .saved_network_manager
+            .real_saved_network_manager
             .lookup(&test_id_1.clone())
             .await
             .get(0)
@@ -889,7 +930,7 @@ mod tests {
 
         // validate the function works
         let result = merge_saved_networks_and_scan_data(
-            &test_values.saved_network_manager,
+            &test_values.real_saved_network_manager,
             mock_scan_results,
             &hasher,
         )
@@ -1101,7 +1142,7 @@ mod tests {
     #[fuchsia::test]
     fn select_bss_sorts_by_score() {
         let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
-        let test_values = exec.run_singlethreaded(test_setup());
+        let test_values = exec.run_singlethreaded(test_setup(true));
 
         // build networks list
         let test_id_1 = types::NetworkIdentifier {
@@ -1203,7 +1244,7 @@ mod tests {
     #[fuchsia::test]
     fn select_bss_sorts_by_failure_count() {
         let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
-        let test_values = exec.run_singlethreaded(test_setup());
+        let test_values = exec.run_singlethreaded(test_setup(true));
 
         // build networks list
         let test_id_1 = types::NetworkIdentifier {
@@ -1296,7 +1337,7 @@ mod tests {
     #[fuchsia::test]
     fn select_bss_incompatible() {
         let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
-        let test_values = exec.run_singlethreaded(test_setup());
+        let test_values = exec.run_singlethreaded(test_setup(true));
 
         // build networks list
         let test_id_1 = types::NetworkIdentifier {
@@ -1399,7 +1440,7 @@ mod tests {
     #[fuchsia::test]
     fn select_bss_logs_to_inspect() {
         let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
-        let test_values = exec.run_singlethreaded(test_setup());
+        let test_values = exec.run_singlethreaded(test_setup(true));
 
         // build networks list
         let test_id_1 = types::NetworkIdentifier {
@@ -1525,7 +1566,7 @@ mod tests {
     #[fuchsia::test]
     fn select_bss_empty_list_logs_to_inspect() {
         let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
-        let test_values = exec.run_singlethreaded(test_setup());
+        let test_values = exec.run_singlethreaded(test_setup(true));
 
         assert_eq!(exec.run_singlethreaded(test_values.network_selector.select_bss(vec![])), None);
 
@@ -1545,7 +1586,7 @@ mod tests {
     #[fuchsia::test]
     fn augment_bss_with_active_scan_doesnt_run_on_actively_found_networks() {
         let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
-        let test_values = exec.run_singlethreaded(test_setup());
+        let test_values = exec.run_singlethreaded(test_setup(true));
 
         let test_id_1 = types::NetworkIdentifier {
             ssid: types::Ssid::try_from("foo").unwrap(),
@@ -1585,7 +1626,7 @@ mod tests {
     #[fuchsia::test]
     fn augment_bss_with_active_scan_runs_on_passively_found_networks() {
         let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
-        let test_values = exec.run_singlethreaded(test_setup());
+        let test_values = exec.run_singlethreaded(test_setup(true));
 
         let scan_channel = generate_channel(36);
         let test_id_1 = types::NetworkIdentifier {
@@ -1646,9 +1687,205 @@ mod tests {
     }
 
     #[fuchsia::test]
+    fn find_available_bss_list_with_network_specified() {
+        let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
+        let test_values = exec.run_singlethreaded(test_setup(false));
+        let network_selector = test_values.network_selector;
+
+        // create identifiers
+        let test_id_1 = types::NetworkIdentifier {
+            ssid: types::Ssid::try_from("foo").unwrap(),
+            security_type: types::SecurityType::Wpa3,
+        };
+        let credential_1 = Credential::Password("foo_pass".as_bytes().to_vec());
+
+        // insert saved networks
+        assert!(exec
+            .run_singlethreaded(
+                test_values.saved_network_manager.store(test_id_1.clone(), credential_1.clone()),
+            )
+            .unwrap()
+            .is_none());
+
+        // Prep the scan results
+        let mutual_security_protocols_1 = [SecurityDescriptor::WPA3_PERSONAL];
+        let bss_desc_1 = random_fidl_bss_description!();
+        exec.run_singlethreaded(test_values.scan_requester.add_scan_result(Ok(vec![
+            types::ScanResult {
+                ssid: test_id_1.ssid.clone(),
+                security_type_detailed: types::SecurityTypeDetailed::Wpa3Personal,
+                compatibility: types::Compatibility::Supported,
+                entries: vec![types::Bss {
+                    compatibility: wlan_common::scan::Compatibility::expect_some(
+                        mutual_security_protocols_1,
+                    ),
+                    bss_description: bss_desc_1.clone(),
+                    ..generate_random_bss()
+                }],
+            },
+            generate_random_scan_result(),
+            generate_random_scan_result(),
+        ])));
+
+        // Run the scan, specifying the desired network
+        let network_selection_fut =
+            network_selector.find_available_bss_list(Some(test_id_1.clone()));
+        pin_mut!(network_selection_fut);
+        let results = exec.run_singlethreaded(&mut network_selection_fut);
+        assert_eq!(results.len(), 1);
+
+        // Check that the right scan request was sent
+        assert_eq!(
+            *exec.run_singlethreaded(test_values.scan_requester.scan_requests.lock()),
+            vec![(ScanReason::BssSelection, vec![test_id_1.ssid.clone()], vec![])]
+        );
+    }
+
+    #[test_case(true)]
+    #[test_case(false)]
+    #[fuchsia::test(add_test_attr = false)]
+    fn find_available_bss_list_without_network_specified(hidden: bool) {
+        let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
+        let test_values = exec.run_singlethreaded(test_setup(false));
+        let network_selector = test_values.network_selector;
+
+        // create identifiers
+        let test_id_not_hidden = types::NetworkIdentifier {
+            ssid: types::Ssid::try_from("foo").unwrap(),
+            security_type: types::SecurityType::Wpa3,
+        };
+        let test_id_maybe_hidden = types::NetworkIdentifier {
+            ssid: types::Ssid::try_from("bar").unwrap(),
+            security_type: types::SecurityType::Wpa3,
+        };
+        let credential = Credential::Password("some_pass".as_bytes().to_vec());
+
+        // insert saved networks
+        assert!(exec
+            .run_singlethreaded(
+                test_values
+                    .saved_network_manager
+                    .store(test_id_not_hidden.clone(), credential.clone()),
+            )
+            .unwrap()
+            .is_none());
+        assert!(exec
+            .run_singlethreaded(
+                test_values
+                    .saved_network_manager
+                    .store(test_id_maybe_hidden.clone(), credential.clone()),
+            )
+            .unwrap()
+            .is_none());
+
+        // Set the hidden probability for test_id_not_hidden
+        exec.run_singlethreaded(
+            test_values.saved_network_manager.update_hidden_prob(test_id_not_hidden.clone(), 0.0),
+        );
+        // Set the hidden probability for test_id_maybe_hidden based on test variant
+        exec.run_singlethreaded(
+            test_values
+                .saved_network_manager
+                .update_hidden_prob(test_id_maybe_hidden.clone(), if hidden { 1.0 } else { 0.0 }),
+        );
+
+        // Prep the scan results
+        let mutual_security_protocols = [SecurityDescriptor::WPA3_PERSONAL];
+        let bss_desc = random_fidl_bss_description!();
+        if hidden {
+            // Initial passive scan has non-hidden result
+            exec.run_singlethreaded(test_values.scan_requester.add_scan_result(Ok(vec![
+                types::ScanResult {
+                    ssid: test_id_not_hidden.ssid.clone(),
+                    security_type_detailed: types::SecurityTypeDetailed::Wpa3Personal,
+                    compatibility: types::Compatibility::Supported,
+                    entries: vec![types::Bss {
+                        compatibility: wlan_common::scan::Compatibility::expect_some(
+                            mutual_security_protocols,
+                        ),
+                        bss_description: bss_desc.clone(),
+                        ..generate_random_bss()
+                    }],
+                },
+                generate_random_scan_result(),
+                generate_random_scan_result(),
+            ])));
+            // Next active scan has hidden result
+            exec.run_singlethreaded(test_values.scan_requester.add_scan_result(Ok(vec![
+                types::ScanResult {
+                    ssid: test_id_maybe_hidden.ssid.clone(),
+                    security_type_detailed: types::SecurityTypeDetailed::Wpa3Personal,
+                    compatibility: types::Compatibility::Supported,
+                    entries: vec![types::Bss {
+                        compatibility: wlan_common::scan::Compatibility::expect_some(
+                            mutual_security_protocols,
+                        ),
+                        bss_description: bss_desc.clone(),
+                        ..generate_random_bss()
+                    }],
+                },
+                generate_random_scan_result(),
+                generate_random_scan_result(),
+            ])));
+        } else {
+            // Non-hidden test case, only one scan, return both results
+            exec.run_singlethreaded(test_values.scan_requester.add_scan_result(Ok(vec![
+                types::ScanResult {
+                    ssid: test_id_not_hidden.ssid.clone(),
+                    security_type_detailed: types::SecurityTypeDetailed::Wpa3Personal,
+                    compatibility: types::Compatibility::Supported,
+                    entries: vec![types::Bss {
+                        compatibility: wlan_common::scan::Compatibility::expect_some(
+                            mutual_security_protocols,
+                        ),
+                        bss_description: bss_desc.clone(),
+                        ..generate_random_bss()
+                    }],
+                },
+                types::ScanResult {
+                    ssid: test_id_maybe_hidden.ssid.clone(),
+                    security_type_detailed: types::SecurityTypeDetailed::Wpa3Personal,
+                    compatibility: types::Compatibility::Supported,
+                    entries: vec![types::Bss {
+                        compatibility: wlan_common::scan::Compatibility::expect_some(
+                            mutual_security_protocols,
+                        ),
+                        bss_description: bss_desc.clone(),
+                        ..generate_random_bss()
+                    }],
+                },
+                generate_random_scan_result(),
+                generate_random_scan_result(),
+            ])));
+        }
+
+        // Run the scan(s)
+        let network_selection_fut = network_selector.find_available_bss_list(None);
+        pin_mut!(network_selection_fut);
+        let results = exec.run_singlethreaded(&mut network_selection_fut);
+        assert_eq!(results.len(), 2);
+
+        // Check that the right scan request(s) were sent
+        if hidden {
+            assert_eq!(
+                *exec.run_singlethreaded(test_values.scan_requester.scan_requests.lock()),
+                vec![
+                    (ScanReason::NetworkSelection, vec![], vec![]),
+                    (ScanReason::NetworkSelection, vec![test_id_maybe_hidden.ssid.clone()], vec![])
+                ]
+            )
+        } else {
+            assert_eq!(
+                *exec.run_singlethreaded(test_values.scan_requester.scan_requests.lock()),
+                vec![(ScanReason::NetworkSelection, vec![], vec![])]
+            )
+        }
+    }
+
+    #[fuchsia::test]
     fn find_and_select_scanned_candidate_scan_error() {
         let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
-        let test_values = exec.run_singlethreaded(test_setup());
+        let test_values = exec.run_singlethreaded(test_setup(true));
         let network_selector = test_values.network_selector;
         let mut telemetry_receiver = test_values.telemetry_receiver;
 
@@ -1694,7 +1931,7 @@ mod tests {
     #[fuchsia::test]
     fn find_and_select_scanned_candidate_end_to_end() {
         let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
-        let test_values = exec.run_singlethreaded(test_setup());
+        let test_values = exec.run_singlethreaded(test_setup(true));
         let network_selector = test_values.network_selector;
         let mut telemetry_receiver = test_values.telemetry_receiver;
 
@@ -1716,26 +1953,30 @@ mod tests {
         // insert some new saved networks
         assert!(exec
             .run_singlethreaded(
-                test_values.saved_network_manager.store(test_id_1.clone(), credential_1.clone()),
+                test_values
+                    .real_saved_network_manager
+                    .store(test_id_1.clone(), credential_1.clone()),
             )
             .unwrap()
             .is_none());
         assert!(exec
             .run_singlethreaded(
-                test_values.saved_network_manager.store(test_id_2.clone(), credential_2.clone()),
+                test_values
+                    .real_saved_network_manager
+                    .store(test_id_2.clone(), credential_2.clone()),
             )
             .unwrap()
             .is_none());
 
         // Mark them as having connected. Make connection passive so that no active scans are made.
-        exec.run_singlethreaded(test_values.saved_network_manager.record_connect_result(
+        exec.run_singlethreaded(test_values.real_saved_network_manager.record_connect_result(
             test_id_1.clone(),
             &credential_1.clone(),
             bssid_1,
             fake_successful_connect_result(),
             types::ScanObservation::Passive,
         ));
-        exec.run_singlethreaded(test_values.saved_network_manager.record_connect_result(
+        exec.run_singlethreaded(test_values.real_saved_network_manager.record_connect_result(
             test_id_2.clone(),
             &credential_2.clone(),
             bssid_2,
@@ -1885,7 +2126,7 @@ mod tests {
     #[fuchsia::test]
     fn find_and_select_scanned_candidate_with_network_end_to_end() {
         let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
-        let test_values = exec.run_singlethreaded(test_setup());
+        let test_values = exec.run_singlethreaded(test_setup(true));
         let network_selector = test_values.network_selector;
         let mut telemetry_receiver = test_values.telemetry_receiver;
 
@@ -1899,7 +2140,9 @@ mod tests {
         // insert saved networks
         assert!(exec
             .run_singlethreaded(
-                test_values.saved_network_manager.store(test_id_1.clone(), credential_1.clone()),
+                test_values
+                    .real_saved_network_manager
+                    .store(test_id_1.clone(), credential_1.clone()),
             )
             .unwrap()
             .is_none());
@@ -1964,7 +2207,7 @@ mod tests {
     #[fuchsia::test]
     fn select_networks_selects_specified_network() {
         let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
-        let test_values = exec.run_singlethreaded(test_setup());
+        let test_values = exec.run_singlethreaded(test_setup(true));
         let network_selector = test_values.network_selector;
 
         let ssid = "foo";
@@ -1996,7 +2239,7 @@ mod tests {
     #[fuchsia::test]
     fn find_and_select_scanned_candidate_with_network_end_to_end_with_failure() {
         let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
-        let test_values = exec.run_singlethreaded(test_setup());
+        let test_values = exec.run_singlethreaded(test_setup(true));
         let network_selector = test_values.network_selector;
         let mut telemetry_receiver = test_values.telemetry_receiver;
 
