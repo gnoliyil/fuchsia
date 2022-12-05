@@ -25,6 +25,7 @@ const MODE_OPTION: &str = "mode";
 /// These are the valid arguments for the mode command line option.
 const MODE_ARG_ALWAYS_SUCCEED: &str = "ALWAYS_SUCCEED";
 const MODE_ARG_ALWAYS_FAIL_AUTHENTICATION: &str = "ALWAYS_FAIL_AUTHENTICATION";
+const MODE_ARG_INTERACTION: &str = "INTERACTION";
 
 #[fuchsia::main(logging_tags = ["identity", "dev_authenticator"])]
 async fn main() -> Result<(), Error> {
@@ -61,6 +62,7 @@ impl TryFrom<&str> for Mode {
         match s {
             MODE_ARG_ALWAYS_SUCCEED => Ok(Mode::AlwaysSucceed),
             MODE_ARG_ALWAYS_FAIL_AUTHENTICATION => Ok(Mode::AlwaysFailAuthentication),
+            MODE_ARG_INTERACTION => Ok(Mode::Interaction),
             s => Err(anyhow!("Unrecognized mode: {}", s)),
         }
     }

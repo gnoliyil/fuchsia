@@ -22,7 +22,6 @@ type StateHangingGet =
 type StatePublisher =
     Publisher<TestInteractionWatchStateResponse, TestInteractionWatchStateResponder, NotifyFn>;
 
-#[allow(dead_code)]
 /// Implement the fuchsia.identity.authentication.TestInteraction protocol.
 /// We can call SetSuccess() to pre-determine if the authentication should
 /// succeed or fail when it is not called. Enrollment always completes
@@ -33,7 +32,6 @@ pub struct TestInteraction {
 }
 
 impl TestInteraction {
-    #[allow(dead_code)]
     /// Creates a new TestInteraction object which will handle TestInteractionRequests
     /// and return whether the authenticate operation should succeed based on
     /// whether SetSuccess() was called or not.
