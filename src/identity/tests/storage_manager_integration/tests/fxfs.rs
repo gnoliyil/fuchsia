@@ -245,3 +245,84 @@ async fn test_file_should_not_persist_across_destruction_reuse_sm() -> Result<()
 
     Ok(())
 }
+
+#[fuchsia::test]
+async fn test_repeated_unlock_and_lock() -> Result<(), Error> {
+    let (_ramdisk, _filesystem, mut fs): (_, _, _) = make_ramdisk_and_filesystem().await?;
+    let sm = new_storage_manager(&mut fs);
+    let key = new_key();
+
+    assert_matches!(sm.provision(&key).await, Ok(()));
+    for _ in 1..5 {
+        assert_matches!(sm.lock_storage().await, Ok(()));
+        assert_matches!(sm.unlock_storage(&key).await, Ok(()));
+    }
+    assert_matches!(sm.destroy().await, Ok(()));
+
+    let () = fs.shutdown().await.unwrap();
+    Ok(())
+}
+
+#[fuchsia::test]
+async fn test_repeated_provision_and_destroy() -> Result<(), Error> {
+    let (_ramdisk, _filesystem, mut fs): (_, _, _) = make_ramdisk_and_filesystem().await?;
+    let sm = new_storage_manager(&mut fs);
+    let key = new_key();
+
+    for _ in 1..5 {
+        assert_matches!(sm.provision(&key).await, Ok(()));
+        assert_matches!(sm.destroy().await, Ok(()));
+    }
+
+    let () = fs.shutdown().await.unwrap();
+    Ok(())
+}
+
+#[fuchsia::test]
+async fn test_get_root_dir_twice() -> Result<(), Error> {
+    let (_ramdisk, _filesystem, mut fs): (_, _, _) = make_ramdisk_and_filesystem().await?;
+    let sm = new_storage_manager(&mut fs);
+    let key = new_key();
+
+    assert_matches!(sm.provision(&key).await, Ok(()));
+
+    // If you call get_root_dir() twice, you should get DirectoryProxy instances
+    // which point to the same thing.
+
+    {
+        let dir_1 = assert_matches!(sm.get_root_dir().await, Ok(d) => d);
+        write_file(&dir_1).await?;
+    }
+
+    {
+        let dir_2 = assert_matches!(sm.get_root_dir().await, Ok(d) => d);
+        read_file(&dir_2).await?;
+    }
+
+    assert_matches!(sm.destroy().await, Ok(()));
+
+    let () = fs.shutdown().await.unwrap();
+    Ok(())
+}
+
+#[fuchsia::test]
+async fn test_wrong_key() -> Result<(), Error> {
+    let (_ramdisk, _filesystem, mut fs): (_, _, _) = make_ramdisk_and_filesystem().await?;
+    let sm = new_storage_manager(&mut fs);
+    let key = new_key();
+
+    // Create and lock the volume.
+    assert_matches!(sm.provision(&key).await, Ok(()));
+    assert_matches!(sm.lock_storage().await, Ok(()));
+
+    // Incorrect keys do not unlock the volume.
+    let wrong_key = new_key();
+    assert_ne!(wrong_key, key);
+    assert_matches!(sm.unlock_storage(&wrong_key).await, Err(_));
+
+    assert_matches!(sm.unlock_storage(&key).await, Ok(()));
+    assert_matches!(sm.destroy().await, Ok(_));
+
+    let () = fs.shutdown().await.unwrap();
+    Ok(())
+}

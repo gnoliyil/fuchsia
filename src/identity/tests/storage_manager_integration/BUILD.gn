@@ -49,13 +49,14 @@ storage_driver_test_realm_v2_component("storage_manager_integration_test") {
     ":test",
     "//src/storage/fxfs:fxfs_component",
     "//src/storage/fxfs-crypt",
-
-    # "//src/devices/bus/drivers/platform",
-    # "//src/storage/fxfs:test_fxfs_component_manifest_shard",
-    #"//src/storage/testing:storage_drivers",
   ]
 }
 
 fuchsia_test_package("storage-manager-integration-test-pkg") {
   test_components = [ ":storage_manager_integration_test" ]
+  test_specs = {
+    log_settings = {
+      max_severity = "ERROR"
+    }
+  }
 }

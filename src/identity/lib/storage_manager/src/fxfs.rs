@@ -206,7 +206,7 @@ impl StorageManagerTrait for Fxfs {
             return Err(AccountManagerError::new(AccountApiError::Internal));
         }
 
-        let fxfs_inner: FxfsInner = state_lock.try_lock().log_info_then(
+        let mut fxfs_inner: FxfsInner = state_lock.try_lock().log_info_then(
             "Failed to set FxfsStorageManager state as locked",
             faccount::Error::Internal,
         )?;
@@ -244,7 +244,7 @@ impl StorageManagerTrait for Fxfs {
             return Err(AccountManagerError::new(AccountApiError::Internal));
         }
 
-        let fxfs_inner: FxfsInner = match state_lock.try_destroy().log_error_then(
+        let mut fxfs_inner: FxfsInner = match state_lock.try_destroy().log_error_then(
             "Failed to destroy FxfsStorageManager state",
             faccount::Error::Internal,
         )? {

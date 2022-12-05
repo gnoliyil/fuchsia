@@ -12,7 +12,7 @@ use {
     fuchsia_component::client::{
         connect_to_protocol, connect_to_protocol_at_dir_root, open_childs_exposed_directory,
     },
-    tracing::error,
+    tracing::warn,
     typed_builder::TypedBuilder,
 };
 
@@ -30,6 +30,13 @@ pub struct Args {
 
 const CRYPT_CM_URL: &str = "#meta/fxfs-crypt.cm";
 
+// Whether or not the Crypt component is currently running or being shut down.
+#[derive(Debug, PartialEq)]
+enum State {
+    Running,
+    ShuttingDown,
+}
+
 /// A helper which provides access to the underlying Crypt service.
 /// Responsible for destroying the Crypt directory when asked.
 ///
@@ -40,8 +47,9 @@ const CRYPT_CM_URL: &str = "#meta/fxfs-crypt.cm";
 /// - //src/identity/tests/storage_manager_integration/tests/fxfs.rs
 ///   - for an example (test) callsite for FxfsStorageManager and CryptKeeper.
 pub struct CryptKeeper {
-    directory: Option<fio::DirectoryProxy>,
-
+    directory: fio::DirectoryProxy,
+    // Whether the crypt component is running or shutting down.
+    state: State,
     // The name of the component collection within which crypt components are launched.
     crypt_collection_name: String,
     // The name for the crypt component.
@@ -49,21 +57,23 @@ pub struct CryptKeeper {
 }
 
 impl CryptKeeper {
-    // Destroys (and consumes) the crypt component.
-    pub async fn destroy(mut self) -> Result<(), faccount::Error> {
-        let _ = self.directory.take();
+    // Destroys the crypt component.
+    pub async fn destroy(&mut self) -> Result<(), faccount::Error> {
+        // Swap out self.state for State::ShuttingDown. If the component wasn't
+        // already shutting down, kick off Realm.destroy_child().
+        if std::mem::replace(&mut self.state, State::ShuttingDown) != State::ShuttingDown {
+            let proxy = connect_to_protocol::<RealmMarker>()
+                .log_error_then("Connect to Realm protocol failed", faccount::Error::Resource)?;
 
-        let proxy = connect_to_protocol::<RealmMarker>()
-            .log_error_then("Connect to Realm protocol failed", faccount::Error::Resource)?;
-
-        let () = proxy
-            .destroy_child(&mut fdecl::ChildRef {
-                name: self.crypt_component_name.to_string(),
-                collection: Some(self.crypt_collection_name.to_string()),
-            })
-            .await
-            .log_warn_then("Could not send destroy child request", faccount::Error::Resource)?
-            .log_warn_then("Could not destroy child", faccount::Error::Resource)?;
+            let () = proxy
+                .destroy_child(&mut fdecl::ChildRef {
+                    name: self.crypt_component_name.to_string(),
+                    collection: Some(self.crypt_collection_name.to_string()),
+                })
+                .await
+                .log_warn_then("Could not send destroy child request", faccount::Error::Resource)?
+                .log_warn_then("Could not destroy child", faccount::Error::Resource)?;
+        }
 
         Ok(())
     }
@@ -128,22 +138,25 @@ impl CryptKeeper {
             .log_warn_then("set_active_key failed", faccount::Error::Resource)?;
 
         Ok(CryptKeeper {
-            directory: Some(exposed_dir),
+            directory: exposed_dir,
+            state: State::Running,
             crypt_collection_name: args.crypt_collection_name,
             crypt_component_name: args.crypt_component_name,
         })
     }
 
-    // Returns a crypt proxy.  This will panic if destroy has been called.
+    // Returns a crypt proxy.
     pub fn crypt_proxy(&self) -> Result<CryptProxy, faccount::Error> {
-        if let Some(exposed_dir) = self.directory.as_ref() {
-            Ok(connect_to_protocol_at_dir_root::<CryptMarker>(exposed_dir).log_error_then(
-                "connect to CryptMarker protocol failed",
-                faccount::Error::Resource,
-            )?)
-        } else {
-            error!("Called crypt_proxy, but the exposed directory was absent.");
-            Err(faccount::Error::Resource)
+        match self.state {
+            State::ShuttingDown => {
+                warn!("Cannot retrieve the crypt proxy, the CryptKeeper is shutting down.");
+                Err(faccount::Error::Internal)
+            }
+            State::Running => connect_to_protocol_at_dir_root::<CryptMarker>(&self.directory)
+                .log_error_then(
+                    "connect to CryptMarker protocol failed",
+                    faccount::Error::Resource,
+                ),
         }
     }
 
@@ -161,19 +174,8 @@ impl CryptKeeper {
 }
 
 impl Drop for CryptKeeper {
-    // When CryptKeeper is dropped, if it contains a directory (i.e. if
-    // .destroy() has not already been called), destroy it.
+    // When CryptKeeper is dropped, attempt to destroy it.
     fn drop(&mut self) {
-        if self.directory.is_some() {
-            let to_drop = std::mem::replace(
-                self,
-                CryptKeeper {
-                    directory: None,
-                    crypt_collection_name: "".to_string(),
-                    crypt_component_name: "".to_string(),
-                },
-            );
-            let _ = to_drop.destroy();
-        }
+        let _ = self.destroy();
     }
 }
