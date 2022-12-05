@@ -135,15 +135,11 @@ Do the following:
 1. Download the latest Workstation image for the emulator:
 
    ```posix-terminal
-   tools/ffx product-bundle get workstation_eng.qemu-x64 --repository workstation-packages
+   tools/ffx product-bundle get workstation_eng.qemu-x64 --force-repo --repository workstation-packages
    ```
 
    This command may take a few minutes to download the image and product
    metadata.
-
-   Note: If the `product-bundle` command fails with an error due to multiple product bundle
-   instances or SDK versions, [clean up the environment](#clean-up-the-environment) before
-   proceeding.
 
    Once the download is finished, the `ffx product-bundle get` command creates
    a local Fuchsia package repository named `workstation-packages` on your host machine.
