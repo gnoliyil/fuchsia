@@ -50,10 +50,6 @@ namespace component {
 // are migrated to the new C++ bindings, that library will be removed.
 class OutgoingDirectory final {
  public:
-  // This method is deprecated.
-  // TODO(htpp://fxbug.dev/114272): Delete once all clients are migrated.
-  static OutgoingDirectory Create(async_dispatcher_t* dispatcher);
-
   // Creates an OutgoingDirectory which will serve requests when
   // |Serve| or |ServeFromStartupInfo()| is called.
   //

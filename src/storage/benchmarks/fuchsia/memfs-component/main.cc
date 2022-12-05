@@ -114,7 +114,7 @@ int main(int argc, char* argv[]) {
   async::Loop loop(&kAsyncLoopConfigNeverAttachToThread);
   async_dispatcher_t* dispatcher = loop.dispatcher();
 
-  auto outgoing_directory = OutgoingDirectory::Create(dispatcher);
+  OutgoingDirectory outgoing_directory(dispatcher);
   MemfsHandler memfs_handler_(outgoing_directory);
 
   if (zx::result status = outgoing_directory.ServeFromStartupInfo(); status.is_error()) {

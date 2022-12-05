@@ -29,10 +29,6 @@ constexpr const char kOutgoingDirectoryThreadSafetyDescription[] =
 
 namespace component {
 
-OutgoingDirectory OutgoingDirectory::Create(async_dispatcher_t* dispatcher) {
-  return OutgoingDirectory(dispatcher);
-}
-
 OutgoingDirectory::OutgoingDirectory(async_dispatcher_t* dispatcher) {
   ZX_ASSERT_MSG(dispatcher != nullptr, "OutgoingDirectory::Create received nullptr |dispatcher|.");
 
