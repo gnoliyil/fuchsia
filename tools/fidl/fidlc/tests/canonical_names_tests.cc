@@ -417,6 +417,12 @@ TEST(CanonicalNamesTests, BadResourceProperties) {
   ASSERT_SUBSTR(library.errors()[0]->msg.c_str(), "rights");
 }
 
+TEST(CanonicalNamesTests, BadMemberValues) {
+  TestLibrary library;
+  library.AddFile("bad/fi-0054.test.fidl");
+  ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrMemberNotFound);
+}
+
 TEST(CanonicalNamesTests, BadUpperAcronym) {
   TestLibrary library(R"FIDL(
 library example;
