@@ -24,7 +24,7 @@ constexpr auto FailToAdd = [](auto&& elf) {
   using Elf = std::decay_t<decltype(elf)>;
   using Phdr = typename Elf::Phdr;
 
-  ExpectedSingleError error("too many PT_LOAD segments", ": maximum 0");
+  ExpectedSingleError error("too many PT_LOAD segments", ": maximum 0 < requested ", 1);
 
   elfldltl::LoadInfo<Elf, elfldltl::StaticVector<0>::Container> loadInfo;
 
@@ -464,7 +464,7 @@ constexpr auto ApplyRelroTooManyLoads = [](auto&& elf) {
 
   ASSERT_EQ(loadInfo.segments().size(), 1);
 
-  auto expected = ExpectedSingleError("too many PT_LOAD segments", ": maximum 1");
+  auto expected = ExpectedSingleError("too many PT_LOAD segments", ": maximum 1 < requested ", 2);
   loadInfo.ApplyRelro(expected.diag(), phdrs[1], kPageSize, false);
 };
 

@@ -337,7 +337,7 @@ TEST(ElfldltlContainerTests, StaticVectorCorrectlyMoves) {
   };
 
   auto diag = ExpectOkDiagnostics();
-  ExpectedSingleError expected("error", ": maximum 10");
+  ExpectedSingleError expected("error", ": maximum 10 < requested ", 11);
 
   elfldltl::StaticVector<10>::Container<S> list;
 
@@ -374,7 +374,7 @@ TEST(ElfldltlContainerTests, PreallocatedVectorStaticExtent) {
   EXPECT_TRUE(std::equal(vec.begin(), vec.end(), insert_range.begin()));
 
   {
-    ExpectedSingleError expected("error", ": maximum 5");
+    ExpectedSingleError expected("error", ": maximum 5 < requested ", 6);
     vec.emplace_back(expected.diag(), "error", 1);
   }
 }
@@ -404,7 +404,7 @@ TEST(ElfldltlContainerTests, PreallocatedVectorDynamicExtent) {
   EXPECT_EQ(vec.size(), 5);
 
   {
-    ExpectedSingleError expected("error", ": maximum ", 5);
+    ExpectedSingleError expected("error", ": maximum ", 5, " < requested ", 6);
     vec.emplace_back(expected.diag(), "error", 1);
   }
 }

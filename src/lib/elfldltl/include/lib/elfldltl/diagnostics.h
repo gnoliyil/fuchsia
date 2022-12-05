@@ -232,16 +232,6 @@ class Diagnostics {
                        internal::ConstString(" < requested "), requested);
   }
 
-  template <size_t MaxObjects>
-  constexpr bool ResourceLimit(std::string_view error) {
-    return FormatError(
-        error, internal::ConstString(": maximum ") + internal::IntegerConstString<MaxObjects>());
-  }
-
-  constexpr bool ResourceLimit(size_t max, std::string_view error) {
-    return FormatError(error, internal::ConstString(": maximum "), max);
-  }
-
  private:
   // This is either a wrapper around an integer, or is an empty object.
   // The tag is unused but makes the two Count types always distinct so

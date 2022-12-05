@@ -177,7 +177,7 @@ class PreallocatedVector {
   template <class Diagnostics, typename... Args>
   constexpr bool emplace_back(Diagnostics& diagnostics, std::string_view error, Args&&... args) {
     if (size_ >= capacity()) [[unlikely]] {
-      ResourceLimit(diagnostics, error);
+      ResourceLimit(diagnostics, error, capacity() + 1);
       return false;
     }
     new (std::addressof(data()[size_++])) T{std::forward<Args>(args)...};
@@ -188,7 +188,7 @@ class PreallocatedVector {
   constexpr std::optional<iterator> emplace(Diagnostics& diagnostics, std::string_view error,
                                             const_iterator it, Args&&... args) {
     if (size_ >= capacity()) [[unlikely]] {
-      ResourceLimit(diagnostics, error);
+      ResourceLimit(diagnostics, error, capacity() + 1);
       return std::nullopt;
     }
 
