@@ -80,6 +80,17 @@ namespace elfldltl {
 //   programmer rather than a bug in the tools or corrupted data per se.  It's
 //   probably safe enough to ignore these issues and use the file regardless.
 //
+// * `<size_t MaxObjects> bool ResourceLimit(std::string_view error, size_t requested)`
+// * bool ResourceLimit(size_t max, std::string_view error, size_t requested)`
+//
+//   The ResourceLimit methods are used to format errors related to imposed
+//   resource limits, like with StaticVector. A ResourceLimit is not caused
+//   by system pressure and is expected that the same call that yielded a
+//   ResourceLimit error on an unchanged object will do so again. The templated
+//   version is preferred and the non templated version should be used when
+//   the limit of the resource are unknown at compile time like
+//   PreallocatedVector with a dynamic extent.
+//
 // * `bool extra_checking()`
 //
 //   If this returns true, the processor may do some extra work that is not
