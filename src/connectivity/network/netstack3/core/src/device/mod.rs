@@ -133,7 +133,7 @@ fn with_ethernet_state<
     F: FnOnce(&IpLinkDeviceState<NonSyncCtx::Instant, EthernetDeviceState>) -> O,
 >(
     sync_ctx: &SyncCtx<NonSyncCtx>,
-    EthernetDeviceId(id, ptr): &EthernetDeviceId<NonSyncCtx::Instant>,
+    EthernetDeviceId(_id, state_ref): &EthernetDeviceId<NonSyncCtx::Instant>,
     cb: F,
 ) -> O {
     // We assume that the device ID is always valid and that it is a programmer
@@ -142,19 +142,12 @@ fn with_ethernet_state<
     //
     // TODO(https://fxbug.dev/100759): Allow device IDs to be invalid and return
     // appropriate errors instead of panicking.
-    let ptr = ptr.upgrade().unwrap();
+    let state = state_ref.upgrade().unwrap();
 
     // Make sure that the pointer belongs to this `sync_ctx`.
-    //
-    // We only do this in debug builds so that we can avoid taking the devices
-    // map read lock in release builds.
-    debug_assert!({
-        let devices = sync_ctx.state.device.devices.read();
-        let in_map_ptr = devices.ethernet.get(*id).unwrap();
-        ReferenceCounted::ptr_eq(in_map_ptr, &ptr)
-    });
+    assert_eq!(sync_ctx.state.device.origin, state.origin);
 
-    cb(&ptr)
+    cb(&state)
 }
 
 fn with_loopback_state<
@@ -163,7 +156,7 @@ fn with_loopback_state<
     F: FnOnce(&IpLinkDeviceState<NonSyncCtx::Instant, LoopbackDeviceState>) -> O,
 >(
     sync_ctx: &SyncCtx<NonSyncCtx>,
-    LoopbackDeviceId(ptr): &LoopbackDeviceId<NonSyncCtx::Instant>,
+    LoopbackDeviceId(state_ref): &LoopbackDeviceId<NonSyncCtx::Instant>,
     cb: F,
 ) -> O {
     // We assume that the device ID is always valid and that it is a programmer
@@ -172,19 +165,12 @@ fn with_loopback_state<
     //
     // TODO(https://fxbug.dev/100759): Allow device IDs to be invalid and return
     // appropriate errors instead of panicking.
-    let ptr = ptr.upgrade().unwrap();
+    let state = state_ref.upgrade().unwrap();
 
     // Make sure that the pointer belongs to this `sync_ctx`.
-    //
-    // We only do this in debug builds so that we can avoid taking the devices
-    // map read lock in release builds.
-    debug_assert!({
-        let devices = sync_ctx.state.device.devices.read();
-        let in_map_ptr = devices.loopback.as_ref().unwrap();
-        ReferenceCounted::ptr_eq(in_map_ptr, &ptr)
-    });
+    assert_eq!(sync_ctx.state.device.origin, state.origin);
 
-    cb(&ptr)
+    cb(&state)
 }
 
 fn with_ip_device_state<
@@ -788,13 +774,48 @@ struct Devices<I: Instant> {
 }
 
 /// The state associated with the device layer.
-#[derive(Derivative)]
-#[derivative(Default(bound = ""))]
 pub(crate) struct DeviceLayerState<I: Instant> {
     devices: RwLock<Devices<I>>,
+    origin: OriginTracker,
+}
+
+/// Light-weight tracker for recording the source of some instance.
+///
+/// This should be held as a field in a parent type that is cloned into each
+/// child instance. Then, the origin of a child instance can be verified by
+/// asserting equality against the parent's field.
+///
+/// This is only enabled in debug builds; in non-debug builds, all
+/// `OriginTracker` instances are identical so all operations are no-ops.
+#[derive(Clone, Debug, PartialEq)]
+struct OriginTracker(#[cfg(debug_assertions)] u64);
+
+impl OriginTracker {
+    /// Creates a new `OriginTracker` that isn't derived from any other
+    /// instance.
+    ///
+    /// In debug builds, this creates a unique `OriginTracker` that won't be
+    /// equal to any instances except those cloned from it. In non-debug builds
+    /// all `OriginTracker` instances are identical.
+    #[cfg_attr(not(debug_assertions), inline)]
+    fn new() -> Self {
+        Self(
+            #[cfg(debug_assertions)]
+            {
+                static COUNTER: core::sync::atomic::AtomicU64 =
+                    core::sync::atomic::AtomicU64::new(0);
+                COUNTER.fetch_add(1, core::sync::atomic::Ordering::Relaxed)
+            },
+        )
+    }
 }
 
 impl<I: Instant> DeviceLayerState<I> {
+    /// Creates a new [`DeviceLayerState`] instance.
+    pub(crate) fn new() -> Self {
+        Self { devices: Default::default(), origin: OriginTracker::new() }
+    }
+
     /// Add a new ethernet device to the device layer.
     ///
     /// `add` adds a new `EthernetDeviceState` with the given MAC address and
@@ -805,6 +826,7 @@ impl<I: Instant> DeviceLayerState<I> {
 
         let ptr = ReferenceCounted::new(IpLinkDeviceState::new(
             EthernetDeviceStateBuilder::new(mac, mtu).build(),
+            self.origin.clone(),
         ));
         let weak_ptr = ReferenceCounted::downgrade(&ptr);
         let id = ethernet.push(ptr);
@@ -820,7 +842,10 @@ impl<I: Instant> DeviceLayerState<I> {
             return Err(ExistsError);
         }
 
-        let ptr = ReferenceCounted::new(IpLinkDeviceState::new(LoopbackDeviceState::new(mtu)));
+        let ptr = ReferenceCounted::new(IpLinkDeviceState::new(
+            LoopbackDeviceState::new(mtu),
+            self.origin.clone(),
+        ));
         let id = ReferenceCounted::downgrade(&ptr);
 
         *loopback = Some(ptr);
@@ -1231,6 +1256,17 @@ mod tests {
         testutil::{FakeEventDispatcherConfig, FakeSyncCtx, FAKE_CONFIG_V4},
         Ctx,
     };
+
+    #[test]
+    fn test_origin_tracker() {
+        let tracker = OriginTracker::new();
+        if cfg!(debug_assertions) {
+            assert_ne!(tracker, OriginTracker::new());
+        } else {
+            assert_eq!(tracker, OriginTracker::new());
+        }
+        assert_eq!(tracker.clone(), tracker);
+    }
 
     #[test]
     fn test_iter_devices() {

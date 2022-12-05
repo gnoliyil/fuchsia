@@ -164,7 +164,7 @@ impl StackStateBuilder {
             transport: self.transport.build_with_ctx(ctx),
             ipv4: self.ipv4.build(),
             ipv6: self.ipv6.build(),
-            device: Default::default(),
+            device: DeviceLayerState::new(),
         }
     }
 }
