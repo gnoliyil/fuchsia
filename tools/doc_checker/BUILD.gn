@@ -68,6 +68,8 @@ if (is_host) {
     sources = [
       "doc_checker_test_data/docs/README.md",
       "doc_checker_test_data/docs/_toc.yaml",
+      "doc_checker_test_data/docs/cycle/_toc.yaml",
+      "doc_checker_test_data/docs/cycle/nested/_toc.yaml",
       "doc_checker_test_data/docs/images/fuchsia_icon_256x256.png",
       "doc_checker_test_data/docs/no_readme/_toc.yaml",
       "doc_checker_test_data/docs/no_readme/details.md",

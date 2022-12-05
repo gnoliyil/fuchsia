@@ -61,9 +61,9 @@ pub(crate) mod mock_path_helper_module {
         is_dir(path) ||
 
         // markdown files exist with a couple exceptions.
-        path_str.ends_with(".md") && 
+        path_str.ends_with(".md") &&
         (!path_str.ends_with("no_readme/README.md") &&
-        !path_str.ends_with("unused/README.md") && 
+        !path_str.ends_with("unused/README.md") &&
         !path_str.ends_with("missing.md" ) )   ||
 
         // OWNERS file exists.
@@ -290,7 +290,7 @@ mod test {
         let expected: Vec<DocCheckError> = vec![
             DocCheckError::new(8, PathBuf::from("doc_checker_test_data/docs/README.md"),
                 "in-tree link to /docs/missing.md could not be found at \"doc_checker_test_data/docs/missing.md\""),
-            DocCheckError::new(11, PathBuf::from("doc_checker_test_data/docs/README.md"), 
+            DocCheckError::new(11, PathBuf::from("doc_checker_test_data/docs/README.md"),
                 "Should not link to https://fuchsia.dev/fuchsia-src/path.md via https, use relative filepath"),
             DocCheckError::new(19, PathBuf::from("doc_checker_test_data/docs/README.md"),
                 "Obsolete or invalid project garnet: https://fuchsia.googlesource.com/garnet/+/refs/heads/main/README.md"),
@@ -304,8 +304,10 @@ mod test {
                 "Invalid link http://{}.com/markdown : invalid uri character"),
             DocCheckError::new(1, PathBuf::from("doc_checker_test_data/docs/unused/_toc.yaml"),
                 "in-tree link to /docs/unused could not be found at \"doc_checker_test_data/docs/unused\" or  \"doc_checker_test_data/docs/unused/README.md\""),
+            DocCheckError::new(0, PathBuf::from("doc_checker_test_data/docs/cycle/_toc.yaml"),
+                "YAML files cannot include themselves \"doc_checker_test_data/docs/cycle/_toc.yaml\""),
             DocCheckError::new(0, PathBuf::from("doc_checker_test_data/docs/unreachable.md"),
-                "File not referenced in any _toc.yaml files."), 
+                "File not referenced in any _toc.yaml files."),
             DocCheckError::new(0, PathBuf::from("doc_checker_test_data/docs/unused/_toc.yaml"),
                 "File not reachable via _toc include references."),
         ];

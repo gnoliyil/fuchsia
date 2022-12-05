@@ -8,3 +8,6 @@ toc:
   - section:
     name: more error cases
     include: /docs/no_readme/_toc.yaml
+  - section:
+    name: cycle test
+    include: /docs/cycle/_toc.yaml

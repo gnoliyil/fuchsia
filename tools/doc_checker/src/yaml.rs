@@ -326,7 +326,22 @@ impl DocYamlCheck for YamlChecker {
                     // All includes are /docs/... so just append the root.
                     let additional_paths = includes
                         .iter()
-                        .map(|p| self.root_dir.join(p.strip_prefix('/').unwrap_or(p.as_str())));
+                        .map(|p| self.root_dir.join(p.strip_prefix('/').unwrap_or(p.as_str())))
+                        .filter(|p| {
+                            if p == &current_yaml {
+                                errors.push(DocCheckError::new(
+                                    0,
+                                    current_yaml.clone(),
+                                    &format!(
+                                        "YAML files cannot include themselves {:?}",
+                                        &current_yaml
+                                    ),
+                                ));
+                                false
+                            } else {
+                                true
+                            }
+                        });
                     toc_stack.extend(additional_paths);
                 }
             } else if !visited.contains(&current_yaml) {
