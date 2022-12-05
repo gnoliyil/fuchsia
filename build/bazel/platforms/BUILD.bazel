@@ -2,8 +2,9 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
-# Bazel platform() definitions for the Fuchsia platform build.
-#
+
+"""Bazel platform() definitions for the Fuchsia platform build."""
+
 # The Fuchsia build will use transitions that change the --platforms=<label>
 # value to modify the current build configuration. As such, each platform
 # instance represents:

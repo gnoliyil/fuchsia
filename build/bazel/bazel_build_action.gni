@@ -163,6 +163,10 @@ template("bazel_build_action") {
       args += [
         "--bazel-platform",
         "//build/bazel/platforms:${current_os}_${current_cpu}",
+
+        # NOTE: The SDK build rules still require the --cpu value to be set properly aa
+        # well (see https://fxbug.dev/116571#c19).
+        "--bazel-cpu=${current_cpu}",
       ]
     }
 
