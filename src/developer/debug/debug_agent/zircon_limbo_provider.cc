@@ -124,6 +124,9 @@ bool ZirconLimboProvider::IsProcessInLimbo(zx_koid_t process_koid) const {
 
 fit::result<debug::Status, ZirconLimboProvider::RetrievedException>
 ZirconLimboProvider::RetrieveException(zx_koid_t process_koid) {
+  if (!is_limbo_active_)
+    return fit::error(debug::ZxStatus(ZX_ERR_NOT_FOUND));
+
   ProcessLimboSyncPtr process_limbo;
   if (zx_status_t status = services_->Connect(process_limbo.NewRequest()); status != ZX_OK)
     return fit::error(debug::ZxStatus(status));
