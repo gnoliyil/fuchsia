@@ -36,6 +36,10 @@ bool GoldfishDevice::Initialize(int dir_fd, std::string name, inspect::Node* par
     return false;
   }
 
+  device_.set_error_handler([this](zx_status_t status) {
+    // Deletes |this|.
+    app()->RemoveDevice(this);
+  });
   if (fidl::Status status =
           fidl::WireCall(controller.value())
               ->OpenSession(fidl::ServerEnd<fuchsia_hardware_goldfish::PipeDevice>(
@@ -44,10 +48,6 @@ bool GoldfishDevice::Initialize(int dir_fd, std::string name, inspect::Node* par
     FX_PLOGS(ERROR, status.status()) << "Failed to open session";
     return false;
   }
-  device_.set_error_handler([this](zx_status_t status) {
-    // Deletes |this|.
-    app()->RemoveDevice(this);
-  });
 
   auto data = node().CreateChild("0");
   std::string component_url = "fuchsia-pkg://fuchsia.com/libvulkan_goldfish#meta/vulkan.cm";

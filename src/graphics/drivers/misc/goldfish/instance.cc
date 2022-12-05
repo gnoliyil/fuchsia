@@ -22,8 +22,8 @@ const char kTag[] = "goldfish-pipe";
 
 }  // namespace
 
-Instance::Instance(zx_device_t* parent, PipeDevice* pipe_device, async_dispatcher_t* dispatcher)
-    : InstanceType(parent), pipe_device_(pipe_device), dispatcher_(dispatcher) {}
+Instance::Instance(PipeDevice* pipe_device, async_dispatcher_t* dispatcher)
+    : pipe_device_(pipe_device), dispatcher_(dispatcher) {}
 
 Instance::~Instance() = default;
 
@@ -52,10 +52,6 @@ void Instance::OpenPipe(OpenPipeRequestView request, OpenPipeCompleter::Sync& co
     // the event of a failure.
     pipe_ptr->Init();
   });
-}
-
-void Instance::OpenSession(OpenSessionRequestView request, OpenSessionCompleter::Sync& completer) {
-  pipe_device_->OpenSession(std::move(request->session));
 }
 
 void Instance::DdkRelease() { delete this; }

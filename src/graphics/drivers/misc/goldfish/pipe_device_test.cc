@@ -305,18 +305,6 @@ TEST_F(PipeDeviceTest, Bind) {
   }
 }
 
-TEST_F(PipeDeviceTest, Open) {
-  ASSERT_OK(dut_child_->Bind(kDefaultPipeDeviceProps, kDefaultPipeDeviceName));
-  auto dut_child_ptr = dut_child_.release();
-
-  zx_device_t* instance_dev;
-  ASSERT_OK(dut_child_ptr->DdkOpen(&instance_dev, 0u));
-
-  ASSERT_EQ(1, fake_root_->child_count());
-  auto child = fake_root_->GetLatestChild();
-  ASSERT_EQ(1, child->child_count());
-}
-
 TEST_F(PipeDeviceTest, CreatePipe) {
   ASSERT_OK(dut_child_->Bind(kDefaultPipeDeviceProps, kDefaultPipeDeviceName));
   dut_child_.release();

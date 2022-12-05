@@ -28,10 +28,6 @@ protocol Controller {
 
 /// Interface for the Goldfish pipe driver.
 protocol PipeDevice {
-    // TODO(fxbug.dev/112355): Remove this compose when this device is migrated
-    // off of instance devices.
-    compose Controller;
-
     /// Open pipe. A protocol request `pipe_request` provides an interface
     /// to the pipe. Multiple pipes can be opened for a single device.
     /// Closing the device connection will also close all pipe connections.

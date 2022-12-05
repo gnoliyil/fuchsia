@@ -99,25 +99,34 @@ TEST_F(LoaderUnittest, MagmaDevice) {
 }
 
 class FakeGoldfishDevice : public fuchsia::hardware::goldfish::testing::PipeDevice_TestBase {
- public:
-  fidl::InterfaceRequestHandler<fuchsia::hardware::goldfish::PipeDevice> GetHandler() {
-    return bindings_.GetHandler(this);
-  }
-
-  void CloseAll() { bindings_.CloseAll(); }
-  size_t GetBindingsSize() { return bindings_.size(); }
-
  private:
   void NotImplemented_(const std::string& name) override {
     ADD_FAILURE() << "unexpected call to " << name;
   }
+};
 
-  void OpenSession(
-      fidl::InterfaceRequest<fuchsia::hardware::goldfish::PipeDevice> session) override {
-    bindings_.AddBinding(this, std::move(session));
+class FakeGoldfishController : public fuchsia::hardware::goldfish::Controller {
+ public:
+  fidl::InterfaceRequestHandler<fuchsia::hardware::goldfish::Controller> GetHandler() {
+    return controller_bindings_.GetHandler(this);
   }
 
+  void CloseAll() {
+    controller_bindings_.CloseAll();
+    bindings_.CloseAll();
+  }
+  size_t PipeDeviceBindingsSize() { return bindings_.size(); }
+  size_t ControllerBindingsSize() { return controller_bindings_.size(); }
+
+ private:
+  void OpenSession(
+      fidl::InterfaceRequest<fuchsia::hardware::goldfish::PipeDevice> session) override {
+    bindings_.AddBinding(&device_, std::move(session));
+  }
+
+  fidl::BindingSet<fuchsia::hardware::goldfish::Controller> controller_bindings_;
   fidl::BindingSet<fuchsia::hardware::goldfish::PipeDevice> bindings_;
+  FakeGoldfishDevice device_;
 };
 
 TEST_F(LoaderUnittest, GoldfishDevice) {
@@ -126,7 +135,7 @@ TEST_F(LoaderUnittest, GoldfishDevice) {
   LoaderApp app(context.get(), dispatcher());
 
   vfs::PseudoDir root;
-  FakeGoldfishDevice goldfish_device;
+  FakeGoldfishController goldfish_device;
   const char* kDeviceNodeName = "dev";
   root.AddEntry(kDeviceNodeName, std::make_unique<vfs::Service>(goldfish_device.GetHandler()));
   fidl::InterfaceHandle<fuchsia::io::Directory> pkg_dir;
@@ -135,10 +144,10 @@ TEST_F(LoaderUnittest, GoldfishDevice) {
   root.Serve(fuchsia::io::OpenFlags::RIGHT_READABLE | fuchsia::io::OpenFlags::RIGHT_WRITABLE,
              pkg_dir.NewRequest().TakeChannel(), vfs_loop.dispatcher());
 
-  fdio_t* dir_fdio;
-  EXPECT_EQ(ZX_OK, fdio_create(pkg_dir.TakeChannel().release(), &dir_fdio));
-  int dir_fd = fdio_bind_to_fd(dir_fdio, -1, 0);
-  auto device = GoldfishDevice::Create(&app, dir_fd, kDeviceNodeName, &inspector.GetRoot());
+  fbl::unique_fd dir_fd;
+  ASSERT_EQ(ZX_OK, fdio_fd_create(pkg_dir.TakeChannel().release(), dir_fd.reset_and_get_address()));
+
+  auto device = GoldfishDevice::Create(&app, dir_fd.get(), kDeviceNodeName, &inspector.GetRoot());
   EXPECT_TRUE(device);
   auto device_ptr = device.get();
 
@@ -157,9 +166,9 @@ TEST_F(LoaderUnittest, GoldfishDevice) {
   RunLoopUntil([&app]() { return app.device_count() == 0; });
   EXPECT_EQ(0u, app.device_count());
 
-  close(dir_fd);
   vfs_loop.Shutdown();
-  EXPECT_EQ(0u, goldfish_device.GetBindingsSize());
+  EXPECT_EQ(0u, goldfish_device.PipeDeviceBindingsSize());
+  EXPECT_EQ(0u, goldfish_device.ControllerBindingsSize());
 }
 
 TEST(Icd, BadMetadata) {

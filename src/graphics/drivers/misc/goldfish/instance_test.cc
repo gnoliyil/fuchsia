@@ -29,8 +29,8 @@ namespace goldfish {
 
 class FakeInstance : public Instance {
  public:
-  FakeInstance(zx_device_t* parent, PipeDevice* pipe_device, async_dispatcher_t* dispatcher)
-      : Instance(parent, pipe_device, dispatcher) {}
+  FakeInstance(PipeDevice* pipe_device, async_dispatcher_t* dispatcher)
+      : Instance(pipe_device, dispatcher) {}
 
   zx_status_t Connect(async_dispatcher_t* dispatcher,
                       fidl::ServerEnd<fuchsia_hardware_goldfish::PipeDevice> server) {
@@ -110,7 +110,7 @@ class InstanceDeviceTest : public zxtest::Test {
 
     ASSERT_OK(loop_.StartThread("goldfish-pipe-thread"));
 
-    dut_.emplace(fake_root_.get(), pipe_device_.get(), loop_.dispatcher());
+    dut_.emplace(pipe_device_.get(), loop_.dispatcher());
 
     zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_goldfish::PipeDevice>();
     ASSERT_OK(endpoints.status_value());

@@ -205,17 +205,6 @@ zx_status_t PipeDevice::Bind() {
   return ZX_OK;
 }
 
-void PipeDevice::DdkUnbind(ddk::UnbindTxn txn) {
-  ZX_ASSERT(!unbind_txn_.has_value());
-  ddk::UnbindTxn& unbind_txn = unbind_txn_.emplace(std::move(txn));
-  auto cleanup = fit::bind_member(&unbind_txn, &ddk::UnbindTxn::Reply);
-  bindings_.set_empty_set_handler(cleanup);
-  if (!bindings_.CloseAll(ZX_OK)) {
-    // Binding set was already empty.
-    cleanup();
-  }
-}
-
 zx_status_t PipeDevice::CreateChildDevice(cpp20::span<const zx_device_prop_t> props,
                                           const char* dev_name) {
   auto child_device = std::make_unique<PipeChildDevice>(this, dispatcher_);
@@ -225,13 +214,6 @@ zx_status_t PipeDevice::CreateChildDevice(cpp20::span<const zx_device_prop_t> pr
     [[maybe_unused]] auto* dev = child_device.release();
   }
   return status;
-}
-
-void PipeDevice::OpenSession(fidl::ServerEnd<fuchsia_hardware_goldfish::PipeDevice> pipe_device) {
-  std::unique_ptr instance = std::make_unique<Instance>(zxdev(), this, dispatcher_);
-  bindings_.AddBinding(fdf::Dispatcher::GetCurrent()->async_dispatcher(), std::move(pipe_device),
-                       instance.get(),
-                       [instance = std::move(instance)](Instance*, fidl::UnbindInfo) {});
 }
 
 void PipeDevice::DdkRelease() { delete this; }
@@ -440,7 +422,9 @@ zx_status_t PipeChildDevice::Bind(cpp20::span<const zx_device_prop_t> props, con
       fidl::DiscoverableProtocolName<fuchsia_hardware_goldfish_pipe::GoldfishPipe>,
       fbl::MakeRefCounted<fs::Service>(
           [this](fidl::ServerEnd<fuchsia_hardware_goldfish_pipe::GoldfishPipe> request) mutable {
-            auto status = fidl::BindSingleInFlightOnly(dispatcher_, std::move(request), this);
+            auto status = fidl::BindSingleInFlightOnly<
+                fidl::WireServer<fuchsia_hardware_goldfish_pipe::GoldfishPipe>>(
+                dispatcher_, std::move(request), this);
             if (status != ZX_OK) {
               zxlogf(ERROR, "%s: failed to bind channel: %s", kTag, zx_status_get_string(status));
             }
@@ -476,17 +460,25 @@ zx_status_t PipeChildDevice::Bind(cpp20::span<const zx_device_prop_t> props, con
   return ZX_OK;
 }
 
-zx_status_t PipeChildDevice::DdkOpen(zx_device_t** dev_out, uint32_t flags) {
-  std::unique_ptr instance = std::make_unique<Instance>(zxdev(), parent_, dispatcher_);
-  if (zx_status_t status = instance->DdkAdd("pipe", DEVICE_ADD_INSTANCE); status != ZX_OK) {
-    return status;
-  }
-  Instance* instance_ptr = instance.release();
-  *dev_out = instance_ptr->zxdev();
-  return ZX_OK;
+void PipeChildDevice::OpenSession(OpenSessionRequestView request,
+                                  OpenSessionCompleter::Sync& completer) {
+  std::unique_ptr instance = std::make_unique<Instance>(parent_, dispatcher_);
+
+  bindings_.AddBinding(fdf::Dispatcher::GetCurrent()->async_dispatcher(),
+                       std::move(request->session), instance.get(),
+                       [instance = std::move(instance)](Instance*, fidl::UnbindInfo info) {});
 }
 
-void PipeChildDevice::DdkUnbind(ddk::UnbindTxn txn) { txn.Reply(); }
+void PipeChildDevice::DdkUnbind(ddk::UnbindTxn txn) {
+  ZX_ASSERT(!unbind_txn_.has_value());
+  ddk::UnbindTxn& unbind_txn = unbind_txn_.emplace(std::move(txn));
+  auto cleanup = fit::bind_member(&unbind_txn, &ddk::UnbindTxn::Reply);
+  bindings_.set_empty_set_handler(cleanup);
+  if (!bindings_.CloseAll(ZX_OK)) {
+    // Binding set was already empty.
+    cleanup();
+  }
+}
 
 void PipeChildDevice::DdkRelease() { delete this; }
 
