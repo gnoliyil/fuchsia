@@ -120,7 +120,30 @@ def _prebuilt_clang_cc_toolchain_config_impl(ctx):
         ],
     )
 
-    features = [dependency_file_feature, ml_inliner_feature] + sanitizer_features
+    coverage_feature = feature(
+        name = "coverage",
+        flag_sets = [
+            flag_set(
+                actions = [
+                    ACTION_NAMES.c_compile,
+                    ACTION_NAMES.cpp_compile,
+                    ACTION_NAMES.cpp_link_dynamic_library,
+                    ACTION_NAMES.cpp_link_executable,
+                    ACTION_NAMES.cpp_link_nodeps_dynamic_library,
+                ],
+                flag_groups = [
+                    flag_group(
+                        flags = [
+                            "-fprofile-instr-generate",
+                            "-fcoverage-mapping",
+                        ],
+                    ),
+                ],
+            ),
+        ],
+    )
+
+    features = [dependency_file_feature, ml_inliner_feature, coverage_feature] + sanitizer_features
 
     return cc_common.create_cc_toolchain_config_info(
         ctx = ctx,

@@ -192,7 +192,7 @@ template("bazel_build_action") {
 
     # Forward GN test coverage configuration to Bazel
     if (is_coverage) {
-      args += [ "--collect_code_coverage" ]
+      args += [ "--features=coverage" ]
     }
 
     # Forward GN C/C++ compiler optimization configuration to Bazel
