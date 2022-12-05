@@ -6,8 +6,7 @@
 
 #include <fidl/fuchsia.hardware.goldfish.pipe/cpp/markers.h>
 #include <fidl/fuchsia.hardware.goldfish.pipe/cpp/wire.h>
-#include <fidl/fuchsia.hardware.goldfish/cpp/markers.h>
-#include <fidl/fuchsia.hardware.goldfish/cpp/wire.h>
+#include <fidl/fuchsia.hardware.goldfish/cpp/wire_test_base.h>
 #include <fidl/fuchsia.sysmem2/cpp/wire.h>
 #include <fuchsia/hardware/goldfish/control/cpp/banjo.h>
 #include <lib/async-loop/loop.h>
@@ -281,33 +280,19 @@ class FakePipe : public fidl::WireServer<fuchsia_hardware_goldfish_pipe::Goldfis
 };
 
 class FakeAddressSpace : public fidl::WireServer<fuchsia_hardware_goldfish::AddressSpaceDevice> {
- public:
-  FakeAddressSpace() {}
-
-  // |fidl::WireServer<fuchsia_hardware_goldfish::AddressSpaceDevice>|
   void OpenChildDriver(OpenChildDriverRequestView request,
                        OpenChildDriverCompleter::Sync& completer) override {
-    completer.Close(ZX_OK);
+    request->req.Close(ZX_ERR_NOT_SUPPORTED);
+    completer.Close(ZX_ERR_NOT_SUPPORTED);
   }
 };
 
 class FakeAddressSpaceChild
-    : public fidl::WireServer<fuchsia_hardware_goldfish::AddressSpaceChildDriver> {
- public:
-  FakeAddressSpaceChild() {}
-  // |fidl::WireServer<fuchsia_hardware_goldfish::AddressSpaceChildDriver>|
-  void AllocateBlock(AllocateBlockRequestView request,
-                     AllocateBlockCompleter::Sync& completer) override {}
-  void DeallocateBlock(DeallocateBlockRequestView request,
-                       DeallocateBlockCompleter::Sync& completer) override {}
-  void ClaimSharedBlock(ClaimSharedBlockRequestView request,
-                        ClaimSharedBlockCompleter::Sync& completer) override {}
-  void UnclaimSharedBlock(UnclaimSharedBlockRequestView request,
-                          UnclaimSharedBlockCompleter::Sync& completer) override {}
-  void Ping(PingRequestView request, PingCompleter::Sync& completer) override {}
-
- private:
-  zx::channel request_;
+    : public fidl::testing::WireTestBase<fuchsia_hardware_goldfish::AddressSpaceChildDriver> {
+  void NotImplemented_(const std::string& name, fidl::CompleterBase& completer) override {
+    ADD_FAILURE() << "unexpected call to " << name;
+    completer.Close(ZX_ERR_NOT_SUPPORTED);
+  }
 };
 
 class FakeSync : public fidl::WireServer<fuchsia_hardware_goldfish::SyncDevice> {

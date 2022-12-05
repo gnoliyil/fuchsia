@@ -168,8 +168,6 @@ void Pipe::SetEvent(SetEventRequestView request, SetEventCompleter::Sync& comple
     completer.Close(ZX_ERR_INTERNAL);
     return;
   }
-
-  completer.Close(ZX_OK);
 }
 
 void Pipe::GetBuffer(GetBufferCompleter::Sync& completer) {

@@ -54,8 +54,6 @@ void Instance::OpenPipe(OpenPipeRequestView request, OpenPipeCompleter::Sync& co
     // the event of a failure.
     pipe_ptr->Init();
   });
-
-  completer.Close(ZX_OK);
 }
 
 void Instance::DdkRelease() { delete this; }

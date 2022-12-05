@@ -106,7 +106,6 @@ void UsbVideoStream::GetChannel(GetChannelRequestView request,
     return;
   }
   control_binding_.Bind(std::move(request->ch), fidl_dispatch_loop_->dispatcher());
-  completer.Close(ZX_OK);
 }
 
 void UsbVideoStream::GetDeviceInfo(GetDeviceInfoCallback callback) {

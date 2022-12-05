@@ -286,6 +286,7 @@ void ConsoleDevice::Clone2(Clone2RequestView request, Clone2Completer::Sync& com
 
 void ConsoleDevice::Close(CloseCompleter::Sync& completer) {
   completer.ReplySuccess();
+  // TODO(https://fxbug.dev/116481): this does not correctly close the channel.
   completer.Close(ZX_OK);
 }
 
