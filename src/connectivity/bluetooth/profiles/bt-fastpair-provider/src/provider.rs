@@ -8,6 +8,8 @@ use fidl_fuchsia_bluetooth_fastpair::{ProviderEnableResponder, ProviderWatcherPr
 use fidl_fuchsia_bluetooth_gatt2 as gatt;
 use fidl_fuchsia_bluetooth_sys::{HostWatcherMarker, PairingMarker, PairingProxy};
 use fuchsia_bluetooth::types::PeerId;
+use fuchsia_inspect::{self as inspect, Property};
+use fuchsia_inspect_derive::{AttachError, Inspect};
 use futures::stream::{FusedStream, StreamExt};
 use futures::{channel::mpsc, select, FutureExt};
 use tracing::{debug, info, trace, warn};
@@ -44,6 +46,20 @@ struct State {
     personalized_name: Option<String>,
 }
 
+#[derive(Default, Debug, Inspect)]
+struct ProviderInspect {
+    fast_pair_enabled: inspect::BoolProperty,
+    active_host: inspect::BoolProperty,
+    personalized_name: inspect::StringProperty,
+    inspect_node: inspect::Node,
+}
+
+impl ProviderInspect {
+    fn node(&self) -> &inspect::Node {
+        &self.inspect_node
+    }
+}
+
 /// The toplevel server that manages the current state of the Fast Pair Provider service.
 /// Owns the interfaces for interacting with various BT system services.
 pub struct Provider {
@@ -68,6 +84,20 @@ pub struct Provider {
     pairing: MaybeStream<PairingManager>,
     /// Message Stream connection (RFCOMM) to the remote peer.
     message_stream: MessageStream,
+    /// The inspect node associated with the server.
+    inspect_node: ProviderInspect,
+}
+
+impl Inspect for &mut Provider {
+    fn iattach(self, parent: &inspect::Node, name: impl AsRef<str>) -> Result<(), AttachError> {
+        self.inspect_node.iattach(parent, name.as_ref())?;
+        self.advertiser.iattach(self.inspect_node.node(), "advertisement")?;
+        self.account_keys.iattach(self.inspect_node.node(), "account_key_list")?;
+        if let Some(pairing) = self.pairing.inner_mut() {
+            pairing.iattach(self.inspect_node.node(), "pairing_manager")?;
+        }
+        Ok(())
+    }
 }
 
 impl Provider {
@@ -88,6 +118,7 @@ impl Provider {
             pairing_svc,
             pairing: MaybeStream::default(),
             message_stream: MessageStream::new(profile),
+            inspect_node: ProviderInspect::default(),
         })
     }
 
@@ -96,6 +127,11 @@ impl Provider {
         // If set, the personalized name is always preferred. Otherwise, defaults to the local
         // name associated with the active host.
         self.state.personalized_name.clone().map_or(self.host_watcher.local_name(), Some)
+    }
+
+    fn set_personalized_name(&mut self, name: String) {
+        self.inspect_node.personalized_name.set(&name);
+        self.state.personalized_name = Some(name);
     }
 
     async fn advertise(&mut self, discoverable: bool) -> Result<(), Error> {
@@ -113,6 +149,7 @@ impl Provider {
 
         // Reset the upstream connection.
         self.upstream.reset();
+        self.inspect_node.fast_pair_enabled.set(false);
     }
 
     async fn handle_host_watcher_update(&mut self, update: HostEvent) -> Result<(), Error> {
@@ -122,10 +159,12 @@ impl Provider {
                 if self.upstream.is_enabled() {
                     self.advertise(discoverable).await?;
                 }
+                self.inspect_node.active_host.set(true);
             }
             HostEvent::NotAvailable => {
                 // TODO(fxbug.dev/94166): It might make sense to shut down the GATT service.
                 let _ = self.advertiser.stop_advertising().await;
+                self.inspect_node.active_host.set(false);
             }
         }
         Ok(())
@@ -371,7 +410,7 @@ impl Provider {
         let result = match parse_fn() {
             Ok(name) => {
                 debug!(%peer_id, "Received request to save personalized name: {}", name);
-                self.state.personalized_name = Some(name);
+                self.set_personalized_name(name);
                 Ok(())
             }
             Err(e) => {
@@ -433,7 +472,10 @@ impl Provider {
         match request {
             ServiceRequest::Pairing(client) => {
                 if self.pairing.inner_mut().map_or(true, |p| p.is_terminated()) {
-                    self.pairing.set(PairingManager::new(self.pairing_svc.clone(), client)?);
+                    let mut pairing_manager =
+                        PairingManager::new(self.pairing_svc.clone(), client)?;
+                    let _ = pairing_manager.iattach(self.inspect_node.node(), "pairing_manager");
+                    self.pairing.set(pairing_manager);
                 } else {
                     warn!("Pairing Delegate is already active, ignoring..");
                 }
@@ -446,6 +488,7 @@ impl Provider {
                             self.advertise(discoverable).await?;
                         }
                         info!("Enabled Fast Pair");
+                        self.inspect_node.fast_pair_enabled.set(true);
                     }
                     Err(e) => {
                         info!("Couldn't enable Fast Pair: {e:?}");
@@ -544,6 +587,8 @@ mod tests {
     };
     use fuchsia_async as fasync;
     use fuchsia_bluetooth::types::{Address, HostId};
+    use fuchsia_inspect::assert_data_tree;
+    use fuchsia_inspect_derive::WithInspect;
     use futures::{pin_mut, FutureExt, SinkExt};
     use std::convert::{TryFrom, TryInto};
 
@@ -602,6 +647,7 @@ mod tests {
             pairing_svc: mock_pairing.pairing_svc.clone(),
             pairing: Some(pairing).into(),
             message_stream,
+            inspect_node: ProviderInspect::default(),
         };
 
         (this, peripheral_server, local_service_proxy, watcher_server, mock_pairing, mock_upstream)
@@ -1540,5 +1586,33 @@ mod tests {
         let expect_fut = mock_pairing.expect_set_pairing_delegate();
         pin_mut!(expect_fut);
         let ((), _server_fut) = run_while(&mut exec, server_fut, expect_fut);
+    }
+
+    #[test]
+    fn provider_server_inspect_tree() {
+        let inspect = inspect::Inspector::new();
+        let provider_inspect =
+            ProviderInspect::default().with_inspect(inspect.root(), "provider").unwrap();
+
+        // Default tree
+        assert_data_tree!(inspect, root: {
+            provider: {
+                fast_pair_enabled: false,
+                active_host: false,
+                personalized_name: "",
+            }
+        });
+
+        provider_inspect.fast_pair_enabled.set(true);
+        provider_inspect.active_host.set(true);
+        provider_inspect.personalized_name.set("foobar");
+
+        assert_data_tree!(inspect, root: {
+            provider: {
+                fast_pair_enabled: true,
+                active_host: true,
+                personalized_name: "foobar",
+            }
+        });
     }
 }

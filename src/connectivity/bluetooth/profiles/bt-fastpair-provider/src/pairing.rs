@@ -16,6 +16,8 @@ use fidl_fuchsia_bluetooth_sys::{
 };
 use fuchsia_async::{self as fasync, DurationExt};
 use fuchsia_bluetooth::types::{Peer, PeerId};
+use fuchsia_inspect::{self as inspect, Property};
+use fuchsia_inspect_derive::{AttachError, Inspect};
 use fuchsia_zircon as zx;
 use futures::stream::{FusedStream, FuturesUnordered, Stream, StreamExt};
 use futures::{future::BoxFuture, Future, FutureExt};
@@ -75,6 +77,13 @@ impl std::fmt::Debug for ProcedureState {
     }
 }
 
+#[derive(Default, Debug, Inspect)]
+struct ProcedureInspect {
+    bredr_id: inspect::StringProperty,
+    state: inspect::StringProperty,
+    inspect_node: inspect::Node,
+}
+
 /// An active Fast Pair Pairing procedure.
 struct Procedure {
     /// PeerId of the remote peer that we are currently pairing with. The PeerId is associated with
@@ -89,6 +98,20 @@ struct Procedure {
     state: ProcedureState,
     /// Tracks the timeout of the pairing procedure.
     timer: Option<fasync::Timer>,
+    /// Inspect properties associated with this procedure.
+    inspect_node: ProcedureInspect,
+}
+
+impl Inspect for &mut Procedure {
+    fn iattach(self, parent: &inspect::Node, name: impl AsRef<str>) -> Result<(), AttachError> {
+        self.inspect_node.iattach(parent, name.as_ref())?;
+        self.inspect_node.inspect_node.record_string("le_id", format!("{:?}", self.le_id));
+        self.inspect_node
+            .bredr_id
+            .set(&self.bredr_id.map_or("".to_string(), |id| format!("{:?}", id)));
+        self.inspect_node.state.set(&format!("{:?}", self.state));
+        Ok(())
+    }
 }
 
 impl Procedure {
@@ -99,18 +122,27 @@ impl Procedure {
 
     fn new(id: PeerId, key: SharedSecret) -> Self {
         let timer = fasync::Timer::new(Self::DEFAULT_PROCEDURE_TIMEOUT_DURATION.after_now());
-        Self { le_id: id, bredr_id: None, key, state: ProcedureState::Started, timer: Some(timer) }
+        Self {
+            le_id: id,
+            bredr_id: None,
+            key,
+            state: ProcedureState::Started,
+            timer: Some(timer),
+            inspect_node: ProcedureInspect::default(),
+        }
     }
 
     /// Moves the procedure to the new pairing `state` and resets the deadline for the procedure.
     fn transition(&mut self, state: ProcedureState) -> ProcedureState {
         let old_state = std::mem::replace(&mut self.state, state);
+        self.inspect_node.state.set(&format!("{:?}", self.state));
         self.timer = Some(fasync::Timer::new(Self::DEFAULT_PROCEDURE_TIMEOUT_DURATION.after_now()));
         old_state
     }
 
     fn set_bredr_id(&mut self, id: PeerId) {
         self.bredr_id = Some(id);
+        self.inspect_node.bredr_id.set(&format!("{:?}", id));
     }
 
     fn is_started(&self) -> bool {
@@ -172,6 +204,21 @@ impl std::fmt::Debug for Procedure {
     }
 }
 
+#[derive(Default, Debug, Inspect)]
+struct PairingManagerInspect {
+    owner: inspect::StringProperty,
+    inspect_node: inspect::Node,
+}
+
+impl PairingManagerInspect {
+    fn set_owner(&self, owner: &PairingDelegateOwner) {
+        match owner {
+            PairingDelegateOwner::FastPair => self.owner.set("FastPair"),
+            PairingDelegateOwner::Upstream => self.owner.set("Upstream"),
+        }
+    }
+}
+
 /// The `PairingManager` is responsible for servicing `sys.Pairing` requests.
 ///
 /// Because pairing can't occur unless a Pairing Delegate is set, the `PairingManager` is
@@ -219,6 +266,16 @@ pub struct PairingManager {
     /// If the PairingManager is finished - i.e either the upstream or downstream delegate
     /// connection has terminated.
     terminated: bool,
+    /// Inspect properties associated with the PairingManager.
+    inspect_node: PairingManagerInspect,
+}
+
+impl Inspect for &mut PairingManager {
+    fn iattach(self, parent: &inspect::Node, name: impl AsRef<str>) -> Result<(), AttachError> {
+        self.inspect_node.iattach(parent, name.as_ref())?;
+        self.inspect_node.set_owner(&self.owner);
+        Ok(())
+    }
 }
 
 impl PairingManager {
@@ -237,6 +294,7 @@ impl PairingManager {
             relay_tasks: FuturesUnordered::new(),
             procedures: FutureMap::new(),
             terminated: false,
+            inspect_node: PairingManagerInspect::default(),
         };
         this.set_pairing_delegate(PairingDelegateOwner::Upstream)?;
         Ok(this)
@@ -312,7 +370,10 @@ impl PairingManager {
         }
 
         self.claim_delegate()?;
-        let _ = self.procedures.insert(le_id, Procedure::new(le_id, key));
+        let mut procedure = Procedure::new(le_id, key);
+        let _ =
+            procedure.iattach(&self.inspect_node.inspect_node, inspect::unique_name("procedure_"));
+        let _ = self.procedures.insert(le_id, procedure);
         Ok(())
     }
 
@@ -662,6 +723,8 @@ pub(crate) mod tests {
     use fidl::client::QueryResponseFut;
     use fidl_fuchsia_bluetooth_sys::{PairingKeypress, PairingMarker, PairingRequestStream};
     use fuchsia_bluetooth::types::Address;
+    use fuchsia_inspect::assert_data_tree;
+    use fuchsia_inspect_derive::WithInspect;
     use futures::{future::Either, pin_mut};
 
     use crate::types::keys;
@@ -1425,5 +1488,33 @@ pub(crate) mod tests {
         assert_matches!(manager.account_key_write(le_id), Ok(_));
         assert_matches!(manager.complete_pairing_procedure(le_id), Ok(_));
         assert_matches!(manager.key_for_procedure(&le_id), None);
+    }
+
+    #[test]
+    fn pairing_manager_inspect_tree() {
+        let inspect = inspect::Inspector::new();
+        let pairing_inspect =
+            PairingManagerInspect::default().with_inspect(inspect.root(), "pairing").unwrap();
+
+        // Default tree
+        assert_data_tree!(inspect, root: {
+            pairing: {
+                owner: "",
+            }
+        });
+
+        pairing_inspect.set_owner(&PairingDelegateOwner::Upstream);
+        assert_data_tree!(inspect, root: {
+            pairing: {
+                owner: "Upstream",
+            }
+        });
+
+        pairing_inspect.set_owner(&PairingDelegateOwner::FastPair);
+        assert_data_tree!(inspect, root: {
+            pairing: {
+                owner: "FastPair",
+            }
+        });
     }
 }

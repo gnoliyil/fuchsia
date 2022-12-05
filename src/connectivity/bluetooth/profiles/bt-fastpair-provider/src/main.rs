@@ -4,6 +4,7 @@
 
 use anyhow::Error;
 use fuchsia_component::server::ServiceFs;
+use fuchsia_inspect_derive::Inspect;
 use futures::{channel::mpsc, future, pin_mut};
 use tracing::{debug, info, warn};
 
@@ -27,11 +28,19 @@ async fn main() -> Result<(), Error> {
     let provider_config = Config::load()?;
     debug!("Starting Fast Pair Provider: {:?}", provider_config);
 
+    let mut fs = ServiceFs::new();
+    let inspector = fuchsia_inspect::Inspector::new();
+    if let Err(e) = inspect_runtime::serve(&inspector, &mut fs) {
+        warn!("Couldn't serve inspect: {}", e);
+    }
+
     let (fidl_service_sender, fidl_service_receiver) = mpsc::channel(1);
-    let server = Provider::new(provider_config).await?;
+    let mut server = Provider::new(provider_config).await?;
+    if let Err(e) = server.iattach(&inspector.root(), "provider") {
+        warn!("Couldn't attach inspect to the Provider server: {:?}", e);
+    }
     let fast_pair = server.run(fidl_service_receiver);
 
-    let fs = ServiceFs::new();
     let services = run_services(fs, fidl_service_sender);
     pin_mut!(fast_pair, services);
     info!("Fast Pair Provider component running.");

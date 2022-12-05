@@ -4,6 +4,8 @@
 
 use aes::cipher::generic_array::GenericArray;
 use aes::{Aes128, BlockDecrypt, BlockEncrypt, NewBlockCipher};
+use fuchsia_inspect::{self as inspect, Property};
+use fuchsia_inspect_derive::{AttachError, Inspect};
 use lru_cache::LruCache;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -126,6 +128,15 @@ pub struct AccountKeyList {
     keys: LruCache<AccountKey, ()>,
     /// The file path pointing to the isolated persistent storage which saves the Account Keys.
     path: path::PathBuf,
+    /// The number of keys currently saved in the AccountKeyList.
+    account_key_count: inspect::UintProperty,
+}
+
+impl Inspect for &mut AccountKeyList {
+    fn iattach(self, parent: &inspect::Node, _name: impl AsRef<str>) -> Result<(), AttachError> {
+        self.account_key_count = parent.create_uint("account_key_count", self.keys.len() as u64);
+        Ok(())
+    }
 }
 
 impl AccountKeyList {
@@ -147,12 +158,16 @@ impl AccountKeyList {
 
         let val = rand::thread_rng().gen::<u64>();
         let path = format!("data/test_account_keys{}.json", val);
-        Self { keys: cache, path: path::PathBuf::from(path) }
+        Self { keys: cache, path: path::PathBuf::from(path), account_key_count: Default::default() }
     }
 
     #[cfg(test)]
     pub fn path(&self) -> String {
         self.path.clone().into_os_string().into_string().expect("valid path string")
+    }
+
+    fn update_inspect(&self) {
+        self.account_key_count.set(self.keys.len() as u64);
     }
 
     /// Returns an Iterator over the saved Account Keys.
@@ -179,6 +194,8 @@ impl AccountKeyList {
         if let Err(e) = self.store() {
             warn!("Couldn't update key list in isolated persistent storage: {:?}", e);
         }
+
+        self.update_inspect();
     }
 
     /// Returns the service data payload associated with the current set of Account Keys.
@@ -228,6 +245,7 @@ impl AccountKeyList {
         let mut this = Self {
             keys: LruCache::new(MAX_ACCOUNT_KEYS),
             path: path::PathBuf::from(path.as_ref()),
+            account_key_count: Default::default(),
         };
         this.load_internal()?;
         Ok(this)

@@ -16,6 +16,8 @@ use fidl_fuchsia_bluetooth_le::{
     PeripheralError, PeripheralMarker, PeripheralProxy, ServiceData,
 };
 use fuchsia_bluetooth::types::{le::Peer, PeerId, Uuid};
+use fuchsia_inspect::{self as inspect, Property};
+use fuchsia_inspect_derive::{AttachError, Inspect};
 use futures::stream::{FusedStream, Stream, StreamExt};
 use futures::{ready, Future, FutureExt};
 use std::convert::TryFrom;
@@ -196,6 +198,16 @@ pub struct LowEnergyAdvertiser {
     /// The current set of active LE connections. This is persisted independently of the active
     /// advertisement.
     active_connections: FutureMap<PeerId, ConnectionFut>,
+    /// Inspect property tracking the LE advertisement type. Possible values are "None", "ModelId",
+    /// and "AccountKeys".
+    advertisement_type: inspect::StringProperty,
+}
+
+impl Inspect for &mut LowEnergyAdvertiser {
+    fn iattach(self, parent: &inspect::Node, name: impl AsRef<str>) -> Result<(), AttachError> {
+        self.advertisement_type = parent.create_string(name.as_ref(), "None");
+        Ok(())
+    }
 }
 
 impl LowEnergyAdvertiser {
@@ -205,7 +217,12 @@ impl LowEnergyAdvertiser {
     }
 
     pub fn from_proxy(peripheral: PeripheralProxy) -> Self {
-        Self { peripheral, advertisement: Default::default(), active_connections: FutureMap::new() }
+        Self {
+            peripheral,
+            advertisement: Default::default(),
+            active_connections: FutureMap::new(),
+            advertisement_type: Default::default(),
+        }
     }
 
     /// Attempts to start advertising the Fast Pair device `model_id` over Low Energy.
@@ -215,7 +232,9 @@ impl LowEnergyAdvertiser {
         let _ = self.stop_advertising().await;
 
         let model_id_bytes: [u8; 3] = model_id.into();
-        self.start_advertising(model_id_bytes.to_vec(), AdvertisingModeHint::VeryFast)
+        self.start_advertising(model_id_bytes.to_vec(), AdvertisingModeHint::VeryFast)?;
+        self.advertisement_type.set("ModelId");
+        Ok(())
     }
 
     /// Attempts to start advertising the set of Fast Pair Account `keys` over Low Energy.
@@ -229,7 +248,9 @@ impl LowEnergyAdvertiser {
         // Next bytes are the formatted account key service data.
         advertisement_bytes.extend(keys.service_data()?);
 
-        self.start_advertising(advertisement_bytes, AdvertisingModeHint::Fast)
+        self.start_advertising(advertisement_bytes, AdvertisingModeHint::Fast)?;
+        self.advertisement_type.set("AccountKeys");
+        Ok(())
     }
 
     /// Clears the active advertisement.
@@ -238,6 +259,7 @@ impl LowEnergyAdvertiser {
         if let Some(active_advertisement) = MaybeStream::take(&mut self.advertisement) {
             let result = active_advertisement.stop().await;
             info!("Stopped LE advertisement with result: {:?}", result);
+            self.advertisement_type.set("None");
             return true;
         }
         false

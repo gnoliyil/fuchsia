@@ -48,6 +48,31 @@ fuchsia_package("bt-fastpair-provider") {
 
 Include the `bt-fastpair-provider` package in the build of your Fuchsia product.
 
+## Inspect
+
+The `bt-fastpair-provider` component includes support for
+[component inspection](https://fuchsia.dev/fuchsia-src/development/diagnostics/inspect). To view
+component metrics and inspect data, use `fx iquery show core/bluetooth-core/bt-fastpair-provider`.
+
+### Hierarchy
+
+```
+root:
+  provider:
+    account_key_count = 0
+    active_host = true
+    advertisement = (ModelId, AccountKeys, None)
+    fast_pair_enabled = true
+    personalized_name = ""
+    PairingManager:
+      owner = Upstream
+      procedure_1:
+        le_id = ""
+        bredr_id = ""
+        state = (Started, Pairing, PasskeyChecked, PairingComplete, AccountKeyWritten)
+      procedure_2:
+```
+
 ## Testing
 
 Add the following to your Fuchsia configuration to include the component unit tests in your build:
