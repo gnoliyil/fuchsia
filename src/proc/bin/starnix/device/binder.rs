@@ -35,6 +35,7 @@ use fuchsia_async as fasync;
 use fuchsia_zircon as zx;
 use futures::{TryFutureExt, TryStreamExt};
 use std::collections::{btree_map::Entry as BTreeMapEntry, BTreeMap, VecDeque};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 use zerocopy::{AsBytes, FromBytes};
 
@@ -54,10 +55,13 @@ pub struct BinderDriver {
     /// The Driver owns the BinderProcess. There can be at most one connection to the binder driver
     /// per process. When the last file descriptor to the binder in the process is closed, the
     /// value is removed from the map.
-    procs: RwLock<BTreeMap<pid_t, Arc<BinderProcess>>>,
+    procs: RwLock<BTreeMap<u64, Arc<BinderProcess>>>,
 
     /// The currently connected remote clients.
-    remote_tasks: RwLock<BTreeMap<pid_t, Arc<RemoteBinderTask>>>,
+    remote_tasks: RwLock<BTreeMap<u64, Arc<RemoteBinderTask>>>,
+
+    /// The identifier to use for the next created `BinderProcess`.
+    next_identifier: AtomicU64,
 
     /// The thread pool to dispatch remote ioctl calls to. This is necessary because these calls
     /// can block waiting from data from another process.
@@ -73,34 +77,24 @@ impl DeviceOps for Arc<BinderDriver> {
         _node: &FsNode,
         _flags: OpenFlags,
     ) -> Result<Box<dyn FileOps>, Errno> {
-        let pid = current_task.get_pid();
-        let binder_proc = BinderProcess::new(pid);
-        match self.procs.write().entry(pid) {
-            BTreeMapEntry::Vacant(entry) => {
-                // The process has not previously opened the binder device.
-                entry.insert(binder_proc);
-            }
-            _ => {
-                // A process cannot open the same binder device more than once.
-                return error!(EINVAL);
-            }
-        }
-        Ok(Box::new(BinderConnection { pid, driver: self.clone() }))
+        let binder_proc = self.create_process(current_task.get_pid());
+        Ok(Box::new(BinderConnection { identifier: binder_proc.identifier, driver: self.clone() }))
     }
 }
 
 /// An instance of the binder driver, associated with the process that opened the binder device.
 struct BinderConnection {
     /// The process that opened the binder device.
-    pid: pid_t,
+    identifier: u64,
     /// The implementation of the binder driver.
     driver: Arc<BinderDriver>,
 }
 
 impl BinderConnection {
     fn proc(&self, task: &CurrentTask) -> Result<Arc<BinderProcess>, Errno> {
-        if task.get_pid() == self.pid {
-            self.driver.find_process(self.pid)
+        let process = self.driver.find_process(self.identifier)?;
+        if process.pid == task.get_pid() {
+            Ok(process)
         } else {
             error!(EINVAL)
         }
@@ -109,7 +103,7 @@ impl BinderConnection {
 
 impl Drop for BinderConnection {
     fn drop(&mut self) {
-        self.driver.procs.write().remove(&self.pid);
+        self.driver.procs.write().remove(&self.identifier);
     }
 }
 
@@ -272,6 +266,10 @@ struct CommandQueueWithWaitQueue {
 
 #[derive(Debug)]
 struct BinderProcess {
+    /// A global identifier at the driver level for this binder process.
+    identifier: u64,
+
+    /// The identifier of the process associated with this binder process.
     pid: pid_t,
 
     // The mutable state of `BinderProcess` is protected by 3 locks. For ordering purpose, locks
@@ -417,8 +415,9 @@ enum RequestType {
 
 impl BinderProcess {
     #[allow(clippy::let_and_return)]
-    fn new(pid: pid_t) -> Arc<Self> {
+    fn new(identifier: u64, pid: pid_t) -> Arc<Self> {
         let result = Arc::new(Self {
+            identifier,
             pid,
             shared_memory: Default::default(),
             state: Default::default(),
@@ -1881,20 +1880,32 @@ impl BinderTask for LocalBinderTask {
 }
 
 impl BinderDriver {
+    #[allow(clippy::let_and_return)]
     fn new() -> Arc<Self> {
-        Arc::new(Self::default())
+        let driver = Arc::new(Self::default());
+        #[cfg(any(test, debug_assertions))]
+        {
+            let _l1 = driver.context_manager.read();
+            let _l2 = driver.procs.read();
+            let _l3 = driver.remote_tasks.read();
+        }
+        driver
     }
 
-    fn find_process(&self, pid: pid_t) -> Result<Arc<BinderProcess>, Errno> {
-        self.procs.read().get(&pid).map(Arc::clone).ok_or_else(|| errno!(ENOENT))
+    fn get_next_identifier(&self) -> u64 {
+        self.next_identifier.fetch_add(1, Ordering::Relaxed)
     }
 
-    /// Creates the binder process state to represent a process with `pid`.
-    #[cfg(test)]
+    fn find_process(&self, identifier: u64) -> Result<Arc<BinderProcess>, Errno> {
+        self.procs.read().get(&identifier).map(Arc::clone).ok_or_else(|| errno!(ENOENT))
+    }
+
+    /// Creates and register the binder process state to represent a process with `pid`.
     fn create_process(&self, pid: pid_t) -> Arc<BinderProcess> {
-        let binder_process = BinderProcess::new(pid);
+        let identifier = self.get_next_identifier();
+        let binder_process = BinderProcess::new(identifier, pid);
         assert!(
-            self.procs.write().insert(pid, binder_process.clone()).is_none(),
+            self.procs.write().insert(identifier, binder_process.clone()).is_none(),
             "process with same pid created"
         );
         binder_process
@@ -1904,11 +1915,7 @@ impl BinderDriver {
     /// thread.
     #[cfg(test)]
     fn create_process_and_thread(&self, pid: pid_t) -> (Arc<BinderProcess>, Arc<BinderThread>) {
-        let binder_process = BinderProcess::new(pid);
-        assert!(
-            self.procs.write().insert(pid, binder_process.clone()).is_none(),
-            "process with same pid created"
-        );
+        let binder_process = self.create_process(pid);
         let binder_thread = binder_process.lock().find_or_register_thread(pid);
         (binder_process, binder_thread)
     }
@@ -1924,15 +1931,14 @@ impl BinderDriver {
 
         fasync::Task::local(
             async move {
-                let pid = kernel.pids.write().allocate_pid();
-                let binder_process = BinderProcess::new(pid);
+                let binder_process = driver.create_process(kernel.pids.write().allocate_pid());
+                let identifier = binder_process.identifier;
                 let remote_binder_task =
                     Arc::new(RemoteBinderTask { process, kernel: kernel.clone() });
-                driver.procs.write().insert(pid, binder_process.clone());
-                driver.remote_tasks.write().insert(pid, remote_binder_task.clone());
+                driver.remote_tasks.write().insert(identifier, remote_binder_task.clone());
                 scopeguard::defer! {
-                    driver.procs.write().remove(&pid);
-                    driver.remote_tasks.write().remove(&pid);
+                    driver.procs.write().remove(&identifier);
+                    driver.remote_tasks.write().remove(&identifier);
                 }
                 let mut stream = fbinder::BinderRequestStream::from_channel(
                     fasync::Channel::from_channel(server_end.into_channel())?,
@@ -2219,12 +2225,16 @@ impl BinderDriver {
     fn get_binder_task(
         &self,
         kernel: &Kernel,
-        pid: pid_t,
+        binder_process: &Arc<BinderProcess>,
     ) -> Result<Box<Arc<dyn BinderTask>>, Errno> {
-        match self.remote_tasks.read().get(&pid) {
+        match self.remote_tasks.read().get(&binder_process.identifier) {
             Some(task) => Ok(Box::new(task.clone())),
             _ => Ok(Box::new(Arc::new(LocalBinderTask {
-                task: kernel.pids.read().get_task(pid).ok_or_else(|| errno!(EINVAL))?,
+                task: kernel
+                    .pids
+                    .read()
+                    .get_task(binder_process.pid)
+                    .ok_or_else(|| errno!(EINVAL))?,
             }))),
         }
     }
@@ -2250,7 +2260,7 @@ impl BinderDriver {
             }
         };
 
-        let target_task = self.get_binder_task(current_task.kernel(), target_proc.pid)?;
+        let target_task = self.get_binder_task(current_task.kernel(), &target_proc)?;
 
         // Copy the transaction data to the target process.
         let (data_buffer, offsets_buffer, transaction_state) = self.copy_transaction_buffers(
@@ -2363,7 +2373,7 @@ impl BinderDriver {
         // Find the process and thread that initiated the transaction. This reply is for them.
         let (target_proc, target_thread) = binder_thread.write().pop_transaction_caller()?;
 
-        let target_task = self.get_binder_task(current_task.kernel(), target_proc.pid)?;
+        let target_task = self.get_binder_task(current_task.kernel(), &target_proc)?;
 
         // Copy the transaction data to the target process.
         let (data_buffer, offsets_buffer, transaction_state) = self.copy_transaction_buffers(
@@ -4760,13 +4770,13 @@ mod tests {
             .expect("binder dev open failed");
 
         // Ensure that the binder driver has created process state.
-        binder_driver.find_process(current_task.get_pid()).expect("failed to find process");
+        binder_driver.find_process(0).expect("failed to find process");
 
         // Simulate closing the FD by dropping the binder instance.
         drop(binder_instance);
 
         // Verify that the process state no longer exists.
-        binder_driver.find_process(current_task.get_pid()).expect_err("process was not cleaned up");
+        binder_driver.find_process(0).expect_err("process was not cleaned up");
     }
 
     #[fuchsia::test]
@@ -4792,7 +4802,7 @@ mod tests {
         client_proc.lock().handles.inc_weak(handle.object_index()).expect("inc_weak");
 
         // Now the owner process dies.
-        driver.procs.write().remove(&owner_proc.pid);
+        driver.procs.write().remove(&owner_proc.identifier);
         drop(owner_proc);
 
         // Confirm that the object is considered dead. The representation is still alive, but the
@@ -4863,7 +4873,7 @@ mod tests {
         }
 
         // Now the owner process dies.
-        driver.procs.write().remove(&owner_proc.pid);
+        driver.procs.write().remove(&owner_proc.identifier);
         drop(owner_proc);
 
         // The client thread should have a notification waiting.
@@ -4891,7 +4901,7 @@ mod tests {
         let handle = client_proc.lock().handles.insert_for_transaction(object);
 
         // Now the owner process dies.
-        driver.procs.write().remove(&owner_proc.pid);
+        driver.procs.write().remove(&owner_proc.identifier);
         drop(owner_proc);
 
         const DEATH_NOTIFICATION_COOKIE: binder_uintptr_t = 0xDEADBEEF;
@@ -4962,7 +4972,7 @@ mod tests {
         }
 
         // Now the owner process dies.
-        driver.procs.write().remove(&owner_proc.pid);
+        driver.procs.write().remove(&owner_proc.identifier);
         drop(owner_proc);
 
         // The client thread should have no notification.
@@ -5384,7 +5394,7 @@ mod tests {
 
         // Drop the receiving process.
         let TranslateHandlesTestFixture { sender_thread, receiver_proc, .. } = test;
-        test.driver.procs.write().remove(&receiver_proc.pid);
+        test.driver.procs.write().remove(&receiver_proc.identifier);
         drop(receiver_proc);
 
         // Check that there is a dead reply command for the sending thread.
@@ -5443,7 +5453,7 @@ mod tests {
 
         // Drop the receiving process and thread.
         let TranslateHandlesTestFixture { sender_thread, receiver_proc, .. } = test;
-        test.driver.procs.write().remove(&receiver_proc.pid);
+        test.driver.procs.write().remove(&receiver_proc.identifier);
         drop(receiver_thread);
         drop(receiver_proc);
 
@@ -5518,12 +5528,27 @@ mod tests {
 
         // Drop the receiving process and thread.
         let TranslateHandlesTestFixture { sender_thread, receiver_proc, .. } = test;
-        test.driver.procs.write().remove(&receiver_proc.pid);
+        test.driver.procs.write().remove(&receiver_proc.identifier);
         drop(receiver_thread);
         drop(receiver_proc);
 
         // Check that there is a dead reply command for the sending thread.
         assert_matches!(sender_thread.read().command_queue.front(), Some(Command::DeadReply));
+    }
+
+    #[fuchsia::test]
+    fn connect_to_multiple_binder() {
+        let (_kernel, task) = create_kernel_and_task();
+        let driver = BinderDriver::new();
+        let node = FsNode::new_root(PanickingFsNode);
+
+        // Opening the driver twice from the same task must succeed.
+        let _d1 = driver
+            .open(&task, DeviceType::NONE, &node, OpenFlags::RDWR)
+            .expect("binder dev open failed");
+        let _d2 = driver
+            .open(&task, DeviceType::NONE, &node, OpenFlags::RDWR)
+            .expect("binder dev open failed");
     }
 
     #[fuchsia::test]
