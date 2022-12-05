@@ -1859,32 +1859,28 @@ int CrgUdc::IrqThread() {
       zxlogf(ERROR, "crg_udc: irq wait failed, retcode = %s", zx_status_get_string(wait_res));
     }
 
-    // It doesn't seem that this inner loop should be necessary,
-    // but without it we miss interrupts on some versions of the IP.
-    while (!thread_terminate_) {
-      auto usbstatus = STATUS::Get().ReadFrom(mmio);
+    auto usbstatus = STATUS::Get().ReadFrom(mmio);
 
-      if (usbstatus.sys_err() == 1) {
-        zxlogf(ERROR, "crg_udc: system error");
-        STATUS::Get().FromValue(0).set_sys_err(1).WriteTo(mmio);
-        break;
-      }
+    if (usbstatus.sys_err() == 1) {
+      zxlogf(ERROR, "crg_udc: system error");
+      STATUS::Get().FromValue(0).set_sys_err(1).WriteTo(mmio);
+      break;
+    }
 
-      if (usbstatus.eint() == 1) {
-        STATUS::Get().FromValue(0).set_eint(1).WriteTo(mmio);
-        // process event ring
-        ProcessEventRing();
-      }
+    if (usbstatus.eint() == 1) {
+      STATUS::Get().FromValue(0).set_eint(1).WriteTo(mmio);
+      // process event ring
+      ProcessEventRing();
+    }
 
-      if (device_state_ == DeviceState::kUsbStateReconnecting && portsc_on_reconnecting_ == 1 &&
-          EventRingEmpty()) {
-        portsc_on_reconnecting_ = 0;
-        HandlePortStatus();
-      }
+    if (device_state_ == DeviceState::kUsbStateReconnecting && portsc_on_reconnecting_ == 1 &&
+        EventRingEmpty()) {
+      portsc_on_reconnecting_ = 0;
+      HandlePortStatus();
+    }
 
-      if (device_state_ == DeviceState::kUsbStateReconnecting && connected_) {
-        PrepareForSetup();
-      }
+    if (device_state_ == DeviceState::kUsbStateReconnecting && connected_) {
+      PrepareForSetup();
     }
   }
 
