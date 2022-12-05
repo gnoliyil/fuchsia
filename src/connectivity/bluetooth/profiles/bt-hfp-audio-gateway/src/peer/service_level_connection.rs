@@ -801,7 +801,6 @@ pub(crate) mod tests {
     }
 
     /// Expects the provided `expected` AT data to be received by the `remote` channel.
-    #[track_caller]
     pub async fn expect_data_received_by_peer(remote: &mut Channel, expected: Vec<at::Response>) {
         for expected_at in expected {
             let mut bytes = Vec::new();

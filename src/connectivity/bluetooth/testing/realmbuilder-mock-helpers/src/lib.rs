@@ -40,7 +40,6 @@ pub async fn process_request_stream<S, Event>(
 /// connection request to the provided `sender`.
 /// Note: This method does not process requests from the service connection. It only relays
 /// the stream to the `sender.
-#[track_caller]
 pub fn add_fidl_service_handler<S, Event: 'static>(
     fs: &mut ServiceFs<ServiceObj<'_, ()>>,
     sender: mpsc::Sender<Event>,
