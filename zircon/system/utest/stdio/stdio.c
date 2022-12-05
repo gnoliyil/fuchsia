@@ -14,7 +14,6 @@
 #include <zircon/syscalls.h>
 #include <zircon/syscalls/object.h>
 
-#include <elfload/elfload.h>
 #include <test-utils/test-utils.h>
 #include <zxtest/zxtest.h>
 

@@ -13,7 +13,6 @@ test("dlfcn") {
     "//zircon/system/ulib/async",
     "//zircon/system/ulib/async-loop:async-loop-cpp",
     "//zircon/system/ulib/async-loop:async-loop-default",
-    "//zircon/system/ulib/elfload",
     "//zircon/system/ulib/zx",
     "//zircon/system/ulib/zxtest",
   ]
