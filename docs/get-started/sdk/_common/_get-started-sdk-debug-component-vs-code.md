@@ -12,12 +12,14 @@ In VS Code, do the following:
 
 1. Click the **Run and Debug** icon on the left side of VS Code.
 
-   ![Run and Debug](images/get-started-vscode-run-and-debug-icon.png "The Run and Debug icon in VS Code"){: .screenshot width="400"}
+   ![Run and Debug](images/get-started-vscode-run-and-debug-icon.png "The Run and Debug icon in VS Code"){: .screenshot width="350"}
 
 1. Click the **Show all automatic debug configurations** link.
 
    This opens the Command Palette and displays a list of
-   launch configurations.
+   launch configurations:
+
+   ![Run and Debug](images/get-started-vscode-add-config-fuchsia-getting-started.png "The Add Config options in VS Code"){: .screenshot width="500"}
 
 1. In the Command Palette, click
    **Add Config (fuchsia-getting-started)...**.
@@ -40,8 +42,8 @@ In VS Code, do the following:
    ]
    ```
 
-   This configuration is set to start the `hello_world`
-   component and attach the debugger to it.
+   This configures the debugger to launch the `hello_world` component and
+   attach to the component.
 
 1. To save the file, press `CTRL+S` (or `Command+S` on macOS).
 
@@ -61,7 +63,7 @@ In VS Code, do the following:
 1. At the top of the **Run and Debug** panel, click
    the **Play** icon to launch the debugger.
 
-   ![Play](images/get-started-vscode-debug-play-icon.png "A breakpoint in VS Code"){: .screenshot width="400"}
+   ![Play](images/get-started-vscode-debug-play-icon.png "A breakpoint in VS Code"){: .screenshot width="350"}
 
    This builds and runs the `hello_world` component, which causes
    the debugger to pause at the line where the breakpoint is set
@@ -75,7 +77,7 @@ In VS Code, do the following:
 
 1. Click the **FUCHISA LOGS** tab on the VS Code panel.
 
-1. In the **Filter logs...** text box, type `hello_world` and press **Enter**.
+1. In the **Filter logs** text box, type `hello_world` and press **Enter**.
 
    You may see some `Hello, World!` and `Hello again, World!` entries from
    the previous sections. However, you can ignore those entries.
@@ -85,7 +87,7 @@ In VS Code, do the following:
 
 1. In the debug toolbar at the top of VS Code, click the **Step Over** icon.
 
-   ![Step over](images/get-started-vscode-step-over-icon.png "The Step Over icon in VS Code"){: .screenshot width="300"}
+   ![Step over](images/get-started-vscode-step-over-icon.png "The Step Over icon in VS Code"){: .screenshot width="250"}
 
 1. In the **FUCHSIA LOGS** panel, verify that a new `Hello again, World!`
    entry is printed in the logs.

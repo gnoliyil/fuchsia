@@ -85,6 +85,6 @@ Do the following:
 
    Verify that the lines in the kernel logs show the exact filenames and line
    numbers (for example, `main() src/hello_world/hello_world.cc:9`) that
-   might've caused the component to crash.
+   might have caused the component to crash.
 
    Press `CTRL+C` to exit.

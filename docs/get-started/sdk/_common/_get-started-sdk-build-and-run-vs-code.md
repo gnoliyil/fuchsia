@@ -84,6 +84,8 @@ In VS Code, do the following:
 1. To fit the messages on the panel, click the **Wrap logs** icon
    at the top right corner of the **FUCHSIA LOGS** panel.
 
+   ![Fuchsia logs](images/get-started-vscode-wrap-logs-icon.png "The Wrap logs icon in VS Code"){: .screenshot width="200"}
+
 1. In the **Filter logs** text box, type `hello_world` and
    press **Enter**.
 
@@ -98,7 +100,7 @@ In VS Code, do the following:
 
 1. Open the `src/hello_world/hello_world.cc` file.
 
-1. Change the message to `"Hello again, World!"`.
+1. Edit the message to `"Hello again, World!"`.
 
    The `main()` method now should look like below:
 

@@ -60,7 +60,7 @@ In VS Code, do the following:
 
 1. Click the **FUCHSIA LOGS** tab on the VS Code panel.
 
-1. In the **Filter logs...** text box, type `moniker:klog` and press
+1. In the **Filter logs** text box, type `moniker:klog` and press
    **Enter**.
 
 1. Verify that the sample component's crash stack is symbolized in the kernel
@@ -70,4 +70,4 @@ In VS Code, do the following:
 
    Verify that the lines in the kernel logs show the exact filenames and line
    numbers (for example, `main() src/hello_world/hello_world.cc:9`) that
-   might've caused the component to crash.
+   might have caused the component to crash.
