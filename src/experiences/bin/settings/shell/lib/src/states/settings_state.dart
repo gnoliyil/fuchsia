@@ -8,6 +8,7 @@ import 'package:shell_settings/src/services/channel_service.dart';
 import 'package:shell_settings/src/services/datetime_service.dart';
 import 'package:shell_settings/src/services/task_service.dart';
 import 'package:shell_settings/src/services/timezone_service.dart';
+import 'package:shell_settings/src/services/volume_service.dart';
 import 'package:shell_settings/src/states/settings_state_impl.dart';
 import 'package:shell_settings/src/widgets/app.dart';
 import 'package:shell_settings/src/widgets/setting_details.dart';
@@ -52,6 +53,10 @@ abstract class SettingsState implements TaskService {
   ChannelState get channelState;
   bool? get optedIntoUpdates;
   double get systemUpdateProgress;
+  // Volume
+  IconData get volumeIcon;
+  double? get volumeLevel;
+  bool? get volumeMuted;
 
   factory SettingsState.fromEnv() {
     // ignore: unnecessary_cast
@@ -60,6 +65,7 @@ abstract class SettingsState implements TaskService {
       dateTimeService: DateTimeService(),
       brightnessService: BrightnessService(),
       channelService: ChannelService(),
+      volumeService: VolumeService(),
     ) as SettingsState;
   }
 
@@ -77,4 +83,11 @@ abstract class SettingsState implements TaskService {
   void showChannelSettings();
   void setTargetChannel(String channel);
   void checkForUpdates();
+  // Volume
+  void setVolumeLevel(double value);
+  void setVolumeMute({bool muted});
+  // TODO(fxb/113485): add keyboard shortcuts for volume
+  void increaseVolume();
+  void decreaseVolume();
+  void toggleMute();
 }

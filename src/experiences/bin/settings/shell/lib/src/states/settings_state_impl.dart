@@ -18,6 +18,7 @@ import 'package:shell_settings/src/services/channel_service.dart';
 import 'package:shell_settings/src/services/datetime_service.dart';
 import 'package:shell_settings/src/services/task_service.dart';
 import 'package:shell_settings/src/services/timezone_service.dart';
+import 'package:shell_settings/src/services/volume_service.dart';
 import 'package:shell_settings/src/states/settings_state.dart';
 
 /// Defines the implementation of [SettingsState].
@@ -110,11 +111,28 @@ class SettingsStateImpl with Disposable implements SettingsState, TaskService {
   set systemUpdateProgress(double value) => _systemUpdateProgress.value = value;
   final _systemUpdateProgress = Observable<double>(0);
 
+  // Volume
+  @override
+  IconData get volumeIcon => _volumeIcon.value;
+  set volumeIcon(IconData value) => _volumeIcon.value = value;
+  final Observable<IconData> _volumeIcon = Icons.volume_up.asObservable();
+
+  @override
+  double? get volumeLevel => _volumeLevel.value;
+  set volumeLevel(double? value) => _volumeLevel.value = value;
+  final Observable<double?> _volumeLevel = Observable<double?>(null);
+
+  @override
+  bool? get volumeMuted => _volumeMuted.value;
+  set volumeMuted(bool? value) => _volumeMuted.value = value;
+  final Observable<bool?> _volumeMuted = Observable<bool?>(null);
+
   // Services
   final BrightnessService brightnessService;
   final DateTimeService dateTimeService;
   final TimezoneService timezoneService;
   final ChannelService channelService;
+  final VolumeService volumeService;
 
   // Constructor
   SettingsStateImpl({
@@ -122,6 +140,7 @@ class SettingsStateImpl with Disposable implements SettingsState, TaskService {
     required this.timezoneService,
     required this.brightnessService,
     required this.channelService,
+    required this.volumeService,
   })  : _timezones = _loadTimezones(),
         _selectedTimezone = timezoneService.timezone.asObservable() {
     dateTimeService.onChanged = updateDateTime;
@@ -167,6 +186,13 @@ class SettingsStateImpl with Disposable implements SettingsState, TaskService {
         }
       });
     };
+    volumeService.onChanged = () {
+      runInAction(() {
+        volumeLevel = volumeService.volume;
+        volumeIcon = volumeService.icon;
+        volumeMuted = volumeService.muted;
+      });
+    };
 
     // We cannot load MaterialIcons font file from pubspec.yaml. So load it
     // explicitly.
@@ -188,6 +214,7 @@ class SettingsStateImpl with Disposable implements SettingsState, TaskService {
       timezoneService.start(),
       brightnessService.start(),
       channelService.start(),
+      volumeService.start(),
     ]);
   }
 
@@ -198,6 +225,7 @@ class SettingsStateImpl with Disposable implements SettingsState, TaskService {
     await timezoneService.stop();
     await brightnessService.stop();
     await channelService.stop();
+    await volumeService.stop();
     _dateTimeNow = null;
   }
 
@@ -208,6 +236,7 @@ class SettingsStateImpl with Disposable implements SettingsState, TaskService {
     timezoneService.dispose();
     brightnessService.dispose();
     channelService.dispose();
+    volumeService.dispose();
   }
 
   // All
@@ -267,4 +296,22 @@ class SettingsStateImpl with Disposable implements SettingsState, TaskService {
 
   @override
   void checkForUpdates() => runInAction(channelService.checkForUpdates);
+
+  // Volume
+  @override
+  void setVolumeLevel(double value) =>
+      runInAction(() => volumeService.volume = value);
+
+  @override
+  void setVolumeMute({bool muted = false}) =>
+      runInAction(() => volumeService.muted = muted);
+
+  @override
+  void increaseVolume() => runInAction(volumeService.increaseVolume);
+
+  @override
+  void decreaseVolume() => runInAction(volumeService.decreaseVolume);
+
+  @override
+  void toggleMute() => runInAction(volumeService.toggleMute);
 }

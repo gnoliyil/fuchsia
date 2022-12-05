@@ -153,6 +153,41 @@ class _ListSettings extends StatelessWidget {
                   trailing: Icon(Icons.arrow_right),
                   onTap: settingsState.showChannelSettings,
                 ),
+                // Volume
+                Observer(builder: (_) {
+                  return ListTile(
+                    enabled: true,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 24),
+                    leading: Icon(settingsState.volumeIcon),
+                    title: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(Strings.volume),
+                        Expanded(
+                          child: Slider(
+                            value: settingsState.volumeLevel ?? 1,
+                            onChanged: settingsState.setVolumeLevel,
+                          ),
+                        ),
+                      ],
+                    ),
+                    trailing: settingsState.volumeMuted == true
+                        ? OutlinedButton(
+                            style: SettingsButtonStyle.outlinedButton(
+                                Theme.of(context)),
+                            onPressed: () =>
+                                settingsState.setVolumeMute(muted: false),
+                            child: Text(Strings.unmute.toUpperCase()),
+                          )
+                        : OutlinedButton(
+                            style: SettingsButtonStyle.outlinedButton(
+                                Theme.of(context)),
+                            onPressed: () =>
+                                settingsState.setVolumeMute(muted: true),
+                            child: Text(Strings.mute.toUpperCase()),
+                          ),
+                  );
+                }),
                 // Brightness
                 Observer(builder: (_) {
                   return ListTile(
