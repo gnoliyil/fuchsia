@@ -210,29 +210,6 @@ void SameTokenTwiceTest(Renderer* renderer, fuchsia::sysmem::Allocator_Sync* sys
   EXPECT_TRUE(res_2);
 }
 
-// Make sure a bad token returns Renderer::allocation::kInvalidId. A "bad token" here can
-// either be a null token, or a token that's a valid channel but just not a
-// valid buffer collection token.
-void BadTokenTest(Renderer* renderer, fuchsia::sysmem::Allocator_Sync* sysmem_allocator) {
-  // Null token should fail.
-  auto bcid = allocation::GenerateUniqueBufferCollectionId();
-  auto result = renderer->ImportBufferCollection(
-      bcid, sysmem_allocator, nullptr, BufferCollectionUsage::kRenderTarget, std::nullopt);
-  EXPECT_FALSE(result);
-
-  // A valid channel that isn't a buffer collection should also fail.
-  zx::channel local_endpoint;
-  zx::channel remote_endpoint;
-  zx::channel::create(0, &local_endpoint, &remote_endpoint);
-  flatland::BufferCollectionHandle handle{std::move(remote_endpoint)};
-  ASSERT_TRUE(handle.is_valid());
-
-  bcid = allocation::GenerateUniqueBufferCollectionId();
-  result = renderer->ImportBufferCollection(bcid, sysmem_allocator, std::move(handle),
-                                            BufferCollectionUsage::kRenderTarget, std::nullopt);
-  EXPECT_FALSE(result);
-}
-
 void BadImageInputTest(Renderer* renderer, fuchsia::sysmem::Allocator_Sync* sysmem_allocator) {
   const uint32_t kNumImages = 1;
   auto tokens = SysmemTokens::Create(sysmem_allocator);
@@ -616,11 +593,6 @@ TEST_F(NullRendererTest, SameTokenTwiceTest) {
   SameTokenTwiceTest(&renderer, sysmem_allocator_.get());
 }
 
-TEST_F(NullRendererTest, BadTokenTest) {
-  NullRenderer renderer;
-  BadTokenTest(&renderer, sysmem_allocator_.get());
-}
-
 TEST_F(NullRendererTest, BadImageInputTest) {
   NullRenderer renderer;
   BadImageInputTest(&renderer, sysmem_allocator_.get());
@@ -701,11 +673,6 @@ VK_TEST_F(VulkanRendererTest, ImportCollectionTest) {
 VK_TEST_F(VulkanRendererTest, SameTokenTwiceTest) {
   auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
   SameTokenTwiceTest(renderer.get(), sysmem_allocator_.get());
-}
-
-VK_TEST_F(VulkanRendererTest, BadTokenTest) {
-  auto [escher, renderer] = CreateEscherAndPrewarmedRenderer();
-  BadTokenTest(renderer.get(), sysmem_allocator_.get());
 }
 
 VK_TEST_F(VulkanRendererTest, BadImageInputTest) {

@@ -15,13 +15,7 @@ bool NullRenderer::ImportBufferCollection(
     fidl::InterfaceHandle<fuchsia::sysmem::BufferCollectionToken> token,
     BufferCollectionUsage usage, std::optional<fuchsia::math::SizeU> size) {
   FX_DCHECK(collection_id != allocation::kInvalidId);
-
-  // Check for a null token here before we try to duplicate it to get the
-  // vulkan token.
-  if (!token.is_valid()) {
-    FX_LOGS(ERROR) << "Token is invalid.";
-    return false;
-  }
+  FX_DCHECK(token.is_valid());
 
   auto& map = usage == BufferCollectionUsage::kReadback ? readback_map_ : render_target_map_;
 

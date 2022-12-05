@@ -98,6 +98,12 @@ class VkRenderer final : public Renderer {
     vk::BufferCollectionFUCHSIA vk_collection;
   };
 
+  // Creates a vk::BufferCollectionFUCHSIA with the proper constraints set.
+  // Returns std::nullopt on failure.
+  std::optional<vk::BufferCollectionFUCHSIA> CreateVulkanBufferCollection(
+      fuchsia::sysmem::BufferCollectionTokenSyncPtr token, BufferCollectionUsage usage,
+      std::optional<fuchsia::math::SizeU> size);
+
   // The function ExtractImage() creates an escher Image from a sysmem collection vmo.
   escher::ImagePtr ExtractImage(const ImageMetadata& metadata, BufferCollectionUsage bc_usage,
                                 vk::BufferCollectionFUCHSIA collection, vk::ImageUsageFlags usage,
@@ -112,6 +118,7 @@ class VkRenderer final : public Renderer {
                         vk::ImageLayout* source_image_layout, escher::ImagePtr dest_image,
                         const ImageMetadata& metadata);
 
+  // Returns a reference to the appropriate map of buffer collections for |usage|.
   std::unordered_map<GlobalBufferCollectionId, CollectionData>* UsageToCollection(
       BufferCollectionUsage usage) FXL_EXCLUSIVE_LOCKS_REQUIRED(lock_);
 

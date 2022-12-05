@@ -175,6 +175,86 @@ std::string GetNextBufferCollectionIdString(const char* prefix) {
   return std::string(prefix) + "-" + std::to_string(GetNextBufferCollectionId());
 }
 
+std::string GetImageName(const BufferCollectionUsage usage) {
+  switch (usage) {
+    case BufferCollectionUsage::kRenderTarget:
+      return "FlatlandRenderTargetMemory";
+    case BufferCollectionUsage::kReadback:
+      return "FlatlandReadbackMemory";
+    case BufferCollectionUsage::kClientImage:
+      return "FlatlandImageMemory";
+    default:
+      FX_NOTREACHED();
+      return "";
+  }
+}
+
+vk::ImageUsageFlags GetImageUsageFlags(const BufferCollectionUsage usage) {
+  switch (usage) {
+    case BufferCollectionUsage::kRenderTarget:
+      return escher::RectangleCompositor::kRenderTargetUsageFlags |
+             vk::ImageUsageFlagBits::eTransferSrc;
+      break;
+    case BufferCollectionUsage::kReadback:
+      return vk::ImageUsageFlagBits::eTransferDst;
+    case BufferCollectionUsage::kClientImage:
+      return escher::RectangleCompositor::kTextureUsageFlags;
+    default:
+      FX_NOTREACHED();
+      return static_cast<vk::ImageUsageFlags>(0);
+  }
+}
+
+// Creates a duplicate of |token|. Returns a std::nullopt if it fails.
+std::optional<fuchsia::sysmem::BufferCollectionTokenSyncPtr> Duplicate(
+    fuchsia::sysmem::BufferCollectionTokenSyncPtr& token) {
+  std::vector<fidl::InterfaceHandle<fuchsia::sysmem::BufferCollectionToken>> dup_tokens;
+  if (const auto status = token->DuplicateSync({ZX_RIGHT_SAME_RIGHTS}, &dup_tokens);
+      status != ZX_OK) {
+    FX_LOGS(ERROR) << "Could not duplicate token: " << zx_status_get_string(status);
+    return std::nullopt;
+  }
+  FX_DCHECK(dup_tokens.size() == 1);
+  return dup_tokens.front().BindSync();
+}
+
+std::optional<fuchsia::sysmem::BufferCollectionSyncPtr>
+CreateBufferCollectionPtrWithEmptyConstraints(fuchsia::sysmem::Allocator_Sync* sysmem_allocator,
+                                              fuchsia::sysmem::BufferCollectionTokenSyncPtr token) {
+  fuchsia::sysmem::BufferCollectionSyncPtr buffer_collection;
+  if (const zx_status_t status =
+          sysmem_allocator->BindSharedCollection(std::move(token), buffer_collection.NewRequest());
+      status != ZX_OK) {
+    FX_LOGS(ERROR) << "Could not bind buffer collection: " << zx_status_get_string(status);
+    return std::nullopt;
+  }
+
+  if (const zx_status_t status = buffer_collection->SetConstraints(
+          /*has_constraints=*/false, fuchsia::sysmem::BufferCollectionConstraints{});
+      status != ZX_OK) {
+    FX_LOGS(ERROR) << "Cannot set constraints: " << zx_status_get_string(status);
+    return std::nullopt;
+  }
+
+  return buffer_collection;
+}
+
+std::vector<vk::ImageFormatConstraintsInfoFUCHSIA> GetVulkanImageFormatConstraints(
+    const BufferCollectionUsage usage, const std::optional<fuchsia::math::SizeU> size) {
+  std::vector<vk::ImageFormatConstraintsInfoFUCHSIA> constraint_infos;
+  for (const auto& format : GetSupportedImageFormatsForBufferCollectionUsage(usage)) {
+    vk::ImageCreateInfo create_info =
+        escher::RectangleCompositor::GetDefaultImageConstraints(format, GetImageUsageFlags(usage));
+    if (size.has_value() && size.value().width && size.value().height) {
+      create_info.extent = vk::Extent3D{size.value().width, size.value().height, 1};
+    }
+
+    constraint_infos.push_back(escher::GetDefaultImageFormatConstraintsInfo(create_info));
+  }
+
+  return constraint_infos;
+}
+
 }  // anonymous namespace
 
 namespace flatland {
@@ -213,121 +293,73 @@ VkRenderer::~VkRenderer() {
   readback_collections_.clear();
 }
 
+std::optional<vk::BufferCollectionFUCHSIA> VkRenderer::CreateVulkanBufferCollection(
+    fuchsia::sysmem::BufferCollectionTokenSyncPtr token, const BufferCollectionUsage usage,
+    const std::optional<fuchsia::math::SizeU> size) {
+  auto vk_device = escher_->vk_device();
+  auto vk_loader = escher_->device()->dispatch_loader();
+  FX_DCHECK(vk_device);
+
+  vk::BufferCollectionCreateInfoFUCHSIA bc_create_info;
+  bc_create_info.collectionToken = token.Unbind().TakeChannel().release();
+  const vk::BufferCollectionFUCHSIA vk_collection = escher::ESCHER_CHECKED_VK_RESULT(
+      vk_device.createBufferCollectionFUCHSIA(bc_create_info, nullptr, vk_loader));
+
+  vk::ImageConstraintsInfoFUCHSIA vk_image_constraints;
+  const auto image_format_constraints = GetVulkanImageFormatConstraints(usage, size);
+  vk_image_constraints.setFormatConstraints(image_format_constraints)
+      .setFlags(escher_->allow_protected_memory()
+                    ? vk::ImageConstraintsInfoFlagBitsFUCHSIA::eProtectedOptional
+                    : vk::ImageConstraintsInfoFlagsFUCHSIA{})
+      .setBufferCollectionConstraints(
+          vk::BufferCollectionConstraintsInfoFUCHSIA().setMinBufferCount(1u));
+
+  if (const auto vk_result = vk_device.setBufferCollectionImageConstraintsFUCHSIA(
+          vk_collection, vk_image_constraints, vk_loader);
+      vk_result != vk::Result::eSuccess) {
+    FX_LOGS(ERROR) << "Cannot set vulkan constraints: " << vk::to_string(vk_result)
+                   << "; The client may have invalidated the token.";
+    return std::nullopt;
+  }
+
+  return vk_collection;
+}
+
 bool VkRenderer::ImportBufferCollection(
     GlobalBufferCollectionId collection_id, fuchsia::sysmem::Allocator_Sync* sysmem_allocator,
     fidl::InterfaceHandle<fuchsia::sysmem::BufferCollectionToken> token,
     BufferCollectionUsage usage, std::optional<fuchsia::math::SizeU> size) {
   FX_DCHECK(main_dispatcher_ == async_get_default_dispatcher());
   TRACE_DURATION("gfx", "flatland::VkRenderer::ImportBufferCollection");
-
-  auto vk_device = escher_->vk_device();
-  auto vk_loader = escher_->device()->dispatch_loader();
-  FX_DCHECK(vk_device);
   FX_DCHECK(collection_id != allocation::kInvalidId);
+  FX_DCHECK(token.is_valid());
 
-  // Check for a null token here before we try to duplicate it to get the
-  // vulkan token.
-  if (!token.is_valid()) {
-    FX_LOGS(WARNING) << "Token is invalid.";
-    return false;
-  }
-
-  // Bind the buffer collection token to get the local token. Valid tokens can always be bound.
+  // TODO(fxbug.dev/51213): See if this can become asynchronous.
   fuchsia::sysmem::BufferCollectionTokenSyncPtr local_token = token.BindSync();
   fuchsia::sysmem::BufferCollectionTokenSyncPtr vulkan_token;
-  // TODO(fxbug.dev/51213): See if this can become asynchronous.
-  zx_status_t status =
-      local_token->Duplicate(std::numeric_limits<uint32_t>::max(), vulkan_token.NewRequest());
-  if (status != ZX_OK) {
-    FX_LOGS(ERROR) << "Cannot duplicate token: " << zx_status_get_string(status)
-                   << "; The client may have invalidated the token.";
+  if (auto dup_token = Duplicate(local_token)) {
+    vulkan_token = std::move(*dup_token);
+  } else {
     return false;
   }
 
-  // Create the sysmem collection.
   fuchsia::sysmem::BufferCollectionSyncPtr buffer_collection;
-  vk::ImageUsageFlags image_usage;
-  {
-    // Use local token to create a BufferCollection and then sync. We can trust
-    // |buffer_collection->Sync()| to tell us if we have a bad or malicious channel. So if this call
-    // passes, then we know we have a valid BufferCollection.
-    zx_status_t status = sysmem_allocator->BindSharedCollection(std::move(local_token),
-                                                                buffer_collection.NewRequest());
-    if (status != ZX_OK) {
-      FX_LOGS(ERROR) << "Could not bind buffer collection: " << zx_status_get_string(status);
-      return false;
-    }
-
-    status = buffer_collection->Sync();
-    if (status != ZX_OK) {
-      FX_LOGS(ERROR) << "Could not sync buffer collection: " << zx_status_get_string(status);
-      return false;
-    }
-
+  if (auto collection =
+          CreateBufferCollectionPtrWithEmptyConstraints(sysmem_allocator, std::move(local_token))) {
+    buffer_collection = std::move(*collection);
     // Use a name with a priority that's greater than the vulkan implementation, but less than
     // what any client would use.
-    const char* image_name;
-    switch (usage) {
-      case BufferCollectionUsage::kRenderTarget:
-        image_name = "FlatlandRenderTargetMemory";
-        image_usage = escher::RectangleCompositor::kRenderTargetUsageFlags |
-                      vk::ImageUsageFlagBits::eTransferSrc;
-        break;
-      case BufferCollectionUsage::kReadback:
-        image_name = "FlatlandReadbackMemory";
-        image_usage = vk::ImageUsageFlagBits::eTransferDst;
-        break;
-      case BufferCollectionUsage::kClientImage:
-        image_usage = escher::RectangleCompositor::kTextureUsageFlags;
-        image_name = "FlatlandImageMemory";
-        break;
-    }
-
-    buffer_collection->SetName(10u, GetNextBufferCollectionIdString(image_name));
-    status = buffer_collection->SetConstraints(false /* has_constraints */,
-                                               fuchsia::sysmem::BufferCollectionConstraints());
-    if (status != ZX_OK) {
-      FX_LOGS(ERROR) << "Cannot set constraints for " << image_name << ": "
-                     << zx_status_get_string(status)
-                     << "; The client may have invalidated the token.";
-      return false;
-    }
+    buffer_collection->SetName(/*priority=*/10u,
+                               GetNextBufferCollectionIdString(GetImageName(usage).c_str()));
+  } else {
+    return false;
   }
 
-  // Create the vk collection.
-  vk::BufferCollectionFUCHSIA collection;
-  {
-    std::vector<vk::ImageFormatConstraintsInfoFUCHSIA> create_infos;
-    for (const auto& format : GetSupportedImageFormatsForBufferCollectionUsage(usage)) {
-      vk::ImageCreateInfo create_info =
-          escher::RectangleCompositor::GetDefaultImageConstraints(format, image_usage);
-      if (size.has_value() && size.value().width && size.value().height) {
-        create_info.extent = vk::Extent3D{size.value().width, size.value().height, 1};
-      }
-
-      create_infos.push_back(escher::GetDefaultImageFormatConstraintsInfo(create_info));
-    }
-
-    vk::ImageConstraintsInfoFUCHSIA image_constraints_info;
-    image_constraints_info.setFormatConstraints(create_infos)
-        .setFlags(escher_->allow_protected_memory()
-                      ? vk::ImageConstraintsInfoFlagBitsFUCHSIA::eProtectedOptional
-                      : vk::ImageConstraintsInfoFlagsFUCHSIA{})
-        .setBufferCollectionConstraints(
-            vk::BufferCollectionConstraintsInfoFUCHSIA().setMinBufferCount(1u));
-
-    // Create the collection and set its constraints.
-    vk::BufferCollectionCreateInfoFUCHSIA buffer_collection_create_info;
-    buffer_collection_create_info.collectionToken = vulkan_token.Unbind().TakeChannel().release();
-    collection = escher::ESCHER_CHECKED_VK_RESULT(
-        vk_device.createBufferCollectionFUCHSIA(buffer_collection_create_info, nullptr, vk_loader));
-    auto vk_result = vk_device.setBufferCollectionImageConstraintsFUCHSIA(
-        collection, image_constraints_info, vk_loader);
-    if (vk_result != vk::Result::eSuccess) {
-      FX_LOGS(ERROR) << "Cannot set vulkan constraints: " << vk::to_string(vk_result)
-                     << "; The client may have invalidated the token.";
-      return false;
-    }
+  vk::BufferCollectionFUCHSIA vk_collection;
+  if (const auto collection = CreateVulkanBufferCollection(std::move(vulkan_token), usage, size)) {
+    vk_collection = std::move(*collection);
+  } else {
+    return false;
   }
 
   // TODO(fxbug.dev/44335): Convert this to a lock-free structure.
@@ -335,10 +367,9 @@ bool VkRenderer::ImportBufferCollection(
 
   std::unordered_map<GlobalBufferCollectionId, CollectionData>* collections =
       UsageToCollection(usage);
-
-  auto [_, emplace_success] = collections->emplace(
+  const auto [_, emplace_success] = collections->emplace(
       std::make_pair(collection_id, CollectionData{.collection = std::move(buffer_collection),
-                                                   .vk_collection = std::move(collection)}));
+                                                   .vk_collection = std::move(vk_collection)}));
   if (!emplace_success) {
     FX_LOGS(WARNING) << "Could not store buffer collection, because an entry already existed for "
                      << collection_id;
@@ -939,12 +970,13 @@ VkRenderer::UsageToCollection(BufferCollectionUsage usage) {
   switch (usage) {
     case BufferCollectionUsage::kRenderTarget:
       return &render_target_collections_;
-      break;
     case BufferCollectionUsage::kReadback:
       return &readback_collections_;
-      break;
-    default:
+    case BufferCollectionUsage::kClientImage:
       return &texture_collections_;
+    default:
+      FX_NOTREACHED();
+      return nullptr;
   }
 }
 
