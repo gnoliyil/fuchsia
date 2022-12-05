@@ -25,7 +25,10 @@ const DEFAULT_MAXIMUM_SEGMENT_SIZE: u32 = 536;
 use crate::{
     ip::{IpDeviceId, IpExt},
     sync::Mutex,
-    transport::tcp::socket::{isn::IsnGenerator, TcpNonSyncContext, TcpSockets},
+    transport::tcp::{
+        seqnum::WindowSize,
+        socket::{isn::IsnGenerator, TcpNonSyncContext, TcpSockets},
+    },
 };
 
 /// Control flags that can alter the state of a TCP control block.
@@ -75,8 +78,16 @@ impl<I: IpExt, D: IpDeviceId, C: TcpNonSyncContext> TcpState<I, D, C> {
 }
 
 /// Named tuple for holding sizes of buffers for a socket.
-///
-/// TODO(https://fxbug.dev/110625): Use this to implement setting SO_SNDBUF.
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
-pub struct BufferSizes {}
+pub struct BufferSizes {
+    /// The size of the send buffer.
+    pub send: usize,
+}
+
+impl Default for BufferSizes {
+    fn default() -> Self {
+        let send = WindowSize::DEFAULT.into();
+        Self { send }
+    }
+}

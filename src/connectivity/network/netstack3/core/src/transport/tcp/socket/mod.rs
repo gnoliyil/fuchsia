@@ -1615,18 +1615,27 @@ mod tests {
         send: Rc<RefCell<Vec<u8>>>,
     }
 
+    impl ClientBuffers {
+        fn new(buffer_sizes: BufferSizes) -> Self {
+            let BufferSizes { send } = buffer_sizes;
+            Self {
+                receive: Default::default(),
+                send: Rc::new(RefCell::new(Vec::with_capacity(send))),
+            }
+        }
+    }
+
     impl TcpNonSyncContext for TcpNonSyncCtx {
         type ReceiveBuffer = Rc<RefCell<RingBuffer>>;
         type SendBuffer = TestSendBuffer;
         type ReturnedBuffers = ClientBuffers;
-        type ProvidedBuffers = ClientBuffers;
+        type ProvidedBuffers = WriteBackClientBuffers;
 
         fn on_new_connection<I: Ip>(&mut self, _listener: ListenerId<I>) {}
         fn new_passive_open_buffers(
             buffer_sizes: BufferSizes,
         ) -> (Self::ReceiveBuffer, Self::SendBuffer, Self::ReturnedBuffers) {
-            let BufferSizes {} = buffer_sizes;
-            let client = ClientBuffers::default();
+            let client = ClientBuffers::new(buffer_sizes);
             (
                 Rc::clone(&client.receive),
                 TestSendBuffer(Rc::clone(&client.send), RingBuffer::default()),
@@ -1635,13 +1644,16 @@ mod tests {
         }
     }
 
-    impl IntoBuffers<Rc<RefCell<RingBuffer>>, TestSendBuffer> for ClientBuffers {
+    type WriteBackClientBuffers = Rc<RefCell<Option<ClientBuffers>>>;
+
+    impl IntoBuffers<Rc<RefCell<RingBuffer>>, TestSendBuffer> for WriteBackClientBuffers {
         fn into_buffers(
             self,
             buffer_sizes: BufferSizes,
         ) -> (Rc<RefCell<RingBuffer>>, TestSendBuffer) {
-            let Self { receive, send } = self;
-            let BufferSizes {} = buffer_sizes;
+            let buffers = ClientBuffers::new(buffer_sizes);
+            *self.as_ref().borrow_mut() = Some(buffers.clone());
+            let ClientBuffers { receive, send } = buffers;
             (receive, TestSendBuffer(send, Default::default()))
         }
     }
@@ -1852,7 +1864,7 @@ mod tests {
             TcpSocketHandler::listen(sync_ctx, non_sync_ctx, bound, backlog)
         });
 
-        let client_ends = ClientBuffers::default();
+        let client_ends = WriteBackClientBuffers::default();
         let client = net.with_context(LOCAL, |TcpCtx { sync_ctx, non_sync_ctx }| {
             let conn = TcpSocketHandler::create_socket(sync_ctx, non_sync_ctx);
             if bind_client {
@@ -1934,7 +1946,8 @@ mod tests {
         assert_connected(LOCAL, client);
         assert_connected(REMOTE, accepted);
 
-        let ClientBuffers { send: client_snd_end, receive: client_rcv_end } = client_ends;
+        let ClientBuffers { send: client_snd_end, receive: client_rcv_end } =
+            client_ends.as_ref().borrow_mut().take().unwrap();
         let ClientBuffers { send: accepted_snd_end, receive: accepted_rcv_end } = accepted_ends;
         for snd_end in [client_snd_end, accepted_snd_end] {
             snd_end.borrow_mut().extend_from_slice(b"Hello");

@@ -137,8 +137,8 @@ impl TcpNonSyncContext for FakeNonSyncCtx {
     fn new_passive_open_buffers(
         buffer_sizes: BufferSizes,
     ) -> (Self::ReceiveBuffer, Self::SendBuffer, Self::ReturnedBuffers) {
-        let BufferSizes {} = buffer_sizes;
-        (RingBuffer::default(), RingBuffer::default(), ())
+        let BufferSizes { send } = buffer_sizes;
+        (RingBuffer::default(), RingBuffer::new(send), ())
     }
 }
 

@@ -581,9 +581,11 @@ pub trait IntoBuffers<R: ReceiveBuffer, S: SendBuffer> {
     fn into_buffers(self, buffer_sizes: BufferSizes) -> (R, S);
 }
 
+#[cfg(test)]
 impl<R: Default + ReceiveBuffer, S: Default + SendBuffer> IntoBuffers<R, S> for () {
     fn into_buffers(self, buffer_sizes: BufferSizes) -> (R, S) {
-        let BufferSizes {} = buffer_sizes;
+        // Ignore buffer sizes since this is a test-only impl.
+        let BufferSizes { send: _ } = buffer_sizes;
         Default::default()
     }
 }

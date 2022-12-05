@@ -116,14 +116,14 @@ impl IntoBuffers<ReceiveBufferWithZirconSocket, SendBufferWithZirconSocket>
         buffer_sizes: BufferSizes,
     ) -> (ReceiveBufferWithZirconSocket, SendBufferWithZirconSocket) {
         let Self(socket, notifier) = self;
-        let BufferSizes {} = buffer_sizes;
+        let BufferSizes { send } = buffer_sizes;
         socket
             .signal_peer(zx::Signals::NONE, ZXSIO_SIGNAL_CONNECTED)
             .expect("failed to signal that the connection is established");
         notifier.schedule();
         (
             ReceiveBufferWithZirconSocket::new(Arc::clone(&socket)),
-            SendBufferWithZirconSocket::new(socket, notifier),
+            SendBufferWithZirconSocket::new(socket, notifier, send),
         )
     }
 }
@@ -301,8 +301,19 @@ impl Takeable for SendBufferWithZirconSocket {
 }
 
 impl SendBufferWithZirconSocket {
-    fn new(socket: Arc<zx::Socket>, notifier: NeedsDataNotifier) -> Self {
-        let ready_to_send = RingBuffer::default();
+    /// The minimum send buffer size, in bytes.
+    ///
+    /// Borrowed from Linux: https://man7.org/linux/man-pages/man7/socket.7.html
+    const MIN_CAPACITY: usize = 2048;
+    /// The maximum send buffer size in bytes.
+    ///
+    /// 4MiB was picked to match Linux's behavior.
+    const MAX_CAPACITY: usize = 1 << 22;
+
+    fn new(socket: Arc<zx::Socket>, notifier: NeedsDataNotifier, target_capacity: usize) -> Self {
+        let ring_buffer_size =
+            usize::min(usize::max(target_capacity, Self::MIN_CAPACITY), Self::MAX_CAPACITY);
+        let ready_to_send = RingBuffer::new(ring_buffer_size);
         let info = socket.info().expect("failed to get socket info");
         let capacity = info.rx_buf_max + ready_to_send.cap();
         Self { capacity, socket, ready_to_send, notifier }
@@ -1211,6 +1222,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use test_case::test_case;
+
     use super::*;
 
     const TEST_BYTES: &'static [u8] = b"Hello";
@@ -1235,7 +1248,8 @@ mod tests {
         let (local, peer) =
             zx::Socket::create(zx::SocketOpts::STREAM).expect("failed to create zircon socket");
         let notifier = NeedsDataNotifier::default();
-        let mut sbuf = SendBufferWithZirconSocket::new(Arc::new(local), notifier);
+        let mut sbuf =
+            SendBufferWithZirconSocket::new(Arc::new(local), notifier, u16::MAX as usize);
         assert_eq!(peer.write(TEST_BYTES), Ok(TEST_BYTES.len()));
         assert_eq!(sbuf.len(), TEST_BYTES.len());
         sbuf.peek_with(0, |avail| {
@@ -1248,5 +1262,17 @@ mod tests {
         sbuf.peek_with(0, |avail| {
             assert_eq!(avail, SendPayload::Contiguous(TEST_BYTES));
         });
+    }
+
+    #[test_case(0, SendBufferWithZirconSocket::MIN_CAPACITY; "below min")]
+    #[test_case(1 << 16, 1 << 16; "in range")]
+    #[test_case(1 << 32, SendBufferWithZirconSocket::MAX_CAPACITY; "above max")]
+    fn send_buffer_limits(target: usize, expected: usize) {
+        let (local, _peer) =
+            zx::Socket::create(zx::SocketOpts::STREAM).expect("failed to create zircon socket");
+        let notifier = NeedsDataNotifier::default();
+        let sbuf = SendBufferWithZirconSocket::new(Arc::new(local), notifier, target);
+        let ring_buffer_capacity = sbuf.capacity - sbuf.socket.info().unwrap().rx_buf_max;
+        assert_eq!(ring_buffer_capacity, expected)
     }
 }
