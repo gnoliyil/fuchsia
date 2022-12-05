@@ -151,15 +151,12 @@ impl DeviceControlHandler {
     }
 
     async fn get_performance_state(&self) -> Result<u32, Error> {
-        let proxy = self
-            .driver_proxy
-            .borrow()
+        let proxy = self.driver_proxy.borrow();
+
+        proxy
             .as_ref()
             .ok_or(format_err!("Missing driver_proxy"))
             .or_debug_panic()?
-            .clone();
-
-        proxy
             .get_current_performance_state()
             .await
             .map_err(|e| format_err!("{}: get_performance_state IPC failed: {}", self.name(), e))
@@ -202,16 +199,13 @@ impl DeviceControlHandler {
     }
 
     async fn set_performance_state(&self, in_state: u32) -> Result<(), Error> {
-        let proxy = self
-            .driver_proxy
-            .borrow()
-            .as_ref()
-            .ok_or(format_err!("Missing driver_proxy"))
-            .or_debug_panic()?
-            .clone();
+        let proxy = self.driver_proxy.borrow();
 
         // Make the FIDL call
         let (status, _out_state) = proxy
+            .as_ref()
+            .ok_or(format_err!("Missing driver_proxy"))
+            .or_debug_panic()?
             .set_performance_state(in_state)
             .await
             .map_err(|e| format_err!("{}: set_performance_state IPC failed: {}", self.name(), e))?;
@@ -238,12 +232,12 @@ impl Node for DeviceControlHandler {
         fuchsia_trace::duration!("power_manager", "DeviceControlHandler::init");
 
         // Connect to the driver. Typically this is None, but it may be set by tests.
-        let driver_proxy = match self.driver_proxy.borrow().as_ref() {
-            Some(p) => p.clone(),
-            None => connect_to_driver::<fdev::ControllerMarker>(&self.driver_path).await?,
-        };
+        let mut option = self.driver_proxy.borrow_mut();
+        if option.is_none() {
+            let proxy = connect_to_driver::<fdev::ControllerMarker>(&self.driver_path).await?;
+            *option = Some(proxy);
+        }
 
-        *self.driver_proxy.borrow_mut() = Some(driver_proxy);
         self.init_done.signal();
 
         Ok(())
