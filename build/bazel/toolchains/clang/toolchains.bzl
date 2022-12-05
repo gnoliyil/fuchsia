@@ -120,7 +120,7 @@ def _prebuilt_clang_cc_toolchain_config_impl(ctx):
         ],
     )
 
-    features = [dependency_file_feature] + sanitizer_features + ml_inliner_feature
+    features = [dependency_file_feature, ml_inliner_feature] + sanitizer_features
 
     return cc_common.create_cc_toolchain_config_info(
         ctx = ctx,
