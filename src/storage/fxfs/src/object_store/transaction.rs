@@ -441,6 +441,9 @@ impl std::fmt::Debug for TxnMutation<'_> {
 }
 
 pub enum MetadataReservation {
+    // The state after a transaction has been dropped.
+    None,
+
     // Metadata space for this transaction is being borrowed from ObjectManager's metadata
     // reservation.
     Borrowed,
@@ -1266,21 +1269,21 @@ mod tests {
 
         // Dropping while there's a reader.
         {
-            let mut write_lock = fs
+            let _write_lock = fs
                 .clone()
                 .new_transaction(&[key.clone()], Options::default())
                 .await
                 .expect("new_transaction failed");
             let _read_lock = fs.read_lock(&[key.clone()]).await;
-            fs.clone().drop_transaction(&mut write_lock);
         }
         // Dropping while there's no reader.
-        let mut write_lock = fs
-            .clone()
-            .new_transaction(&[key.clone()], Options::default())
-            .await
-            .expect("new_transaction failed");
-        fs.clone().drop_transaction(&mut write_lock);
+        {
+            let _write_lock = fs
+                .clone()
+                .new_transaction(&[key.clone()], Options::default())
+                .await
+                .expect("new_transaction failed");
+        }
         // Make sure we can take the lock again (i.e. it was actually released).
         fs.clone()
             .new_transaction(&[key.clone()], Options::default())

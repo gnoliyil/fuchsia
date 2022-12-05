@@ -31,15 +31,17 @@ use {
     },
     anyhow::{Context, Error},
     async_trait::async_trait,
+    event_listener::Event,
     fuchsia_async as fasync,
     futures::{
         channel::oneshot::{channel, Sender},
         FutureExt,
     },
     once_cell::sync::OnceCell,
+    scopeguard::ScopeGuard,
     static_assertions::const_assert,
     std::sync::{
-        atomic::{self, AtomicBool},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex, Weak,
     },
     storage_device::{Device, DeviceHolder},
@@ -53,6 +55,9 @@ pub const MIN_BLOCK_SIZE: u64 = 4096;
 // needs to be excluded.
 pub const MAX_FILE_SIZE: u64 = i64::MAX as u64 - 4095;
 const_assert!(9223372036854771712 == MAX_FILE_SIZE);
+
+// The maximum number of transactions that can be in-flight at any time.
+const MAX_IN_FLIGHT_TRANSACTIONS: u64 = 4;
 
 /// Holds information on an Fxfs Filesystem
 pub struct Info {
@@ -217,7 +222,7 @@ impl From<Arc<FxFilesystem>> for OpenFxFilesystem {
 
 impl Drop for OpenFxFilesystem {
     fn drop(&mut self) {
-        if !self.options.read_only && !self.closed.load(atomic::Ordering::SeqCst) {
+        if !self.options.read_only && !self.closed.load(Ordering::SeqCst) {
             error!("OpenFxFilesystem dropped without first being closed. Data loss may occur.");
         }
     }
@@ -245,6 +250,13 @@ pub struct FxFilesystem {
     graveyard: Arc<Graveyard>,
     completed_transactions: UintMetric,
     options: Options,
+
+    // The number of in-flight transactions which we will limit to MAX_IN_FLIGHT_TRANSACTIONS.
+    in_flight_transactions: AtomicU64,
+
+    // An event that is used to wake up tasks that are blocked due to the in-flight transaction
+    // limit.
+    event: Event,
 }
 
 #[derive(Default)]
@@ -295,6 +307,8 @@ impl FxFilesystem {
             graveyard: Graveyard::new(objects.clone()),
             completed_transactions: UintMetric::new("completed_transactions", 0),
             options: Default::default(),
+            in_flight_transactions: AtomicU64::new(0),
+            event: Event::new(),
         });
         filesystem.device.set(device).unwrap_or_else(|_| unreachable!());
         filesystem.journal.init_empty(filesystem.clone()).await?;
@@ -319,7 +333,7 @@ impl FxFilesystem {
         transaction.commit().await?;
 
         objects.set_volume_directory(volume_directory);
-        filesystem.closed.store(false, atomic::Ordering::SeqCst);
+        filesystem.closed.store(false, Ordering::SeqCst);
         Ok(filesystem.into())
     }
 
@@ -358,6 +372,8 @@ impl FxFilesystem {
             graveyard: Graveyard::new(objects.clone()),
             completed_transactions: UintMetric::new("completed_transactions", 0),
             options: filesystem_options,
+            in_flight_transactions: AtomicU64::new(0),
+            event: Event::new(),
         });
 
         if let Some(fsck_after_every_transaction) = fsck_after_every_transaction {
@@ -390,7 +406,7 @@ impl FxFilesystem {
             // Now start the async reaper.
             filesystem.graveyard.clone().reap_async();
         }
-        filesystem.closed.store(false, atomic::Ordering::SeqCst);
+        filesystem.closed.store(false, Ordering::SeqCst);
         Ok(filesystem.into())
     }
 
@@ -407,7 +423,7 @@ impl FxFilesystem {
     }
 
     pub async fn close(&self) -> Result<(), Error> {
-        assert_eq!(self.closed.swap(true, atomic::Ordering::SeqCst), false);
+        assert_eq!(self.closed.swap(true, Ordering::SeqCst), false);
         debug_assert_not_too_long!(self.graveyard.wait_for_reap());
         self.journal.stop_compactions().await;
         let sync_status =
@@ -431,9 +447,6 @@ impl FxFilesystem {
         options: transaction::Options<'a>,
     ) -> Result<(MetadataReservation, Option<&'a Reservation>, Option<Hold<'a>>), Error> {
         if !options.skip_journal_checks {
-            // TODO(fxbug.dev/96073): for now, we don't allow for transactions that might be
-            // inflight but not committed.  In theory, if there are a large number of them, it would
-            // be possible to run out of journal space.  We should probably have an in-flight limit.
             self.journal.check_journal_space().await?;
         }
 
@@ -477,6 +490,43 @@ impl FxFilesystem {
 
     pub fn journal(&self) -> &Journal {
         &self.journal
+    }
+
+    async fn add_transaction(&self, skip_journal_checks: bool) {
+        if skip_journal_checks {
+            self.in_flight_transactions.fetch_add(1, Ordering::Relaxed);
+        } else {
+            let inc = || {
+                let mut in_flights = self.in_flight_transactions.load(Ordering::Relaxed);
+                while in_flights < MAX_IN_FLIGHT_TRANSACTIONS {
+                    match self.in_flight_transactions.compare_exchange_weak(
+                        in_flights,
+                        in_flights + 1,
+                        Ordering::Relaxed,
+                        Ordering::Relaxed,
+                    ) {
+                        Ok(_) => return true,
+                        Err(x) => in_flights = x,
+                    }
+                }
+                return false;
+            };
+            while !inc() {
+                let listener = self.event.listen();
+                if inc() {
+                    break;
+                }
+                listener.await;
+            }
+        }
+    }
+
+    fn sub_transaction(&self) {
+        let old = self.in_flight_transactions.fetch_sub(1, Ordering::Relaxed);
+        assert!(old != 0);
+        if old <= MAX_IN_FLIGHT_TRANSACTIONS {
+            self.event.notify(usize::MAX);
+        }
     }
 }
 
@@ -546,10 +596,14 @@ impl TransactionHandler for FxFilesystem {
         locks: &[LockKey],
         options: transaction::Options<'a>,
     ) -> Result<Transaction<'a>, Error> {
+        self.add_transaction(options.skip_journal_checks).await;
+        let guard = scopeguard::guard((), |_| self.sub_transaction());
         let (metadata_reservation, allocator_reservation, hold) =
             self.reservation_for_transaction(options).await?;
         let mut transaction =
-            Transaction::new(self, metadata_reservation, &[LockKey::Filesystem], locks).await;
+            Transaction::new(self.clone(), metadata_reservation, &[LockKey::Filesystem], locks)
+                .await;
+        ScopeGuard::into_inner(guard);
         hold.map(|h| h.forget()); // Transaction takes ownership from here on.
         transaction.allocator_reservation = allocator_reservation;
         Ok(transaction)
@@ -594,14 +648,19 @@ impl TransactionHandler for FxFilesystem {
     }
 
     fn drop_transaction(&self, transaction: &mut Transaction<'_>) {
+        if !matches!(transaction.metadata_reservation, MetadataReservation::None) {
+            self.sub_transaction();
+        }
         // If we placed a hold for metadata space, return it now.
-        if let MetadataReservation::Hold(hold_amount) = &transaction.metadata_reservation {
+        if let MetadataReservation::Hold(hold_amount) =
+            std::mem::replace(&mut transaction.metadata_reservation, MetadataReservation::None)
+        {
             let hold = transaction
                 .allocator_reservation
                 .unwrap()
                 .reserve(0)
                 .expect("Zero should always succeed.");
-            hold.add(*hold_amount);
+            hold.add(hold_amount);
         }
         self.objects.drop_transaction(transaction);
         self.lock_manager.drop_transaction(transaction);
@@ -897,5 +956,25 @@ mod tests {
             fs.object_manager().metadata_reservation().amount(),
             metadata_reservation_amount
         );
+    }
+
+    #[fuchsia::test]
+    async fn test_max_in_flight_transactions() {
+        let device = DeviceHolder::new(FakeDevice::new(8192, TEST_DEVICE_BLOCK_SIZE));
+        let fs = FxFilesystem::new_empty(device).await.expect("new_empty failed");
+
+        let mut transactions = Vec::new();
+        for _ in 0..super::MAX_IN_FLIGHT_TRANSACTIONS {
+            transactions.push(fs.clone().new_transaction(&[], Options::default()).await);
+        }
+
+        // Trying to create another one should be blocked.
+        let mut fut = fs.clone().new_transaction(&[], Options::default());
+        assert!(futures::poll!(&mut fut).is_pending());
+
+        // Dropping one should allow it to proceed.
+        transactions.pop();
+
+        assert!(futures::poll!(&mut fut).is_ready());
     }
 }

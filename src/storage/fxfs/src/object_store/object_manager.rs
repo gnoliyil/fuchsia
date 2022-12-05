@@ -487,6 +487,7 @@ impl ObjectManager {
         inner.max_transaction_size.set_if(journal_usage, |curr, new| new > curr);
         let txn_space = reserved_space_from_journal_usage(journal_usage);
         match &mut transaction.metadata_reservation {
+            MetadataReservation::None => unreachable!(),
             MetadataReservation::Borrowed => {
                 // Account for the amount we need to borrow for the transaction itself now that we
                 // know the transaction size.
