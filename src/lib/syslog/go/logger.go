@@ -20,6 +20,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"syscall/zx"
+	"unicode/utf8"
 
 	"fidl/fuchsia/diagnostics"
 	"fidl/fuchsia/logger"
@@ -145,167 +146,6 @@ type LogInitOptions struct {
 	LogLevel LogLevel
 }
 
-// LogEncoder class, used for encoding structured logs.
-type LogEncoder struct {
-	// 65-kb buffer to encode to
-	buf [65536]byte
-
-	// Current offset into the buffer
-	offset int
-
-	// Arg size in bytes
-	argSize int
-
-	// Offset of the current arg header
-	argHeaderOffset int
-
-	// Offset of the current header
-	headerOffset int
-
-	// Unaligned key size in bytes
-	unalignedKeySize int
-
-	// Log severity
-	severity LogLevel
-}
-
-// New method
-func NewLogEncoder() *LogEncoder {
-	return &LogEncoder{}
-}
-
-// Write uint64 method
-func (e *LogEncoder) WriteUint64(value uint64) {
-	binary.LittleEndian.PutUint64(e.buf[e.offset:], value)
-	e.offset += 8
-}
-
-// Flush previous argument
-func (e *LogEncoder) FlushPreviousArgument() {
-	e.argSize = 0
-}
-
-// Aligns a byte offset to the next 8-byte (word) boundary
-func AlignToWord(value int) int {
-	if value%8 == 0 {
-		return value
-	}
-	return (value + 8) &^ 7
-}
-
-// Write a string to the buffer
-func (e *LogEncoder) WriteString(value string) {
-	// Write the string to the buffer
-	copy(e.buf[e.offset:], value)
-	e.offset += AlignToWord(len(value))
-}
-
-func boolToUint64(value bool) uint64 {
-	if value {
-		return 1
-	}
-	return 0
-}
-
-// Compute argument header
-func (e *LogEncoder) ComputeArgumentHeader(argtype uint64) uint64 {
-	return argtype | (uint64(e.argSize) << 4) | (uint64(e.unalignedKeySize) << 16) | (boolToUint64(e.unalignedKeySize > 0) << 31)
-}
-
-// Append argument key
-func (e *LogEncoder) AppendArgumentKey(key string) {
-	e.FlushPreviousArgument()
-	e.argHeaderOffset = e.offset
-	// Write an empty header
-	e.WriteUint64(0)
-	copy(e.buf[e.offset:], key)
-	var aligned = AlignToWord(len(key))
-	e.unalignedKeySize = len(key)
-	e.offset += aligned
-	e.argSize += aligned + 8 // 8 extra bytes for the header
-}
-
-// Append argument uint64 value (type 4)
-func (e *LogEncoder) AppendArgumentValueUint64(value uint64) {
-	e.WriteUint64(value)
-
-	e.argSize += 8
-
-	// Write the argument header
-	binary.LittleEndian.PutUint64(e.buf[e.argHeaderOffset:], e.ComputeArgumentHeader(4))
-}
-
-// Append argument int64 value (type 3)
-func (e *LogEncoder) AppendArgumentValueInt64(value int64) {
-	e.WriteUint64(uint64(value))
-	e.argSize += 8
-
-	binary.LittleEndian.PutUint64(e.buf[e.argHeaderOffset:], e.ComputeArgumentHeader(3))
-}
-
-// Append argument string value (type 6)
-func (e *LogEncoder) AppendArgumentValueString(value string) {
-	copy(e.buf[e.offset:], value)
-	var aligned = AlignToWord(len(value))
-	e.offset += aligned
-	e.argSize += aligned
-
-	binary.LittleEndian.PutUint64(e.buf[e.argHeaderOffset:], e.ComputeArgumentHeader(6)|(((boolToUint64(len(value) > 0)<<15)|uint64(len(value)))<<32))
-}
-
-func (e *LogEncoder) Begin(timestamp uint64, severity LogLevel, file *string, line *uint32, pid uint64, tid uint64, msg string, tags []string) {
-	e.offset = 0
-	e.argSize = 0
-	e.buf = [65536]byte{}
-	e.severity = severity
-
-	e.headerOffset = e.offset
-
-	// Write an empty header.
-	// This is initially empty to reserve space until we know
-	// the full value of the header.
-	e.WriteUint64(0)
-
-	e.WriteUint64(timestamp)
-
-	e.AppendArgumentKey("pid")
-	e.AppendArgumentValueUint64(pid)
-
-	e.AppendArgumentKey("tid")
-	e.AppendArgumentValueUint64(tid)
-
-	e.AppendArgumentKey("message")
-	e.AppendArgumentValueString(msg)
-
-	if file != nil {
-		e.AppendArgumentKey("file")
-		e.AppendArgumentValueString(*file)
-	}
-
-	if line != nil {
-		e.AppendArgumentKey("line")
-		e.AppendArgumentValueUint64(uint64(*line))
-	}
-
-	for _, tag := range tags {
-		e.AppendArgumentKey("tag")
-		e.AppendArgumentValueString(tag)
-	}
-}
-
-// Gets the buffer up to the offset that was written
-func (e *LogEncoder) GetBuffer() []byte {
-	return e.buf[:e.offset]
-}
-
-func (e *LogEncoder) End() {
-	e.FlushPreviousArgument()
-	var recordSizeInWords = (e.offset - e.headerOffset) / 8
-
-	// Write the header
-	binary.LittleEndian.PutUint64(e.buf[e.headerOffset:], 9|(uint64(recordSizeInWords)<<4)|(uint64(e.severity)<<56))
-}
-
 type Logger struct {
 	socket zx.Socket
 	cancel context.CancelFunc
@@ -314,8 +154,6 @@ type Logger struct {
 	options     logOptions
 	level       int32 // LogLevel; accessed atomically.
 	pid         uint64
-	file        *string
-	line        *uint32
 }
 
 func NewLogger(options LogInitOptions) (*Logger, error) {
@@ -348,7 +186,7 @@ func NewLogger(options LogInitOptions) (*Logger, error) {
 			return nil, err
 		}
 		l.socket = localS
-		if err := logSink.ConnectStructured(context.Background(), peerS); err != nil {
+		if err := logSink.Connect(context.Background(), peerS); err != nil {
 			_ = l.Close()
 			return nil, err
 		}
@@ -434,16 +272,76 @@ func (l *Logger) logToWriter(writer io.Writer, time zx.Time, logLevel LogLevel, 
 func (l *Logger) logToSocket(time zx.Time, logLevel LogLevel, tag, msg string) error {
 	const golangThreadID = 0
 
-	var encoder = NewLogEncoder()
-	encoder.Begin(uint64(time), logLevel, l.file, l.line, l.pid, golangThreadID, msg, append(l.options.Tags, tag))
-	l.file = nil
-	l.line = nil
-	encoder.End()
-	if _, err := l.socket.Write(encoder.GetBuffer(), 0); err != nil {
+	var buffer [logger.MaxDatagramLenBytes]byte
+
+	pos := 0
+	for _, i := range [...]uint64{
+		l.pid,
+		golangThreadID,
+		uint64(time),
+	} {
+		binary.LittleEndian.PutUint64(buffer[pos:], i)
+		pos += 8
+	}
+	for _, i := range [...]uint32{
+		uint32(logLevel),
+		atomic.LoadUint32(&l.droppedLogs),
+	} {
+		binary.LittleEndian.PutUint32(buffer[pos:], i)
+		pos += 4
+	}
+
+	// Write global tags
+	for _, tag := range l.options.Tags {
+		if length := len(tag); length != 0 {
+			buffer[pos] = byte(length)
+			pos += 1
+			pos += copy(buffer[pos:], tag)
+		}
+	}
+
+	// Write local tags
+	if length := len(tag); length != 0 {
+		buffer[pos] = byte(length)
+		pos += 1
+		pos += copy(buffer[pos:], tag)
+	}
+
+	const ellipsis = "..."
+
+	// Write msg
+	buffer[pos] = 0
+	pos += 1
+
+	payload := msg
+	if len(payload)+1 > len(buffer)-pos {
+		payload = payload[:len(buffer)-pos-1-len(ellipsis)]
+
+		// Remove the last byte until the result is valid UTF-8.
+		for {
+			if lastRune, _ := utf8.DecodeLastRuneInString(payload); lastRune != utf8.RuneError {
+				break
+			}
+			payload = payload[:len(payload)-1]
+		}
+	}
+	pos += copy(buffer[pos:], payload)
+	if payload != msg {
+		pos += copy(buffer[pos:], ellipsis)
+	}
+
+	buffer[pos] = 0
+	pos += 1
+
+	if _, err := l.socket.Write(buffer[:pos], 0); err != nil {
+		atomic.AddUint32(&l.droppedLogs, 1)
 		return err
 	}
-	return nil
 
+	if payload != msg {
+		return &ErrMsgTooLong{Msg: msg[len(payload):]}
+	}
+	return nil
 }
 
 func (l *Logger) logf(callDepth int, logLevel LogLevel, tag string, format string, a ...interface{}) error {
@@ -467,13 +365,7 @@ func (l *Logger) logf(callDepth int, logLevel LogLevel, tag string, format strin
 			}
 			file = short
 		}
-		if atomic.LoadUint32((*uint32)(&l.socket)) == uint32(zx.HandleInvalid) {
-			msg = fmt.Sprintf("%s(%d): %s ", file, line, msg)
-		} else {
-			l.file = &file
-			var lineHeapAllocated = uint32(line)
-			l.line = &lineHeapAllocated
-		}
+		msg = fmt.Sprintf("%s(%d): %s ", file, line, msg)
 	}
 	if len(tag) > int(logger.MaxTagLenBytes) {
 		tag = tag[:logger.MaxTagLenBytes]
