@@ -10,6 +10,7 @@
 #include <lib/async/default.h>
 #include <lib/fdio/directory.h>
 #include <lib/fit/function.h>
+#include <lib/syslog/cpp/macros.h>
 #include <lib/zx/socket.h>
 #include <stdlib.h>
 #include <string.h>
@@ -46,7 +47,7 @@ class EthertapClientImpl : public EthertapClient {
     };
 
     device_.set_error_handler([this](zx_status_t status) {
-      fprintf(stderr, "Ethertap device error: %s\n", zx_status_get_string(status));
+      FX_PLOGS(WARNING, status) << "ethertap device error";
       if (peer_closed_callback_) {
         peer_closed_callback_();
       }

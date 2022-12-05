@@ -78,8 +78,8 @@ class Guest : public fuchsia::net::virtualization::Interface, public data::Consu
       return;
     }
     if (zx_status_t status = buffer.Send(); status != ZX_OK) {
-      FX_LOGS(ERROR) << "network device client TX send failed: " << zx_status_get_string(status)
-                     << "; dropping " << len << " bytes";
+      FX_PLOGS(ERROR, status) << "network device client TX send failed; dropping " << len
+                              << " bytes";
       return;
     }
   }
@@ -206,7 +206,7 @@ void Network::AddPort(fidl::InterfaceHandle<fuchsia::hardware::network::Port> po
                       fidl::InterfaceRequest<fuchsia::net::virtualization::Interface> interface) {
   zx::result device_endpoints = fidl::CreateEndpoints<fuchsia_hardware_network::Device>();
   if (device_endpoints.is_error()) {
-    FX_LOGS(ERROR) << "failed to create device endpoints" << device_endpoints.status_string();
+    FX_PLOGS(ERROR, device_endpoints.status_value()) << "failed to create device endpoints";
     interface.Close(ZX_ERR_INTERNAL);
     return;
   }

@@ -8,6 +8,7 @@
 #include <fuchsia/netemul/devmgr/cpp/fidl.h>
 #include <lib/fdio/cpp/caller.h>
 #include <lib/sys/cpp/service_directory.h>
+#include <lib/syslog/cpp/macros.h>
 
 #include "src/connectivity/network/testing/netemul/network-context/lib/ethernet_client.h"
 #include "src/connectivity/network/testing/netemul/network-context/lib/realm_setup.h"
@@ -59,10 +60,11 @@ class EthertapClientTest : public gtest::RealLoopFixture {
 
     ASSERT_TRUE(config.IsMacLocallyAdministered());
 
-    fprintf(stderr, "startup with mac %02X:%02X:%02X:%02X:%02X:%02X\n",
-            config.tap_cfg.mac.octets[0], config.tap_cfg.mac.octets[1],
-            config.tap_cfg.mac.octets[2], config.tap_cfg.mac.octets[3],
-            config.tap_cfg.mac.octets[4], config.tap_cfg.mac.octets[5]);
+    FX_LOGS(INFO) << "startup with mac "
+                  << fxl::StringPrintf("%02X:%02X:%02X:%02X:%02X:%02X",
+                                       config.tap_cfg.mac.octets[0], config.tap_cfg.mac.octets[1],
+                                       config.tap_cfg.mac.octets[2], config.tap_cfg.mac.octets[3],
+                                       config.tap_cfg.mac.octets[4], config.tap_cfg.mac.octets[5]);
 
     fuchsia::hardware::ethernet::MacAddress mac;
     config.tap_cfg.mac.Clone(&mac);

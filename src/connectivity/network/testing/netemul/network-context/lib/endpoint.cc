@@ -10,6 +10,7 @@
 #include <lib/fdio/directory.h>
 #include <lib/fdio/fd.h>
 #include <lib/fdio/fdio.h>
+#include <lib/syslog/cpp/macros.h>
 #include <zircon/status.h>
 #include <zircon/types.h>
 
@@ -22,6 +23,7 @@
 #include "network_context.h"
 #include "src/lib/fostr/hex_dump.h"
 #include "src/lib/fxl/strings/join_strings.h"
+#include "src/lib/fxl/strings/string_printf.h"
 
 namespace netemul {
 
@@ -143,9 +145,10 @@ class EthertapImpl : public EndpointImpl {
 
     // can't find mount path for ethernet!!
     if (ethernet_mount_path_.empty()) {
-      fprintf(stderr, "Failed to locate ethertap device %s %02X:%02X:%02X:%02X:%02X:%02X\n",
-              name.c_str(), mac.octets[0], mac.octets[1], mac.octets[2], mac.octets[3],
-              mac.octets[4], mac.octets[5]);
+      FX_LOGS(WARNING) << "failed to locate ethertap device " << name << " "
+                       << fxl::StringPrintf("%02X:%02X:%02X:%02X:%02X:%02X", mac.octets[0],
+                                            mac.octets[1], mac.octets[2], mac.octets[3],
+                                            mac.octets[4], mac.octets[5]);
       return ZX_ERR_INTERNAL;
     }
 
@@ -187,7 +190,7 @@ class EthertapImpl : public EndpointImpl {
   void Consume(const void* data, size_t len) override {
     auto status = ethertap_->Send(data, len);
     if (status != ZX_OK) {
-      fprintf(stderr, "ethertap couldn't push data: %s\n", zx_status_get_string(status));
+      FX_PLOGS(WARNING, status) << "ethertap couldn't push data";
     }
   }
 
@@ -293,9 +296,9 @@ class NetworkDeviceImpl : public EndpointImpl,
     tun_device_->WriteFrame(std::move(frame), [this, data = std::move(partial_data),
                                                len](fpromise::result<void, zx_status_t> status) {
       if (status.is_error()) {
-        FX_LOGS(WARNING) << "Failed to send " << len << "-byte frame to network device '"
-                         << device_name_ << "': " << zx_status_get_string(status.error()) << " "
-                         << fostr::HexDump(data.data(), data.size(), 0);
+        FX_PLOGS(WARNING, status.error())
+            << "Failed to send " << len << "-byte frame to network device '" << device_name_
+            << "': " << fostr::HexDump(data.data(), data.size(), 0);
       }
     });
   }
@@ -371,7 +374,7 @@ class NetworkDeviceImpl : public EndpointImpl,
         auto& data = result.response().frame.data();
         ForwardData(data.data(), data.size());
       } else {
-        FX_LOGS(ERROR) << "ReadFrame from Tun Device failed " << zx_status_get_string(result.err());
+        FX_PLOGS(ERROR, result.err()) << "ReadFrame from Tun Device failed";
       }
 
       // Listen again for the next frame.
