@@ -438,24 +438,26 @@ impl BinderProcess {
 
     /// Finds the binder object that corresponds to the process-local addresses `local`, or creates
     /// a new [`BinderObject`] to represent the one in the process.
+    ///
+    /// Returns the [`BinderObject`] and a boolean indicating whether the object is new.
     pub fn find_or_register_object(
         self: &Arc<BinderProcess>,
         local: LocalBinderObject,
-    ) -> Arc<BinderObject> {
+    ) -> (Arc<BinderObject>, bool) {
         match self.lock().objects.entry(local.weak_ref_addr) {
             BTreeMapEntry::Occupied(mut entry) => {
                 if let Some(binder_object) = entry.get().upgrade() {
-                    binder_object
+                    (binder_object, false)
                 } else {
                     let binder_object = Arc::new(BinderObject::new(self, local));
                     entry.insert(Arc::downgrade(&binder_object));
-                    binder_object
+                    (binder_object, true)
                 }
             }
             BTreeMapEntry::Vacant(entry) => {
                 let binder_object = Arc::new(BinderObject::new(self, local));
                 entry.insert(Arc::downgrade(&binder_object));
-                binder_object
+                (binder_object, true)
             }
         }
     }
@@ -2619,11 +2621,13 @@ impl BinderDriver {
                     // to translate this address to some handle.
 
                     // Register this binder object if it hasn't already been registered.
-                    let object = source_proc.find_or_register_object(local);
+                    let (object, is_new) = source_proc.find_or_register_object(local);
 
                     // Tell the owning process that a remote process now has a strong reference to
                     // to this object.
-                    source_thread.state.write().enqueue_command(Command::AcquireRef(local));
+                    if is_new {
+                        source_thread.state.write().enqueue_command(Command::AcquireRef(local));
+                    }
 
                     // Create a handle in the receiving process that references the binder object
                     // in the sender's process.
@@ -4787,7 +4791,7 @@ mod tests {
         let client_proc = driver.create_process(2);
 
         // Register an object with the owner.
-        let object = owner_proc.find_or_register_object(LocalBinderObject {
+        let (object, _) = owner_proc.find_or_register_object(LocalBinderObject {
             weak_ref_addr: UserAddress::from(0x0000000000000001),
             strong_ref_addr: UserAddress::from(0x0000000000000002),
         });
@@ -4844,7 +4848,7 @@ mod tests {
         let (client_proc, client_thread) = driver.create_process_and_thread(2);
 
         // Register an object with the owner.
-        let object = owner_proc.find_or_register_object(LocalBinderObject {
+        let (object, _) = owner_proc.find_or_register_object(LocalBinderObject {
             weak_ref_addr: UserAddress::from(0x0000000000000001),
             strong_ref_addr: UserAddress::from(0x0000000000000002),
         });
@@ -4892,7 +4896,7 @@ mod tests {
         let (client_proc, client_thread) = driver.create_process_and_thread(2);
 
         // Register an object with the owner.
-        let object = owner_proc.find_or_register_object(LocalBinderObject {
+        let (object, _) = owner_proc.find_or_register_object(LocalBinderObject {
             weak_ref_addr: UserAddress::from(0x0000000000000001),
             strong_ref_addr: UserAddress::from(0x0000000000000002),
         });
@@ -4934,7 +4938,7 @@ mod tests {
         let (client_proc, client_thread) = driver.create_process_and_thread(2);
 
         // Register an object with the owner.
-        let object = owner_proc.find_or_register_object(LocalBinderObject {
+        let (object, _) = owner_proc.find_or_register_object(LocalBinderObject {
             weak_ref_addr: UserAddress::from(0x0000000000000001),
             strong_ref_addr: UserAddress::from(0x0000000000000002),
         });
