@@ -19,10 +19,12 @@ pub mod types;
 
 use alloc::vec::Vec;
 use core::{
+    cmp::Ordering,
     fmt::{self, Debug, Display, Formatter},
     hash::Hash,
+    marker::PhantomData,
     num::NonZeroU8,
-    sync::atomic::{AtomicU16, Ordering},
+    sync::atomic::{self, AtomicU16},
 };
 
 use derivative::Derivative;
@@ -227,7 +229,9 @@ impl<I: IpExt, C, SC: IpDeviceIdContext<I> + ?Sized, B: BufferMut>
 pub(crate) trait TransportIpContext<I: IpExt, C>:
     IpDeviceIdContext<I> + IpSocketHandler<I, C>
 {
-    type DevicesWithAddrIter: Iterator<Item = Self::DeviceId>;
+    type DevicesWithAddrIter<'s>: Iterator<Item = Self::DeviceId>
+    where
+        Self: 's;
 
     /// Is this one of our local addresses, and is it in the assigned state?
     ///
@@ -237,7 +241,7 @@ pub(crate) trait TransportIpContext<I: IpExt, C>:
     fn get_devices_with_assigned_addr(
         &self,
         addr: SpecifiedAddr<I::Addr>,
-    ) -> Self::DevicesWithAddrIter;
+    ) -> Self::DevicesWithAddrIter<'_>;
 
     /// Get default hop limits.
     ///
@@ -338,25 +342,38 @@ where
     type Udp = SC::Udp;
 }
 
+/// An iterator over device IDs.
+///
+/// This yields the device IDs in the wrapped iterator where the paired status
+/// is a unicast assignment (see [`is_unicast_assigned`] for the IPv4 and v6
+/// definitions).
+///
+/// This is functionally identical to calling `Iterator::filter_map` on the
+/// wrapped iterator, and exists only to be a named type that can be an
+/// associated type.
+pub(crate) struct FilterUnicastAssigned<I, It>(It, PhantomData<I>);
+
+impl<I: IpLayerIpExt, D, It: Iterator<Item = (D, I::AddressStatus)>> Iterator
+    for FilterUnicastAssigned<I, It>
+{
+    type Item = D;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let Self(it, _marker) = self;
+        it.filter_map(|(device, state)| is_unicast_assigned::<I>(&state).then_some(device)).next()
+    }
+}
+
 impl<C, SC: IpDeviceContext<Ipv4, C> + IpSocketHandler<Ipv4, C> + NonTestCtxMarker>
     TransportIpContext<Ipv4, C> for SC
 {
-    type DevicesWithAddrIter = <Option<SC::DeviceId> as IntoIterator>::IntoIter;
+    type DevicesWithAddrIter<'s> = FilterUnicastAssigned<Ipv4, SC::AddressStatusesIter<'s>> where Self: 's;
 
     fn get_devices_with_assigned_addr(
         &self,
         addr: SpecifiedAddr<Ipv4Addr>,
-    ) -> Self::DevicesWithAddrIter {
-        match self.address_status(addr) {
-            AddressStatus::Present((device, state)) => match state {
-                Ipv4PresentAddressStatus::Unicast => Some(device),
-                Ipv4PresentAddressStatus::LimitedBroadcast
-                | Ipv4PresentAddressStatus::SubnetBroadcast
-                | Ipv4PresentAddressStatus::Multicast => None,
-            },
-            AddressStatus::Unassigned => None,
-        }
-        .into_iter()
+    ) -> Self::DevicesWithAddrIter<'_> {
+        FilterUnicastAssigned(self.address_statuses(addr), PhantomData::default())
     }
 
     fn get_default_hop_limits(&self, device: Option<&Self::DeviceId>) -> HopLimits {
@@ -370,21 +387,13 @@ impl<C, SC: IpDeviceContext<Ipv4, C> + IpSocketHandler<Ipv4, C> + NonTestCtxMark
 impl<C, SC: IpDeviceContext<Ipv6, C> + IpSocketHandler<Ipv6, C> + NonTestCtxMarker>
     TransportIpContext<Ipv6, C> for SC
 {
-    type DevicesWithAddrIter = <Option<SC::DeviceId> as IntoIterator>::IntoIter;
+    type DevicesWithAddrIter<'s> = FilterUnicastAssigned<Ipv6, SC::AddressStatusesIter<'s>> where Self: 's;
 
     fn get_devices_with_assigned_addr(
         &self,
         addr: SpecifiedAddr<Ipv6Addr>,
-    ) -> Self::DevicesWithAddrIter {
-        match self.address_status(addr) {
-            AddressStatus::Present((device, status)) => match status {
-                Ipv6PresentAddressStatus::UnicastAssigned => Some(device),
-                Ipv6PresentAddressStatus::Multicast
-                | Ipv6PresentAddressStatus::UnicastTentative => None,
-            },
-            AddressStatus::Unassigned => None,
-        }
-        .into_iter()
+    ) -> Self::DevicesWithAddrIter<'_> {
+        FilterUnicastAssigned(self.address_statuses(addr), PhantomData::default())
     }
 
     fn get_default_hop_limits(&self, device: Option<&Self::DeviceId>) -> HopLimits {
@@ -428,11 +437,11 @@ pub(crate) enum AddressStatus<S> {
     Unassigned,
 }
 
-impl<D: IpDeviceId, S> AddressStatus<(D, S)> {
-    fn drop_device(self) -> AddressStatus<S> {
+impl<S> AddressStatus<S> {
+    fn into_present(self) -> Option<S> {
         match self {
-            Self::Present((_d, s)) => AddressStatus::Present(s),
-            Self::Unassigned => AddressStatus::Unassigned,
+            Self::Present(s) => Some(s),
+            Self::Unassigned => None,
         }
     }
 }
@@ -494,14 +503,15 @@ pub(crate) trait IpDeviceContext<I: IpLayerIpExt, C>: IpDeviceIdContext<I> {
         remote: SpecifiedAddr<I::Addr>,
     ) -> Option<SpecifiedAddr<I::Addr>>;
 
+    type AddressStatusesIter<'s>: Iterator<Item = (Self::DeviceId, I::AddressStatus)> + 's
+    where
+        Self: 's;
+
     /// Gets the status of an address.
     ///
-    /// Returns the status of the address if it is assigned, and the device it
-    /// is assigned to.
-    fn address_status(
-        &self,
-        addr: SpecifiedAddr<I::Addr>,
-    ) -> AddressStatus<(Self::DeviceId, I::AddressStatus)>;
+    /// Returns the devices for which the address is assigned and the status
+    /// of the assignment for each device.
+    fn address_statuses(&self, addr: SpecifiedAddr<I::Addr>) -> Self::AddressStatusesIter<'_>;
 
     /// Gets the status of an address.
     ///
@@ -663,16 +673,14 @@ impl<
                 }
                 AddressStatus::Unassigned => None,
             },
-            None => match self.address_status(addr) {
-                AddressStatus::Present((_device, status)) => {
-                    // If the destination is an address assigned on an
-                    // interface, and an egress interface wasn't specifically
-                    // selected, route via the loopback device operating in a
-                    // weak host model.
-                    is_unicast_assigned::<I>(&status).then_some(LocalDelivery::WeakLoopback)
-                }
-                AddressStatus::Unassigned => None,
-            },
+            None => {
+                // If the destination is an address assigned on an interface,
+                // and an egress interface wasn't specifically selected, route
+                // via the loopback device operating in a weak host model.
+                self.address_statuses(addr)
+                    .any(|(_device, status)| is_unicast_assigned::<I>(&status))
+                    .then_some(LocalDelivery::WeakLoopback)
+            }
         };
 
         match local_delivery_instructions {
@@ -683,16 +691,11 @@ impl<
 
                 let local_ip = match local_delivery {
                     LocalDelivery::WeakLoopback => match local_ip {
-                        Some(local_ip) => match self.address_status(local_ip) {
-                            AddressStatus::Present((_device, status))
-                                if is_unicast_assigned::<I>(&status) =>
-                            {
-                                Ok(local_ip)
-                            }
-                            AddressStatus::Present(_) | AddressStatus::Unassigned => {
-                                Err(IpSockUnroutableError::LocalAddrNotAssigned)
-                            }
-                        }?,
+                        Some(local_ip) => self
+                            .address_statuses(local_ip)
+                            .any(|(_device, status)| is_unicast_assigned::<I>(&status))
+                            .then_some(local_ip)
+                            .ok_or(IpSockUnroutableError::LocalAddrNotAssigned)?,
                         None => addr,
                     },
                     LocalDelivery::StrongForDevice(device) => get_local_addr(device)?,
@@ -975,7 +978,8 @@ fn gen_ipv4_packet_id<I: Instant, C: IpStateContext<Ipv4, I>>(sync_ctx: &mut C) 
     // for more details.
     //
     // TODO(https://fxbug.dev/87588): Generate IPv4 IDs unpredictably
-    sync_ctx.with_ip_layer_state(|state| state.next_packet_id.fetch_add(1, Ordering::Relaxed))
+    sync_ctx
+        .with_ip_layer_state(|state| state.next_packet_id.fetch_add(1, atomic::Ordering::Relaxed))
 }
 
 pub(crate) struct Ipv6State<Instant: crate::Instant, D> {
@@ -1950,24 +1954,26 @@ fn receive_ipv4_packet_action<
     //
     // TODO(https://fxbug.dev/93870): This should instead be controlled by the
     // routing table.
-    let address_status = if device.is_loopback() {
-        sync_ctx.address_status(dst_ip).drop_device()
+
+    // Since we treat all addresses identically, it doesn't matter whether one
+    // or more than one device has the address assigned. That means we can just
+    // take the first status and ignore the rest.
+    let first_status = if device.is_loopback() {
+        sync_ctx.address_statuses(dst_ip).map(|(_device, status)| status).next()
     } else {
-        sync_ctx.address_status_for_device(dst_ip, device)
+        sync_ctx.address_status_for_device(dst_ip, device).into_present()
     };
-    match address_status {
-        AddressStatus::Present(state) => match state {
+    match first_status {
+        Some(
             Ipv4PresentAddressStatus::LimitedBroadcast
             | Ipv4PresentAddressStatus::SubnetBroadcast
             | Ipv4PresentAddressStatus::Multicast
-            | Ipv4PresentAddressStatus::Unicast => {
-                ctx.increment_debug_counter("receive_ipv4_packet_action::deliver");
-                ReceivePacketAction::Deliver
-            }
-        },
-        AddressStatus::Unassigned => {
-            receive_ip_packet_action_common::<Ipv4, _, _>(sync_ctx, ctx, dst_ip, device)
+            | Ipv4PresentAddressStatus::Unicast,
+        ) => {
+            ctx.increment_debug_counter("receive_ipv4_packet_action::deliver");
+            ReceivePacketAction::Deliver
         }
+        None => receive_ip_packet_action_common::<Ipv4, _, _>(sync_ctx, ctx, dst_ip, device),
     }
 }
 
@@ -1992,21 +1998,51 @@ fn receive_ipv6_packet_action<
     //
     // TODO(https://fxbug.dev/93870): This should instead be controlled by the
     // routing table.
-    let address_status = if device.is_loopback() {
-        sync_ctx.address_status(dst_ip).drop_device()
+
+    // It's possible that there is more than one device with the address
+    // assigned. Since IPv6 addresses are either multicast or unicast, we
+    // don't expect to see one device with `UnicastAssigned` or
+    // `UnicastTentative` and another with `Multicast`. We might see one
+    // assigned and one tentative status, though, in which case we should
+    // prefer the former.
+    fn choose_highest_priority(
+        address_statuses: impl Iterator<Item = Ipv6PresentAddressStatus>,
+        dst_ip: SpecifiedAddr<Ipv6Addr>,
+    ) -> Option<Ipv6PresentAddressStatus> {
+        address_statuses.max_by(|lhs, rhs| {
+            use Ipv6PresentAddressStatus::*;
+            match (lhs, rhs) {
+                (UnicastAssigned | UnicastTentative, Multicast)
+                | (Multicast, UnicastAssigned | UnicastTentative) => {
+                    unreachable!("the IPv6 address {:?} is not both unicast and multicast", dst_ip)
+                }
+                (UnicastAssigned, UnicastTentative) => Ordering::Greater,
+                (UnicastTentative, UnicastAssigned) => Ordering::Less,
+                (UnicastTentative, UnicastTentative)
+                | (UnicastAssigned, UnicastAssigned)
+                | (Multicast, Multicast) => Ordering::Equal,
+            }
+        })
+    }
+
+    let highest_priority = if device.is_loopback() {
+        choose_highest_priority(
+            sync_ctx.address_statuses(dst_ip).map(|(_device, status)| status),
+            dst_ip,
+        )
     } else {
-        sync_ctx.address_status_for_device(dst_ip, device)
+        sync_ctx.address_status_for_device(dst_ip, device).into_present()
     };
-    match address_status {
-        AddressStatus::Present(Ipv6PresentAddressStatus::Multicast) => {
+    match highest_priority {
+        Some(Ipv6PresentAddressStatus::Multicast) => {
             ctx.increment_debug_counter("receive_ipv6_packet_action::deliver_multicast");
             ReceivePacketAction::Deliver
         }
-        AddressStatus::Present(Ipv6PresentAddressStatus::UnicastAssigned) => {
+        Some(Ipv6PresentAddressStatus::UnicastAssigned) => {
             ctx.increment_debug_counter("receive_ipv6_packet_action::deliver_unicast");
             ReceivePacketAction::Deliver
         }
-        AddressStatus::Present(Ipv6PresentAddressStatus::UnicastTentative) => {
+        Some(Ipv6PresentAddressStatus::UnicastTentative) => {
             // If the destination address is tentative (which implies that
             // we are still performing NDP's Duplicate Address Detection on
             // it), then we don't consider the address "assigned to an
@@ -2040,9 +2076,7 @@ fn receive_ipv6_packet_action<
             ctx.increment_debug_counter("receive_ipv6_packet_action::drop_for_tentative");
             ReceivePacketAction::Drop { reason: DropReason::Tentative }
         }
-        AddressStatus::Unassigned => {
-            receive_ip_packet_action_common::<Ipv6, _, _>(sync_ctx, ctx, dst_ip, device)
-        }
+        None => receive_ip_packet_action_common::<Ipv6, _, _>(sync_ctx, ctx, dst_ip, device),
     }
 }
 

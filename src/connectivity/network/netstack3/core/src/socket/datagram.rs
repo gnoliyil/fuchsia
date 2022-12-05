@@ -508,11 +508,8 @@ where
                             return Err(LocalAddressError::AddressMismatch);
                         }
                     } else {
-                        if assigned_to.next() == None {
+                        if !assigned_to.any(|_: A::DeviceId| true) {
                             return Err(LocalAddressError::CannotBindToAddress);
-                        }
-                        if assigned_to.next() != None {
-                            todo!("https://fxbug.dev/112584: handle multiple addresses")
                         }
                     }
                 }

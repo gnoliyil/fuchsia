@@ -819,12 +819,12 @@ pub(crate) mod testutil {
             })
         }
 
-        type DevicesWithAddrIter = <Option<Self::DeviceId> as IntoIterator>::IntoIter;
+        type DevicesWithAddrIter<'a> = <Option<Self::DeviceId> as IntoIterator>::IntoIter;
 
         fn get_devices_with_assigned_addr(
             &self,
             addr: SpecifiedAddr<<I>::Addr>,
-        ) -> Self::DevicesWithAddrIter {
+        ) -> Self::DevicesWithAddrIter<'_> {
             self.find_device_with_addr(addr).into_iter()
         }
     }
@@ -1059,13 +1059,14 @@ pub(crate) mod testutil {
     where
         Self: IpSocketContext<I, C, DeviceId = D>,
     {
-        type DevicesWithAddrIter =
-            <FakeIpSocketCtx<I, D> as TransportIpContext<I, C>>::DevicesWithAddrIter;
+        type DevicesWithAddrIter<'a> =
+            <FakeIpSocketCtx<I, D> as TransportIpContext<I, C>>::DevicesWithAddrIter<'a>
+            where Self: 'a;
 
         fn get_devices_with_assigned_addr(
             &self,
             addr: SpecifiedAddr<I::Addr>,
-        ) -> Self::DevicesWithAddrIter {
+        ) -> Self::DevicesWithAddrIter<'_> {
             let FakeBufferIpSocketCtx { ip_socket_ctx } = self.get_ref();
             TransportIpContext::<I, C>::get_devices_with_assigned_addr(ip_socket_ctx, addr)
         }

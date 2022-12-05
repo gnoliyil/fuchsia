@@ -455,18 +455,19 @@ impl<C: IpDeviceNonSyncContext<Ipv4, SC::DeviceId>, SC: device::IpDeviceContext<
         })
     }
 
-    fn address_status(
-        &self,
-        dst_ip: SpecifiedAddr<Ipv4Addr>,
-    ) -> AddressStatus<(SC::DeviceId, Ipv4PresentAddressStatus)> {
-        let devices = self.with_devices(|devices| devices.collect::<Vec<_>>());
-        devices
-            .into_iter()
-            .find_map(|device_id| match self.address_status_for_device(dst_ip, &device_id) {
-                AddressStatus::Present(a) => Some(AddressStatus::Present((device_id, a))),
-                AddressStatus::Unassigned => None,
-            })
-            .unwrap_or(AddressStatus::Unassigned)
+    type AddressStatusesIter<'s> = alloc::vec::IntoIter<(SC::DeviceId, Ipv4PresentAddressStatus)>
+        where SC: 's;
+
+    fn address_statuses(&self, dst_ip: SpecifiedAddr<Ipv4Addr>) -> Self::AddressStatusesIter<'_> {
+        self.with_devices(|devices| {
+            devices
+                .filter_map(|device_id| match self.address_status_for_device(dst_ip, &device_id) {
+                    AddressStatus::Present(a) => Some((device_id, a)),
+                    AddressStatus::Unassigned => None,
+                })
+                .collect::<Vec<_>>()
+        })
+        .into_iter()
     }
 
     fn address_status_for_device(
@@ -539,18 +540,19 @@ impl<C: IpDeviceNonSyncContext<Ipv6, SC::DeviceId>, SC: device::IpDeviceContext<
         })
     }
 
-    fn address_status(
-        &self,
-        addr: SpecifiedAddr<Ipv6Addr>,
-    ) -> AddressStatus<(SC::DeviceId, Ipv6PresentAddressStatus)> {
-        let devices = self.with_devices(|devices| devices.collect::<Vec<_>>());
-        devices
-            .into_iter()
-            .find_map(|device_id| match self.address_status_for_device(addr, &device_id) {
-                AddressStatus::Present(a) => Some(AddressStatus::Present((device_id, a))),
-                AddressStatus::Unassigned => None,
-            })
-            .unwrap_or(AddressStatus::Unassigned)
+    type AddressStatusesIter<'s> = alloc::vec::IntoIter<(SC::DeviceId, Ipv6PresentAddressStatus)>
+        where SC: 's;
+
+    fn address_statuses(&self, dst_ip: SpecifiedAddr<Ipv6Addr>) -> Self::AddressStatusesIter<'_> {
+        self.with_devices(|devices| {
+            devices
+                .filter_map(|device_id| match self.address_status_for_device(dst_ip, &device_id) {
+                    AddressStatus::Present(a) => Some((device_id, a)),
+                    AddressStatus::Unassigned => None,
+                })
+                .collect::<Vec<_>>()
+        })
+        .into_iter()
     }
 
     fn address_status_for_device(
