@@ -464,7 +464,12 @@ static void AddClientHelper(EthertapClient& tap, EthernetClient& client,
             if (fidl::Status status =
                     fidl::WireCall(controller.value())->OpenSession(std::move(server));
                 !status.ok()) {
-              return status.status();
+              fprintf(stderr, "could not open session for %s/%s: %s\n", kEthernetDir, fn,
+                      status.FormatDescription().c_str());
+              // Return ZX_OK to keep watching for devices.
+              //
+              // This sometimes fails because tests are running concurrently without isolation.
+              return ZX_OK;
             }
             // See if this device is our ethertap device
             const fidl::WireResult result = fidl::WireCall(client)->GetInfo();
