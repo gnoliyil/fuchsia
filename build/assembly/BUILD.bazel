@@ -3,7 +3,6 @@
 # found in the LICENSE file.
 
 exports_files([
-    "empty_product_config.json",
     "default_product_config.json",
     "bootable_product_config.json",
 ])

@@ -73,12 +73,12 @@ if (is_fuchsia) {
       product_assembly_config_file = fuchsia_product_assembly_config_file
     } else {
       product_assembly_config_file =
-          "//build/assembly/empty_product_config.json"
+          "//build/assembly/default_product_config.json"
     }
 
-    # Recovery currently uses an empty product config.
+    # Recovery currently should use the bootable user config.
     recovery_product_assembly_config_file =
-        "//build/assembly/empty_product_config.json"
+        "//build/assembly/bootable_product_config.json"
 
     # Outputs of prime assembly.
     outdir_prime = target_out_dir + "/fuchsia_prime_assembly"

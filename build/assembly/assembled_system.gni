@@ -355,7 +355,7 @@ template("assembled_system") {
     if (defined(invoker.product_assembly_config_file)) {
       product_assembly_config = invoker.product_assembly_config_file
     } else {
-      product_assembly_config = "//build/assembly/empty_product_config.json"
+      product_assembly_config = "//build/assembly/default_product_config.json"
     }
     generated_config_for_legacy_bundle =
         "$target_out_dir/${namespace}.legacy_image_assembly_config.json"
