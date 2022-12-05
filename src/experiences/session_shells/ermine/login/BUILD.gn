@@ -9,8 +9,11 @@ import("//build/flutter/flutter_component.gni")
 import("//build/testing/flutter_driver.gni")
 
 declare_args() {
-  # Whether or not to provide the data sharing consent step in OOBE
+  # Whether or not to provide the data sharing consent step in OOBE.
   data_sharing_oobe_enabled = false
+
+  # Whether or not to use the new AccountManager API for enrollment and authentication.
+  use_new_account_manager = false
 }
 
 dart_library("lib") {
@@ -69,6 +72,7 @@ dart_library("lib") {
     "//sdk/fidl/fuchsia.feedback:fuchsia.feedback_dart",
     "//sdk/fidl/fuchsia.hardware.power.statecontrol:fuchsia.hardware.power.statecontrol_dart",
     "//sdk/fidl/fuchsia.identity.account:fuchsia.identity.account_dart",
+    "//sdk/fidl/fuchsia.identity.authentication:fuchsia.identity.authentication_dart",
     "//sdk/fidl/fuchsia.intl:fuchsia.intl_dart",
     "//sdk/fidl/fuchsia.io:fuchsia.io_dart",
     "//sdk/fidl/fuchsia.mem:fuchsia.mem_dart",
@@ -116,6 +120,10 @@ flutter_component("component") {
   if (data_sharing_oobe_enabled) {
     deps += [ ":enable_data_sharing_oobe" ]
   }
+
+  if (use_new_account_manager) {
+    deps += [ ":use_new_account_manager_config" ]
+  }
 }
 
 resource("resources") {
@@ -129,6 +137,12 @@ resource("resources") {
 resource("enable_data_sharing_oobe") {
   sources = [ "config/enable_data_sharing_oobe" ]
   outputs = [ "config/enable_data_sharing_oobe" ]
+}
+
+# With this JSON, use of new account manager API will be enabled.
+resource("use_new_account_manager_config") {
+  sources = [ "config/use_new_account_manager" ]
+  outputs = [ "config/use_new_account_manager" ]
 }
 
 # With the default config, OOBE will be skipped on startup.

@@ -7,6 +7,7 @@ import 'dart:ui';
 
 import 'package:ermine_utils/ermine_utils.dart';
 import 'package:fidl_ermine_tools/fidl_async.dart';
+import 'package:fidl_fuchsia_identity_authentication/fidl_async.dart';
 import 'package:fidl/fidl.dart';
 import 'package:flutter/services.dart';
 import 'package:fuchsia_inspect/inspect.dart';
@@ -366,6 +367,12 @@ class OobeStateImpl with Disposable implements OobeState {
       await authService.loginWithPassword(password);
       runInAction(() => _wait.value = false);
       finish();
+    } on PasswordInteractionException catch (error) {
+      log.shout(StackTrace.current);
+      runInAction(() {
+        _wait.value = error.shouldWait;
+        _authError.value = error.message;
+      });
       // ignore: avoid_catches_without_on_clauses
     } catch (e) {
       log.shout('Caught exception during login: $e');

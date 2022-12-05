@@ -2,11 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:async';
 import 'dart:io' as io;
 import 'package:fidl/fidl.dart';
 //ignore: unused_import
 import 'package:ermine_utils/ermine_utils.dart';
-import 'package:fidl_fuchsia_identity_account/fidl_async.dart';
+import 'package:fidl_fuchsia_identity_account/fidl_async.dart' as faccount;
+import 'package:fidl_fuchsia_identity_authentication/fidl_async.dart';
 import 'package:fidl_fuchsia_io/fidl_async.dart';
 import 'package:fidl_fuchsia_recovery/fidl_async.dart';
 import 'package:fuchsia_logger/logger.dart';
@@ -28,6 +30,8 @@ const kTmpSubdirectory = 'account/';
 
 enum AuthOp { enrollment, authentication }
 
+const kUseNewAccountManagerMarkerFile = '/pkg/config/use_new_account_manager';
+
 /// Defines a service that performs authentication tasks like:
 /// - create an account with password
 /// - login to an account with password
@@ -41,16 +45,21 @@ enum AuthOp { enrollment, authentication }
 class AuthService {
   late final PseudoDir hostedDirectories;
 
-  final _accountManager = AccountManagerProxy();
-  AccountProxy? _account;
+  final _accountManager = faccount.AccountManagerProxy();
+  faccount.AccountProxy? _account;
   final _accountIds = <int>[];
   final _ready = false.asObservable();
 
   /// Set to true if successfully authenticated, false otherwise or post logout.
   bool authenticated = false;
 
+  bool useNewAccountManager = false;
+
   AuthService() {
     Incoming.fromSvcPath().connectToService(_accountManager);
+
+    useNewAccountManager =
+        io.File(kUseNewAccountManagerMarkerFile).existsSync();
   }
 
   void dispose() {
@@ -119,10 +128,13 @@ class AuthService {
 
   String errorFromException(Object e, AuthOp op) {
     if (e is MethodException) {
-      switch (e.value as Error) {
-        case Error.failedAuthentication:
+      switch (e.value as faccount.Error) {
+        case faccount.Error.unsupportedOperation:
+          // TODO(sanjayc): Create Strings.unsupportedOperation.
+          return 'Unsupported Operation';
+        case faccount.Error.failedAuthentication:
           return Strings.accountPasswordFailedAuthentication;
-        case Error.notFound:
+        case faccount.Error.notFound:
           switch (op) {
             case AuthOp.authentication:
               return Strings.accountNotFound;
@@ -143,16 +155,30 @@ class AuthService {
       _account!.ctrl.close();
     }
 
-    final metadata = AccountMetadata(
+    final metadata = faccount.AccountMetadata(
         name: password.isEmpty
             ? kSystemPickedAccountName
             : kUserPickedAccountName);
-    _account = AccountProxy();
-    await _accountManager.deprecatedProvisionNewAccount(
-      password,
-      metadata,
-      _account!.ctrl.request(),
-    );
+    _account = faccount.AccountProxy();
+    if (useNewAccountManager) {
+      final passwordInteractionFlow =
+          await _getPasswordInteractionFlowForEnroll(metadata);
+
+      final id = await passwordInteractionFlow.setPassword(password);
+      clearPasswordInteractionFlow();
+
+      await _accountManager.getAccount(faccount.AccountManagerGetAccountRequest(
+        id: id,
+        account: _account!.ctrl.request(),
+      ));
+    } else {
+      await _accountManager.deprecatedProvisionNewAccount(
+        password,
+        metadata,
+        _account!.ctrl.request(),
+      );
+    }
+
     final ids = await _accountManager.getAccountIds();
     _accountIds
       ..clear()
@@ -174,12 +200,19 @@ class AuthService {
       _account!.ctrl.close();
     }
 
-    _account = AccountProxy();
-    await _accountManager.deprecatedGetAccount(
-      _accountIds.first,
-      password,
-      _account!.ctrl.request(),
-    );
+    if (useNewAccountManager) {
+      final passwordInteractionFlow =
+          await _getPasswordInteractionFlowForAuth(_accountIds.first);
+      await passwordInteractionFlow.setPassword(password);
+      clearPasswordInteractionFlow();
+    } else {
+      _account = faccount.AccountProxy();
+      await _accountManager.deprecatedGetAccount(
+        _accountIds.first,
+        password,
+        _account!.ctrl.request(),
+      );
+    }
     log.info('Login to first account on device succeeded.');
 
     await _publishAccountDirectory(_account!);
@@ -207,7 +240,7 @@ class AuthService {
   }
 
   /// Publishes all flavors of storage directory for the supplied account.
-  Future<void> _publishAccountDirectory(Account account) async {
+  Future<void> _publishAccountDirectory(faccount.Account account) async {
     // Get the data directory for the account.
     log.info('Getting data directory for account.');
     final dataDirChannel = ChannelPair();
@@ -249,5 +282,185 @@ class AuthService {
       ..addNode(kAccountTmpDirectory, RemoteDir(tmpSubdirChannel.first!));
 
     log.info('Data, cache, and tmp directories for account published.');
+  }
+
+  _PasswordInteractionFlow? _passwordInteractionFlow;
+
+  void clearPasswordInteractionFlow() => _passwordInteractionFlow = null;
+
+  Future<_PasswordInteractionFlow> _getPasswordInteractionFlowForAuth(
+      int accountId) async {
+    return _passwordInteractionFlow ??= await () async {
+      _account = faccount.AccountProxy();
+      return _PasswordInteractionFlow.forAuthentication(
+          _accountManager, accountId, _account!);
+    }();
+  }
+
+  Future<_PasswordInteractionFlow> _getPasswordInteractionFlowForEnroll(
+      faccount.AccountMetadata metadata) async {
+    return _passwordInteractionFlow ??= await () async {
+      return _PasswordInteractionFlow.forEnrollment(_accountManager, metadata);
+    }();
+  }
+}
+
+// Defines set password flow used during enrollment and authentication.
+class _PasswordInteractionFlow {
+  // The future that completes when [AccountManager.getAccount] or
+  // [AccountManager.provisionNewAccount] succeeds.
+  final Future getAccountOrProvisionNewAccountFuture;
+
+  // Holds the connection to [Interaction] proxy and used to wait for the
+  // underlying channel to close signifying success.
+  final InteractionProxy interaction;
+
+  // Holds the connection to [PasswordInteraction] proxy and used to wait for
+  // the underlying channel to close signifying success.
+  final PasswordInteractionProxy passwordInteraction;
+
+  // Private constructor to hold state during password interaction flow.
+  _PasswordInteractionFlow._(this.getAccountOrProvisionNewAccountFuture,
+      this.interaction, this.passwordInteraction);
+
+  static Future<_PasswordInteractionFlow> forAuthentication(
+      faccount.AccountManagerProxy accountManager,
+      int id,
+      faccount.AccountProxy account) async {
+    final interaction = InteractionProxy();
+    final passwordInteraction = PasswordInteractionProxy();
+    final getAccountOrProvisionNewAccountCompleter = Completer();
+
+    // ignore: unawaited_futures
+    accountManager
+        .getAccount(faccount.AccountManagerGetAccountRequest(
+          id: id,
+          interaction: InterfaceRequest<Interaction>(
+              interaction.ctrl.request().passChannel()),
+          account: account.ctrl.request(),
+        ))
+        .then(getAccountOrProvisionNewAccountCompleter.complete);
+
+    // ignore: unawaited_futures
+    interaction.startPassword(
+        InterfaceRequest(passwordInteraction.ctrl.request().passChannel()),
+        Mode.authenticate);
+
+    // Ensure watchState is waiting for setPassword.
+    final response = await passwordInteraction.watchState();
+    if (response.$tag != PasswordInteractionWatchStateResponseTag.waiting ||
+        !response.waiting!
+            .contains(PasswordCondition.withSetPassword(Empty()))) {
+      throw PasswordInteractionException(response);
+    }
+
+    return _PasswordInteractionFlow._(
+        getAccountOrProvisionNewAccountCompleter.future,
+        interaction,
+        passwordInteraction);
+  }
+
+  static Future<_PasswordInteractionFlow> forEnrollment(
+      faccount.AccountManagerProxy accountManager,
+      faccount.AccountMetadata metadata) async {
+    final interaction = InteractionProxy();
+    final passwordInteraction = PasswordInteractionProxy();
+    final getAccountOrProvisionNewAccountCompleter = Completer();
+
+    // ignore: unawaited_futures
+    accountManager
+        .provisionNewAccount(faccount.AccountManagerProvisionNewAccountRequest(
+          lifetime: faccount.Lifetime.persistent,
+          metadata: metadata,
+          interaction: InterfaceRequest<Interaction>(
+              interaction.ctrl.request().passChannel()),
+        ))
+        .then(getAccountOrProvisionNewAccountCompleter.complete);
+
+    // ignore: unawaited_futures
+    interaction.startPassword(
+        InterfaceRequest(passwordInteraction.ctrl.request().passChannel()),
+        Mode.enroll);
+
+    // Ensure watchState is waiting for setPassword.
+    final response = await passwordInteraction.watchState();
+    if (response.$tag != PasswordInteractionWatchStateResponseTag.waiting ||
+        !response.waiting!
+            .contains(PasswordCondition.withSetPassword(Empty()))) {
+      throw PasswordInteractionException(response);
+    }
+
+    return _PasswordInteractionFlow._(
+        getAccountOrProvisionNewAccountCompleter.future,
+        interaction,
+        passwordInteraction);
+  }
+
+  // Calls setPassword and watchState on passwordInteraction channel without
+  // blocking. It responds to change in state asynchronously, converting any
+  // state change as an exception, which is reported from a blocking wait on
+  // a list of channel closure futures and watchState future.
+  Future<dynamic> setPassword(String password) async {
+    // Set the password without blocking. This will allow us to call watchSate
+    // right after.
+    // ignore: unawaited_futures
+    passwordInteraction.setPassword(password);
+
+    // Watch for state change without blocking and report any state as an
+    // exception to allow updating the UX accordingly.
+    final watchStateCompleter = Completer();
+    // ignore: unawaited_futures
+    passwordInteraction.watchState().then((response) => watchStateCompleter
+        .completeError(PasswordInteractionException(response)));
+
+    // Wait on futures from the auth/enroll method and channel closures on
+    // passwordInteraction and interaction channels. These channels are closed
+    // upon successful auth/enroll. The list also includes the future from the
+    // watchState completer, which throws an exception upon state change.
+    final result = await Future.wait([
+      getAccountOrProvisionNewAccountFuture,
+      passwordInteraction.ctrl.whenClosed,
+      interaction.ctrl.whenClosed,
+      watchStateCompleter.future
+    ], eagerError: true);
+
+    return result.first;
+  }
+}
+
+// A custom exception to allow clients of the AuthService to handle change in
+// watchState response.
+class PasswordInteractionException implements Exception {
+  final PasswordInteractionWatchStateResponse response;
+  late final bool shouldWait;
+  late final String message;
+
+  PasswordInteractionException(this.response) {
+    _processResponse();
+  }
+
+  void _processResponse() {
+    switch (response.$tag) {
+      case PasswordInteractionWatchStateResponseTag.waiting:
+        message = '';
+        shouldWait = false;
+        for (final condition in response.waiting!) {
+          if (condition.$tag == PasswordConditionTag.waitUntil) {
+            // TODO(sanjayc): Also report the duration for a countdown UX.
+            message = 'Please wait';
+            shouldWait = true;
+            break;
+          }
+        }
+        break;
+      case PasswordInteractionWatchStateResponseTag.verifying:
+        shouldWait = true;
+        message = 'Verifying password';
+        break;
+      case PasswordInteractionWatchStateResponseTag.error:
+        shouldWait = false;
+        message = response.error.toString();
+        break;
+    }
   }
 }
