@@ -28,6 +28,7 @@ source_set("common") {
     "memory_mapped_buffer.cc",
     "memory_mapped_buffer.h",
     "thread_checker.h",
+    "vector_of_weak_ptr.h",
   ]
 
   public_deps = [

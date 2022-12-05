@@ -76,24 +76,19 @@ DelayWatcherServerGroup::DelayWatcherServerGroup(std::string_view group_name,
     : group_name_(group_name), fidl_thread_(std::move(fidl_thread)) {}
 
 void DelayWatcherServerGroup::Add(fidl::ServerEnd<fuchsia_audio::DelayWatcher> server_end) {
-  GarbageCollect();
-
-  auto server = DelayWatcherServer::Create(
-      fidl_thread_, std::move(server_end),
-      {
-          .name = group_name_ + ".Server" + std::to_string(num_created_++),
-          .initial_delay = delay_,
-      });
-
   // The result of DelayWatcherServer::Create is immediately converted to a std::weak_ptr. This
   // doesn't immediately delete the server because the server's `on_unbound` handler holds a
   // shared_ptr to the server. The server won't be deleted until that handler runs, which happens
   // when the channel is closed.
-  servers_.push_back(server);
+  servers_.push_back(DelayWatcherServer::Create(
+      fidl_thread_, std::move(server_end),
+      {
+          .name = group_name_ + ".Server" + std::to_string(num_created_++),
+          .initial_delay = delay_,
+      }));
 }
 
 void DelayWatcherServerGroup::Shutdown() {
-  GarbageCollect();
   for (auto& weak : servers_) {
     if (auto server = weak.lock(); server) {
       server->Shutdown();
@@ -102,27 +97,10 @@ void DelayWatcherServerGroup::Shutdown() {
 }
 
 void DelayWatcherServerGroup::set_delay(zx::duration delay) {
-  GarbageCollect();
-
   delay_ = delay;
   for (auto& weak : servers_) {
     if (auto server = weak.lock(); server) {
       server->set_delay(delay);
-    }
-  }
-}
-
-int64_t DelayWatcherServerGroup::num_live_servers() {
-  GarbageCollect();
-  return static_cast<int64_t>(servers_.size());
-}
-
-void DelayWatcherServerGroup::GarbageCollect() {
-  for (auto it = servers_.begin(); it != servers_.end();) {
-    if (it->expired()) {
-      it = servers_.erase(it);
-    } else {
-      ++it;
     }
   }
 }

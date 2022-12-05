@@ -117,7 +117,7 @@ TEST(DelayWatcherServerGroupTest, Groups) {
   DelayWatcherServerGroup group("Group", thread);
   group.Add(std::move(endpoints1->server));
   group.Add(std::move(endpoints2->server));
-  EXPECT_EQ(group.num_live_servers(), 2);
+  EXPECT_EQ(group.count_live_servers(), 2u);
 
   group.set_delay(zx::nsec(100));
 
@@ -149,7 +149,7 @@ TEST(DelayWatcherServerGroupTest, Groups) {
   // Teardown server1.
   client1 = std::nullopt;
   loop.RunUntilIdle();
-  EXPECT_EQ(group.num_live_servers(), 1);
+  EXPECT_EQ(group.count_live_servers(), 1u);
 
   group.set_delay(zx::nsec(200));
 
@@ -168,7 +168,7 @@ TEST(DelayWatcherServerGroupTest, Groups) {
   // Teardown server2 via group.Shutdown().
   group.Shutdown();
   loop.RunUntilIdle();
-  EXPECT_EQ(group.num_live_servers(), 0);
+  EXPECT_EQ(group.count_live_servers(), 0u);
 
   group.set_delay(zx::nsec(300));
 

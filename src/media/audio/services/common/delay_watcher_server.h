@@ -13,6 +13,7 @@
 #include <string>
 
 #include "src/media/audio/services/common/base_fidl_server.h"
+#include "src/media/audio/services/common/vector_of_weak_ptr.h"
 
 namespace media_audio {
 
@@ -71,15 +72,13 @@ class DelayWatcherServerGroup {
   void set_delay(zx::duration delay);
 
   // Returns the number of live servers.
-  int64_t num_live_servers();
+  size_t count_live_servers() { return servers_.size(); }
 
  private:
-  void GarbageCollect();
-
   const std::string group_name_;
   const std::shared_ptr<const FidlThread> fidl_thread_;
 
-  std::vector<std::weak_ptr<DelayWatcherServer>> servers_;
+  VectorOfWeakPtr<DelayWatcherServer> servers_;
   std::optional<zx::duration> delay_;
   int64_t num_created_ = 0;
 };
