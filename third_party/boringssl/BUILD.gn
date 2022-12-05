@@ -48,6 +48,9 @@ if (current_cpu == "arm64" && (is_fuchsia || is_linux)) {
 # TODO(46139): remove this added source.
 crypto_sources += [ "src/decrepit/xts/xts.c" ]
 
+# TODO(46139): Required for TPM2.0 TSS Library //third_party/tpm2-tss.
+crypto_sources += [ "src/decrepit/cfb/cfb.c" ]
+
 ################
 # libcrypto.so #
 ################
