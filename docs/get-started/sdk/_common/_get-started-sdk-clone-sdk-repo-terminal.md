@@ -69,11 +69,11 @@ Do the following:
 
    ```none {:.devsite-disable-click-to-copy}
    $ tools/ffx sdk version
-   10.20221103.2.1
+   10.20221130.0.1
    ```
 
    At this point, you only need to confirm that you can run `ffx` commands
    without error.
 
-   Note: The output above shows the version `10.20221103.2.1`, which
-   indicates that this SDK was built and published on November 3, 2022.
+   Note: The output above shows the version `10.20221130.0.1`, which
+   indicates that this SDK was built and published on November 30, 2022.

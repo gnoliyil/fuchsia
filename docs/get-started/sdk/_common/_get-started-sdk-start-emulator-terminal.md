@@ -134,10 +134,10 @@ Do the following:
    Device:
        ...
    Build:
-       Version: "10.20221103.2.1"
+       Version: "10.20221130.0.1"
        Product: "workstation_eng"
        Board: "qemu-x64"
-       Commit: "2022-11-03T07:03:36+00:00"
+       Commit: "2022-11-30T07:03:36+00:00"
    Last Reboot:
        Graceful: "false"
        Reason: "Cold"
