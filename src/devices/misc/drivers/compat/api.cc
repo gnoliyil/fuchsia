@@ -221,6 +221,10 @@ __EXPORT zx_status_t device_get_fragment_metadata(zx_device_t* dev, const char* 
 
 __EXPORT zx_status_t device_get_variable(zx_device_t* device, const char* name, char* out,
                                          size_t out_size, size_t* size_actual) {
+  if (device == nullptr) {
+    return ZX_ERR_INVALID_ARGS;
+  }
+
   if (!strncmp(name, compat::kDfv2Variable, sizeof(compat::kDfv2Variable))) {
     if (size_actual) {
       *size_actual = 2;
@@ -235,9 +239,6 @@ __EXPORT zx_status_t device_get_variable(zx_device_t* device, const char* name, 
 
   if (strncmp(name, "driver.", strlen("driver.")) == 0 ||
       strncmp(name, "clock.backstop", strlen("clock.backstop")) == 0) {
-    if (device == nullptr) {
-      return ZX_ERR_INVALID_ARGS;
-    }
     auto variable = device->driver()->GetVariable(name);
     if (variable.is_error()) {
       return variable.status_value();

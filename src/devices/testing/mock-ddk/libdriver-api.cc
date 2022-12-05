@@ -40,7 +40,7 @@ zx_status_t device_add_from_driver(zx_driver_t* drv, zx_device_t* parent, device
 __EXPORT
 void device_async_remove(zx_device_t* device) {
   if (!device) {
-    zxlogf(ERROR, "Error: %s passed an null device\n", __func__);
+    zxlogf(ERROR, "Error: %s passed a null device\n", __func__);
     return;
   }
   if (device->IsRootParent()) {
@@ -54,7 +54,7 @@ __EXPORT
 void device_init_reply(zx_device_t* device, zx_status_t status,
                        const device_init_reply_args_t* args) {
   if (!device) {
-    zxlogf(ERROR, "Error: %s passed an null device\n", __func__);
+    zxlogf(ERROR, "Error: %s passed a null device\n", __func__);
     return;
   }
   if (device->IsRootParent()) {
@@ -67,7 +67,7 @@ void device_init_reply(zx_device_t* device, zx_status_t status,
 __EXPORT
 void device_unbind_reply(zx_device_t* device) {
   if (!device) {
-    zxlogf(ERROR, "Error: %s passed an null device\n", __func__);
+    zxlogf(ERROR, "Error: %s passed a null device\n", __func__);
     return;
   }
   if (device->IsRootParent()) {
@@ -79,7 +79,7 @@ void device_unbind_reply(zx_device_t* device) {
 
 __EXPORT void device_suspend_reply(zx_device_t* device, zx_status_t status, uint8_t out_state) {
   if (!device) {
-    zxlogf(ERROR, "Error: %s passed an null device\n", __func__);
+    zxlogf(ERROR, "Error: %s passed a null device\n", __func__);
     return;
   }
   if (device->IsRootParent()) {
@@ -92,7 +92,7 @@ __EXPORT void device_suspend_reply(zx_device_t* device, zx_status_t status, uint
 __EXPORT void device_resume_reply(zx_device_t* device, zx_status_t status, uint8_t out_power_state,
                                   uint32_t out_perf_state) {
   if (!device) {
-    zxlogf(ERROR, "Error: %s passed an null device\n", __func__);
+    zxlogf(ERROR, "Error: %s passed a null device\n", __func__);
     return;
   }
   if (device->IsRootParent()) {
@@ -233,7 +233,7 @@ __EXPORT __WEAK zx_status_t load_firmware_from_driver(zx_driver_t* drv, zx_devic
                                                       const char* path, zx_handle_t* fw,
                                                       size_t* size) {
   if (!device) {
-    zxlogf(ERROR, "Error: %s passed an null device\n", __func__);
+    zxlogf(ERROR, "Error: %s passed a null device\n", __func__);
     return ZX_ERR_INVALID_ARGS;
   }
   return device->LoadFirmware(path, fw, size);
@@ -241,9 +241,9 @@ __EXPORT __WEAK zx_status_t load_firmware_from_driver(zx_driver_t* drv, zx_devic
 
 __EXPORT zx_status_t device_get_variable(zx_device_t* device, const char* name, char* out,
                                          size_t out_size, size_t* size_actual) {
-  // TODO(fxb/115160): Enforce that device is not null.
   if (!device) {
-    return ZX_ERR_NOT_FOUND;
+    zxlogf(ERROR, "Error: %s passed a null device\n", __func__);
+    return ZX_ERR_INVALID_ARGS;
   }
 
   return device->GetVariable(name, out, out_size, size_actual);
