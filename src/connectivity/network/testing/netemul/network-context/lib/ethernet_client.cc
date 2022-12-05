@@ -412,26 +412,24 @@ void EthernetClient::set_online(bool online) {
   }
 }
 
-std::string EthernetClientFactory::MountPointWithMAC(const EthernetClient::Mac& mac,
-                                                     zx::duration timeout) {
+zx::result<std::string> EthernetClientFactory::MountPointWithMAC(const EthernetClient::Mac& mac,
+                                                                 zx::duration timeout) {
   WatchCbArgs args{.base_dir = base_dir_, .search_mac = mac};
 
   int ethdir = OpenDir();
 
   if (ethdir < 0) {
     FX_LOGS(ERROR) << "could not open " << base_dir_ << ": " << strerror(errno);
-    // empty string if not found
-    return std::string();
+    return zx::error(ZX_ERR_INTERNAL);
   }
 
-  zx_status_t status;
-  status = fdio_watch_directory(ethdir, WatchCb, zx::deadline_after(timeout).get(),
-                                reinterpret_cast<void*>(&args));
+  zx_status_t status = fdio_watch_directory(ethdir, WatchCb, zx::deadline_after(timeout).get(),
+                                            reinterpret_cast<void*>(&args));
   close(ethdir);
   if (status == ZX_ERR_STOP) {
-    return std::move(args.result);
+    return zx::ok(std::move(args.result));
   } else {
-    return std::string();  // empty string if not found
+    return zx::error(status);
   }
 }
 
@@ -465,15 +463,13 @@ EthernetClient::Ptr EthernetClientFactory::Create(const std::string& path,
   return std::make_unique<EthernetClient>(dispatcher, handle.Bind());
 }
 
-EthernetClient::Ptr EthernetClientFactory::RetrieveWithMAC(const EthernetClient::Mac& mac,
-                                                           zx::duration timeout,
-                                                           async_dispatcher_t* dispatcher) {
-  auto mount = MountPointWithMAC(mac, timeout);
-  if (mount.empty()) {
-    return nullptr;
+zx::result<EthernetClient::Ptr> EthernetClientFactory::RetrieveWithMAC(
+    const EthernetClient::Mac& mac, zx::duration timeout, async_dispatcher_t* dispatcher) {
+  zx::result mount = MountPointWithMAC(mac, timeout);
+  if (!mount.is_ok()) {
+    return zx::error(mount.status_value());
   }
-
-  return Create(mount, dispatcher);
+  return zx::ok(Create(mount.value(), dispatcher));
 }
 
 int EthernetClientFactory::OpenDir() {

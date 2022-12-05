@@ -7,6 +7,7 @@
 
 #include <fuchsia/hardware/ethernet/cpp/fidl.h>
 #include <lib/async/dispatcher.h>
+#include <lib/zx/result.h>
 #include <zircon/device/ethernet.h>
 
 #include <memory>
@@ -81,14 +82,14 @@ class EthernetClientFactory {
 
   // finds the mount point of an ethernet device with given Mac.
   // This is achieved based on directory watching and will only fail on timeout.
-  std::string MountPointWithMAC(const EthernetClient::Mac& mac,
-                                zx::duration timeout = zx::duration::infinite());
+  zx::result<std::string> MountPointWithMAC(const EthernetClient::Mac& mac,
+                                            zx::duration timeout = zx::duration::infinite());
 
   // Same as MountPointWithMac, but returns an instance of EthernetClient
   // already bound to the found mount point.
-  EthernetClient::Ptr RetrieveWithMAC(const EthernetClient::Mac& mac,
-                                      zx::duration timeout = zx::duration::infinite(),
-                                      async_dispatcher_t* dispatcher = nullptr);
+  zx::result<EthernetClient::Ptr> RetrieveWithMAC(const EthernetClient::Mac& mac,
+                                                  zx::duration timeout = zx::duration::infinite(),
+                                                  async_dispatcher_t* dispatcher = nullptr);
 
   zx_status_t Connect(const std::string& path,
                       fidl::InterfaceRequest<fuchsia::hardware::ethernet::Controller> req);

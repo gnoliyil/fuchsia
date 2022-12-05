@@ -72,10 +72,11 @@ class EthertapClientTest : public gtest::RealLoopFixture {
     ASSERT_OK(EthertapClient::Create(std::move(config), &tap));
     status = GetDevmgr();
     ASSERT_OK(status.status_value()) << "failed to connect request to /dev";
-    auto eth = EthernetClientFactory(EthernetClientFactory::kDevfsEthernetRoot,
-                                     status.value().TakeChannel())
-                   .RetrieveWithMAC(mac);
-    ASSERT_TRUE(eth);
+    zx::result result = EthernetClientFactory(EthernetClientFactory::kDevfsEthernetRoot,
+                                              status.value().TakeChannel())
+                            .RetrieveWithMAC(mac);
+    ASSERT_OK(result.status_value()) << "failed to retrieve device from devfs by MAC address";
+    std::unique_ptr<EthernetClient> eth = std::move(result.value());
     bool ok = false;
 
     EthernetConfig eth_config{.nbufs = TEST_N_FIFO_BUFS, .buff_size = TEST_FIFO_SIZE};

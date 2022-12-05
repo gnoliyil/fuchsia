@@ -141,16 +141,17 @@ class EthertapImpl : public EndpointImpl {
     // We add a 2 min timeout to this so that it's easier to debug problems with enumerating devices
     // from devfs. By default, MountPointWithMAC would hang forever and would make debugging
     // problems here really hard.
-    ethernet_mount_path_ = ethernet_factory_->MountPointWithMAC(mac, zx::sec(120));
+    zx::result path = ethernet_factory_->MountPointWithMAC(mac, zx::sec(120));
 
     // can't find mount path for ethernet!!
-    if (ethernet_mount_path_.empty()) {
-      FX_LOGS(WARNING) << "failed to locate ethertap device " << name << " "
-                       << fxl::StringPrintf("%02X:%02X:%02X:%02X:%02X:%02X", mac.octets[0],
-                                            mac.octets[1], mac.octets[2], mac.octets[3],
-                                            mac.octets[4], mac.octets[5]);
+    if (path.is_error()) {
+      FX_PLOGS(WARNING, path.error_value())
+          << "failed to locate ethertap device " << name << " "
+          << fxl::StringPrintf("%02X:%02X:%02X:%02X:%02X:%02X", mac.octets[0], mac.octets[1],
+                               mac.octets[2], mac.octets[3], mac.octets[4], mac.octets[5]);
       return ZX_ERR_INTERNAL;
     }
+    ethernet_mount_path_ = std::move(path.value());
 
     ethertap_->SetPacketCallback(
         [this](std::vector<uint8_t> data) { ForwardData(data.data(), data.size()); });
