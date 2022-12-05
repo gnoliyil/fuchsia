@@ -27,8 +27,6 @@ Instance::Instance(zx_device_t* parent, PipeDevice* pipe_device, async_dispatche
 
 Instance::~Instance() = default;
 
-zx_status_t Instance::Bind() { return DdkAdd("pipe", DEVICE_ADD_INSTANCE); }
-
 void Instance::OpenPipe(OpenPipeRequestView request, OpenPipeCompleter::Sync& completer) {
   if (!request->pipe_request.is_valid()) {
     zxlogf(ERROR, "%s: invalid channel", kTag);
@@ -54,6 +52,10 @@ void Instance::OpenPipe(OpenPipeRequestView request, OpenPipeCompleter::Sync& co
     // the event of a failure.
     pipe_ptr->Init();
   });
+}
+
+void Instance::OpenSession(OpenSessionRequestView request, OpenSessionCompleter::Sync& completer) {
+  pipe_device_->OpenSession(std::move(request->session));
 }
 
 void Instance::DdkRelease() { delete this; }

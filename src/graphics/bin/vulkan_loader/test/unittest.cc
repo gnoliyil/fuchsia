@@ -112,6 +112,11 @@ class FakeGoldfishDevice : public fuchsia::hardware::goldfish::testing::PipeDevi
     ADD_FAILURE() << "unexpected call to " << name;
   }
 
+  void OpenSession(
+      fidl::InterfaceRequest<fuchsia::hardware::goldfish::PipeDevice> session) override {
+    bindings_.AddBinding(this, std::move(session));
+  }
+
   fidl::BindingSet<fuchsia::hardware::goldfish::PipeDevice> bindings_;
 };
 

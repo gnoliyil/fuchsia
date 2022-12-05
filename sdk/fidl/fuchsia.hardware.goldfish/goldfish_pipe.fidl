@@ -17,8 +17,21 @@ const SIGNAL_WRITABLE uint32 = 0x02000000; // ZX_USER_SIGNAL_1
 /// disconnected.
 const SIGNAL_HANGUP uint32 = 0x04000000; // ZX_USER_SIGNAL_2
 
+/// This is the interface for the Goldfish pipe driver. It is used
+/// to connect to a PipeDevice.
+protocol Controller {
+    /// Opens a new PipeDevice session.
+    OpenSession(resource struct {
+        session server_end:PipeDevice;
+    });
+};
+
 /// Interface for the Goldfish pipe driver.
 protocol PipeDevice {
+    // TODO(fxbug.dev/112355): Remove this compose when this device is migrated
+    // off of instance devices.
+    compose Controller;
+
     /// Open pipe. A protocol request `pipe_request` provides an interface
     /// to the pipe. Multiple pipes can be opened for a single device.
     /// Closing the device connection will also close all pipe connections.

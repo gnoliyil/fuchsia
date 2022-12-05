@@ -149,10 +149,20 @@ void RunPingPongBenchmark(fidl::WireSyncClient<fuchsia_hardware_goldfish::Pipe>&
 
 int main(int argc, char** argv) {
   // TODO(https://fxbug.dev/113830): Stop hardcoding the 000 in this path.
-  zx::result pipe_device_connection =
-      component::Connect<fuchsia_hardware_goldfish::PipeDevice>("/dev/class/goldfish-pipe/000");
-  ZX_ASSERT_MSG(pipe_device_connection.is_ok(), "%s", pipe_device_connection.status_string());
-  fidl::WireSyncClient pipe_device(std::move(pipe_device_connection.value()));
+  zx::result controller =
+      component::Connect<fuchsia_hardware_goldfish::Controller>("/dev/class/goldfish-pipe/000");
+  ZX_ASSERT_MSG(controller.is_ok(), "%s", controller.status_string());
+
+  zx::result pipe_device_endpoints = fidl::CreateEndpoints<fuchsia_hardware_goldfish::PipeDevice>();
+  ZX_ASSERT_MSG(pipe_device_endpoints.is_ok(), "%s", pipe_device_endpoints.status_string());
+  auto& [pipe_device_client, pipe_device_server] = pipe_device_endpoints.value();
+  {
+    fidl::Status status =
+        fidl::WireCall(controller.value())->OpenSession(std::move(pipe_device_server));
+    ZX_ASSERT_MSG(status.ok(), "%s", status.status_string());
+  }
+
+  fidl::WireSyncClient pipe_device(std::move(pipe_device_client));
 
   zx::result pipe_endpoints = fidl::CreateEndpoints<fuchsia_hardware_goldfish::Pipe>();
   ZX_ASSERT_MSG(pipe_endpoints.is_ok(), "%s", pipe_endpoints.status_string());

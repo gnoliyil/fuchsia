@@ -4,6 +4,9 @@
 
 #include "src/graphics/bin/vulkan_loader/goldfish_device.h"
 
+#include <fidl/fuchsia.hardware.goldfish/cpp/wire.h>
+#include <lib/component/incoming/cpp/service_client.h>
+#include <lib/fdio/cpp/caller.h>
 #include <lib/fdio/directory.h>
 #include <lib/fdio/io.h>
 #include <lib/fdio/unsafe.h>
@@ -24,26 +27,23 @@ bool GoldfishDevice::Initialize(int dir_fd, std::string name, inspect::Node* par
   node() = parent->CreateChild("goldfish-" + name);
   icd_list_.Initialize(&node());
   auto pending_action_token = app()->GetPendingActionToken();
-  fdio_t* dir_fdio = fdio_unsafe_fd_to_io(dir_fd);
-  if (!dir_fdio) {
-    FX_LOGS(ERROR) << "Failed to get fdio_t";
-    return false;
-  }
-  zx_handle_t dir_handle;
-  dir_handle = fdio_unsafe_borrow_channel(dir_fdio);
-  if (!dir_handle) {
-    FX_LOGS(ERROR) << "Failed to borrow channel";
+
+  fdio_cpp::UnownedFdioCaller caller(dir_fd);
+  zx::result controller =
+      component::ConnectAt<fuchsia_hardware_goldfish::Controller>(caller.directory(), name);
+  if (controller.is_error()) {
+    FX_PLOGS(ERROR, controller.error_value()) << "Failed to connect to service";
     return false;
   }
 
-  zx_status_t status;
-  status = fdio_service_connect_at(dir_handle, name.c_str(),
-                                   device_.NewRequest().TakeChannel().release());
-  if (status != ZX_OK) {
-    FX_PLOGS(ERROR, status) << "Failed to connect to service";
+  if (fidl::Status status =
+          fidl::WireCall(controller.value())
+              ->OpenSession(fidl::ServerEnd<fuchsia_hardware_goldfish::PipeDevice>(
+                  device_.NewRequest().TakeChannel()));
+      !status.ok()) {
+    FX_PLOGS(ERROR, status.status()) << "Failed to open session";
     return false;
   }
-  fdio_unsafe_release(dir_fdio);
   device_.set_error_handler([this](zx_status_t status) {
     // Deletes |this|.
     app()->RemoveDevice(this);

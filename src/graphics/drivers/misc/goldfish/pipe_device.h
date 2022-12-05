@@ -6,6 +6,7 @@
 #define SRC_GRAPHICS_DRIVERS_MISC_GOLDFISH_PIPE_DEVICE_H_
 
 #include <fidl/fuchsia.hardware.goldfish.pipe/cpp/wire.h>
+#include <fidl/fuchsia.hardware.goldfish/cpp/wire.h>
 #include <fidl/fuchsia.hardware.sysmem/cpp/wire.h>
 #include <lib/ddk/device.h>
 #include <lib/ddk/io-buffer.h>
@@ -30,7 +31,7 @@
 namespace goldfish {
 
 class PipeDevice;
-using DeviceType = ddk::Device<PipeDevice>;
+using DeviceType = ddk::Device<PipeDevice, ddk::Unbindable>;
 
 // |PipeDevice| is the "root" ACPI device that creates pipes and executes pipe
 // operations. It could create multiple |PipeChildDevice| instances using
@@ -46,8 +47,12 @@ class PipeDevice : public DeviceType {
   zx_status_t Bind();
   zx_status_t CreateChildDevice(cpp20::span<const zx_device_prop_t> props, const char* dev_name);
 
+  void OpenSession(fidl::ServerEnd<fuchsia_hardware_goldfish::PipeDevice> pipe_device);
+
   // Device protocol implementation.
   void DdkRelease();
+  void DdkUnbind(ddk::UnbindTxn txn);
+
   zx_status_t Create(int32_t* out_id, zx::vmo* out_vmo);
   zx_status_t SetEvent(int32_t id, zx::event pipe_event);
   void Destroy(int32_t id);
@@ -90,6 +95,9 @@ class PipeDevice : public DeviceType {
   using PipeMap = std::map<int32_t, std::unique_ptr<Pipe>>;
   PipeMap pipes_ TA_GUARDED(pipes_lock_);
   async_dispatcher_t* const dispatcher_;
+
+  fidl::ServerBindingGroup<fuchsia_hardware_goldfish::PipeDevice> bindings_;
+  std::optional<ddk::UnbindTxn> unbind_txn_;
 
   DISALLOW_COPY_ASSIGN_AND_MOVE(PipeDevice);
 };

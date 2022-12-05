@@ -108,21 +108,14 @@ class InstanceDeviceTest : public zxtest::Test {
     pipe_device_ = std::make_unique<FakePipeDevice>(
         fake_root_.get(), std::move(acpi_result.value()), loop_.dispatcher());
 
-    loop_.StartThread("goldfish-pipe-thread");
+    ASSERT_OK(loop_.StartThread("goldfish-pipe-thread"));
 
-    auto dut =
-        std::make_unique<FakeInstance>(fake_root_.get(), pipe_device_.get(), loop_.dispatcher());
-    ASSERT_OK(dut->Bind());
-    // dut is now managed by the Driver Framework so we release the unique
-    // pointer. Note that pipe_device_ is not managed by the framework so we
-    // retain the unique pointer as an instance variable so that it is freed at
-    // the end of the test.
-    dut_ = dut.release();
+    dut_.emplace(fake_root_.get(), pipe_device_.get(), loop_.dispatcher());
 
     zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_goldfish::PipeDevice>();
     ASSERT_OK(endpoints.status_value());
 
-    ASSERT_OK(dut_->Connect(loop_.dispatcher(), std::move(endpoints->server)));
+    ASSERT_OK(dut_.value().Connect(loop_.dispatcher(), std::move(endpoints->server)));
     fidl_goldfish_client_.Bind(std::move(endpoints->client));
   }
 
@@ -136,7 +129,8 @@ class InstanceDeviceTest : public zxtest::Test {
   acpi::mock::Device mock_acpi_;
 
   std::unique_ptr<FakePipeDevice> pipe_device_;
-  FakeInstance* dut_;
+  // Not really optional, but needs to be late-bound.
+  std::optional<FakeInstance> dut_;
   std::shared_ptr<MockDevice> fake_root_;
 
   fidl::WireSyncClient<fuchsia_hardware_goldfish::PipeDevice> fidl_goldfish_client_;

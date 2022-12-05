@@ -33,10 +33,9 @@ class Instance : public InstanceType {
   Instance(zx_device_t* parent, PipeDevice* pipe_device, async_dispatcher_t* dispatcher);
   ~Instance() override;
 
-  zx_status_t Bind();
-
   // |fidl::WireServer<fuchsia_hardware_goldfish::PipeDevice>|
   void OpenPipe(OpenPipeRequestView request, OpenPipeCompleter::Sync& completer) override;
+  void OpenSession(OpenSessionRequestView request, OpenSessionCompleter::Sync& completer) override;
 
   // Device protocol implementation.
   void DdkRelease();

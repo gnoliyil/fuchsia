@@ -250,7 +250,10 @@ class PipeDeviceTest : public zxtest::Test {
   }
 
   // |zxtest::Test|
-  void TearDown() override {}
+  void TearDown() override {
+    device_async_remove(fake_root_.get());
+    mock_ddk::ReleaseFlaggedDevices(fake_root_.get());
+  }
 
   std::unique_ptr<VmoMapping> MapControlRegisters() const {
     return std::make_unique<VmoMapping>(vmo_control_, /*size=*/sizeof(Registers), /*offset=*/0);

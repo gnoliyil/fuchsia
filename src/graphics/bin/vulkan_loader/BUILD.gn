@@ -41,8 +41,10 @@ source_set("app") {
     "//src/lib/storage/vfs/cpp",
   ]
   deps = [
+    "//sdk/fidl/fuchsia.hardware.goldfish:fuchsia.hardware.goldfish_cpp_wire",
     "//sdk/fidl/fuchsia.io:fuchsia.io_hlcpp",
     "//sdk/fidl/fuchsia.vulkan.loader:fuchsia.vulkan.loader_hlcpp",
+    "//sdk/lib/component/incoming/cpp",
     "//sdk/lib/fdio",
     "//sdk/lib/fidl/cpp",
     "//sdk/lib/sys/cpp",
@@ -52,6 +54,7 @@ source_set("app") {
     "//zircon/system/ulib/async-loop:async-loop-cpp",
     "//zircon/system/ulib/async-loop:async-loop-default",
     "//zircon/system/ulib/fbl",
+    "//zircon/system/ulib/fdio-caller",
   ]
 }
 executable("bin") {

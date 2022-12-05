@@ -23,8 +23,8 @@
 namespace {
 
 // TODO(https://fxbug.dev/113830): Stop hardcoding the 000 in this path.
-zx::result<fidl::ClientEnd<fuchsia_hardware_goldfish::PipeDevice>> ConnectToPipe() {
-  return component::Connect<fuchsia_hardware_goldfish::PipeDevice>("/dev/class/goldfish-pipe/000");
+zx::result<fidl::ClientEnd<fuchsia_hardware_goldfish::Controller>> ConnectToPipe() {
+  return component::Connect<fuchsia_hardware_goldfish::Controller>("/dev/class/goldfish-pipe/000");
 }
 
 // TODO(https://fxbug.dev/113830): Stop hardcoding the 000 in this path.
@@ -61,16 +61,22 @@ void SetDefaultCollectionName(fidl::WireSyncClient<fuchsia_sysmem::BufferCollect
 }  // namespace
 
 TEST(GoldfishPipeTests, GoldfishPipeTest) {
-  zx::result pipe_device_connection = ConnectToPipe();
-  ASSERT_EQ(pipe_device_connection.status_value(), ZX_OK);
-  fidl::WireSyncClient pipe_device(std::move(pipe_device_connection.value()));
+  zx::result controller = ConnectToPipe();
+  ASSERT_EQ(controller.status_value(), ZX_OK);
+  zx::result endpoints = fidl::CreateEndpoints<fuchsia_hardware_goldfish::PipeDevice>();
+  ASSERT_EQ(endpoints.status_value(), ZX_OK);
+  auto& [channel, server] = endpoints.value();
+
+  ASSERT_EQ(fidl::WireCall(controller.value())->OpenSession(std::move(server)).status(), ZX_OK);
 
   zx::result pipe_endpoints = fidl::CreateEndpoints<fuchsia_hardware_goldfish::Pipe>();
   ASSERT_EQ(pipe_endpoints.status_value(), ZX_OK);
+  auto& [pipe_client, pipe_server] = pipe_endpoints.value();
 
-  ASSERT_EQ(pipe_device->OpenPipe(std::move(pipe_endpoints->server)).status(), ZX_OK);
+  fidl::WireSyncClient pipe_device(std::move(channel));
+  ASSERT_EQ(pipe_device->OpenPipe(std::move(pipe_server)).status(), ZX_OK);
 
-  fidl::WireSyncClient pipe(std::move(pipe_endpoints->client));
+  fidl::WireSyncClient pipe(std::move(pipe_client));
   const size_t kSize = 3 * 4096;
   {
     auto result = pipe->SetBufferSize(kSize);
