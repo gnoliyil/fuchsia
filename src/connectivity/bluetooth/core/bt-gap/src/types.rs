@@ -2,7 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use {anyhow::format_err, fidl_fuchsia_bluetooth_sys as sys, thiserror::Error};
+use anyhow::format_err;
+use fidl_fuchsia_bluetooth_sys as sys;
+use thiserror::Error;
 
 /// Type representing Possible errors raised in the operation of BT-GAP
 #[derive(Debug, Error)]

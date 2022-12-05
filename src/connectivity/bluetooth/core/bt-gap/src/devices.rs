@@ -6,18 +6,14 @@
 //! produces a stream of messages when bt-host devices are added or removed from
 //! the system
 
-use {
-    fuchsia_bluetooth::constants::HOST_DEVICE_DIR,
-    fuchsia_fs::OpenFlags,
-    fuchsia_vfs_watcher::{self as vfs_watcher, WatchEvent, WatchMessage},
-    futures::{future, FutureExt, Stream, TryStreamExt},
-    log::{info, warn},
-    std::{
-        ffi::OsStr,
-        io,
-        path::{Path, PathBuf},
-    },
-};
+use fuchsia_bluetooth::constants::HOST_DEVICE_DIR;
+use fuchsia_fs::OpenFlags;
+use fuchsia_vfs_watcher::{self as vfs_watcher, WatchEvent, WatchMessage};
+use futures::{future, FutureExt, Stream, TryStreamExt};
+use std::ffi::OsStr;
+use std::io;
+use std::path::{Path, PathBuf};
+use tracing::{info, warn};
 
 pub enum HostEvent {
     HostAdded(PathBuf),

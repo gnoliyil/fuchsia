@@ -25,29 +25,25 @@
 //! hosts, which will be processed by the Future returned from `PairingDispatcher::run()`. When the
 //! handle is dropped, the PairingDispatcher will be closed.
 
-use {
-    anyhow::Error,
-    async_utils::stream::{IndexedStreams, StreamItem, WithEpitaph, WithTag},
-    fidl::endpoints::Proxy,
-    fidl_fuchsia_bluetooth_host::HostProxy,
-    fidl_fuchsia_bluetooth_sys::{
-        InputCapability, OutputCapability, PairingDelegateEvent, PairingDelegateEventStream,
-        PairingDelegateProxy,
-        PairingDelegateRequest::{self, *},
-        PairingDelegateRequestStream,
-    },
-    fuchsia_async as fasync,
-    fuchsia_bluetooth::types::{HostId, Peer, PeerId},
-    futures::{
-        channel::mpsc,
-        future::{BoxFuture, FutureExt},
-        select,
-        sink::SinkExt,
-        stream::StreamExt,
-    },
-    log::{info, warn},
-    std::convert::TryFrom,
+use anyhow::Error;
+use async_utils::stream::{IndexedStreams, StreamItem, WithEpitaph, WithTag};
+use fidl::endpoints::Proxy;
+use fidl_fuchsia_bluetooth_host::HostProxy;
+use fidl_fuchsia_bluetooth_sys::{
+    InputCapability, OutputCapability, PairingDelegateEvent, PairingDelegateEventStream,
+    PairingDelegateProxy,
+    PairingDelegateRequest::{self, *},
+    PairingDelegateRequestStream,
 };
+use fuchsia_async as fasync;
+use fuchsia_bluetooth::types::{HostId, Peer, PeerId};
+use futures::channel::mpsc;
+use futures::future::{BoxFuture, FutureExt};
+use futures::select;
+use futures::sink::SinkExt;
+use futures::stream::StreamExt;
+use std::convert::TryFrom;
+use tracing::{info, warn};
 
 use crate::services::pairing::pairing_requests::PairingRequests;
 

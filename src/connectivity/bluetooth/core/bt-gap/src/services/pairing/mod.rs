@@ -6,7 +6,7 @@ use anyhow::Error;
 use fidl::endpoints::ControlHandle;
 use fidl_fuchsia_bluetooth_sys::{PairingRequest, PairingRequestStream};
 use futures::stream::TryStreamExt;
-use log::{info, warn};
+use tracing::{info, warn};
 
 use crate::host_dispatcher::HostDispatcher;
 

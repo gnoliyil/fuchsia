@@ -2,15 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use {
-    anyhow::{format_err, Error},
-    async_helpers::hanging_get::asynchronous as hanging_get,
-    fidl_fuchsia_bluetooth_sys::{self as sys, HostWatcherRequest, HostWatcherRequestStream},
-    fuchsia_bluetooth::types::host_info::HostInfo,
-    fuchsia_zircon as zx,
-    futures::StreamExt,
-    log::warn,
-};
+use anyhow::{format_err, Error};
+use async_helpers::hanging_get::asynchronous as hanging_get;
+use fidl_fuchsia_bluetooth_sys::{self as sys, HostWatcherRequest, HostWatcherRequestStream};
+use fuchsia_bluetooth::types::host_info::HostInfo;
+use fuchsia_zircon as zx;
+use futures::StreamExt;
+use tracing::warn;
 
 use crate::host_dispatcher::*;
 

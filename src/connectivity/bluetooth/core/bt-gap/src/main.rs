@@ -4,26 +4,23 @@
 
 #![recursion_limit = "512"]
 
-use {
-    anyhow::{format_err, Context as _, Error},
-    async_helpers::hanging_get::asynchronous as hanging_get,
-    fidl::prelude::*,
-    fidl_fuchsia_bluetooth::Appearance,
-    fidl_fuchsia_bluetooth_bredr::ProfileMarker,
-    fidl_fuchsia_bluetooth_gatt::Server_Marker,
-    fidl_fuchsia_bluetooth_gatt2::{LocalServiceRequest, Server_Marker as Server_Marker2},
-    fidl_fuchsia_bluetooth_le::{CentralMarker, PeripheralMarker},
-    fidl_fuchsia_device::NameProviderMarker,
-    fuchsia_async as fasync,
-    fuchsia_component::{client::connect_to_protocol, server::ServiceFs},
-    futures::{
-        channel::mpsc, future::BoxFuture, try_join, FutureExt, StreamExt, TryFutureExt,
-        TryStreamExt,
-    },
-    log::{error, info, warn},
-    pin_utils::pin_mut,
-    std::collections::HashMap,
-};
+use anyhow::{format_err, Context as _, Error};
+use async_helpers::hanging_get::asynchronous as hanging_get;
+use fidl::endpoints::{DiscoverableProtocolMarker, ProtocolMarker};
+use fidl_fuchsia_bluetooth::Appearance;
+use fidl_fuchsia_bluetooth_bredr::ProfileMarker;
+use fidl_fuchsia_bluetooth_gatt::Server_Marker;
+use fidl_fuchsia_bluetooth_gatt2::{LocalServiceRequest, Server_Marker as Server_Marker2};
+use fidl_fuchsia_bluetooth_le::{CentralMarker, PeripheralMarker};
+use fidl_fuchsia_device::NameProviderMarker;
+use fuchsia_async as fasync;
+use fuchsia_component::{client::connect_to_protocol, server::ServiceFs};
+use futures::channel::mpsc;
+use futures::future::BoxFuture;
+use futures::{try_join, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
+use pin_utils::pin_mut;
+use std::collections::HashMap;
+use tracing::{error, info, warn};
 
 use crate::{
     devices::{watch_hosts, HostEvent::*},

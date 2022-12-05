@@ -2,22 +2,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use {
-    anyhow::{format_err, Error},
-    async_helpers::hanging_get::asynchronous as hanging_get,
-    fidl_fuchsia_bluetooth_sys::{self as sys, AccessRequest, AccessRequestStream},
-    fuchsia_bluetooth::types::{
-        pairing_options::{BondableMode, PairingOptions},
-        Peer, PeerId, Technology,
-    },
-    futures::{
-        future::{pending, BoxFuture},
-        select, FutureExt, Stream, StreamExt,
-    },
-    log::{info, trace, warn},
-    parking_lot::Mutex,
-    std::{collections::HashMap, mem, sync::Arc},
-};
+use anyhow::{format_err, Error};
+use async_helpers::hanging_get::asynchronous as hanging_get;
+use fidl_fuchsia_bluetooth_sys::{self as sys, AccessRequest, AccessRequestStream};
+use fuchsia_bluetooth::types::pairing_options::{BondableMode, PairingOptions};
+use fuchsia_bluetooth::types::{Peer, PeerId, Technology};
+use futures::future::{pending, BoxFuture};
+use futures::{select, FutureExt, Stream, StreamExt};
+use parking_lot::Mutex;
+use std::{collections::HashMap, mem, sync::Arc};
+use tracing::{info, trace, warn};
 
 use crate::{host_dispatcher::*, watch_peers::PeerWatcher};
 

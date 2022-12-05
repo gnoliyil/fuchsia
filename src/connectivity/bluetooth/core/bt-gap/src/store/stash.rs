@@ -2,29 +2,22 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use {
-    anyhow::{format_err, Error},
-    fidl::endpoints::create_proxy,
-    fidl_fuchsia_stash::{
-        GetIteratorMarker, KeyValue, SecureStoreMarker, StoreAccessorMarker, StoreAccessorProxy,
-        Value,
-    },
-    fuchsia_async as fasync,
-    fuchsia_bluetooth::{
-        error::Error as BtError,
-        inspect::Inspectable,
-        types::{Address, BondingData, HostData, PeerId},
-    },
-    fuchsia_inspect,
-    futures::{
-        channel::{mpsc, oneshot},
-        future::{Future, FutureExt},
-        stream::StreamExt,
-    },
-    log::{error, info, warn},
-    serde_json,
-    std::collections::HashMap,
+use anyhow::{format_err, Error};
+use fidl::endpoints::create_proxy;
+use fidl_fuchsia_stash::{
+    GetIteratorMarker, KeyValue, SecureStoreMarker, StoreAccessorMarker, StoreAccessorProxy, Value,
 };
+use fuchsia_async as fasync;
+use fuchsia_bluetooth::error::Error as BtError;
+use fuchsia_bluetooth::inspect::Inspectable;
+use fuchsia_bluetooth::types::{Address, BondingData, HostData, PeerId};
+use fuchsia_inspect;
+use futures::channel::{mpsc, oneshot};
+use futures::future::{Future, FutureExt};
+use futures::stream::StreamExt;
+use serde_json;
+use std::collections::HashMap;
+use tracing::{error, info, warn};
 
 #[cfg(test)]
 use {

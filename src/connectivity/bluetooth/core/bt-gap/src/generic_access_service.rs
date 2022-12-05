@@ -1,12 +1,13 @@
 // Copyright 2019 The Fuchsia Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
 use anyhow::{format_err, Error};
 use fidl::endpoints::{create_request_stream, Responder};
 use fidl_fuchsia_bluetooth_gatt2 as gatt;
 use fuchsia_bluetooth::types::Uuid;
 use futures::{channel::mpsc, SinkExt, StreamExt};
-use log::{info, warn};
+use tracing::{info, warn};
 
 use crate::host_dispatcher::HostDispatcher;
 

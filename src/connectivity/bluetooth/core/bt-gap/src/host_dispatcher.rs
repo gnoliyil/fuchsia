@@ -2,51 +2,42 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use {
-    anyhow::{anyhow, format_err, Context as _, Error},
-    async_helpers::hanging_get::asynchronous as hanging_get,
-    fidl::endpoints::ServerEnd,
-    fidl_fuchsia_bluetooth::{Appearance, DeviceClass},
-    fidl_fuchsia_bluetooth_bredr::ProfileMarker,
-    fidl_fuchsia_bluetooth_gatt::Server_Marker,
-    fidl_fuchsia_bluetooth_gatt2::{
-        LocalServiceRequest, Server_Marker as Server_Marker2, Server_Proxy,
-    },
-    fidl_fuchsia_bluetooth_host::HostProxy,
-    fidl_fuchsia_bluetooth_le::{CentralMarker, PeripheralMarker},
-    fidl_fuchsia_bluetooth_sys::{
-        self as sys, InputCapability, OutputCapability, PairingDelegateProxy,
-    },
-    fuchsia_async::{self as fasync, DurationExt, TimeoutExt},
-    fuchsia_bluetooth::{
-        self as bt,
-        inspect::{DebugExt, Inspectable, ToProperty},
-        types::{
-            pairing_options::PairingOptions, Address, BondingData, HostData, HostId, HostInfo,
-            Identity, Peer, PeerId,
-        },
-    },
-    fuchsia_inspect::{self as inspect, unique_name, Property},
-    fuchsia_zircon::{self as zx, Duration},
-    futures::{
-        channel::{mpsc, oneshot},
-        future::BoxFuture,
-        FutureExt,
-    },
-    log::{error, info, trace, warn},
-    parking_lot::RwLock,
-    slab::Slab,
-    std::{
-        collections::HashMap,
-        convert::TryFrom,
-        fs::File,
-        future::Future,
-        marker::Unpin,
-        path::Path,
-        sync::{Arc, Weak},
-        task::{Context, Poll, Waker},
-    },
+use anyhow::{anyhow, format_err, Context as _, Error};
+use async_helpers::hanging_get::asynchronous as hanging_get;
+use fidl::endpoints::ServerEnd;
+use fidl_fuchsia_bluetooth::{Appearance, DeviceClass};
+use fidl_fuchsia_bluetooth_bredr::ProfileMarker;
+use fidl_fuchsia_bluetooth_gatt::Server_Marker;
+use fidl_fuchsia_bluetooth_gatt2::{
+    LocalServiceRequest, Server_Marker as Server_Marker2, Server_Proxy,
 };
+use fidl_fuchsia_bluetooth_host::HostProxy;
+use fidl_fuchsia_bluetooth_le::{CentralMarker, PeripheralMarker};
+use fidl_fuchsia_bluetooth_sys::{
+    self as sys, InputCapability, OutputCapability, PairingDelegateProxy,
+};
+use fuchsia_async::{self as fasync, DurationExt, TimeoutExt};
+use fuchsia_bluetooth as bt;
+use fuchsia_bluetooth::inspect::{DebugExt, Inspectable, ToProperty};
+use fuchsia_bluetooth::types::pairing_options::PairingOptions;
+use fuchsia_bluetooth::types::{
+    Address, BondingData, HostData, HostId, HostInfo, Identity, Peer, PeerId,
+};
+use fuchsia_inspect::{self as inspect, unique_name, Property};
+use fuchsia_zircon::{self as zx, Duration};
+use futures::channel::{mpsc, oneshot};
+use futures::future::{BoxFuture, Future};
+use futures::FutureExt;
+use parking_lot::RwLock;
+use slab::Slab;
+use std::collections::HashMap;
+use std::convert::TryFrom;
+use std::fs::File;
+use std::marker::Unpin;
+use std::path::Path;
+use std::sync::{Arc, Weak};
+use std::task::{Context, Poll, Waker};
+use tracing::{error, info, trace, warn};
 
 use crate::{
     build_config, generic_access_service,

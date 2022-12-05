@@ -2,34 +2,29 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use crate::{
-    build_config::{BrEdrConfig, Config},
-    host_dispatcher::{test as hd_test, HostDispatcher, NameReplace, DEFAULT_DEVICE_NAME},
-    store::stash::Stash,
-    types,
-};
-use {
-    anyhow::{format_err, Error},
-    assert_matches::assert_matches,
-    async_helpers::hanging_get::asynchronous as hanging_get,
-    fidl::encoding::Decodable,
-    fidl_fuchsia_bluetooth::Appearance,
-    fidl_fuchsia_bluetooth_host::HostRequest,
-    fidl_fuchsia_bluetooth_sys::{self as sys, TechnologyType},
-    fuchsia_async::{self as fasync, TimeoutExt},
-    fuchsia_bluetooth::types::{
-        bonding_data::example, Address, HostData, HostId, Identity, Peer, PeerId,
-    },
-    fuchsia_inspect::{self as inspect, assert_data_tree},
-    futures::{
-        channel::mpsc, future::join, stream::TryStreamExt, FutureExt, StreamExt, TryFutureExt,
-    },
-    log::info,
-    std::{
-        collections::{HashMap, HashSet},
-        path::Path,
-    },
-};
+use anyhow::{format_err, Error};
+use assert_matches::assert_matches;
+use async_helpers::hanging_get::asynchronous as hanging_get;
+use fidl::encoding::Decodable;
+use fidl_fuchsia_bluetooth::Appearance;
+use fidl_fuchsia_bluetooth_host::HostRequest;
+use fidl_fuchsia_bluetooth_sys::{self as sys, TechnologyType};
+use fuchsia_async::{self as fasync, TimeoutExt};
+use fuchsia_bluetooth::types::bonding_data::example;
+use fuchsia_bluetooth::types::{Address, HostData, HostId, Identity, Peer, PeerId};
+use fuchsia_inspect::{self as inspect, assert_data_tree};
+use futures::channel::mpsc;
+use futures::future::join;
+use futures::stream::TryStreamExt;
+use futures::{FutureExt, StreamExt, TryFutureExt};
+use std::collections::{HashMap, HashSet};
+use std::path::Path;
+use tracing::info;
+
+use crate::build_config::{BrEdrConfig, Config};
+use crate::host_dispatcher::{test as hd_test, HostDispatcher, NameReplace, DEFAULT_DEVICE_NAME};
+use crate::store::stash::Stash;
+use crate::types;
 
 fn peer(id: PeerId) -> Peer {
     Peer {

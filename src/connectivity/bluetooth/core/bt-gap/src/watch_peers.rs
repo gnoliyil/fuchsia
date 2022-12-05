@@ -2,14 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use {
-    fidl_fuchsia_bluetooth as btfidl, fidl_fuchsia_bluetooth_sys as sys,
-    fuchsia_bluetooth::types::{Peer, PeerId},
-    log::{info, warn},
-    parking_lot::Mutex,
-    std::collections::{HashMap, HashSet},
-    std::sync::Arc,
-};
+use fidl_fuchsia_bluetooth as btfidl;
+use fidl_fuchsia_bluetooth_sys as sys;
+use fuchsia_bluetooth::types::{Peer, PeerId};
+use parking_lot::Mutex;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+use tracing::{info, warn};
 
 pub struct PeerWatcher {
     // Store the previous state in a shared structure that can be updated when the hanging_get is

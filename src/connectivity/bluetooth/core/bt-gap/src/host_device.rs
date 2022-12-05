@@ -2,25 +2,20 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use {
-    anyhow::{format_err, Context},
-    fidl_fuchsia_bluetooth::{self as fbt, DeviceClass},
-    fidl_fuchsia_bluetooth_host::{HostEvent, HostProxy},
-    fidl_fuchsia_bluetooth_sys as sys, fuchsia_async as fasync,
-    fuchsia_bluetooth::{
-        inspect::Inspectable,
-        types::{Address, BondingData, HostData, HostId, HostInfo, Peer, PeerId},
-    },
-    futures::{future::try_join_all, Future, FutureExt, StreamExt, TryFutureExt},
-    log::{error, info, trace, warn},
-    parking_lot::RwLock,
-    pin_utils::pin_mut,
-    std::{
-        convert::TryInto,
-        path::{Path, PathBuf},
-        sync::{Arc, Weak},
-    },
-};
+use anyhow::{format_err, Context};
+use fidl_fuchsia_bluetooth::{self as fbt, DeviceClass};
+use fidl_fuchsia_bluetooth_host::{HostEvent, HostProxy};
+use fidl_fuchsia_bluetooth_sys as sys;
+use fuchsia_async as fasync;
+use fuchsia_bluetooth::inspect::Inspectable;
+use fuchsia_bluetooth::types::{Address, BondingData, HostData, HostId, HostInfo, Peer, PeerId};
+use futures::{future::try_join_all, Future, FutureExt, StreamExt, TryFutureExt};
+use parking_lot::RwLock;
+use pin_utils::pin_mut;
+use std::convert::TryInto;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Weak};
+use tracing::{error, info, trace, warn};
 
 #[cfg(test)]
 use fidl_fuchsia_bluetooth_sys::TechnologyType;
