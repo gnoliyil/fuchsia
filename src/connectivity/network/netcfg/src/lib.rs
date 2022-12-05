@@ -367,6 +367,10 @@ fn should_enable_filter(
 struct InterfaceState {
     // Hold on to control to enforce interface ownership, even if unused.
     control: fidl_fuchsia_net_interfaces_ext::admin::Control,
+    // TODO(https://fxbug.dev/114770): Use the device class when handling
+    // fuchsia.net.dhcpv6/PrefixProvider.AcquirePrefix.
+    #[allow(dead_code)]
+    device_class: DeviceClass,
     config: InterfaceConfigState,
 }
 
@@ -386,19 +390,30 @@ struct HostInterfaceState {
 struct WlanApInterfaceState {}
 
 impl InterfaceState {
-    fn new_host(control: fidl_fuchsia_net_interfaces_ext::admin::Control) -> Self {
+    fn new_host(
+        control: fidl_fuchsia_net_interfaces_ext::admin::Control,
+        device_class: DeviceClass,
+    ) -> Self {
         Self {
             control,
+            device_class,
             config: InterfaceConfigState::Host(HostInterfaceState { dhcpv6_client_addr: None }),
         }
     }
 
-    fn new_wlan_ap(control: fidl_fuchsia_net_interfaces_ext::admin::Control) -> Self {
-        Self { control, config: InterfaceConfigState::WlanAp(WlanApInterfaceState {}) }
+    fn new_wlan_ap(
+        control: fidl_fuchsia_net_interfaces_ext::admin::Control,
+        device_class: DeviceClass,
+    ) -> Self {
+        Self {
+            control,
+            device_class,
+            config: InterfaceConfigState::WlanAp(WlanApInterfaceState {}),
+        }
     }
 
     fn is_wlan_ap(&self) -> bool {
-        let Self { control: _, config } = self;
+        let Self { config, control: _, device_class: _ } = self;
         match config {
             InterfaceConfigState::Host(_) => false,
             InterfaceConfigState::WlanAp(_) => true,
@@ -412,7 +427,7 @@ impl InterfaceState {
         dhcpv6_client_provider: Option<&fnet_dhcpv6::ClientProviderProxy>,
         watchers: &mut DnsServerWatchers<'_>,
     ) -> Result<(), errors::Error> {
-        let Self { control: _, config } = self;
+        let Self { config, control: _, device_class: _ } = self;
         let fnet_interfaces_ext::Properties { online, .. } = properties;
         match config {
             InterfaceConfigState::Host(HostInterfaceState { dhcpv6_client_addr }) => {
@@ -689,7 +704,7 @@ impl<'a> NetCfg<'a> {
             }
             DnsServersUpdateSource::Netstack => {}
             DnsServersUpdateSource::Dhcpv6 { interface_id } => {
-                let InterfaceState { control: _, config } = self
+                let InterfaceState { config, control: _, device_class: _ } = self
                     .interface_states
                     .get_mut(&interface_id)
                     .ok_or(anyhow::anyhow!("no interface state found for id={}", interface_id))?;
@@ -1118,9 +1133,10 @@ impl<'a> NetCfg<'a> {
                     // An interface netcfg is not configuring was changed, do nothing.
                     None => return Ok(()),
                     Some(InterfaceState {
-                        control: _,
                         config:
                             InterfaceConfigState::Host(HostInterfaceState { dhcpv6_client_addr }),
+                        control: _,
+                        device_class: _,
                     }) => {
                         let dhcpv6_client_provider =
                             if let Some(dhcpv6_client_provider) = dhcpv6_client_provider {
@@ -1202,8 +1218,9 @@ impl<'a> NetCfg<'a> {
                         Ok(())
                     }
                     Some(InterfaceState {
-                        control: _,
                         config: InterfaceConfigState::WlanAp(WlanApInterfaceState {}),
+                        control: _,
+                        device_class: _,
                     }) => {
                         // TODO(fxbug.dev/55879): Stop the DHCP server when the address it is
                         // listening on is removed.
@@ -1248,7 +1265,7 @@ impl<'a> NetCfg<'a> {
                     // An interface netcfg was not responsible for configuring was removed, do
                     // nothing.
                     None => Ok(()),
-                    Some(InterfaceState { control: _, config }) => {
+                    Some(InterfaceState { config, control: _, device_class: _ }) => {
                         match config {
                             InterfaceConfigState::Host(HostInterfaceState {
                                 mut dhcpv6_client_addr,
@@ -1550,7 +1567,7 @@ impl<'a> NetCfg<'a> {
                     id
                 )));
             }
-            let InterfaceState { control, config: _ } =
+            let InterfaceState { control, config: _, device_class: _ } =
                 match self.interface_states.entry(interface_id) {
                     Entry::Occupied(entry) => {
                         return Err(errors::Error::Fatal(anyhow::anyhow!(
@@ -1560,7 +1577,9 @@ impl<'a> NetCfg<'a> {
                             entry.get()
                         )));
                     }
-                    Entry::Vacant(entry) => entry.insert(InterfaceState::new_wlan_ap(control)),
+                    Entry::Vacant(entry) => {
+                        entry.insert(InterfaceState::new_wlan_ap(control, class))
+                    }
                 };
 
             info!("discovered WLAN AP (interface ID={})", interface_id);
@@ -1584,7 +1603,7 @@ impl<'a> NetCfg<'a> {
                 );
             }
         } else {
-            let InterfaceState { control, config: _ } =
+            let InterfaceState { control, config: _, device_class: _ } =
                 match self.interface_states.entry(interface_id) {
                     Entry::Occupied(entry) => {
                         return Err(errors::Error::Fatal(anyhow::anyhow!(
@@ -1594,7 +1613,9 @@ impl<'a> NetCfg<'a> {
                             entry.get()
                         )));
                     }
-                    Entry::Vacant(entry) => entry.insert(InterfaceState::new_host(control)),
+                    Entry::Vacant(entry) => {
+                        entry.insert(InterfaceState::new_host(control, class))
+                    }
                 };
 
             info!("discovered host interface with id={}, configuring interface", interface_id);
@@ -2296,8 +2317,11 @@ mod tests {
         let (control, _control_server_end) =
             fidl_fuchsia_net_interfaces_ext::admin::Control::create_endpoints()
                 .expect("create endpoints");
+        let device_class = fidl_fuchsia_hardware_network::DeviceClass::Virtual;
         assert_matches::assert_matches!(
-            netcfg.interface_states.insert(INTERFACE_ID, InterfaceState::new_host(control)),
+            netcfg
+                .interface_states
+                .insert(INTERFACE_ID, InterfaceState::new_host(control, device_class.into())),
             None
         );
 
@@ -2308,9 +2332,7 @@ mod tests {
                 fnet_interfaces::Event::Added(fnet_interfaces::Properties {
                     id: Some(INTERFACE_ID),
                     name: Some("testif01".to_string()),
-                    device_class: Some(fnet_interfaces::DeviceClass::Loopback(
-                        fnet_interfaces::Empty {},
-                    )),
+                    device_class: Some(fnet_interfaces::DeviceClass::Device(device_class)),
                     online: Some(true),
                     addresses: Some(ipv6addrs(Some(LINK_LOCAL_SOCKADDR1))),
                     has_default_ipv4_route: Some(false),
@@ -2428,8 +2450,11 @@ mod tests {
         let (control, _control_server_end) =
             fidl_fuchsia_net_interfaces_ext::admin::Control::create_endpoints()
                 .expect("create endpoints");
+        let device_class = fidl_fuchsia_hardware_network::DeviceClass::Virtual;
         assert_matches::assert_matches!(
-            netcfg.interface_states.insert(INTERFACE_ID, InterfaceState::new_host(control)),
+            netcfg
+                .interface_states
+                .insert(INTERFACE_ID, InterfaceState::new_host(control, device_class.into())),
             None
         );
 
@@ -2440,9 +2465,7 @@ mod tests {
                 fnet_interfaces::Event::Added(fnet_interfaces::Properties {
                     id: Some(INTERFACE_ID),
                     name: Some("testif01".to_string()),
-                    device_class: Some(fnet_interfaces::DeviceClass::Loopback(
-                        fnet_interfaces::Empty {},
-                    )),
+                    device_class: Some(fnet_interfaces::DeviceClass::Device(device_class)),
                     online: Some(true),
                     addresses: Some(ipv6addrs(Some(LINK_LOCAL_SOCKADDR1))),
                     has_default_ipv4_route: Some(false),
