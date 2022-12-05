@@ -21,6 +21,24 @@
 #include "src/lib/fsl/handles/object_info.h"
 
 namespace {
+
+// TODO(https://fxbug.dev/113830): Stop hardcoding the 000 in this path.
+zx::result<fidl::ClientEnd<fuchsia_hardware_goldfish::PipeDevice>> ConnectToPipe() {
+  return component::Connect<fuchsia_hardware_goldfish::PipeDevice>("/dev/class/goldfish-pipe/000");
+}
+
+// TODO(https://fxbug.dev/113830): Stop hardcoding the 000 in this path.
+zx::result<fidl::ClientEnd<fuchsia_hardware_goldfish::ControlDevice>> ConnectToControl() {
+  return component::Connect<fuchsia_hardware_goldfish::ControlDevice>(
+      "/dev/class/goldfish-control/000");
+}
+
+// TODO(https://fxbug.dev/113830): Stop hardcoding the 000 in this path.
+zx::result<fidl::ClientEnd<fuchsia_hardware_goldfish::AddressSpaceDevice>> ConnectToAddress() {
+  return component::Connect<fuchsia_hardware_goldfish::AddressSpaceDevice>(
+      "/dev/class/goldfish-address-space/000");
+}
+
 fidl::WireSyncClient<fuchsia_sysmem::Allocator> CreateSysmemAllocator() {
   zx::result client_end = component::Connect<fuchsia_sysmem::Allocator>();
   EXPECT_EQ(client_end.status_value(), ZX_OK);
@@ -43,20 +61,16 @@ void SetDefaultCollectionName(fidl::WireSyncClient<fuchsia_sysmem::BufferCollect
 }  // namespace
 
 TEST(GoldfishPipeTests, GoldfishPipeTest) {
-  int fd = open("/dev/class/goldfish-pipe/000", O_RDWR);
-  EXPECT_GE(fd, 0);
+  zx::result pipe_device_connection = ConnectToPipe();
+  ASSERT_EQ(pipe_device_connection.status_value(), ZX_OK);
+  fidl::WireSyncClient pipe_device(std::move(pipe_device_connection.value()));
 
-  zx::channel channel;
-  EXPECT_EQ(fdio_get_service_handle(fd, channel.reset_and_get_address()), ZX_OK);
+  zx::result pipe_endpoints = fidl::CreateEndpoints<fuchsia_hardware_goldfish::Pipe>();
+  ASSERT_EQ(pipe_endpoints.status_value(), ZX_OK);
 
-  zx::channel pipe_client;
-  zx::channel pipe_server;
-  EXPECT_EQ(zx::channel::create(0, &pipe_client, &pipe_server), ZX_OK);
+  ASSERT_EQ(pipe_device->OpenPipe(std::move(pipe_endpoints->server)).status(), ZX_OK);
 
-  fidl::WireSyncClient<fuchsia_hardware_goldfish::PipeDevice> pipe_device(std::move(channel));
-  EXPECT_TRUE(pipe_device->OpenPipe(std::move(pipe_server)).ok());
-
-  fidl::WireSyncClient<fuchsia_hardware_goldfish::Pipe> pipe(std::move(pipe_client));
+  fidl::WireSyncClient pipe(std::move(pipe_endpoints->client));
   const size_t kSize = 3 * 4096;
   {
     auto result = pipe->SetBufferSize(kSize);
@@ -150,25 +164,26 @@ TEST(GoldfishPipeTests, GoldfishPipeTest) {
 }
 
 TEST(GoldfishControlTests, GoldfishControlTest) {
-  int fd = open("/dev/class/goldfish-control/000", O_RDWR);
-  EXPECT_GE(fd, 0);
-
-  zx::channel channel;
-  EXPECT_EQ(fdio_get_service_handle(fd, channel.reset_and_get_address()), ZX_OK);
+  zx::result control_connection = ConnectToControl();
+  ASSERT_EQ(control_connection.status_value(), ZX_OK);
+  fidl::WireSyncClient<fuchsia_hardware_goldfish::ControlDevice> control(
+      std::move(control_connection.value()));
 
   auto allocator = CreateSysmemAllocator();
-  EXPECT_TRUE(allocator.is_valid());
+  ASSERT_TRUE(allocator.is_valid());
 
-  zx::channel token_client;
-  zx::channel token_server;
-  EXPECT_EQ(zx::channel::create(0, &token_client, &token_server), ZX_OK);
-  EXPECT_TRUE(allocator->AllocateSharedCollection(std::move(token_server)).ok());
+  zx::result token_endpoints = fidl::CreateEndpoints<fuchsia_sysmem::BufferCollectionToken>();
+  ASSERT_EQ(token_endpoints.status_value(), ZX_OK);
+  ASSERT_EQ(allocator->AllocateSharedCollection(std::move(token_endpoints->server)).status(),
+            ZX_OK);
 
-  zx::channel collection_client;
-  zx::channel collection_server;
-  EXPECT_EQ(zx::channel::create(0, &collection_client, &collection_server), ZX_OK);
-  EXPECT_TRUE(
-      allocator->BindSharedCollection(std::move(token_client), std::move(collection_server)).ok());
+  zx::result collection_endpoints = fidl::CreateEndpoints<fuchsia_sysmem::BufferCollection>();
+  ASSERT_EQ(collection_endpoints.status_value(), ZX_OK);
+  ASSERT_EQ(allocator
+                ->BindSharedCollection(std::move(token_endpoints->client),
+                                       std::move(collection_endpoints->server))
+                .status(),
+            ZX_OK);
 
   fuchsia_sysmem::wire::BufferCollectionConstraints constraints;
   constraints.usage.vulkan = fuchsia_sysmem::wire::kVulkanImageUsageTransferDst;
@@ -185,7 +200,8 @@ TEST(GoldfishControlTests, GoldfishControlTest) {
       .heap_permitted_count = 1,
       .heap_permitted = {fuchsia_sysmem::wire::HeapType::kGoldfishDeviceLocal}};
 
-  fidl::WireSyncClient<fuchsia_sysmem::BufferCollection> collection(std::move(collection_client));
+  fidl::WireSyncClient<fuchsia_sysmem::BufferCollection> collection(
+      std::move(collection_endpoints->client));
 
   SetDefaultCollectionName(collection);
   EXPECT_TRUE(collection->SetConstraints(true, std::move(constraints)).ok());
@@ -209,7 +225,6 @@ TEST(GoldfishControlTests, GoldfishControlTest) {
   zx::vmo vmo_copy;
   EXPECT_EQ(vmo.duplicate(ZX_RIGHT_SAME_RIGHTS, &vmo_copy), ZX_OK);
 
-  fidl::WireSyncClient<fuchsia_hardware_goldfish::ControlDevice> control(std::move(channel));
   {
     fidl::Arena allocator;
     fuchsia_hardware_goldfish::wire::CreateColorBuffer2Params create_params(allocator);
@@ -252,25 +267,26 @@ TEST(GoldfishControlTests, GoldfishControlTest) {
 }
 
 TEST(GoldfishControlTests, GoldfishControlTest_HostVisible) {
-  int fd = open("/dev/class/goldfish-control/000", O_RDWR);
-  EXPECT_GE(fd, 0);
-
-  zx::channel channel;
-  EXPECT_EQ(fdio_get_service_handle(fd, channel.reset_and_get_address()), ZX_OK);
+  zx::result control_connection = ConnectToControl();
+  ASSERT_EQ(control_connection.status_value(), ZX_OK);
+  fidl::WireSyncClient<fuchsia_hardware_goldfish::ControlDevice> control(
+      std::move(control_connection.value()));
 
   auto allocator = CreateSysmemAllocator();
-  EXPECT_TRUE(allocator.is_valid());
+  ASSERT_TRUE(allocator.is_valid());
 
-  zx::channel token_client;
-  zx::channel token_server;
-  EXPECT_EQ(zx::channel::create(0, &token_client, &token_server), ZX_OK);
-  EXPECT_TRUE(allocator->AllocateSharedCollection(std::move(token_server)).ok());
+  zx::result token_endpoints = fidl::CreateEndpoints<fuchsia_sysmem::BufferCollectionToken>();
+  ASSERT_EQ(token_endpoints.status_value(), ZX_OK);
+  ASSERT_EQ(allocator->AllocateSharedCollection(std::move(token_endpoints->server)).status(),
+            ZX_OK);
 
-  zx::channel collection_client;
-  zx::channel collection_server;
-  EXPECT_EQ(zx::channel::create(0, &collection_client, &collection_server), ZX_OK);
-  EXPECT_TRUE(
-      allocator->BindSharedCollection(std::move(token_client), std::move(collection_server)).ok());
+  zx::result collection_endpoints = fidl::CreateEndpoints<fuchsia_sysmem::BufferCollection>();
+  ASSERT_EQ(collection_endpoints.status_value(), ZX_OK);
+  ASSERT_EQ(allocator
+                ->BindSharedCollection(std::move(token_endpoints->client),
+                                       std::move(collection_endpoints->server))
+                .status(),
+            ZX_OK);
 
   const size_t kMinSizeBytes = 4 * 1024;
   const size_t kMaxSizeBytes = 4 * 4096;
@@ -305,7 +321,8 @@ TEST(GoldfishControlTests, GoldfishControlTest_HostVisible) {
       .min_coded_height = 32,
   };
 
-  fidl::WireSyncClient<fuchsia_sysmem::BufferCollection> collection(std::move(collection_client));
+  fidl::WireSyncClient<fuchsia_sysmem::BufferCollection> collection(
+      std::move(collection_endpoints->client));
   SetDefaultCollectionName(collection);
   EXPECT_TRUE(collection->SetConstraints(true, std::move(constraints)).ok());
 
@@ -355,36 +372,46 @@ TEST(GoldfishControlTests, GoldfishControlTest_HostVisible_MultiClients) {
   using fuchsia_sysmem::BufferCollection;
   using fuchsia_sysmem::wire::BufferCollectionConstraints;
 
-  int fd = open("/dev/class/goldfish-control/000", O_RDWR);
-  EXPECT_GE(fd, 0);
-
-  zx::channel channel;
-  EXPECT_EQ(fdio_get_service_handle(fd, channel.reset_and_get_address()), ZX_OK);
+  zx::result control = ConnectToControl();
+  EXPECT_EQ(control.status_value(), ZX_OK);
 
   auto allocator = CreateSysmemAllocator();
-  EXPECT_TRUE(allocator.is_valid());
+  ASSERT_TRUE(allocator.is_valid());
 
   constexpr size_t kNumClients = 2;
-  zx::channel token_client[kNumClients];
-  zx::channel token_server[kNumClients];
-  zx::channel collection_client[kNumClients];
-  zx::channel collection_server[kNumClients];
 
-  EXPECT_EQ(zx::channel::create(0, &token_client[0], &token_server[0]), ZX_OK);
-  EXPECT_EQ(zx::channel::create(0, &token_client[1], &token_server[1]), ZX_OK);
-  EXPECT_TRUE(allocator->AllocateSharedCollection(std::move(token_server[0])).ok());
+  fidl::ClientEnd<fuchsia_sysmem::BufferCollectionToken> token_client[kNumClients];
+  fidl::ClientEnd<fuchsia_sysmem::BufferCollection> collection_client[kNumClients];
 
-  // TODO(fxbug.dev/97955) Consider handling the error instead of ignoring it.
-  (void)fidl::WireCall<fuchsia_sysmem::BufferCollectionToken>(token_client[0].borrow())
-      ->Duplicate(0, std::move(token_server[1]));
-  // TODO(fxbug.dev/97955) Consider handling the error instead of ignoring it.
-  (void)fidl::WireCall<fuchsia_sysmem::BufferCollectionToken>(token_client[0].borrow())->Sync();
+  // Client 0.
+  {
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_sysmem::BufferCollectionToken>();
+    ASSERT_EQ(endpoints.status_value(), ZX_OK);
+    ASSERT_EQ(allocator->AllocateSharedCollection(std::move(endpoints->server)).status(), ZX_OK);
+    token_client[0] = std::move(endpoints->client);
+  }
+
+  // Client 1.
+  {
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_sysmem::BufferCollectionToken>();
+    ASSERT_EQ(endpoints.status_value(), ZX_OK);
+    ASSERT_EQ(fidl::WireCall(token_client[0].borrow())
+                  ->Duplicate(0, std::move(endpoints->server))
+                  .status(),
+              ZX_OK);
+    ASSERT_EQ(fidl::WireCall(token_client[0].borrow())->Sync().status(), ZX_OK);
+    token_client[1] = std::move(endpoints->client);
+  }
 
   for (size_t i = 0; i < kNumClients; i++) {
-    EXPECT_EQ(zx::channel::create(0, &collection_client[i], &collection_server[i]), ZX_OK);
-    EXPECT_TRUE(
-        allocator->BindSharedCollection(std::move(token_client[i]), std::move(collection_server[i]))
-            .ok());
+    zx::result endpoints = fidl::CreateEndpoints<fuchsia_sysmem::BufferCollection>();
+    ASSERT_EQ(endpoints.status_value(), ZX_OK);
+
+    ASSERT_EQ(
+        allocator->BindSharedCollection(std::move(token_client[i]), std::move(endpoints->server))
+            .status(),
+        ZX_OK);
+    collection_client[i] = std::move(endpoints->client);
   }
 
   const size_t kMinSizeBytes = 4 * 1024;
@@ -495,25 +522,26 @@ TEST(GoldfishControlTests, GoldfishControlTest_HostVisible_MultiClients) {
 }
 
 TEST(GoldfishControlTests, GoldfishControlTest_HostVisibleBuffer) {
-  int fd = open("/dev/class/goldfish-control/000", O_RDWR);
-  EXPECT_GE(fd, 0);
-
-  zx::channel channel;
-  EXPECT_EQ(fdio_get_service_handle(fd, channel.reset_and_get_address()), ZX_OK);
+  zx::result control_connection = ConnectToControl();
+  ASSERT_EQ(control_connection.status_value(), ZX_OK);
+  fidl::WireSyncClient<fuchsia_hardware_goldfish::ControlDevice> control(
+      std::move(control_connection.value()));
 
   auto allocator = CreateSysmemAllocator();
-  EXPECT_TRUE(allocator.is_valid());
+  ASSERT_TRUE(allocator.is_valid());
 
-  zx::channel token_client;
-  zx::channel token_server;
-  EXPECT_EQ(zx::channel::create(0, &token_client, &token_server), ZX_OK);
-  EXPECT_TRUE(allocator->AllocateSharedCollection(std::move(token_server)).ok());
+  zx::result token_endpoints = fidl::CreateEndpoints<fuchsia_sysmem::BufferCollectionToken>();
+  ASSERT_EQ(token_endpoints.status_value(), ZX_OK);
+  ASSERT_EQ(allocator->AllocateSharedCollection(std::move(token_endpoints->server)).status(),
+            ZX_OK);
 
-  zx::channel collection_client;
-  zx::channel collection_server;
-  EXPECT_EQ(zx::channel::create(0, &collection_client, &collection_server), ZX_OK);
-  EXPECT_TRUE(
-      allocator->BindSharedCollection(std::move(token_client), std::move(collection_server)).ok());
+  zx::result collection_endpoints = fidl::CreateEndpoints<fuchsia_sysmem::BufferCollection>();
+  ASSERT_EQ(collection_endpoints.status_value(), ZX_OK);
+  ASSERT_EQ(allocator
+                ->BindSharedCollection(std::move(token_endpoints->client),
+                                       std::move(collection_endpoints->server))
+                .status(),
+            ZX_OK);
 
   const size_t kMinSizeBytes = 4 * 1024;
   const size_t kMaxSizeBytes = 4 * 4096;
@@ -533,7 +561,8 @@ TEST(GoldfishControlTests, GoldfishControlTest_HostVisibleBuffer) {
       .heap_permitted = {fuchsia_sysmem::wire::HeapType::kGoldfishHostVisible}};
   constraints.image_format_constraints_count = 0;
 
-  fidl::WireSyncClient<fuchsia_sysmem::BufferCollection> collection(std::move(collection_client));
+  fidl::WireSyncClient<fuchsia_sysmem::BufferCollection> collection(
+      std::move(collection_endpoints->client));
   SetDefaultCollectionName(collection);
   EXPECT_TRUE(collection->SetConstraints(true, std::move(constraints)).ok());
 
@@ -580,25 +609,26 @@ TEST(GoldfishControlTests, GoldfishControlTest_HostVisibleBuffer) {
 }
 
 TEST(GoldfishControlTests, GoldfishControlTest_DataBuffer) {
-  int fd = open("/dev/class/goldfish-control/000", O_RDWR);
-  EXPECT_GE(fd, 0);
-
-  zx::channel channel;
-  EXPECT_EQ(fdio_get_service_handle(fd, channel.reset_and_get_address()), ZX_OK);
+  zx::result control_connection = ConnectToControl();
+  ASSERT_EQ(control_connection.status_value(), ZX_OK);
+  fidl::WireSyncClient<fuchsia_hardware_goldfish::ControlDevice> control(
+      std::move(control_connection.value()));
 
   auto allocator = CreateSysmemAllocator();
-  EXPECT_TRUE(allocator.is_valid());
+  ASSERT_TRUE(allocator.is_valid());
 
-  zx::channel token_client;
-  zx::channel token_server;
-  EXPECT_EQ(zx::channel::create(0, &token_client, &token_server), ZX_OK);
-  EXPECT_TRUE(allocator->AllocateSharedCollection(std::move(token_server)).ok());
+  zx::result token_endpoints = fidl::CreateEndpoints<fuchsia_sysmem::BufferCollectionToken>();
+  ASSERT_EQ(token_endpoints.status_value(), ZX_OK);
+  ASSERT_EQ(allocator->AllocateSharedCollection(std::move(token_endpoints->server)).status(),
+            ZX_OK);
 
-  zx::channel collection_client;
-  zx::channel collection_server;
-  EXPECT_EQ(zx::channel::create(0, &collection_client, &collection_server), ZX_OK);
-  EXPECT_TRUE(
-      allocator->BindSharedCollection(std::move(token_client), std::move(collection_server)).ok());
+  zx::result collection_endpoints = fidl::CreateEndpoints<fuchsia_sysmem::BufferCollection>();
+  ASSERT_EQ(collection_endpoints.status_value(), ZX_OK);
+  ASSERT_EQ(allocator
+                ->BindSharedCollection(std::move(token_endpoints->client),
+                                       std::move(collection_endpoints->server))
+                .status(),
+            ZX_OK);
 
   constexpr size_t kBufferSizeBytes = 4 * 1024;
   fuchsia_sysmem::wire::BufferCollectionConstraints constraints;
@@ -616,7 +646,8 @@ TEST(GoldfishControlTests, GoldfishControlTest_DataBuffer) {
       .heap_permitted_count = 1,
       .heap_permitted = {fuchsia_sysmem::wire::HeapType::kGoldfishDeviceLocal}};
 
-  fidl::WireSyncClient<fuchsia_sysmem::BufferCollection> collection(std::move(collection_client));
+  fidl::WireSyncClient<fuchsia_sysmem::BufferCollection> collection(
+      std::move(collection_endpoints->client));
   SetDefaultCollectionName(collection);
   EXPECT_TRUE(collection->SetConstraints(true, std::move(constraints)).ok());
 
@@ -639,7 +670,6 @@ TEST(GoldfishControlTests, GoldfishControlTest_DataBuffer) {
   zx::vmo vmo_copy;
   EXPECT_EQ(vmo.duplicate(ZX_RIGHT_SAME_RIGHTS, &vmo_copy), ZX_OK);
 
-  fidl::WireSyncClient<fuchsia_hardware_goldfish::ControlDevice> control(std::move(channel));
   {
     fidl::Arena allocator;
     fuchsia_hardware_goldfish::wire::CreateBuffer2Params create_params(allocator);
@@ -700,11 +730,10 @@ TEST(GoldfishControlTests, GoldfishControlTest_DataBuffer) {
 // The IPC transmission should succeed but FIDL interface should
 // return ZX_ERR_INVALID_ARGS.
 TEST(GoldfishControlTests, GoldfishControlTest_InvalidVmo) {
-  int fd = open("/dev/class/goldfish-control/000", O_RDWR);
-  EXPECT_GE(fd, 0);
-
-  zx::channel channel;
-  EXPECT_EQ(fdio_get_service_handle(fd, channel.reset_and_get_address()), ZX_OK);
+  zx::result control_connection = ConnectToControl();
+  ASSERT_EQ(control_connection.status_value(), ZX_OK);
+  fidl::WireSyncClient<fuchsia_hardware_goldfish::ControlDevice> control(
+      std::move(control_connection.value()));
 
   zx::vmo non_sysmem_vmo;
   EXPECT_EQ(zx::vmo::create(1024u, 0u, &non_sysmem_vmo), ZX_OK);
@@ -714,7 +743,6 @@ TEST(GoldfishControlTests, GoldfishControlTest_InvalidVmo) {
   zx::vmo vmo_copy;
   EXPECT_EQ(non_sysmem_vmo.duplicate(ZX_RIGHT_SAME_RIGHTS, &vmo_copy), ZX_OK);
 
-  fidl::WireSyncClient<fuchsia_hardware_goldfish::ControlDevice> control(std::move(channel));
   {
     fidl::Arena allocator;
     fuchsia_hardware_goldfish::wire::CreateColorBuffer2Params create_params(allocator);
@@ -744,28 +772,28 @@ TEST(GoldfishControlTests, GoldfishControlTest_InvalidVmo) {
 // If a mandatory field is missing, it should return "ZX_ERR_INVALID_ARGS".
 TEST(GoldfishControlTests, GoldfishControlTest_CreateColorBuffer2Args) {
   // Setup control device.
-  int control_device_fd = open("/dev/class/goldfish-control/000", O_RDWR);
-  EXPECT_GE(control_device_fd, 0);
-
-  zx::channel control_channel;
-  EXPECT_EQ(fdio_get_service_handle(control_device_fd, control_channel.reset_and_get_address()),
-            ZX_OK);
+  zx::result control_connection = ConnectToControl();
+  ASSERT_EQ(control_connection.status_value(), ZX_OK);
+  fidl::WireSyncClient<fuchsia_hardware_goldfish::ControlDevice> control(
+      std::move(control_connection.value()));
 
   // ----------------------------------------------------------------------//
   // Setup sysmem allocator and buffer collection.
   auto allocator = CreateSysmemAllocator();
-  EXPECT_TRUE(allocator.is_valid());
+  ASSERT_TRUE(allocator.is_valid());
 
-  zx::channel token_client;
-  zx::channel token_server;
-  EXPECT_EQ(zx::channel::create(0, &token_client, &token_server), ZX_OK);
-  EXPECT_TRUE(allocator->AllocateSharedCollection(std::move(token_server)).ok());
+  zx::result token_endpoints = fidl::CreateEndpoints<fuchsia_sysmem::BufferCollectionToken>();
+  ASSERT_EQ(token_endpoints.status_value(), ZX_OK);
+  ASSERT_EQ(allocator->AllocateSharedCollection(std::move(token_endpoints->server)).status(),
+            ZX_OK);
 
-  zx::channel collection_client;
-  zx::channel collection_server;
-  EXPECT_EQ(zx::channel::create(0, &collection_client, &collection_server), ZX_OK);
-  EXPECT_TRUE(
-      allocator->BindSharedCollection(std::move(token_client), std::move(collection_server)).ok());
+  zx::result collection_endpoints = fidl::CreateEndpoints<fuchsia_sysmem::BufferCollection>();
+  ASSERT_EQ(collection_endpoints.status_value(), ZX_OK);
+  ASSERT_EQ(allocator
+                ->BindSharedCollection(std::move(token_endpoints->client),
+                                       std::move(collection_endpoints->server))
+                .status(),
+            ZX_OK);
 
   // ----------------------------------------------------------------------//
   // Use device local heap which only *registers* the koid of vmo to control
@@ -785,7 +813,8 @@ TEST(GoldfishControlTests, GoldfishControlTest_CreateColorBuffer2Args) {
       .heap_permitted_count = 1,
       .heap_permitted = {fuchsia_sysmem::wire::HeapType::kGoldfishDeviceLocal}};
 
-  fidl::WireSyncClient<fuchsia_sysmem::BufferCollection> collection(std::move(collection_client));
+  fidl::WireSyncClient<fuchsia_sysmem::BufferCollection> collection(
+      std::move(collection_endpoints->client));
   SetDefaultCollectionName(collection);
   EXPECT_TRUE(collection->SetConstraints(true, std::move(constraints)).ok());
 
@@ -808,8 +837,6 @@ TEST(GoldfishControlTests, GoldfishControlTest_CreateColorBuffer2Args) {
   // ----------------------------------------------------------------------//
   // Try creating color buffer.
   zx::vmo vmo_copy;
-  fidl::WireSyncClient<fuchsia_hardware_goldfish::ControlDevice> control(
-      std::move(control_channel));
 
   {
     // Verify that a CreateColorBuffer2() call without width will fail.
@@ -882,28 +909,28 @@ TEST(GoldfishControlTests, GoldfishControlTest_CreateColorBuffer2Args) {
 // If a mandatory field is missing, it should return "ZX_ERR_INVALID_ARGS".
 TEST(GoldfishControlTests, GoldfishControlTest_CreateBuffer2Args) {
   // Setup control device.
-  int control_device_fd = open("/dev/class/goldfish-control/000", O_RDWR);
-  EXPECT_GE(control_device_fd, 0);
-
-  zx::channel control_channel;
-  EXPECT_EQ(fdio_get_service_handle(control_device_fd, control_channel.reset_and_get_address()),
-            ZX_OK);
+  zx::result control_connection = ConnectToControl();
+  ASSERT_EQ(control_connection.status_value(), ZX_OK);
+  fidl::WireSyncClient<fuchsia_hardware_goldfish::ControlDevice> control(
+      std::move(control_connection.value()));
 
   // ----------------------------------------------------------------------//
   // Setup sysmem allocator and buffer collection.
   auto allocator = CreateSysmemAllocator();
-  EXPECT_TRUE(allocator.is_valid());
+  ASSERT_TRUE(allocator.is_valid());
 
-  zx::channel token_client;
-  zx::channel token_server;
-  EXPECT_EQ(zx::channel::create(0, &token_client, &token_server), ZX_OK);
-  EXPECT_TRUE(allocator->AllocateSharedCollection(std::move(token_server)).ok());
+  zx::result token_endpoints = fidl::CreateEndpoints<fuchsia_sysmem::BufferCollectionToken>();
+  ASSERT_EQ(token_endpoints.status_value(), ZX_OK);
+  ASSERT_EQ(allocator->AllocateSharedCollection(std::move(token_endpoints->server)).status(),
+            ZX_OK);
 
-  zx::channel collection_client;
-  zx::channel collection_server;
-  EXPECT_EQ(zx::channel::create(0, &collection_client, &collection_server), ZX_OK);
-  EXPECT_TRUE(
-      allocator->BindSharedCollection(std::move(token_client), std::move(collection_server)).ok());
+  zx::result collection_endpoints = fidl::CreateEndpoints<fuchsia_sysmem::BufferCollection>();
+  ASSERT_EQ(collection_endpoints.status_value(), ZX_OK);
+  ASSERT_EQ(allocator
+                ->BindSharedCollection(std::move(token_endpoints->client),
+                                       std::move(collection_endpoints->server))
+                .status(),
+            ZX_OK);
 
   // ----------------------------------------------------------------------//
   // Use device local heap which only *registers* the koid of vmo to control
@@ -923,7 +950,8 @@ TEST(GoldfishControlTests, GoldfishControlTest_CreateBuffer2Args) {
       .heap_permitted_count = 1,
       .heap_permitted = {fuchsia_sysmem::wire::HeapType::kGoldfishDeviceLocal}};
 
-  fidl::WireSyncClient<fuchsia_sysmem::BufferCollection> collection(std::move(collection_client));
+  fidl::WireSyncClient<fuchsia_sysmem::BufferCollection> collection(
+      std::move(collection_endpoints->client));
   SetDefaultCollectionName(collection);
   EXPECT_TRUE(collection->SetConstraints(true, std::move(constraints)).ok());
 
@@ -946,8 +974,6 @@ TEST(GoldfishControlTests, GoldfishControlTest_CreateBuffer2Args) {
   // ----------------------------------------------------------------------//
   // Try creating data buffers.
   zx::vmo vmo_copy;
-  fidl::WireSyncClient<fuchsia_hardware_goldfish::ControlDevice> control(
-      std::move(control_channel));
 
   {
     // Verify that a CreateBuffer2() call without width will fail.
@@ -985,25 +1011,26 @@ TEST(GoldfishControlTests, GoldfishControlTest_CreateBuffer2Args) {
 //
 // The FIDL interface should return ZX_ERR_NOT_FOUND.
 TEST(GoldfishControlTests, GoldfishControlTest_GetNotCreatedColorBuffer) {
-  int fd = open("/dev/class/goldfish-control/000", O_RDWR);
-  EXPECT_GE(fd, 0);
-
-  zx::channel channel;
-  EXPECT_EQ(fdio_get_service_handle(fd, channel.reset_and_get_address()), ZX_OK);
+  zx::result control_connection = ConnectToControl();
+  ASSERT_EQ(control_connection.status_value(), ZX_OK);
+  fidl::WireSyncClient<fuchsia_hardware_goldfish::ControlDevice> control(
+      std::move(control_connection.value()));
 
   auto allocator = CreateSysmemAllocator();
-  EXPECT_TRUE(allocator.is_valid());
+  ASSERT_TRUE(allocator.is_valid());
 
-  zx::channel token_client;
-  zx::channel token_server;
-  EXPECT_EQ(zx::channel::create(0, &token_client, &token_server), ZX_OK);
-  EXPECT_TRUE(allocator->AllocateSharedCollection(std::move(token_server)).ok());
+  zx::result token_endpoints = fidl::CreateEndpoints<fuchsia_sysmem::BufferCollectionToken>();
+  ASSERT_EQ(token_endpoints.status_value(), ZX_OK);
+  ASSERT_EQ(allocator->AllocateSharedCollection(std::move(token_endpoints->server)).status(),
+            ZX_OK);
 
-  zx::channel collection_client;
-  zx::channel collection_server;
-  EXPECT_EQ(zx::channel::create(0, &collection_client, &collection_server), ZX_OK);
-  EXPECT_TRUE(
-      allocator->BindSharedCollection(std::move(token_client), std::move(collection_server)).ok());
+  zx::result collection_endpoints = fidl::CreateEndpoints<fuchsia_sysmem::BufferCollection>();
+  ASSERT_EQ(collection_endpoints.status_value(), ZX_OK);
+  ASSERT_EQ(allocator
+                ->BindSharedCollection(std::move(token_endpoints->client),
+                                       std::move(collection_endpoints->server))
+                .status(),
+            ZX_OK);
 
   fuchsia_sysmem::wire::BufferCollectionConstraints constraints;
   constraints.usage.vulkan = fuchsia_sysmem::wire::kVulkanImageUsageTransferDst;
@@ -1020,7 +1047,8 @@ TEST(GoldfishControlTests, GoldfishControlTest_GetNotCreatedColorBuffer) {
       .heap_permitted_count = 1,
       .heap_permitted = {fuchsia_sysmem::wire::HeapType::kGoldfishDeviceLocal}};
 
-  fidl::WireSyncClient<fuchsia_sysmem::BufferCollection> collection(std::move(collection_client));
+  fidl::WireSyncClient<fuchsia_sysmem::BufferCollection> collection(
+      std::move(collection_endpoints->client));
   SetDefaultCollectionName(collection);
   EXPECT_TRUE(collection->SetConstraints(true, constraints).ok());
 
@@ -1043,7 +1071,6 @@ TEST(GoldfishControlTests, GoldfishControlTest_GetNotCreatedColorBuffer) {
   zx::vmo vmo_copy;
   EXPECT_EQ(vmo.duplicate(ZX_RIGHT_SAME_RIGHTS, &vmo_copy), ZX_OK);
 
-  fidl::WireSyncClient<fuchsia_hardware_goldfish::ControlDevice> control(std::move(channel));
   {
     auto result = control->GetBufferHandle(std::move(vmo_copy));
     ASSERT_TRUE(result.ok());
@@ -1052,29 +1079,23 @@ TEST(GoldfishControlTests, GoldfishControlTest_GetNotCreatedColorBuffer) {
 }
 
 TEST(GoldfishAddressSpaceTests, GoldfishAddressSpaceTest) {
-  int fd = open("/dev/class/goldfish-address-space/000", O_RDWR);
-  EXPECT_GE(fd, 0);
+  zx::result asd_connection = ConnectToAddress();
+  ASSERT_EQ(asd_connection.status_value(), ZX_OK);
+  fidl::WireSyncClient asd_parent(std::move(asd_connection.value()));
 
-  zx::channel parent_channel;
-  EXPECT_EQ(fdio_get_service_handle(fd, parent_channel.reset_and_get_address()), ZX_OK);
-
-  zx::channel child_channel;
-  zx::channel child_channel2;
-  EXPECT_EQ(zx::channel::create(0, &child_channel, &child_channel2), ZX_OK);
-
-  fidl::WireSyncClient<fuchsia_hardware_goldfish::AddressSpaceDevice> asd_parent(
-      std::move(parent_channel));
+  zx::result child_endpoints =
+      fidl::CreateEndpoints<fuchsia_hardware_goldfish::AddressSpaceChildDriver>();
+  EXPECT_EQ(child_endpoints.status_value(), ZX_OK);
   {
     auto result = asd_parent->OpenChildDriver(
         fuchsia_hardware_goldfish::wire::AddressSpaceChildDriverType::kDefault,
-        std::move(child_channel));
+        std::move(child_endpoints->server));
     ASSERT_TRUE(result.ok());
   }
 
   constexpr uint64_t kHeapSize = 16ULL * 1048576ULL;
 
-  fidl::WireSyncClient<fuchsia_hardware_goldfish::AddressSpaceChildDriver> asd_child(
-      std::move(child_channel2));
+  fidl::WireSyncClient asd_child(std::move(child_endpoints->client));
   uint64_t paddr = 0;
   zx::vmo vmo;
   {
@@ -1200,56 +1221,52 @@ TEST(GoldfishAddressSpaceTests, GoldfishAddressSpaceTest) {
 //
 TEST(GoldfishHostMemoryTests, GoldfishHostVisibleColorBuffer) {
   // Setup control device.
-  int control_device_fd = open("/dev/class/goldfish-control/000", O_RDWR);
-  EXPECT_GE(control_device_fd, 0);
-
-  zx::channel control_channel;
-  EXPECT_EQ(fdio_get_service_handle(control_device_fd, control_channel.reset_and_get_address()),
-            ZX_OK);
+  zx::result control_connection = ConnectToControl();
+  ASSERT_EQ(control_connection.status_value(), ZX_OK);
+  fidl::WireSyncClient<fuchsia_hardware_goldfish::ControlDevice> control(
+      std::move(control_connection.value()));
 
   // ----------------------------------------------------------------------//
   // Setup sysmem allocator and buffer collection.
   auto allocator = CreateSysmemAllocator();
-  EXPECT_TRUE(allocator.is_valid());
+  ASSERT_TRUE(allocator.is_valid());
 
-  zx::channel token_client;
-  zx::channel token_server;
-  EXPECT_EQ(zx::channel::create(0, &token_client, &token_server), ZX_OK);
-  EXPECT_TRUE(allocator->AllocateSharedCollection(std::move(token_server)).ok());
+  zx::result token_endpoints = fidl::CreateEndpoints<fuchsia_sysmem::BufferCollectionToken>();
+  ASSERT_EQ(token_endpoints.status_value(), ZX_OK);
+  ASSERT_EQ(allocator->AllocateSharedCollection(std::move(token_endpoints->server)).status(),
+            ZX_OK);
 
-  zx::channel collection_client;
-  zx::channel collection_server;
-  EXPECT_EQ(zx::channel::create(0, &collection_client, &collection_server), ZX_OK);
-  EXPECT_TRUE(
-      allocator->BindSharedCollection(std::move(token_client), std::move(collection_server)).ok());
+  zx::result collection_endpoints = fidl::CreateEndpoints<fuchsia_sysmem::BufferCollection>();
+  ASSERT_EQ(collection_endpoints.status_value(), ZX_OK);
+  ASSERT_EQ(allocator
+                ->BindSharedCollection(std::move(token_endpoints->client),
+                                       std::move(collection_endpoints->server))
+                .status(),
+            ZX_OK);
+  fidl::WireSyncClient<fuchsia_sysmem::BufferCollection> collection(
+      std::move(collection_endpoints->client));
 
   // ----------------------------------------------------------------------//
   // Setup address space driver.
-  int address_space_fd = open("/dev/class/goldfish-address-space/000", O_RDWR);
-  EXPECT_GE(address_space_fd, 0);
+  zx::result asd_connection = ConnectToAddress();
+  ASSERT_EQ(asd_connection.status_value(), ZX_OK);
+  fidl::WireSyncClient asd_parent(std::move(asd_connection.value()));
 
-  zx::channel parent_channel;
-  EXPECT_EQ(fdio_get_service_handle(address_space_fd, parent_channel.reset_and_get_address()),
-            ZX_OK);
+  zx::result child_endpoints =
+      fidl::CreateEndpoints<fuchsia_hardware_goldfish::AddressSpaceChildDriver>();
+  EXPECT_EQ(child_endpoints.status_value(), ZX_OK);
 
-  zx::channel child_channel;
-  zx::channel child_channel2;
-  EXPECT_EQ(zx::channel::create(0, &child_channel, &child_channel2), ZX_OK);
-
-  fidl::WireSyncClient<fuchsia_hardware_goldfish::AddressSpaceDevice> asd_parent(
-      std::move(parent_channel));
   {
     auto result = asd_parent->OpenChildDriver(
         fuchsia_hardware_goldfish::wire::AddressSpaceChildDriverType::kDefault,
-        std::move(child_channel));
+        std::move(child_endpoints->server));
     ASSERT_TRUE(result.ok());
   }
 
   // Allocate device memory block using address space device.
   constexpr uint64_t kHeapSize = 32768ULL;
 
-  fidl::WireSyncClient<fuchsia_hardware_goldfish::AddressSpaceChildDriver> asd_child(
-      std::move(child_channel2));
+  fidl::WireSyncClient asd_child(std::move(child_endpoints->client));
   uint64_t physical_addr = 0;
   zx::vmo address_space_vmo;
   {
@@ -1285,7 +1302,6 @@ TEST(GoldfishHostMemoryTests, GoldfishHostVisibleColorBuffer) {
       .heap_permitted_count = 1,
       .heap_permitted = {fuchsia_sysmem::wire::HeapType::kGoldfishDeviceLocal}};
 
-  fidl::WireSyncClient<fuchsia_sysmem::BufferCollection> collection(std::move(collection_client));
   SetDefaultCollectionName(collection);
   EXPECT_TRUE(collection->SetConstraints(true, constraints).ok());
 
@@ -1310,8 +1326,6 @@ TEST(GoldfishHostMemoryTests, GoldfishHostVisibleColorBuffer) {
   zx::vmo vmo_copy;
   EXPECT_EQ(vmo.duplicate(ZX_RIGHT_SAME_RIGHTS, &vmo_copy), ZX_OK);
 
-  fidl::WireSyncClient<fuchsia_hardware_goldfish::ControlDevice> control(
-      std::move(control_channel));
   {
     // Verify that a CreateColorBuffer2() call with host-visible memory property,
     // but without physical address will fail.
@@ -1370,25 +1384,27 @@ using GoldfishCreateColorBufferTest =
     testing::TestWithParam<fuchsia_hardware_goldfish::wire::ColorBufferFormatType>;
 
 TEST_P(GoldfishCreateColorBufferTest, CreateColorBufferWithFormat) {
-  int fd = open("/dev/class/goldfish-control/000", O_RDWR);
-  EXPECT_GE(fd, 0);
-
-  zx::channel channel;
-  EXPECT_EQ(fdio_get_service_handle(fd, channel.reset_and_get_address()), ZX_OK);
+  zx::result control_connection = ConnectToControl();
+  ASSERT_EQ(control_connection.status_value(), ZX_OK);
+  fidl::WireSyncClient<fuchsia_hardware_goldfish::ControlDevice> control(
+      std::move(control_connection.value()));
 
   auto allocator = CreateSysmemAllocator();
-  EXPECT_TRUE(allocator.is_valid());
+  ASSERT_TRUE(allocator.is_valid());
 
-  zx::channel token_client;
-  zx::channel token_server;
-  EXPECT_EQ(zx::channel::create(0, &token_client, &token_server), ZX_OK);
-  EXPECT_TRUE(allocator->AllocateSharedCollection(std::move(token_server)).ok());
+  zx::result token_endpoints = fidl::CreateEndpoints<fuchsia_sysmem::BufferCollectionToken>();
+  ASSERT_EQ(token_endpoints.status_value(), ZX_OK);
+  ASSERT_EQ(allocator->AllocateSharedCollection(std::move(token_endpoints->server)).status(),
+            ZX_OK);
 
-  zx::channel collection_client;
-  zx::channel collection_server;
-  EXPECT_EQ(zx::channel::create(0, &collection_client, &collection_server), ZX_OK);
-  EXPECT_TRUE(
-      allocator->BindSharedCollection(std::move(token_client), std::move(collection_server)).ok());
+  zx::result collection_endpoints = fidl::CreateEndpoints<fuchsia_sysmem::BufferCollection>();
+  ASSERT_EQ(collection_endpoints.status_value(), ZX_OK);
+  ASSERT_EQ(allocator
+                ->BindSharedCollection(std::move(token_endpoints->client),
+                                       std::move(collection_endpoints->server))
+                .status(),
+            ZX_OK);
+  fidl::WireSyncClient collection(std::move(collection_endpoints->client));
 
   fuchsia_sysmem::wire::BufferCollectionConstraints constraints;
   constraints.usage.vulkan = fuchsia_sysmem::wire::kVulkanImageUsageTransferDst;
@@ -1405,7 +1421,6 @@ TEST_P(GoldfishCreateColorBufferTest, CreateColorBufferWithFormat) {
       .heap_permitted_count = 1,
       .heap_permitted = {fuchsia_sysmem::wire::HeapType::kGoldfishDeviceLocal}};
 
-  fidl::WireSyncClient<fuchsia_sysmem::BufferCollection> collection(std::move(collection_client));
   SetDefaultCollectionName(collection);
   EXPECT_TRUE(collection->SetConstraints(true, constraints).ok());
 
@@ -1428,7 +1443,6 @@ TEST_P(GoldfishCreateColorBufferTest, CreateColorBufferWithFormat) {
   zx::vmo vmo_copy;
   EXPECT_EQ(vmo.duplicate(ZX_RIGHT_SAME_RIGHTS, &vmo_copy), ZX_OK);
 
-  fidl::WireSyncClient<fuchsia_hardware_goldfish::ControlDevice> control(std::move(channel));
   {
     fidl::Arena allocator;
     fuchsia_hardware_goldfish::wire::CreateColorBuffer2Params create_params(allocator);
@@ -1455,13 +1469,10 @@ TEST_P(GoldfishCreateColorBufferTest, CreateColorBufferWithFormat) {
 }
 
 TEST(GoldfishControlTests, CreateSyncKhr) {
-  int fd = open("/dev/class/goldfish-control/000", O_RDWR);
-  EXPECT_GE(fd, 0);
-
-  zx::channel channel;
-  EXPECT_EQ(fdio_get_service_handle(fd, channel.reset_and_get_address()), ZX_OK);
-
-  fidl::WireSyncClient<fuchsia_hardware_goldfish::ControlDevice> control(std::move(channel));
+  zx::result control_connection = ConnectToControl();
+  ASSERT_EQ(control_connection.status_value(), ZX_OK);
+  fidl::WireSyncClient<fuchsia_hardware_goldfish::ControlDevice> control(
+      std::move(control_connection.value()));
 
   zx::eventpair event_client, event_server;
   zx_status_t status = zx::eventpair::create(0u, &event_client, &event_server);
