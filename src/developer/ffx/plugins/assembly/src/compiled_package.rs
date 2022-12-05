@@ -15,6 +15,7 @@ pub struct CompiledPackageBuilder {
     name: String,
     component_shards: BTreeMap<String, Vec<Utf8PathBuf>>,
     main_definition: Option<MainPackageDefinition>,
+    main_bundle_path: Utf8PathBuf,
 }
 
 /// Builds `CompiledPackageDefinition`s which are specified for Assembly
@@ -24,7 +25,11 @@ impl CompiledPackageBuilder {
         CompiledPackageBuilder { name: name.into(), ..Default::default() }
     }
 
-    pub fn add_package_def(&mut self, entry: &CompiledPackageDefinition) -> Result<&mut Self> {
+    pub fn add_package_def(
+        &mut self,
+        entry: &CompiledPackageDefinition,
+        bundle_path: impl AsRef<Utf8Path>,
+    ) -> Result<&mut Self> {
         let name = entry.name();
 
         if name != self.name {
@@ -40,6 +45,7 @@ impl CompiledPackageBuilder {
                     bail!("Duplicate main definition for package {name}");
                 }
                 self.main_definition = Some(def.clone());
+                self.main_bundle_path = bundle_path.as_ref().into();
             }
             CompiledPackageDefinition::Additional(def) => {
                 for (component_name, mut component_shards) in def.component_shards.clone() {
@@ -91,7 +97,7 @@ impl CompiledPackageBuilder {
                 format!("Adding cml for component: '{component_name}' to package: '{}'", &self.name)
             })?;
 
-            let default = Vec::new();
+            let default = Vec::default();
             let cml_shards = self.component_shards.get(component_name).unwrap_or(&default);
 
             for cml_shard in cml_shards {
@@ -101,7 +107,11 @@ impl CompiledPackageBuilder {
             }
 
             let component_manifest_path = component_builder
-                .build(&outdir, cmc_tool)
+                .build(
+                    &outdir,
+                    cmc_tool,
+                    self.main_bundle_path.join("compiled_packages").join("include"),
+                )
                 .with_context(|| format!("building component {}", component_name))?;
             let component_manifest_file_name =
                 component_manifest_path.file_name().context("component file name")?;
@@ -144,22 +154,32 @@ mod tests {
         make_test_package_and_components(outdir);
 
         compiled_package_builder
-            .add_package_def(&CompiledPackageDefinition::MainDefinition(MainPackageDefinition {
-                name: "foo".into(),
-                components: BTreeMap::from([
-                    ("component1".into(), "cml1".into()),
-                    ("component2".into(), "cml2".into()),
-                ]),
-                contents: vec![FileEntry {
-                    source: outdir.join("file1"),
-                    destination: "file1".into(),
-                }],
-            }))
+            .add_package_def(
+                &CompiledPackageDefinition::MainDefinition(MainPackageDefinition {
+                    name: "foo".into(),
+                    components: BTreeMap::from([
+                        ("component1".into(), "cml1".into()),
+                        ("component2".into(), "cml2".into()),
+                    ]),
+                    contents: vec![FileEntry {
+                        source: outdir.join("file1"),
+                        destination: "file1".into(),
+                    }],
+                    includes: Vec::default(),
+                }),
+                outdir,
+            )
             .unwrap()
-            .add_package_def(&CompiledPackageDefinition::Additional(AdditionalPackageContents {
-                name: "foo".into(),
-                component_shards: BTreeMap::from([("component2".into(), vec!["shard1".into()])]),
-            }))
+            .add_package_def(
+                &CompiledPackageDefinition::Additional(AdditionalPackageContents {
+                    name: "foo".into(),
+                    component_shards: BTreeMap::from([(
+                        "component2".into(),
+                        vec!["shard1".into()],
+                    )]),
+                }),
+                outdir,
+            )
             .unwrap();
 
         assert!(compiled_package_builder.main_definition.is_some());
@@ -168,6 +188,7 @@ mod tests {
             CompiledPackageBuilder {
                 name: "foo".into(),
                 component_shards: BTreeMap::from([("component2".into(), vec!["shard1".into()])]),
+                main_bundle_path: outdir.into(),
                 main_definition: Some(MainPackageDefinition {
                     name: "foo".into(),
                     components: BTreeMap::from([
@@ -178,6 +199,7 @@ mod tests {
                         source: outdir.join("file1"),
                         destination: "file1".into()
                     }],
+                    includes: Vec::default(),
                 })
             }
         );
@@ -192,22 +214,32 @@ mod tests {
         make_test_package_and_components(outdir);
 
         compiled_package_builder
-            .add_package_def(&CompiledPackageDefinition::MainDefinition(MainPackageDefinition {
-                name: "foo".into(),
-                components: BTreeMap::from([
-                    ("component1".into(), "cml1".into()),
-                    ("component2".into(), "cml2".into()),
-                ]),
-                contents: vec![FileEntry {
-                    source: outdir.join("file1"),
-                    destination: "file1".into(),
-                }],
-            }))
+            .add_package_def(
+                &CompiledPackageDefinition::MainDefinition(MainPackageDefinition {
+                    name: "foo".into(),
+                    components: BTreeMap::from([
+                        ("component1".into(), "cml1".into()),
+                        ("component2".into(), "cml2".into()),
+                    ]),
+                    contents: vec![FileEntry {
+                        source: outdir.join("file1"),
+                        destination: "file1".into(),
+                    }],
+                    includes: Vec::default(),
+                }),
+                outdir,
+            )
             .unwrap()
-            .add_package_def(&CompiledPackageDefinition::Additional(AdditionalPackageContents {
-                name: "foo".into(),
-                component_shards: BTreeMap::from([("component2".into(), vec!["shard1".into()])]),
-            }))
+            .add_package_def(
+                &CompiledPackageDefinition::Additional(AdditionalPackageContents {
+                    name: "foo".into(),
+                    component_shards: BTreeMap::from([(
+                        "component2".into(),
+                        vec!["shard1".into()],
+                    )]),
+                }),
+                outdir,
+            )
             .unwrap();
 
         compiled_package_builder.build(tools.get_tool("cmc").unwrap().as_ref(), outdir).unwrap();
@@ -233,8 +265,10 @@ mod tests {
             &CompiledPackageDefinition::MainDefinition(MainPackageDefinition {
                 name: "foo".into(),
                 components: BTreeMap::new(),
-                contents: Vec::new(),
+                contents: Vec::default(),
+                includes: Vec::default(),
             }),
+            "assembly/input/bundle/path",
         );
 
         assert!(result.is_err());
@@ -244,10 +278,16 @@ mod tests {
     fn validate_without_main_definition_returns_err() {
         let mut compiled_package_builder = CompiledPackageBuilder::new("foo");
         compiled_package_builder
-            .add_package_def(&CompiledPackageDefinition::Additional(AdditionalPackageContents {
-                name: "foo".into(),
-                component_shards: BTreeMap::from([("component2".into(), vec!["shard1".into()])]),
-            }))
+            .add_package_def(
+                &CompiledPackageDefinition::Additional(AdditionalPackageContents {
+                    name: "foo".into(),
+                    component_shards: BTreeMap::from([(
+                        "component2".into(),
+                        vec!["shard1".into()],
+                    )]),
+                }),
+                "assembly/input/bundle/path",
+            )
             .unwrap();
 
         let result = compiled_package_builder.validate();
@@ -259,16 +299,22 @@ mod tests {
     fn add_package_def_with_duplicate_main_definition_returns_err() {
         let mut compiled_package_builder = CompiledPackageBuilder::new("foo");
         compiled_package_builder
-            .add_package_def(&CompiledPackageDefinition::MainDefinition(MainPackageDefinition {
-                name: "foo".into(),
-                ..Default::default()
-            }))
+            .add_package_def(
+                &CompiledPackageDefinition::MainDefinition(MainPackageDefinition {
+                    name: "foo".into(),
+                    ..Default::default()
+                }),
+                "assembly/input/bundle/path",
+            )
             .unwrap();
 
-        let result =
-            compiled_package_builder.add_package_def(&CompiledPackageDefinition::MainDefinition(
-                MainPackageDefinition { name: "foo".into(), ..Default::default() },
-            ));
+        let result = compiled_package_builder.add_package_def(
+            &CompiledPackageDefinition::MainDefinition(MainPackageDefinition {
+                name: "foo".into(),
+                ..Default::default()
+            }),
+            "assembly/input/bundle/path",
+        );
 
         assert!(result.is_err());
     }

@@ -205,7 +205,7 @@ impl ImageAssemblyConfigBuilder {
         }
 
         for compiled_package in packages_to_compile {
-            self.add_compiled_package(&compiled_package)?;
+            self.add_compiled_package(&compiled_package, bundle_path)?;
         }
 
         assembly_util::set_option_once_or(
@@ -419,12 +419,13 @@ impl ImageAssemblyConfigBuilder {
     pub fn add_compiled_package(
         &mut self,
         compiled_package_def: &CompiledPackageDefinition,
+        bundle_path: &Utf8Path,
     ) -> Result<()> {
         let name = compiled_package_def.name();
         self.packages_to_compile
             .entry(name.to_string())
             .or_insert_with(|| CompiledPackageBuilder::new(name))
-            .add_package_def(compiled_package_def)
+            .add_package_def(compiled_package_def, bundle_path)
             .context("adding package def")?;
         Ok(())
     }
@@ -1183,6 +1184,7 @@ mod tests {
                     ("component2".into(), "cml2".into()),
                 ]),
                 contents: Vec::default(),
+                includes: Vec::default(),
             },
         ));
         let bundle2 = AssemblyInputBundle {
@@ -1219,6 +1221,8 @@ mod tests {
                     "tool": "./host_x64/cmc",
                     "args": [
                         "compile",
+                        "--includeroot",
+                        vars.outdir.join("bundle/compiled_packages/include").as_str(),
                         "-o",
                         vars.outdir.join("foo/component1/component1.cm").as_str(),
                         vars.outdir.join("foo/component1/component1.cml").as_str()
@@ -1232,6 +1236,8 @@ mod tests {
                     "tool": "./host_x64/cmc",
                     "args": [
                         "compile",
+                        "--includeroot",
+                        vars.outdir.join("bundle/compiled_packages/include").as_str(),
                         "-o",
                         vars.outdir.join("foo/component2/component2.cm").as_str(),
                         vars.outdir.join("foo/component2/component2.cml").as_str()

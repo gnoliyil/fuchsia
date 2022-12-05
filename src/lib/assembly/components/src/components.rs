@@ -35,7 +35,12 @@ impl ComponentBuilder {
     }
 
     /// Build the component.
-    pub fn build(self, outdir: impl AsRef<Utf8Path>, cmc_tool: &dyn Tool) -> Result<Utf8PathBuf> {
+    pub fn build(
+        self,
+        outdir: impl AsRef<Utf8Path>,
+        cmc_tool: &dyn Tool,
+        include_path: impl AsRef<Utf8Path>,
+    ) -> Result<Utf8PathBuf> {
         // Write all generated files in a subdir with the name of the package.
         let outdir = outdir.as_ref().join(&self.name);
         let cmlfile = outdir.join(format!("{}.cml", &self.name));
@@ -49,8 +54,14 @@ impl ComponentBuilder {
 
         let cmfile = outdir.join(format!("{}.cm", &self.name));
 
-        let args =
-            vec!["compile".to_owned(), "-o".to_owned(), cmfile.to_string(), cmlfile.to_string()];
+        let args = vec![
+            "compile".into(),
+            "--includeroot".into(),
+            include_path.as_ref().to_string(),
+            "-o".into(),
+            cmfile.to_string(),
+            cmlfile.to_string(),
+        ];
 
         cmc_tool
             .run(&args)
@@ -107,6 +118,8 @@ mod tests {
                     "tool": "./host_x64/cmc",
                     "args": [
                         "compile",
+                        "--includeroot",
+                        "include/path",
                         "-o",
                         outdir.join("test").join("test.cm").to_string(),
                         outdir.join("test").join("test.cml").to_string(),
@@ -116,7 +129,7 @@ mod tests {
         }))
         .unwrap();
 
-        let result = builder.build(outdir, tools.get_tool("cmc").unwrap().as_ref());
+        let result = builder.build(outdir, tools.get_tool("cmc").unwrap().as_ref(), "include/path");
 
         assert!(result.is_ok());
         assert_eq!(&expected_commands, tools.log());

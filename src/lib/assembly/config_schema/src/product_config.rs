@@ -357,6 +357,9 @@ pub struct MainPackageDefinition {
     /// Non-component files to add to the package.
     #[serde(default)]
     pub contents: Vec<FileEntry>,
+    /// CML files included by the component cml.
+    #[serde(default)]
+    pub includes: Vec<Utf8PathBuf>,
 }
 
 /// Additional contents of the package to be defined in
@@ -741,7 +744,8 @@ mod tests {
                             source: "path/to/source",
                             destination: "path/to/destination",
                         }
-                    ]
+                    ],
+                    includes: [ "src/path/to/include.cml" ]
                 },
                 {
                    name: "package_name",
@@ -803,6 +807,36 @@ mod tests {
                 PackageInternalPathBuf::from("path/to/binary1"),
                 PackageInternalPathBuf::from("path/to/binary2"),
             ])
+        );
+        assert_eq!(
+            bundle.packages_to_compile,
+            vec!(
+                CompiledPackageDefinition::MainDefinition(MainPackageDefinition {
+                    name: "package_name".into(),
+                    components: BTreeMap::from([
+                        (
+                            "component1".to_owned(),
+                            Utf8PathBuf::from("path/to/component1.cml".to_owned())
+                        ),
+                        (
+                            "component2".to_owned(),
+                            Utf8PathBuf::from("path/to/component2.cml".to_owned())
+                        ),
+                    ]),
+                    contents: vec![FileEntry {
+                        source: "path/to/source".into(),
+                        destination: "path/to/destination".into(),
+                    }],
+                    includes: vec!["src/path/to/include.cml".into()]
+                }),
+                CompiledPackageDefinition::Additional(AdditionalPackageContents {
+                    name: "package_name".into(),
+                    component_shards: BTreeMap::from([(
+                        "component1".into(),
+                        vec!["path/to/shard1.cml".into(), "path/to/shard2.cml".into()]
+                    )])
+                })
+            )
         );
     }
 }
