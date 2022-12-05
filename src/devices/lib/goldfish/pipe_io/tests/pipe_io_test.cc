@@ -9,6 +9,7 @@
 #include <lib/async-loop/cpp/loop.h>
 #include <lib/async-loop/loop.h>
 
+#include <future>
 #include <string_view>
 #include <type_traits>
 
@@ -200,36 +201,46 @@ TEST_F(PipeIoTest, NonBlockingRead) {
   }
 }
 
+template <typename T>
+void AssertBlocked(const std::future<T>& fut) {
+  // Give an asynchronous blocking operation some time to reach the blocking state. Clocks
+  // sometimes jump in infrastructure, which may cause a single wait to trip sooner than expected,
+  // without the asynchronous task getting a meaningful shot at running. We protect against that by
+  // splitting the wait into multiple calls as an attempt to guarantee that clock jumps do not
+  // impact the duration of a wait.
+  for (int i = 0; i < 50; i++) {
+    ASSERT_EQ(fut.wait_for(std::chrono::milliseconds(1)), std::future_status::timeout);
+  }
+}
+
 TEST_F(PipeIoTest, BlockingRead) {
-  bool read = false;
-  bool contents_correct = false;
   constexpr std::string_view kSegment1 = "hello";
   constexpr std::string_view kSegment2 = "world!";
   constexpr std::string_view kConcat = "helloworld!";
 
-  std::thread t([this, kConcat, &read, &contents_correct] {
-    auto result = io_->Read<char>(kConcat.length(), true);
-    read = true;
-
-    ASSERT_TRUE(result.is_ok());
-    contents_correct = result.value() == kConcat;
+  const auto fut = std::async(std::launch::async, [this, kConcat]() {
+    zx::result result = io_->Read<char>(kConcat.length(), true);
+    ASSERT_TRUE(result.is_ok()) << result.status_string();
+    ASSERT_EQ(result.value(), kConcat);
   });
 
-  std::vector<uint8_t> bytes_to_read(kSegment1.begin(), kSegment1.end());
-  pipe_.EnqueueBytesToRead(bytes_to_read);
+  ASSERT_NO_FATAL_FAILURE(AssertBlocked(fut));
 
-  ASSERT_FALSE(read);
+  pipe_.EnqueueBytesToRead({kSegment1.begin(), kSegment1.end()});
 
-  bytes_to_read = std::vector<uint8_t>(kSegment2.begin(), kSegment2.end());
-  pipe_.EnqueueBytesToRead(bytes_to_read);
+  ASSERT_NO_FATAL_FAILURE(AssertBlocked(fut));
 
-  ASSERT_FALSE(read);
+  ASSERT_EQ(pipe_.pipe_event().signal(0u, fuchsia_hardware_goldfish::wire::kSignalReadable), ZX_OK);
 
-  pipe_.pipe_event().signal(0u, fuchsia_hardware_goldfish::wire::kSignalReadable);
-  t.join();
+  ASSERT_NO_FATAL_FAILURE(AssertBlocked(fut));
 
-  ASSERT_TRUE(read);
-  ASSERT_TRUE(contents_correct);
+  pipe_.EnqueueBytesToRead({kSegment2.begin(), kSegment2.end()});
+
+  ASSERT_NO_FATAL_FAILURE(AssertBlocked(fut));
+
+  ASSERT_EQ(pipe_.pipe_event().signal(0u, fuchsia_hardware_goldfish::wire::kSignalReadable), ZX_OK);
+
+  fut.wait();
 }
 
 TEST_F(PipeIoTest, BlockingCall) {
