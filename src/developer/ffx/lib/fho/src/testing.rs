@@ -117,7 +117,7 @@ impl Injector for FakeInjector {
 mod internal {
     use super::*;
     use crate::subtool::{FhoSuite, ToolCommand};
-    use crate::{self as fho, CheckEnv, FfxMain, FfxTool, FhoEnvironment, Result, TryFromEnv};
+    use crate::{self as fho, CheckEnv, FfxMain, FhoEnvironment, Result, TryFromEnv};
     use argh::FromArgs;
     use ffx_command::Ffx;
     use std::cell::RefCell;

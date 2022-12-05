@@ -11,7 +11,7 @@ macro_rules! embedded_plugin {
     ($tool:ty) => {
         pub async fn ffx_plugin_impl(
             injector: &dyn ffx_core::Injector,
-            cmd: <$tool as FfxTool>::Command,
+            cmd: <$tool as $crate::FfxTool>::Command,
         ) -> $crate::macro_deps::anyhow::Result<()> {
             #[allow(unused_imports)]
             use $crate::macro_deps::{anyhow::Context, argh, global_env_context, Ffx};
@@ -21,7 +21,7 @@ macro_rules! embedded_plugin {
 
             let env = $crate::FhoEnvironment { ffx, context, injector };
 
-            let tool = <$tool>::from_env(env, cmd).await?;
+            let tool = <$tool as $crate::FfxTool>::from_env(env, cmd).await?;
             match $crate::FfxMain::main(tool).await {
                 Ok(ok) => Ok(ok),
                 Err($crate::Error::User(err)) => Err(err),
@@ -42,8 +42,8 @@ macro_rules! embedded_plugin {
 
 #[cfg(test)]
 mod tests {
+    use crate::subtool::FhoHandler;
     use crate::testing::*;
-    use crate::{subtool::FhoHandler, FfxTool};
 
     // The main testing part will happen in the `main()` function of the tool.
     #[fuchsia_async::run_singlethreaded(test)]
