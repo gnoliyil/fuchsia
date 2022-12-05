@@ -34,7 +34,7 @@ use fidl_fuchsia_starnix_binder as fbinder;
 use fuchsia_async as fasync;
 use fuchsia_zircon as zx;
 use futures::{TryFutureExt, TryStreamExt};
-use std::collections::{btree_map::Entry as BTreeMapEntry, BTreeMap, BTreeSet, VecDeque};
+use std::collections::{btree_map::Entry as BTreeMapEntry, BTreeMap, VecDeque};
 use std::sync::{Arc, Weak};
 use zerocopy::{AsBytes, FromBytes};
 
@@ -737,14 +737,14 @@ struct SharedMemory {
     user_address: UserAddress,
     /// The length of the shared memory mapping in bytes.
     length: usize,
-    /// The next free address in our bump allocator.
-    next_free_offset: usize,
-
-    /// The offsets of all the currently active allocations, ordered in ascending order.
+    /// The map from offset to size of all the currently active allocations, ordered in ascending
+    /// order.
     ///
-    /// This is used by the allocator to check whether or not a new allocation can fit, either at
-    /// the `next_free_offset` or by wrapping around to the start of the vmo.
-    allocations: BTreeSet<usize>,
+    /// This is used by the allocator to find new allocations.
+    ///
+    /// TODO(qsr): This should evolved into a better allocator for performance reason. Currently,
+    /// each new allocation is done in O(n) where n is the number of currently active allocations.
+    allocations: BTreeMap<usize, usize>,
 }
 
 /// Contains (data buffer, offsets buffer, scatter gather buffer).
@@ -785,9 +785,30 @@ impl SharedMemory {
             kernel_address: kernel_address as *mut u8,
             user_address,
             length,
-            next_free_offset: 0,
-            allocations: BTreeSet::new(),
+            allocations: Default::default(),
         })
+    }
+
+    /// Allocate a buffer of size `length` from this memory block.
+    fn allocate(&mut self, length: usize) -> Result<usize, Errno> {
+        // The current candidate for an allocation.
+        let mut candidate = 0;
+        for (&ptr, &size) in &self.allocations {
+            // If there is enough room at the current candidate location, stop looking.
+            if ptr - candidate >= length {
+                break;
+            }
+            // Otherwise, check after the current allocation.
+            candidate = ptr + size;
+        }
+        // At this point, either `candidate` is correct, or the only remaining position is at the
+        // end of the buffer. In both case, the allocation succeed if there is enough room between
+        // the candidate and the end of the buffer.
+        if self.length - candidate < length {
+            return error!(ENOMEM);
+        }
+        self.allocations.insert(candidate, length);
+        Ok(candidate)
     }
 
     /// Allocates three buffers large enough to hold the requested data, offsets, and scatter-gather
@@ -824,51 +845,24 @@ impl SharedMemory {
             .checked_add(offsets_length)
             .and_then(|v| v.checked_add(sg_buffers_length))
             .ok_or_else(|| errno!(EINVAL))?;
-
-        // Find the maximum offset that can result from this allocation without overwriting the next
-        // allocation in the cycle, or the end of the vmo.
-        let max_allocation_boundary =
-            *self.allocations.range(self.next_free_offset..).next().unwrap_or(&self.length);
-
-        let offset_after_allocation = match self.next_free_offset.checked_add(total_length) {
-            Some(offset_after_allocation) if offset_after_allocation <= max_allocation_boundary => {
-                // The allocation fit within the boundary, so just return the new offset.
-                Ok(offset_after_allocation)
-            }
-            _overflowing_offset => {
-                // The allocation did not fit within the boundary (or usize::MAX), so try to wrap
-                // around and map it at the start.
-                let min_allocation_boundary =
-                    self.allocations.iter().next().copied().unwrap_or(self.length);
-                if total_length <= min_allocation_boundary {
-                    self.next_free_offset = 0;
-                    Ok(total_length)
-                } else {
-                    error!(ENOMEM)
-                }
-            }
-        }?;
-
-        let this_offset = self.next_free_offset;
-        self.allocations.insert(this_offset);
-        self.next_free_offset = offset_after_allocation;
+        let base_offset = self.allocate(total_length)?;
 
         // SAFETY: The offsets and lengths have been bounds-checked above. Constructing a
         // `SharedBuffer` should be safe.
         unsafe {
             Ok((
-                SharedBuffer::new_unchecked(self, this_offset, data_length),
-                SharedBuffer::new_unchecked(self, this_offset + data_cap, offsets_length),
+                SharedBuffer::new_unchecked(self, base_offset, data_length),
+                SharedBuffer::new_unchecked(self, base_offset + data_cap, offsets_length),
                 SharedBuffer::new_unchecked(
                     self,
-                    this_offset + data_cap + offsets_length,
+                    base_offset + data_cap + offsets_length,
                     sg_buffers_length,
                 ),
             ))
         }
     }
 
-    // This temporary allocator implementation does not reclaim free buffers.
+    // Reclaim the buffer so that it can be reused.
     fn free_buffer(&mut self, buffer: UserAddress) -> Result<(), Errno> {
         // Sanity check that the buffer being freed came from this memory region.
         if buffer < self.user_address || buffer >= self.user_address + self.length {
@@ -876,9 +870,6 @@ impl SharedMemory {
         }
         let offset = buffer - self.user_address;
         self.allocations.remove(&offset);
-        if self.allocations.is_empty() {
-            self.next_free_offset = 0;
-        }
         Ok(())
     }
 }
@@ -3465,7 +3456,7 @@ mod tests {
     }
 
     #[fuchsia::test]
-    fn shared_memory_allocation_doesnt_allocate_out_of_order() {
+    fn shared_memory_allocation_can_allocate_in_hole() {
         let vmo = zx::Vmo::create(VMO_LENGTH as u64).expect("failed to create VMO");
         let mut shared_memory =
             SharedMemory::map(&vmo, BASE_ADDR, VMO_LENGTH).expect("failed to map shared memory");
@@ -3475,17 +3466,11 @@ mod tests {
 
         // Free all the buffers in reverse order, and verify that the new buffer isn't allocated
         // until the first buffer is freed.
-        shared_memory.allocate_buffers(VMO_LENGTH / n, 0, 0).expect_err("allocated buffer 3");
-        shared_memory.free_buffer(buffers[3]).expect("didn't free buffer");
-        shared_memory.allocate_buffers(VMO_LENGTH / n, 0, 0).expect_err("allocated buffer 2");
-        shared_memory.free_buffer(buffers[2]).expect("didn't free buffer");
-        shared_memory.allocate_buffers(VMO_LENGTH / n, 0, 0).expect_err("allocated buffer 1");
-        shared_memory.free_buffer(buffers[1]).expect("didn't free buffer");
-
-        shared_memory.free_buffer(buffers[0]).expect("didn't free buffer");
         shared_memory
             .allocate_buffers(VMO_LENGTH / n, 0, 0)
-            .expect("couldn't allocate even after first slot opened up");
+            .expect_err("cannot allocate when full");
+        shared_memory.free_buffer(buffers[1]).expect("didn't free buffer");
+        shared_memory.allocate_buffers(VMO_LENGTH / n, 0, 0).expect("can allocate in hole");
     }
 
     #[fuchsia::test]
