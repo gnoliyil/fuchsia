@@ -7,7 +7,7 @@ use {
         account::{Account, AccountContext},
         common::AccountLifetime,
         inspect, lock_request,
-        pre_auth::{self, State as PreAuthState},
+        pre_auth::{self, produce_single_enrollment, State as PreAuthState},
     },
     account_common::{AccountId, AccountManagerError},
     anyhow::format_err,
@@ -241,12 +241,14 @@ where
                                 );
                                 AccountManagerError::from(authenticator_err).api_error
                             })?;
+
                         // TODO(fxbug.dev/45041): Use storage manager for key validation
                         if prekey_material != *MAGIC_PREKEY {
                             warn!("Received unexpected pre-key material from authenticator");
                             return Err(ApiError::Internal);
                         }
-                        pre_auth::EnrollmentState::SingleEnrollment { auth_mechanism_id, data }
+
+                        produce_single_enrollment(auth_mechanism_id, data, prekey_material)?
                     }
                     (AccountLifetime::Ephemeral, Some(_)) => {
                         warn!(
@@ -525,8 +527,11 @@ where
         let (_, test_interaction_server_end) = create_endpoints().unwrap();
         let mut test_ipse = InteractionProtocolServerEnd::Test(test_interaction_server_end);
 
-        if let pre_auth::EnrollmentState::SingleEnrollment { ref auth_mechanism_id, ref data } =
-            enrollment_state
+        if let pre_auth::EnrollmentState::SingleEnrollment {
+            ref auth_mechanism_id,
+            ref data,
+            ref wrapped_key_material,
+        } = enrollment_state
         {
             let auth_mechanism_proxy =
                 Self::get_auth_mechanism_connection(auth_mechanism_id).await?;
@@ -555,6 +560,7 @@ where
                 pre_auth::EnrollmentState::SingleEnrollment {
                     auth_mechanism_id: auth_mechanism_id.to_string(),
                     data,
+                    wrapped_key_material: wrapped_key_material.clone(),
                 }
             });
             Ok((auth_attempt.prekey_material, updated_pre_auth_state))
