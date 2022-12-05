@@ -245,17 +245,9 @@ zx_status_t ConvertRxInfo(const fuchsia_wlan_softmac::wire::WlanRxInfo& in, wlan
 }
 
 zx_status_t ConvertRxPacket(const fuchsia_wlan_softmac::wire::WlanRxPacket& in,
-                            wlan_rx_packet_t* out) {
-  uint8_t* rx_packet_data;
-  if (unlikely(in.mac_frame.count() > PRE_ALLOC_RECV_BUFFER_SIZE)) {
-    // This buffer will be freed in Device::Recv under the same condition.
-    rx_packet_data = static_cast<uint8_t*>(malloc(in.mac_frame.count()));
-  } else {
-    rx_packet_data = pre_alloc_recv_buffer;
-  }
-
-  memcpy(rx_packet_data, in.mac_frame.begin(), in.mac_frame.count());
-  out->mac_frame_buffer = rx_packet_data;
+                            wlan_rx_packet_t* out, uint8_t* rx_packet_buffer) {
+  memcpy(rx_packet_buffer, in.mac_frame.begin(), in.mac_frame.count());
+  out->mac_frame_buffer = rx_packet_buffer;
   out->mac_frame_size = in.mac_frame.count();
 
   return ConvertRxInfo(in.info, &out->info);

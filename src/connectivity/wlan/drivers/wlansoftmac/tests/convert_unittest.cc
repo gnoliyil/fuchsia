@@ -272,7 +272,8 @@ TEST(ConvertTest, ToBanjoRxPacket) {
 
   // Conduct conversion
   wlan_rx_packet_t out;
-  EXPECT_EQ(ZX_OK, ConvertRxPacket(in, &out));
+  uint8_t out_packet_buffer[kFakePacketSize];
+  EXPECT_EQ(ZX_OK, ConvertRxPacket(in, &out, out_packet_buffer));
 
   // Verify outputs
   EXPECT_EQ(kFakePacketSize, out.mac_frame_size);

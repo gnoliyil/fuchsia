@@ -15,9 +15,6 @@
 
 namespace wlan {
 
-#define PRE_ALLOC_RECV_BUFFER_SIZE 2000
-static uint8_t* pre_alloc_recv_buffer = static_cast<uint8_t*>(malloc(PRE_ALLOC_RECV_BUFFER_SIZE));
-
 // FIDL to banjo conversions.
 zx_status_t ConvertWlanSoftmacInfo(const fuchsia_wlan_softmac::wire::WlanSoftmacInfo& in,
                                    wlan_softmac_info_t* out);
@@ -31,7 +28,7 @@ void ConvertSpectrumManagementSupport(
     const fuchsia_wlan_common::wire::SpectrumManagementSupport& in,
     spectrum_management_support_t* out);
 zx_status_t ConvertRxPacket(const fuchsia_wlan_softmac::wire::WlanRxPacket& in,
-                            wlan_rx_packet_t* out);
+                            wlan_rx_packet_t* out, uint8_t* rx_packet_buffer);
 zx_status_t ConvertTxStatus(const fuchsia_wlan_common::wire::WlanTxStatus& in,
                             wlan_tx_status_t* out);
 

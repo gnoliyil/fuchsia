@@ -36,6 +36,8 @@
 
 namespace wlan {
 
+#define PRE_ALLOC_RECV_BUFFER_SIZE 2000
+
 class WlanSoftmacHandle {
  public:
   explicit WlanSoftmacHandle(DeviceInterface* device);
@@ -171,6 +173,9 @@ class Device : public DeviceInterface,
 
   // Store unbind txn for async reply.
   std::optional<::ddk::UnbindTxn> unbind_txn_;
+
+  // Preallocated buffer for small frames
+  uint8_t pre_alloc_recv_buffer_[PRE_ALLOC_RECV_BUFFER_SIZE];
 
   // Lock for Rec() function to make it thread safe.
   std::mutex rx_lock_;

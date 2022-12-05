@@ -979,17 +979,26 @@ void Device::Recv(RecvRequestView request, fdf::Arena& arena, RecvCompleter::Syn
     // Lock the buffer operations to prevent data corruption when multiple thread are calling into
     // this function.
     std::lock_guard lock(rx_lock_);
-    if ((status = ConvertRxPacket(request->packet, &rx_packet)) != ZX_OK) {
+    bool use_prealloc_recv_buffer =
+        unlikely(request->packet.mac_frame.count() > PRE_ALLOC_RECV_BUFFER_SIZE);
+    uint8_t* rx_packet_buffer;
+    if (use_prealloc_recv_buffer) {
+      rx_packet_buffer = static_cast<uint8_t*>(malloc(request->packet.mac_frame.count()));
+    } else {
+      rx_packet_buffer = pre_alloc_recv_buffer_;
+    }
+
+    if ((status = ConvertRxPacket(request->packet, &rx_packet, rx_packet_buffer)) != ZX_OK) {
       errorf("RxPacket conversion failed: %s", zx_status_get_string(status));
     }
 
     wlan_softmac_ifc_protocol_->ops->recv(wlan_softmac_ifc_protocol_->ctx, &rx_packet);
-    if (unlikely(request->packet.mac_frame.count() > PRE_ALLOC_RECV_BUFFER_SIZE)) {
+    if (use_prealloc_recv_buffer) {
       // Freeing the frame buffer allocated in ConvertRxPacket() above.
       memset(const_cast<uint8_t*>(rx_packet.mac_frame_buffer), 0, rx_packet.mac_frame_size);
       free(const_cast<uint8_t*>(rx_packet.mac_frame_buffer));
     } else {
-      memset(pre_alloc_recv_buffer, 0, PRE_ALLOC_RECV_BUFFER_SIZE);
+      memset(pre_alloc_recv_buffer_, 0, PRE_ALLOC_RECV_BUFFER_SIZE);
     }
   }
 
