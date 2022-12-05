@@ -28,6 +28,7 @@ constexpr std::string_view kUMSProductDescription = "USB Mass Storage";
 constexpr std::string_view kRNDISProductDescription = "RNDIS Ethernet";
 constexpr std::string_view kTestProductDescription = "USB Function Test";
 constexpr std::string_view kADBProductDescription = "ADB";
+constexpr std::string_view kFastbootProductDescription = "Fastboot";
 
 constexpr peripheral::wire::FunctionDescriptor kCDCFunctionDescriptor = {
     .interface_class = USB_CLASS_COMM,
@@ -51,6 +52,12 @@ constexpr peripheral::wire::FunctionDescriptor kADBFunctionDescriptor = {
     .interface_class = USB_CLASS_VENDOR,
     .interface_subclass = USB_SUBCLASS_ADB,
     .interface_protocol = USB_PROTOCOL_ADB,
+};
+
+constexpr peripheral::wire::FunctionDescriptor kFastbootFunctionDescriptor = {
+    .interface_class = USB_CLASS_VENDOR,
+    .interface_subclass = USB_SUBCLASS_FASTBOOT,
+    .interface_protocol = USB_PROTOCOL_FASTBOOT,
 };
 
 constexpr peripheral::wire::FunctionDescriptor kTestFunctionDescriptor = {

@@ -66,6 +66,9 @@ zx_status_t UsbPeripheralConfig::ParseBootArgs(zx_device_t *platform_bus) {
     } else if (function == "adb") {
       function_configs_.push_back(kADBFunctionDescriptor);
       status = SetCompositeProductDescription(GOOGLE_USB_ADB_PID);
+    } else if (function == "fastboot") {
+      function_configs_.push_back(kFastbootFunctionDescriptor);
+      status = SetCompositeProductDescription(GOOGLE_USB_FASTBOOT_PID);
     } else if (function == "test") {
       function_configs_.push_back(kTestFunctionDescriptor);
       status = SetCompositeProductDescription(GOOGLE_USB_FUNCTION_TEST_PID);
@@ -136,6 +139,9 @@ zx_status_t UsbPeripheralConfig::SetCompositeProductDescription(uint16_t pid) {
       case GOOGLE_USB_ADB_PID:
         product_desc_ = kADBProductDescription;
         break;
+      case GOOGLE_USB_FASTBOOT_PID:
+        product_desc_ = kFastbootProductDescription;
+        break;
       case GOOGLE_USB_FUNCTION_TEST_PID:
         product_desc_ = kTestProductDescription;
         break;
@@ -152,6 +158,9 @@ zx_status_t UsbPeripheralConfig::SetCompositeProductDescription(uint16_t pid) {
     } else if (pid_ == GOOGLE_USB_CDC_PID && pid == GOOGLE_USB_ADB_PID) {
       pid_ = GOOGLE_USB_CDC_AND_ADB_PID;
       product_desc_ += kADBProductDescription;
+    } else if (pid_ == GOOGLE_USB_CDC_PID && pid == GOOGLE_USB_FASTBOOT_PID) {
+      pid_ = GOOGLE_USB_CDC_AND_FASTBOOT_PID;
+      product_desc_ += kFastbootProductDescription;
     } else {
       zxlogf(ERROR, "No matching pid for this combination: %d + %d", pid_, pid);
       return ZX_ERR_WRONG_TYPE;

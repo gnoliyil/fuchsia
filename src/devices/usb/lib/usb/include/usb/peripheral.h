@@ -31,4 +31,10 @@
 // USB Product ID for CDC Ethernet and ADB composite device.
 #define GOOGLE_USB_CDC_AND_ADB_PID 0xA026
 
+// USB Product ID for Fastboot function
+#define GOOGLE_USB_FASTBOOT_PID 0x4ee0
+
+// USB Product ID for CDC and Fastboot composite device.
+#define GOOGLE_USB_CDC_AND_FASTBOOT_PID 0xA027
+
 #endif  // SRC_DEVICES_USB_LIB_USB_INCLUDE_USB_PERIPHERAL_H_
