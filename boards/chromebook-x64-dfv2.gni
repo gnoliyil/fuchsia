@@ -9,10 +9,3 @@ board_bootfs_labels += [
   "//bundles/drivers:disable.drivers_for_dfv2",
   "//src/media/audio/drivers/codecs/da7219:component-dfv2",
 ]
-
-board_provided_drivers += [
-  {
-    package_target = "//src/ui/backlight/drivers:chromebook-keyboard-backlight"
-    driver_components = [ "meta/backlight_driver.cm" ]
-  },
-]
