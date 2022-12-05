@@ -30,6 +30,7 @@ group("drivers") {
     "hci/vendor/atheros:driver",
     "hci/vendor/broadcom:bt-hci-broadcom",
     "hci/vendor/intel:driver",
+    "hci/vendor/marvell:bt-hci-marvell",
     "hci/virtual:driver",
   ]
 }

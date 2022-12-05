@@ -1,0 +1,32 @@
+# Copyright 2022 The Fuchsia Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import("//build/components.gni")
+
+group("tests") {
+  testonly = true
+  deps = [ ":bt-hci-marvell-tests" ]
+}
+
+fuchsia_unittest_package("bt-hci-marvell-tests") {
+  test_specs = {
+    log_settings = {
+      max_severity = "ERROR"
+    }
+  }
+  deps = [ ":lifecycle-tests" ]
+}
+
+executable("lifecycle-tests") {
+  testonly = true
+  output_name = "bt-hci-marvell-lifecycle-tests"
+  sources = [ "lifecycle.cc" ]
+  deps = [
+    "//sdk/banjo/fuchsia.hardware.sdio:fuchsia.hardware.sdio_banjo_cpp_mock",
+    "//src/connectivity/bluetooth/hci/vendor/marvell:common",
+    "//src/devices/bus/testing/mock-sdio",
+    "//src/devices/testing/mock-ddk",
+    "//zircon/system/ulib/zxtest",
+  ]
+}
