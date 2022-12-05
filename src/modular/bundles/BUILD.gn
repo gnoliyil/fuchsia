@@ -12,7 +12,7 @@ group("bundles") {
 
 group("tools") {
   testonly = true
-  public_deps = [ "//src/modular/bin/sessionctl" ]
+  # TODO(fxb/102727): remove after vendor/google references have been removed.
 }
 
 group("framework") {

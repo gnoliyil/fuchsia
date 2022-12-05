@@ -120,7 +120,6 @@ _METRICS_TRACK_COMMAND_OPS=(
     "shell screencap"
     "shell sed"
     "shell seq"
-    "shell sessionctl"
     "shell set_renderer_params"
     "shell sh"
     "shell sha1sum"

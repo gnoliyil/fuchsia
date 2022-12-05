@@ -72,7 +72,6 @@ group("cmx_allowlist") {
     "//src/media/playback/mediaplayer:mediaplayer_test_util_component_manifest_compile",
     "//src/media/playback/mediaplayer:mediaplayer_tests_component_cfv1_manifest_compile",
     "//src/modular/bin/basemgr:v1_echo_server_component_manifest_compile",
-    "//src/modular/bin/sessionctl:sessionctl_component_manifest_compile",
     "//src/modular/bin/sessionmgr:component-v1_manifest_compile",
     "//src/modular/tests:sessionmgr-integration-test_manifest_compile",
     "//src/sys/appmgr:appmgr_unittests_component_manifest_compile",
