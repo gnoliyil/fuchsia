@@ -206,25 +206,9 @@ zx_status_t SpiBanjoChild::DdkGetProtocol(uint32_t proto_id, void* out_protocol)
   }
 
   spi_protocol_t* spi_proto = static_cast<spi_protocol_t*>(out_protocol);
-  spi_proto->ops = &spi_protocol_ops_;
-  spi_proto->ctx = this;
+  spi_proto->ops = &spi_->spi_protocol_ops();
+  spi_proto->ctx = spi_;
   return ZX_OK;
-}
-
-zx_status_t SpiBanjoChild::SpiTransmit(const uint8_t* txdata_list, size_t txdata_count) {
-  return spi_->SpiTransmit(txdata_list, txdata_count);
-}
-
-zx_status_t SpiBanjoChild::SpiReceive(uint32_t size, uint8_t* out_rxdata_list, size_t rxdata_count,
-                                      size_t* out_rxdata_actual) {
-  return spi_->SpiReceive(size, out_rxdata_list, rxdata_count, out_rxdata_actual);
-}
-
-zx_status_t SpiBanjoChild::SpiExchange(const uint8_t* txdata_list, size_t txdata_count,
-                                       uint8_t* out_rxdata_list, size_t rxdata_count,
-                                       size_t* out_rxdata_actual) {
-  return spi_->SpiExchange(txdata_list, txdata_count, out_rxdata_list, rxdata_count,
-                           out_rxdata_actual);
 }
 
 }  // namespace spi

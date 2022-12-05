@@ -35,7 +35,9 @@ using SpiChildType =
     ddk::Device<SpiChild, ddk::Messageable<fuchsia_hardware_spi::Controller>::Mixin,
                 ddk::Unbindable>;
 
-class SpiChild : public SpiChildType, public fidl::WireServer<fuchsia_hardware_spi::Device> {
+class SpiChild : public SpiChildType,
+                 public ddk::SpiProtocol<SpiChild>,
+                 public fidl::WireServer<fuchsia_hardware_spi::Device> {
  public:
   SpiChild(zx_device_t* parent, ddk::SpiImplProtocolClient spi, uint32_t chip_select,
            bool has_siblings, async_dispatcher_t* dispatcher)
@@ -77,6 +79,8 @@ class SpiChild : public SpiChildType, public fidl::WireServer<fuchsia_hardware_s
 
   void Bind(async_dispatcher_t* dispatcher,
             fidl::ServerEnd<fuchsia_hardware_spi::Device> server_end);
+
+  spi_protocol_ops_t& spi_protocol_ops() { return spi_protocol_ops_; }
 
  private:
   const ddk::SpiImplProtocolClient spi_;
@@ -120,19 +124,12 @@ class SpiFidlChild : public SpiFidlChildType {
 class SpiBanjoChild;
 using SpiBanjoChildType = ddk::Device<SpiBanjoChild, ddk::GetProtocolable>;
 
-class SpiBanjoChild : public SpiBanjoChildType, public ddk::SpiProtocol<SpiBanjoChild> {
+class SpiBanjoChild : public SpiBanjoChildType {
  public:
   SpiBanjoChild(zx_device_t* parent, SpiChild* spi) : SpiBanjoChildType(parent), spi_(spi) {}
 
   void DdkRelease() { delete this; }
   zx_status_t DdkGetProtocol(uint32_t proto_id, void* out_protocol);
-
-  // Banjo implementation
-  zx_status_t SpiTransmit(const uint8_t* txdata_list, size_t txdata_count);
-  zx_status_t SpiReceive(uint32_t size, uint8_t* out_rxdata_list, size_t rxdata_count,
-                         size_t* out_rxdata_actual);
-  zx_status_t SpiExchange(const uint8_t* txdata_list, size_t txdata_count, uint8_t* out_rxdata_list,
-                          size_t rxdata_count, size_t* out_rxdata_actual);
 
  private:
   // SpiChild is the parent of SpiBanjoChild so it is guaranteed to outlive it,
