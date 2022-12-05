@@ -101,10 +101,10 @@ struct MockDevice : public std::enable_shared_from_this<MockDevice> {
   // Calls for tracking libdriver calls made that reference this device:
   // The Register calls below create 4 functions each:
   // REGISTER_CALL_TRACKER( InitReply )  creates:
-  //   void WaitUntilInitReplyCalled();  <-- Blocking wait until InitReply is called
-  //   void RecordInitReply();           <-- Records the InitReply call
-  //   bool InitReplyCalled();           <-- Returns true if InitReply has been called.
-  //   zx_status_t InitReplyCallStatus(); <-- Returns the status that was passed to InitReply
+  //   zx_status_t WaitUntilInitReplyCalled();  <-- Blocking wait until InitReply is called
+  //   void RecordInitReply();                  <-- Records the InitReply call
+  //   bool InitReplyCalled();                  <-- Returns true if InitReply has been called.
+  //   zx_status_t InitReplyCallStatus();       <-- Returns the status that was passed to InitReply
   //
   // The WaitUntil* functions are useful if you expect the reply/remove/etc to be called
   // in a different thread.
