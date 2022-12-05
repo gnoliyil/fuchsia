@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+use std::io::Cursor;
+
 use anyhow::Error;
 use appkit::*;
 use either::Either;
@@ -43,6 +45,10 @@ pub(crate) const WM_SHELLVIEWS: &'static [&'static str] = &[WM_SHELLVIEW_APP_LAU
 // Note: This value should match the APP_LAUNCHER_HEIGHT value in app_launcher package.
 const APP_LAUNCHER_HEIGHT: u32 = 32;
 // LINT.ThenChange(../../app_launcher/src/main.rs)
+
+// Dimensions of keyboard shortcuts image.
+const SHORTCUTS_IMAGE_WIDTH: u32 = 400;
+const SHORTCUTS_IMAGE_HEIGHT: u32 = 300;
 
 /// Defines an enumeration of all shell view types.
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
@@ -100,6 +106,8 @@ pub(crate) struct WindowManager {
     child_views_layer: ui_comp::TransformId,
     // The layer (parent transform) for holding all shell component views.
     shell_views_layer: ui_comp::TransformId,
+    // The child transform to hold the image for keyboard shortcuts.
+    shortcuts_image_transform: ui_comp::TransformId,
     // The current width of the application window.
     width: u32,
     // The current height of the application window.
@@ -135,6 +143,10 @@ impl WindowManager {
         flatland.create_transform(&mut child_views_layer)?;
         flatland.add_child(&mut root_transform_id, &mut child_views_layer)?;
 
+        let mut shortcuts_image_transform = window.next_transform_id();
+        flatland.create_transform(&mut shortcuts_image_transform)?;
+        flatland.add_child(&mut root_transform_id, &mut shortcuts_image_transform)?;
+
         let mut shell_views_layer = window.next_transform_id();
         flatland.create_transform(&mut shell_views_layer)?;
         flatland.add_child(&mut root_transform_id, &mut shell_views_layer)?;
@@ -150,6 +162,7 @@ impl WindowManager {
             background_content: background,
             child_views_layer,
             shell_views_layer,
+            shortcuts_image_transform,
             width: 0,
             height: 0,
             is_ready: false,
@@ -173,6 +186,9 @@ impl WindowManager {
         &mut self,
         mut receiver: impl Stream<Item = Event> + std::marker::Unpin,
     ) -> Result<(), Error> {
+        // Load the keyboard shortcuts image.
+        self.load_shortcuts_image().await?;
+
         while let Some(event) = receiver.next().await {
             debug!("{:?}", event);
             match event {
@@ -336,6 +352,21 @@ impl WindowManager {
         Ok(())
     }
 
+    async fn load_shortcuts_image(&mut self) -> Result<(), Error> {
+        static IMAGE_DATA: &'static [u8] = include_bytes!("../shortcuts.png");
+        let (bytes, width, height) = load_png(Cursor::new(IMAGE_DATA)).expect("Failed to load png");
+        let shortcuts_image = self.window.create_image_from_bytes(&bytes, width, height).await?;
+
+        let flatland = self.window.get_flatland();
+        flatland.set_image_blending_function(
+            &mut shortcuts_image.get_content_id(),
+            ui_comp::BlendMode::SrcOver,
+        )?;
+
+        self.window.set_content(self.shortcuts_image_transform, shortcuts_image.get_content_id());
+        Ok(())
+    }
+
     // Resizes the background color and child view contents.
     fn resize(&mut self, width: u32, height: u32) -> Result<(), Error> {
         self.width = width;
@@ -353,6 +384,15 @@ impl WindowManager {
             &mut fmath::SizeU {
                 width: width.saturating_sub(1).clamp(1, u32::MAX),
                 height: height.saturating_sub(1).clamp(1, u32::MAX) - APP_LAUNCHER_HEIGHT,
+            },
+        )?;
+
+        // Position shortcuts image to bottom-right of the screen, above app launcher.
+        flatland.set_translation(
+            &mut self.shortcuts_image_transform,
+            &mut fmath::Vec_ {
+                x: (width - SHORTCUTS_IMAGE_WIDTH) as i32,
+                y: (height - SHORTCUTS_IMAGE_HEIGHT - APP_LAUNCHER_HEIGHT) as i32,
             },
         )?;
 

@@ -20,6 +20,8 @@ rustc_binary("bin") {
     "src/wm.rs",
   ]
 
+  inputs = [ "shortcuts.png" ]
+
   deps = [
     "//sdk/fidl/fuchsia.element:fuchsia.element_rust",
     "//sdk/fidl/fuchsia.math:fuchsia.math_rust",

@@ -31,7 +31,7 @@ use tracing::*;
 use crate::{
     child_view::ChildView,
     event::{Event, EventSender, ViewSpecHolder, WindowEvent},
-    image::{Image, ImageData},
+    image::{load_image_from_bytes_using_allocators, Image, ImageData},
     utils::{ProductionProtocolConnector, ProtocolConnector},
 };
 
@@ -521,11 +521,31 @@ impl Window {
         )
     }
 
-    /// Creates an instance of flatland [Image] given width, height and image data in
-    /// [ui_comp::BufferCollectionImportToken] token at [vmo_index].
+    /// Creates an instance of flatland [Image] given [ImageData].
     pub fn create_image(&mut self, image_data: &mut ImageData) -> Result<Image, Error> {
         let content_id = self.next_content_id();
         Image::new(image_data, self.get_flatland(), content_id)
+    }
+
+    /// Creates an instance of flatland [Image] given width, height and image bytes.
+    pub async fn create_image_from_bytes(
+        &mut self,
+        bytes: &[u8],
+        width: u32,
+        height: u32,
+    ) -> Result<Image, Error> {
+        let sysmem_allocator = self.protocol_connector.connect_to_sysmem_allocator()?;
+        let flatland_allocator = self.protocol_connector.connect_to_flatland_allocator()?;
+        let mut image_data = load_image_from_bytes_using_allocators(
+            &bytes,
+            width,
+            height,
+            sysmem_allocator,
+            flatland_allocator,
+        )
+        .await?;
+
+        self.create_image(&mut image_data)
     }
 }
 
