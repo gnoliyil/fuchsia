@@ -183,6 +183,9 @@ void SessionmgrImpl::InitializeInternal(
       GetPresentationProtocol()
           .and_then([this, svc_from_v1_sessionmgr = std::move(svc_from_v1_sessionmgr),
                      use_flatland](PresentationProtocolPtr& presentation_protocol) mutable {
+            if (terminating_)
+              return;
+
             // We create |story_provider_impl_| after |agent_runner_| so
             // story_provider_impl_ is terminated before agent_runner_, which will cause
             // all modules to be terminated before agents are terminated. Agents must
