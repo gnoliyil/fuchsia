@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <fidl/fuchsia.device/cpp/wire.h>
-#include <fidl/fuchsia.hardware.cpu.ctrl/cpp/wire.h>
+#include <fidl/fuchsia.device/cpp/wire_test_base.h>
+#include <fidl/fuchsia.hardware.cpu.ctrl/cpp/wire_test_base.h>
 #include <lib/async-loop/cpp/loop.h>
 #include <lib/fidl/cpp/wire/channel.h>
 
@@ -25,30 +25,20 @@ constexpr uint32_t kNumLogicalCores = 4;
 
 constexpr uint64_t kLogicalCoreIds[kNumLogicalCores] = {1, 2, 3, 4};
 
-class FakeCpuDevice : public fidl::WireServer<cpuctrl::Device>,
-                      public fidl::WireServer<fuchsia_device::Controller> {
+class FakeCpuDevice : public fidl::testing::WireTestBase<cpuctrl::Device>,
+                      public fidl::testing::WireTestBase<fuchsia_device::Controller> {
  public:
   unsigned int PstateSetCount() const { return pstate_set_count_; }
 
-  // fidl::WireServer<fuchsia_device::Controller> methods
-  // We only implement the following methods for now
-  void SetPerformanceState(SetPerformanceStateRequestView request,
-                           SetPerformanceStateCompleter::Sync& _completer) override;
-  void GetCurrentPerformanceState(GetCurrentPerformanceStateCompleter::Sync& completer) override;
-
-  // The following methods are left unimplemented and it's an error to call them.
-  void ConnectToDeviceFidl(ConnectToDeviceFidlRequestView request,
-                           ConnectToDeviceFidlCompleter::Sync& completer) override {}
-  void Bind(BindRequestView request, BindCompleter::Sync& _completer) override {}
-  void Rebind(RebindRequestView request, RebindCompleter::Sync& _completer) override {}
-  void UnbindChildren(UnbindChildrenCompleter::Sync& completer) override {}
-  void ScheduleUnbind(ScheduleUnbindCompleter::Sync& _completer) override {}
-  void GetTopologicalPath(GetTopologicalPathCompleter::Sync& _completer) override {}
-  void GetMinDriverLogSeverity(GetMinDriverLogSeverityCompleter::Sync& _completer) override {}
-  void SetMinDriverLogSeverity(SetMinDriverLogSeverityRequestView request,
-                               SetMinDriverLogSeverityCompleter::Sync& _completer) override {}
+  void NotImplemented_(const std::string& name, fidl::CompleterBase& completer) override {
+    ADD_FAILURE("unexpected call to %s", name.c_str());
+    completer.Close(ZX_ERR_NOT_SUPPORTED);
+  }
 
  private:
+  void SetPerformanceState(SetPerformanceStateRequestView request,
+                           SetPerformanceStateCompleter::Sync& completer) override;
+  void GetCurrentPerformanceState(GetCurrentPerformanceStateCompleter::Sync& completer) override;
   void GetPerformanceStateInfo(GetPerformanceStateInfoRequestView request,
                                GetPerformanceStateInfoCompleter::Sync& completer) override;
   void GetNumLogicalCores(GetNumLogicalCoresCompleter::Sync& completer) override;
