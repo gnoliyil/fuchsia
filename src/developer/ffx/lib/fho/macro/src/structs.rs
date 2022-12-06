@@ -225,6 +225,8 @@ impl ToTokens for NamedFieldStruct<'_> {
         let res = quote_spanned! {span=>
             #(#try_from_env_type_assertions)*
             #struct_decl {
+                type Main<'a> = Self;
+
                 #command_field_decl
                 async fn from_env(
                     _env: fho::FhoEnvironment<'_>,

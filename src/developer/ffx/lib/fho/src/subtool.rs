@@ -24,7 +24,7 @@ use crate::FhoToolMetadata;
 
 #[derive(FromArgs)]
 #[argh(subcommand)]
-pub(crate) enum FhoHandler<M: FfxMain> {
+pub(crate) enum FhoHandler<M: FfxTool> {
     //FhoVersion1(M),
     /// Run the tool as if under ffx
     Standalone(M::Command),
@@ -41,12 +41,12 @@ pub(crate) struct MetadataCmd {
 
 #[derive(FromArgs)]
 /// Fuchsia Host Objects Runner
-pub(crate) struct ToolCommand<M: FfxMain> {
+pub(crate) struct ToolCommand<M: FfxTool> {
     #[argh(subcommand)]
     pub(crate) subcommand: FhoHandler<M>,
 }
 
-pub(crate) struct FhoSuite<M> {
+pub struct FhoSuite<M> {
     ffx: Ffx,
     context: EnvironmentContext,
     _p: std::marker::PhantomData<fn(M) -> ()>,
@@ -58,7 +58,7 @@ impl<M> Clone for FhoSuite<M> {
     }
 }
 
-struct FhoTool<M: FfxMain> {
+struct FhoTool<M: FfxTool> {
     suite: FhoSuite<M>,
     command: ToolCommand<M>,
 }
@@ -87,7 +87,7 @@ impl MetadataCmd {
 }
 
 #[async_trait(?Send)]
-impl<M: FfxMain> ToolRunner for FhoTool<M> {
+impl<M: FfxTool> ToolRunner for FhoTool<M> {
     fn forces_stdout_log(&self) -> bool {
         M::forces_stdout_log()
     }
@@ -120,7 +120,7 @@ impl<M: FfxMain> ToolRunner for FhoTool<M> {
     }
 }
 
-impl<M: FfxMain> ToolSuite for FhoSuite<M> {
+impl<M: FfxTool> ToolSuite for FhoSuite<M> {
     fn from_env(ffx: &Ffx, context: &EnvironmentContext) -> Result<Self> {
         let ffx = ffx.clone();
         let context = context.clone();
@@ -153,22 +153,23 @@ impl<M: FfxMain> ToolSuite for FhoSuite<M> {
 #[async_trait(?Send)]
 pub trait FfxTool: Sized + 'static {
     type Command: FromArgs + SubCommand + 'static;
+    type Main<'a>: FfxMain;
 
     fn forces_stdout_log() -> bool;
-    async fn from_env(env: FhoEnvironment<'_>, cmd: Self::Command) -> Result<Self>;
-}
-
-#[async_trait(?Send)]
-pub trait FfxMain: FfxTool {
-    /// The entrypoint of the tool. Once FHO has set up the environment for the tool, this is
-    /// invoked. Should not be invoked directly unless for testing.
-    async fn main(self) -> Result<()>;
+    async fn from_env(env: FhoEnvironment<'_>, cmd: Self::Command) -> Result<Self::Main<'_>>;
 
     /// Executes the tool. This is intended to be invoked by the user in main.
     async fn execute_tool() {
         let result = ffx_command::run::<FhoSuite<Self>>().await;
         ffx_command::exit(result).await;
     }
+}
+
+#[async_trait(?Send)]
+pub trait FfxMain: Sized {
+    /// The entrypoint of the tool. Once FHO has set up the environment for the tool, this is
+    /// invoked. Should not be invoked directly unless for testing.
+    async fn main(self) -> Result<()>;
 }
 
 #[async_trait(?Send)]
