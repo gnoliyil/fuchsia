@@ -409,6 +409,7 @@ zx_status_t File::DoWrite(const void *data, size_t len, size_t offset, size_t *o
   const size_t offset_end = safemath::CheckAdd<size_t>(offset, len).ValueOrDie();
   const pgoff_t block_index_end = CheckedDivRoundUp<pgoff_t>(offset_end, kBlockSize);
 
+  fs()->GetSegmentManager().BalanceFs();
   std::vector<LockedPage> data_pages;
   data_pages.reserve(block_index_end - block_index_start);
   if (auto result = WriteBegin(offset, len); result.is_error()) {
@@ -418,8 +419,6 @@ zx_status_t File::DoWrite(const void *data, size_t len, size_t offset, size_t *o
     data_pages = std::move(result.value());
   }
 
-  // Trigger writeback every dirty Page.
-  auto trigger_writeback = fit::defer([fs = fs()] { fs->ScheduleWriteback(); });
   size_t off_in_block = safemath::CheckMod<size_t>(offset, kBlockSize).ValueOrDie();
   size_t off_in_buf = 0;
   size_t left = len;
@@ -467,6 +466,9 @@ zx_status_t File::DoWrite(const void *data, size_t len, size_t offset, size_t *o
   }
 
   *out_actual = off_in_buf;
+
+  // TODO(sk): remove it when memorypressure is available with stress-tests and fs-tests.
+  fs()->ScheduleWriteback();
 
   return ZX_OK;
 }

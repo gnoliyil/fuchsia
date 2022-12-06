@@ -4,8 +4,8 @@
 {
     include: [
         "//src/lib/storage/fs_management/client.shard.cml",
+        "//src/storage/stress-tests/f2fs/meta/f2fs.shard.cml",
         "//src/sys/test_runners/rust/default.shard.cml",
-        "sys/component/realm_builder.shard.cml",
         "syslog/client.shard.cml",
     ],
     program: {
@@ -13,7 +13,7 @@
         args: [
             // Ramdisk disconnection every 10 minutes
             "--disconnect-secs",
-            "600",
+            "30",
 
             // 6 hour time limit
             "--time-limit-secs",

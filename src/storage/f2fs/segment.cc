@@ -307,6 +307,9 @@ void SegmentManager::BalanceFs() {
   if (superblock_info_->IsOnRecovery()) {
     return;
   }
+
+  // If there is not enough memory, wait for writeback.
+  fs_->WaitForAvailableMemory();
   if (HasNotEnoughFreeSecs()) {
     if (auto ret = fs_->GetGcManager().F2fsGc(); ret.is_error()) {
       // F2fsGc() returns ZX_ERR_UNAVAILABLE when there is no available victim section, otherwise

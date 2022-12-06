@@ -151,7 +151,7 @@ void FuchsiaOperator::Mount(MountOptions opt) {
   auto vfs_or = Runner::CreateRunner(loop_.dispatcher());
   ASSERT_TRUE(vfs_or.is_ok());
 
-  auto fs_or = F2fs::Create(loop_.dispatcher(), std::move(bc_), opt, (*vfs_or).get());
+  auto fs_or = F2fs::Create(nullptr, std::move(bc_), opt, (*vfs_or).get());
   ASSERT_TRUE(fs_or.is_ok());
   (*fs_or)->SetVfsForTests(std::move(*vfs_or));
   fs_ = std::move(*fs_or);

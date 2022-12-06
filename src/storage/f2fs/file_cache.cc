@@ -535,7 +535,6 @@ void FileCache::Reset() {
   }
   for (auto &page : pages) {
     if (page->IsDirty()) {
-      FX_LOGS(WARNING) << "[f2fs] An unexpected dirty page found.";
       page->Invalidate();
     }
     page->ClearMmapped();

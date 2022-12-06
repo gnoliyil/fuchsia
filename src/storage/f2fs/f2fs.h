@@ -100,6 +100,7 @@
 #include "src/storage/f2fs/component_runner.h"
 #include "src/storage/f2fs/dir_entry_cache.h"
 #include "src/storage/f2fs/inspect.h"
+#include "src/storage/f2fs/memory_watcher.h"
 #endif  // __Fuchsia__
 // clang-format on
 
@@ -302,7 +303,33 @@ class F2fs final {
   }
   std::atomic_flag &GetStopReclaimFlag() { return stop_reclaim_flag_; }
 
+  bool NeedToWriteback() {
+    // release-acquire ordering with MemoryPressureWatcher::OnLevelChanged().
+    auto level = current_memory_pressure_level_.load(std::memory_order_acquire);
+    return (level > MemoryPressure::kLow &&
+            superblock_info_->GetPageCount(CountType::kDirtyData)) ||
+           (level == MemoryPressure::kUnknown &&
+            superblock_info_->GetPageCount(CountType::kDirtyData) >= kMaxDirtyDataPages / 2);
+  }
+
+  bool HasNotEnoughMemory() {
+    // release-acquire ordering with MemoryPressureWatcher::OnLevelChanged().
+    auto level = current_memory_pressure_level_.load(std::memory_order_acquire);
+    return (level == MemoryPressure::kHigh &&
+            superblock_info_->GetPageCount(CountType::kDirtyData)) ||
+           (level == MemoryPressure::kUnknown &&
+            superblock_info_->GetPageCount(CountType::kDirtyData) >= kMaxDirtyDataPages);
+  }
+
+  void WaitForAvailableMemory() {
+    while (HasNotEnoughMemory()) {
+      ScheduleWriteback();
+      ZX_ASSERT(WaitForWriteback().is_ok());
+    }
+  }
+
  private:
+  void StartMemoryPressureWatcher();
   // Flush all dirty meta Pages that meet |operation|.if_page.
   pgoff_t FlushDirtyMetaPages(WritebackOperation &operation);
   // Flush all dirty data Pages that meet |operation|.if_vnode and if_page.
@@ -339,6 +366,8 @@ class F2fs final {
   DirEntryCache dir_entry_cache_;
   zx::event fs_id_;
   std::unique_ptr<InspectTree> inspect_tree_;
+  std::atomic<MemoryPressure> current_memory_pressure_level_ = MemoryPressure::kUnknown;
+  std::unique_ptr<MemoryPressureWatcher> memory_pressure_watcher_;
 #endif  // __Fuchsia__
 };
 

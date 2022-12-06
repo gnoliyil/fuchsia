@@ -135,34 +135,26 @@ zx::result<> ComponentRunner::Configure(std::unique_ptr<Bcache> bcache,
 
 void ComponentRunner::Shutdown(fs::FuchsiaVfs::ShutdownCallback cb) {
   TRACE_DURATION("f2fs", "ComponentRunner::Shutdown");
-  FX_LOGS(INFO) << "Shutting down";
-  PagedVfs::Shutdown([this, cb = std::move(cb)](zx_status_t status) mutable {
-    if (f2fs_) {
-      f2fs_->Sync([this, cb = std::move(cb)](zx_status_t sync_status) mutable {
-        async::PostTask(dispatcher(), [this, cb = std::move(cb)]() mutable {
-          f2fs_->PutSuper();
-          ZX_ASSERT(f2fs_->TakeBc().is_ok());
-
-          if (on_unmount_) {
-            on_unmount_();
-          }
-
-          // Tell the unmounting channel that we've completed teardown. This *must* be the last
-          // thing we do because after this, the caller can assume that it's safe to destroy the
-          // runner.
-          cb(ZX_OK);
-        });
-      });
-    } else {
-      async::PostTask(dispatcher(), [this, cb = std::move(cb)]() mutable {
+  if (!IsTerminating()) {
+    ManagedVfs::Shutdown([this, cb = std::move(cb)](zx_status_t status) mutable {
+      async::PostTask(dispatcher(), [this, status, cb = std::move(cb)]() mutable {
+        if (f2fs_) {
+          f2fs_->Sync([this](zx_status_t) mutable {
+            f2fs_->PutSuper();
+            ZX_ASSERT(f2fs_->TakeBc().is_ok());
+          });
+        }
         if (on_unmount_) {
           on_unmount_();
         }
 
-        cb(ZX_OK);
+        // Tell the unmounting channel that we've completed teardown. This *must* be the last
+        // thing we do because after this, the caller can assume that it's safe to destroy the
+        // runner.
+        cb(status);
       });
-    }
-  });
+    });
+  }
 }
 
 zx::result<fs::FilesystemInfo> ComponentRunner::GetFilesystemInfo() {

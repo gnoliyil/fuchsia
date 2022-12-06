@@ -43,23 +43,14 @@ void F2fs::PutSuper() {
 }
 
 void F2fs::ScheduleWriteback(size_t num_pages) {
-  block_t dirty_data_pages = superblock_info_->GetPageCount(CountType::kDirtyData);
-  block_t limit = kMaxDirtyDataPages / 2;
-
-  // |limit| is configurable according to the maximum allowable memory for f2fs
-  // TODO: when f2fs can get hints about memory pressure, revisit it.
-  if (dirty_data_pages < limit) {
-    return;
-  }
-
-  // Schedule a Writer task after allocating blocks for dirty data Pages.
-  // |writeback_flag_| ensures that neither checkpoint nor gc runs during the
-  // allocation. Flushing N of dirty Pages can produce N of additional dirty node
-  // Pages in the worst case. If there is not enough space, stop writeback.
-  if (writeback_flag_.try_acquire()) {
-    auto promise = fpromise::make_promise([this, limit]() mutable {
-      block_t dirty_pages = superblock_info_->GetPageCount(CountType::kDirtyData);
-      while (dirty_pages >= limit && !segment_manager_->HasNotEnoughFreeSecs() && CanReclaim()) {
+  // Schedule a Writer task for kernel to reclaim memory pages until the current memory pressure
+  // becomes normal or the number of dirty Pages is less than kMaxDirtyDataPages. |writeback_flag_|
+  // ensures that neither checkpoint nor gc runs during this writeback.
+  // If there is not enough space, stop writeback as flushing N of dirty Pages can produce N of
+  // additional dirty node Pages in the worst case.
+  if (NeedToWriteback() && writeback_flag_.try_acquire()) {
+    auto promise = fpromise::make_promise([this]() mutable {
+      while (!segment_manager_->HasNotEnoughFreeSecs() && CanReclaim()) {
         auto pages = dirty_data_page_list_.TakePages(kDefaultBlocksPerSegment);
         if (auto page_list_or =
                 GetSegmentManager().GetBlockAddrsForDirtyDataPages(std::move(pages), true);
@@ -68,7 +59,9 @@ void F2fs::ScheduleWriteback(size_t num_pages) {
             ScheduleWriter(nullptr, std::move(*page_list_or));
           }
         }
-        dirty_pages = superblock_info_->GetPageCount(CountType::kDirtyData);
+        if (!NeedToWriteback()) {
+          break;
+        }
       }
       // Wake waiters of WaitForWriteback().
       writeback_flag_.release();
@@ -81,11 +74,13 @@ void F2fs::ScheduleWriteback(size_t num_pages) {
 void F2fs::SyncFs(bool bShutdown) {
   // TODO:: Consider !superblock_info_.IsDirty()
   if (bShutdown) {
-    FX_LOGS(INFO) << "[f2fs] Unmount triggered";
+    FX_LOGS(INFO) << "[f2fs] Prepare for shutdown";
     // Stop writeback before umount.
     FlagAcquireGuard flag(&stop_reclaim_flag_);
     ZX_DEBUG_ASSERT(flag.IsAcquired());
     ZX_ASSERT(WaitForWriteback().is_ok());
+    // Stop listening to memorypressure.
+    memory_pressure_watcher_.reset();
     // Flush every dirty Pages.
     while (superblock_info_->GetPageCount(CountType::kDirtyData)) {
       // If necessary, do gc.

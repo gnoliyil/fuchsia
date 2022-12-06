@@ -30,6 +30,25 @@ F2fs::F2fs(FuchsiaDispatcher dispatcher, std::unique_ptr<f2fs::Bcache> bc,
 #endif  // __Fuchsia__
 }
 
+void F2fs::StartMemoryPressureWatcher() {
+  if (dispatcher_) {
+    memory_pressure_watcher_ =
+        std::make_unique<MemoryPressureWatcher>(dispatcher_, [this](MemoryPressure level) {
+          MemoryPressure prev_level = current_memory_pressure_level_;
+          // release-acquire ordering with HasNotEnoughMemory() and NeedToWriteback().
+          current_memory_pressure_level_.store(level, std::memory_order_release);
+          if (level > prev_level) {
+            ScheduleWriteback();
+          }
+          FX_LOGS(INFO) << "Memory pressure level: " << MemoryPressureWatcher::ToString(level);
+        });
+
+    if (!memory_pressure_watcher_->IsConnected()) {
+      memory_pressure_watcher_.reset();
+    }
+  }
+}
+
 zx::result<std::unique_ptr<F2fs>> F2fs::Create(FuchsiaDispatcher dispatcher,
                                                std::unique_ptr<f2fs::Bcache> bc,
                                                const MountOptions& options, PlatformVfs* vfs) {
@@ -45,6 +64,8 @@ zx::result<std::unique_ptr<F2fs>> F2fs::Create(FuchsiaDispatcher dispatcher,
     FX_LOGS(ERROR) << "failed to initialize fs." << status;
     return zx::error(status);
   }
+
+  fs->StartMemoryPressureWatcher();
 
   return zx::ok(std::move(fs));
 }

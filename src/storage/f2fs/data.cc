@@ -489,8 +489,6 @@ zx::result<block_t> VnodeF2fs::GetBlockAddrForDirtyDataPage(LockedPage &page, bo
 }
 
 zx::result<std::vector<LockedPage>> VnodeF2fs::WriteBegin(const size_t offset, const size_t len) {
-  fs()->GetSegmentManager().BalanceFs();
-
   const pgoff_t index_start = safemath::CheckDiv<pgoff_t>(offset, kBlockSize).ValueOrDie();
   const size_t offset_end = safemath::CheckAdd<size_t>(offset, len).ValueOrDie();
   const pgoff_t index_end = CheckedDivRoundUp<pgoff_t>(offset_end, kBlockSize);

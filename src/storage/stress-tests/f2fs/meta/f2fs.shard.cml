@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 {
+    include: [ "sys/component/realm_builder.shard.cml" ],
     children: [
         {
             name: "f2fs",
@@ -10,28 +11,25 @@
     ],
     use: [
         {
-            protocol: "fuchsia.fs.startup.Startup",
+            protocol: [
+                "fuchsia.fs.Admin",
+                "fuchsia.fs.startup.Startup",
+            ],
             from: "#f2fs",
-            path: "/f2fs/svc/fuchsia.fs.startup.Startup",
+        },
+        {
+            protocol: "fuchsia.component.Realm",
+            from: "framework",
         },
     ],
     offer: [
         {
             protocol: [
                 "fuchsia.logger.LogSink",
-                "fuchsia.scheduler.ProfileProvider",
+                "fuchsia.process.Launcher",
             ],
             from: "parent",
-            to: "#f2fs",
-        },
-        {
-            protocol: [
-                "fuchsia.memorypressure.Provider",
-                "fuchsia.tracing.provider.Registry",
-            ],
-            from: "parent",
-            to: "#f2fs",
-            availability: "optional",
+            to: [ "#f2fs" ],
         },
     ],
 }

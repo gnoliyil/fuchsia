@@ -812,8 +812,9 @@ void VnodeF2fs::ReleasePagedVmo() {
     valid_vmo_or = ReleasePagedVmoUnsafe();
     ZX_DEBUG_ASSERT(valid_vmo_or.is_ok());
   }
+
   // If necessary, clear the mmap flag in its node Page after releasing its paged VMO.
-  if (valid_vmo_or.value() && TestFlag(InodeInfoFlag::kInlineData)) {
+  if (!fs()->IsTearDown() && valid_vmo_or.value() && TestFlag(InodeInfoFlag::kInlineData)) {
     LockedPage inline_page;
     if (zx_status_t ret = fs()->GetNodeManager().GetNodePage(Ino(), &inline_page); ret == ZX_OK) {
       inline_page->ClearMmapped();

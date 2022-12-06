@@ -81,7 +81,7 @@ int usage(const std::vector<Command>& commands) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  syslog::SetLogSettings({}, {"f2fs"});
+  syslog::SetLogSettings({}, {"fshost", "f2fs"});
   f2fs::MountOptions options;
   const std::vector<Command> commands = {
       Command{kComponentCommand, StartComponent, "start a f2fs component"},

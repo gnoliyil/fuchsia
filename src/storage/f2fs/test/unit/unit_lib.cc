@@ -83,7 +83,7 @@ void FileTester::MountWithOptions(async_dispatcher_t *dispatcher, const MountOpt
   if (readonly) {
     vfs_or->SetReadonly(readonly != 0);
   }
-  auto fs_or = F2fs::Create(dispatcher, std::move(*bc), options, (*vfs_or).get());
+  auto fs_or = F2fs::Create(nullptr, std::move(*bc), options, (*vfs_or).get());
   ASSERT_TRUE(fs_or.is_ok());
   (*fs_or)->SetVfsForTests(std::move(*vfs_or));
   *fs = std::move(*fs_or);
