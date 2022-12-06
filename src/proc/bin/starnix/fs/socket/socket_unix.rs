@@ -390,7 +390,7 @@ impl UnixSocket {
     pub fn write_kernel(&self, message: Message) -> Result<(), Errno> {
         let peer = {
             let inner = self.lock();
-            inner.peer().ok_or_else(|| errno!(EPIPE))?.clone()
+            inner.peer().ok_or_else(|| errno!(ENOTCONN))?.clone()
         };
         let unix_socket = downcast_socket_to_unix(&peer);
         let mut peer = unix_socket.lock();
@@ -500,7 +500,7 @@ impl SocketOps for UnixSocket {
         let (peer, local_address, creds) = {
             let inner = self.lock();
             (
-                inner.peer().ok_or_else(|| errno!(EPIPE))?.clone(),
+                inner.peer().ok_or_else(|| errno!(ENOTCONN))?.clone(),
                 inner.address.clone(),
                 inner.credentials.clone(),
             )
