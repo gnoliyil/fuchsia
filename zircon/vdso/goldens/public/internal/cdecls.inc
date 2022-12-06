@@ -761,20 +761,20 @@ _ZX_SYSCALL_DECL(stream_create, zx_status_t, /* no attributes */, 4,
     _ZX_SYSCALL_ANNO(acquire_handle("Fuchsia")) zx_handle_t* out_stream))
 
 _ZX_SYSCALL_DECL(stream_readv, zx_status_t, /* no attributes */, 5,
-    (handle, options, vector, num_vector, actual), (
+    (handle, options, vectors, num_vectors, actual), (
     _ZX_SYSCALL_ANNO(use_handle("Fuchsia")) zx_handle_t handle,
     uint32_t options,
-    zx_iovec_t* vector,
-    size_t num_vector,
+    zx_iovec_t* vectors,
+    size_t num_vectors,
     size_t* actual))
 
 _ZX_SYSCALL_DECL(stream_readv_at, zx_status_t, /* no attributes */, 6,
-    (handle, options, offset, vector, num_vector, actual), (
+    (handle, options, offset, vectors, num_vectors, actual), (
     _ZX_SYSCALL_ANNO(use_handle("Fuchsia")) zx_handle_t handle,
     uint32_t options,
     zx_off_t offset,
-    zx_iovec_t* vector,
-    size_t num_vector,
+    zx_iovec_t* vectors,
+    size_t num_vectors,
     size_t* actual))
 
 _ZX_SYSCALL_DECL(stream_seek, zx_status_t, /* no attributes */, 4,
@@ -785,20 +785,20 @@ _ZX_SYSCALL_DECL(stream_seek, zx_status_t, /* no attributes */, 4,
     zx_off_t* out_seek))
 
 _ZX_SYSCALL_DECL(stream_writev, zx_status_t, /* no attributes */, 5,
-    (handle, options, vector, num_vector, actual), (
+    (handle, options, vectors, num_vectors, actual), (
     _ZX_SYSCALL_ANNO(use_handle("Fuchsia")) zx_handle_t handle,
     uint32_t options,
-    const zx_iovec_t* vector,
-    size_t num_vector,
+    const zx_iovec_t* vectors,
+    size_t num_vectors,
     size_t* actual))
 
 _ZX_SYSCALL_DECL(stream_writev_at, zx_status_t, /* no attributes */, 6,
-    (handle, options, offset, vector, num_vector, actual), (
+    (handle, options, offset, vectors, num_vectors, actual), (
     _ZX_SYSCALL_ANNO(use_handle("Fuchsia")) zx_handle_t handle,
     uint32_t options,
     zx_off_t offset,
-    const zx_iovec_t* vector,
-    size_t num_vector,
+    const zx_iovec_t* vectors,
+    size_t num_vectors,
     size_t* actual))
 
 _ZX_SYSCALL_DECL(system_get_dcache_line_size, uint32_t, __CONST, 0,

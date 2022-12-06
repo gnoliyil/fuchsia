@@ -2342,7 +2342,7 @@ TEXT runtime·vdsoCall_zx_stream_create(SB),NOSPLIT,$0-28
 	MOVD $0, m_vdsoSP(R21)
 	RET
 
-// func vdsoCall_zx_stream_readv(handle uint32, options uint32, vector unsafe.Pointer, num_vector uint, actual unsafe.Pointer) int32
+// func vdsoCall_zx_stream_readv(handle uint32, options uint32, vectors unsafe.Pointer, num_vectors uint, actual unsafe.Pointer) int32
 TEXT runtime·vdsoCall_zx_stream_readv(SB),NOSPLIT,$0-36
 	GO_ARGS
 	NO_LOCAL_POINTERS
@@ -2354,8 +2354,8 @@ TEXT runtime·vdsoCall_zx_stream_readv(SB),NOSPLIT,$0-36
 	CALL runtime·entersyscall(SB)
 	MOVW handle+0(FP), R0
 	MOVW options+4(FP), R1
-	MOVD vector+8(FP), R2
-	MOVD num_vector+16(FP), R3
+	MOVD vectors+8(FP), R2
+	MOVD num_vectors+16(FP), R3
 	MOVD actual+24(FP), R4
 	BL vdso_zx_stream_readv(SB)
 	MOVW R0, ret+32(FP)
@@ -2364,7 +2364,7 @@ TEXT runtime·vdsoCall_zx_stream_readv(SB),NOSPLIT,$0-36
 	MOVD $0, m_vdsoSP(R21)
 	RET
 
-// func vdsoCall_zx_stream_readv_at(handle uint32, options uint32, offset uint64, vector unsafe.Pointer, num_vector uint, actual unsafe.Pointer) int32
+// func vdsoCall_zx_stream_readv_at(handle uint32, options uint32, offset uint64, vectors unsafe.Pointer, num_vectors uint, actual unsafe.Pointer) int32
 TEXT runtime·vdsoCall_zx_stream_readv_at(SB),NOSPLIT,$0-44
 	GO_ARGS
 	NO_LOCAL_POINTERS
@@ -2377,8 +2377,8 @@ TEXT runtime·vdsoCall_zx_stream_readv_at(SB),NOSPLIT,$0-44
 	MOVW handle+0(FP), R0
 	MOVW options+4(FP), R1
 	MOVD offset+8(FP), R2
-	MOVD vector+16(FP), R3
-	MOVD num_vector+24(FP), R4
+	MOVD vectors+16(FP), R3
+	MOVD num_vectors+24(FP), R4
 	MOVD actual+32(FP), R5
 	BL vdso_zx_stream_readv_at(SB)
 	MOVW R0, ret+40(FP)
@@ -2406,7 +2406,7 @@ TEXT runtime·vdsoCall_zx_stream_seek(SB),NOSPLIT,$0-28
 	MOVD $0, m_vdsoSP(R21)
 	RET
 
-// func vdsoCall_zx_stream_writev(handle uint32, options uint32, vector unsafe.Pointer, num_vector uint, actual unsafe.Pointer) int32
+// func vdsoCall_zx_stream_writev(handle uint32, options uint32, vectors unsafe.Pointer, num_vectors uint, actual unsafe.Pointer) int32
 TEXT runtime·vdsoCall_zx_stream_writev(SB),NOSPLIT,$0-36
 	GO_ARGS
 	NO_LOCAL_POINTERS
@@ -2418,8 +2418,8 @@ TEXT runtime·vdsoCall_zx_stream_writev(SB),NOSPLIT,$0-36
 	CALL runtime·entersyscall(SB)
 	MOVW handle+0(FP), R0
 	MOVW options+4(FP), R1
-	MOVD vector+8(FP), R2
-	MOVD num_vector+16(FP), R3
+	MOVD vectors+8(FP), R2
+	MOVD num_vectors+16(FP), R3
 	MOVD actual+24(FP), R4
 	BL vdso_zx_stream_writev(SB)
 	MOVW R0, ret+32(FP)
@@ -2428,7 +2428,7 @@ TEXT runtime·vdsoCall_zx_stream_writev(SB),NOSPLIT,$0-36
 	MOVD $0, m_vdsoSP(R21)
 	RET
 
-// func vdsoCall_zx_stream_writev_at(handle uint32, options uint32, offset uint64, vector unsafe.Pointer, num_vector uint, actual unsafe.Pointer) int32
+// func vdsoCall_zx_stream_writev_at(handle uint32, options uint32, offset uint64, vectors unsafe.Pointer, num_vectors uint, actual unsafe.Pointer) int32
 TEXT runtime·vdsoCall_zx_stream_writev_at(SB),NOSPLIT,$0-44
 	GO_ARGS
 	NO_LOCAL_POINTERS
@@ -2441,8 +2441,8 @@ TEXT runtime·vdsoCall_zx_stream_writev_at(SB),NOSPLIT,$0-44
 	MOVW handle+0(FP), R0
 	MOVW options+4(FP), R1
 	MOVD offset+8(FP), R2
-	MOVD vector+16(FP), R3
-	MOVD num_vector+24(FP), R4
+	MOVD vectors+16(FP), R3
+	MOVD num_vectors+24(FP), R4
 	MOVD actual+32(FP), R5
 	BL vdso_zx_stream_writev_at(SB)
 	MOVW R0, ret+40(FP)

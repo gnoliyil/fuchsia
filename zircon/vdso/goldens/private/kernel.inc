@@ -841,20 +841,20 @@ KERNEL_SYSCALL(stream_create, zx_status_t, /* no attributes */, 4,
     _ZX_SYSCALL_ANNO(acquire_handle("Fuchsia")) user_out_handle* out_stream))
 
 BLOCKING_SYSCALL(stream_readv, zx_status_t, /* no attributes */, 5,
-    (handle, options, vector, num_vector, actual), (
+    (handle, options, vectors, num_vectors, actual), (
     _ZX_SYSCALL_ANNO(use_handle("Fuchsia")) zx_handle_t handle,
     uint32_t options,
-    user_out_ptr<zx_iovec_t> vector,
-    size_t num_vector,
+    user_out_ptr<zx_iovec_t> vectors,
+    size_t num_vectors,
     user_out_ptr<size_t> actual))
 
 BLOCKING_SYSCALL(stream_readv_at, zx_status_t, /* no attributes */, 6,
-    (handle, options, offset, vector, num_vector, actual), (
+    (handle, options, offset, vectors, num_vectors, actual), (
     _ZX_SYSCALL_ANNO(use_handle("Fuchsia")) zx_handle_t handle,
     uint32_t options,
     zx_off_t offset,
-    user_out_ptr<zx_iovec_t> vector,
-    size_t num_vector,
+    user_out_ptr<zx_iovec_t> vectors,
+    size_t num_vectors,
     user_out_ptr<size_t> actual))
 
 KERNEL_SYSCALL(stream_seek, zx_status_t, /* no attributes */, 4,
@@ -865,20 +865,20 @@ KERNEL_SYSCALL(stream_seek, zx_status_t, /* no attributes */, 4,
     user_out_ptr<zx_off_t> out_seek))
 
 BLOCKING_SYSCALL(stream_writev, zx_status_t, /* no attributes */, 5,
-    (handle, options, vector, num_vector, actual), (
+    (handle, options, vectors, num_vectors, actual), (
     _ZX_SYSCALL_ANNO(use_handle("Fuchsia")) zx_handle_t handle,
     uint32_t options,
-    user_in_ptr<const zx_iovec_t> vector,
-    size_t num_vector,
+    user_in_ptr<const zx_iovec_t> vectors,
+    size_t num_vectors,
     user_out_ptr<size_t> actual))
 
 BLOCKING_SYSCALL(stream_writev_at, zx_status_t, /* no attributes */, 6,
-    (handle, options, offset, vector, num_vector, actual), (
+    (handle, options, offset, vectors, num_vectors, actual), (
     _ZX_SYSCALL_ANNO(use_handle("Fuchsia")) zx_handle_t handle,
     uint32_t options,
     zx_off_t offset,
-    user_in_ptr<const zx_iovec_t> vector,
-    size_t num_vector,
+    user_in_ptr<const zx_iovec_t> vectors,
+    size_t num_vectors,
     user_out_ptr<size_t> actual))
 
 KERNEL_SYSCALL(syscall_next_1, zx_status_t, /* no attributes */, 1,

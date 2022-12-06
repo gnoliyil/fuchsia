@@ -1195,18 +1195,18 @@ syscall_result wrapper_stream_create(SafeSyscallArgument<uint32_t>::RawType opti
     });
 }
 
-syscall_result wrapper_stream_readv(SafeSyscallArgument<zx_handle_t>::RawType handle, SafeSyscallArgument<uint32_t>::RawType options, SafeSyscallArgument<zx_iovec_t*>::RawType vector, SafeSyscallArgument<size_t>::RawType num_vector, SafeSyscallArgument<size_t*>::RawType actual, uint64_t pc);
-syscall_result wrapper_stream_readv(SafeSyscallArgument<zx_handle_t>::RawType handle, SafeSyscallArgument<uint32_t>::RawType options, SafeSyscallArgument<zx_iovec_t*>::RawType vector, SafeSyscallArgument<size_t>::RawType num_vector, SafeSyscallArgument<size_t*>::RawType actual, uint64_t pc) {
+syscall_result wrapper_stream_readv(SafeSyscallArgument<zx_handle_t>::RawType handle, SafeSyscallArgument<uint32_t>::RawType options, SafeSyscallArgument<zx_iovec_t*>::RawType vectors, SafeSyscallArgument<size_t>::RawType num_vectors, SafeSyscallArgument<size_t*>::RawType actual, uint64_t pc);
+syscall_result wrapper_stream_readv(SafeSyscallArgument<zx_handle_t>::RawType handle, SafeSyscallArgument<uint32_t>::RawType options, SafeSyscallArgument<zx_iovec_t*>::RawType vectors, SafeSyscallArgument<size_t>::RawType num_vectors, SafeSyscallArgument<size_t*>::RawType actual, uint64_t pc) {
     return do_syscall(ZX_SYS_stream_readv, pc, &VDso::ValidSyscallPC::stream_readv, [&](ProcessDispatcher* current_process) -> uint64_t {
-        auto result = sys_stream_readv(SafeSyscallArgument<zx_handle_t>::Sanitize(handle), SafeSyscallArgument<uint32_t>::Sanitize(options), make_user_out_ptr(SafeSyscallArgument<zx_iovec_t*>::Sanitize(vector)), SafeSyscallArgument<size_t>::Sanitize(num_vector), make_user_out_ptr(SafeSyscallArgument<size_t*>::Sanitize(actual)));
+        auto result = sys_stream_readv(SafeSyscallArgument<zx_handle_t>::Sanitize(handle), SafeSyscallArgument<uint32_t>::Sanitize(options), make_user_out_ptr(SafeSyscallArgument<zx_iovec_t*>::Sanitize(vectors)), SafeSyscallArgument<size_t>::Sanitize(num_vectors), make_user_out_ptr(SafeSyscallArgument<size_t*>::Sanitize(actual)));
         return result;
     });
 }
 
-syscall_result wrapper_stream_readv_at(SafeSyscallArgument<zx_handle_t>::RawType handle, SafeSyscallArgument<uint32_t>::RawType options, SafeSyscallArgument<zx_off_t>::RawType offset, SafeSyscallArgument<zx_iovec_t*>::RawType vector, SafeSyscallArgument<size_t>::RawType num_vector, SafeSyscallArgument<size_t*>::RawType actual, uint64_t pc);
-syscall_result wrapper_stream_readv_at(SafeSyscallArgument<zx_handle_t>::RawType handle, SafeSyscallArgument<uint32_t>::RawType options, SafeSyscallArgument<zx_off_t>::RawType offset, SafeSyscallArgument<zx_iovec_t*>::RawType vector, SafeSyscallArgument<size_t>::RawType num_vector, SafeSyscallArgument<size_t*>::RawType actual, uint64_t pc) {
+syscall_result wrapper_stream_readv_at(SafeSyscallArgument<zx_handle_t>::RawType handle, SafeSyscallArgument<uint32_t>::RawType options, SafeSyscallArgument<zx_off_t>::RawType offset, SafeSyscallArgument<zx_iovec_t*>::RawType vectors, SafeSyscallArgument<size_t>::RawType num_vectors, SafeSyscallArgument<size_t*>::RawType actual, uint64_t pc);
+syscall_result wrapper_stream_readv_at(SafeSyscallArgument<zx_handle_t>::RawType handle, SafeSyscallArgument<uint32_t>::RawType options, SafeSyscallArgument<zx_off_t>::RawType offset, SafeSyscallArgument<zx_iovec_t*>::RawType vectors, SafeSyscallArgument<size_t>::RawType num_vectors, SafeSyscallArgument<size_t*>::RawType actual, uint64_t pc) {
     return do_syscall(ZX_SYS_stream_readv_at, pc, &VDso::ValidSyscallPC::stream_readv_at, [&](ProcessDispatcher* current_process) -> uint64_t {
-        auto result = sys_stream_readv_at(SafeSyscallArgument<zx_handle_t>::Sanitize(handle), SafeSyscallArgument<uint32_t>::Sanitize(options), SafeSyscallArgument<zx_off_t>::Sanitize(offset), make_user_out_ptr(SafeSyscallArgument<zx_iovec_t*>::Sanitize(vector)), SafeSyscallArgument<size_t>::Sanitize(num_vector), make_user_out_ptr(SafeSyscallArgument<size_t*>::Sanitize(actual)));
+        auto result = sys_stream_readv_at(SafeSyscallArgument<zx_handle_t>::Sanitize(handle), SafeSyscallArgument<uint32_t>::Sanitize(options), SafeSyscallArgument<zx_off_t>::Sanitize(offset), make_user_out_ptr(SafeSyscallArgument<zx_iovec_t*>::Sanitize(vectors)), SafeSyscallArgument<size_t>::Sanitize(num_vectors), make_user_out_ptr(SafeSyscallArgument<size_t*>::Sanitize(actual)));
         return result;
     });
 }
@@ -1219,18 +1219,18 @@ syscall_result wrapper_stream_seek(SafeSyscallArgument<zx_handle_t>::RawType han
     });
 }
 
-syscall_result wrapper_stream_writev(SafeSyscallArgument<zx_handle_t>::RawType handle, SafeSyscallArgument<uint32_t>::RawType options, SafeSyscallArgument<const zx_iovec_t*>::RawType vector, SafeSyscallArgument<size_t>::RawType num_vector, SafeSyscallArgument<size_t*>::RawType actual, uint64_t pc);
-syscall_result wrapper_stream_writev(SafeSyscallArgument<zx_handle_t>::RawType handle, SafeSyscallArgument<uint32_t>::RawType options, SafeSyscallArgument<const zx_iovec_t*>::RawType vector, SafeSyscallArgument<size_t>::RawType num_vector, SafeSyscallArgument<size_t*>::RawType actual, uint64_t pc) {
+syscall_result wrapper_stream_writev(SafeSyscallArgument<zx_handle_t>::RawType handle, SafeSyscallArgument<uint32_t>::RawType options, SafeSyscallArgument<const zx_iovec_t*>::RawType vectors, SafeSyscallArgument<size_t>::RawType num_vectors, SafeSyscallArgument<size_t*>::RawType actual, uint64_t pc);
+syscall_result wrapper_stream_writev(SafeSyscallArgument<zx_handle_t>::RawType handle, SafeSyscallArgument<uint32_t>::RawType options, SafeSyscallArgument<const zx_iovec_t*>::RawType vectors, SafeSyscallArgument<size_t>::RawType num_vectors, SafeSyscallArgument<size_t*>::RawType actual, uint64_t pc) {
     return do_syscall(ZX_SYS_stream_writev, pc, &VDso::ValidSyscallPC::stream_writev, [&](ProcessDispatcher* current_process) -> uint64_t {
-        auto result = sys_stream_writev(SafeSyscallArgument<zx_handle_t>::Sanitize(handle), SafeSyscallArgument<uint32_t>::Sanitize(options), make_user_in_ptr(SafeSyscallArgument<const zx_iovec_t*>::Sanitize(vector)), SafeSyscallArgument<size_t>::Sanitize(num_vector), make_user_out_ptr(SafeSyscallArgument<size_t*>::Sanitize(actual)));
+        auto result = sys_stream_writev(SafeSyscallArgument<zx_handle_t>::Sanitize(handle), SafeSyscallArgument<uint32_t>::Sanitize(options), make_user_in_ptr(SafeSyscallArgument<const zx_iovec_t*>::Sanitize(vectors)), SafeSyscallArgument<size_t>::Sanitize(num_vectors), make_user_out_ptr(SafeSyscallArgument<size_t*>::Sanitize(actual)));
         return result;
     });
 }
 
-syscall_result wrapper_stream_writev_at(SafeSyscallArgument<zx_handle_t>::RawType handle, SafeSyscallArgument<uint32_t>::RawType options, SafeSyscallArgument<zx_off_t>::RawType offset, SafeSyscallArgument<const zx_iovec_t*>::RawType vector, SafeSyscallArgument<size_t>::RawType num_vector, SafeSyscallArgument<size_t*>::RawType actual, uint64_t pc);
-syscall_result wrapper_stream_writev_at(SafeSyscallArgument<zx_handle_t>::RawType handle, SafeSyscallArgument<uint32_t>::RawType options, SafeSyscallArgument<zx_off_t>::RawType offset, SafeSyscallArgument<const zx_iovec_t*>::RawType vector, SafeSyscallArgument<size_t>::RawType num_vector, SafeSyscallArgument<size_t*>::RawType actual, uint64_t pc) {
+syscall_result wrapper_stream_writev_at(SafeSyscallArgument<zx_handle_t>::RawType handle, SafeSyscallArgument<uint32_t>::RawType options, SafeSyscallArgument<zx_off_t>::RawType offset, SafeSyscallArgument<const zx_iovec_t*>::RawType vectors, SafeSyscallArgument<size_t>::RawType num_vectors, SafeSyscallArgument<size_t*>::RawType actual, uint64_t pc);
+syscall_result wrapper_stream_writev_at(SafeSyscallArgument<zx_handle_t>::RawType handle, SafeSyscallArgument<uint32_t>::RawType options, SafeSyscallArgument<zx_off_t>::RawType offset, SafeSyscallArgument<const zx_iovec_t*>::RawType vectors, SafeSyscallArgument<size_t>::RawType num_vectors, SafeSyscallArgument<size_t*>::RawType actual, uint64_t pc) {
     return do_syscall(ZX_SYS_stream_writev_at, pc, &VDso::ValidSyscallPC::stream_writev_at, [&](ProcessDispatcher* current_process) -> uint64_t {
-        auto result = sys_stream_writev_at(SafeSyscallArgument<zx_handle_t>::Sanitize(handle), SafeSyscallArgument<uint32_t>::Sanitize(options), SafeSyscallArgument<zx_off_t>::Sanitize(offset), make_user_in_ptr(SafeSyscallArgument<const zx_iovec_t*>::Sanitize(vector)), SafeSyscallArgument<size_t>::Sanitize(num_vector), make_user_out_ptr(SafeSyscallArgument<size_t*>::Sanitize(actual)));
+        auto result = sys_stream_writev_at(SafeSyscallArgument<zx_handle_t>::Sanitize(handle), SafeSyscallArgument<uint32_t>::Sanitize(options), SafeSyscallArgument<zx_off_t>::Sanitize(offset), make_user_in_ptr(SafeSyscallArgument<const zx_iovec_t*>::Sanitize(vectors)), SafeSyscallArgument<size_t>::Sanitize(num_vectors), make_user_out_ptr(SafeSyscallArgument<size_t*>::Sanitize(actual)));
         return result;
     });
 }

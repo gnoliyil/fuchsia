@@ -809,8 +809,8 @@ extern {
     pub fn zx_stream_readv(
         handle: zx_handle_t,
         options: u32,
-        vector: *mut zx_iovec_t,
-        num_vector: usize,
+        vectors: *mut zx_iovec_t,
+        num_vectors: usize,
         actual: *mut usize
         ) -> zx_status_t;
 
@@ -818,8 +818,8 @@ extern {
         handle: zx_handle_t,
         options: u32,
         offset: zx_off_t,
-        vector: *mut zx_iovec_t,
-        num_vector: usize,
+        vectors: *mut zx_iovec_t,
+        num_vectors: usize,
         actual: *mut usize
         ) -> zx_status_t;
 
@@ -833,8 +833,8 @@ extern {
     pub fn zx_stream_writev(
         handle: zx_handle_t,
         options: u32,
-        vector: *const zx_iovec_t,
-        num_vector: usize,
+        vectors: *const zx_iovec_t,
+        num_vectors: usize,
         actual: *mut usize
         ) -> zx_status_t;
 
@@ -842,8 +842,8 @@ extern {
         handle: zx_handle_t,
         options: u32,
         offset: zx_off_t,
-        vector: *const zx_iovec_t,
-        num_vector: usize,
+        vectors: *const zx_iovec_t,
+        num_vectors: usize,
         actual: *mut usize
         ) -> zx_status_t;
 

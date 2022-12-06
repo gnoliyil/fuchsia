@@ -1108,11 +1108,11 @@ func vdsoCall_zx_stream_create(options uint32, vmo uint32, seek uint64, out_stre
 
 //go:noescape
 //go:nosplit
-func vdsoCall_zx_stream_readv(handle uint32, options uint32, vector unsafe.Pointer, num_vector uint, actual unsafe.Pointer) int32
+func vdsoCall_zx_stream_readv(handle uint32, options uint32, vectors unsafe.Pointer, num_vectors uint, actual unsafe.Pointer) int32
 
 //go:noescape
 //go:nosplit
-func vdsoCall_zx_stream_readv_at(handle uint32, options uint32, offset uint64, vector unsafe.Pointer, num_vector uint, actual unsafe.Pointer) int32
+func vdsoCall_zx_stream_readv_at(handle uint32, options uint32, offset uint64, vectors unsafe.Pointer, num_vectors uint, actual unsafe.Pointer) int32
 
 //go:noescape
 //go:nosplit
@@ -1120,11 +1120,11 @@ func vdsoCall_zx_stream_seek(handle uint32, whence uint32, offset int64, out_see
 
 //go:noescape
 //go:nosplit
-func vdsoCall_zx_stream_writev(handle uint32, options uint32, vector unsafe.Pointer, num_vector uint, actual unsafe.Pointer) int32
+func vdsoCall_zx_stream_writev(handle uint32, options uint32, vectors unsafe.Pointer, num_vectors uint, actual unsafe.Pointer) int32
 
 //go:noescape
 //go:nosplit
-func vdsoCall_zx_stream_writev_at(handle uint32, options uint32, offset uint64, vector unsafe.Pointer, num_vector uint, actual unsafe.Pointer) int32
+func vdsoCall_zx_stream_writev_at(handle uint32, options uint32, offset uint64, vectors unsafe.Pointer, num_vectors uint, actual unsafe.Pointer) int32
 
 //go:noescape
 //go:nosplit

@@ -502,11 +502,11 @@ TEXT ·Sys_socket_write(SB),NOSPLIT,$0
 TEXT ·Sys_stream_create(SB),NOSPLIT,$0
 	JMP runtime·vdsoCall_zx_stream_create(SB)
 
-// func Sys_stream_readv(handle Handle, options uint32, vector *uintptr, num_vector uint, actual *uint) Status
+// func Sys_stream_readv(handle Handle, options uint32, vectors *uintptr, num_vectors uint, actual *uint) Status
 TEXT ·Sys_stream_readv(SB),NOSPLIT,$0
 	JMP runtime·vdsoCall_zx_stream_readv(SB)
 
-// func Sys_stream_readv_at(handle Handle, options uint32, offset uint64, vector *uintptr, num_vector uint, actual *uint) Status
+// func Sys_stream_readv_at(handle Handle, options uint32, offset uint64, vectors *uintptr, num_vectors uint, actual *uint) Status
 TEXT ·Sys_stream_readv_at(SB),NOSPLIT,$0
 	JMP runtime·vdsoCall_zx_stream_readv_at(SB)
 
@@ -514,11 +514,11 @@ TEXT ·Sys_stream_readv_at(SB),NOSPLIT,$0
 TEXT ·Sys_stream_seek(SB),NOSPLIT,$0
 	JMP runtime·vdsoCall_zx_stream_seek(SB)
 
-// func Sys_stream_writev(handle Handle, options uint32, vector *uintptr, num_vector uint, actual *uint) Status
+// func Sys_stream_writev(handle Handle, options uint32, vectors *uintptr, num_vectors uint, actual *uint) Status
 TEXT ·Sys_stream_writev(SB),NOSPLIT,$0
 	JMP runtime·vdsoCall_zx_stream_writev(SB)
 
-// func Sys_stream_writev_at(handle Handle, options uint32, offset uint64, vector *uintptr, num_vector uint, actual *uint) Status
+// func Sys_stream_writev_at(handle Handle, options uint32, offset uint64, vectors *uintptr, num_vectors uint, actual *uint) Status
 TEXT ·Sys_stream_writev_at(SB),NOSPLIT,$0
 	JMP runtime·vdsoCall_zx_stream_writev_at(SB)
 

@@ -506,11 +506,11 @@ func Sys_stream_create(options uint32, vmo Handle, seek uint64, out_stream *Hand
 
 //go:noescape
 //go:nosplit
-func Sys_stream_readv(handle Handle, options uint32, vector *uintptr, num_vector uint, actual *uint) Status
+func Sys_stream_readv(handle Handle, options uint32, vectors *uintptr, num_vectors uint, actual *uint) Status
 
 //go:noescape
 //go:nosplit
-func Sys_stream_readv_at(handle Handle, options uint32, offset uint64, vector *uintptr, num_vector uint, actual *uint) Status
+func Sys_stream_readv_at(handle Handle, options uint32, offset uint64, vectors *uintptr, num_vectors uint, actual *uint) Status
 
 //go:noescape
 //go:nosplit
@@ -518,11 +518,11 @@ func Sys_stream_seek(handle Handle, whence uint32, offset int64, out_seek *uint6
 
 //go:noescape
 //go:nosplit
-func Sys_stream_writev(handle Handle, options uint32, vector *uintptr, num_vector uint, actual *uint) Status
+func Sys_stream_writev(handle Handle, options uint32, vectors *uintptr, num_vectors uint, actual *uint) Status
 
 //go:noescape
 //go:nosplit
-func Sys_stream_writev_at(handle Handle, options uint32, offset uint64, vector *uintptr, num_vector uint, actual *uint) Status
+func Sys_stream_writev_at(handle Handle, options uint32, offset uint64, vectors *uintptr, num_vectors uint, actual *uint) Status
 
 //go:noescape
 //go:nosplit
