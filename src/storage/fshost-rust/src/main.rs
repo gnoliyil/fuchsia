@@ -59,6 +59,7 @@ async fn main() -> Result<(), Error> {
             "blob" => remote_dir(env.blobfs_root()?),
             "data" => remote_dir(env.data_root()?),
         },
+        "mnt" => vfs::pseudo_directory! {},
     };
 
     let _ = service::handle_lifecycle_requests(shutdown_tx)?;
