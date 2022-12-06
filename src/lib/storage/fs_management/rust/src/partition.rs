@@ -63,12 +63,16 @@ pub async fn open_partition(matcher: PartitionMatcher, timeout: Duration) -> Res
     .await
 }
 
-// Checks if the partition associated with proxy matches the matcher
+/// Checks if the partition associated with proxy matches the matcher. If an error is encountered,
+/// it prints it out as a warning and returns false. An error isn't necessarily an issue - we might
+/// be using a matcher that wants a type guid, but the device we are currently checking doesn't
+/// implement get_type_guid. The error message may help debugging why no partition was matched
+/// though.
 pub async fn partition_matches(proxy: PartitionAndDeviceProxy, matcher: &PartitionMatcher) -> bool {
     match partition_matches_res(proxy, matcher).await {
         Ok(matched) => matched,
         Err(e) => {
-            tracing::error!("partition_matches failed: {:?}", e);
+            tracing::warn!(?e, "partition_matches failed");
             return false;
         }
     }
