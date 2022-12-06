@@ -7,7 +7,7 @@
 
 namespace {
 TEST(UsbMonitorUtilTest, StartStop) {
-  USBMonitor test_monitor;
+  UsbMonitor test_monitor;
   ASSERT_FALSE(test_monitor.Started());
   test_monitor.Start();
   ASSERT_TRUE(test_monitor.Started());
@@ -16,10 +16,10 @@ TEST(UsbMonitorUtilTest, StartStop) {
 }
 
 TEST(UsbMonitorUtilTest, StartAddRecordStop) {
-  USBMonitor test_monitor;
+  UsbMonitor test_monitor;
   test_monitor.Start();
   test_monitor.AddRecord({});
-  const USBMonitorStats test_record = test_monitor.GetStats();
+  const UsbMonitorStats test_record = test_monitor.GetStats();
   ASSERT_EQ(1u, test_record.num_records, "One record should have been added");
   ASSERT_TRUE(test_monitor.Started());
   test_monitor.Stop();

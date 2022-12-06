@@ -10,37 +10,37 @@
 #include <fbl/auto_lock.h>
 #include <usb/usb.h>
 
-void USBMonitor::Start() {
+void UsbMonitor::Start() {
   fbl::AutoLock start_lock(&mutex_);
   if (!started_) {
-    TRACE_INSTANT("USB Monitor Util", "START", TRACE_SCOPE_PROCESS);
+    TRACE_INSTANT("UsbMonitorUtil", "START", TRACE_SCOPE_PROCESS);
     started_ = true;
   }
 }
 
-void USBMonitor::Stop() {
+void UsbMonitor::Stop() {
   fbl::AutoLock<fbl::Mutex> start_lock(&mutex_);
   if (started_) {
-    TRACE_INSTANT("USB Monitor Util", "STOP", TRACE_SCOPE_PROCESS);
+    TRACE_INSTANT("UsbMonitorUtil", "STOP", TRACE_SCOPE_PROCESS);
     started_ = false;
   }
 }
 
-bool USBMonitor::Started() const {
+bool UsbMonitor::Started() const {
   fbl::AutoLock start_lock(&mutex_);
   return started_;
 }
 
-void USBMonitor::AddRecord(usb_request_t* request) {
+void UsbMonitor::AddRecord(usb_request_t* request) {
   fbl::AutoLock<fbl::Mutex> start_lock(&mutex_);
 
   if (started_) {
     ++num_records_;
-    TRACE_INSTANT("USB Monitor Util", "Record Added", TRACE_SCOPE_GLOBAL, "ep_num",
+    TRACE_INSTANT("UsbMonitorUtil", "Record Added", TRACE_SCOPE_GLOBAL, "ep_num",
                   TA_UINT32(usb_ep_num2(request->header.ep_address)), "device_id",
                   request->header.device_id, "length", request->header.length, "frame",
                   TA_UINT64(request->header.frame), "direct", TA_BOOL(request->direct));
   }
 }
 
-USBMonitorStats USBMonitor::GetStats() const { return USBMonitorStats{num_records_.load()}; }
+UsbMonitorStats UsbMonitor::GetStats() const { return UsbMonitorStats{num_records_.load()}; }

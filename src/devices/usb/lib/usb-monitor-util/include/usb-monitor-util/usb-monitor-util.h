@@ -6,19 +6,20 @@
 #define SRC_DEVICES_USB_LIB_USB_MONITOR_UTIL_INCLUDE_USB_MONITOR_UTIL_USB_MONITOR_UTIL_H_
 
 #include <fuchsia/hardware/usb/request/c/banjo.h>
+
 #include <atomic>
 
 #include <fbl/mutex.h>
 
 #ifdef __cplusplus
 
-// Stores fields the USBMonitor stores
-struct USBMonitorStats {
+// Stores fields the UsbMonitor stores
+struct UsbMonitorStats {
   unsigned int num_records;
 };
 
 // Records USB transactions and statistics on them.
-class USBMonitor {
+class UsbMonitor {
  public:
   // Start recording USB transactions. These are currently stored as traces.
   void Start();
@@ -33,7 +34,7 @@ class USBMonitor {
   void AddRecord(usb_request_t* request);
 
   // Returns statistics on the currently stored USB transactions.
-  USBMonitorStats GetStats() const;
+  UsbMonitorStats GetStats() const;
 
  private:
   bool started_ __TA_GUARDED(mutex_){false};
