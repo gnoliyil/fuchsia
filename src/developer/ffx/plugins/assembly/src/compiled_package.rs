@@ -4,7 +4,7 @@
 
 use anyhow::{bail, Context, Result};
 use assembly_components::ComponentBuilder;
-use assembly_config_schema::product_config::{CompiledPackageDefinition, MainPackageDefinition};
+use assembly_config_schema::assembly_config::{CompiledPackageDefinition, MainPackageDefinition};
 use assembly_tool::Tool;
 use camino::{Utf8Path, Utf8PathBuf};
 use fuchsia_pkg::PackageBuilder;
@@ -138,7 +138,7 @@ impl CompiledPackageBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use assembly_config_schema::{product_config::AdditionalPackageContents, FileEntry};
+    use assembly_config_schema::{assembly_config::AdditionalPackageContents, FileEntry};
     use assembly_tool::testing::FakeToolProvider;
     use assembly_tool::ToolProvider;
     use fuchsia_archive::Utf8Reader;

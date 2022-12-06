@@ -5,10 +5,7 @@
 use crate::operations::product::assembly_builder::ImageAssemblyConfigBuilder;
 use crate::util;
 use anyhow::{Context, Result};
-use assembly_config_schema::{
-    board_config::BoardInformation,
-    product_config::{AssemblyConfig, BuildType, FeatureSupportLevel},
-};
+use assembly_config_schema::{AssemblyConfig, BoardInformation, BuildType, FeatureSupportLevel};
 use assembly_tool::SdkToolProvider;
 use camino::Utf8PathBuf;
 use ffx_assembly_args::ProductArgs;

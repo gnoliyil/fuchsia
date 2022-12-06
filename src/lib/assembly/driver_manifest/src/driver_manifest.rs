@@ -4,7 +4,7 @@
 
 use {
     anyhow::{Context, Result},
-    assembly_config_schema::product_config::DriverDetails,
+    assembly_config_schema::DriverDetails,
     camino::{Utf8Path, Utf8PathBuf},
     fuchsia_pkg::PackageBuilder,
     fuchsia_pkg::PackageManifest,

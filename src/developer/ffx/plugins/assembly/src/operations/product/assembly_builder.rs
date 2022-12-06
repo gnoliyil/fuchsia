@@ -6,13 +6,11 @@ use crate::compiled_package::CompiledPackageBuilder;
 use crate::util;
 use anyhow::{anyhow, ensure, Context, Result};
 use assembly_config_data::ConfigDataBuilder;
-use assembly_config_schema::product_config::CompiledPackageDefinition;
 use assembly_config_schema::{
-    product_config::{
-        AssemblyInputBundle, DriverDetails, ProductConfigData, ProductPackageDetails,
-        ProductPackagesConfig, ShellCommands,
-    },
-    FileEntry, PartialImageAssemblyConfig,
+    assembly_config::{AssemblyInputBundle, CompiledPackageDefinition, ShellCommands},
+    image_assembly_config::{PartialImageAssemblyConfig, PartialKernelConfig},
+    product_config::{ProductConfigData, ProductPackageDetails, ProductPackagesConfig},
+    DriverDetails, FileEntry,
 };
 use assembly_driver_manifest::DriverManifestBuilder;
 use assembly_package_utils::{PackageInternalPathBuf, PackageManifestPathBuf};
@@ -569,7 +567,7 @@ impl ImageAssemblyConfigBuilder {
             system: system.into_paths().collect(),
             base: base.into_paths().collect(),
             cache: cache.into_paths().collect(),
-            kernel: Some(assembly_config_schema::PartialKernelConfig {
+            kernel: Some(PartialKernelConfig {
                 path: kernel_path,
                 args: kernel_args.into_iter().collect(),
                 clock_backstop: kernel_clock_backstop,
@@ -741,9 +739,9 @@ impl FileEntryMap {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use assembly_config_schema::product_config::AdditionalPackageContents;
-    use assembly_config_schema::product_config::MainPackageDefinition;
-    use assembly_config_schema::product_config::ShellCommands;
+    use assembly_config_schema::assembly_config::{
+        AdditionalPackageContents, MainPackageDefinition, ShellCommands,
+    };
     use assembly_driver_manifest::DriverManifest;
     use assembly_package_utils::PackageManifestPathBuf;
     use assembly_test_util::generate_test_manifest;
@@ -815,7 +813,7 @@ mod tests {
                 system: vec![write_empty_bundle_pkg("sys_package0")],
                 cache: vec![write_empty_bundle_pkg("cache_package0")],
                 bootfs_packages: vec![write_empty_bundle_pkg("bootfs_package0")],
-                kernel: Some(assembly_config_schema::PartialKernelConfig {
+                kernel: Some(PartialKernelConfig {
                     path: Some("kernel/path".into()),
                     args: vec!["kernel_arg0".into()],
                     clock_backstop: Some(56244),
@@ -865,7 +863,7 @@ mod tests {
                     .iter()
                     .map(|package_name| write_empty_pkg(&outdir, package_name, None).into())
                     .collect(),
-                kernel: Some(assembly_config_schema::PartialKernelConfig {
+                kernel: Some(PartialKernelConfig {
                     path: Some("kernel/path".into()),
                     args: Vec::default(),
                     clock_backstop: Some(0),

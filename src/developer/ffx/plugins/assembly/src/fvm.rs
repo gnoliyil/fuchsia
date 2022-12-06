@@ -339,7 +339,7 @@ mod tests {
     use super::MultiFvmBuilder;
 
     use crate::base_package::BasePackage;
-    use assembly_config_schema::{ImageAssemblyConfig, KernelConfig};
+    use assembly_config_schema::image_assembly_config::{ImageAssemblyConfig, KernelConfig};
     use assembly_images_config::{
         BlobFS, BlobFSLayout, EmptyAccount, EmptyMinFS, FvmFilesystem, FvmOutput, MinFS, NandFvm,
         Reserved, SparseFvm, StandardFvm,

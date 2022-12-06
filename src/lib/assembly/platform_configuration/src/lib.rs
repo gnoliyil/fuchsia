@@ -4,8 +4,7 @@
 
 use anyhow::ensure;
 use assembly_config_schema::{
-    board_config::{BoardInformation, BoardInformationExt},
-    product_config::{AssemblyConfig, BuildType, FeatureControl},
+    AssemblyConfig, BoardInformation, BoardInformationExt, BuildType, FeatureControl,
 };
 use fidl_fuchsia_logger::MAX_TAGS;
 use std::collections::{BTreeMap, BTreeSet};
