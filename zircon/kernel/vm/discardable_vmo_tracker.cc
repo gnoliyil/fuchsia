@@ -210,6 +210,27 @@ bool DiscardableVmoTracker::DebugIsDiscarded() const {
   return DebugIsInDiscardableListLocked(/*reclaim_candidate=*/false);
 }
 
+bool DiscardableVmoTracker::IsEligibleForReclamationLocked(
+    zx_duration_t min_duration_since_reclaimable) const {
+  // We've raced with a lock operation. Bail without doing anything. The lock operation will have
+  // already moved it to the unreclaimable list.
+  if (discardable_state_ != DiscardableVmoTracker::DiscardableState::kReclaimable) {
+    return false;
+  }
+
+  // If the vmo was unlocked less than |min_duration_since_reclaimable| in the past, do not discard
+  // from it yet.
+  if (zx_time_sub_time(current_time(), last_unlock_timestamp_) < min_duration_since_reclaimable) {
+    return false;
+  }
+
+  // We've verified that the state is |kReclaimable|, so the lock count should be zero.
+  DEBUG_ASSERT(lock_count_ == 0);
+
+  return true;
+}
+
+// static
 DiscardableVmoTracker::DiscardablePageCounts DiscardableVmoTracker::DebugDiscardablePageCounts() {
   DiscardablePageCounts total_counts = {};
   Guard<CriticalMutex> guard{DiscardableVmosLock::Get()};
@@ -251,6 +272,7 @@ DiscardableVmoTracker::DiscardablePageCounts DiscardableVmoTracker::DebugDiscard
   return total_counts;
 }
 
+// static
 uint64_t DiscardableVmoTracker::ReclaimPagesFromDiscardableVmos(
     uint64_t target_pages, zx_duration_t min_duration_since_reclaimable, list_node_t* freed_list) {
   uint64_t total_pages_discarded = 0;

@@ -2201,11 +2201,11 @@ zx_status_t VmCowPages::LookupPagesLocked(uint64_t offset, uint pf_flags,
     return ZX_ERR_OUT_OF_RANGE;
   }
 
-  // This vmo was discarded and has not been locked yet after the discard. Do not return any pages.
   if (discardable_tracker_) {
     discardable_tracker_->assert_cow_pages_locked();
-    if (discardable_tracker_->discardable_state_locked() ==
-        DiscardableVmoTracker::DiscardableState::kDiscarded) {
+    // This vmo was discarded and has not been locked yet after the discard. Do not return any
+    // pages.
+    if (discardable_tracker_->WasDiscardedLocked()) {
       return ZX_ERR_NOT_FOUND;
     }
   }
@@ -6147,12 +6147,12 @@ VmCowPages::DiscardablePageCounts VmCowPages::DebugGetDiscardablePageCounts() co
   canary_.Assert();
   DiscardablePageCounts counts = {};
 
-  Guard<CriticalMutex> guard{&lock_};
-
   // Not a discardable VMO.
   if (!discardable_tracker_) {
     return counts;
   }
+
+  Guard<CriticalMutex> guard{&lock_};
 
   discardable_tracker_->assert_cow_pages_locked();
   const DiscardableVmoTracker::DiscardableState state =
@@ -6192,34 +6192,20 @@ uint64_t VmCowPages::DiscardPages(zx_duration_t min_duration_since_reclaimable,
                                   list_node_t* freed_list) {
   canary_.Assert();
 
-  Guard<CriticalMutex> guard{&lock_};
-
   // Not a discardable VMO.
   if (!discardable_tracker_) {
     return 0;
   }
 
+  Guard<CriticalMutex> guard{&lock_};
+
   discardable_tracker_->assert_cow_pages_locked();
-  // We've raced with a lock operation. Bail without doing anything. The lock operation will have
-  // already moved it to the unreclaimable list.
-  if (discardable_tracker_->discardable_state_locked() !=
-      DiscardableVmoTracker::DiscardableState::kReclaimable) {
+  if (!discardable_tracker_->IsEligibleForReclamationLocked(min_duration_since_reclaimable)) {
     return 0;
   }
-
-  // If the vmo was unlocked less than |min_duration_since_reclaimable| in the past, do not discard
-  // from it yet.
-  if (zx_time_sub_time(current_time(), discardable_tracker_->last_unlock_timestamp_locked()) <
-      min_duration_since_reclaimable) {
-    return 0;
-  }
-
-  // We've verified that the state is |kReclaimable|, so the lock count should be zero.
-  DEBUG_ASSERT(discardable_tracker_->lock_count_locked() == 0);
-
-  uint64_t pages_freed = 0;
 
   // Remove all pages.
+  uint64_t pages_freed = 0;
   zx_status_t status = UnmapAndRemovePagesLocked(0, size_, freed_list, &pages_freed);
 
   if (status != ZX_OK) {
@@ -6229,9 +6215,8 @@ uint64_t VmCowPages::DiscardPages(zx_duration_t min_duration_since_reclaimable,
 
   IncrementHierarchyGenerationCountLocked();
 
-  // Update state to discarded.
-  discardable_tracker_->UpdateDiscardableStateLocked(
-      DiscardableVmoTracker::DiscardableState::kDiscarded);
+  // Set state to discarded.
+  discardable_tracker_->SetDiscardedLocked();
 
   return pages_freed;
 }

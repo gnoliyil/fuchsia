@@ -31,11 +31,6 @@ class DiscardableVmoTracker final {
     kDiscarded,
   };
 
-  // Updates the |discardable_state_| of a discardable vmo, and moves it from one discardable list
-  // to another.
-  void UpdateDiscardableStateLocked(DiscardableState state) TA_REQ(cow_->lock())
-      TA_EXCL(DiscardableVmosLock::Get());
-
   // Remove a discardable object from whichever global discardable list it is in. Called from the
   // VmCowPages destructor. Also resets the cow_ back reference.
   void RemoveFromDiscardableListLocked() TA_REQ(cow_->lock()) TA_EXCL(DiscardableVmosLock::Get());
@@ -44,6 +39,21 @@ class DiscardableVmoTracker final {
   zx_status_t LockDiscardableLocked(bool try_lock, bool* was_discarded_out) TA_REQ(cow_->lock())
       TA_EXCL(DiscardableVmosLock::Get());
   zx_status_t UnlockDiscardableLocked() TA_REQ(cow_->lock()) TA_EXCL(DiscardableVmosLock::Get());
+
+  // Returns whether this object qualifies for reclamation based on whether its state is
+  // kReclaimable *and* it has been in this state for at least |min_duration_since_reclaimable|.
+  bool IsEligibleForReclamationLocked(zx_duration_t min_duration_since_reclaimable) const
+      TA_REQ(cow_->lock());
+
+  // Whether the VMO has been discarded and not locked again yet.
+  bool WasDiscardedLocked() const TA_REQ(cow_->lock()) {
+    return discardable_state_ == DiscardableState::kDiscarded;
+  }
+
+  // Mark the VMO as discarded.
+  void SetDiscardedLocked() TA_REQ(cow_->lock()) TA_EXCL(DiscardableVmosLock::Get()) {
+    UpdateDiscardableStateLocked(DiscardableState::kDiscarded);
+  }
 
   // Returns the total number of pages locked and unlocked across all discardable vmos.
   // Note that this might not be exact and we might miss some vmos, because the
@@ -67,10 +77,6 @@ class DiscardableVmoTracker final {
   DiscardableState discardable_state_locked() const TA_REQ(cow_->lock()) {
     return discardable_state_;
   }
-  zx_time_t last_unlock_timestamp_locked() const TA_REQ(cow_->lock()) {
-    return last_unlock_timestamp_;
-  }
-  uint64_t lock_count_locked() const TA_REQ(cow_->lock()) { return lock_count_; }
 
   // Debug functions exposed for testing.
   uint64_t DebugGetLockCount() const {
@@ -86,6 +92,11 @@ class DiscardableVmoTracker final {
   void assert_cow_pages_locked() TA_ASSERT(cow_->lock()) { AssertHeld(cow_->lock_ref()); }
 
  private:
+  // Updates the |discardable_state_| of a discardable vmo, and moves it from one discardable list
+  // to another.
+  void UpdateDiscardableStateLocked(DiscardableState state) TA_REQ(cow_->lock())
+      TA_EXCL(DiscardableVmosLock::Get());
+
   // Helper function to move an object from the |discardable_non_reclaim_candidates_| list to the
   // |discardable_reclaim_candidates_| list.
   void MoveToReclaimCandidatesListLocked() TA_REQ(cow_->lock()) TA_REQ(DiscardableVmosLock::Get());
