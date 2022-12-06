@@ -28,7 +28,7 @@ use {
         errors::FxfsError,
         filesystem::{ApplyContext, ApplyMode, Filesystem, JournalingObject},
         log::*,
-        lsm_tree::types::LayerIterator,
+        lsm_tree::{types::MutableLayer, LSMTree, LayerSet},
         metrics::{traits::Metric as _, UintMetric},
         object_handle::BootstrapObjectHandle,
         object_store::{
@@ -40,7 +40,8 @@ use {
             },
             object_record::ObjectItem,
             transaction::{AssocObj, Options},
-            HandleOptions, Mutation, ObjectStore, StoreObjectHandle,
+            tree::MajorCompactable,
+            HandleOptions, Mutation, ObjectKey, ObjectStore, ObjectValue, StoreObjectHandle,
         },
         range::RangeExt,
         serialized_types::{Version, Versioned, VersionedLatest, EARLIEST_SUPPORTED_VERSION},
@@ -273,7 +274,7 @@ async fn read(
 /// Requires that the filesystem is fully loaded and writable as this may require allocation.
 async fn write<S: AsRef<ObjectStore> + Send + Sync + 'static>(
     super_block_header: &SuperBlockHeader,
-    items: Vec<ObjectItem>,
+    items: LayerSet<ObjectKey, ObjectValue>,
     handle: StoreObjectHandle<S>,
 ) -> Result<(), Error> {
     let object_manager = handle.store().filesystem().object_manager().clone();
@@ -286,10 +287,15 @@ async fn write<S: AsRef<ObjectStore> + Send + Sync + 'static>(
 
     writer.writer.write_all(SUPER_BLOCK_MAGIC)?;
     super_block_header.serialize_with_version(&mut writer.writer)?;
-    for item in items.into_iter() {
+
+    let mut merger = items.merger();
+    let mut iter = LSMTree::major_iter(Box::new(merger.seek(Bound::Unbounded).await?)).await?;
+    while let Some(item) = iter.get() {
         writer.maybe_extend().await?;
-        SuperBlockRecord::ObjectItem(item).serialize_into(&mut writer.writer)?;
+        SuperBlockRecord::ObjectItem(item.cloned()).serialize_into(&mut writer.writer)?;
+        iter.advance().await?;
     }
+
     SuperBlockRecord::End.serialize_into(&mut writer.writer)?;
     writer.writer.pad_to_block()?;
     writer.flush_buffer().await?;
@@ -309,25 +315,24 @@ async fn write<S: AsRef<ObjectStore> + Send + Sync + 'static>(
     Ok(())
 }
 
-// Reads and returns a snapshot of the root_parent store.
+// Compacts and returns the *old* snapshot of the root_parent store.
 // Must be performed whilst holding a writer lock.
-pub async fn object_store_to_vec(
+pub async fn compact_root_parent(
     root_parent_store: &ObjectStore,
-) -> Result<Vec<ObjectItem>, Error> {
+) -> Result<LayerSet<ObjectKey, ObjectValue>, Error> {
     let tree = root_parent_store.tree();
     let layer_set = tree.layer_set();
-    let mut merger = layer_set.merger();
-    let mut iter = merger.seek(Bound::Unbounded).await?;
-    let mut items = vec![];
-    while let Some(item_ref) = iter.get() {
-        let item = item_ref.cloned();
-        // TODO(fxbug.dev/116388): There shouldn't be tombstones here to begin with.
-        if !item.is_tombstone() {
-            items.push(item);
+    {
+        let mut merger = layer_set.merger();
+        let mut iter = LSMTree::major_iter(Box::new(merger.seek(Bound::Unbounded).await?)).await?;
+        let new_layer = LSMTree::new_mutable_layer();
+        while let Some(item_ref) = iter.get() {
+            new_layer.insert(item_ref.cloned()).await?;
+            iter.advance().await?;
         }
-        iter.advance().await?;
+        tree.set_mutable_layer(new_layer);
     }
-    Ok(items)
+    Ok(layer_set)
 }
 
 /// This encapsulates the A/B alternating super-block logic.
@@ -381,7 +386,7 @@ impl SuperBlockManager {
         &self,
         super_block_header: SuperBlockHeader,
         filesystem: Arc<dyn Filesystem>,
-        root_parent: Vec<ObjectItem>,
+        root_parent: LayerSet<ObjectKey, ObjectValue>,
     ) -> Result<(), Error> {
         let root_store = filesystem.root_store();
         let object_id = {
@@ -588,7 +593,7 @@ impl RecordReader {
 mod tests {
     use {
         super::{
-            object_store_to_vec, write, SuperBlockHeader, SuperBlockInstance, UuidWrapper,
+            compact_root_parent, write, SuperBlockHeader, SuperBlockInstance, UuidWrapper,
             MIN_SUPER_BLOCK_SIZE,
         },
         crate::{
@@ -597,7 +602,7 @@ mod tests {
                 allocator::Allocator,
                 journal::JournalCheckpoint,
                 transaction::{Options, TransactionHandler},
-                HandleOptions, ObjectHandle, ObjectStore, StoreObjectHandle,
+                HandleOptions, ObjectHandle, ObjectKey, ObjectStore, StoreObjectHandle,
             },
             serialized_types::LATEST_VERSION,
         },
@@ -829,7 +834,7 @@ mod tests {
         super_block_header_a.guid = UuidWrapper(Uuid::nil());
         write(
             &super_block_header_a,
-            object_store_to_vec(fs.object_manager().root_parent_store().as_ref())
+            compact_root_parent(fs.object_manager().root_parent_store().as_ref())
                 .await
                 .expect("scan failed"),
             handle_a,
@@ -892,6 +897,7 @@ mod tests {
             .map(|_| ())
             .expect_err("Super-block B was readable after a re-format");
     }
+
     #[fuchsia::test]
     async fn test_alternating_super_blocks() {
         let device = DeviceHolder::new(FakeDevice::new(8192, TEST_DEVICE_BLOCK_SIZE));
@@ -960,5 +966,52 @@ mod tests {
 
         // They should have the same oddness.
         assert_eq!(super_block_header_a_after.generation & 1, super_block_header_a.generation & 1);
+    }
+
+    #[fuchsia::test]
+    async fn test_root_parent_is_compacted() {
+        let device = DeviceHolder::new(FakeDevice::new(8192, TEST_DEVICE_BLOCK_SIZE));
+
+        let fs = FxFilesystem::new_empty(device).await.expect("new_empty failed");
+
+        let mut transaction = fs
+            .clone()
+            .new_transaction(&[], Options::default())
+            .await
+            .expect("new_transaction failed");
+        let store = fs.root_parent_store();
+        let handle =
+            ObjectStore::create_object(&store, &mut transaction, HandleOptions::default(), None)
+                .await
+                .expect("create_object failed");
+        transaction.commit().await.expect("commit failed");
+
+        store.tombstone(handle.object_id(), Options::default()).await.expect("tombstone failed");
+
+        // Generate enough work to induce a journal flush.
+        let root_store = fs.root_store();
+        for _ in 0..8000 {
+            let mut transaction = fs
+                .clone()
+                .new_transaction(&[], Options::default())
+                .await
+                .expect("new_transaction failed");
+            ObjectStore::create_object(
+                &root_store,
+                &mut transaction,
+                HandleOptions::default(),
+                None,
+            )
+            .await
+            .expect("create_object failed");
+            transaction.commit().await.expect("commit failed");
+        }
+
+        // The root parent store should have been compacted, so we shouldn't be able to find any
+        // record referring to the object we tombstoned.
+        assert_eq!(
+            store.tree().find(&ObjectKey::object(handle.object_id())).await.expect("find failed"),
+            None
+        );
     }
 }

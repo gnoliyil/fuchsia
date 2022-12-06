@@ -155,24 +155,6 @@ impl ObjectStore {
         let handle; // Must live longer than end_transaction.
         let mut end_transaction = filesystem.clone().new_transaction(&[], txn_options).await?;
 
-        #[async_trait]
-        impl tree::MajorCompactable<ObjectKey, ObjectValue> for LSMTree<ObjectKey, ObjectValue> {
-            async fn major_iter(
-                iter: BoxedLayerIterator<'_, ObjectKey, ObjectValue>,
-            ) -> Result<BoxedLayerIterator<'_, ObjectKey, ObjectValue>, Error> {
-                Ok(Box::new(
-                    iter.filter(|item: ItemRef<'_, _, _>| match item {
-                        // Object Tombstone.
-                        ItemRef { value: ObjectValue::None, .. } => false,
-                        // Deleted extent.
-                        ItemRef { value: ObjectValue::Extent(ExtentValue::None), .. } => false,
-                        _ => true,
-                    })
-                    .await?,
-                ))
-            }
-        }
-
         let mut new_store_info = store_info_snapshot.store_info.into_inner().unwrap();
         let mut total_layer_size = 0;
 
@@ -492,5 +474,23 @@ mod tests {
     #[fuchsia::test(threads = 10)]
     async fn test_metadata_key_roll_with_flush_before_unlock() {
         run_key_roll_test(/* flush_before_unlock: */ true).await;
+    }
+}
+
+#[async_trait]
+impl tree::MajorCompactable<ObjectKey, ObjectValue> for LSMTree<ObjectKey, ObjectValue> {
+    async fn major_iter(
+        iter: BoxedLayerIterator<'_, ObjectKey, ObjectValue>,
+    ) -> Result<BoxedLayerIterator<'_, ObjectKey, ObjectValue>, Error> {
+        Ok(Box::new(
+            iter.filter(|item: ItemRef<'_, _, _>| match item {
+                // Object Tombstone.
+                ItemRef { value: ObjectValue::None, .. } => false,
+                // Deleted extent.
+                ItemRef { value: ObjectValue::Extent(ExtentValue::None), .. } => false,
+                _ => true,
+            })
+            .await?,
+        ))
     }
 }

@@ -992,7 +992,7 @@ impl Journal {
         // relies on written data being observable, and we also need to lock the root parent store
         // so that no new entries are written to it whilst we are writing the super-block, and for
         // that we use the write lock.
-        let items;
+        let old_layers;
         let old_super_block_offset;
         let mut new_super_block_header;
         {
@@ -1019,13 +1019,13 @@ impl Journal {
             new_super_block_header.journal_file_offsets = journal_file_offsets;
             new_super_block_header.borrowed_metadata_space = borrowed;
 
-            items = super_block::object_store_to_vec(&*root_parent_store).await?;
+            old_layers = super_block::compact_root_parent(&*root_parent_store).await?;
         }
         self.super_block_manager
             .save(
                 new_super_block_header.clone(),
                 self.objects.root_parent_store().filesystem(),
-                items,
+                old_layers,
             )
             .await?;
         {

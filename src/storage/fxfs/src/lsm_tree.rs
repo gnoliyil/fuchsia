@@ -77,10 +77,7 @@ impl<'tree, K: MergeableKey, V: Value> LSMTree<K, V> {
     pub fn new(merge_fn: merge::MergeFn<K, V>) -> Self {
         LSMTree {
             data: RwLock::new(Inner {
-                mutable_layer: (
-                    Arc::new(DropEvent::new()),
-                    skip_list_layer::SkipListLayer::new(SKIP_LIST_LAYER_ITEMS),
-                ),
+                mutable_layer: (Arc::new(DropEvent::new()), Self::new_mutable_layer()),
                 layers: Vec::new(),
                 mutation_callback: None,
             }),
@@ -95,10 +92,7 @@ impl<'tree, K: MergeableKey, V: Value> LSMTree<K, V> {
     ) -> Result<Self, Error> {
         Ok(LSMTree {
             data: RwLock::new(Inner {
-                mutable_layer: (
-                    Arc::new(DropEvent::new()),
-                    skip_list_layer::SkipListLayer::new(SKIP_LIST_LAYER_ITEMS),
-                ),
+                mutable_layer: (Arc::new(DropEvent::new()), Self::new_mutable_layer()),
                 layers: layers_from_handles(handles).await?,
                 mutation_callback: None,
             }),
@@ -133,10 +127,7 @@ impl<'tree, K: MergeableKey, V: Value> LSMTree<K, V> {
         let mut data = self.data.write().unwrap();
         let (event, layer) = std::mem::replace(
             &mut data.mutable_layer,
-            (
-                Arc::new(DropEvent::new()),
-                skip_list_layer::SkipListLayer::new(SKIP_LIST_LAYER_ITEMS),
-            ),
+            (Arc::new(DropEvent::new()), Self::new_mutable_layer()),
         );
         data.layers.insert(0, layer.as_layer());
         // The caller should wait for any mutations to the old mutable layer to complete and that's
@@ -149,10 +140,7 @@ impl<'tree, K: MergeableKey, V: Value> LSMTree<K, V> {
     pub fn reset(&self) {
         let mut data = self.data.write().unwrap();
         data.layers = Vec::new();
-        data.mutable_layer = (
-            Arc::new(DropEvent::new()),
-            skip_list_layer::SkipListLayer::new(SKIP_LIST_LAYER_ITEMS),
-        );
+        data.mutable_layer = (Arc::new(DropEvent::new()), Self::new_mutable_layer());
     }
 
     /// Writes the items yielded by the iterator into the supplied object.
@@ -291,6 +279,16 @@ impl<'tree, K: MergeableKey, V: Value> LSMTree<K, V> {
             }
         }
         return earliest_version;
+    }
+
+    /// Returns a new mutable layer.
+    pub fn new_mutable_layer() -> Arc<impl MutableLayer<K, V>> {
+        skip_list_layer::SkipListLayer::new(SKIP_LIST_LAYER_ITEMS)
+    }
+
+    /// Replaces the mutable layer.
+    pub fn set_mutable_layer(&self, layer: Arc<impl MutableLayer<K, V> + 'static>) {
+        self.data.write().unwrap().mutable_layer = (Arc::new(DropEvent::new()), layer);
     }
 }
 
