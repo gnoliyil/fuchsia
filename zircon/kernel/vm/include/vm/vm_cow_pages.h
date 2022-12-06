@@ -36,10 +36,6 @@ class BatchPQRemove;
 class VmObjectPaged;
 class DiscardableVmoTracker;
 
-namespace internal {
-struct DiscardableListTag {};
-}  // namespace internal
-
 enum class VmCowPagesOptions : uint32_t {
   // Externally-usable flags:
   kNone = 0u,
@@ -65,12 +61,10 @@ enum class VmCowPagesOptions : uint32_t {
 FBL_ENABLE_ENUM_BITS(VmCowPagesOptions)
 
 // Implements a copy-on-write hierarchy of pages in a VmPageList.
-class VmCowPages final
-    : public VmHierarchyBase,
-      public fbl::ContainableBaseClasses<
-          fbl::TaggedDoublyLinkedListable<VmCowPages*, internal::ChildListTag>,
-          fbl::TaggedDoublyLinkedListable<VmCowPages*, internal::DiscardableListTag>>,
-      public fbl::Recyclable<VmCowPages> {
+class VmCowPages final : public VmHierarchyBase,
+                         public fbl::ContainableBaseClasses<
+                             fbl::TaggedDoublyLinkedListable<VmCowPages*, internal::ChildListTag>>,
+                         public fbl::Recyclable<VmCowPages> {
  public:
   static zx_status_t Create(fbl::RefPtr<VmHierarchyState> root_lock, VmCowPagesOptions options,
                             uint32_t pmm_alloc_flags, uint64_t size,

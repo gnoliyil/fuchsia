@@ -81,8 +81,8 @@ void DiscardableVmoTracker::UpdateDiscardableStateLocked(DiscardableState state)
 
       if (discardable_state_ == DiscardableState::kDiscarded) {
         // Should already be on the non reclaim candidates list.
-        DEBUG_ASSERT(discardable_non_reclaim_candidates_.find_if([this](auto& cow) -> bool {
-          return &cow == cow_;
+        DEBUG_ASSERT(discardable_non_reclaim_candidates_.find_if([this](auto& discardable) -> bool {
+          return &discardable == this;
         }) != discardable_non_reclaim_candidates_.end());
       } else {
         // Move to non reclaim candidates list.
@@ -114,14 +114,14 @@ void DiscardableVmoTracker::RemoveFromDiscardableListLocked() {
   }
 
   DEBUG_ASSERT(cow_);
-  DEBUG_ASSERT(fbl::InContainer<internal::DiscardableListTag>(*cow_));
+  DEBUG_ASSERT(fbl::InContainer<internal::DiscardableListTag>(*this));
 
-  Cursor::AdvanceCursors(discardable_vmos_cursors_, cow_);
+  Cursor::AdvanceCursors(discardable_vmos_cursors_, this);
 
   if (discardable_state_ == DiscardableState::kReclaimable) {
-    discardable_reclaim_candidates_.erase(*cow_);
+    discardable_reclaim_candidates_.erase(*this);
   } else {
-    discardable_non_reclaim_candidates_.erase(*cow_);
+    discardable_non_reclaim_candidates_.erase(*this);
   }
 
   discardable_state_ = DiscardableState::kUnset;
@@ -130,25 +130,25 @@ void DiscardableVmoTracker::RemoveFromDiscardableListLocked() {
 
 void DiscardableVmoTracker::MoveToReclaimCandidatesListLocked() {
   DEBUG_ASSERT(cow_);
-  DEBUG_ASSERT(fbl::InContainer<internal::DiscardableListTag>(*cow_));
+  DEBUG_ASSERT(fbl::InContainer<internal::DiscardableListTag>(*this));
 
-  Cursor::AdvanceCursors(discardable_vmos_cursors_, cow_);
-  discardable_non_reclaim_candidates_.erase(*cow_);
+  Cursor::AdvanceCursors(discardable_vmos_cursors_, this);
+  discardable_non_reclaim_candidates_.erase(*this);
 
-  discardable_reclaim_candidates_.push_back(cow_);
+  discardable_reclaim_candidates_.push_back(this);
 }
 
 void DiscardableVmoTracker::MoveToNonReclaimCandidatesListLocked(bool new_candidate) {
   DEBUG_ASSERT(cow_);
   if (new_candidate) {
-    DEBUG_ASSERT(!fbl::InContainer<internal::DiscardableListTag>(*cow_));
+    DEBUG_ASSERT(!fbl::InContainer<internal::DiscardableListTag>(*this));
   } else {
-    DEBUG_ASSERT(fbl::InContainer<internal::DiscardableListTag>(*cow_));
-    Cursor::AdvanceCursors(discardable_vmos_cursors_, cow_);
-    discardable_reclaim_candidates_.erase(*cow_);
+    DEBUG_ASSERT(fbl::InContainer<internal::DiscardableListTag>(*this));
+    Cursor::AdvanceCursors(discardable_vmos_cursors_, this);
+    discardable_reclaim_candidates_.erase(*this);
   }
 
-  discardable_non_reclaim_candidates_.push_back(cow_);
+  discardable_non_reclaim_candidates_.push_back(this);
 }
 
 bool DiscardableVmoTracker::DebugIsInDiscardableListLocked(bool reclaim_candidate) const {
@@ -160,12 +160,12 @@ bool DiscardableVmoTracker::DebugIsInDiscardableListLocked(bool reclaim_candidat
   }
 
   DEBUG_ASSERT(cow_);
-  DEBUG_ASSERT(fbl::InContainer<internal::DiscardableListTag>(*cow_));
+  DEBUG_ASSERT(fbl::InContainer<internal::DiscardableListTag>(*this));
 
-  auto iter_c =
-      discardable_reclaim_candidates_.find_if([this](auto& cow) -> bool { return &cow == cow_; });
+  auto iter_c = discardable_reclaim_candidates_.find_if(
+      [this](auto& discardable) -> bool { return &discardable == this; });
   auto iter_nc = discardable_non_reclaim_candidates_.find_if(
-      [this](auto& cow) -> bool { return &cow == cow_; });
+      [this](auto& discardable) -> bool { return &discardable == this; });
 
   if (reclaim_candidate) {
     // Verify that the vmo is in the |discardable_reclaim_candidates_| list and NOT in the
@@ -243,9 +243,13 @@ DiscardableVmoTracker::DiscardablePageCounts DiscardableVmoTracker::DebugDiscard
     Cursor cursor(DiscardableVmosLock::Get(), *list, discardable_vmos_cursors_);
     AssertHeld(cursor.lock_ref());
 
-    VmCowPages* cow;
-    while ((cow = cursor.Next())) {
-      fbl::RefPtr<VmCowPages> cow_ref = fbl::MakeRefPtrUpgradeFromRaw(cow, guard);
+    DiscardableVmoTracker* discardable;
+    while ((discardable = cursor.Next())) {
+      // It is safe to reference |discardable->cow_| like this because we found |discardable| in a
+      // discardable list, which means that even if the |cow_| was in process of being destroyed it
+      // hasn't made it far enough to have removed |discardable| from the discardable list and reset
+      // |cow_|, which requires the |DiscardableVmosLock|.
+      fbl::RefPtr<VmCowPages> cow_ref = fbl::MakeRefPtrUpgradeFromRaw(discardable->cow_, guard);
       if (cow_ref) {
         // Get page counts for each vmo outside of the |DiscardableVmosLock|, since
         // DebugGetDiscardablePageCounts() will acquire the VmCowPages lock. Holding the
@@ -253,7 +257,9 @@ DiscardableVmoTracker::DiscardablePageCounts DiscardableVmoTracker::DebugDiscard
         // constraints between the two.
         //
         // Since we upgraded the raw pointer to a RefPtr under the |DiscardableVmosLock|, we know
-        // that the object is valid. We will call Next() on our cursor after re-acquiring the
+        // that the object is valid. We could not have raced with destruction, since the object is
+        // removed from the discardable list on the destruction path, which requires the
+        // |DiscardableVmosLock|. We will call Next() on our cursor after re-acquiring the
         // |DiscardableVmosLock| to safely iterate to the next element on the list.
         guard.CallUnlocked([&total_counts, cow_ref = ktl::move(cow_ref)]() mutable {
           DiscardablePageCounts counts = cow_ref->DebugGetDiscardablePageCounts();
@@ -283,13 +289,17 @@ uint64_t DiscardableVmoTracker::ReclaimPagesFromDiscardableVmos(
   AssertHeld(cursor.lock_ref());
 
   while (total_pages_discarded < target_pages) {
-    VmCowPages* cow = cursor.Next();
+    DiscardableVmoTracker* discardable = cursor.Next();
     // No vmos to reclaim pages from.
-    if (cow == nullptr) {
+    if (discardable == nullptr) {
       break;
     }
 
-    fbl::RefPtr<VmCowPages> cow_ref = fbl::MakeRefPtrUpgradeFromRaw(cow, guard);
+    // It is safe to reference |discardable->cow_| like this because we found |discardable| in a
+    // discardable list, which means that even if the |cow_| was in process of being destroyed it
+    // hasn't made it far enough to have removed |discardable| from the discardable list and reset
+    // |cow_|, which requires the |DiscardableVmosLock|.
+    fbl::RefPtr<VmCowPages> cow_ref = fbl::MakeRefPtrUpgradeFromRaw(discardable->cow_, guard);
     if (cow_ref) {
       // We obtained the RefPtr above under the |DiscardableVmosLock|, so we know the object is
       // valid. We could not have raced with destruction, since the object is removed from the

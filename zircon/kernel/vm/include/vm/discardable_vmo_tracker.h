@@ -9,9 +9,15 @@
 
 #include <vm/vm_cow_pages.h>
 
+namespace internal {
+struct DiscardableListTag {};
+}  // namespace internal
+
 // Tracks state relevant for discardable VMOs. This class offers separation of the logic required
 // for discardable VMO management; the members are still protected by the owning VmCowPages' lock.
-class DiscardableVmoTracker final {
+class DiscardableVmoTracker final
+    : public fbl::ContainableBaseClasses<
+          fbl::TaggedDoublyLinkedListable<DiscardableVmoTracker*, internal::DiscardableListTag>> {
  public:
   DiscardableVmoTracker() = default;
   ~DiscardableVmoTracker() = default;
@@ -119,7 +125,8 @@ class DiscardableVmoTracker final {
   // required the order of locking should always be 1) vmo's lock, and then 2) DiscardableVmosLock.
   DECLARE_SINGLETON_CRITICAL_MUTEX(DiscardableVmosLock);
 
-  using DiscardableList = fbl::TaggedDoublyLinkedList<VmCowPages*, internal::DiscardableListTag>;
+  using DiscardableList =
+      fbl::TaggedDoublyLinkedList<DiscardableVmoTracker*, internal::DiscardableListTag>;
 
   // Two global lists of discardable vmos:
   // - |discardable_reclaim_candidates_| tracks discardable vmos that are eligible for reclamation
@@ -154,8 +161,8 @@ class DiscardableVmoTracker final {
   // the above state transitions.
   DiscardableState discardable_state_ TA_GUARDED(cow_->lock()) = DiscardableState::kUnset;
 
-  using Cursor =
-      VmoCursor<VmCowPages, DiscardableVmosLock, DiscardableList, DiscardableList::iterator>;
+  using Cursor = VmoCursor<DiscardableVmoTracker, DiscardableVmosLock, DiscardableList,
+                           DiscardableList::iterator>;
 
   // The list of all outstanding cursors iterating over the discardable lists:
   // |discardable_reclaim_candidates_| and |discardable_non_reclaim_candidates_|. The cursors should
@@ -166,4 +173,5 @@ class DiscardableVmoTracker final {
   // Back reference to the owning VmCowPages. Set at creation time.
   VmCowPages* cow_ = nullptr;
 };
+
 #endif  // ZIRCON_KERNEL_VM_INCLUDE_VM_DISCARDABLE_VMO_TRACKER_H_
