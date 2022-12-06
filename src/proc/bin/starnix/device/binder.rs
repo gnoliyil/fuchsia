@@ -2241,16 +2241,12 @@ impl BinderDriver {
         kernel: &Kernel,
         binder_process: &Arc<BinderProcess>,
     ) -> Result<Box<Arc<dyn BinderTask>>, Errno> {
-        match self.remote_tasks.read().get(&binder_process.identifier) {
-            Some(task) => Ok(Box::new(task.clone())),
-            _ => Ok(Box::new(Arc::new(LocalBinderTask {
-                task: kernel
-                    .pids
-                    .read()
-                    .get_task(binder_process.pid)
-                    .ok_or_else(|| errno!(EINVAL))?,
-            }))),
+        if let Some(task) = self.remote_tasks.read().get(&binder_process.identifier) {
+            return Ok(Box::new(task.clone()));
         }
+        Ok(Box::new(Arc::new(LocalBinderTask {
+            task: kernel.pids.read().get_task(binder_process.pid).ok_or_else(|| errno!(EINVAL))?,
+        })))
     }
 
     /// A binder thread is starting a transaction on a remote binder object.
