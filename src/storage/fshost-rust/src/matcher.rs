@@ -22,17 +22,25 @@ use {
 
 #[async_trait]
 pub trait Matcher: Send {
-    /// Tries to match this device against this matcher.
-    async fn match_device(
+    /// Tries to match this device against this matcher. Matching should be infallible.
+    async fn match_device(&self, device: &mut dyn Device) -> bool;
+
+    /// Process this device as the format this matcher is for. This is called when this matcher
+    /// returns true during matching. This step is fallible - if a device matched a matcher, but
+    /// then this step fails, we stop matching and bubble up the error.
+    async fn process_device(
         &mut self,
         device: &mut dyn Device,
         env: &mut dyn Environment,
-    ) -> Result<bool, Error>;
+    ) -> Result<(), Error>;
 
     /// This is called when a device appears that is a child of an already matched device.  It can
     /// be anywhere within the hierarchy, so not necessarily an immediate child.  Devices will be
     /// matched as children before being matched against global matches.
-    async fn match_child(
+    ///
+    /// Matchers are responsible for calling both match_device and process_device on their
+    /// children.
+    async fn match_and_process_child(
         &mut self,
         _device: &mut dyn Device,
         _env: &mut dyn Environment,
@@ -127,14 +135,15 @@ impl Matchers {
             .rev()
         {
             if device.topological_path().starts_with(path) {
-                if self.matchers[index].match_child(device, env, path).await? {
+                if self.matchers[index].match_and_process_child(device, env, path).await? {
                     self.matched.insert(device.topological_path().to_string(), index);
                     return Ok(true);
                 }
             }
         }
         for (index, m) in self.matchers.iter_mut().enumerate() {
-            if m.match_device(device, env).await? {
+            if m.match_device(device).await {
+                m.process_device(device, env).await?;
                 self.matched.insert(device.topological_path().to_string(), index);
                 return Ok(true);
             }
@@ -154,17 +163,19 @@ impl BootpartMatcher {
 
 #[async_trait]
 impl Matcher for BootpartMatcher {
-    async fn match_device(
+    async fn match_device(&self, device: &mut dyn Device) -> bool {
+        device
+            .get_block_info()
+            .await
+            .map_or(false, |info| info.flags.contains(fidl_fuchsia_hardware_block::Flag::BOOTPART))
+    }
+
+    async fn process_device(
         &mut self,
         device: &mut dyn Device,
         env: &mut dyn Environment,
-    ) -> Result<bool, Error> {
-        let info = device.get_block_info().await?;
-        if !info.flags.contains(fidl_fuchsia_hardware_block::Flag::BOOTPART) {
-            return Ok(false);
-        }
-        env.attach_driver(device, BOOTPART_DRIVER_PATH).await?;
-        Ok(true)
+    ) -> Result<(), Error> {
+        env.attach_driver(device, BOOTPART_DRIVER_PATH).await
     }
 }
 
@@ -179,17 +190,16 @@ impl NandMatcher {
 
 #[async_trait]
 impl Matcher for NandMatcher {
-    async fn match_device(
+    async fn match_device(&self, device: &mut dyn Device) -> bool {
+        device.is_nand()
+    }
+
+    async fn process_device(
         &mut self,
         device: &mut dyn Device,
         env: &mut dyn Environment,
-    ) -> Result<bool, Error> {
-        if device.is_nand() {
-            env.attach_driver(device, NAND_BROKER_DRIVER_PATH).await?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+    ) -> Result<(), Error> {
+        env.attach_driver(device, NAND_BROKER_DRIVER_PATH).await
     }
 }
 
@@ -217,7 +227,7 @@ struct PartitionMapMatcher {
     device_paths: Vec<String>,
 
     // A list of matchers to use against partitions of matched devices.
-    child_matchers: Vec<Box<dyn Matcher>>,
+    child_matchers: Vec<Box<dyn Matcher + Sync>>,
 }
 
 impl PartitionMapMatcher {
@@ -242,29 +252,29 @@ impl PartitionMapMatcher {
 
 #[async_trait]
 impl Matcher for PartitionMapMatcher {
-    async fn match_device(
-        &mut self,
-        device: &mut dyn Device,
-        env: &mut dyn Environment,
-    ) -> Result<bool, Error> {
+    async fn match_device(&self, device: &mut dyn Device) -> bool {
         if !self.allow_multiple && !self.device_paths.is_empty() {
-            return Ok(false);
+            return false;
         }
         if let Some(ramdisk_prefix) = &self.ramdisk_required {
             if !device.topological_path().starts_with(ramdisk_prefix) {
-                return Ok(false);
+                return false;
             }
         }
-        if device.content_format().await? == self.content_format {
-            env.attach_driver(device, self.driver_path).await?;
-            self.device_paths.push(device.topological_path().to_string());
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        device.content_format().await.ok() == Some(self.content_format)
     }
 
-    async fn match_child(
+    async fn process_device(
+        &mut self,
+        device: &mut dyn Device,
+        env: &mut dyn Environment,
+    ) -> Result<(), Error> {
+        env.attach_driver(device, self.driver_path).await?;
+        self.device_paths.push(device.topological_path().to_string());
+        Ok(())
+    }
+
+    async fn match_and_process_child(
         &mut self,
         device: &mut dyn Device,
         env: &mut dyn Environment,
@@ -280,8 +290,9 @@ impl Matcher for PartitionMapMatcher {
                     head.rsplit_once('/').and_then(|(head, _)| head.strip_suffix(self.path_suffix))
                 {
                     if head == parent_path {
-                        for m in &mut self.child_matchers {
-                            if m.match_device(device, env).await? {
+                        for m in self.child_matchers.iter_mut() {
+                            if m.match_device(device).await {
+                                m.process_device(device, env).await?;
                                 return Ok(true);
                             }
                         }
@@ -293,6 +304,10 @@ impl Matcher for PartitionMapMatcher {
     }
 }
 
+/// Matches a device with a given label and type guid. This is the common matching behavior between
+/// all matchers that match against devices in partition tables. It itself isn't a fully functional
+/// matcher - it doesn't know what to do with the device it matched - so it doesn't implement the
+/// Matcher trait.
 struct PartitionMatcher {
     label: &'static str,
     type_guid: &'static [u8; 16],
@@ -302,17 +317,10 @@ impl PartitionMatcher {
     fn new(label: &'static str, type_guid: &'static [u8; 16]) -> Self {
         Self { label, type_guid }
     }
-}
 
-#[async_trait]
-impl Matcher for PartitionMatcher {
-    async fn match_device(
-        &mut self,
-        device: &mut dyn Device,
-        _env: &mut dyn Environment,
-    ) -> Result<bool, Error> {
-        Ok(device.partition_label().await? == self.label
-            && device.partition_type().await? == self.type_guid)
+    async fn match_device(&self, device: &mut dyn Device) -> bool {
+        device.partition_label().await.ok() == Some(self.label)
+            && device.partition_type().await.ok() == Some(self.type_guid)
     }
 }
 
@@ -327,17 +335,16 @@ impl BlobfsMatcher {
 
 #[async_trait]
 impl Matcher for BlobfsMatcher {
-    async fn match_device(
+    async fn match_device(&self, device: &mut dyn Device) -> bool {
+        self.0.match_device(device).await
+    }
+
+    async fn process_device(
         &mut self,
         device: &mut dyn Device,
         env: &mut dyn Environment,
-    ) -> Result<bool, Error> {
-        if self.0.match_device(device, env).await? {
-            env.mount_blobfs(device).await?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+    ) -> Result<(), Error> {
+        env.mount_blobfs(device).await
     }
 }
 
@@ -352,17 +359,16 @@ impl DataMatcher {
 
 #[async_trait]
 impl Matcher for DataMatcher {
-    async fn match_device(
+    async fn match_device(&self, device: &mut dyn Device) -> bool {
+        self.0.match_device(device).await
+    }
+
+    async fn process_device(
         &mut self,
         device: &mut dyn Device,
         env: &mut dyn Environment,
-    ) -> Result<bool, Error> {
-        if self.0.match_device(device, env).await? {
-            env.mount_data(device).await?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+    ) -> Result<(), Error> {
+        env.mount_data(device).await
     }
 }
 
@@ -377,17 +383,16 @@ impl ZxcryptMatcher {
 
 #[async_trait]
 impl Matcher for ZxcryptMatcher {
-    async fn match_device(
+    async fn match_device(&self, device: &mut dyn Device) -> bool {
+        self.0.match_device(device).await
+    }
+
+    async fn process_device(
         &mut self,
         device: &mut dyn Device,
         env: &mut dyn Environment,
-    ) -> Result<bool, Error> {
-        if self.0.match_device(device, env).await? {
-            env.bind_zxcrypt(device).await?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+    ) -> Result<(), Error> {
+        env.bind_zxcrypt(device).await
     }
 }
 
@@ -403,7 +408,7 @@ mod tests {
                 NAND_BROKER_DRIVER_PATH,
             },
         },
-        anyhow::Error,
+        anyhow::{anyhow, Error},
         async_trait::async_trait,
         fidl::encoding::Decodable,
         fidl_fuchsia_hardware_block::{BlockInfo, BlockProxy, Flag},
@@ -460,7 +465,11 @@ mod tests {
     #[async_trait]
     impl Device for MockDevice {
         async fn get_block_info(&self) -> Result<fidl_fuchsia_hardware_block::BlockInfo, Error> {
-            Ok(BlockInfo { flags: self.block_flags, ..BlockInfo::new_empty() })
+            if self.is_nand {
+                Err(anyhow!("not supported by nand device"))
+            } else {
+                Ok(BlockInfo { flags: self.block_flags, ..BlockInfo::new_empty() })
+            }
         }
         fn is_nand(&self) -> bool {
             self.is_nand
