@@ -301,7 +301,7 @@ impl<FSC: FSConfig> Filesystem<FSC> {
 
             Ok(ServingMultiVolumeFilesystem {
                 _component: self.component.clone(),
-                exposed_dir,
+                exposed_dir: Some(exposed_dir),
                 volumes: HashMap::default(),
             })
         } else {
@@ -539,7 +539,8 @@ impl Drop for ServingSingleVolumeFilesystem {
 /// [`Filesystem::serve_multi_volume()`].
 pub struct ServingMultiVolumeFilesystem {
     _component: Option<Arc<ComponentInstance>>,
-    exposed_dir: fio::DirectoryProxy,
+    // exposed_dir will always be Some, except in Self::shutdown.
+    exposed_dir: Option<fio::DirectoryProxy>,
     volumes: HashMap<String, ServingVolume>,
 }
 
@@ -607,7 +608,7 @@ impl ServingMultiVolumeFilesystem {
         }
         let path = format!("volumes/{}", volume);
         fuchsia_fs::directory::open_node(
-            &self.exposed_dir,
+            self.exposed_dir.as_ref().unwrap(),
             &path,
             fio::OpenFlags::RIGHT_READABLE | fio::OpenFlags::NODE_REFERENCE,
             0,
@@ -633,10 +634,12 @@ impl ServingMultiVolumeFilesystem {
     ) -> Result<&mut ServingVolume, Error> {
         ensure!(!self.volumes.contains_key(volume), "Already bound");
         let (exposed_dir, server) = create_proxy::<fio::DirectoryMarker>()?;
-        connect_to_protocol_at_dir_root::<fidl_fuchsia_fxfs::VolumesMarker>(&self.exposed_dir)?
-            .create(volume, crypt, server)
-            .await?
-            .map_err(|e| anyhow!(zx::Status::from_raw(e)))?;
+        connect_to_protocol_at_dir_root::<fidl_fuchsia_fxfs::VolumesMarker>(
+            self.exposed_dir.as_ref().unwrap(),
+        )?
+        .create(volume, crypt, server)
+        .await?
+        .map_err(|e| anyhow!(zx::Status::from_raw(e)))?;
         self.insert_volume(volume.to_string(), exposed_dir).await
     }
 
@@ -651,7 +654,7 @@ impl ServingMultiVolumeFilesystem {
         let (exposed_dir, server) = create_proxy::<fio::DirectoryMarker>()?;
         let path = format!("volumes/{}", volume);
         connect_to_named_protocol_at_dir_root::<fidl_fuchsia_fxfs::VolumeMarker>(
-            &self.exposed_dir,
+            self.exposed_dir.as_ref().unwrap(),
             &path,
         )?
         .mount(server, &mut MountOptions { crypt })
@@ -669,7 +672,7 @@ impl ServingMultiVolumeFilesystem {
         ensure!(!self.volumes.contains_key(volume), "Already bound");
         let path = format!("volumes/{}", volume);
         connect_to_named_protocol_at_dir_root::<fidl_fuchsia_fxfs::VolumeMarker>(
-            &self.exposed_dir,
+            self.exposed_dir.as_ref().unwrap(),
             &path,
         )?
         .check(&mut fidl_fuchsia_fxfs::CheckOptions { crypt })
@@ -702,7 +705,7 @@ impl ServingMultiVolumeFilesystem {
     /// Provides access to the internal |exposed_dir| for use in testing
     /// callsites which need directory access.
     pub fn exposed_dir(&self) -> &fio::DirectoryProxy {
-        &self.exposed_dir
+        self.exposed_dir.as_ref().unwrap()
     }
 
     /// Attempts to shutdown the filesystem using the [`fidl_fuchsia_fs::AdminProxy::shutdown()`]
@@ -711,21 +714,26 @@ impl ServingMultiVolumeFilesystem {
     /// # Errors
     ///
     /// Returns [`Err`] if the shutdown failed.
-    pub async fn shutdown(self) -> Result<(), ShutdownError> {
-        connect_to_protocol_at_dir_root::<fidl_fuchsia_fs::AdminMarker>(&self.exposed_dir)?
-            .shutdown()
-            .await?;
+    pub async fn shutdown(mut self) -> Result<(), ShutdownError> {
+        connect_to_protocol_at_dir_root::<fidl_fuchsia_fs::AdminMarker>(
+            // Take exposed_dir so we don't attempt to shut down again in Drop.
+            &self.exposed_dir.take().unwrap(),
+        )?
+        .shutdown()
+        .await?;
         Ok(())
     }
 }
 
 impl Drop for ServingMultiVolumeFilesystem {
     fn drop(&mut self) {
-        // Make a best effort attempt to shut down to the filesystem.
-        if let Ok(proxy) =
-            connect_to_protocol_at_dir_root::<fidl_fuchsia_fs::AdminMarker>(&self.exposed_dir)
-        {
-            let _ = proxy.shutdown();
+        if let Some(exposed_dir) = self.exposed_dir.take() {
+            // Make a best effort attempt to shut down to the filesystem.
+            if let Ok(proxy) =
+                connect_to_protocol_at_dir_root::<fidl_fuchsia_fs::AdminMarker>(&exposed_dir)
+            {
+                let _ = proxy.shutdown();
+            }
         }
     }
 }
