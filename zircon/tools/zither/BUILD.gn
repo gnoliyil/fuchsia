@@ -26,7 +26,7 @@ group("tests") {
     ":multifile",
     ":resources",
     ":structs",
-    ":syscalls",
+    ":zx.test",
   ]
 
   # TODO(fxbug.dev/110295): These dependencies constitute build-time checks
@@ -113,7 +113,10 @@ if (is_host) {
 #      library is assumed to be `"zither." + string_replace(case_name, "_", ".")`.
 #      We derive the FIDL library name with character replacement since
 #      underscores are not a permitted as library name characters and a period
-#      is the defined separator.
+#      is the defined separator. One exception to this is "zx.test": if that is
+#      the target name, then the library is expected to be called "zx", which
+#      permits the testing of things that FIDL currently requires to be defined
+#      in a library of that name.
 #    - Type: list of relative paths
 #
 #  * cases
@@ -136,7 +139,11 @@ template("zither_golden_test") {
   assert(defined(invoker.cases) && invoker.cases != [], "no test cases defined")
 
   main_target = target_name
-  library_target = "zither." + string_replace(target_name, "_", ".")
+  if (target_name == "zx.test") {
+    library_target = "zx"
+  } else {
+    library_target = "zither." + string_replace(target_name, "_", ".")
+  }
 
   case_name = target_name
   case_data_dir = "testdata/${case_name}"
@@ -482,10 +489,10 @@ zither_golden_test("aliases") {
   ]
 }
 
-# FIDL: testdata/syscalls/
-# Goldens: testdata/syscalls/goldens/${backend}/
-zither_golden_test("syscalls") {
-  sources = [ "syscalls.test.fidl" ]
+# FIDL: testdata/zx/
+# Goldens: testdata/zx/goldens/${backend}/
+zither_golden_test("zx.test") {
+  sources = [ "zx.test.fidl" ]
 
   cases = [
     {
