@@ -41,8 +41,6 @@ func main() {
 	flag.BoolVar(&flags.UseRuntests, "use-runtests", false, "Whether to default to running fuchsia tests with runtests; if false, run_test_component will be used.")
 	flag.StringVar(&flags.SnapshotFile, "snapshot-output", "", "The output filename for the snapshot. This will be created in the output directory.")
 	flag.Var(&flags.LogLevel, "level", "Output verbosity, can be fatal, error, warning, info, debug or trace.")
-	flag.StringVar(&flags.FfxPath, "ffx", "", "Path to the ffx tool.")
-	flag.IntVar(&flags.FfxExperimentLevel, "ffx-experiment-level", 0, "The level of experimental features to enable. If -ffx is not set, this will have no effect.")
 	flag.BoolVar(&flags.PrefetchPackages, "prefetch-packages", false, "Prefetch any test packages in the background.")
 	flag.BoolVar(&flags.UseSerial, "use-serial", false, "Use serial to run tests on the target.")
 

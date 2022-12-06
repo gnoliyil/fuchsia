@@ -926,7 +926,7 @@ func TestExecute(t *testing.T) {
 			}
 			defer o.Close()
 			err = execute(context.Background(), tests, o, net.IPAddr{}, c.sshKeyFile, c.serialSocketPath, t.TempDir(),
-				TestrunnerFlags{SnapshotFile: "snapshot.zip", FfxExperimentLevel: 2})
+				TestrunnerFlags{SnapshotFile: "snapshot.zip"})
 			if c.wantErr {
 				if err == nil {
 					t.Errorf("got nil error, want an error for failing to initialize a tester")

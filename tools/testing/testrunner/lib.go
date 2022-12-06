@@ -64,17 +64,6 @@ type TestrunnerFlags struct {
 	// Logger level.
 	LogLevel logger.LogLevel
 
-	// The path to the ffx tool.
-	FfxPath string
-
-	// The level of experimental ffx features to enable.
-	//
-	// The following levels enable the following ffx features:
-	// 0 or greater: ffx test, ffx target snapshot
-	// 2 or greater: keeps ffx output dir for debugging
-	// 3: enables parallel test execution
-	FfxExperimentLevel int
-
 	// Whether to prefetch test packages. This is only useful when fetching
 	// packages ephemerally.
 	PrefetchPackages bool
@@ -253,13 +242,10 @@ func execute(
 			defer cancel()
 		}
 
-		ffxPath, ok := os.LookupEnv(botanistconstants.FFXPathEnvKey)
-		if !ok {
-			ffxPath = flags.FfxPath
-		}
+		ffxPath := os.Getenv(botanistconstants.FFXPathEnvKey)
 		ffxExperimentLevel, err := strconv.Atoi(os.Getenv(botanistconstants.FFXExperimentLevelEnvKey))
 		if err != nil {
-			ffxExperimentLevel = flags.FfxExperimentLevel
+			ffxExperimentLevel = 0
 		}
 		ffx, err := ffxInstance(
 			ctx, ffxPath, ffxExperimentLevel, flags.LocalWD, localEnv, addr, os.Getenv(botanistconstants.NodenameEnvKey),

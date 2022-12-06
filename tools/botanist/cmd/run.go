@@ -82,6 +82,11 @@ type RunCommand struct {
 	ffxPath string
 
 	// The level of experimental ffx features to enable.
+	//
+	// The following levels enable the following ffx features:
+	// 1 or greater: ffx emu, ffx target flash, ffx bootloader boot
+	// 2 or greater: ffx test, ffx target snapshot, keeps ffx output dir for debugging
+	// 3: enables parallel test execution
 	ffxExperimentLevel int
 
 	// Any image overrides for boot.
@@ -561,9 +566,6 @@ func (r *RunCommand) runAgainstTarget(ctx context.Context, t targets.Target, arg
 	if t.UseFFX() {
 		setEnviron(t.FFXEnv())
 	}
-
-	r.testrunnerFlags.FfxExperimentLevel = r.ffxExperimentLevel
-	r.testrunnerFlags.FfxPath = r.ffxPath
 
 	logger.Debugf(ctx, "botanist positional args (passed to testrunner) %v", args)
 
