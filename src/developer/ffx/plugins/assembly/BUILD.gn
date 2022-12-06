@@ -2,8 +2,13 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/host.gni")
+import("//build/rust/rustc_binary.gni")
 import("//build/zircon/tools.gni")
 import("//src/developer/ffx/build/ffx_plugin.gni")
+import("//src/developer/ffx/build/ffx_tool.gni")
+
+assert(is_host)
 
 ffx_plugin("ffx_assembly") {
   version = "0.1.0"
@@ -98,4 +103,15 @@ ffx_plugin("ffx_assembly") {
     "//third_party/rust_crates:itertools",
     "//third_party/rust_crates:regex",
   ]
+}
+
+ffx_tool("ffx_assembly_tool") {
+  edition = "2021"
+  output_name = "ffx-assembly"
+  deps = [
+    ":ffx_assembly",
+    "//src/developer/ffx/lib/fho:lib",
+    "//src/lib/fuchsia-async",
+  ]
+  sources = [ "src/main.rs" ]
 }

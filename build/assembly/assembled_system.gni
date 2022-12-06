@@ -862,6 +862,10 @@ template("assembled_system") {
     # This will not be resolved except by moving to Bazel.
     hermetic_deps = false
 
+    ffx_tool =
+        "//src/developer/ffx/plugins/assembly:ffx_assembly_tool_versioned"
+    ffx_tool_output_name = "ffx-assembly"
+
     args = [
       "--config",
       "assembly_enabled=true",
@@ -929,6 +933,10 @@ template("assembled_system") {
 
     hermetic_inputs_target = ":${labels.image_assembly_inputs}"
     hermetic_inputs_file = files.image_assembly_inputs
+
+    ffx_tool =
+        "//src/developer/ffx/plugins/assembly:ffx_assembly_tool_versioned"
+    ffx_tool_output_name = "ffx-assembly"
 
     args = [
       "--config",
