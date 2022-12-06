@@ -5,7 +5,6 @@
 #include <fidl/fuchsia.kernel/cpp/fidl.h>
 #include <lib/async-loop/cpp/loop.h>
 
-#include "src/lib/fxl/strings/string_printf.h"
 #include "src/virtualization/tests/lib/guest_test.h"
 
 namespace {
@@ -45,7 +44,6 @@ class VirtioMemTerminaGuest : public TerminaEnclosedGuest {
     launch_info->config.set_guest_memory(3u * 1024 * kOneMebibyte);
     launch_info->config.set_virtio_rng(false);
     launch_info->config.set_virtio_mem(true);
-    launch_info->config.set_virtio_balloon(true);
     launch_info->config.set_virtio_mem_block_size(kDefaultBlockSize);
     launch_info->config.set_virtio_mem_region_size(kDefaultMemoryRegionSize);
     launch_info->config.set_virtio_mem_region_alignment(kLinuxMinimalDIMMSize);
@@ -67,7 +65,6 @@ class VirtioMemDebianGuest : public DebianEnclosedGuest {
     // Not enough PCI slots, turn off a few devices
     launch_info->config.set_virtio_rng(false);
     launch_info->config.set_virtio_mem(true);
-    launch_info->config.set_virtio_balloon(true);
     launch_info->config.set_virtio_mem_block_size(kDefaultBlockSize);
     launch_info->config.set_virtio_mem_region_size(kDefaultMemoryRegionSize);
     launch_info->config.set_virtio_mem_region_alignment(kLinuxMinimalDIMMSize);
@@ -75,127 +72,29 @@ class VirtioMemDebianGuest : public DebianEnclosedGuest {
   }
 };
 
-constexpr uint16_t VIRTIO_BALLOON_S_MEMFREE = 4;
-constexpr uint16_t VIRTIO_BALLOON_S_MEMTOT = 5;
-constexpr uint16_t VIRTIO_BALLOON_S_AVAIL = 6;
-
-std::unordered_map<uint16_t, uint64_t> GetGuestMemStats(
-    fuchsia::virtualization::BalloonControllerSyncPtr& balloon_controller) {
-  ::fidl::VectorPtr<::fuchsia::virtualization::MemStat> mem_stats;
-  int32_t mem_stats_status = 0;
-  zx_status_t status = balloon_controller->GetMemStats(&mem_stats_status, &mem_stats);
-  EXPECT_EQ(status, ZX_OK);
-  EXPECT_EQ(mem_stats_status, ZX_OK);
-  std::unordered_map<uint16_t, uint64_t> stats;
-  for (auto& el : mem_stats.value()) {
-    stats[el.tag] = el.val;
-  }
-  return stats;
-}
-
-void RequestMemoryAndWaitForCompletion(
-    const std::string& label, uint64_t new_requested_size,
-    fuchsia::virtualization::MemControllerSyncPtr& mem_controller,
-    fuchsia::virtualization::BalloonControllerSyncPtr& balloon_controller) {
-  auto stats = GetGuestMemStats(balloon_controller);
-  FX_LOGS(INFO) << "Memory stats before " << label << ":"
-                << " TotalMemory = " << stats[VIRTIO_BALLOON_S_MEMTOT]
-                << " AvailableMemory = " << stats[VIRTIO_BALLOON_S_AVAIL]
-                << " FreeMemory = " << stats[VIRTIO_BALLOON_S_MEMFREE];
-
-  uint64_t prev_total_memory = stats[VIRTIO_BALLOON_S_MEMTOT];
-  mem_controller->RequestSize(new_requested_size);
-  FX_LOGS(INFO) << "Adjusting plugged size to " << new_requested_size;
-
-  uint64_t block_size;
-  uint64_t region_size;
-  uint64_t usable_region_size;
-  uint64_t plugged_size;
-  uint64_t requested_size;
-
-  while (true) {
-    zx_status_t status = mem_controller->GetMemSize(&block_size, &region_size, &usable_region_size,
-                                                    &plugged_size, &requested_size);
-
-    stats = GetGuestMemStats(balloon_controller);
-    ASSERT_EQ(status, ZX_OK);
-    ASSERT_EQ(block_size, kDefaultBlockSize);
-    ASSERT_EQ(region_size, kDefaultMemoryRegionSize);
-    ASSERT_EQ(usable_region_size, kDefaultMemoryRegionSize);
-    ASSERT_EQ(requested_size, new_requested_size);
-    uint64_t mem_delta = std::max(stats[VIRTIO_BALLOON_S_MEMTOT], prev_total_memory) -
-                         std::min(stats[VIRTIO_BALLOON_S_MEMTOT], prev_total_memory);
-    if (plugged_size == requested_size && mem_delta == requested_size) {
-      break;
-    }
-    zx::nanosleep(zx::deadline_after(zx::msec(100)));
-
-    FX_LOGS(INFO) << "Waiting Memory stats:"
-                  << " TotalMemory = " << stats[VIRTIO_BALLOON_S_MEMTOT]
-                  << " AvailableMemory = " << stats[VIRTIO_BALLOON_S_AVAIL]
-                  << " FreeMemory = " << stats[VIRTIO_BALLOON_S_MEMFREE]
-                  << " plugged_size = " << plugged_size;
-  }
-
-  FX_LOGS(INFO) << "Memory stats after " << label << ":"
-                << " TotalMemory = " << stats[VIRTIO_BALLOON_S_MEMTOT]
-                << " AvailableMemory = " << stats[VIRTIO_BALLOON_S_AVAIL]
-                << " FreeMemory = " << stats[VIRTIO_BALLOON_S_MEMFREE]
-                << " plugged_size = " << plugged_size;
-}
-
 // TODO(fxbug.dev/100514): Re-enable Debian after finding out why it doesn't update the total system
 // memory after the successful hotplug
 using GuestTypes = ::testing::Types<VirtioMemTerminaGuest>;
 TYPED_TEST_SUITE(MemGuestTest, GuestTypes, GuestTestNameGenerator);
 
-TYPED_TEST(MemGuestTest, PlugAndUnplug) {
+TYPED_TEST(MemGuestTest, Placeholder) {
   fuchsia::virtualization::MemControllerSyncPtr mem_controller;
   ASSERT_TRUE(this->ConnectToMem(mem_controller.NewRequest()));
 
-  // Validate the initial state of the virtio-mem
   uint64_t block_size;
   uint64_t region_size;
   uint64_t usable_region_size;
   uint64_t plugged_size;
   uint64_t requested_size;
 
-  ASSERT_EQ(ZX_OK, mem_controller->GetMemSize(&block_size, &region_size, &usable_region_size,
-                                              &plugged_size, &requested_size));
+  zx_status_t status = mem_controller->GetMemSize(&block_size, &region_size, &usable_region_size,
+                                                  &plugged_size, &requested_size);
+  ASSERT_EQ(status, ZX_OK);
   ASSERT_EQ(block_size, kDefaultBlockSize);
   ASSERT_EQ(region_size, kDefaultMemoryRegionSize);
   ASSERT_EQ(usable_region_size, kDefaultMemoryRegionSize);
   ASSERT_EQ(plugged_size, 0u);
   ASSERT_EQ(requested_size, 0u);
-
-  // use balloon GetGuestMemStats to query the total available memory before and after plug
-  fuchsia::virtualization::BalloonControllerSyncPtr balloon_controller;
-  ASSERT_TRUE(this->ConnectToBalloon(balloon_controller.NewRequest()));
-
-  uint64_t free_mem_before_plug = GetGuestMemStats(balloon_controller)[VIRTIO_BALLOON_S_MEMFREE];
-
-  constexpr uint64_t kTestPlugSize = kDefaultMemoryRegionSize;
-
-  RequestMemoryAndWaitForCompletion("Plug all", kTestPlugSize, mem_controller, balloon_controller);
-
-  const uint64_t alloc_amount_mib =
-      (free_mem_before_plug + (kTestPlugSize - plugged_size) / 2) / kOneMebibyte;
-  FX_LOGS(INFO) << fxl::StringPrintf("Allocate and release %lu MiB in the guest", alloc_amount_mib);
-
-  // This call will allocate and immediate release the specified amount of
-  // memory in the guest.
-  // From the guest perspective, memory is available once it got released.
-  // From the host perspective, memory is taken by the guest and not available
-  // until it will be reclaimed by the free page reporting.
-  std::string result;
-  ASSERT_EQ(this->RunUtil(
-                fxl::StringPrintf("memory_test_util alloc --size-mb 1 --num %lu", alloc_amount_mib),
-                {}, &result),
-            ZX_OK);
-
-  // Unplug half of the memory
-  RequestMemoryAndWaitForCompletion("Unplug half", kTestPlugSize / 2, mem_controller,
-                                    balloon_controller);
 }
 
 }  // namespace
