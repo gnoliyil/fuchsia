@@ -39,6 +39,8 @@ class DeviceControllerConnection
   fidl::WireSharedClient<fuchsia_device_manager::Coordinator> coordinator_client_;
 
   // Fidl methods
+  void ConnectMultiplexed(ConnectMultiplexedRequestView request,
+                          ConnectMultiplexedCompleter::Sync& _completer) override;
   void ConnectToDeviceProtocol(ConnectToDeviceProtocolRequestView request,
                                ConnectToDeviceProtocolCompleter::Sync& completer) override;
   void ConnectToController(ConnectToControllerRequestView request,
@@ -51,7 +53,6 @@ class DeviceControllerConnection
   void Resume(ResumeRequestView request, ResumeCompleter::Sync& _completer) override;
   void Unbind(UnbindCompleter::Sync& _completer) override;
   void CompleteRemoval(CompleteRemovalCompleter::Sync& _completer) override;
-  void Open(OpenRequestView request, OpenCompleter::Sync& _completer) override;
 };
 
 #endif  // SRC_DEVICES_BIN_DRIVER_HOST_DEVICE_CONTROLLER_CONNECTION_H_

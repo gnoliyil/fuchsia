@@ -4,6 +4,7 @@
 
 #include "src/devices/bin/driver_host/zx_device.h"
 
+#include <lib/fit/defer.h>
 #include <stdio.h>
 
 #include <fbl/auto_lock.h>
@@ -38,7 +39,7 @@ zx_device::~zx_device() = default;
 zx_status_t zx_device::Create(DriverHostContext* ctx, std::string name, fbl::RefPtr<Driver> driver,
                               fbl::RefPtr<zx_device>* out_dev) {
   *out_dev = fbl::AdoptRef(new zx_device(ctx, name, driver));
-  (*out_dev)->vnode = fbl::MakeRefCounted<DevfsVnode>(*out_dev, ctx->loop().dispatcher());
+  (*out_dev)->vnode.emplace(*out_dev, ctx->loop().dispatcher());
   return ZX_OK;
 }
 
@@ -225,14 +226,12 @@ zx_status_t zx_device_t::get_dev_power_state_from_mapping(
 }
 
 void zx_device::CloseAllConnections() {
-  // Posted to the main event loop to synchronize with any other calls that may manipulate
-  // the state of this Vnode (such as dev->vnode being reset by DevfsVnode::Close or
-  // DriverHostContext::DriverManagerRemove)
+  // Posted to the main event loop to synchronize with any other calls that may manipulate the state
+  // of this Vnode (such as dev->vnode being reset by DriverHostContext::DriverManagerRemove).
   async::PostTask(internal::ContextForApi()->loop().dispatcher(),
                   [dev = fbl::RefPtr<zx_device>(this)] {
-                    if (dev->vnode) {
-                      dev->driver_host_context_->vfs()->CloseAllConnectionsForVnode(
-                          *dev->vnode, /*callback=*/nullptr);
+                    if (std::optional<DeviceServer>& vnode = dev->vnode; vnode.has_value()) {
+                      vnode.value().CloseAllConnections(/*callback=*/nullptr);
                     }
                   });
 }

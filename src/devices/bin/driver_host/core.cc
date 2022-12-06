@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <lib/ddk/device.h>
 #include <lib/ddk/driver.h>
+#include <lib/fit/defer.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

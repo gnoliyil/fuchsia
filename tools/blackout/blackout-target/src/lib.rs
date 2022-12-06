@@ -297,22 +297,26 @@ pub async fn set_up_partition(
 pub async fn find_partition(partition_label: &str, device_path: Option<&str>) -> Result<String> {
     if let Some(path) = device_path {
         let fvm_block_path = format!("{}/fvm/{}-p-1/block", path, partition_label);
-        if let Err(_) = fuchsia_fs::directory::open_file(
+        match fuchsia_fs::directory::open_node(
             &dev(),
             fvm_block_path.strip_prefix("/dev/").unwrap(),
             fuchsia_fs::OpenFlags::RIGHT_READABLE,
+            0,
         )
         .await
         {
-            // If we failed to open that path, it might be because the fvm driver isn't bound yet.
-            let proxy = connect_to_protocol_at_path::<ControllerMarker>(&path)
-                .context("device path connect failed")?;
-            fvm::bind_fvm_driver(&proxy).await?;
-            recursive_wait_and_open_node(&dev(), fvm_block_path.strip_prefix("/dev/").unwrap())
-                .await
-                .context("recursive_wait on expected fvm path failed")?;
+            Ok(fio::NodeProxy { .. }) => return Ok(fvm_block_path),
+            Err(fuchsia_fs::node::OpenError::OpenError(zx::Status::NOT_FOUND)) => {
+                // If we failed to open that path, it might be because the fvm driver isn't bound yet.
+                let proxy = connect_to_protocol_at_path::<ControllerMarker>(&path)
+                    .context("device path connect failed")?;
+                fvm::bind_fvm_driver(&proxy).await?;
+                recursive_wait_and_open_node(&dev(), fvm_block_path.strip_prefix("/dev/").unwrap())
+                    .await
+                    .context("recursive_wait on expected fvm path failed")?;
+            }
+            Err(err) => return Err(err).context("failed to open fvm path"),
         }
-        return Ok(fvm_block_path);
     }
 
     for entry in readdir(&dev_class_block()).await? {

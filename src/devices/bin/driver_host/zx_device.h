@@ -396,7 +396,7 @@ struct zx_device
   fbl::Mutex controller_lock;
   std::optional<fidl::ServerBindingRef<fuchsia_device_manager::DeviceController>> controller_binding
       TA_GUARDED(controller_lock);
-  fbl::RefPtr<DevfsVnode> vnode;
+  std::optional<DeviceServer> vnode;
 
   fbl::Mutex proxy_ios_lock;
   ProxyIostate* proxy_ios TA_GUARDED(proxy_ios_lock) = nullptr;

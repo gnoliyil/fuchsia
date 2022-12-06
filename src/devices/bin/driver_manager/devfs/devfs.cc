@@ -148,12 +148,35 @@ zx_status_t Devnode::VnodeImpl::GetNodeInfoForProtocol(fs::VnodeProtocol protoco
   }
 }
 
+zx_status_t Devnode::VnodeImpl::ConnectService(zx::channel channel) {
+  return std::visit(
+      overloaded{[&](const NoRemote&) { return ZX_ERR_NOT_SUPPORTED; },
+                 [&](const Service&) { return ZX_ERR_NOT_SUPPORTED; },
+                 [&](const Remote& remote) {
+                   if (remote.connector.is_valid()) {
+                     return remote.connector->ConnectMultiplexed(std::move(channel)).status();
+                   }
+                   return ZX_ERR_NOT_SUPPORTED;
+                 }},
+      target_);
+}
+
+bool Devnode::VnodeImpl::IsService() const {
+  return std::visit(
+      overloaded{[&](const NoRemote&) { return false; }, [&](const Service&) { return false; },
+                 [&](const Remote& remote) { return remote.connector.is_valid(); }},
+      target_);
+}
+
 zx_status_t Devnode::VnodeImpl::OpenNode(ValidatedOptions options,
                                          fbl::RefPtr<Vnode>* out_redirect) {
   if (options->flags.directory) {
     return ZX_OK;
   }
   if (IsDirectory()) {
+    return ZX_OK;
+  }
+  if (IsService()) {
     return ZX_OK;
   }
   *out_redirect = remote_;
@@ -186,7 +209,7 @@ zx_status_t Devnode::VnodeImpl::RemoteNode::OpenRemote(fio::OpenFlags flags, uin
                        .status();
                  },
                  [&](const Remote& remote) {
-                   return remote.connector->Open(flags, mode, path, std::move(object)).status();
+                   return remote.connector->ConnectMultiplexed(object.TakeChannel()).status();
                  }},
       parent_.target_);
 }

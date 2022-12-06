@@ -17,6 +17,7 @@
 #include <lib/ddk/driver.h>
 #include <lib/fdio/fdio.h>
 #include <lib/fidl/coding.h>
+#include <lib/fit/defer.h>
 #include <lib/fit/function.h>
 #include <lib/zx/debuglog.h>
 #include <lib/zx/process.h>
@@ -430,10 +431,11 @@ zx_status_t DriverHostContext::DriverManagerRemove(fbl::RefPtr<zx_device_t> dev)
   }
   VLOGD(1, *dev, "Removing device %p", dev.get());
 
-  // Close all connections to the device vnode and drop it, since no one should be able to
-  // open connections anymore. This will break the reference cycle between the DevfsVnode
-  // and the zx_device.
-  vfs_.CloseAllConnectionsForVnode(*(dev->vnode), [dev]() { dev->vnode.reset(); });
+  // Close all connections to the device vnode and drop it, since no one should be able to open
+  // connections anymore. This will break the reference cycle between the device and its vnode.
+  if (std::optional<DeviceServer>& vnode = dev->vnode; vnode.has_value()) {
+    vnode.value().CloseAllConnections([dev]() { dev->vnode.reset(); });
+  }
 
   // respond to the remove fidl call
   dev->removal_cb(ZX_OK);

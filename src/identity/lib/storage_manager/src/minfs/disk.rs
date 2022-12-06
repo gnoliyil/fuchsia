@@ -348,7 +348,8 @@ impl Node {
     /// Clones the connection to the node and casts it as the protocol `T`.
     pub fn clone_as<T: ProtocolMarker>(&self) -> Result<T::Proxy, DiskError> {
         let (proxy, server_end) = fidl::endpoints::create_proxy::<T>()?;
-        self.0.clone(OPEN_RW, ServerEnd::new(server_end.into_channel()))?;
+        self.0
+            .clone(fio::OpenFlags::CLONE_SAME_RIGHTS, ServerEnd::new(server_end.into_channel()))?;
         Ok(proxy)
     }
 }
@@ -701,7 +702,7 @@ pub mod test {
 
                         // fuchsia.io.Node methods
                         MockPartitionRequest::Clone { flags, object, control_handle: _ } => {
-                            assert_eq!(flags, OPEN_RW);
+                            assert_eq!(flags, fio::OpenFlags::CLONE_SAME_RIGHTS);
                             let stream =
                                 ServerEnd::<MockPartitionMarker>::new(object.into_channel())
                                     .into_stream()

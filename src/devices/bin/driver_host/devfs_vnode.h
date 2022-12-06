@@ -6,49 +6,93 @@
 #define SRC_DEVICES_BIN_DRIVER_HOST_DEVFS_VNODE_H_
 
 #include <fidl/fuchsia.device/cpp/wire.h>
-#include <lib/fidl-async/cpp/bind.h>
-#include <lib/fidl/cpp/wire/transaction.h>
+#include <fidl/fuchsia.io/cpp/wire_test_base.h>
+#include <lib/fidl/cpp/wire/internal/server_details.h>
 
-#include <variant>
-
-#include <ddktl/fidl.h>
-
-#include "src/lib/storage/vfs/cpp/vnode.h"
+#include <fbl/ref_ptr.h>
 
 struct zx_device;
 
-class DevfsVnode : public fs::Vnode, public fidl::WireServer<fuchsia_device::Controller> {
+class DeviceServer {
  public:
-  DevfsVnode(fbl::RefPtr<zx_device> dev, async_dispatcher_t* dispatcher)
-      : dev_(std::move(dev)), dispatcher_(dispatcher) {}
+  DeviceServer(fbl::RefPtr<zx_device> dev, async_dispatcher_t* dispatcher);
 
-  // fs::Vnode methods
-  zx_status_t GetAttributes(fs::VnodeAttributes* a) override;
-  fs::VnodeProtocolSet GetProtocols() const override;
-  zx_status_t GetNodeInfoForProtocol(fs::VnodeProtocol protocol, fs::Rights rights,
-                                     fs::VnodeRepresentation* info) override;
-  void HandleFsSpecificMessage(fidl::IncomingHeaderAndMessage& msg,
-                               fidl::Transaction* txn) override;
-  void ConnectToDeviceFidl(zx::channel server);
+  void ConnectToController(fidl::ServerEnd<fuchsia_device::Controller> server_end);
+  void ConnectToDeviceFidl(zx::channel channel);
+  void ServeMultiplexed(zx::channel channel);
 
-  // fidl::WireServer<fuchsia_device::Controller> methods
-  void ConnectToDeviceFidl(ConnectToDeviceFidlRequestView request,
-                           ConnectToDeviceFidlCompleter::Sync& completer) override;
-  void Bind(BindRequestView request, BindCompleter::Sync& _completer) override;
-  void Rebind(RebindRequestView request, RebindCompleter::Sync& _completer) override;
-  void UnbindChildren(UnbindChildrenCompleter::Sync& completer) override;
-  void ScheduleUnbind(ScheduleUnbindCompleter::Sync& _completer) override;
-  void GetTopologicalPath(GetTopologicalPathCompleter::Sync& _completer) override;
-  void GetMinDriverLogSeverity(GetMinDriverLogSeverityCompleter::Sync& _completer) override;
-  void GetCurrentPerformanceState(GetCurrentPerformanceStateCompleter::Sync& completer) override;
-  void SetMinDriverLogSeverity(SetMinDriverLogSeverityRequestView request,
-                               SetMinDriverLogSeverityCompleter::Sync& _completer) override;
-  void SetPerformanceState(SetPerformanceStateRequestView request,
-                           SetPerformanceStateCompleter::Sync& _completer) override;
+  // Asynchronously close all connections and call `callback` when all connections have completed
+  // their teardown. Must not be called with `callback != nullptr` while a previous `callback` is
+  // pending.
+  void CloseAllConnections(fit::callback<void()> callback);
 
  private:
+  void Serve(zx::channel channel, fidl::internal::IncomingMessageDispatcher* impl);
+
+  class Node : public fidl::testing::WireTestBase<fuchsia_io::Node> {
+   public:
+    explicit Node(DeviceServer& parent);
+
+   private:
+    void NotImplemented_(const std::string& name, fidl::CompleterBase& completer) override;
+    void Close(CloseCompleter::Sync& completer) override;
+    void Query(QueryCompleter::Sync& completer) override;
+    void Clone(CloneRequestView request, CloneCompleter::Sync& completer) override;
+
+    DeviceServer& parent_;
+  };
+
+  class Controller : public fidl::WireServer<fuchsia_device::Controller> {
+   public:
+    explicit Controller(DeviceServer& parent);
+
+   private:
+    void ConnectToDeviceFidl(ConnectToDeviceFidlRequestView request,
+                             ConnectToDeviceFidlCompleter::Sync& completer) override;
+    void Bind(BindRequestView request, BindCompleter::Sync& completer) override;
+    void Rebind(RebindRequestView request, RebindCompleter::Sync& completer) override;
+    void UnbindChildren(UnbindChildrenCompleter::Sync& completer) override;
+    void ScheduleUnbind(ScheduleUnbindCompleter::Sync& completer) override;
+    void GetTopologicalPath(GetTopologicalPathCompleter::Sync& completer) override;
+    void GetMinDriverLogSeverity(GetMinDriverLogSeverityCompleter::Sync& completer) override;
+    void GetCurrentPerformanceState(GetCurrentPerformanceStateCompleter::Sync& completer) override;
+    void SetMinDriverLogSeverity(SetMinDriverLogSeverityRequestView request,
+                                 SetMinDriverLogSeverityCompleter::Sync& completer) override;
+    void SetPerformanceState(SetPerformanceStateRequestView request,
+                             SetPerformanceStateCompleter::Sync& completer) override;
+
+    DeviceServer& parent_;
+  };
+
+  class MessageDispatcher : public fidl::internal::IncomingMessageDispatcher {
+   public:
+    MessageDispatcher(DeviceServer& parent, bool multiplexing);
+
+   private:
+    void dispatch_message(fidl::IncomingHeaderAndMessage&& msg, fidl::Transaction* txn,
+                          fidl::internal::MessageStorageViewBase* storage_view) override;
+
+    DeviceServer& parent_;
+    const bool multiplexing_;
+  };
+
   fbl::RefPtr<zx_device> dev_;
-  async_dispatcher_t* dispatcher_;
+  async_dispatcher_t* const dispatcher_;
+
+  Node node_{*this};
+  Controller controller_{*this};
+  MessageDispatcher device_{*this, false};
+  MessageDispatcher multiplexed_{*this, true};
+
+  // Note: this protocol is a lie with respect to the bindings below; some of them speak the stated
+  // protocol, some speak the device-specific protocol, others speak a mix of protocols multiplexed
+  // at run-time. The protocol is not particularly important as this collection is only used to
+  // synchronize the destruction of all its bindings in response to driver lifecycle events.
+  using TypeErasedProtocol = fuchsia_device::Controller;
+
+  std::unordered_map<zx_handle_t, fidl::ServerBindingRef<TypeErasedProtocol>> bindings_;
+  // Set via `CloseAllConnections` and called when all bindings have completed their teardown.
+  std::optional<fit::callback<void()>> callback_;
 };
 
 #endif  // SRC_DEVICES_BIN_DRIVER_HOST_DEVFS_VNODE_H_

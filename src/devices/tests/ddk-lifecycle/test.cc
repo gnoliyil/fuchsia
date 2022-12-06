@@ -13,6 +13,7 @@
 #include <lib/fdio/directory.h>
 #include <lib/fidl/cpp/wire/channel.h>
 #include <lib/fidl/cpp/wire/connect_service.h>
+#include <lib/fit/defer.h>
 #include <zircon/processargs.h>
 #include <zircon/syscalls.h>
 
@@ -136,6 +137,8 @@ TEST_F(LifecycleTest, Init) {
   ASSERT_NO_FATAL_FAILURE(WaitPreRelease(child_id));
 }
 
+constexpr char kPath[] = "sys/platform/11:10:0/ddk-lifecycle-test/ddk-lifecycle-test-child-0";
+
 // TODO(https://fxbug.dev/116750): Implement in DFv2 and remove this test skip.
 #ifdef DFV2
 #define MAYBE_CloseAllConnectionsOnChildUnbind DISABLED_CloseAllConnectionsOnChildUnbind
@@ -149,9 +152,7 @@ TEST_F(LifecycleTest, MAYBE_CloseAllConnectionsOnChildUnbind) {
   ASSERT_FALSE(result->is_error());
   auto child_id = result->value()->child_id;
 
-  zx::result channel = device_watcher::RecursiveWaitForFile(
-      devmgr_.devfs_root().get(),
-      "sys/platform/11:10:0/ddk-lifecycle-test/ddk-lifecycle-test-child-0");
+  zx::result channel = device_watcher::RecursiveWaitForFile(devmgr_.devfs_root().get(), kPath);
   ASSERT_OK(channel.status_value());
 
   zx::channel chan = std::move(channel.value());
@@ -170,45 +171,66 @@ TEST_F(LifecycleTest, MAYBE_CloseAllConnectionsOnChildUnbind) {
 #define MAYBE_CallsFailDuringUnbind CallsFailDuringUnbind
 #endif  // __DFV2
 
+template <typename Protocol>
+zx::result<fidl::WireClient<Protocol>> MakeClient(const fbl::unique_fd& fd, const char* path,
+                                                  async_dispatcher_t* dispatcher) {
+  zx::result channel = device_watcher::RecursiveWaitForFile(fd.get(), path);
+  if (channel.is_error()) {
+    return channel.take_error();
+  }
+  return zx::ok(fidl::WireClient<Protocol>(fidl::ClientEnd<Protocol>(std::move(channel.value())),
+                                           dispatcher));
+}
+
 TEST_F(LifecycleTest, MAYBE_CallsFailDuringUnbind) {
   auto result = fidl::WireCall(chan_)->AddChild(true /* complete_init */, ZX_OK /* init_status */);
   ASSERT_OK(result.status());
   ASSERT_FALSE(result->is_error());
   auto child_id = result->value()->child_id;
 
-  zx::result channel = device_watcher::RecursiveWaitForFile(
-      devmgr_.devfs_root().get(),
-      "sys/platform/11:10:0/ddk-lifecycle-test/ddk-lifecycle-test-child-0");
-  ASSERT_OK(channel.status_value());
+  async::Loop loop{&kAsyncLoopConfigNeverAttachToThread};
 
-  fidl::ClientEnd<fuchsia_io::File> file_client(std::move(channel.value()));
+  // Connect before unbinding.
 
-  ASSERT_TRUE(fidl::WireCall(chan_)->AsyncRemoveChild(child_id).ok());
-  {
-    const fidl::WireResult result = fidl::WireCall(file_client)->GetAttr();
-    ASSERT_OK(result.status());
-    const fidl::WireResponse response = result.value();
-    ASSERT_STATUS(response.s, ZX_ERR_IO_NOT_PRESENT);
-  }
-  int fd2 = open("sys/platform/11:10:0/ddk-lifecycle-test/ddk-lifecycle-test-child-0", O_RDWR);
-  ASSERT_EQ(fd2, -1);
-  fidl::ClientEnd<fuchsia_hardware_serial::Device> device_client(file_client.TakeChannel());
-  ASSERT_EQ(fidl::WireCall(device_client)->GetClass().status(), ZX_ERR_PEER_CLOSED);
-  struct Epitaph {
-    zx_txid_t txid;
-    uint8_t flags[3];
-    uint8_t magic_number;
-    uint64_t ordinal;
-    zx_status_t error;
-  } epitaph;
-  constexpr auto kEpitaph = 0xFFFFFFFFFFFFFFFF;
-  uint32_t actual_bytes = 0;
-  uint32_t actual_handles = 0;
-  ASSERT_OK(device_client.channel().read(0, &epitaph, nullptr, sizeof(epitaph), 0, &actual_bytes,
-                                         &actual_handles));
-  ASSERT_EQ(actual_bytes, sizeof(epitaph));
-  ASSERT_EQ(epitaph.ordinal, kEpitaph);
-  ASSERT_EQ(epitaph.error, ZX_ERR_IO_NOT_PRESENT);
+  const fbl::unique_fd& fd = devmgr_.devfs_root();
+  async_dispatcher_t* const dispatcher = loop.dispatcher();
+
+  zx::result queryable = MakeClient<fuchsia_unknown::Queryable>(fd, kPath, dispatcher);
+  ASSERT_OK(queryable);
+
+  zx::result controller = MakeClient<fuchsia_device::Controller>(fd, kPath, dispatcher);
+  ASSERT_OK(controller);
+
+  zx::result device = MakeClient<fuchsia_hardware_serial::Device>(fd, kPath, dispatcher);
+  ASSERT_OK(device);
+
+  ASSERT_OK(loop.RunUntilIdle());
+
+  ASSERT_OK(fidl::WireCall(chan_)->AsyncRemoveChild(child_id).status());
+
+  auto quitter =
+      std::make_shared<fit::deferred_action<fit::callback<void()>>>([&loop]() { loop.Quit(); });
+
+  queryable.value()->Query().ThenExactlyOnce(
+      [&, quitter](fidl::WireUnownedResult<fuchsia_unknown::Queryable::Query>& result) {
+        ASSERT_STATUS(result.status(), ZX_ERR_IO_NOT_PRESENT);
+      });
+  controller.value()->GetTopologicalPath().ThenExactlyOnce(
+      [&,
+       quitter](fidl::WireUnownedResult<fuchsia_device::Controller::GetTopologicalPath>& result) {
+        ASSERT_STATUS(result.status(), ZX_ERR_IO_NOT_PRESENT);
+      });
+  device.value()->GetClass().ThenExactlyOnce(
+      [&, quitter](fidl::WireUnownedResult<fuchsia_hardware_serial::Device::GetClass>& result) {
+        ASSERT_STATUS(result.status(), ZX_ERR_IO_NOT_PRESENT);
+      });
+
+  quitter.reset();
+
+  ASSERT_STATUS(loop.Run(), ZX_ERR_CANCELED);
+
+  ASSERT_EQ(open(kPath, O_RDWR), -1);
+  ASSERT_EQ(errno, ENOENT);
 }
 
 TEST_F(LifecycleTest, CloseAllConnectionsOnUnbind) {

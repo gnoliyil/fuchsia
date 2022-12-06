@@ -354,7 +354,7 @@ mod tests {
             fidl::endpoints::ClientEnd::<fio::NodeMarker>::new(client_end.into_channel());
         let proxy = client_end.into_proxy().unwrap();
         let protocol = proxy.query().await.expect("failed to get node info");
-        assert_eq!(protocol, fio::FILE_PROTOCOL_NAME.as_bytes());
+        assert_eq!(protocol, fio::NODE_PROTOCOL_NAME.as_bytes());
 
         assert_eq!(ramdisk.destroy(), Ok(()));
     }

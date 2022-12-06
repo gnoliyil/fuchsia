@@ -102,6 +102,8 @@ class Devnode {
                         size_t* out_actual) final;
     zx_status_t GetNodeInfoForProtocol(fs::VnodeProtocol protocol, fs::Rights rights,
                                        fs::VnodeRepresentation* info) final;
+    zx_status_t ConnectService(zx::channel channel) final;
+    bool IsService() const final;
     zx_status_t OpenNode(ValidatedOptions options, fbl::RefPtr<Vnode>* out_redirect) final;
 
     bool IsSkipRightsEnforcementDevfsOnlyDoNotUse() const final { return true; }

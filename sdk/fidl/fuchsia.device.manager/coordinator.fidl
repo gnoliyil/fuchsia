@@ -133,9 +133,14 @@ type NodeGroupDescriptor = struct {
 
 /// Protocol for controlling devices in a devhost process from the devcoordinator
 protocol DeviceController {
-    compose fuchsia.io.Openable;
+    /// Connect to the device's partial fuchsia.io/Node, its
+    /// fuchsia.device/Controller, and its native FIDL API. These protocols are
+    /// multiplexed on the provided channel.
+    ConnectMultiplexed(resource struct {
+        server zx.handle:CHANNEL;
+    });
 
-    /// Connect to the device's fuchsia.device.Controller API.
+    /// Connect to the device's fuchsia.device/Controller API.
     ConnectToController(resource struct {
         controller server_end:fuchsia.device.Controller;
     });

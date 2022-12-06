@@ -22,14 +22,13 @@
 #include "src/devices/bin/driver_host/zx_device.h"
 #include "src/devices/bin/driver_host/zx_driver.h"
 #include "src/devices/bin/driver_host2/driver.h"
-#include "src/lib/storage/vfs/cpp/managed_vfs.h"
 
 class DriverHostContext {
  public:
   using Callback = fit::inline_callback<void(void), 2 * sizeof(void*)>;
 
   explicit DriverHostContext(const async_loop_config_t* config, zx::resource root_resource = {})
-      : loop_(config), vfs_(loop_.dispatcher()), root_resource_(std::move(root_resource)) {}
+      : loop_(config), root_resource_(std::move(root_resource)) {}
 
   ~DriverHostContext();
 
@@ -37,10 +36,6 @@ class DriverHostContext {
       fidl::ServerEnd<fuchsia_device_manager::DriverHostController> request);
 
   void ProxyIosDestroy(const fbl::RefPtr<zx_device_t>& dev);
-
-  // Attaches channel |c| to new state representing an open connection to |dev|.
-  zx_status_t DeviceConnect(const fbl::RefPtr<zx_device_t>& dev, fuchsia_io::wire::OpenFlags flags,
-                            zx::channel c);
 
   // routines driver_host uses to talk to driver_manager
   zx_status_t DriverManagerAdd(const fbl::RefPtr<zx_device_t>& dev,
@@ -121,8 +116,6 @@ class DriverHostContext {
 
   async::Loop& loop() { return loop_; }
 
-  fs::ManagedVfs* vfs() { return &vfs_; }
-
   const zx::resource& root_resource() { return root_resource_; }
 
   ApiLock& api_lock() TA_RET_CAP(api_lock_) { return api_lock_; }
@@ -151,7 +144,6 @@ class DriverHostContext {
   zx_status_t DeviceValidate(const fbl::RefPtr<zx_device_t>& dev) TA_REQ(api_lock_);
 
   async::Loop loop_;
-  fs::ManagedVfs vfs_;
 
   // Used to serialize API operations
   ApiLock api_lock_;

@@ -51,15 +51,25 @@ void BindReply(const fbl::RefPtr<zx_device_t>& dev,
 
 }  // namespace
 
+void DeviceControllerConnection::ConnectMultiplexed(ConnectMultiplexedRequestView request,
+                                                    ConnectMultiplexedCompleter::Sync& completer) {
+  if (std::optional<DeviceServer>& vnode = dev()->vnode; vnode.has_value()) {
+    vnode.value().ServeMultiplexed(std::move(request->server));
+  }
+}
+
 void DeviceControllerConnection::ConnectToDeviceProtocol(
     ConnectToDeviceProtocolRequestView request, ConnectToDeviceProtocolCompleter::Sync& completer) {
-  dev()->vnode->ConnectToDeviceFidl(std::move(request->server));
+  if (std::optional<DeviceServer>& vnode = dev()->vnode; vnode.has_value()) {
+    vnode.value().ConnectToDeviceFidl(std::move(request->server));
+  }
 }
 
 void DeviceControllerConnection::ConnectToController(
     ConnectToControllerRequestView request, ConnectToControllerCompleter::Sync& completer) {
-  fidl::BindServer(driver_host_context_->loop().dispatcher(), std::move(request->controller),
-                   dev()->vnode.get());
+  if (std::optional<DeviceServer>& vnode = dev()->vnode; vnode.has_value()) {
+    vnode.value().ConnectToController(std::move(request->controller));
+  }
 }
 
 void DeviceControllerConnection::Init(InitCompleter::Sync& completer) {
@@ -280,14 +290,4 @@ void DeviceControllerConnection::Bind(
         LOGD(FATAL, *dev, "FIDL error for device %p: %s", dev.get(),
              info.FormatDescription().c_str());
       });
-}
-
-// Handler for when a fuchsia.io open() is called on a device
-void DeviceControllerConnection::Open(OpenRequestView request, OpenCompleter::Sync& completer) {
-  VLOGD(1, *dev(), "Opening device %p", dev().get());
-  if (request->path.size() > 1 && request->path.data()[0] != '.') {
-    LOGD(ERROR, *dev(), "Attempt to open path '%.*s'", static_cast<int>(request->path.size()),
-         request->path.data());
-  }
-  driver_host_context_->DeviceConnect(this->dev(), request->flags, request->object.TakeChannel());
 }

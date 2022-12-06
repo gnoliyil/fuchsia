@@ -351,7 +351,11 @@ impl FormattedRamdisk {
 
 async fn blobfs_corrupt_blob(ramdisk: fio::NodeProxy, merkle: &Hash) -> Result<(), Error> {
     let mut fs = ServiceFs::new();
-    fs.root_dir().add_remote_node("block", ramdisk);
+    fs.root_dir().add_service_at("block", move |channel: zx::Channel| {
+        let _: Result<(), fidl::Error> =
+            ramdisk.clone(fio::OpenFlags::CLONE_SAME_RIGHTS, channel.into());
+        None
+    });
 
     let (devfs_client, devfs_server) = fidl::endpoints::create_endpoints()?;
     fs.serve_connection(devfs_server)?;
