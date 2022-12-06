@@ -58,10 +58,11 @@ async fn detect_disk_format_res(block_proxy: &BlockProxy) -> Result<DiskFormat, 
         2 * block_info.block_size
     };
 
-    ensure!(
-        header_size as u64 <= block_info.block_size as u64 * block_info.block_count,
-        "header size is larger than the size of the block device"
-    );
+    if header_size as u64 > block_info.block_size as u64 * block_info.block_count {
+        // The header we want to read is bigger than the actual device. This isn't necessarily an
+        // error, but it does mean we can't inspect the content.
+        return Ok(DiskFormat::Unknown);
+    }
 
     let buffer_size = round_up(header_size as u64, block_info.block_size as u64);
     let vmo = zx::Vmo::create(buffer_size).context("failed to create vmo")?;
@@ -139,7 +140,8 @@ async fn detect_disk_format_res(block_proxy: &BlockProxy) -> Result<DiskFormat, 
 #[cfg(test)]
 mod tests {
     use {
-        super::{constants, detect_disk_format, DiskFormat},
+        super::{constants, detect_disk_format_res, DiskFormat},
+        anyhow::Error,
         fidl::endpoints::create_proxy_and_stream,
         fidl_fuchsia_hardware_block::{BlockInfo, BlockMarker, BlockRequest, Flag},
         futures::{pin_mut, select, FutureExt, TryStreamExt},
@@ -149,7 +151,7 @@ mod tests {
         content: &[u8],
         block_count: u64,
         block_size: u64,
-    ) -> DiskFormat {
+    ) -> Result<DiskFormat, Error> {
         let (proxy, mut stream) = create_proxy_and_stream::<BlockMarker>().unwrap();
 
         let mock_device = async {
@@ -181,22 +183,30 @@ mod tests {
 
         select! {
           _ = mock_device => unreachable!(),
-          format = detect_disk_format(&proxy).fuse() => format,
+          format = detect_disk_format_res(&proxy).fuse() => format,
         }
+    }
+
+    #[fuchsia::test]
+    async fn detect_disk_format_too_small() {
+        assert_eq!(
+            get_detected_disk_format(&Vec::new(), 1, 512).await.unwrap(),
+            DiskFormat::Unknown
+        );
     }
 
     #[fuchsia::test]
     async fn detect_format_fvm() {
         let mut data = vec![0; 4096];
         data[..constants::FVM_MAGIC.len()].copy_from_slice(&constants::FVM_MAGIC);
-        assert_eq!(get_detected_disk_format(&data, 1000, 512).await, DiskFormat::Fvm);
+        assert_eq!(get_detected_disk_format(&data, 1000, 512).await.unwrap(), DiskFormat::Fvm);
     }
 
     #[fuchsia::test]
     async fn detect_format_zxcrypt() {
         let mut data = vec![0; 4096];
         data[0..constants::ZXCRYPT_MAGIC.len()].copy_from_slice(&constants::ZXCRYPT_MAGIC);
-        assert_eq!(get_detected_disk_format(&data, 1000, 512).await, DiskFormat::Zxcrypt);
+        assert_eq!(get_detected_disk_format(&data, 1000, 512).await.unwrap(), DiskFormat::Zxcrypt);
     }
 
     #[fuchsia::test]
@@ -204,49 +214,58 @@ mod tests {
         let mut data = vec![0; 4096];
         data[0..constants::BLOCK_VERITY_MAGIC.len()]
             .copy_from_slice(&constants::BLOCK_VERITY_MAGIC);
-        assert_eq!(get_detected_disk_format(&data, 1000, 512).await, DiskFormat::BlockVerity);
+        assert_eq!(
+            get_detected_disk_format(&data, 1000, 512).await.unwrap(),
+            DiskFormat::BlockVerity
+        );
     }
 
     #[fuchsia::test]
     async fn detect_format_gpt() {
         let mut data = vec![0; 4096];
         data[512..512 + 16].copy_from_slice(&constants::GPT_MAGIC);
-        assert_eq!(get_detected_disk_format(&data, 1000, 512).await, DiskFormat::Gpt);
+        assert_eq!(get_detected_disk_format(&data, 1000, 512).await.unwrap(), DiskFormat::Gpt);
     }
 
     #[fuchsia::test]
     async fn detect_format_minfs() {
         let mut data = vec![0; 4096];
         data[0..constants::MINFS_MAGIC.len()].copy_from_slice(&constants::MINFS_MAGIC);
-        assert_eq!(get_detected_disk_format(&data, 1000, 512).await, DiskFormat::Minfs);
+        assert_eq!(get_detected_disk_format(&data, 1000, 512).await.unwrap(), DiskFormat::Minfs);
     }
 
     #[fuchsia::test]
     async fn detect_format_minfs_large_block_device() {
         let mut data = vec![0; 32768];
         data[0..constants::MINFS_MAGIC.len()].copy_from_slice(&constants::MINFS_MAGIC);
-        assert_eq!(get_detected_disk_format(&data, 1250000, 16384).await, DiskFormat::Minfs);
+        assert_eq!(
+            get_detected_disk_format(&data, 1250000, 16384).await.unwrap(),
+            DiskFormat::Minfs
+        );
     }
 
     #[fuchsia::test]
     async fn detect_format_blobfs() {
         let mut data = vec![0; 4096];
         data[0..constants::BLOBFS_MAGIC.len()].copy_from_slice(&constants::BLOBFS_MAGIC);
-        assert_eq!(get_detected_disk_format(&data, 1000, 512).await, DiskFormat::Blobfs);
+        assert_eq!(get_detected_disk_format(&data, 1000, 512).await.unwrap(), DiskFormat::Blobfs);
     }
 
     #[fuchsia::test]
     async fn detect_format_factory_fs() {
         let mut data = vec![0; 4096];
         data[0..constants::FACTORYFS_MAGIC.len()].copy_from_slice(&constants::FACTORYFS_MAGIC);
-        assert_eq!(get_detected_disk_format(&data, 1000, 512).await, DiskFormat::FactoryFs);
+        assert_eq!(
+            get_detected_disk_format(&data, 1000, 512).await.unwrap(),
+            DiskFormat::FactoryFs
+        );
     }
 
     #[fuchsia::test]
     async fn detect_format_vb_meta() {
         let mut data = vec![0; 4096];
         data[0..constants::VB_META_MAGIC.len()].copy_from_slice(&constants::VB_META_MAGIC);
-        assert_eq!(get_detected_disk_format(&data, 1000, 512).await, DiskFormat::VbMeta);
+        assert_eq!(get_detected_disk_format(&data, 1000, 512).await.unwrap(), DiskFormat::VbMeta);
     }
 
     #[fuchsia::test]
@@ -256,7 +275,7 @@ mod tests {
         data[511] = 0xAA as u8;
         data[38] = 0x30 as u8;
         data[66] = 0x30 as u8;
-        assert_eq!(get_detected_disk_format(&data, 1000, 512).await, DiskFormat::Mbr);
+        assert_eq!(get_detected_disk_format(&data, 1000, 512).await.unwrap(), DiskFormat::Mbr);
     }
 
     #[fuchsia::test]
@@ -266,7 +285,7 @@ mod tests {
         data[511] = 0xAA as u8;
         data[38] = 0x29 as u8;
         data[66] = 0x30 as u8;
-        assert_eq!(get_detected_disk_format(&data, 1000, 512).await, DiskFormat::Fat);
+        assert_eq!(get_detected_disk_format(&data, 1000, 512).await.unwrap(), DiskFormat::Fat);
     }
 
     #[fuchsia::test]
@@ -276,25 +295,28 @@ mod tests {
         data[511] = 0xAA as u8;
         data[38] = 0x30 as u8;
         data[66] = 0x29 as u8;
-        assert_eq!(get_detected_disk_format(&data, 1000, 512).await, DiskFormat::Fat);
+        assert_eq!(get_detected_disk_format(&data, 1000, 512).await.unwrap(), DiskFormat::Fat);
     }
 
     #[fuchsia::test]
     async fn detect_format_f2fs() {
         let mut data = vec![0; 4096];
         data[1024..1024 + constants::F2FS_MAGIC.len()].copy_from_slice(&constants::F2FS_MAGIC);
-        assert_eq!(get_detected_disk_format(&data, 1000, 512).await, DiskFormat::F2fs);
+        assert_eq!(get_detected_disk_format(&data, 1000, 512).await.unwrap(), DiskFormat::F2fs);
     }
 
     #[fuchsia::test]
     async fn detect_format_fxfs() {
         let mut data = vec![0; 4096];
         data[0..constants::FXFS_MAGIC.len()].copy_from_slice(&constants::FXFS_MAGIC);
-        assert_eq!(get_detected_disk_format(&data, 1000, 512).await, DiskFormat::Fxfs);
+        assert_eq!(get_detected_disk_format(&data, 1000, 512).await.unwrap(), DiskFormat::Fxfs);
     }
 
     #[fuchsia::test]
     async fn detect_format_unknown() {
-        assert_eq!(get_detected_disk_format(&vec![0; 4096], 1000, 512).await, DiskFormat::Unknown);
+        assert_eq!(
+            get_detected_disk_format(&vec![0; 4096], 1000, 512).await.unwrap(),
+            DiskFormat::Unknown
+        );
     }
 }
