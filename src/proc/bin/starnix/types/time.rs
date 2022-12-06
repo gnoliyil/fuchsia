@@ -65,6 +65,10 @@ pub fn time_from_timespec(ts: timespec) -> Result<zx::Time, Errno> {
     Ok(zx::Time::ZERO + duration)
 }
 
+pub fn timespec_is_zero(ts: timespec) -> bool {
+    ts.tv_sec == 0 && ts.tv_nsec == 0
+}
+
 /// Returns an `itimerspec` with `it_value` set to `deadline` and `it_interval` set to `interval`.
 pub fn itimerspec_from_deadline_interval(deadline: zx::Time, interval: zx::Duration) -> itimerspec {
     itimerspec {

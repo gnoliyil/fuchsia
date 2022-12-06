@@ -12,7 +12,7 @@ use crate::fs::inotify::*;
 use crate::fs::pipe::*;
 use crate::fs::*;
 use crate::lock::Mutex;
-use crate::logging::{log_trace, not_implemented};
+use crate::logging::*;
 use crate::mm::{MemoryAccessor, MemoryAccessorExt};
 use crate::syscalls::*;
 use crate::task::*;
@@ -1306,9 +1306,10 @@ pub fn sys_timerfd_create(
         _ => return error!(EINVAL),
     };
     if flags & !(TFD_NONBLOCK | TFD_CLOEXEC) != 0 {
-        not_implemented!(current_task, "timerfd_create: flags 0x{:x}", flags);
+        not_implemented!(current_task, "timerfd_create: flags {:#x}", flags);
         return error!(EINVAL);
     }
+    log_trace!(current_task, "timerfd_create(clock_id={:?}, flags={:#x})", clock_id, flags);
 
     let mut open_flags = OpenFlags::RDWR;
     if flags & TFD_NONBLOCK != 0 {
@@ -1333,8 +1334,8 @@ pub fn sys_timerfd_gettime(
     let file = current_task.files.get(fd)?;
     let timer_file = file.downcast_file::<TimerFile>().ok_or_else(|| errno!(EBADF))?;
     let timer_info = timer_file.current_timer_spec();
+    log_trace!(current_task, "timerfd_gettime(fd={:?}, current_value={:?})", fd, timer_info);
     current_task.mm.write_object(user_current_value, &timer_info)?;
-
     Ok(())
 }
 
@@ -1346,7 +1347,7 @@ pub fn sys_timerfd_settime(
     user_old_value: UserRef<itimerspec>,
 ) -> Result<(), Errno> {
     if flags & !(TFD_TIMER_ABSTIME) != 0 {
-        not_implemented!(current_task, "timerfd_settime: flags 0x{:x}", flags);
+        not_implemented!(current_task, "timerfd_settime: flags {:#x}", flags);
         return error!(EINVAL);
     }
 
@@ -1355,10 +1356,17 @@ pub fn sys_timerfd_settime(
 
     let new_timer_spec = current_task.mm.read_object(user_new_value)?;
     let old_timer_spec = timer_file.set_timer_spec(new_timer_spec, flags)?;
+    log_trace!(
+        current_task,
+        "timerfd_settime(fd={:?}, flags={:#x}, new_value={:?}, current_value={:?})",
+        fd,
+        flags,
+        new_timer_spec,
+        old_timer_spec
+    );
     if !user_old_value.is_null() {
         current_task.mm.write_object(user_old_value, &old_timer_spec)?;
     }
-
     Ok(())
 }
 

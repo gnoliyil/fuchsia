@@ -69,32 +69,30 @@ impl TimerFile {
     pub fn set_timer_spec(&self, timer_spec: itimerspec, flags: u32) -> Result<itimerspec, Errno> {
         let mut deadline_interval = self.deadline_interval.lock();
         let (old_deadline, old_interval) = *deadline_interval;
+        let old_itimerspec = itimerspec_from_deadline_interval(old_deadline, old_interval);
 
-        let now = zx::Time::get_monotonic();
-
-        let new_deadline = if flags & TFD_TIMER_ABSTIME != 0 {
-            // If the time_spec represents an absolute time, then treat the
-            // `it_value` as the deadline..
-            time_from_timespec(timer_spec.it_value)?
+        if timespec_is_zero(timer_spec.it_value) {
+            // Sayeth timerfd_settime(2):
+            // Setting both fields of new_value.it_value to zero disarms the timer.
+            self.timer.cancel().map_err(|status| from_status_like_fdio!(status))?;
         } else {
-            // .. otherwise the deadline is computed relative to the current time.
-            let duration = duration_from_timespec(timer_spec.it_value)?;
-            now + duration
-        };
-        let new_interval = duration_from_timespec(timer_spec.it_interval)?;
+            let now = zx::Time::get_monotonic();
+            let new_deadline = if flags & TFD_TIMER_ABSTIME != 0 {
+                // If the time_spec represents an absolute time, then treat the
+                // `it_value` as the deadline..
+                time_from_timespec(timer_spec.it_value)?
+            } else {
+                // .. otherwise the deadline is computed relative to the current time.
+                let duration = duration_from_timespec(timer_spec.it_value)?;
+                now + duration
+            };
+            let new_interval = duration_from_timespec(timer_spec.it_interval)?;
 
-        if new_deadline > now {
-            // If the new deadline is in the future, set the timer to trigger at deadline.
             self.timer
                 .set(new_deadline, zx::Duration::default())
                 .map_err(|status| from_status_like_fdio!(status))?;
-        } else {
-            // If the new deadline is in the past (or was 0), cancel the timer.
-            self.timer.cancel().map_err(|status| from_status_like_fdio!(status))?;
+            *deadline_interval = (new_deadline, new_interval);
         }
-
-        let old_itimerspec = itimerspec_from_deadline_interval(old_deadline, old_interval);
-        *deadline_interval = (new_deadline, new_interval);
 
         Ok(old_itimerspec)
     }
@@ -213,8 +211,10 @@ impl FileOps for TimerFile {
     }
 
     fn query_events(&self, _current_task: &CurrentTask) -> FdEvents {
-        let observed =
-            self.timer.wait_handle(zx::Signals::TIMER_SIGNALED, zx::Time::INFINITE_PAST).unwrap();
+        let observed = match self.timer.wait_handle(zx::Signals::TIMER_SIGNALED, zx::Time::ZERO) {
+            Err(zx::Status::TIMED_OUT) => zx::Signals::empty(),
+            res => res.unwrap(),
+        };
         TimerFile::get_events_from_signals(observed)
     }
 }
