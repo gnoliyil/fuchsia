@@ -19,12 +19,5 @@
             rights: [ "rw*" ],
             path: "/dev/class/block",
         },
-
-        // For ramctl.
-        {
-            directory: "dev-misc",
-            rights: [ "rw*" ],
-            path: "/dev/misc",
-        },
     ],
 }

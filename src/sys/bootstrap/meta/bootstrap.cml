@@ -606,13 +606,6 @@
             subdir: "tpm",
         },
         {
-            directory: "dev-topological",
-            from: "#driver_manager",
-            as: "dev-misc",
-            to: "#live_usb",
-            subdir: "misc",
-        },
-        {
             directory: "dev-class",
             from: "#driver_manager",
             as: "input-report",
