@@ -178,7 +178,10 @@ impl FileSystemRepository {
 
             let content_len = content_range.content_len();
 
-            Ok(Resource { content_range, stream: Box::pin(file_stream(content_len, file)) })
+            Ok(Resource {
+                content_range,
+                stream: Box::pin(file_stream(content_len, file, Some(file_path))),
+            })
         }
         .boxed()
     }

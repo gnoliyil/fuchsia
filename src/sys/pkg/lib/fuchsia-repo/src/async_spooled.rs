@@ -66,7 +66,7 @@ impl AsyncSpooledTempFile {
                 file.seek(io::SeekFrom::Start(0)).await?;
 
                 let len = file.metadata().await?.len();
-                let stream = Box::pin(file_stream(len, file));
+                let stream = Box::pin(file_stream(len, file, None));
 
                 Ok((len, stream))
             }

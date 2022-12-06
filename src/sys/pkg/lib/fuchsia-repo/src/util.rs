@@ -4,6 +4,7 @@
 
 use {
     bytes::{Bytes, BytesMut},
+    camino::{Utf8Path, Utf8PathBuf},
     futures::{stream, AsyncRead, Stream, TryStreamExt as _},
     std::{cmp::min, io, pin::Pin, task::Poll},
 };
@@ -23,12 +24,24 @@ where
     Ok(())
 }
 
+#[cfg(unix)]
+fn path_nlink(path: &Utf8Path) -> Option<u64> {
+    use std::os::unix::fs::MetadataExt as _;
+    std::fs::metadata(path).ok().map(|metadata| metadata.nlink())
+}
+
+#[cfg(not(unix))]
+fn path_nlink(_path: &Utf8Path) -> Option<usize> {
+    None
+}
+
 /// Read a file up to `len` bytes in batches of [CHUNK_SIZE], and return a stream of [Bytes].
 ///
 /// This will return an error if the file changed size during streaming.
 pub(super) fn file_stream(
     expected_len: u64,
     mut file: impl AsyncRead + Unpin,
+    path: Option<Utf8PathBuf>,
 ) -> impl Stream<Item = io::Result<Bytes>> {
     let mut buf = BytesMut::new();
     let mut remaining_len = expected_len;
@@ -50,11 +63,30 @@ pub(super) fn file_stream(
 
         // If we read zero bytes, then the file changed size while we were streaming it.
         if n == 0 {
-            let msg = format!(
-                "file truncated: only read {} out of {} bytes",
-                expected_len - remaining_len,
-                expected_len,
-            );
+            let msg = if let Some(path) = &path {
+                if let Some(nlink) = path_nlink(path) {
+                    format!(
+                        "file {} truncated: only read {} out of {} bytes: nlink: {}",
+                        path,
+                        expected_len - remaining_len,
+                        expected_len,
+                        nlink,
+                    )
+                } else {
+                    format!(
+                        "file {} truncated: only read {} out of {} bytes",
+                        path,
+                        expected_len - remaining_len,
+                        expected_len,
+                    )
+                }
+            } else {
+                format!(
+                    "file truncated: only read {} out of {} bytes",
+                    expected_len - remaining_len,
+                    expected_len,
+                )
+            };
             // Clear out the remaining_len so we'll return None next time we're polled.
             remaining_len = 0;
             return Poll::Ready(Some(Err(io::Error::new(io::ErrorKind::Other, msg))));
@@ -90,7 +122,7 @@ mod tests {
     async fn test_file_stream() {
         for size in [0, CHUNK_SIZE - 1, CHUNK_SIZE, CHUNK_SIZE + 1, CHUNK_SIZE * 2 + 1] {
             let expected = (0..std::u8::MAX).cycle().take(size).collect::<Vec<_>>();
-            let stream = file_stream(size as u64, &*expected);
+            let stream = file_stream(size as u64, &*expected, None);
 
             let mut actual = vec![];
             read_stream_to_end(stream, &mut actual).await.unwrap();
@@ -103,7 +135,7 @@ mod tests {
         let size = CHUNK_SIZE * 3 + 10;
 
         let expected = (0..std::u8::MAX).cycle().take(size).collect::<Vec<_>>();
-        let mut stream = file_stream(size as u64, &*expected);
+        let mut stream = file_stream(size as u64, &*expected, None);
 
         let mut expected_chunks = expected.chunks(CHUNK_SIZE).map(Bytes::copy_from_slice);
 
@@ -121,7 +153,7 @@ mod tests {
         let long_len = CHUNK_SIZE * 3;
 
         let truncated_buf = vec![0; len];
-        let stream = file_stream(long_len as u64, truncated_buf.as_slice());
+        let stream = file_stream(long_len as u64, truncated_buf.as_slice(), None);
 
         let mut actual = vec![];
         assert_eq!(
@@ -136,7 +168,7 @@ mod tests {
         let short_len = CHUNK_SIZE * 2;
 
         let buf = (0..std::u8::MAX).cycle().take(len).collect::<Vec<_>>();
-        let stream = file_stream(short_len as u64, buf.as_slice());
+        let stream = file_stream(short_len as u64, buf.as_slice(), None);
 
         let mut actual = vec![];
         read_stream_to_end(stream, &mut actual).await.unwrap();
@@ -177,7 +209,7 @@ mod tests {
                 let reader = TestReader {
                     bytes: expected.as_slice(),
                 };
-                let stream = file_stream(expected.len() as u64, reader);
+                let stream = file_stream(expected.len() as u64, reader, None);
 
                 let mut actual = vec![];
                 read_stream_to_end(stream, &mut actual).await.unwrap();
