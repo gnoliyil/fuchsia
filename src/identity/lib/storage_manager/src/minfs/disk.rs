@@ -6,7 +6,6 @@ use {
     async_trait::async_trait,
     fidl::endpoints::{ProtocolMarker, ServerEnd},
     fidl_fuchsia_device::ControllerMarker,
-    fidl_fuchsia_hardware_block::BlockMarker,
     fidl_fuchsia_hardware_block_encrypted::{DeviceManagerMarker, DeviceManagerProxy},
     fidl_fuchsia_hardware_block_partition::{PartitionMarker, PartitionProxyInterface},
     fidl_fuchsia_identity_account as faccount, fidl_fuchsia_io as fio,
@@ -75,22 +74,6 @@ impl From<DiskError> for faccount::Error {
 const OPEN_RW: fio::OpenFlags = fio::OpenFlags::empty()
     .union(fio::OpenFlags::RIGHT_READABLE)
     .union(fio::OpenFlags::RIGHT_WRITABLE);
-
-// This is the 16-byte magic byte string found at the start of a valid zxcrypt partition.
-// It is also defined in `//src/security/zxcrypt/volume.h` and
-// `//src/lib/storage/fs_management/cpp/format.h`.
-const ZXCRYPT_MAGIC: [u8; 16] = [
-    0x5f, 0xe8, 0xf8, 0x00, 0xb3, 0x6d, 0x11, 0xe7, 0x80, 0x7a, 0x78, 0x63, 0x72, 0x79, 0x70, 0x74,
-];
-
-/// Given a slice representing the first block of a device, return true if this block has the
-/// zxcrypt_magic as the first 16 bytes.
-fn is_zxcrypt_superblock(block: &[u8]) -> Result<bool, DiskError> {
-    if block.len() < 16 {
-        return Err(DiskError::BlockTooSmallForZxcryptHeader);
-    }
-    Ok(block[0..16] == ZXCRYPT_MAGIC)
-}
 
 /// Given a partition, return true if the partition has the desired GUID
 async fn partition_has_guid<T>(partition: &T, desired_guid: [u8; 16]) -> bool
@@ -189,10 +172,6 @@ pub trait DiskManager: Sync + Send {
     /// Returns a list of all block devices that are valid partitions.
     async fn partitions(&self) -> Result<Vec<Self::Partition>, DiskError>;
 
-    /// Given a block device, query the block size, and return if the contents of the first block
-    /// contain the zxcrypt magic bytes
-    async fn has_zxcrypt_header(&self, block_dev: &Self::BlockDevice) -> Result<bool, DiskError>;
-
     /// Bind the zxcrypt driver to the given block device, returning an encrypted block device.
     async fn bind_to_encrypted_block(
         &self,
@@ -279,11 +258,6 @@ impl DiskManager for DevDiskManager {
         all_partitions(&self.dev_root).await
     }
 
-    async fn has_zxcrypt_header(&self, block_dev: &Self::BlockDevice) -> Result<bool, DiskError> {
-        let superblock = block_dev.read_first_block().await?;
-        is_zxcrypt_superblock(&superblock)
-    }
-
     async fn bind_to_encrypted_block(
         &self,
         block_dev: Self::BlockDevice,
@@ -356,30 +330,6 @@ impl Node {
 
 /// A production device block.
 pub struct DevBlockDevice(Node);
-
-impl DevBlockDevice {
-    async fn read_first_block(&self) -> Result<Vec<u8>, DiskError> {
-        let block_size = self.block_size().await?;
-        let file_proxy = self.0.clone_as::<fio::FileMarker>()?;
-        // Issue a read of block_size bytes, since block devices only like being read along block
-        // boundaries.
-        file_proxy
-            .read_at(block_size, 0)
-            .await?
-            .map_err(zx::Status::from_raw)
-            .map_err(DiskError::ReadBlockHeaderFailed)
-    }
-
-    async fn block_size(&self) -> Result<u64, DiskError> {
-        let block_proxy = self.0.clone_as::<BlockMarker>()?;
-        let info = block_proxy
-            .get_info()
-            .await?
-            .map_err(zx::Status::from_raw)
-            .map_err(DiskError::GetBlockInfoFailed)?;
-        Ok(info.block_size.into())
-    }
-}
 
 /// The production implementation of [`Partition`].
 pub struct DevBlockPartition(Node);
@@ -541,7 +491,6 @@ pub mod test {
     use {
         super::*,
         crate::minfs::constants::{ACCOUNT_LABEL, FUCHSIA_DATA_GUID},
-        assert_matches::assert_matches,
         fidl_fuchsia_hardware_block::{BlockInfo, Flag, MAX_TRANSFER_UNBOUNDED},
         fidl_fuchsia_hardware_block_encrypted::{DeviceManagerRequest, DeviceManagerRequestStream},
         fidl_fuchsia_hardware_block_partition::Guid,
@@ -581,20 +530,12 @@ pub mod test {
         ],
     };
 
-    // Creates a Vec<u8> starting with zxcrypt magic and filled up to block_size with zeroes.
-    // This doesn't include any keyslots or version information, just the magic bytes.
-    pub fn make_zxcrypt_superblock(block_size: usize) -> Vec<u8> {
-        [ZXCRYPT_MAGIC.to_vec(), [0].repeat(block_size - ZXCRYPT_MAGIC.len())].concat()
-    }
-
     /// A mock [`Partition`] that can control the result of certain operations.
     pub struct MockPartition {
         /// Controls whether the `get_type_guid` call succeeds.
         guid: Result<Guid, i32>,
         /// Controls whether the `get_name` call succeeds.
         label: Result<String, i32>,
-        /// Controls whether reading the first block of data succeeds.
-        first_block: Result<Vec<u8>, i32>,
         /// A reference to the block device directory hosted at the
         /// topological path of the block device. This is used to append
         /// the "zxcrypt" directory to simulate the zxcrypt driver being
@@ -674,30 +615,6 @@ pub mod test {
                             responder
                                 .send(&mut resp)
                                 .expect("failed to send Controller.Bind response");
-                        }
-
-                        // fuchsia.io.File methods
-                        MockPartitionRequest::ReadAt { count, offset, responder } => {
-                            // All reads should be of block size.
-                            assert_eq!(
-                                count as usize, BLOCK_SIZE,
-                                "all reads must be of block size"
-                            );
-
-                            // Only the first
-                            assert_eq!(offset, 0, "only the first block should be read");
-
-                            if let Ok(data) = &self.first_block {
-                                assert_eq!(
-                                    data.len(),
-                                    BLOCK_SIZE,
-                                    "mock block data must be of size BLOCK_SIZE"
-                                );
-                            }
-                            // Silly clone required because FIDL bindings want mutability.
-                            responder
-                                .send(&mut self.first_block.clone())
-                                .expect("failed to send File.ReadAt response");
                         }
 
                         // fuchsia.io.Node methods
@@ -921,13 +838,11 @@ pub mod test {
                     "000" => host_mock_partition(&scope, 0, MockPartition {
                             guid: Ok(BLOB_GUID),
                             label: Ok("other".to_string()),
-                            first_block: Ok(make_zxcrypt_superblock(BLOCK_SIZE)),
                             block_dir: simple::simple(),
                     }),
                     "001" => host_mock_partition(&scope, 1, MockPartition {
                             guid: Ok(DATA_GUID),
                             label: Ok(ACCOUNT_LABEL.to_string()),
-                            first_block: Ok(make_zxcrypt_superblock(BLOCK_SIZE)),
                             block_dir: simple::simple(),
                     }),
                 }
@@ -964,53 +879,6 @@ pub mod test {
     }
 
     #[fuchsia::test]
-    async fn has_zxcrypt_header() {
-        let scope = ExecutionScope::new();
-        let mock_devfs = pseudo_directory! {
-            "class" => pseudo_directory! {
-                "block" => pseudo_directory! {
-                    "000" => host_mock_partition(&scope, 0, MockPartition {
-                        guid: Ok(BLOB_GUID),
-                        label: Ok("other".to_string()),
-                        first_block: Ok([0].repeat(BLOCK_SIZE)),
-                        block_dir: simple::simple(),
-                    }),
-                    "001" => host_mock_partition(&scope, 1, MockPartition {
-                        guid: Ok(DATA_GUID),
-                        label: Ok(ACCOUNT_LABEL.to_string()),
-                        first_block: Ok(make_zxcrypt_superblock(BLOCK_SIZE)),
-                        block_dir: simple::simple(),
-                    }),
-                    "002" => host_mock_partition(&scope, 2, MockPartition {
-                        guid: Ok(DATA_GUID),
-                        label: Ok(ACCOUNT_LABEL.to_string()),
-                        first_block: Err(zx::Status::NOT_FOUND.into_raw()),
-                        block_dir: simple::simple(),
-                    }),
-                }
-            }
-        };
-        let disk_manager = DevDiskManager::new(serve_mock_devfs(&scope, mock_devfs));
-        let partitions = disk_manager.partitions().await.expect("list partitions");
-        let mut partition_iter = partitions.into_iter();
-
-        let non_zxcrypt_block =
-            partition_iter.next().expect("expected first partition").into_block_device();
-        assert_matches!(disk_manager.has_zxcrypt_header(&non_zxcrypt_block).await, Ok(false));
-
-        let zxcrypt_block =
-            partition_iter.next().expect("expected second partition").into_block_device();
-        assert_matches!(disk_manager.has_zxcrypt_header(&zxcrypt_block).await, Ok(true));
-
-        let bad_block =
-            partition_iter.next().expect("expected third partition").into_block_device();
-        assert_matches!(disk_manager.has_zxcrypt_header(&bad_block).await, Err(_));
-
-        scope.shutdown();
-        scope.wait().await;
-    }
-
-    #[fuchsia::test]
     async fn binds_zxcrypt_to_block_device() {
         let scope = ExecutionScope::new();
         let block_dir = simple::simple();
@@ -1020,7 +888,6 @@ pub mod test {
                     "000" => host_mock_partition(&scope, 0, MockPartition {
                         guid: Ok(DATA_GUID),
                         label: Ok(ACCOUNT_LABEL.to_string()),
-                        first_block: Ok(make_zxcrypt_superblock(BLOCK_SIZE)),
                         block_dir: block_dir.clone(),
                     }),
                 }
@@ -1051,7 +918,6 @@ pub mod test {
                     "000" => host_mock_partition(&scope, 0, MockPartition {
                         guid: Ok(DATA_GUID),
                         label: Ok(ACCOUNT_LABEL.to_string()),
-                        first_block: Ok(make_zxcrypt_superblock(BLOCK_SIZE)),
                         block_dir: block_dir.clone(),
                     }),
                 }

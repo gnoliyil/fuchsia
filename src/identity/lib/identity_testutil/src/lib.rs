@@ -98,14 +98,6 @@ impl DiskManager for MockDiskManager {
             .ok_or_else(|| DiskError::GetBlockInfoFailed(Status::NOT_FOUND))
     }
 
-    async fn has_zxcrypt_header(&self, block_dev: &MockBlockDevice) -> Result<bool, DiskError> {
-        match &block_dev.zxcrypt_header_behavior {
-            Ok(Match::Any) => Ok(true),
-            Ok(Match::None) => Ok(false),
-            Err(err_factory) => Err(err_factory()),
-        }
-    }
-
     async fn bind_to_encrypted_block(
         &self,
         block_dev: MockBlockDevice,
