@@ -177,6 +177,7 @@
         },
         {
             protocol: [
+                "fuchsia.element.GraphicalPresenter",
                 "fuchsia.sys.Environment",
                 "fuchsia.sys.Loader",
             ],
