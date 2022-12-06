@@ -49,6 +49,7 @@ type BitsAlias = Bits
 type Struct struct {
 	X uint64
 	Y uint64
+	E EnumAlias
 }
 
 type StructAlias = Struct

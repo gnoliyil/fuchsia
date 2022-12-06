@@ -33,6 +33,7 @@ alias BitsAlias = Bits;
 type Struct = struct {
     x uint64;
     y uint64;
+    e EnumAlias;
 };
 
 alias StructAlias = Struct;
@@ -45,7 +46,6 @@ alias NestedArrayAlias = array<array<Struct, 8>, 4>;
 // Exercise more complicated alias declarations when fixed:
 // * alias of alias
 // * array of aliases
-// * struct member of alias type
 
 /// Alias with a one-line comment.
 alias AliasWithOneLineComment = bool;

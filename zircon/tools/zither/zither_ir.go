@@ -803,7 +803,14 @@ func newStruct(strct fidlgen.Struct, decls declMap, typeKinds map[TypeKind]struc
 	}
 	for _, member := range strct.Members {
 		attrs := member.GetAttributes()
-		typ, err := resolveType(fidlgenType(member.Type), attrs, decls, typeKinds)
+
+		// TODO(fxbug.dev/105758): For struct members, we have the `MaybeAlias`
+		// field as a workaround for recovering any alias name.
+		memberType := recursiveType(fidlgenType(member.Type))
+		if member.MaybeAlias != nil {
+			memberType = recursiveType(fidlgenTypeCtor(*member.MaybeAlias))
+		}
+		typ, err := resolveType(memberType, attrs, decls, typeKinds)
 		if err != nil {
 			return nil, fmt.Errorf("%s.%s: failed to derive type: %w", s.Name, member.Name, err)
 		}

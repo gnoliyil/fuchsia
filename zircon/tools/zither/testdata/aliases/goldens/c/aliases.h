@@ -53,6 +53,7 @@ typedef zither_aliases_bits_t zither_aliases_bits_alias_t;
 typedef struct {
   uint64_t x;
   uint64_t y;
+  zither_aliases_enum_alias_t e;
 } zither_aliases_struct_t;
 
 typedef zither_aliases_struct_t zither_aliases_struct_alias_t;
