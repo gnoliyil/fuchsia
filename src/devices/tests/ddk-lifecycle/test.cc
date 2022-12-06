@@ -136,8 +136,14 @@ TEST_F(LifecycleTest, Init) {
   ASSERT_NO_FATAL_FAILURE(WaitPreRelease(child_id));
 }
 
-#ifndef DFV2
-TEST_F(LifecycleTest, CloseAllConnectionsOnChildUnbind) {
+// TODO(https://fxbug.dev/116750): Implement in DFv2 and remove this test skip.
+#ifdef DFV2
+#define MAYBE_CloseAllConnectionsOnChildUnbind DISABLED_CloseAllConnectionsOnChildUnbind
+#else
+#define MAYBE_CloseAllConnectionsOnChildUnbind CloseAllConnectionsOnChildUnbind
+#endif  // __DFV2
+
+TEST_F(LifecycleTest, MAYBE_CloseAllConnectionsOnChildUnbind) {
   auto result = fidl::WireCall(chan_)->AddChild(true /* complete_init */, ZX_OK /* init_status */);
   ASSERT_OK(result.status());
   ASSERT_FALSE(result->is_error());
@@ -157,7 +163,14 @@ TEST_F(LifecycleTest, CloseAllConnectionsOnChildUnbind) {
   ASSERT_NO_FATAL_FAILURE(WaitPreRelease(child_id));
 }
 
-TEST_F(LifecycleTest, CallsFailDuringUnbind) {
+// TODO(https://fxbug.dev/116750): Implement in DFv2 and remove this test skip.
+#ifdef DFV2
+#define MAYBE_CallsFailDuringUnbind DISABLED_CallsFailDuringUnbind
+#else
+#define MAYBE_CallsFailDuringUnbind CallsFailDuringUnbind
+#endif  // __DFV2
+
+TEST_F(LifecycleTest, MAYBE_CallsFailDuringUnbind) {
   auto result = fidl::WireCall(chan_)->AddChild(true /* complete_init */, ZX_OK /* init_status */);
   ASSERT_OK(result.status());
   ASSERT_FALSE(result->is_error());
@@ -197,8 +210,6 @@ TEST_F(LifecycleTest, CallsFailDuringUnbind) {
   ASSERT_EQ(epitaph.ordinal, kEpitaph);
   ASSERT_EQ(epitaph.error, ZX_ERR_IO_NOT_PRESENT);
 }
-
-#endif
 
 TEST_F(LifecycleTest, CloseAllConnectionsOnUnbind) {
   const fidl::WireResult result =
