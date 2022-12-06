@@ -30,7 +30,7 @@ In VS Code, do the following:
    Once the download is finished, the `ffx product-bundle get` command creates a
    local Fuchsia package repository named `workstation-packages` on your host
    machine. This package repository hosts additional system packages for this
-   Workstation prebuilt image. Later in step 12 you’ll register this package
+   Workstation prebuilt image. Later in step 10 you’ll register this package
    repository to the emulator instance.
 
 1. Stop all running emulator instances:
@@ -64,20 +64,6 @@ In VS Code, do the following:
    Emulator is ready.
    ```
 
-1. Verify that the emulator instance is detected as a device:
-
-   ```posix-terminal
-   tools/ffx target list
-   ```
-
-   This command prints output similar to the following:
-
-   ```none {:.devsite-disable-click-to-copy}
-   $ tools/ffx target list
-   NAME                SERIAL       TYPE                        STATE      ADDRS/IP       RCS
-   fuchsia-emulator    <unknown>    workstation_eng.qemu-x64    Product    [10.0.2.15]    Y
-   ```
-
 1. Click the **Not connected** icon at the bottom of VS Code.
 
    ![Not connected](images/get-started-vscode-not-connected.png "The Not connect icon at the bottom of VS Code"){: .screenshot}
@@ -86,8 +72,7 @@ In VS Code, do the following:
 
 1. Click **Set fuchsia-emulator as default** in the Command Palette.
 
-1. Verify that `fuchsia-emulator`is set as the default target
-   at the bottom of VS Code.
+   This sets `fuchsia-emulator` as the default target at the bottom of VS Code:
 
    ![Connected](images/get-started-vscode-connected-to-fuchsia-emulator.png "The fuchsia-emulator icon at the bottom of VS Code"){: .screenshot}
 

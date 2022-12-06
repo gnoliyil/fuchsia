@@ -44,13 +44,13 @@ Do the following:
    tools/bazel run //src/hello_world:pkg.component
    ```
 
-   Building a component automatically generates and registers the component’s
-   debug symbols in your development environment.
+   Building a component automatically generates and registers its debug symbols
+   in the development environment.
 
-1. For newly registered symbols to be used in your environment, restart the
-   `ffx` daemon:
+1. Restart the `ffx` daemon:
 
-   Note: This is a temporary workaround. This issue is being tracked in
+   Note: Today, this workaround is required for newly registered symbols to be
+   discovered in the environment. This issue is being tracked in
    [Issue 94614][ticket-94614]{:.external}.
 
    ```posix-terminal
@@ -83,8 +83,8 @@ Do the following:
    [174978.457][klog][klog][I] KERN: terminating process 'hello_world.cm' (32996655)
    ```
 
-   Verify that the lines in the kernel logs show the exact filenames and line
-   numbers (for example, `main() src/hello_world/hello_world.cc:9`) that
-   might have caused the component to crash.
+   The symbolized logs above show the exact filenames and line numbers
+   (for example, `main() src/hello_world/hello_world.cc:9`) that might have
+   caused the component to crash.
 
    Press `CTRL+C` to exit.

@@ -26,7 +26,7 @@ In VS Code, do the following:
    Once the download is finished, the `ffx product-bundle get` command creates
    a local Fuchsia package repository named `workstation-packages` on your host machine.
    This package repository hosts additional system packages for this Workstation prebuilt image.
-   Later in step 10 you’ll register this package repository to the emulator instance.
+   Later in step 9 you’ll register this package repository to the emulator instance.
 
 1. Stop all emulator instances:
 
@@ -67,8 +67,7 @@ In VS Code, do the following:
 
 1. Click **Set fuchsia-emulator as default** in the Command Palette.
 
-1. Verify that `fuchsia-emulator`is set as the default target
-   at the bottom of VS Code.
+   This sets `fuchsia-emulator` as the default target at the bottom of VS Code:
 
    ![Connected](images/get-started-vscode-connected-to-fuchsia-emulator.png "The fuchsia-emualtor icon at the bottom of VS Code"){: .screenshot}
 

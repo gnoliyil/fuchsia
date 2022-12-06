@@ -95,6 +95,8 @@ In VS Code, do the following:
 
 1. Click the **Explorer** icon on the left side of VS Code.
 
+   ![Explorer](images/get-started-vscode-explorer-icon.png "The Explorer icon in VS Code"){: .screenshot width="50"}
+
 1. Open the `src/qemu_edu/drivers/edu_device.cc` file.
 
 1. To set a breakpoint at the `QemuEduDevice::HandleIrq()` method,
@@ -166,4 +168,6 @@ In VS Code, do the following:
    ```
 
 1. To exit the debugger, click the **Stop** icon in the debug toolbar.
+
+   ![Debug stop](images/get-started-vscode-debug-stop-icon.png "The Stop icon in VS Code"){: .screenshot width="250"}
 

@@ -11,17 +11,44 @@ The tasks include:
 
 In VS Code, do the following:
 
-1. In the terminal, build and run the sample component:
+1. Click the **Explorer** icon on the left side of VS Code.
 
-   ```posix-terminal
-   tools/bazel run //src/hello_world:pkg.component
+   ![Explorer](images/get-started-vscode-explorer-icon.png "The Explorer icon in VS Code"){: .screenshot width="50"}
+
+1. Open the `getting-started.code-workspace` file.
+
+   This file includes the following launch configuration, which is
+   set to build and run the `hello_world` component:
+
+   ```none {:.devsite-disable-click-to-copy}
+   "launch": {
+     "version": "0.2.0",
+     "configurations": [
+       {
+         "name": "Fuchsia Hello World",
+         "type": "zxdb",
+         "request": "launch",
+         "launchCommand": "tools/bazel run //src/hello_world:pkg.component",
+         "process": "hello_world"
+       }
+     ]
+   }
    ```
 
-   When the build is successful, this command generates build artifacts in a
-   temporary Fuchsia package repository, which is then removed after the
-   component runs.
+1. Click the **Run and Debug** icon on the left side of VS Code.
 
-   The command prints output similar to the following:
+   ![Run and Debug](images/get-started-vscode-run-and-debug-icon-01.png "The Run and Debug icon in VS Code"){: .screenshot width="50"}
+
+1. At the top of the **Run and Debug** panel, select the **Fuchsia Hello World**
+   option in the dropdown memu.
+
+   ![Run and Debug dropdown](images/get-started-vscode-run-and-debug-dropdown.png "The dropdown menu in the Run and Drop panel of VS Code"){: .screenshot width="350"}
+
+1. Click **Run > Run Without Debugging**.
+
+   This starts a debug session (but without actually running a debugger)
+   that launches the `hello_world` component. The `bazel run` command used to
+   launch the component prints output similar to the following in the terminal:
 
    ```none {:.devsite-disable-click-to-copy}
    $ tools/bazel run //src/hello_world:pkg.component
@@ -39,7 +66,7 @@ In VS Code, do the following:
    Started component instance!
    ```
 
-1. Check the status of the `hello_world` component:
+1. In the terminal, check the status of the `hello_world` component:
 
    ```posix-terminal
    tools/ffx component show hello_world
@@ -62,6 +89,14 @@ In VS Code, do the following:
 
    The output shows that the `hello_world` component has run and is now
    terminated (`Stopped`).
+
+1. In the debug toolbar at the top of VS Code, click the **Stop** icon
+   to close the current debug session.
+
+   ![Debug stop](images/get-started-vscode-debug-stop-icon.png "The Stop icon in VS Code"){: .screenshot width="250"}
+
+   Note: You can safely ignore the `Error: connection closed` pop-up message
+   at the bottom of VS Code for now.
 
 1. Click the **fuchsia-emulator** icon at the bottom of VS Code.
 
@@ -113,19 +148,17 @@ In VS Code, do the following:
 
 1. To save the file, press `CTRL+S` (or `Command+S` on macOS).
 
-1. Click the **TERMINAL** tab on the VS Code panel.
+1. Click **Run > Run Without Debugging**.
 
-1. In the terminal, build and run the `hello_world` component again:
-
-   ```posix-terminal
-   tools/bazel run //src/hello_world:pkg.component
-   ```
+   This builds and runs the `hello_world` component again.
 
 1. Click the **FUCHSIA LOGS** tab on the VS Code panel.
 
 1. Verify that `Hello again, World!` is printed in the logs.
 
    ![Hello again, World](images/get-started-vscode-hello-again-world.png "Hello again, World! shown in the Fuchsia logs panel of VS Code"){: .screenshot}
+
+1. In the debug toolbar at the top of VS Code, click the **Stop** icon.
 
 <!-- Reference links -->
 

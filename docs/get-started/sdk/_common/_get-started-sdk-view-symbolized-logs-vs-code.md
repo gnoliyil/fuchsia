@@ -34,21 +34,17 @@ In VS Code, do the following:
 
 1. To save the file, press `CTRL+S` (or `Command+S` on macOS).
 
-1. Click the **TERMINAL** tab on the VS Code panel.
+1. Click **Run > Run Without Debugging**.
 
-1. In the terminal, build and run the sample component:
+   Building a component automatically generates and registers its debug symbols
+   in the development environment.
 
-   ```posix-terminal
-   tools/bazel run //src/hello_world:pkg.component
-   ```
+1. In the debug toolbar at the top of VS Code, click the **Stop** icon.
 
-   Building a component automatically generates and registers the component’s
-   debug symbols in your development environment.
+1. In the terminal, restart the `ffx` daemon:
 
-1. For newly registered symbols to be used in your environment, restart the
-   `ffx` daemon:
-
-   Note: This is a temporary workaround. This issue is being tracked in
+   Note: Today, this workaround is required for newly registered symbols to be
+   discovered in the environment. This issue is being tracked in
    [Issue 94614][ticket-94614]{:.external}.
 
    ```posix-terminal
@@ -68,6 +64,6 @@ In VS Code, do the following:
 
    ![Symbolized logs](images/get-started-vscode-symbolized-logs.png "Symbolized Fuchsia logs shown in VS Code"){: .screenshot}
 
-   Verify that the lines in the kernel logs show the exact filenames and line
-   numbers (for example, `main() src/hello_world/hello_world.cc:9`) that
-   might have caused the component to crash.
+   The symbolized logs above show the exact filenames and line numbers
+   (for example, `main() src/hello_world/hello_world.cc:9`) that might have
+   caused the component to crash.

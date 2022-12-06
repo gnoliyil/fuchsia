@@ -19,7 +19,6 @@ In VS Code, do the following:
    This installed the following extensions:
 
    *  [Fuchsia VS Code extension][fuchsia-vscode-ext]{:.external}
-   *  [FIDL extension][fidl-vscode-ext]{:.external}
    *  [Bazel extension][bazel-vscode-ext]{:.external}
 
    Note: You may see more pop-ups recommending other extensions while using
@@ -28,5 +27,4 @@ In VS Code, do the following:
 <!-- Reference links -->
 
 [bazel-vscode-ext]: https://marketplace.visualstudio.com/items?itemName=BazelBuild.vscode-bazel
-[fidl-vscode-ext]: https://marketplace.visualstudio.com/items?itemName=fuchsia-authors.language-fidl
 [fuchsia-vscode-ext]: https://marketplace.visualstudio.com/items?itemName=fuchsia-authors.vscode-fuchsia
