@@ -51,6 +51,5 @@ group("core-tools") {
     "//src/media/playback/bundles:services",
     "//src/media/sessions/bundles:services",
     "//src/modular/bundles:framework",
-    "//src/modular/bundles:tools",
   ]
 }

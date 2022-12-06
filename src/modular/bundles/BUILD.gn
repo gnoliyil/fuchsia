@@ -4,15 +4,7 @@
 
 group("bundles") {
   testonly = true
-  deps = [
-    ":framework",
-    ":tools",
-  ]
-}
-
-group("tools") {
-  testonly = true
-  # TODO(fxb/102727): remove after vendor/google references have been removed.
+  deps = [ ":framework" ]
 }
 
 group("framework") {

@@ -131,7 +131,6 @@ group("tests") {
                   "//src/fonts",
                   "//src/modular/bundles:framework",
                   "//src/modular/bundles:integration_testing",
-                  "//src/modular/bundles:tools",
                   "//src/ui/tools:scenic",
                 ] + _flutter_tester_tests
 }
