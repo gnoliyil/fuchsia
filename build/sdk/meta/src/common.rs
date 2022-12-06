@@ -173,6 +173,7 @@ pub enum ElementType {
     Config,
     DartLibrary,
     Documentation,
+    FfxTool,
     FidlLibrary,
     HostTool,
     License,

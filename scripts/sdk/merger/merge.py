@@ -198,7 +198,7 @@ class ElementMeta(object):
         elif type == 'sysroot':
             meta = meta_one
             meta['versions'].update(meta_two['versions'])
-        elif type in ['host_tool', 'companion_host_tool']:
+        elif type in ['ffx_tool', 'host_tool', 'companion_host_tool']:
             meta = meta_one
             if not 'target_files' in meta:
                 meta['target_files'] = {}
