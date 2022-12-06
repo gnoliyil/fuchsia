@@ -10,7 +10,7 @@
 #include <fuchsia/hardware/i2cimpl/cpp/banjo.h>
 #include <lib/ddk/platform-defs.h>
 #include <lib/fdf/cpp/dispatcher.h>
-#include <lib/svc/outgoing.h>
+#include <lib/sys/component/cpp/outgoing_directory.h>
 
 #include <optional>
 
@@ -31,8 +31,9 @@ using I2cChildType = ddk::Device<I2cChild, ddk::Messageable<fidl_i2c::Device>::M
 
 class I2cChild : public I2cChildType {
  public:
-  I2cChild(zx_device_t* parent, fbl::RefPtr<I2cBus> bus, uint16_t address)
-      : I2cChildType(parent), bus_(std::move(bus)), address_(address) {}
+  I2cChild(zx_device_t* parent, fbl::RefPtr<I2cBus> bus, uint16_t address,
+           async_dispatcher_t* dispatcher)
+      : I2cChildType(parent), outgoing_dir_(dispatcher), bus_(std::move(bus)), address_(address) {}
 
   static zx_status_t CreateAndAddDevice(
       zx_device_t* parent, const fuchsia_hardware_i2c_businfo::wire::I2CChannel& channel,
@@ -47,7 +48,7 @@ class I2cChild : public I2cChildType {
     fidl::BindServer(fdf::Dispatcher::GetCurrent()->async_dispatcher(), std::move(request), this);
   }
 
-  std::optional<svc::Outgoing> outgoing_dir_;
+  component::OutgoingDirectory outgoing_dir_;
 
   fbl::RefPtr<I2cBus> bus_;
   const uint16_t address_;

@@ -55,7 +55,7 @@ zx_status_t I2cChild::CreateAndAddDevice(
   }
 
   fbl::AllocChecker ac;
-  std::unique_ptr<I2cChild> dev(new (&ac) I2cChild(parent, bus, address));
+  std::unique_ptr<I2cChild> dev(new (&ac) I2cChild(parent, bus, address, dispatcher));
   if (!ac.check()) {
     zxlogf(ERROR, "Failed to create child device: %s", zx_status_get_string(ZX_ERR_NO_MEMORY));
     return ZX_ERR_NO_MEMORY;
@@ -66,32 +66,47 @@ zx_status_t I2cChild::CreateAndAddDevice(
     return endpoints.status_value();
   }
 
-  dev->outgoing_dir_.emplace(dispatcher);
-  dev->outgoing_dir_->svc_dir()->AddEntry(
-      fidl::DiscoverableProtocolName<fidl_i2c::Device>,
-      fbl::MakeRefCounted<fs::Service>(
-          [dev = dev.get()](fidl::ServerEnd<fidl_i2c::Device> request) mutable {
-            dev->Bind(std::move(request));
-            return ZX_OK;
-          }));
+  auto result = dev->outgoing_dir_.AddProtocol<fidl_i2c::Device>(
+      [dev = dev.get()](fidl::ServerEnd<fidl_i2c::Device> request) mutable {
+        dev->Bind(std::move(request));
+      });
 
-  zx_status_t status = dev->outgoing_dir_->Serve(std::move(endpoints->server));
-  if (status != ZX_OK) {
-    zxlogf(ERROR, "Failed to service the outoing directory: %s", zx_status_get_string(status));
-    return status;
+  if (result.is_error()) {
+    zxlogf(ERROR, "Failed to AddProtocol: %s", result.status_string());
+    return result.error_value();
+  }
+
+  result = dev->outgoing_dir_.AddService<fidl_i2c::Service>(fidl_i2c::Service::InstanceHandler(
+      {.device = [dev = dev.get()](fidl::ServerEnd<fidl_i2c::Device> request) mutable {
+        dev->Bind(std::move(request));
+      }}));
+
+  if (result.is_error()) {
+    zxlogf(ERROR, "Failed to AddService: %s", result.status_string());
+    return result.error_value();
+  }
+
+  result = dev->outgoing_dir_.Serve(std::move(endpoints->server));
+  if (result.is_error()) {
+    zxlogf(ERROR, "Failed to service the outoing directory: %s", result.status_string());
+    return result.error_value();
   }
 
   std::array offers = {fidl::DiscoverableProtocolName<fidl_i2c::Device>};
+  std::array service_offers = {
+      fidl_i2c::Service::Name,
+  };
 
   char name[32];
   snprintf(name, sizeof(name), "i2c-%u-%u", bus_id, address);
-  status = dev->DdkAdd(ddk::DeviceAddArgs(name)
-                           // Add the Banjo protocol ID to create aliases under /dev/class/i2c.
-                           .set_proto_id(ZX_PROTOCOL_I2C)
-                           .set_flags(DEVICE_ADD_MUST_ISOLATE)
-                           .set_props(props)
-                           .set_fidl_protocol_offers(offers)
-                           .set_outgoing_dir(endpoints->client.TakeChannel()));
+  auto status = dev->DdkAdd(ddk::DeviceAddArgs(name)
+                                // Add the Banjo protocol ID to create aliases under /dev/class/i2c.
+                                .set_proto_id(ZX_PROTOCOL_I2C)
+                                .set_flags(DEVICE_ADD_MUST_ISOLATE)
+                                .set_props(props)
+                                .set_fidl_protocol_offers(offers)
+                                .set_fidl_service_offers(service_offers)
+                                .set_outgoing_dir(endpoints->client.TakeChannel()));
 
   if (status != ZX_OK) {
     zxlogf(ERROR, "DdkAdd failed: %s", zx_status_get_string(status));
