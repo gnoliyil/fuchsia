@@ -383,8 +383,7 @@ void JSONGenerator::Generate(const flat::Protocol& value) {
     GenerateObjectMember("location", NameSpan(value.name));
     if (!value.attributes->Empty())
       GenerateObjectMember("maybe_attributes", value.attributes);
-    if (experimental_flags_.IsFlagEnabled(ExperimentalFlags::Flag::kUnknownInteractions) ||
-        experimental_flags_.IsFlagEnabled(ExperimentalFlags::Flag::kUnknownInteractionsMigration))
+    if (experimental_flags_.IsFlagEnabled(ExperimentalFlags::Flag::kUnknownInteractions))
       GenerateObjectMember("openness", value.openness);
     GenerateObjectMember("composed_protocols", value.composed_protocols);
     GenerateObjectMember("methods", value.all_methods);
@@ -406,8 +405,7 @@ void JSONGenerator::Generate(const flat::Protocol::MethodWithInfo& method_with_i
   GenerateObject([&]() {
     GenerateObjectMember("ordinal", value.generated_ordinal64, Position::kFirst);
     GenerateObjectMember("name", value.name);
-    if (experimental_flags_.IsFlagEnabled(ExperimentalFlags::Flag::kUnknownInteractions) ||
-        experimental_flags_.IsFlagEnabled(ExperimentalFlags::Flag::kUnknownInteractionsMigration))
+    if (experimental_flags_.IsFlagEnabled(ExperimentalFlags::Flag::kUnknownInteractions))
       GenerateObjectMember("strict", value.strictness);
     GenerateObjectMember("location", NameSpan(value.name));
     GenerateObjectMember("has_request", value.has_request);

@@ -169,6 +169,7 @@ ajar protocol AjarExample {};
 closed protocol ClosedExample {};
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_COMPILED(library);
   ASSERT_TRUE(library.Lint({.included_check_ids = {"explicit-openness-modifier"}}));
   ASSERT_WARNINGS(0, library, "");
@@ -181,6 +182,7 @@ library fuchsia.a;
 protocol Example {};
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_COMPILED(library);
   ASSERT_FALSE(library.Lint({.included_check_ids = {"explicit-openness-modifier"}}));
   ASSERT_WARNINGS(1, library, "Example must have an explicit openness modifier");
@@ -226,6 +228,7 @@ closed protocol ClosedExample {
 };
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_COMPILED(library);
   ASSERT_TRUE(library.Lint({.included_check_ids = {"explicit-flexible-method-modifier"}}));
   ASSERT_WARNINGS(0, library, "");
@@ -240,6 +243,7 @@ open protocol Example {
 };
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_COMPILED(library);
   ASSERT_FALSE(library.Lint({.included_check_ids = {"explicit-flexible-method-modifier"}}));
   ASSERT_WARNINGS(1, library, "Foo must have an explicit 'flexible' modifier");
@@ -254,6 +258,7 @@ open protocol Example {
 };
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_COMPILED(library);
   ASSERT_FALSE(library.Lint({.included_check_ids = {"explicit-flexible-method-modifier"}}));
   ASSERT_WARNINGS(1, library, "Foo must have an explicit 'flexible' modifier");
@@ -268,6 +273,7 @@ open protocol Example {
 };
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_COMPILED(library);
   ASSERT_FALSE(library.Lint({.included_check_ids = {"explicit-flexible-method-modifier"}}));
   ASSERT_WARNINGS(1, library, "OnFoo must have an explicit 'flexible' modifier");
@@ -284,6 +290,7 @@ closed protocol Example {
 };
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrFlexibleOneWayMethodInClosedProtocol);
   ASSERT_FALSE(library.Lint({.included_check_ids = {"explicit-flexible-method-modifier"}}));
   ASSERT_WARNINGS(1, library, "Foo must have an explicit 'flexible' modifier");
@@ -300,6 +307,7 @@ closed protocol Example {
 };
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrFlexibleOneWayMethodInClosedProtocol);
   ASSERT_FALSE(library.Lint({.included_check_ids = {"explicit-flexible-method-modifier"}}));
   ASSERT_WARNINGS(1, library, "OnFoo must have an explicit 'flexible' modifier");

@@ -4,7 +4,7 @@
     "no_optional_structs",
     "output_index_json",
     "simple_empty_response_syntax",
-    "unknown_interactions_migration"
+    "unknown_interactions"
   ],
   "library_dependencies": [],
   "bits_declarations": [

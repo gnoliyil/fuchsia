@@ -9,7 +9,7 @@ fidl("test.foreigntypeinresponseusedthroughcompose") {
   sources = [ "top.test.fidl" ]
   experimental_flags = [
     "output_index_json",
-    "unknown_interactions_migration",
+    "unknown_interactions",
   ]
   public_deps = [
     ":test.bottom",
@@ -22,13 +22,13 @@ fidl("test.middle") {
   testonly = true
   sources = [ "middle.test.fidl" ]
   public_deps = [ ":test.bottom" ]
-  experimental_flags = [ "unknown_interactions_migration" ]
+  experimental_flags = [ "unknown_interactions" ]
   golden_fuzzer = true
 }
 
 fidl("test.bottom") {
   testonly = true
   sources = [ "bottom.test.fidl" ]
-  experimental_flags = [ "unknown_interactions_migration" ]
+  experimental_flags = [ "unknown_interactions" ]
   golden_fuzzer = true
 }

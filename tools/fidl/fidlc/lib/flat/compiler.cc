@@ -52,8 +52,7 @@ bool Compiler::Compile() {
     return false;
   if (!VerifyDependenciesStep(this).Run())
     return false;
-  if (experimental_flags_.IsFlagEnabled(ExperimentalFlags::Flag::kUnknownInteractions) ||
-      experimental_flags_.IsFlagEnabled(ExperimentalFlags::Flag::kUnknownInteractionsMigration)) {
+  if (experimental_flags_.IsFlagEnabled(ExperimentalFlags::Flag::kUnknownInteractions)) {
     if (!VerifyOpenInteractionsStep(this).Run())
       return false;
   }

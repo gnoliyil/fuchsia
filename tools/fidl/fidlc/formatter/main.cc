@@ -57,6 +57,7 @@ bool Format(const fidl::SourceFile& source_file, fidl::Reporter* reporter, std::
   // formatter so formatter works with unknown interaction modifiers without
   // adding flags.
   experimental_flags.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  experimental_flags.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
 
   auto formatter = fidl::fmt::NewFormatter(100, reporter);
   auto result = formatter.Format(source_file, experimental_flags);

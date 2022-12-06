@@ -10,6 +10,7 @@
 
 #include "tools/fidl/fidlc/include/fidl/diagnostics.h"
 #include "tools/fidl/fidlc/include/fidl/experimental_flags.h"
+#include "tools/fidl/fidlc/include/fidl/raw_ast.h"
 #include "tools/fidl/fidlc/include/fidl/types.h"
 #include "tools/fidl/fidlc/include/fidl/utils.h"
 
@@ -753,10 +754,7 @@ void Parser::ParseProtocolMember(
         // an Identifier source element.
         method_name = std::make_unique<raw::Identifier>(
             raw::TokenChain(compose_token.value(), compose_token.value()));
-      } else if ((experimental_flags_.IsFlagEnabled(
-                      ExperimentalFlags::Flag::kUnknownInteractions) ||
-                  experimental_flags_.IsFlagEnabled(
-                      ExperimentalFlags::Flag::kUnknownInteractionsMigration)) &&
+      } else if (experimental_flags_.IsFlagEnabled(ExperimentalFlags::Flag::kUnknownInteractions) &&
                  (Peek().combined() == CASE_IDENTIFIER(Token::Subkind::kStrict) ||
                   Peek().combined() == CASE_IDENTIFIER(Token::Subkind::kFlexible))) {
         // There are two possibilities here: we are looking at a method or event with strictness
@@ -835,8 +833,7 @@ std::unique_ptr<raw::ProtocolDeclaration> Parser::ParseProtocolDeclaration(
   std::vector<std::unique_ptr<raw::ProtocolCompose>> composed_protocols;
   std::vector<std::unique_ptr<raw::ProtocolMethod>> methods;
 
-  if ((experimental_flags_.IsFlagEnabled(ExperimentalFlags::Flag::kUnknownInteractions) ||
-       experimental_flags_.IsFlagEnabled(ExperimentalFlags::Flag::kUnknownInteractionsMigration)) &&
+  if (experimental_flags_.IsFlagEnabled(ExperimentalFlags::Flag::kUnknownInteractions) &&
       (Peek().combined() == CASE_IDENTIFIER(Token::Subkind::kOpen) ||
        Peek().combined() == CASE_IDENTIFIER(Token::Subkind::kAjar) ||
        Peek().combined() == CASE_IDENTIFIER(Token::Subkind::kClosed))) {
@@ -1657,9 +1654,7 @@ std::unique_ptr<raw::File> Parser::ParseFile() {
       case CASE_IDENTIFIER(Token::Subkind::kAjar):
       case CASE_IDENTIFIER(Token::Subkind::kClosed):
       case CASE_IDENTIFIER(Token::Subkind::kOpen):
-        if (!(experimental_flags_.IsFlagEnabled(ExperimentalFlags::Flag::kUnknownInteractions) ||
-              experimental_flags_.IsFlagEnabled(
-                  ExperimentalFlags::Flag::kUnknownInteractionsMigration))) {
+        if (!experimental_flags_.IsFlagEnabled(ExperimentalFlags::Flag::kUnknownInteractions)) {
           Fail(ErrExpectedDeclaration, last_token_.data());
           return More;
         }

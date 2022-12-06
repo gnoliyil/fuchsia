@@ -745,6 +745,7 @@ TEST(ErrcatTests, Good0114a) {
   TestLibrary library;
   library.AddFile("good/fi-0114-a.test.fidl");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_COMPILED(library);
 }
 
@@ -752,6 +753,7 @@ TEST(ErrcatTests, Good0114b) {
   TestLibrary library;
   library.AddFile("good/fi-0114-b.test.fidl");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_COMPILED(library);
 }
 
@@ -759,6 +761,7 @@ TEST(ErrcatTests, Good0115a) {
   TestLibrary library;
   library.AddFile("good/fi-0115-a.test.fidl");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_COMPILED(library);
 }
 
@@ -766,6 +769,7 @@ TEST(ErrcatTests, Good0115b) {
   TestLibrary library;
   library.AddFile("good/fi-0115-b.test.fidl");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_COMPILED(library);
 }
 
@@ -773,6 +777,7 @@ TEST(ErrcatTests, Good0116a) {
   TestLibrary library;
   library.AddFile("good/fi-0116-a.test.fidl");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_COMPILED(library);
 }
 
@@ -780,6 +785,7 @@ TEST(ErrcatTests, Good0116b) {
   TestLibrary library;
   library.AddFile("good/fi-0116-b.test.fidl");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_COMPILED(library);
 }
 
@@ -1232,6 +1238,7 @@ TEST(ErrcatTests, Good0190) {
   TestLibrary library;
   library.AddFile("good/fi-0190.test.fidl");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_COMPILED(library);
 }
 

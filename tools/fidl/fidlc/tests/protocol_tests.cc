@@ -21,7 +21,7 @@ ajar protocol AjarEmpty {};
 closed protocol ClosedEmpty {};
 protocol ImplicitClosedEmpty {};
 )FIDL");
-  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsMigration);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
   ASSERT_COMPILED(library);
 
   auto open_protocol = library.LookupProtocol("OpenEmpty");
@@ -73,7 +73,7 @@ protocol ImplicitClosedComposer {
   compose ImplicitClosedEmpty;
 };
 )FIDL");
-  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsMigration);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
   ASSERT_COMPILED(library);
 }
 
@@ -86,7 +86,7 @@ ajar protocol AjarComposer {
   compose OpenEmpty;
 };
 )FIDL");
-  library1.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsMigration);
+  library1.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
   ASSERT_ERRORED_DURING_COMPILE(library1, fidl::ErrComposedProtocolTooOpen);
 
   TestLibrary library2(R"FIDL(library example;
@@ -96,7 +96,7 @@ closed protocol ClosedComposer {
   compose OpenEmpty;
 };
 )FIDL");
-  library2.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsMigration);
+  library2.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
   ASSERT_ERRORED_DURING_COMPILE(library2, fidl::ErrComposedProtocolTooOpen);
 
   TestLibrary library3(R"FIDL(library example;
@@ -106,7 +106,7 @@ closed protocol ClosedComposer {
   compose AjarEmpty;
 };
 )FIDL");
-  library3.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsMigration);
+  library3.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
   ASSERT_ERRORED_DURING_COMPILE(library3, fidl::ErrComposedProtocolTooOpen);
 
   TestLibrary library4(R"FIDL(library example;
@@ -116,7 +116,7 @@ protocol ImplicitClosedComposer {
   compose OpenEmpty;
 };
 )FIDL");
-  library4.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsMigration);
+  library4.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
   ASSERT_ERRORED_DURING_COMPILE(library4, fidl::ErrComposedProtocolTooOpen);
 
   TestLibrary library5(R"FIDL(library example;
@@ -126,8 +126,43 @@ protocol ImplicitClosedComposer {
   compose AjarEmpty;
 };
 )FIDL");
-  library5.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsMigration);
+  library5.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
   ASSERT_ERRORED_DURING_COMPILE(library5, fidl::ErrComposedProtocolTooOpen);
+}
+
+// TODO(fxbug.dev/88366): remove once fully migrated.
+TEST(ProtocolTests, GoodValidOpennessModifiersMandateMode) {
+  TestLibrary library(R"FIDL(library example;
+
+open protocol OpenEmpty {};
+ajar protocol AjarEmpty {};
+closed protocol ClosedEmpty {};
+)FIDL");
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsMandate);
+  ASSERT_COMPILED(library);
+
+  auto open_protocol = library.LookupProtocol("OpenEmpty");
+  ASSERT_NOT_NULL(open_protocol);
+  EXPECT_EQ(open_protocol->openness, fidl::types::Openness::kOpen);
+
+  auto ajar_protocol = library.LookupProtocol("AjarEmpty");
+  ASSERT_NOT_NULL(ajar_protocol);
+  EXPECT_EQ(ajar_protocol->openness, fidl::types::Openness::kAjar);
+
+  auto closed_protocol = library.LookupProtocol("ClosedEmpty");
+  ASSERT_NOT_NULL(closed_protocol);
+  EXPECT_EQ(closed_protocol->openness, fidl::types::Openness::kClosed);
+}
+
+// TODO(fxbug.dev/88366): remove once fully migrated.
+TEST(ProtocolTests, BadMissingOpennessModifierMandateMode) {
+  TestLibrary library(R"FIDL(library example;
+protocol ImplicitOpenness {};
+)FIDL");
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsMandate);
+  ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrProtocolMustDefineOpenness);
 }
 
 TEST(ProtocolTests, GoodValidEmptyProtocol) {
@@ -136,6 +171,7 @@ TEST(ProtocolTests, GoodValidEmptyProtocol) {
 protocol Empty {};
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_COMPILED(library);
 
   auto protocol = library.LookupProtocol("Empty");
@@ -152,6 +188,7 @@ TEST(ProtocolTests, GoodValidEmptyOpenProtocol) {
 open protocol Empty {};
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_COMPILED(library);
 
   auto protocol = library.LookupProtocol("Empty");
@@ -168,6 +205,7 @@ TEST(ProtocolTests, GoodValidEmptyAjarProtocol) {
 ajar protocol Empty {};
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_COMPILED(library);
 
   auto protocol = library.LookupProtocol("Empty");
@@ -184,6 +222,7 @@ TEST(ProtocolTests, GoodValidEmptyClosedProtocol) {
 closed protocol Empty {};
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_COMPILED(library);
 
   auto protocol = library.LookupProtocol("Empty");
@@ -255,6 +294,7 @@ strict protocol Empty {};
 
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrExpectedDeclaration);
 }
 
@@ -266,6 +306,7 @@ flexible protocol Empty {};
 
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrExpectedDeclaration);
 }
 
@@ -277,6 +318,7 @@ open Empty {};
 
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrUnexpectedIdentifier);
 }
 
@@ -288,6 +330,7 @@ ajar Empty {};
 
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrUnexpectedIdentifier);
 }
 
@@ -299,6 +342,7 @@ closed Empty {};
 
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrUnexpectedIdentifier);
 }
 
@@ -385,6 +429,7 @@ open protocol ComposeInOpen {
 
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_COMPILED(library);
 
   auto compose_in_closed = library.LookupProtocol("ComposeInClosed");
@@ -412,6 +457,7 @@ closed protocol Composing {
 
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrComposedProtocolTooOpen);
 }
 
@@ -427,6 +473,7 @@ closed protocol Composing {
 
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrComposedProtocolTooOpen);
 }
 
@@ -434,6 +481,7 @@ TEST(ProtocolTests, BadInvalidComposeOpenInAjar) {
   TestLibrary library;
   library.AddFile("bad/fi-0114.test.fidl");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrComposedProtocolTooOpen);
 }
 
@@ -509,6 +557,7 @@ protocol B {
 
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrInvalidProtocolMember);
 }
 
@@ -524,6 +573,7 @@ protocol B {
 
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrInvalidProtocolMember);
 }
 
@@ -537,6 +587,7 @@ protocol Example {
 
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrInvalidProtocolMember);
 }
 
@@ -550,6 +601,7 @@ protocol Example {
 
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrInvalidProtocolMember);
 }
 
@@ -971,6 +1023,7 @@ closed protocol MyProtocol {
 };
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_COMPILED(library);
 }
 
@@ -978,6 +1031,7 @@ TEST(ProtocolTests, BadOpenSimpleProtocol) {
   TestLibrary library;
   library.AddFile("bad/fi-0190.test.fidl");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrSimpleProtocolMustBeClosed);
 }
 
@@ -991,6 +1045,7 @@ ajar protocol MyProtocol {
 };
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractions);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrSimpleProtocolMustBeClosed);
 }
 
@@ -1123,6 +1178,7 @@ protocol MyProtocol {
 };
 )FIDL");
   library.EnableFlag(fidl::ExperimentalFlags::Flag::kSimpleEmptyResponseSyntax);
+  library.EnableFlag(fidl::ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults);
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrEmptyPayloadStructs);
 }
 

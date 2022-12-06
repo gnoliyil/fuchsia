@@ -376,19 +376,21 @@ void ConsumeStep::ConsumeProtocolDeclaration(
     std::unique_ptr<AttributeList> attributes;
     ConsumeAttributeList(std::move(method->attributes), &attributes);
 
+    SourceSpan method_name = method->identifier->span();
+
     auto strictness = types::Strictness::kStrict;
-    if (experimental_flags().IsFlagEnabled(ExperimentalFlags::Flag::kUnknownInteractions) ||
-        experimental_flags().IsFlagEnabled(
-            ExperimentalFlags::Flag::kUnknownInteractionsMigration)) {
+    if (experimental_flags().IsFlagEnabled(ExperimentalFlags::Flag::kUnknownInteractions)) {
       if (method->modifiers != nullptr && method->modifiers->maybe_strictness.has_value()) {
         strictness = method->modifiers->maybe_strictness->value;
       } else if (experimental_flags().IsFlagEnabled(
-                     ExperimentalFlags::Flag::kUnknownInteractions)) {
+                     ExperimentalFlags::Flag::kUnknownInteractionsMandate)) {
+        Fail(ErrMethodMustDefineStrictness, method_name, method_name.data());
+      } else if (experimental_flags().IsFlagEnabled(
+                     ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults)) {
         strictness = types::Strictness::kFlexible;
       }
     }
 
-    SourceSpan method_name = method->identifier->span();
     bool has_request = method->maybe_request != nullptr;
     std::unique_ptr<TypeConstructor> maybe_request;
     if (has_request) {
@@ -494,12 +496,18 @@ void ConsumeStep::ConsumeProtocolDeclaration(
   std::unique_ptr<AttributeList> attributes;
   ConsumeAttributeList(std::move(protocol_declaration->attributes), &attributes);
 
-  auto openness = experimental_flags().IsFlagEnabled(ExperimentalFlags::Flag::kUnknownInteractions)
-                      ? types::Openness::kOpen
-                      : types::Openness::kClosed;
+  auto openness =
+      experimental_flags().IsFlagEnabled(ExperimentalFlags::Flag::kUnknownInteractionsNewDefaults)
+          ? types::Openness::kOpen
+          : types::Openness::kClosed;
   if (protocol_declaration->modifiers != nullptr &&
-      protocol_declaration->modifiers->maybe_openness.has_value())
+      protocol_declaration->modifiers->maybe_openness.has_value()) {
     openness = protocol_declaration->modifiers->maybe_openness->value;
+  } else if (experimental_flags().IsFlagEnabled(
+                 ExperimentalFlags::Flag::kUnknownInteractionsMandate)) {
+    Fail(ErrProtocolMustDefineOpenness, protocol_declaration->identifier->span(),
+         protocol_declaration->identifier->span().data());
+  }
 
   RegisterDecl(std::make_unique<Protocol>(std::move(attributes), openness, std::move(protocol_name),
                                           std::move(composed_protocols), std::move(methods)));
