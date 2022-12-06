@@ -651,6 +651,12 @@ type Foo = struct {
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrExpectedValueButGotType);
 }
 
+TEST(NewSyntaxTests, BadUnresolvableConstraint) {
+  TestLibrary library;
+  library.AddFile("bad/fi-0166.test.fidl");
+  ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrUnexpectedConstraint);
+}
+
 TEST(NewSyntaxTests, BadShadowedOptional) {
   TestLibrary library(R"FIDL(
 library example;
