@@ -21,6 +21,7 @@ import("//build/testing/host_test_data.gni")
 #     "//path/to/foo:lib",
 #     "//path/to/bar:lib",
 #   ]
+#   main_callable = "my_module.main"
 #   extra_args = [ "--a_very_useful_flag" ]
 # }
 # ```
@@ -50,6 +51,12 @@ import("//build/testing/host_test_data.gni")
 #    Additional arguments to pass to the test.
 #    Type: list(string)
 #
+#   main_callable (optional)
+#     Main callable, which serves as the entry point of the output zip archive.
+#     In the example above, this is "my_module.main".
+#     Type: string
+#     Default: unittest.main
+#
 #   deps
 #   environments
 #   visibility
@@ -70,6 +77,9 @@ template("python_host_test") {
 
     output_name = _python_binary_name
     main_callable = "unittest.main"
+    if (defined(invoker.main_callable)) {
+      main_callable = invoker.main_callable
+    }
 
     if (defined(invoker.libraries)) {
       deps = invoker.libraries
