@@ -543,13 +543,6 @@
             subdir: "class/thermal",
         },
         {
-            directory: "dev",
-            from: "parent",
-            as: "dev-misc",
-            to: [ "#cobalt_system_metrics" ],
-            subdir: "misc",
-        },
-        {
             directory: "root-ssl-certificates",
             from: "parent",
             to: [

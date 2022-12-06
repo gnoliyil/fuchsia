@@ -42,10 +42,5 @@
             rights: [ "r*" ],
             path: "/dev/class/thermal",
         },
-        {
-            directory: "dev-misc",
-            rights: [ "r*" ],
-            path: "/dev/misc",
-        },
     ],
 }
