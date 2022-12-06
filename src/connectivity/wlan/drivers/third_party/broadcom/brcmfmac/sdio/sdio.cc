@@ -1387,7 +1387,7 @@ static uint8_t brcmf_sdio_rxglom_frames(struct brcmf_sdio* bus, uint8_t rxseq) {
     err = brcmf_sdiod_recv_frames(bus->sdiodev,
                                   cpp20::span<wlan::drivers::components::Frame>(glom_frames));
   }
-  ++bus->sdcnt.f2rxdata;
+  bus->sdcnt.f2rxdata += glom_frames.size();
 
   TRACE_DURATION("brcmfmac:isr", "post_recv");
 
@@ -1640,6 +1640,7 @@ static uint32_t brcmf_sdio_read_frames(struct brcmf_sdio* bus, uint32_t max_fram
 
       // If we don't know how much to read then read headers first.
       zx_status_t result = brcmf_sdiod_recv_frame(bus->sdiodev, *frame, BRCMF_FIRSTREAD);
+      ++bus->sdcnt.f2rxhdrs;
       if (result != ZX_OK) {
         BRCMF_ERR("RXHEADER FAILED: %s", zx_status_get_string(result));
         ++bus->sdcnt.rx_hdrfail;
