@@ -49,6 +49,8 @@ The above instructions is not what is run during testing and CQ. The GN build st
 
 ### Testing
 
+Note: many of these tests require `python3.8` to be on `$PATH`. This might need to be added.
+
 #### Execute GN SDK scripts/tools
 
 The internal GN SDK helper scripts/tools can be executed after the GN SDK has been generated.
