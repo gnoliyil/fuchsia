@@ -6,6 +6,7 @@
 
 #include <lib/fit/defer.h>
 
+#include <vm/discardable_vmo_tracker.h>
 #include <vm/pinned_vm_object.h>
 
 #include "test_helper.h"
@@ -2450,7 +2451,8 @@ static bool vmo_lock_count_test() {
     }
   }
 
-  EXPECT_EQ(expected_lock_count, vmo->DebugGetCowPages()->DebugGetLockCount());
+  EXPECT_EQ(expected_lock_count,
+            vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugGetLockCount());
 
   END_TEST;
 }
@@ -2467,16 +2469,16 @@ static bool vmo_discardable_states_test() {
   ASSERT_EQ(ZX_OK, status);
 
   // A newly created discardable vmo is not on any list yet.
-  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugIsUnreclaimable());
-  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugIsReclaimable());
-  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugIsDiscarded());
+  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsUnreclaimable());
+  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsReclaimable());
+  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsDiscarded());
 
   // Lock and commit all pages.
   EXPECT_EQ(ZX_OK, vmo->TryLockRange(0, kSize));
   EXPECT_EQ(ZX_OK, vmo->CommitRange(0, kSize));
-  EXPECT_TRUE(vmo->DebugGetCowPages()->DebugIsUnreclaimable());
-  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugIsReclaimable());
-  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugIsDiscarded());
+  EXPECT_TRUE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsUnreclaimable());
+  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsReclaimable());
+  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsDiscarded());
 
   // List to collect any pages freed during the test, and free them to the PMM before exiting.
   list_node_t freed_list;
@@ -2488,15 +2490,15 @@ static bool vmo_discardable_states_test() {
 
   // Unlock.
   EXPECT_EQ(ZX_OK, vmo->UnlockRange(0, kSize));
-  EXPECT_TRUE(vmo->DebugGetCowPages()->DebugIsReclaimable());
-  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugIsUnreclaimable());
-  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugIsDiscarded());
+  EXPECT_TRUE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsReclaimable());
+  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsUnreclaimable());
+  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsDiscarded());
 
   // Should be able to discard now.
   EXPECT_EQ(kSize / PAGE_SIZE, vmo->DebugGetCowPages()->DiscardPages(0, &freed_list));
-  EXPECT_TRUE(vmo->DebugGetCowPages()->DebugIsDiscarded());
-  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugIsUnreclaimable());
-  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugIsReclaimable());
+  EXPECT_TRUE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsDiscarded());
+  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsUnreclaimable());
+  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsReclaimable());
 
   // Try lock should fail after discard.
   EXPECT_EQ(ZX_ERR_UNAVAILABLE, vmo->TryLockRange(0, kSize));
@@ -2504,9 +2506,9 @@ static bool vmo_discardable_states_test() {
   // Lock should succeed.
   zx_vmo_lock_state_t lock_state = {};
   EXPECT_EQ(ZX_OK, vmo->LockRange(0, kSize, &lock_state));
-  EXPECT_TRUE(vmo->DebugGetCowPages()->DebugIsUnreclaimable());
-  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugIsReclaimable());
-  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugIsDiscarded());
+  EXPECT_TRUE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsUnreclaimable());
+  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsReclaimable());
+  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsDiscarded());
 
   // Verify the lock state returned.
   EXPECT_EQ(0u, lock_state.offset);
@@ -2518,15 +2520,15 @@ static bool vmo_discardable_states_test() {
 
   // Unlock.
   EXPECT_EQ(ZX_OK, vmo->UnlockRange(0, kSize));
-  EXPECT_TRUE(vmo->DebugGetCowPages()->DebugIsReclaimable());
-  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugIsUnreclaimable());
-  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugIsDiscarded());
+  EXPECT_TRUE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsReclaimable());
+  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsUnreclaimable());
+  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsDiscarded());
 
   // Lock again and verify the lock state returned without a discard.
   EXPECT_EQ(ZX_OK, vmo->LockRange(0, kSize, &lock_state));
-  EXPECT_TRUE(vmo->DebugGetCowPages()->DebugIsUnreclaimable());
-  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugIsReclaimable());
-  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugIsDiscarded());
+  EXPECT_TRUE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsUnreclaimable());
+  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsReclaimable());
+  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsDiscarded());
 
   EXPECT_EQ(0u, lock_state.offset);
   EXPECT_EQ(kSize, lock_state.size);
@@ -2535,20 +2537,20 @@ static bool vmo_discardable_states_test() {
 
   // Unlock and discard again.
   EXPECT_EQ(ZX_OK, vmo->UnlockRange(0, kSize));
-  EXPECT_TRUE(vmo->DebugGetCowPages()->DebugIsReclaimable());
-  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugIsUnreclaimable());
-  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugIsDiscarded());
+  EXPECT_TRUE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsReclaimable());
+  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsUnreclaimable());
+  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsDiscarded());
 
   // Cannot discard if recently unlocked.
   EXPECT_EQ(0u, vmo->DebugGetCowPages()->DiscardPages(ZX_TIME_INFINITE, &freed_list));
-  EXPECT_TRUE(vmo->DebugGetCowPages()->DebugIsReclaimable());
-  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugIsUnreclaimable());
-  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugIsDiscarded());
+  EXPECT_TRUE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsReclaimable());
+  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsUnreclaimable());
+  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsDiscarded());
 
   EXPECT_EQ(kSize / PAGE_SIZE, vmo->DebugGetCowPages()->DiscardPages(0, &freed_list));
-  EXPECT_TRUE(vmo->DebugGetCowPages()->DebugIsDiscarded());
-  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugIsUnreclaimable());
-  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugIsReclaimable());
+  EXPECT_TRUE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsDiscarded());
+  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsUnreclaimable());
+  EXPECT_FALSE(vmo->DebugGetCowPages()->DebugGetDiscardableTracker()->DebugIsReclaimable());
 
   END_TEST;
 }
@@ -2633,7 +2635,6 @@ static bool vmo_discard_test() {
   vmo.reset();
   status = VmObjectPaged::Create(PMM_ALLOC_FLAG_ANY, VmObjectPaged::kResizable, kSize, &vmo);
   ASSERT_EQ(ZX_OK, status);
-  ASSERT_EQ(0u, vmo->DebugGetCowPages()->DebugGetLockCount());
   EXPECT_EQ(0u, vmo->DebugGetCowPages()->DiscardPages(0, &freed_list));
 
   END_TEST;
@@ -2772,7 +2773,7 @@ static bool vmo_discardable_counts_test() {
     ASSERT_EQ(ZX_OK, status);
   }
 
-  VmCowPages::DiscardablePageCounts expected = {};
+  DiscardableVmoTracker::DiscardablePageCounts expected = {};
 
   // List to collect any pages freed during the test, and free them to the PMM before exiting.
   list_node_t freed_list;
@@ -2802,7 +2803,8 @@ static bool vmo_discardable_counts_test() {
     }
   }
 
-  VmCowPages::DiscardablePageCounts counts = VmCowPages::DebugDiscardablePageCounts();
+  DiscardableVmoTracker::DiscardablePageCounts counts =
+      DiscardableVmoTracker::DebugDiscardablePageCounts();
   // There might be other discardable vmos in the rest of the system, so the actual page counts
   // might be higher than the expected counts.
   EXPECT_LE(expected.locked, counts.locked);

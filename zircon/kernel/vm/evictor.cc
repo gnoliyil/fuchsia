@@ -14,6 +14,7 @@
 
 #include <kernel/lockdep.h>
 #include <ktl/algorithm.h>
+#include <vm/discardable_vmo_tracker.h>
 #include <vm/evictor.h>
 #include <vm/pmm.h>
 #include <vm/scanner.h>
@@ -296,7 +297,8 @@ uint64_t Evictor::EvictDiscardable(uint64_t target_pages) const {
     Guard<MonitoredSpinLock, IrqSave> guard{&lock_, SOURCE_TAG};
     min_age = min_discardable_age_;
   }
-  uint64_t count = VmCowPages::ReclaimPagesFromDiscardableVmos(target_pages, min_age, &freed_list);
+  uint64_t count =
+      DiscardableVmoTracker::ReclaimPagesFromDiscardableVmos(target_pages, min_age, &freed_list);
 
   DEBUG_ASSERT(pmm_node_);
   pmm_node_->FreeList(&freed_list);

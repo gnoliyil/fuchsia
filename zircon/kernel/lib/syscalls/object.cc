@@ -38,6 +38,7 @@
 #include <object/vcpu_dispatcher.h>
 #include <object/vm_address_region_dispatcher.h>
 #include <object/vm_object_dispatcher.h>
+#include <vm/discardable_vmo_tracker.h>
 #include <vm/pmm.h>
 #include <vm/vm.h>
 
@@ -768,8 +769,8 @@ zx_status_t sys_object_get_info(zx_handle_t handle, uint32_t topic, user_out_ptr
       stats_ext.vmo_pager_newest_bytes = pager_counts.newest * PAGE_SIZE;
       stats_ext.vmo_pager_oldest_bytes = pager_counts.oldest * PAGE_SIZE;
 
-      VmCowPages::DiscardablePageCounts discardable_counts =
-          VmCowPages::DebugDiscardablePageCounts();
+      DiscardableVmoTracker::DiscardablePageCounts discardable_counts =
+          DiscardableVmoTracker::DebugDiscardablePageCounts();
       stats_ext.vmo_discardable_locked_bytes = discardable_counts.locked * PAGE_SIZE;
       stats_ext.vmo_discardable_unlocked_bytes = discardable_counts.unlocked * PAGE_SIZE;
 

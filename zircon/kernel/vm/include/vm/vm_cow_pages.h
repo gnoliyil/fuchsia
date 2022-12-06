@@ -34,6 +34,7 @@
 // Forward declare these so VmCowPages helpers can accept references.
 class BatchPQRemove;
 class VmObjectPaged;
+class DiscardableVmoTracker;
 
 namespace internal {
 struct DiscardableListTag {};
@@ -67,14 +68,13 @@ FBL_ENABLE_ENUM_BITS(VmCowPagesOptions)
 class VmCowPages final
     : public VmHierarchyBase,
       public fbl::ContainableBaseClasses<
-          // Guarded by lock_.
           fbl::TaggedDoublyLinkedListable<VmCowPages*, internal::ChildListTag>,
-          // Guarded by DiscardableVmosLock::Get().
           fbl::TaggedDoublyLinkedListable<VmCowPages*, internal::DiscardableListTag>>,
       public fbl::Recyclable<VmCowPages> {
  public:
   static zx_status_t Create(fbl::RefPtr<VmHierarchyState> root_lock, VmCowPagesOptions options,
                             uint32_t pmm_alloc_flags, uint64_t size,
+                            ktl::unique_ptr<DiscardableVmoTracker> discardable_tracker,
                             fbl::RefPtr<VmCowPages>* cow_pages);
 
   static zx_status_t CreateExternal(fbl::RefPtr<PageSource> src, VmCowPagesOptions options,
@@ -586,21 +586,16 @@ class VmCowPages final
   zx_status_t TryLockRangeLocked(uint64_t offset, uint64_t len);
   zx_status_t UnlockRangeLocked(uint64_t offset, uint64_t len);
 
-  // Exposed for testing.
-  uint64_t DebugGetLockCount() const {
-    Guard<CriticalMutex> guard{&lock_};
-    return lock_count_;
-  }
   uint64_t DebugGetPageCountLocked() const TA_REQ(lock_);
-  bool DebugIsReclaimable() const;
-  bool DebugIsUnreclaimable() const;
-  bool DebugIsDiscarded() const;
   bool DebugIsPage(uint64_t offset) const;
   bool DebugIsMarker(uint64_t offset) const;
   bool DebugIsEmpty(uint64_t offset) const;
   vm_page_t* DebugGetPage(uint64_t offset) const TA_EXCL(lock_);
   vm_page_t* DebugGetPageLocked(uint64_t offset) const TA_REQ(lock_);
   uint64_t DebugGetSupplyZeroOffset() const TA_EXCL(lock_);
+
+  // Exposed for testing.
+  DiscardableVmoTracker* DebugGetDiscardableTracker() const { return discardable_tracker_.get(); }
 
   // Discard all the pages from a discardable vmo in the |kReclaimable| state. For this call to
   // succeed, the vmo should have been in the reclaimable state for at least
@@ -610,29 +605,14 @@ class VmCowPages final
   // of the removed pages and is responsible for freeing them. Returns the number of pages
   // discarded.
   uint64_t DiscardPages(zx_duration_t min_duration_since_reclaimable, list_node_t* freed_list)
-      TA_EXCL(DiscardableVmosLock::Get()) TA_EXCL(lock_);
+      TA_EXCL(lock_);
 
+  // See DiscardableVmoTracker::DebugDiscardablePageCounts().
   struct DiscardablePageCounts {
     uint64_t locked;
     uint64_t unlocked;
   };
-
-  // Returns the total number of pages locked and unlocked across all discardable vmos.
-  // Note that this might not be exact and we might miss some vmos, because the
-  // |DiscardableVmosLock| is dropped after processing each vmo on the global discardable lists.
-  // That is fine since these numbers are only used for accounting.
-  static DiscardablePageCounts DebugDiscardablePageCounts() TA_EXCL(DiscardableVmosLock::Get());
-
-  // Walks through the LRU reclaimable list of discardable vmos and discards pages from each, until
-  // |target_pages| have been discarded, or the list of candidates is exhausted. Only vmos that have
-  // become reclaimable more than |min_duration_since_reclaimable| in the past will be discarded;
-  // this prevents discarding reclaimable vmos that were recently accessed. The discarded pages are
-  // appended to the |freed_list| passed in; the caller takes ownership of the discarded pages and
-  // is responsible for freeing them. Returns the total number of pages discarded.
-  static uint64_t ReclaimPagesFromDiscardableVmos(uint64_t target_pages,
-                                                  zx_duration_t min_duration_since_reclaimable,
-                                                  list_node_t* freed_list)
-      TA_EXCL(DiscardableVmosLock::Get());
+  DiscardablePageCounts DebugGetDiscardablePageCounts() const TA_EXCL(lock_);
 
   // Walks up the parent tree and returns the root, or |this| if there is no parent.
   const VmCowPages* GetRootLocked() const TA_REQ(lock_);
@@ -647,7 +627,8 @@ class VmCowPages final
   // private constructor (use Create...())
   VmCowPages(ktl::unique_ptr<VmCowPagesContainer> cow_container,
              fbl::RefPtr<VmHierarchyState> root_lock, VmCowPagesOptions options,
-             uint32_t pmm_alloc_flags, uint64_t size, fbl::RefPtr<PageSource> page_source);
+             uint32_t pmm_alloc_flags, uint64_t size, fbl::RefPtr<PageSource> page_source,
+             ktl::unique_ptr<DiscardableVmoTracker> discardable_tracker);
   friend class VmCowPagesContainer;
 
   ~VmCowPages() override;
@@ -1028,57 +1009,6 @@ class VmCowPages final
   // UnlockRangeLocked() is valid.
   bool IsLockRangeValidLocked(uint64_t offset, uint64_t len) const TA_REQ(lock_);
 
-  // Lock that protects the global discardable lists.
-  // This lock can be acquired with the vmo's |lock_| held. To prevent deadlocks, if both locks are
-  // required the order of locking should always be 1) vmo's lock, and then 2) DiscardableVmosLock.
-  DECLARE_SINGLETON_CRITICAL_MUTEX(DiscardableVmosLock);
-
-  enum class DiscardableState : uint8_t {
-    kUnset = 0,
-    kReclaimable,
-    kUnreclaimable,
-    kDiscarded,
-  };
-
-  using DiscardableList = fbl::TaggedDoublyLinkedList<VmCowPages*, internal::DiscardableListTag>;
-
-  // Two global lists of discardable vmos:
-  // - |discardable_reclaim_candidates_| tracks discardable vmos that are eligible for reclamation
-  // and haven't been reclaimed yet.
-  // - |discardable_non_reclaim_candidates_| tracks all other discardable VMOs.
-  // The lists are protected by the |DiscardableVmosLock|, and updated based on a discardable vmo's
-  // state changes (lock, unlock, or discard).
-  static DiscardableList discardable_reclaim_candidates_ TA_GUARDED(DiscardableVmosLock::Get());
-  static DiscardableList discardable_non_reclaim_candidates_ TA_GUARDED(DiscardableVmosLock::Get());
-
-  // Helper function to move an object from the |discardable_non_reclaim_candidates_| list to the
-  // |discardable_reclaim_candidates_| list.
-  void MoveToReclaimCandidatesListLocked() TA_REQ(lock_) TA_REQ(DiscardableVmosLock::Get());
-
-  // Helper function to move an object from the |discardable_reclaim_candidates_| list to the
-  // |discardable_non_reclaim_candidates_| list. If |new_candidate| is true, that indicates that the
-  // object was not yet being tracked on any list, and should only be inserted into the
-  // |discardable_non_reclaim_candidates_| list without a corresponding list removal.
-  void MoveToNonReclaimCandidatesListLocked(bool new_candidate = false) TA_REQ(lock_)
-      TA_REQ(DiscardableVmosLock::Get());
-
-  // Updates the |discardable_state_| of a discardable vmo, and moves it from one discardable list
-  // to another.
-  void UpdateDiscardableStateLocked(DiscardableState state) TA_REQ(lock_)
-      TA_EXCL(DiscardableVmosLock::Get());
-
-  // Remove a discardable object from whichever global discardable list it is in. Called from the
-  // VmCowPages destructor.
-  void RemoveFromDiscardableListLocked() TA_REQ(lock_) TA_EXCL(DiscardableVmosLock::Get());
-
-  // Returns whether the vmo is in either one of the |discardable_reclaim_candidates_| or
-  // |discardable_reclaim_candidates_| lists, depending on whether it is a |reclaim_candidate|
-  // or not.
-  bool DebugIsInDiscardableListLocked(bool reclaim_candidate) const TA_REQ(lock_)
-      TA_EXCL(DiscardableVmosLock::Get());
-
-  DiscardablePageCounts GetDiscardablePageCounts() const TA_EXCL(lock_);
-
   // Returns the root parent's page source.
   fbl::RefPtr<PageSource> GetRootPageSourceLocked() const TA_REQ(lock_);
 
@@ -1324,30 +1254,6 @@ class VmCowPages final
   // Count eviction events so that we can report them to the user.
   uint64_t eviction_event_count_ TA_GUARDED(lock_) = 0;
 
-  // Count of outstanding lock operations. A non-zero count prevents the kernel from discarding /
-  // evicting pages from the VMO to relieve memory pressure (currently only applicable if
-  // |kDiscardable| is set). Note that this does not prevent removal of pages by other means, like
-  // decommitting or resizing, since those are explicit actions driven by the user, not by the
-  // kernel directly.
-  uint64_t lock_count_ TA_GUARDED(lock_) = 0;
-
-  // Timestamp of the last unlock operation that changed a discardable vmo's state to
-  // |kReclaimable|. Used to determine whether the vmo was accessed too recently to be discarded.
-  zx_time_t last_unlock_timestamp_ TA_GUARDED(lock_) = ZX_TIME_INFINITE;
-
-  // The current state of a discardable vmo, depending on the lock count and whether it has been
-  // discarded.
-  // State transitions work as follows:
-  // 1. kUnreclaimable -> kReclaimable: When the lock count changes from 1 to 0.
-  // 2. kReclaimable -> kUnreclaimable: When the lock count changes from 0 to 1. The vmo remains
-  // kUnreclaimable for any non-zero lock count.
-  // 3. kReclaimable -> kDiscarded: When a vmo with lock count 0 is discarded.
-  // 4. kDiscarded -> kUnreclaimable: When a discarded vmo is locked again.
-  //
-  // We start off with state kUnset, so a discardable vmo must be locked at least once to opt into
-  // the above state transitions. For non-discardable vmos, the state will always remain kUnset.
-  DiscardableState discardable_state_ TA_GUARDED(lock_) = DiscardableState::kUnset;
-
   // a tree of pages
   VmPageList page_list_ TA_GUARDED(lock_);
 
@@ -1359,6 +1265,9 @@ class VmCowPages final
   // raw pointer to avoid circular references, the VmObjectPaged destructor needs to update it.
   VmObjectPaged* paged_ref_ TA_GUARDED(lock_) = nullptr;
 
+  // Non-null if this is a discardable VMO.
+  const ktl::unique_ptr<DiscardableVmoTracker> discardable_tracker_;
+
   // TODO(fxb/101641): This is a temporary solution and needs to be replaced with something that is
   // formalized.
   // Marks whether or not this VMO is considered a latency sensitive object. For a VMO being latency
@@ -1367,15 +1276,6 @@ class VmCowPages final
   // Note: This does not presently protect against user pager eviction, as there is already a
   // separate mechanism for that. Once fxb/101641 is resolved this might change.
   bool is_latency_sensitive_ TA_GUARDED(lock_) = false;
-
-  using Cursor =
-      VmoCursor<VmCowPages, DiscardableVmosLock, DiscardableList, DiscardableList::iterator>;
-
-  // The list of all outstanding cursors iterating over the discardable lists:
-  // |discardable_reclaim_candidates_| and |discardable_non_reclaim_candidates_|. The cursors should
-  // be advanced (by calling AdvanceIf()) before removing any element from the discardable lists.
-  static fbl::DoublyLinkedList<Cursor*> discardable_vmos_cursors_
-      TA_GUARDED(DiscardableVmosLock::Get());
 
   // With this bool we achieve these things:
   //  * Avoid using loaned pages for a VMO that will just get pinned and replace the loaned pages

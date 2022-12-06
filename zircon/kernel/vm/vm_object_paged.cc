@@ -23,6 +23,7 @@
 #include <ktl/array.h>
 #include <ktl/move.h>
 #include <vm/bootreserve.h>
+#include <vm/discardable_vmo_tracker.h>
 #include <vm/fault.h>
 #include <vm/page_source.h>
 #include <vm/physical_page_provider.h>
@@ -182,8 +183,17 @@ zx_status_t VmObjectPaged::CreateCommon(uint32_t pmm_alloc_flags, uint32_t optio
     return ZX_ERR_NO_MEMORY;
   }
 
+  ktl::unique_ptr<DiscardableVmoTracker> discardable = nullptr;
+  if (options & kDiscardable) {
+    discardable = ktl::make_unique<DiscardableVmoTracker>(&ac);
+    if (!ac.check()) {
+      return ZX_ERR_NO_MEMORY;
+    }
+  }
+
   fbl::RefPtr<VmCowPages> cow_pages;
-  status = VmCowPages::Create(state, VmCowPagesOptions::kNone, pmm_alloc_flags, size, &cow_pages);
+  status = VmCowPages::Create(state, VmCowPagesOptions::kNone, pmm_alloc_flags, size,
+                              ktl::move(discardable), &cow_pages);
   if (status != ZX_OK) {
     return status;
   }

@@ -12,6 +12,7 @@ zx_library("vm") {
     "bootalloc.cc",
     "bootreserve.cc",
     "content_size_manager.cc",
+    "discardable_vmo_tracker.cc",
     "evictor.cc",
     "kstack.cc",
     "loan_sweeper.cc",

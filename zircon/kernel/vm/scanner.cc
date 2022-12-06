@@ -15,6 +15,7 @@
 #include <kernel/thread.h>
 #include <ktl/algorithm.h>
 #include <lk/init.h>
+#include <vm/discardable_vmo_tracker.h>
 #include <vm/physical_page_borrowing_config.h>
 #include <vm/scanner.h>
 #include <vm/vm.h>
@@ -84,7 +85,8 @@ void scanner_print_stats() {
   printf("[SCAN]: Found %lu reclaimable pages in DontNeed queue\n", queue_counts.reclaim_dont_need);
   printf("[SCAN]: Found %lu zero forked pages\n", queue_counts.anonymous_zero_fork);
 
-  VmCowPages::DiscardablePageCounts counts = VmCowPages::DebugDiscardablePageCounts();
+  DiscardableVmoTracker::DiscardablePageCounts counts =
+      DiscardableVmoTracker::DebugDiscardablePageCounts();
   printf("[SCAN]: Found %lu locked pages in discardable vmos\n", counts.locked);
   printf("[SCAN]: Found %lu unlocked pages in discardable vmos\n", counts.unlocked);
   pmm_page_queues()->Dump();

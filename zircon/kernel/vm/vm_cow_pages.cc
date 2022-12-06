@@ -14,6 +14,7 @@
 #include <ktl/move.h>
 #include <lk/init.h>
 #include <vm/anonymous_page_requester.h>
+#include <vm/discardable_vmo_tracker.h>
 #include <vm/fault.h>
 #include <vm/physmap.h>
 #include <vm/pmm.h>
@@ -103,11 +104,6 @@ void FreeReference(VmPageOrMarker::ReferenceValue content) {
 }
 
 }  // namespace
-
-VmCowPages::DiscardableList VmCowPages::discardable_reclaim_candidates_ = {};
-VmCowPages::DiscardableList VmCowPages::discardable_non_reclaim_candidates_ = {};
-
-fbl::DoublyLinkedList<VmCowPages::Cursor*> VmCowPages::discardable_vmos_cursors_ = {};
 
 // Helper class for collecting pages to performed batched Removes from the page queue to not incur
 // its spinlock overhead for every single page. Pages that it removes from the page queue get placed
@@ -293,14 +289,16 @@ zx_status_t VmCowPages::ReplaceReferenceWithPageLocked(VmPageOrMarkerRef page_or
 VmCowPages::VmCowPages(ktl::unique_ptr<VmCowPagesContainer> cow_container,
                        const fbl::RefPtr<VmHierarchyState> hierarchy_state_ptr,
                        VmCowPagesOptions options, uint32_t pmm_alloc_flags, uint64_t size,
-                       fbl::RefPtr<PageSource> page_source)
+                       fbl::RefPtr<PageSource> page_source,
+                       ktl::unique_ptr<DiscardableVmoTracker> discardable_tracker)
     : VmHierarchyBase(ktl::move(hierarchy_state_ptr)),
       container_(fbl::AdoptRef(cow_container.release())),
       debug_retained_raw_container_(container_.get()),
       options_(options),
       size_(size),
       pmm_alloc_flags_(pmm_alloc_flags),
-      page_source_(ktl::move(page_source)) {
+      page_source_(ktl::move(page_source)),
+      discardable_tracker_(ktl::move(discardable_tracker)) {
   DEBUG_ASSERT(IS_PAGE_ALIGNED(size));
   DEBUG_ASSERT(!(pmm_alloc_flags & PMM_ALLOC_FLAG_CAN_BORROW));
 }
@@ -357,7 +355,10 @@ void VmCowPages::fbl_recycle() {
       // finalized with one recursive step.
     }
 
-    RemoveFromDiscardableListLocked();
+    if (discardable_tracker_) {
+      discardable_tracker_->assert_cow_pages_locked();
+      discardable_tracker_->RemoveFromDiscardableListLocked();
+    }
 
     // We stack-own loaned pages between removing the page from PageQueues and freeing the page via
     // call to FreePagesLocked().
@@ -475,13 +476,19 @@ bool VmCowPages::DedupZeroPage(vm_page_t* page, uint64_t offset) {
 
 zx_status_t VmCowPages::Create(fbl::RefPtr<VmHierarchyState> root_lock, VmCowPagesOptions options,
                                uint32_t pmm_alloc_flags, uint64_t size,
+                               ktl::unique_ptr<DiscardableVmoTracker> discardable_tracker,
                                fbl::RefPtr<VmCowPages>* cow_pages) {
   DEBUG_ASSERT(!(options & VmCowPagesOptions::kInternalOnlyMask));
   fbl::AllocChecker ac;
-  auto cow = NewVmCowPages(&ac, ktl::move(root_lock), options, pmm_alloc_flags, size, nullptr);
+  auto cow = NewVmCowPages(&ac, ktl::move(root_lock), options, pmm_alloc_flags, size, nullptr,
+                           ktl::move(discardable_tracker));
   if (!ac.check()) {
     return ZX_ERR_NO_MEMORY;
   }
+  if (cow->discardable_tracker_) {
+    cow->discardable_tracker_->InitCowPages(cow.get());
+  }
+
   *cow_pages = ktl::move(cow);
   return ZX_OK;
 }
@@ -491,8 +498,8 @@ zx_status_t VmCowPages::CreateExternal(fbl::RefPtr<PageSource> src, VmCowPagesOp
                                        fbl::RefPtr<VmCowPages>* cow_pages) {
   DEBUG_ASSERT(!(options & VmCowPagesOptions::kInternalOnlyMask));
   fbl::AllocChecker ac;
-  auto cow =
-      NewVmCowPages(&ac, ktl::move(root_lock), options, PMM_ALLOC_FLAG_ANY, size, ktl::move(src));
+  auto cow = NewVmCowPages(&ac, ktl::move(root_lock), options, PMM_ALLOC_FLAG_ANY, size,
+                           ktl::move(src), nullptr);
   if (!ac.check()) {
     return ZX_ERR_NO_MEMORY;
   }
@@ -580,7 +587,7 @@ zx_status_t VmCowPages::CreateChildSliceLocked(uint64_t offset, uint64_t size,
   // Slices just need the slice option and default alloc flags since they will propagate any
   // operation up to a parent and use their options and alloc flags.
   auto slice = NewVmCowPages(&ac, hierarchy_state_ptr_, VmCowPagesOptions::kSlice,
-                             PMM_ALLOC_FLAG_ANY, size, nullptr);
+                             PMM_ALLOC_FLAG_ANY, size, nullptr, nullptr);
   if (!ac.check()) {
     return ZX_ERR_NO_MEMORY;
   }
@@ -713,10 +720,10 @@ zx_status_t VmCowPages::CreateCloneLocked(CloneType type, uint64_t offset, uint6
 
     fbl::RefPtr<VmCowPages> left_child =
         NewVmCowPages(ktl::move(left_child_placeholder), hierarchy_state_ptr_,
-                      VmCowPagesOptions::kNone, pmm_alloc_flags_, size_, nullptr);
+                      VmCowPagesOptions::kNone, pmm_alloc_flags_, size_, nullptr, nullptr);
     fbl::RefPtr<VmCowPages> right_child =
         NewVmCowPages(ktl::move(right_child_placeholder), hierarchy_state_ptr_,
-                      VmCowPagesOptions::kNone, pmm_alloc_flags_, size, nullptr);
+                      VmCowPagesOptions::kNone, pmm_alloc_flags_, size, nullptr, nullptr);
 
     AssertHeld(left_child->lock_ref());
     AssertHeld(right_child->lock_ref());
@@ -741,7 +748,7 @@ zx_status_t VmCowPages::CreateCloneLocked(CloneType type, uint64_t offset, uint6
   } else {
     fbl::AllocChecker ac;
     auto cow_pages = NewVmCowPages(&ac, hierarchy_state_ptr_, VmCowPagesOptions::kNone,
-                                   pmm_alloc_flags_, size, nullptr);
+                                   pmm_alloc_flags_, size, nullptr, nullptr);
     if (!ac.check()) {
       return ZX_ERR_NO_MEMORY;
     }
@@ -2195,8 +2202,12 @@ zx_status_t VmCowPages::LookupPagesLocked(uint64_t offset, uint pf_flags,
   }
 
   // This vmo was discarded and has not been locked yet after the discard. Do not return any pages.
-  if (discardable_state_ == DiscardableState::kDiscarded) {
-    return ZX_ERR_NOT_FOUND;
+  if (discardable_tracker_) {
+    discardable_tracker_->assert_cow_pages_locked();
+    if (discardable_tracker_->discardable_state_locked() ==
+        DiscardableVmoTracker::DiscardableState::kDiscarded) {
+      return ZX_ERR_NOT_FOUND;
+    }
   }
 
   offset = ROUNDDOWN(offset, PAGE_SIZE);
@@ -6025,6 +6036,7 @@ bool VmCowPages::IsLockRangeValidLocked(uint64_t offset, uint64_t len) const {
 zx_status_t VmCowPages::LockRangeLocked(uint64_t offset, uint64_t len,
                                         zx_vmo_lock_state_t* lock_state_out) {
   canary_.Assert();
+  ASSERT(discardable_tracker_);
 
   AssertHeld(lock_);
   if (!IsLockRangeValidLocked(offset, len)) {
@@ -6037,195 +6049,44 @@ zx_status_t VmCowPages::LockRangeLocked(uint64_t offset, uint64_t len,
   lock_state_out->offset = offset;
   lock_state_out->size = len;
 
-  if (discardable_state_ == DiscardableState::kDiscarded) {
-    DEBUG_ASSERT(lock_count_ == 0);
-    lock_state_out->discarded_offset = 0;
-    lock_state_out->discarded_size = size_locked();
-  } else {
-    lock_state_out->discarded_offset = 0;
-    lock_state_out->discarded_size = 0;
-  }
+  discardable_tracker_->assert_cow_pages_locked();
 
-  if (lock_count_ == 0) {
-    // Lock count transition from 0 -> 1. Change state to unreclaimable.
-    UpdateDiscardableStateLocked(DiscardableState::kUnreclaimable);
-  }
-  ++lock_count_;
+  bool was_discarded = false;
+  zx_status_t status =
+      discardable_tracker_->LockDiscardableLocked(/*try_lock=*/false, &was_discarded);
+  // Locking must succeed if try_lock was false.
+  DEBUG_ASSERT(status == ZX_OK);
+  lock_state_out->discarded_offset = 0;
+  lock_state_out->discarded_size = was_discarded ? size_locked() : 0;
 
-  return ZX_OK;
+  return status;
 }
 
 zx_status_t VmCowPages::TryLockRangeLocked(uint64_t offset, uint64_t len) {
   canary_.Assert();
+  ASSERT(discardable_tracker_);
 
   AssertHeld(lock_);
   if (!IsLockRangeValidLocked(offset, len)) {
     return ZX_ERR_OUT_OF_RANGE;
   }
 
-  if (discardable_state_ == DiscardableState::kDiscarded) {
-    return ZX_ERR_UNAVAILABLE;
-  }
-
-  if (lock_count_ == 0) {
-    // Lock count transition from 0 -> 1. Change state to unreclaimable.
-    UpdateDiscardableStateLocked(DiscardableState::kUnreclaimable);
-  }
-  ++lock_count_;
-
-  return ZX_OK;
+  discardable_tracker_->assert_cow_pages_locked();
+  bool unused;
+  return discardable_tracker_->LockDiscardableLocked(/*try_lock=*/true, &unused);
 }
 
 zx_status_t VmCowPages::UnlockRangeLocked(uint64_t offset, uint64_t len) {
   canary_.Assert();
+  ASSERT(discardable_tracker_);
 
   AssertHeld(lock_);
   if (!IsLockRangeValidLocked(offset, len)) {
     return ZX_ERR_OUT_OF_RANGE;
   }
 
-  if (lock_count_ == 0) {
-    return ZX_ERR_BAD_STATE;
-  }
-
-  if (lock_count_ == 1) {
-    // Lock count transition from 1 -> 0. Change state to reclaimable.
-    UpdateDiscardableStateLocked(DiscardableState::kReclaimable);
-  }
-  --lock_count_;
-
-  return ZX_OK;
-}
-
-void VmCowPages::UpdateDiscardableStateLocked(DiscardableState state) {
-  Guard<CriticalMutex> guard{DiscardableVmosLock::Get()};
-
-  DEBUG_ASSERT(state != DiscardableState::kUnset);
-
-  if (state == discardable_state_) {
-    return;
-  }
-
-  switch (state) {
-    case DiscardableState::kReclaimable:
-      // The only valid transition into reclaimable is from unreclaimable (lock count 1 -> 0).
-      DEBUG_ASSERT(discardable_state_ == DiscardableState::kUnreclaimable);
-      DEBUG_ASSERT(lock_count_ == 1);
-
-      // Update the last unlock timestamp.
-      last_unlock_timestamp_ = current_time();
-
-      // Move to reclaim candidates list.
-      MoveToReclaimCandidatesListLocked();
-
-      break;
-    case DiscardableState::kUnreclaimable:
-      // The vmo could be reclaimable OR discarded OR not on any list yet. In any case, the lock
-      // count should be 0.
-      DEBUG_ASSERT(lock_count_ == 0);
-      DEBUG_ASSERT(discardable_state_ != DiscardableState::kUnreclaimable);
-
-      if (discardable_state_ == DiscardableState::kDiscarded) {
-        // Should already be on the non reclaim candidates list.
-        DEBUG_ASSERT(discardable_non_reclaim_candidates_.find_if([this](auto& cow) -> bool {
-          return &cow == this;
-        }) != discardable_non_reclaim_candidates_.end());
-      } else {
-        // Move to non reclaim candidates list.
-        MoveToNonReclaimCandidatesListLocked(discardable_state_ == DiscardableState::kUnset);
-      }
-
-      break;
-    case DiscardableState::kDiscarded:
-      // The only valid transition into discarded is from reclaimable (lock count is 0).
-      DEBUG_ASSERT(discardable_state_ == DiscardableState::kReclaimable);
-      DEBUG_ASSERT(lock_count_ == 0);
-
-      // Move from reclaim candidates to non reclaim candidates list.
-      MoveToNonReclaimCandidatesListLocked();
-
-      break;
-    default:
-      break;
-  }
-
-  // Update the state.
-  discardable_state_ = state;
-}
-
-void VmCowPages::RemoveFromDiscardableListLocked() {
-  Guard<CriticalMutex> guard{DiscardableVmosLock::Get()};
-  if (discardable_state_ == DiscardableState::kUnset) {
-    return;
-  }
-
-  DEBUG_ASSERT(fbl::InContainer<internal::DiscardableListTag>(*this));
-
-  Cursor::AdvanceCursors(discardable_vmos_cursors_, this);
-
-  if (discardable_state_ == DiscardableState::kReclaimable) {
-    discardable_reclaim_candidates_.erase(*this);
-  } else {
-    discardable_non_reclaim_candidates_.erase(*this);
-  }
-
-  discardable_state_ = DiscardableState::kUnset;
-}
-
-void VmCowPages::MoveToReclaimCandidatesListLocked() {
-  DEBUG_ASSERT(fbl::InContainer<internal::DiscardableListTag>(*this));
-
-  Cursor::AdvanceCursors(discardable_vmos_cursors_, this);
-  discardable_non_reclaim_candidates_.erase(*this);
-
-  discardable_reclaim_candidates_.push_back(this);
-}
-
-void VmCowPages::MoveToNonReclaimCandidatesListLocked(bool new_candidate) {
-  if (new_candidate) {
-    DEBUG_ASSERT(!fbl::InContainer<internal::DiscardableListTag>(*this));
-  } else {
-    DEBUG_ASSERT(fbl::InContainer<internal::DiscardableListTag>(*this));
-    Cursor::AdvanceCursors(discardable_vmos_cursors_, this);
-    discardable_reclaim_candidates_.erase(*this);
-  }
-
-  discardable_non_reclaim_candidates_.push_back(this);
-}
-
-bool VmCowPages::DebugIsInDiscardableListLocked(bool reclaim_candidate) const {
-  AssertHeld(lock_);
-  Guard<CriticalMutex> guard{DiscardableVmosLock::Get()};
-
-  // Not on any list yet. Nothing else to verify.
-  if (discardable_state_ == DiscardableState::kUnset) {
-    return false;
-  }
-
-  DEBUG_ASSERT(fbl::InContainer<internal::DiscardableListTag>(*this));
-
-  auto iter_c =
-      discardable_reclaim_candidates_.find_if([this](auto& cow) -> bool { return &cow == this; });
-  auto iter_nc = discardable_non_reclaim_candidates_.find_if(
-      [this](auto& cow) -> bool { return &cow == this; });
-
-  if (reclaim_candidate) {
-    // Verify that the vmo is in the |discardable_reclaim_candidates_| list and NOT in the
-    // |discardable_non_reclaim_candidates_| list.
-    if (iter_c != discardable_reclaim_candidates_.end() &&
-        iter_nc == discardable_non_reclaim_candidates_.end()) {
-      return true;
-    }
-  } else {
-    // Verify that the vmo is in the |discardable_non_reclaim_candidates_| list and NOT in the
-    // |discardable_reclaim_candidates_| list.
-    if (iter_nc != discardable_non_reclaim_candidates_.end() &&
-        iter_c == discardable_reclaim_candidates_.end()) {
-      return true;
-    }
-  }
-
-  return false;
+  discardable_tracker_->assert_cow_pages_locked();
+  return discardable_tracker_->UnlockDiscardableLocked();
 }
 
 uint64_t VmCowPages::DebugGetPageCountLocked() const {
@@ -6240,30 +6101,6 @@ uint64_t VmCowPages::DebugGetPageCountLocked() const {
   // We never stop early in lambda above.
   DEBUG_ASSERT(status == ZX_OK);
   return page_count;
-}
-
-bool VmCowPages::DebugIsReclaimable() const {
-  Guard<CriticalMutex> guard{&lock_};
-  if (discardable_state_ != DiscardableState::kReclaimable) {
-    return false;
-  }
-  return DebugIsInDiscardableListLocked(/*reclaim_candidate=*/true);
-}
-
-bool VmCowPages::DebugIsUnreclaimable() const {
-  Guard<CriticalMutex> guard{&lock_};
-  if (discardable_state_ != DiscardableState::kUnreclaimable) {
-    return false;
-  }
-  return DebugIsInDiscardableListLocked(/*reclaim_candidate=*/false);
-}
-
-bool VmCowPages::DebugIsDiscarded() const {
-  Guard<CriticalMutex> guard{&lock_};
-  if (discardable_state_ != DiscardableState::kDiscarded) {
-    return false;
-  }
-  return DebugIsInDiscardableListLocked(/*reclaim_candidate=*/false);
 }
 
 bool VmCowPages::DebugIsPage(uint64_t offset) const {
@@ -6306,11 +6143,22 @@ uint64_t VmCowPages::DebugGetSupplyZeroOffset() const {
   return supply_zero_offset_;
 }
 
-VmCowPages::DiscardablePageCounts VmCowPages::GetDiscardablePageCounts() const {
+VmCowPages::DiscardablePageCounts VmCowPages::DebugGetDiscardablePageCounts() const {
+  canary_.Assert();
   DiscardablePageCounts counts = {};
 
   Guard<CriticalMutex> guard{&lock_};
-  if (discardable_state_ == DiscardableState::kUnset) {
+
+  // Not a discardable VMO.
+  if (!discardable_tracker_) {
+    return counts;
+  }
+
+  discardable_tracker_->assert_cow_pages_locked();
+  const DiscardableVmoTracker::DiscardableState state =
+      discardable_tracker_->discardable_state_locked();
+  // This is a discardable VMO but hasn't opted into locking / unlocking yet.
+  if (state == DiscardableVmoTracker::DiscardableState::kUnset) {
     return counts;
   }
 
@@ -6323,14 +6171,14 @@ VmCowPages::DiscardablePageCounts VmCowPages::GetDiscardablePageCounts() const {
     return ZX_ERR_NEXT;
   });
 
-  switch (discardable_state_) {
-    case DiscardableState::kReclaimable:
+  switch (state) {
+    case DiscardableVmoTracker::DiscardableState::kReclaimable:
       counts.unlocked = pages;
       break;
-    case DiscardableState::kUnreclaimable:
+    case DiscardableVmoTracker::DiscardableState::kUnreclaimable:
       counts.locked = pages;
       break;
-    case DiscardableState::kDiscarded:
+    case DiscardableVmoTracker::DiscardableState::kDiscarded:
       DEBUG_ASSERT(pages == 0);
       break;
     default:
@@ -6340,68 +6188,34 @@ VmCowPages::DiscardablePageCounts VmCowPages::GetDiscardablePageCounts() const {
   return counts;
 }
 
-VmCowPages::DiscardablePageCounts VmCowPages::DebugDiscardablePageCounts() {
-  DiscardablePageCounts total_counts = {};
-  Guard<CriticalMutex> guard{DiscardableVmosLock::Get()};
-
-  // The union of the two lists should give us a list of all discardable vmos.
-  DiscardableList* lists_to_process[] = {&discardable_reclaim_candidates_,
-                                         &discardable_non_reclaim_candidates_};
-
-  for (auto list : lists_to_process) {
-    Cursor cursor(DiscardableVmosLock::Get(), *list, discardable_vmos_cursors_);
-    AssertHeld(cursor.lock_ref());
-
-    VmCowPages* cow;
-    while ((cow = cursor.Next())) {
-      fbl::RefPtr<VmCowPages> cow_ref = fbl::MakeRefPtrUpgradeFromRaw(cow, guard);
-      if (cow_ref) {
-        // Get page counts for each vmo outside of the |DiscardableVmosLock|, since
-        // GetDiscardablePageCounts() will acquire the VmCowPages lock. Holding the
-        // |DiscardableVmosLock| while acquiring the VmCowPages lock will violate lock ordering
-        // constraints between the two.
-        //
-        // Since we upgraded the raw pointer to a RefPtr under the |DiscardableVmosLock|, we know
-        // that the object is valid. We will call Next() on our cursor after re-acquiring the
-        // |DiscardableVmosLock| to safely iterate to the next element on the list.
-        guard.CallUnlocked([&total_counts, cow_ref = ktl::move(cow_ref)]() mutable {
-          DiscardablePageCounts counts = cow_ref->GetDiscardablePageCounts();
-          total_counts.locked += counts.locked;
-          total_counts.unlocked += counts.unlocked;
-
-          // Explicitly reset the RefPtr to force any destructor to run right now and not in the
-          // cleanup of the lambda, which might happen after the |DiscardableVmosLock| has been
-          // re-acquired.
-          cow_ref.reset();
-        });
-      }
-    }
-  }
-
-  return total_counts;
-}
-
 uint64_t VmCowPages::DiscardPages(zx_duration_t min_duration_since_reclaimable,
                                   list_node_t* freed_list) {
   canary_.Assert();
 
   Guard<CriticalMutex> guard{&lock_};
 
-  // Either this vmo is not discardable, or we've raced with a lock operation. Bail without doing
-  // anything. If this was a discardable vmo, the lock operation will have already moved it to the
-  // unreclaimable list.
-  if (discardable_state_ != DiscardableState::kReclaimable) {
+  // Not a discardable VMO.
+  if (!discardable_tracker_) {
+    return 0;
+  }
+
+  discardable_tracker_->assert_cow_pages_locked();
+  // We've raced with a lock operation. Bail without doing anything. The lock operation will have
+  // already moved it to the unreclaimable list.
+  if (discardable_tracker_->discardable_state_locked() !=
+      DiscardableVmoTracker::DiscardableState::kReclaimable) {
     return 0;
   }
 
   // If the vmo was unlocked less than |min_duration_since_reclaimable| in the past, do not discard
   // from it yet.
-  if (zx_time_sub_time(current_time(), last_unlock_timestamp_) < min_duration_since_reclaimable) {
+  if (zx_time_sub_time(current_time(), discardable_tracker_->last_unlock_timestamp_locked()) <
+      min_duration_since_reclaimable) {
     return 0;
   }
 
   // We've verified that the state is |kReclaimable|, so the lock count should be zero.
-  DEBUG_ASSERT(lock_count_ == 0);
+  DEBUG_ASSERT(discardable_tracker_->lock_count_locked() == 0);
 
   uint64_t pages_freed = 0;
 
@@ -6416,50 +6230,10 @@ uint64_t VmCowPages::DiscardPages(zx_duration_t min_duration_since_reclaimable,
   IncrementHierarchyGenerationCountLocked();
 
   // Update state to discarded.
-  UpdateDiscardableStateLocked(DiscardableState::kDiscarded);
+  discardable_tracker_->UpdateDiscardableStateLocked(
+      DiscardableVmoTracker::DiscardableState::kDiscarded);
 
   return pages_freed;
-}
-
-uint64_t VmCowPages::ReclaimPagesFromDiscardableVmos(uint64_t target_pages,
-                                                     zx_duration_t min_duration_since_reclaimable,
-                                                     list_node_t* freed_list) {
-  uint64_t total_pages_discarded = 0;
-  Guard<CriticalMutex> guard{DiscardableVmosLock::Get()};
-
-  Cursor cursor(DiscardableVmosLock::Get(), discardable_reclaim_candidates_,
-                discardable_vmos_cursors_);
-  AssertHeld(cursor.lock_ref());
-
-  while (total_pages_discarded < target_pages) {
-    VmCowPages* cow = cursor.Next();
-    // No vmos to reclaim pages from.
-    if (cow == nullptr) {
-      break;
-    }
-
-    fbl::RefPtr<VmCowPages> cow_ref = fbl::MakeRefPtrUpgradeFromRaw(cow, guard);
-    if (cow_ref) {
-      // We obtained the RefPtr above under the |DiscardableVmosLock|, so we know the object is
-      // valid. We could not have raced with destruction, since the object is removed from the
-      // discardable list on the destruction path, which requires the |DiscardableVmosLock|.
-      //
-      // DiscardPages() will acquire the VmCowPages |lock_|, so it needs to be called outside of
-      // the |DiscardableVmosLock|. This preserves lock ordering constraints between the two locks
-      // - |DiscardableVmosLock| can be acquired while holding the VmCowPages |lock_|, but not the
-      // other way around.
-      guard.CallUnlocked([&total_pages_discarded, min_duration_since_reclaimable, &freed_list,
-                          cow_ref = ktl::move(cow_ref)]() mutable {
-        total_pages_discarded += cow_ref->DiscardPages(min_duration_since_reclaimable, freed_list);
-
-        // Explicitly reset the RefPtr to force any destructor to run right now and not in the
-        // cleanup of the lambda, which might happen after the |DiscardableVmosLock| has been
-        // re-acquired.
-        cow_ref.reset();
-      });
-    }
-  }
-  return total_pages_discarded;
 }
 
 void VmCowPages::CopyPageForReplacementLocked(vm_page_t* dst_page, vm_page_t* src_page) {
