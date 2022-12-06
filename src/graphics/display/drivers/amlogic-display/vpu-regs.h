@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// See S905D2G datasheet v0.8, section 8.2.2 beginning at page 345
+
 #ifndef SRC_GRAPHICS_DISPLAY_DRIVERS_AMLOGIC_DISPLAY_VPU_REGS_H_
 #define SRC_GRAPHICS_DISPLAY_DRIVERS_AMLOGIC_DISPLAY_VPU_REGS_H_
 #include <hwreg/bitfields.h>
@@ -480,6 +482,30 @@ class Osd1Blk0CfgW0Reg : public hwreg::RegisterBase<Osd1Blk0CfgW0Reg, uint32_t> 
   static auto Get() { return hwreg::RegisterAddr<Osd1Blk0CfgW0Reg>(VPU_VIU_OSD1_BLK0_CFG_W0); }
 };
 
+class Osd1Blk0CfgW1Reg : public hwreg::RegisterBase<Osd1Blk0CfgW1Reg, uint32_t> {
+ public:
+  DEF_FIELD(28, 16, x_end);
+  DEF_FIELD(12, 0, x_start);
+};
+
+class Osd1Blk0CfgW2Reg : public hwreg::RegisterBase<Osd1Blk0CfgW2Reg, uint32_t> {
+ public:
+  DEF_FIELD(28, 16, y_end);
+  DEF_FIELD(12, 0, y_start);
+};
+
+class Osd1Blk0CfgW3Reg : public hwreg::RegisterBase<Osd1Blk0CfgW3Reg, uint32_t> {
+ public:
+  DEF_FIELD(27, 16, h_end);
+  DEF_FIELD(11, 0, h_start);
+};
+
+class Osd1Blk0CfgW4Reg : public hwreg::RegisterBase<Osd1Blk0CfgW4Reg, uint32_t> {
+ public:
+  DEF_FIELD(27, 16, v_end);
+  DEF_FIELD(11, 0, v_start);
+};
+
 class Osd1Blk1CfgW4Reg : public hwreg::RegisterBase<Osd1Blk1CfgW4Reg, uint32_t> {
  public:
   DEF_FIELD(31, 0, frame_addr);
@@ -491,6 +517,24 @@ class Osd1Blk2CfgW4Reg : public hwreg::RegisterBase<Osd1Blk2CfgW4Reg, uint32_t> 
   // TRM shows 32 bits for linear_stride, but vendor code uses only the first 12
   DEF_FIELD(11, 0, linear_stride);
   static auto Get() { return hwreg::RegisterAddr<Osd1Blk2CfgW4Reg>(VPU_VIU_OSD1_BLK2_CFG_W4); }
+};
+
+class Osd1FifoCtrlStatReg : public hwreg::RegisterBase<Osd1FifoCtrlStatReg, uint32_t> {
+ public:
+  DEF_BIT(31, burst_len_sel_hi);      // bit 2 of burst_len_sel
+  DEF_BIT(30, byte_swap);             // 1`swap bytes, 0 do not swap
+  DEF_BIT(29, div_swap);              // 1 swap 64-bit words in 128-bit data
+  DEF_FIELD(28, 24, fifo_lim);        // when fifo.length() < fifo_lim*16, close OSD_RD_MIF
+  DEF_FIELD(23, 22, fifo_ctrl);       // 00=1 word/burst, 01=2, 10=4, 11=invalid
+  DEF_FIELD(21, 20, fifo_st);         // read-only. 0=idle, 1=active, 2=aborting
+  DEF_BIT(19, fifo_overflow);         // read-only
+  DEF_FIELD(18, 12, fifo_depth_val);  // depth of fifo = val*8
+  DEF_FIELD(11, 10, burst_len_sel);   // index into [24, 32, 48, 64, 96, 128] per burst
+  DEF_FIELD(9, 5, hold_fifo_lines);   // lines after vsync to wait before requesting data
+  DEF_BIT(4, clear_err);
+  DEF_BIT(3, fifo_sync_rst);
+  DEF_FIELD(2, 1, endian);  // endianness of 64-bit data [none, 32-bit LE, 16-bit LE, 16-bit ME
+  DEF_BIT(1, urgent);       // priority of data requests
 };
 
 class Osd1CtrlStatReg : public hwreg::RegisterBase<Osd1CtrlStatReg, uint32_t> {
@@ -510,6 +554,131 @@ class Osd1CtrlStat2Reg : public hwreg::RegisterBase<Osd1CtrlStat2Reg, uint32_t> 
   DEF_FIELD(13, 6, replaced_alpha);
   DEF_BIT(1, pending_status_cleanup);
   static auto Get() { return hwreg::RegisterAddr<Osd1CtrlStat2Reg>(VPU_VIU_OSD1_CTRL_STAT2); }
+};
+
+class Osd1TcolorAgReg : public hwreg::RegisterBase<Osd1TcolorAgReg, uint32_t> {
+ public:
+  DEF_FIELD(31, 24, y_or_r);
+  DEF_FIELD(23, 16, cb_or_g);
+  DEF_FIELD(15, 8, cr_or_b);
+  DEF_FIELD(7, 0, a);
+};
+
+class Osd1ColorAddrReg : public hwreg::RegisterBase<Osd1ColorAddrReg, uint32_t> {};
+
+class Osd1ColorReg : public hwreg::RegisterBase<Osd1ColorReg, uint32_t> {
+ public:
+  DEF_FIELD(31, 24, r);
+  DEF_FIELD(23, 16, g);
+  DEF_FIELD(15, 8, b);
+  DEF_FIELD(7, 0, a);
+};
+
+class Osd1ProtCtrlReg : public hwreg::RegisterBase<Osd1ProtCtrlReg, uint32_t> {
+ public:
+  DEF_FIELD(31, 16, urgent_ctrl);
+  DEF_BIT(15, prot_en);
+  DEF_FIELD(12, 0, prot_fifo_size);
+};
+
+class Osd1DimmCtrlReg : public hwreg::RegisterBase<Osd1DimmCtrlReg, uint32_t> {
+ public:
+  DEF_BIT(30, en);
+  DEF_FIELD(29, 0, rgb);
+};
+
+class Osd1ScaleCoefIdxReg : public hwreg::RegisterBase<Osd1ScaleCoefIdxReg, uint32_t> {
+ public:
+  DEF_BIT(15, auto_incr_step);  // bit9 ? (value ? 2 : 1) :  2
+  DEF_BIT(14, unused_cbus_readback);
+  DEF_BIT(9, hi_res_coef);
+  DEF_BIT(8, h_coef);  // if 0, vertical coefficient
+  DEF_FIELD(6, 0, index);
+};
+
+class Osd1ScaleCoefReg : public hwreg::RegisterBase<Osd1ScaleCoefReg, uint32_t> {};
+
+class Osd1VscPhaseStepReg : public hwreg::RegisterBase<Osd1VscPhaseStepReg, uint32_t> {
+  DEF_FIELD(27, 0, phase_4_24);
+};
+
+class Osd1VscInitPhaseReg : public hwreg::RegisterBase<Osd1VscInitPhaseReg, uint32_t> {
+  DEF_FIELD(31, 16, bottom_vscale_phase);
+  DEF_FIELD(15, 0, top_vscale_phase);
+};
+
+class Osd1VscCtrl0Reg : public hwreg::RegisterBase<Osd1VscCtrl0Reg, uint32_t> {
+ public:
+  DEF_BIT(24, en);
+  DEF_BIT(23, interlace);
+  DEF_FIELD(22, 21, double_line_mode);
+  DEF_BIT(20, phase0_always_en);
+  DEF_BIT(19, nearest_en);
+  DEF_FIELD(17, 16, bot_rpt_l0_num);
+  DEF_FIELD(14, 11, bot_ini_rcv_num);
+  DEF_FIELD(9, 8, top_rpt_l0_num);
+  DEF_FIELD(6, 3, top_ini_rcv_num);
+  DEF_FIELD(2, 0, bank_length);
+};
+
+class Osd1HscPhaseStepReg : public hwreg::RegisterBase<Osd1HscPhaseStepReg, uint32_t> {
+ public:
+  DEF_FIELD(27, 0, phase_4_24);
+};
+
+class Osd1HscInitPhaseReg : public hwreg::RegisterBase<Osd1HscInitPhaseReg, uint32_t> {
+ public:
+  DEF_FIELD(31, 16, init_phase1);
+  DEF_FIELD(15, 0, init_phase0);
+};
+
+class Osd1HscCtrl0Reg : public hwreg::RegisterBase<Osd1HscCtrl0Reg, uint32_t> {
+ public:
+  DEF_BIT(22, hsc_en);
+  DEF_BIT(21, double_pix_mode);
+  DEF_BIT(20, phase0_always_en);
+  DEF_BIT(19, vsc_nearest_en);
+  DEF_FIELD(17, 16, hsc_rpt_p0_num1);
+  DEF_FIELD(14, 11, hsc_ini_rcv_num1);
+  DEF_FIELD(9, 8, hsc_rpt_p0_num0);
+  DEF_FIELD(6, 3, hsc_ini_rcv_num0);
+  DEF_FIELD(2, 0, hsc_bank_length);
+};
+
+class Osd1ScDummyDataReg : public hwreg::RegisterBase<Osd1ScDummyDataReg, uint32_t> {
+ public:
+  DEF_FIELD(31, 24, c0);  // >>4
+  DEF_FIELD(23, 16, c1);
+  DEF_FIELD(15, 8, c2);
+  DEF_FIELD(7, 0, c3);  // alpha
+};
+
+class Osd1ScCtrl0Reg : public hwreg::RegisterBase<Osd1ScCtrl0Reg, uint32_t> {
+ public:
+  DEF_FIELD(27, 16, gclk_ctrl);
+  DEF_BIT(13, din_osd_alpha_mode);
+  DEF_BIT(12, dout_alpha_mode);
+  DEF_FIELD(11, 4, alpha);
+  DEF_BIT(3, path_en);
+  DEF_BIT(2, en);
+};
+
+class Osd1SciWhM1Reg : public hwreg::RegisterBase<Osd1SciWhM1Reg, uint32_t> {
+ public:
+  DEF_FIELD(28, 16, width_minus_1);
+  DEF_FIELD(12, 0, height_minus_1);
+};
+
+class Osd1ScoHStartEndReg : public hwreg::RegisterBase<Osd1ScoHStartEndReg, uint32_t> {
+ public:
+  DEF_FIELD(27, 16, h_start);
+  DEF_FIELD(11, 0, h_end);
+};
+
+class Osd1ScoVStartEndReg : public hwreg::RegisterBase<Osd1ScoVStartEndReg, uint32_t> {
+ public:
+  DEF_FIELD(27, 16, v_start);
+  DEF_FIELD(11, 0, v_end);
 };
 
 class Osd2CtrlStatReg : public hwreg::RegisterBase<Osd2CtrlStatReg, uint32_t> {
