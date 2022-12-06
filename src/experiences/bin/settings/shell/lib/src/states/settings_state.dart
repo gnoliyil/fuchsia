@@ -6,6 +6,7 @@ import 'package:flutter/material.dart' hide Action;
 import 'package:shell_settings/src/services/brightness_service.dart';
 import 'package:shell_settings/src/services/channel_service.dart';
 import 'package:shell_settings/src/services/datetime_service.dart';
+import 'package:shell_settings/src/services/keyboard_service.dart';
 import 'package:shell_settings/src/services/task_service.dart';
 import 'package:shell_settings/src/services/timezone_service.dart';
 import 'package:shell_settings/src/services/volume_service.dart';
@@ -18,6 +19,7 @@ enum SettingsPage {
   none,
   timezone,
   channel,
+  keyboard,
 }
 
 /// Defines states for channel ota.
@@ -57,6 +59,10 @@ abstract class SettingsState implements TaskService {
   IconData get volumeIcon;
   double? get volumeLevel;
   bool? get volumeMuted;
+  // Keyboard
+  bool get keyboardPageVisible;
+  String get currentKeymap;
+  List<String> get supportedKeymaps;
 
   factory SettingsState.fromEnv() {
     // ignore: unnecessary_cast
@@ -66,6 +72,7 @@ abstract class SettingsState implements TaskService {
       brightnessService: BrightnessService(),
       channelService: ChannelService(),
       volumeService: VolumeService(),
+      keyboardService: KeyboardService(),
     ) as SettingsState;
   }
 
@@ -90,4 +97,7 @@ abstract class SettingsState implements TaskService {
   void increaseVolume();
   void decreaseVolume();
   void toggleMute();
+  // Keyboard
+  void showKeyboardSettings();
+  void updateKeymap(String id);
 }

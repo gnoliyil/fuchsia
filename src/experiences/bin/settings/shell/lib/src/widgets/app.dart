@@ -15,6 +15,7 @@ import 'package:mobx/mobx.dart';
 import 'package:shell_settings/src/states/settings_state.dart';
 import 'package:shell_settings/src/utils/themes.dart';
 import 'package:shell_settings/src/widgets/channel_settings.dart';
+import 'package:shell_settings/src/widgets/keyboard_settings.dart';
 import 'package:shell_settings/src/widgets/timezone_settings.dart';
 
 /// Defines a widget to display shell settings.
@@ -106,6 +107,11 @@ class App extends StatelessWidget {
                     state: state,
                     onChange: state.setTargetChannel,
                   ),
+                ),
+              if (state.keyboardPageVisible)
+                Expanded(
+                  child: KeyboardSettings(
+                      state: state, onChange: state.updateKeymap),
                 ),
             ],
           );
@@ -239,6 +245,22 @@ class _ListSettings extends StatelessWidget {
                     ],
                   ),
                   onTap: settingsState.showTimezoneSettings,
+                ),
+                // Keyboard Input
+                ListTile(
+                  contentPadding: EdgeInsets.symmetric(horizontal: 24),
+                  leading: Icon(Icons.keyboard),
+                  title: Text(Strings.keyboard),
+                  trailing: Wrap(
+                    alignment: WrapAlignment.end,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    children: [
+                      Text(settingsState.currentKeymap),
+                      Icon(Icons.arrow_right),
+                    ],
+                  ),
+                  onTap: settingsState.showKeyboardSettings,
                 ),
               ],
             ),

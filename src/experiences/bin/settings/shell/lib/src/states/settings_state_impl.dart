@@ -16,6 +16,7 @@ import 'package:mobx/mobx.dart';
 import 'package:shell_settings/src/services/brightness_service.dart';
 import 'package:shell_settings/src/services/channel_service.dart';
 import 'package:shell_settings/src/services/datetime_service.dart';
+import 'package:shell_settings/src/services/keyboard_service.dart';
 import 'package:shell_settings/src/services/task_service.dart';
 import 'package:shell_settings/src/services/timezone_service.dart';
 import 'package:shell_settings/src/services/volume_service.dart';
@@ -127,12 +128,27 @@ class SettingsStateImpl with Disposable implements SettingsState, TaskService {
   set volumeMuted(bool? value) => _volumeMuted.value = value;
   final Observable<bool?> _volumeMuted = Observable<bool?>(null);
 
+  // Keyboard
+  @override
+  bool get keyboardPageVisible => _keyboardPageVisible.value;
+  late final _keyboardPageVisible =
+      (() => settingsPage.value == SettingsPage.keyboard).asComputed();
+
+  @override
+  String get currentKeymap => _currentKeymap.value;
+  set currentKeymap(String value) => _currentKeymap.value = value;
+  final Observable<String> _currentKeymap = Observable<String>('');
+
+  @override
+  final List<String> supportedKeymaps = ObservableList<String>();
+
   // Services
   final BrightnessService brightnessService;
   final DateTimeService dateTimeService;
   final TimezoneService timezoneService;
   final ChannelService channelService;
   final VolumeService volumeService;
+  final KeyboardService keyboardService;
 
   // Constructor
   SettingsStateImpl({
@@ -141,6 +157,7 @@ class SettingsStateImpl with Disposable implements SettingsState, TaskService {
     required this.brightnessService,
     required this.channelService,
     required this.volumeService,
+    required this.keyboardService,
   })  : _timezones = _loadTimezones(),
         _selectedTimezone = timezoneService.timezone.asObservable() {
     dateTimeService.onChanged = updateDateTime;
@@ -193,6 +210,14 @@ class SettingsStateImpl with Disposable implements SettingsState, TaskService {
         volumeMuted = volumeService.muted;
       });
     };
+    keyboardService.onChanged = () {
+      runInAction(() {
+        currentKeymap = keyboardService.currentKeymap;
+        supportedKeymaps
+          ..clear()
+          ..addAll(keyboardService.supportedKeymaps);
+      });
+    };
 
     // We cannot load MaterialIcons font file from pubspec.yaml. So load it
     // explicitly.
@@ -215,6 +240,7 @@ class SettingsStateImpl with Disposable implements SettingsState, TaskService {
       brightnessService.start(),
       channelService.start(),
       volumeService.start(),
+      keyboardService.start(),
     ]);
   }
 
@@ -226,6 +252,7 @@ class SettingsStateImpl with Disposable implements SettingsState, TaskService {
     await brightnessService.stop();
     await channelService.stop();
     await volumeService.stop();
+    await keyboardService.stop();
     _dateTimeNow = null;
   }
 
@@ -237,6 +264,7 @@ class SettingsStateImpl with Disposable implements SettingsState, TaskService {
     brightnessService.dispose();
     channelService.dispose();
     volumeService.dispose();
+    keyboardService.dispose();
   }
 
   // All
@@ -314,4 +342,16 @@ class SettingsStateImpl with Disposable implements SettingsState, TaskService {
 
   @override
   void toggleMute() => runInAction(volumeService.toggleMute);
+
+  // Keyboard
+  @override
+  void updateKeymap(String id) => runInAction(() {
+        currentKeymap = id;
+        keyboardService.currentKeymap = id;
+        settingsPage.value = SettingsPage.none;
+      });
+
+  @override
+  void showKeyboardSettings() =>
+      runInAction(() => settingsPage.value = SettingsPage.keyboard);
 }

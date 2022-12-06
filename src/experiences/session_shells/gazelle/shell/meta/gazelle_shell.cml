@@ -116,6 +116,7 @@
                 "fuchsia.media.Audio",
                 "fuchsia.media.AudioCore",
                 "fuchsia.settings.Intl",
+                "fuchsia.settings.Keyboard",
                 "fuchsia.sys.Launcher",
                 "fuchsia.sysmem.Allocator",
                 "fuchsia.tracing.provider.Registry",
