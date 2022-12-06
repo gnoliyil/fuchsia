@@ -24,6 +24,7 @@
                 "fuchsia.fonts.Provider",
                 "fuchsia.hardware.power.statecontrol.Admin",
                 "fuchsia.hwinfo.Product",
+                "fuchsia.identity.account.AccountManager",
                 "fuchsia.identity.account.DeprecatedAccountManager",
                 "fuchsia.intl.PropertyProvider",
                 "fuchsia.kernel.VmexResource",

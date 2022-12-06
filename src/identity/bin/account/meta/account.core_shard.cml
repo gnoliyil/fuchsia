@@ -10,7 +10,10 @@
     ],
     use: [
         {
-            protocol: "fuchsia.identity.account.DeprecatedAccountManager",
+            protocol: [
+                "fuchsia.identity.account.AccountManager",
+                "fuchsia.identity.account.DeprecatedAccountManager",
+            ],
             from: "#account",
         },
     ],
