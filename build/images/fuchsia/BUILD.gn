@@ -4,7 +4,6 @@
 
 import("//build/assembly/assembled_system.gni")
 import("//build/assembly/generated_assembly_inputs.gni")
-import("//build/assembly/generated_partitions_config.gni")
 import("//build/assembly/legacy_image_metadata_overrides.gni")
 import("//build/assembly/update_package.gni")
 import("//build/board.gni")
@@ -18,7 +17,6 @@ import("//build/security/policies.gni")
 import("//build/security/policies_swd.gni")
 import("//build/security/verifier/scrutiny_verifiers.gni")
 import("//build/testing/host_test_data.gni")
-import("//build/testing/verify_files_match.gni")
 import("//src/sys/core/build/core.gni")
 
 if (is_host) {
@@ -48,7 +46,6 @@ if (is_fuchsia) {
   ##################################################
 
   files = {
-    partitions_config = "$target_out_dir/partitions_config.json"
     assembly_inputs = "$target_out_dir/fuchsia/assembly_inputs.json"
     platform_aib_dir = get_label_info("//bundles/assembly", "target_out_dir")
 
@@ -286,10 +283,6 @@ if (is_fuchsia) {
       ":update",
     ]
 
-    if (partitions_config_label != false) {
-      public_deps += [ ":partitions_config_matches" ]
-    }
-
     if (include_fvm_blob_sparse) {
       public_deps += [ ":copy_fvm_blob_sparse" ]
     }
@@ -319,104 +312,22 @@ if (is_fuchsia) {
     image_metadata_overrides = legacy_fuchsia_image_metadata_overrides
   }
 
-  generated_partitions_config_new("partitions_config") {
-    testonly = fuchsia_zbi_testonly
-    output_path = files.partitions_config
-    hw_revision = board_name
-    bootstrap_partitions = bootstrap_files
-    unlock_credentials = board_fastboot_unlock_credentials
-
-    bootloader_partitions = []
-    foreach(firmware, firmware_prebuilts) {
-      assert(defined(firmware.type), "Firmware type must be specified")
-      assert(defined(firmware.path), "Firmware path must be specified")
-
-      firmware_path = "${firmware.path}${firmware_prebuilts_path_suffix}"
-
-      # If a partition is specified, then the flash manifest will include the bootloader.
-      if (defined(firmware.partition)) {
-        bootloader_partitions += [
-          {
-            type = firmware.type
-            image = firmware_path
-            name = firmware.partition
-          },
-        ]
-      } else {
-        bootloader_partitions += [
-          {
-            type = firmware.type
-            image = firmware_path
-          },
-        ]
-      }
-    }
-
-    if (use_gigaboot) {
-      bootloader_partitions += [
-        {
-          image = files.esp_image_path
-          type = "esp"
-          name = "fuchsia-esp"
-        },
-      ]
-      deps = [ "//build/images/flash:esp" ]
-    }
-
-    zbi_a = zircon_a_partition
-    zbi_b = zircon_b_partition
-    zbi_r = zircon_r_partition
-    vbmeta_a = vbmeta_a_partition
-    vbmeta_b = vbmeta_b_partition
-    vbmeta_r = vbmeta_r_partition
-    fvm = fvm_partition
-  }
-
-  # Verify that the generated partitions config is equivalent to the optionally
-  # provided partitions config.
-  if (partitions_config_label != false) {
-    if (partitions_config_file != false) {
-      _partitions_config_file = partitions_config_file
-    } else {
-      _partitions_config_file =
-          get_label_info(partitions_config_label, "target_out_dir") + "/" +
-          get_label_info(partitions_config_label, "name") + ".json"
-    }
-
-    verify_files_match("partitions_config_matches") {
-      testonly = fuchsia_zbi_testonly
-      first = files.partitions_config
-      second = _partitions_config_file
-      display_text_diff_on_failure = true
-      deps = [
-        ":partitions_config",
-        partitions_config_label,
-      ]
-    }
-  }
-
-  # Create a list of the files that are referenced by the partitions config.
-  _partitions_contents = board_fastboot_unlock_credentials
-  foreach(file, bootstrap_files) {
-    _partitions_contents += [ file.path ]
-  }
-  foreach(file, firmware_prebuilts) {
-    _partitions_contents += [ "${file.path}${firmware_prebuilts_path_suffix}" ]
-  }
-  if (use_gigaboot) {
-    _partitions_contents += [ files.esp_image_path ]
-  }
+  assert(partitions_config_label != false,
+         "Need to define partitions_config_label")
+  _partitions_config_file =
+      get_label_info(partitions_config_label, "target_out_dir") + "/" +
+      get_label_info(partitions_config_label, "name") + ".json"
 
   update_epoch = update_platform_epoch + update_product_epoch
   update_package("update") {
     testonly = fuchsia_zbi_testonly
     deps = [
       ":fuchsia_assembly",
-      ":partitions_config",
       "//build/info:latest-commit-date",
+      partitions_config_label,
       recovery_label,
     ]
-    partitions = files.partitions_config
+    partitions = _partitions_config_file
     packages = files.packages_json
     system_a = files.images_json
     system_r = files.recovery_images_json
@@ -429,8 +340,8 @@ if (is_fuchsia) {
     testonly = fuchsia_zbi_testonly
     deps = [
       ":fuchsia_assembly",
-      ":partitions_config",
       "//build/info:latest-commit-date",
+      partitions_config_label,
       recovery_label,
     ]
 
@@ -439,7 +350,7 @@ if (is_fuchsia) {
       epoch = "${update_epoch}"
     }
 
-    partitions = files.partitions_config
+    partitions = _partitions_config_file
     system_a = files.images_json
     system_r = files.recovery_images_json
 
@@ -479,14 +390,14 @@ if (is_fuchsia) {
     }
 
     # List the contents of each input so that the outputs can be calculated.
-    partitions_contents = _partitions_contents
+    partitions_contents = partitions_config_contents
     system_a_contents = _assembly_contents
     system_r_contents = _recovery_contents
   }
 
   generated_assembly_inputs("assembly_inputs") {
     testonly = fuchsia_zbi_testonly
-    partitions_config = files.partitions_config
+    partitions_config = _partitions_config_file
     output_path = files.assembly_inputs
 
     # Add the images configs and their dependencies.
@@ -504,7 +415,7 @@ if (is_fuchsia) {
 
     deps = [
       ":fuchsia_assembly",
-      ":partitions_config",
+      partitions_config_label,
     ]
 
     # Add the product configs and their dependencies.
@@ -576,12 +487,12 @@ if (is_fuchsia) {
     testonly = fuchsia_zbi_testonly
     deps = [
       ":fuchsia_prime_assembly",
-      ":partitions_config",
       "//build/info:latest-commit-date",
+      partitions_config_label,
       recovery_label,
     ]
     name = "update_prime"
-    partitions = files.partitions_config
+    partitions = _partitions_config_file
     packages = files.packages_prime_json
     system_a = files.images_prime_json
     system_r = files.recovery_images_json

@@ -101,7 +101,7 @@ if (is_fuchsia) {
     include_component_id_index = true
   }
 
-  generated_partitions_config_new("partitions_config") {
+  generated_partitions_config("partitions_config") {
     testonly = true
     output_path = files.partitions_config
     hw_revision = board_name

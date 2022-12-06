@@ -29,7 +29,7 @@ if (is_fuchsia) {
     version = "$target_out_dir/version"
   }
 
-  generated_partitions_config_new("partitions") {
+  generated_partitions_config("partitions") {
     testonly = true
     hw_revision = "board"
     output_path = files.partitions

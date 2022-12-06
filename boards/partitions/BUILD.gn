@@ -36,7 +36,11 @@ _gigaboot = {
   deps = [ "//build/images/flash:esp" ]
 }
 
-generated_partitions_config_new("x64") {
+generated_partitions_config("default") {
+  hw_revision = ""
+}
+
+generated_partitions_config("x64") {
   forward_variables_from(_gigaboot, "*")
   hw_revision = "x64"
 
@@ -50,43 +54,43 @@ generated_partitions_config_new("x64") {
   fvm = "fvm"
 }
 
-generated_partitions_config_new("arm64") {
+generated_partitions_config("arm64") {
   forward_variables_from(_gigaboot, "*")
   hw_revision = "arm64"
 }
 
-generated_partitions_config_new("qemu-x64") {
+generated_partitions_config("qemu-x64") {
   hw_revision = "qemu-x64"
 }
 
-generated_partitions_config_new("toulouse") {
+generated_partitions_config("toulouse") {
   hw_revision = ""
 }
 
-generated_partitions_config_new("as370") {
+generated_partitions_config("as370") {
   hw_revision = "av370"
   zbi_a = "boot"
 }
 
-generated_partitions_config_new("av400") {
+generated_partitions_config("av400") {
   forward_variables_from(_vim3_boot, "*")
   forward_variables_from(_standard_names, "*")
   hw_revision = "av400"
 }
 
-generated_partitions_config_new("buckeye") {
+generated_partitions_config("buckeye") {
   forward_variables_from(_vim3_boot, "*")
   forward_variables_from(_standard_names, "*")
   hw_revision = "buckeye"
 }
 
-generated_partitions_config_new("vim3") {
+generated_partitions_config("vim3") {
   forward_variables_from(_vim3_boot, "*")
   forward_variables_from(_standard_names, "*")
   hw_revision = "vim3"
 }
 
-generated_partitions_config_new("chromebook-x64") {
+generated_partitions_config("chromebook-x64") {
   forward_variables_from(_standard_names, "*")
   hw_revision = "chromebook-x64"
   bootloader_partitions = [
@@ -100,7 +104,7 @@ generated_partitions_config_new("chromebook-x64") {
   ]
 }
 
-generated_partitions_config_new("clover") {
+generated_partitions_config("clover") {
   forward_variables_from(_standard_names, "*")
   hw_revision = "clover"
 }
