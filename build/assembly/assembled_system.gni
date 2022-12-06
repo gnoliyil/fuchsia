@@ -4,7 +4,7 @@
 
 import("//build/assembly/compare_json_list.gni")
 import("//build/assembly/generated_image_assembly_config.gni")
-import("//build/assembly/generated_images_config_new.gni")
+import("//build/assembly/generated_images_config.gni")
 import("//build/assembly/generated_images_config_old.gni")
 import("//build/assembly/hermetic_inputs_for_image_assembly.gni")
 import("//build/assembly/legacy_assembly_input_bundle.gni")
@@ -67,6 +67,9 @@ import("//src/storage/fshost/generated_fshost_config.gni")
 #     [bool] Usual GN meanings.
 #
 # Product parameters:
+#   assembly_images_config_label (optional)
+#     [label] A label for the above images config file. If not specified, global
+#     args will be used to generate an images config.
 #
 #   product_assembly_config_file (optional)
 #     [file] A path to a product assembly config file.  If not specified, a
@@ -792,20 +795,26 @@ template("assembled_system") {
     }
   }
 
-  verify_files_match(labels.images_config_matches) {
-    forward_variables_from(invoker,
-                           [
-                             "testonly",
-                             "visibility",
-                           ])
+  if (defined(invoker.assembly_images_config_label)) {
+    _images_config_file =
+        get_label_info(invoker.assembly_images_config_label, "target_out_dir") +
+        "/" + get_label_info(invoker.assembly_images_config_label, "name") +
+        ".json"
 
-    first = files.images_config_old
-    second = files.images_config
-    deps = [
-      ":${labels.images_config_old}",
-      ":${labels.images_config}",
-    ]
-    display_text_diff_on_failure = true
+    verify_files_match(labels.images_config_matches) {
+      forward_variables_from(invoker,
+                             [
+                               "testonly",
+                               "visibility",
+                             ])
+      deps = [
+        ":${labels.images_config}",
+        invoker.assembly_images_config_label,
+      ]
+      first = files.images_config
+      second = _images_config_file
+      display_text_diff_on_failure = true
+    }
   }
 
   bazel_assembly_images_config_inputs(labels.bazel_images_config_inputs) {
@@ -1335,11 +1344,13 @@ template("assembled_system") {
     public_deps = [
       ":${labels.generated_config_for_legacy_bundle}",
       ":${labels.image_assembler}",
-      ":${labels.images_config_matches}",
       ":${labels.images_config}",
     ]
     if (defined(invoker.output_dir)) {
       public_deps += [ ":${labels.copy_images}" ]
+    }
+    if (defined(invoker.assembly_images_config_label)) {
+      public_deps += [ ":${labels.images_config_matches}" ]
     }
 
     metadata = {

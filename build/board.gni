@@ -105,6 +105,9 @@ declare_args() {
   board_is_emu = false
   board_is_phys = true
 
+  # The images config information used during assembly.
+  images_config_label = false
+
   # The partitions config information used to create an update package and
   # product bundle.
   partitions_config_label = "//boards/partitions:default"

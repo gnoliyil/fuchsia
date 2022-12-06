@@ -368,6 +368,7 @@ template("generated_images_config") {
                            [
                              "testonly",
                              "visibility",
+                             "deps",
                            ])
 
     outputs = [ output_path ]
