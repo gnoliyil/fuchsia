@@ -2,20 +2,13 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/dist/component_manifest_resources.gni")
+import("//build/components.gni")
 import("//build/test.gni")
 import("//build/testing/bootfs_test.gni")
 import("//build/zircon/zx_library.gni")
 
 group("bootfs") {
-  deps = [
-    ":meta",
-    ":svchost",
-  ]
-}
-
-component_manifest_resources("meta") {
-  sources = [ "meta/svchost.cml" ]
+  deps = []
 }
 
 zx_library("crashsvc") {
@@ -85,6 +78,17 @@ executable("svchost") {
     "//zircon/system/ulib/zx",
   ]
   output_dir = "$root_out_dir/zircon-migrated"
+}
+
+fuchsia_component("component") {
+  component_name = "svchost"
+  manifest = "meta/svchost.cml"
+  deps = [ ":svchost" ]
+}
+
+fuchsia_package("pkg") {
+  package_name = "svchost"
+  deps = [ ":component" ]
 }
 
 test("crashsvc-test") {

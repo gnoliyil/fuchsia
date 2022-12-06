@@ -49,7 +49,7 @@ group("eng_and_userdebug") {
 # move them to other AIBs that are included by all other products.
 #
 assembly_input_bundle("common_bringup") {
-  bootfs_packages = []
+  bootfs_packages = [ "//src/bringup/bin/svchost:pkg" ]
 
   # Create package and archive for use OOT.
   create_aib_package = true

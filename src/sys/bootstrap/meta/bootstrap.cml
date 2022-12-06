@@ -77,7 +77,7 @@
         },
         {
             name: "svchost",
-            url: "fuchsia-boot:///#meta/svchost.cm",
+            url: "fuchsia-boot:///svchost#meta/svchost.cm",
 
             // Start eager in order to register the crash handler as early as
             // possible.
