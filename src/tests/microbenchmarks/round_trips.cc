@@ -149,6 +149,12 @@ enum MultiProc {
   MultiProcess = 2,
 };
 
+// Parameters for launching a child thread or process.
+struct ThreadOrProcessParams {
+  MultiProc multi_proc = SingleProcess;
+  uint32_t cpu_mask = 0;
+};
+
 // Helper class for launching a thread or a subprocess.
 class ThreadOrProcess {
  public:
@@ -161,11 +167,11 @@ class ThreadOrProcess {
     }
   }
 
-  void LaunchWithCpuAffinity(const char* func_name, std::vector<zx::handle>&& handles,
-                             MultiProc multiproc, uint32_t cpu_mask) {
-    if (multiproc == MultiProcess) {
+  void Launch(const char* func_name, std::vector<zx::handle>&& handles,
+              ThreadOrProcessParams params) {
+    if (params.multi_proc == MultiProcess) {
       const char* executable_path = "/pkg/bin/fuchsia_microbenchmarks";
-      std::string cpu_mask_arg = fxl::NumberToString(cpu_mask);
+      std::string cpu_mask_arg = fxl::NumberToString(params.cpu_mask);
       const char* args[] = {executable_path, "--subprocess", func_name, cpu_mask_arg.c_str(),
                             nullptr};
       size_t action_count = handles.size() + 1;
@@ -186,15 +192,11 @@ class ThreadOrProcess {
       }
     } else {
       auto thread_func = [=](std::vector<zx::handle>&& handles) {
-        SetCpuAffinity(cpu_mask);
+        SetCpuAffinity(params.cpu_mask);
         GetThreadFunc(func_name)(std::move(handles));
       };
       thread_ = std::thread(thread_func, std::move(handles));
     }
-  }
-
-  void Launch(const char* func_name, std::vector<zx::handle>&& handles, MultiProc multiproc) {
-    LaunchWithCpuAffinity(func_name, std::move(handles), multiproc, 0);
   }
 
  private:
@@ -215,12 +217,12 @@ std::vector<zx::handle> MakeHandleVector(zx_handle_t handle) {
 // and server both use zx_object_wait_one() to wait.
 class BasicChannelTest {
  public:
-  explicit BasicChannelTest(MultiProc multiproc, uint32_t msg_count, uint32_t msg_size)
+  explicit BasicChannelTest(ThreadOrProcessParams params, uint32_t msg_count, uint32_t msg_size)
       : args_({msg_count, msg_size}), msg_(args_.msg_size) {
     zx::channel server;
     ASSERT_OK(zx::channel::create(0, &server, &client_));
     thread_or_process_.Launch("BasicChannelTest::ThreadFunc", MakeHandleVector(server.release()),
-                              multiproc);
+                              params);
 
     // Pass the test arguments to the other thread.
     ASSERT_OK(client_.write(0, &args_, sizeof(args_), nullptr, 0));
@@ -265,12 +267,11 @@ class BasicChannelTest {
 // both use Zircon ports to wait.
 class ChannelPortTest {
  public:
-  explicit ChannelPortTest(MultiProc multiproc, uint32_t child_thread_cpu_mask = 0) {
+  explicit ChannelPortTest(ThreadOrProcessParams params) {
     zx::channel server;
     ASSERT_OK(zx::channel::create(0, &server, &client_));
-    thread_or_process_.LaunchWithCpuAffinity("ChannelPortTest::ThreadFunc",
-                                             MakeHandleVector(server.release()), multiproc,
-                                             child_thread_cpu_mask);
+    thread_or_process_.Launch("ChannelPortTest::ThreadFunc", MakeHandleVector(server.release()),
+                              params);
     ASSERT_OK(zx::port::create(0, &client_port_));
   }
 
@@ -320,11 +321,11 @@ class ChannelPortTest {
 // uses zx_channel_call() for the send+wait+read.
 class ChannelCallTest {
  public:
-  explicit ChannelCallTest(MultiProc multiproc) {
+  explicit ChannelCallTest(ThreadOrProcessParams params) {
     zx::channel server;
     ASSERT_OK(zx::channel::create(0, &server, &client_));
     thread_or_process_.Launch("ChannelCallTest::ThreadFunc", MakeHandleVector(server.release()),
-                              multiproc);
+                              params);
 
     msg_ = 0;
     args_.wr_bytes = reinterpret_cast<void*>(&msg_);
@@ -362,7 +363,7 @@ class ChannelCallTest {
 // but it is useful for measuring the overhead of ports.
 class PortTest {
  public:
-  explicit PortTest(MultiProc multiproc) {
+  explicit PortTest(ThreadOrProcessParams params) {
     ASSERT_OK(zx::port::create(0, &ports_[0]));
     ASSERT_OK(zx::port::create(0, &ports_[1]));
 
@@ -372,7 +373,7 @@ class PortTest {
       ASSERT_OK(ports_[i].duplicate(ZX_RIGHT_SAME_RIGHTS, &dup));
       ports_dup[i] = std::move(dup);
     }
-    thread_or_process_.Launch("PortTest::ThreadFunc", std::move(ports_dup), multiproc);
+    thread_or_process_.Launch("PortTest::ThreadFunc", std::move(ports_dup), params);
   }
 
   ~PortTest() {
@@ -443,14 +444,14 @@ class EventPortSignaler {
 // zx_object_wait_one()), because ports are the most general way to wait.
 class EventPortTest {
  public:
-  explicit EventPortTest(MultiProc multiproc) {
+  explicit EventPortTest(ThreadOrProcessParams params) {
     zx::eventpair event1;
     zx::eventpair event2;
     ASSERT_OK(zx::eventpair::create(0, &event1, &event2));
     signaler_.set_event(std::move(event1));
 
     thread_or_process_.Launch("EventPortTest::ThreadFunc", MakeHandleVector(event2.release()),
-                              multiproc);
+                              params);
   }
 
   static void ThreadFunc(std::vector<zx::handle>&& handles) {
@@ -516,14 +517,14 @@ class SocketPortSignaler {
 // general way to wait.
 class SocketPortTest {
  public:
-  explicit SocketPortTest(MultiProc multiproc) {
+  explicit SocketPortTest(ThreadOrProcessParams params) {
     zx::socket socket1;
     zx::socket socket2;
     ASSERT_OK(zx::socket::create(0, &socket1, &socket2));
     signaler_.set_socket(std::move(socket1));
 
     thread_or_process_.Launch("SocketPortTest::ThreadFunc", MakeHandleVector(socket2.release()),
-                              multiproc);
+                              params);
   }
 
   static void ThreadFunc(std::vector<zx::handle>&& handles) {
@@ -559,9 +560,9 @@ class RoundTripperImpl : public fuchsia::zircon::benchmarks::RoundTripper {
 // client side.
 class FidlTest {
  public:
-  explicit FidlTest(MultiProc multiproc) {
+  explicit FidlTest(ThreadOrProcessParams params) {
     zx_handle_t server = service_ptr_.NewRequest().TakeChannel().release();
-    thread_or_process_.Launch("FidlTest::ThreadFunc", MakeHandleVector(server), multiproc);
+    thread_or_process_.Launch("FidlTest::ThreadFunc", MakeHandleVector(server), params);
   }
 
   static void ThreadFunc(std::vector<zx::handle>&& handles) {
@@ -619,9 +620,11 @@ ThreadFunc GetThreadFunc(const char* name) {
 template <class TestClass, typename... Args>
 void RegisterTestMultiProc(const char* base_name, Args... args) {
   fbenchmark::RegisterTest<TestClass>((std::string(base_name) + "_SingleProcess").c_str(),
-                                      SingleProcess, std::forward<Args>(args)...);
+                                      ThreadOrProcessParams{SingleProcess},
+                                      std::forward<Args>(args)...);
   fbenchmark::RegisterTest<TestClass>((std::string(base_name) + "_MultiProcess").c_str(),
-                                      MultiProcess, std::forward<Args>(args)...);
+                                      ThreadOrProcessParams{MultiProcess},
+                                      std::forward<Args>(args)...);
 }
 
 // Call the given function with CPU affinity set to the given mask.
@@ -692,8 +695,8 @@ void RegisterTestMultiProcSameDiffCpu(const char* base_name) {
     for (auto cpu_param : cpu_params) {
       RegisterTestWithCpuAffinity<TestClass>(
           (std::string(base_name) + multi_proc_param.suffix + cpu_param.suffix).c_str(),
-          cpu_param.parent_thread_cpu_mask, multi_proc_param.value,
-          cpu_param.child_thread_cpu_mask);
+          cpu_param.parent_thread_cpu_mask,
+          ThreadOrProcessParams{multi_proc_param.value, cpu_param.child_thread_cpu_mask});
     }
   };
 }
