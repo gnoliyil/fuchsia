@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"go.fuchsia.dev/fuchsia/tools/lib/jsonutil"
@@ -47,8 +48,8 @@ type File struct {
 	Source      string `json:"source"`
 }
 
-// EmuStart launches the emulator.
-func (f *FFXInstance) EmuStart(ctx context.Context, sdkRoot, name string, qemu bool, config string, tools EmuTools) error {
+// EmuStartConsole returns a command to launch the emulator.
+func (f *FFXInstance) EmuStartConsole(ctx context.Context, sdkRoot, name string, qemu bool, config string, tools EmuTools) (*exec.Cmd, error) {
 	// If using different tools from the ones in the sdk, `ffx emu` expects them to
 	// have certain names and to be located in a parent directory of the ffx binary.
 	ffxDir := filepath.Dir(f.ffxPath)
@@ -71,24 +72,24 @@ func (f *FFXInstance) EmuStart(ctx context.Context, sdkRoot, name string, qemu b
 			continue
 		}
 		if err := os.Symlink(oldname, newname); err != nil && !os.IsExist(err) {
-			return err
+			return nil, err
 		}
 	}
 	if err := f.ConfigSet(ctx, "sdk.type", "in-tree"); err != nil {
-		return err
+		return nil, err
 	}
 	absPath, err := filepath.Abs(sdkRoot)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := f.ConfigSet(ctx, "sdk.root", absPath); err != nil {
-		return err
+		return nil, err
 	}
-	args := []string{"emu", "start", "--net", "tap", "--name", name, "-H", "-s", "0", "--config", config}
+	args := []string{"emu", "start", "--console", "--net", "tap", "--name", name, "-H", "-s", "0", "--config", config}
 	if qemu {
 		args = append(args, "--engine", "qemu")
 	}
-	return f.Run(ctx, args...)
+	return f.Command(args...), nil
 }
 
 // EmuStop terminates all emulator instances launched by ffx.

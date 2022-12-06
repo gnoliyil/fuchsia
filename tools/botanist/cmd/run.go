@@ -539,6 +539,12 @@ func (r *RunCommand) runAgainstTarget(ctx context.Context, t targets.Target, arg
 		testrunnerEnv[constants.DeviceAddrEnvKey] = addr.String()
 		testrunnerEnv[constants.IPv4AddrEnvKey] = ipv4.String()
 		testrunnerEnv[constants.IPv6AddrEnvKey] = ipv6.String()
+		if t.UseFFX() {
+			// Add the target address in order to skip MDNS discovery.
+			if err := t.GetFFX().Run(ctx, "target", "add", addr.String(), "--nowait"); err != nil {
+				return err
+			}
+		}
 	}
 
 	// One would assume this should only be provisioned when paving, but

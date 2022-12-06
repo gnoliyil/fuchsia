@@ -56,10 +56,8 @@ type RunOptions struct {
 	Dir string
 }
 
-// Run runs a command until completion or until a context is canceled, in
-// which case the subprocess is killed so that no subprocesses it spun up are
-// orphaned.
-func (r *Runner) Run(ctx context.Context, command []string, options RunOptions) error {
+// Command returns an *exec.Cmd from the provided command args and run options.
+func (r *Runner) Command(command []string, options RunOptions) *exec.Cmd {
 	cmd := exec.Command(command[0], command[1:]...)
 
 	if options.Stdout == nil {
@@ -95,15 +93,26 @@ func (r *Runner) Run(ctx context.Context, command []string, options RunOptions) 
 	// running a potentially interactive command that has access to stdin. Those
 	// cases are less likely to involve chains of subprocesses anyway, so it's
 	// not as important to be able to kill the entire chain.
-	pgidSet := false
 	if cmd.Stdin != os.Stdin {
-		pgidSet = true
 		cmd.SysProcAttr = &syscall.SysProcAttr{
 			// Set a process group ID so we can kill the entire group, meaning
 			// the process and any of its children.
 			Setpgid: true,
 		}
 	}
+	return cmd
+}
+
+// Run runs a command generated from the provided command args and run options.
+func (r *Runner) Run(ctx context.Context, command []string, options RunOptions) error {
+	cmd := r.Command(command, options)
+	return r.RunCommand(ctx, cmd)
+}
+
+// RunCommand runs a command until completion or until a context is canceled, in
+// which case the subprocess is killed so that no subprocesses it spun up are
+// orphaned.
+func (r *Runner) RunCommand(ctx context.Context, cmd *exec.Cmd) error {
 	if len(cmd.Env) > 0 {
 		logger.Tracef(ctx, "environment of subprocess: %v", cmd.Env)
 	}
@@ -125,6 +134,7 @@ func (r *Runner) Run(ctx context.Context, command []string, options RunOptions) 
 		errs <- cmd.Wait()
 	}()
 
+	pgidSet := cmd.SysProcAttr != nil && cmd.SysProcAttr.Setpgid
 	select {
 	case err := <-errs:
 		// Process is done so no need to worry about cleanup. Just exit.

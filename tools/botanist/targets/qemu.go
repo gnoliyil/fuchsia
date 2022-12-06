@@ -436,6 +436,7 @@ func (t *QEMUTarget) Start(ctx context.Context, images []bootserver.Image, args 
 	qemuCmd.SetFlag("-nographic")
 	qemuCmd.SetFlag("-monitor", "none")
 
+	var cmd *exec.Cmd
 	if useFFX {
 		config, err := qemuCmd.BuildConfig()
 		if err != nil {
@@ -464,31 +465,21 @@ func (t *QEMUTarget) Start(ctx context.Context, images []bootserver.Image, args 
 			FVM:      t.config.FVMTool,
 			ZBI:      t.config.ZBITool,
 		}
-		err = t.ffx.EmuStart(ctx, cwd, DefaultQEMUNodename, t.isQEMU, configFile, tools)
+		cmd, err = t.ffx.EmuStartConsole(ctx, cwd, DefaultQEMUNodename, t.isQEMU, configFile, tools)
 		if err != nil {
-			// The `ffx emu` command may fail but still stage images in its instance dir
-			// that need to be cleaned up with a call to `ffx emu stop`.
-			if stopErr := t.ffx.EmuStop(ctx); stopErr != nil {
-				logger.Errorf(ctx, "failed to stop emulator: %s", stopErr)
-			}
+			return err
 		}
-		// Show the emulator details for debugging purposes since they are hidden
-		// in the config files passed to `ffx emu`.
-		if showErr := t.ffx.Run(ctx, "emu", "show"); showErr != nil {
-			logger.Errorf(ctx, "failed to run `ffx emu show`: %s", showErr)
+	} else {
+		invocation, err := qemuCmd.Build()
+		if err != nil {
+			return err
 		}
-		return err
-	}
-
-	invocation, err := qemuCmd.Build()
-	if err != nil {
-		return err
+		cmd = exec.Command(invocation[0], invocation[1:]...)
 	}
 
 	// TODO(fxbug.dev/43188): We temporarily capture the tail of all stdout and
 	// stderr to search for a particular error signature.
 	var outputSink bytes.Buffer
-	cmd := exec.Command(invocation[0], invocation[1:]...)
 	cmd.Dir = workdir
 	stdout, stderr, flush := botanist.NewStdioWriters(ctx)
 	if t.ptm != nil {
@@ -502,8 +493,13 @@ func (t *QEMUTarget) Start(ctx context.Context, images []bootserver.Image, args 
 	} else {
 		cmd.Stdout = io.MultiWriter(&outputSink, stdout)
 		cmd.Stderr = io.MultiWriter(&outputSink, stderr)
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			// Set a process group ID so we can kill the entire group, meaning
+			// the process and any of its children.
+			Setpgid: true,
+		}
 	}
-	logger.Debugf(ctx, "QEMU invocation:\n%s", strings.Join(invocation, " "))
+	logger.Debugf(ctx, "QEMU invocation:\n%s", strings.Join(append([]string{cmd.Path}, cmd.Args...), " "))
 
 	if err := cmd.Start(); err != nil {
 		flush()

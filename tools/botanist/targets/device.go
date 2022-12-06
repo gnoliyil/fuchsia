@@ -308,12 +308,14 @@ func (t *DeviceTarget) Start(ctx context.Context, images []bootserver.Image, arg
 	} else {
 		var imgs []bootserver.Image
 		for _, img := range images {
-			if img.Label == t.imageOverrides.ZBI {
-				img.Args = append(img.Args, "--boot")
+			if t.imageOverrides.IsEmpty() {
 				imgs = append(imgs, img)
-				break
 			} else {
-				imgs = append(imgs, img)
+				if img.Label == t.imageOverrides.ZBI {
+					img.Args = append(img.Args, "--boot")
+					imgs = append(imgs, img)
+					break
+				}
 			}
 		}
 		if err := bootserver.Boot(ctx, t.Tftp(), imgs, args, authorizedKeys); err != nil {

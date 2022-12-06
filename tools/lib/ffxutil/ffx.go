@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -42,13 +43,12 @@ const (
 	Trace LogLevel = "Trace"
 )
 
-func runCommand(
-	ctx context.Context,
+func getCommand(
 	runner *subprocess.Runner,
 	stdout, stderr io.Writer,
 	args ...string,
-) error {
-	return runner.Run(ctx, args, subprocess.RunOptions{
+) *exec.Cmd {
+	return runner.Command(args, subprocess.RunOptions{
 		Stdout: stdout,
 		Stderr: stderr,
 	})
@@ -58,11 +58,12 @@ func runCommand(
 type FFXInstance struct {
 	ffxPath string
 
-	runner *subprocess.Runner
-	stdout io.Writer
-	stderr io.Writer
-	target string
-	env    []string
+	runner     *subprocess.Runner
+	stdout     io.Writer
+	stderr     io.Writer
+	target     string
+	env        []string
+	isolateDir string
 }
 
 // NewFFXInstance creates an isolated FFXInstance.
@@ -82,31 +83,34 @@ func NewFFXInstance(
 	}
 	env = append(os.Environ(), env...)
 	env = append(env, fmt.Sprintf("%s=%s", FFXIsolateDirEnvKey, outputDir))
-	sshKey, err := filepath.Abs(sshKey)
-	if err != nil {
-		return nil, err
-	}
 	absFFXPath, err := filepath.Abs(ffxPath)
 	if err != nil {
 		return nil, err
 	}
 	ffx := &FFXInstance{
-		ffxPath: absFFXPath,
-		runner:  &subprocess.Runner{Dir: dir, Env: env},
-		stdout:  os.Stdout,
-		stderr:  os.Stderr,
-		target:  target,
-		env:     env,
+		ffxPath:    absFFXPath,
+		runner:     &subprocess.Runner{Dir: dir, Env: env},
+		stdout:     os.Stdout,
+		stderr:     os.Stderr,
+		target:     target,
+		env:        env,
+		isolateDir: outputDir,
 	}
 	ffxCmds := [][]string{
 		{"config", "set", "target.default", target},
-		{"config", "set", "ssh.priv", fmt.Sprintf("[\"%s\"]", sshKey)},
 		{"config", "set", "test.experimental_json_input", "true"},
 		// Set these fields in the global config for tests that don't use this library
 		// and don't set their own isolated env config.
 		{"config", "env", "set", filepath.Join(outputDir, "global_config.json"), "-l", "global"},
 		{"config", "set", "fastboot.usb.disabled", "true", "-l", "global"},
 		{"config", "set", "ffx.analytics.disabled", "true", "-l", "global"},
+	}
+	if sshKey != "" {
+		sshKey, err = filepath.Abs(sshKey)
+		if err != nil {
+			return nil, err
+		}
+		ffxCmds = append(ffxCmds, []string{"config", "set", "ssh.priv", fmt.Sprintf("[\"%s\"]", sshKey)})
 	}
 	for _, args := range ffxCmds {
 		if err := ffx.Run(ctx, args...); err != nil {
@@ -123,7 +127,7 @@ func NewFFXInstance(
 			}
 			return nil, err
 		}
-		if err := ffx.Run(ctx, "target", "add", deviceAddr); err != nil {
+		if err := ffx.Run(ctx, "target", "add", deviceAddr, "--nowait"); err != nil {
 			if stopErr := ffx.Stop(); stopErr != nil {
 				logger.Debugf(ctx, "failed to stop daemon: %s", stopErr)
 			}
@@ -157,10 +161,16 @@ func (f *FFXInstance) ConfigSet(ctx context.Context, key, value string) error {
 	return f.Run(ctx, "config", "set", key, value)
 }
 
+// Command returns an *exec.Cmd to run ffx with the provided args.
+func (f *FFXInstance) Command(args ...string) *exec.Cmd {
+	args = append([]string{f.ffxPath, "--isolate-dir", f.isolateDir}, args...)
+	return getCommand(f.runner, f.stdout, f.stderr, args...)
+}
+
 // Run runs ffx with the associated config and provided args.
 func (f *FFXInstance) Run(ctx context.Context, args ...string) error {
-	args = append([]string{f.ffxPath}, args...)
-	if err := runCommand(ctx, f.runner, f.stdout, f.stderr, args...); err != nil {
+	cmd := f.Command(args...)
+	if err := f.runner.RunCommand(ctx, cmd); err != nil {
 		return fmt.Errorf("%s: %w", constants.CommandFailedMsg, err)
 	}
 	return nil
@@ -186,7 +196,8 @@ func (f *FFXInstance) Stop() error {
 	// no more logs are written once the command returns.
 	for i := 0; i < 3; i++ {
 		var b bytes.Buffer
-		if err := runCommand(ctx, f.runner, &b, io.Discard, "pgrep", "-f", f.ffxPath); err != nil {
+		cmd := getCommand(f.runner, &b, io.Discard, "pgrep", "-f", f.ffxPath)
+		if err := f.runner.RunCommand(ctx, cmd); err != nil {
 			logger.Debugf(ctx, "failed to run \"pgrep ffx\": %s", err)
 			continue
 		}

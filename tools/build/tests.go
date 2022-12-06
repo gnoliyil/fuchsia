@@ -120,6 +120,10 @@ type ImageOverrides struct {
 	EFI string `json:"efi,omitempty"`
 }
 
+func (o ImageOverrides) IsEmpty() bool {
+	return o.ZBI == "" && o.VBMeta == "" && o.QEMUKernel == "" && o.EFI == ""
+}
+
 // DimensionSet encapsulates the Swarming dimensions a test wishes to target.
 type DimensionSet struct {
 	// DeviceType represents the class of device the test should run on.

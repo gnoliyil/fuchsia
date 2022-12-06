@@ -152,7 +152,6 @@ var ffxInstance = func(
 	ffxExperimentalLevel int,
 	dir string,
 	env []string,
-	addr net.IPAddr,
 	target, sshKey, outputDir string,
 ) (FFXInstance, error) {
 	ffx, err := func() (FFXInstance, error) {
@@ -181,14 +180,6 @@ var ffxInstance = func(
 		// Print the list of available targets for debugging purposes.
 		// TODO(ihuh): Remove when not needed.
 		if err := ffx.List(ctx); err != nil {
-			return ffx, err
-		}
-		// Add the target address in order to skip MDNS discovery.
-		if err := ffx.Run(ctx, "target", "add", addr.String()); err != nil {
-			return ffx, err
-		}
-		// Wait for the target to be available to interact with ffx.
-		if err := ffx.TargetWait(ctx); err != nil {
 			return ffx, err
 		}
 		// Print the config for debugging purposes.
@@ -248,7 +239,7 @@ func execute(
 			ffxExperimentLevel = 0
 		}
 		ffx, err := ffxInstance(
-			ctx, ffxPath, ffxExperimentLevel, flags.LocalWD, localEnv, addr, os.Getenv(botanistconstants.NodenameEnvKey),
+			ctx, ffxPath, ffxExperimentLevel, flags.LocalWD, localEnv, os.Getenv(botanistconstants.NodenameEnvKey),
 			sshKeyFile, outputs.OutDir)
 		if err != nil {
 			return err
