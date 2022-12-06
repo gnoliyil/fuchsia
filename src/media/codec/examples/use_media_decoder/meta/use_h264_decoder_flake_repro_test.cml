@@ -5,11 +5,10 @@
     include: [
         "//src/media/codec/factory/meta/include_codecfactory.shard.cml",
         "sys/testing/elf_test_runner.shard.cml",
-        "sys/testing/system-test.shard.cml",
         "syslog/client.shard.cml",
     ],
     program: {
-        binary: "test/h264_multi_decoder_fuzzer_test",
+        binary: "test/use_h264_decoder_flake_repro_test",
     },
     use: [
         {

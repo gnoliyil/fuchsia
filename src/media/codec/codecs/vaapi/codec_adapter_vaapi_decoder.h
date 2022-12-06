@@ -590,7 +590,6 @@ class CodecAdapterVaApiDecoder : public CodecAdapter {
   static constexpr std::string_view kMjpegMimeType = "video/x-motion-jpeg";
   static constexpr std::string_view kVp9MimeType = "video/vp9";
   static constexpr std::string_view kH264MimeType = "video/h264";
-  static constexpr std::string_view kH264MultiMimeType = "video/h264-multi";
 
   // Intel linear surface alignment
   static constexpr uint32_t kLinearSurfaceWidthAlignment = 16u;
@@ -615,7 +614,7 @@ class CodecAdapterVaApiDecoder : public CodecAdapter {
   };
 
   static std::string_view CodecTypeName(CodecType codec_type);
-  static std::set<std::string_view> CodecMimeFromType(CodecType codec_type);
+  static std::optional<std::string_view> CodecMimeFromType(CodecType codec_type);
   static std::optional<CodecType> CodecTypeFromMime(std::string_view mime_type);
 
   // Used from trace events

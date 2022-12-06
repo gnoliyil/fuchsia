@@ -181,11 +181,6 @@ std::vector<fuchsia::mediacodec::CodecDescription> GetCodecList() {
     description.codec_type = fuchsia::mediacodec::CodecType::DECODER;
     description.mime_type = "video/h264";
     descriptions.push_back(std::move(description));
-
-    fuchsia::mediacodec::CodecDescription multi_description;
-    multi_description.codec_type = fuchsia::mediacodec::CodecType::DECODER;
-    multi_description.mime_type = "video/h264-multi";
-    descriptions.push_back(std::move(multi_description));
   }
 
   if (SupportsVP9()) {

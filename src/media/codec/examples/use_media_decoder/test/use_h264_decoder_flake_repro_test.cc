@@ -5,22 +5,13 @@
 // This manual test is a basic integration test of the codec_factory +
 // amlogic_video_decoder driver.
 //
-// If this test breaks and it's not immediately obvoius why, please feel free to
+// If this test breaks and it's not immediately obvious why, please feel free to
 // involve dustingreen@ (me) in figuring it out.
 
-#include <lib/async-loop/cpp/loop.h>
-#include <lib/async-loop/default.h>
-#include <lib/media/codec_impl/fourcc.h>
-#include <lib/sys/cpp/component_context.h>
-#include <lib/syslog/cpp/macros.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <map>
-#include <set>
-
 #include "../use_video_decoder.h"
-#include "../util.h"
 #include "use_video_decoder_test.h"
 
 // This test can be run manually along with modifications to the decoder to help narrow down any

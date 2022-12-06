@@ -207,8 +207,6 @@ std::optional<size_t> FindJpegImage(cpp20::span<const uint8_t> buffer) {
 enum class Format {
   kMjpeg,
   kH264,
-  // This uses the multi-instance h.264 decoder.
-  kH264Multi,
   kVp9,
 };
 
@@ -940,10 +938,6 @@ void VideoDecoderRunner::Run() {
       mime_type = "video/h264";
       break;
 
-    case Format::kH264Multi:
-      mime_type = "video/h264-multi";
-      break;
-
     case Format::kVp9:
       mime_type = "video/vp9";
       break;
@@ -1010,7 +1004,6 @@ void VideoDecoderRunner::Run() {
           break;
 
         case Format::kH264:
-        case Format::kH264Multi:
           frames_queued = QueueH264Frames(stream_lifetime_ordinal, input_frame_pts_counter);
           break;
 
@@ -1405,10 +1398,6 @@ void use_video_decoder(Format format, UseVideoDecoderParams params) {
 
 void use_h264_decoder(UseVideoDecoderParams params) {
   use_video_decoder(Format::kH264, std::move(params));
-}
-
-void use_h264_multi_decoder(UseVideoDecoderParams params) {
-  use_video_decoder(Format::kH264Multi, std::move(params));
 }
 
 void use_vp9_decoder(UseVideoDecoderParams params) {

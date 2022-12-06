@@ -5,7 +5,7 @@
 // This manual test is a basic integration test of the codec_factory +
 // amlogic_video_decoder driver.
 //
-// If this test breaks and it's not immediately obvoius why, please feel free to
+// If this test breaks and it's not immediately obvious why, please feel free to
 // involve dustingreen@ (me) in figuring it out.
 
 #include <lib/async-loop/cpp/loop.h>

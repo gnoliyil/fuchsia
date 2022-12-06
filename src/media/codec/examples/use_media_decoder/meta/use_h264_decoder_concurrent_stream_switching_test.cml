@@ -9,7 +9,7 @@
         "syslog/client.shard.cml",
     ],
     program: {
-        binary: "test/use_h264_multi_decoder_test",
+        binary: "test/use_h264_decoder_concurrent_stream_switching_test",
     },
     use: [
         {
@@ -20,4 +20,9 @@
             protocol: [ "fuchsia.sysmem.Allocator" ],
         },
     ],
+    facets: {
+        "fuchsia.test": {
+            "deprecated-allowed-packages": [ "codec_runner_intel_gen" ],
+        },
+    },
 }

@@ -126,22 +126,12 @@ test("use_h264_sw_decoder_test") {
   deps = [ ":use_media_decoder_source_set" ]
 }
 
-test("use_h264_multi_decoder_test") {
+test("use_h264_decoder_flake_repro_test") {
   testonly = true
 
-  output_name = "use_h264_multi_decoder_test"
+  output_name = "use_h264_decoder_flake_repro_test"
 
-  sources = [ "test/use_h264_multi_decoder_test.cc" ]
-
-  deps = [ ":use_media_decoder_source_set" ]
-}
-
-test("use_h264_multi_decoder_flake_repro_test") {
-  testonly = true
-
-  output_name = "use_h264_multi_decoder_flake_repro_test"
-
-  sources = [ "test/use_h264_multi_decoder_flake_repro_test.cc" ]
+  sources = [ "test/use_h264_decoder_flake_repro_test.cc" ]
 
   deps = [ ":use_media_decoder_source_set" ]
 }
@@ -156,23 +146,12 @@ test("use_h264_decoder_stream_switching_test") {
   deps = [ ":use_media_decoder_source_set" ]
 }
 
-test("use_h264_multi_decoder_stream_switching_test") {
+test("use_h264_decoder_concurrent_stream_switching_test") {
   testonly = true
 
-  output_name = "use_h264_multi_decoder_stream_switching_test"
+  output_name = "use_h264_decoder_concurrent_stream_switching_test"
 
-  sources = [ "test/use_h264_multi_decoder_stream_switching_test.cc" ]
-
-  deps = [ ":use_media_decoder_source_set" ]
-}
-
-test("use_h264_multi_decoder_concurrent_stream_switching_test") {
-  testonly = true
-
-  output_name = "use_h264_multi_decoder_concurrent_stream_switching_test"
-
-  sources =
-      [ "test/use_h264_multi_decoder_concurrent_stream_switching_test.cc" ]
+  sources = [ "test/use_h264_decoder_concurrent_stream_switching_test.cc" ]
 
   deps = [ ":use_media_decoder_source_set" ]
 }
@@ -199,16 +178,6 @@ test("use_h264_decoder_secure_output_test") {
   output_name = "use_h264_decoder_secure_output_test"
 
   sources = [ "test/use_h264_decoder_secure_output_test.cc" ]
-
-  deps = [ ":use_media_decoder_source_set" ]
-}
-
-test("use_h264_multi_decoder_secure_output_test") {
-  testonly = true
-
-  output_name = "use_h264_multi_decoder_secure_output_test"
-
-  sources = [ "test/use_h264_multi_decoder_secure_output_test.cc" ]
 
   deps = [ ":use_media_decoder_source_set" ]
 }
@@ -365,16 +334,6 @@ test("h264_decoder_malformed_stream_test") {
     "//src/lib/fxl/test:gtest_main",
     "//third_party/googletest:gtest",
   ]
-}
-
-test("h264_multi_decoder_fuzzer_test") {
-  testonly = true
-
-  output_name = "h264_multi_decoder_fuzzer_test"
-
-  sources = [ "test/h264_multi_decoder_fuzzer_test.cc" ]
-
-  deps = [ ":decoder_fuzzer" ]
 }
 
 test("vp9_decoder_fuzzer_test") {

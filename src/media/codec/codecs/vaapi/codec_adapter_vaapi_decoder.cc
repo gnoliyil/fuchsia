@@ -1059,16 +1059,17 @@ std::string_view CodecAdapterVaApiDecoder::CodecTypeName(CodecType codec_type) {
   }
 }
 
-std::set<std::string_view> CodecAdapterVaApiDecoder::CodecMimeFromType(CodecType codec_type) {
+std::optional<std::string_view> CodecAdapterVaApiDecoder::CodecMimeFromType(CodecType codec_type) {
   switch (codec_type) {
     case CodecType::kMJPEG:
-      return {kMjpegMimeType};
+      return kMjpegMimeType;
     case CodecType::kH264:
-      return {kH264MimeType, kH264MultiMimeType};
+      return kH264MimeType;
     case CodecType::kVP9:
-      return {kVp9MimeType};
+      return kVp9MimeType;
     default:
       FX_NOTREACHED();
+      return std::nullopt;
   }
 }
 
@@ -1078,7 +1079,7 @@ std::optional<CodecAdapterVaApiDecoder::CodecType> CodecAdapterVaApiDecoder::Cod
     return CodecType::kMJPEG;
   } else if (mime_type == kVp9MimeType) {
     return CodecType::kVP9;
-  } else if ((mime_type == kH264MimeType) || (mime_type == kH264MultiMimeType)) {
+  } else if (mime_type == kH264MimeType) {
     return CodecType::kH264;
   } else {
     return std::nullopt;
@@ -1304,8 +1305,8 @@ void CodecAdapterVaApiDecoder::ProcessInputLoop() {
     if (input_item.is_format_details()) {
       ZX_ASSERT(media_codec_.has_value());
       const std::string& mime_type = input_item.format_details().mime_type();
-      const auto allow_mime_types = CodecMimeFromType(media_codec_.value());
-      if (allow_mime_types.count(mime_type) == 0) {
+      const auto allow_mime_type = CodecMimeFromType(media_codec_.value());
+      if (!allow_mime_type.has_value() || (allow_mime_type.value() != mime_type)) {
         SetCodecFailure(
             "CodecCodecInit(): Can not switch codec type after setting it in CoreCodecInit(). "
             "Attempting to switch it to %s\n",
