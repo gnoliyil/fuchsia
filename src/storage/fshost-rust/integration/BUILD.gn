@@ -85,6 +85,7 @@ template("fshost_integration_test") {
     source_root = "tests/fshost_integration_test.rs"
     sources = [
       "tests/fshost_integration_test.rs",
+      "tests/migration.rs",
       "tests/wipe_storage.rs",
       "tests/write_data_file.rs",
     ]

@@ -25,6 +25,7 @@ use {
     fidl_fuchsia_hardware_block as _, fs_management as _, fuchsia_fs as _, remote_block_device as _,
 };
 
+mod migration;
 mod write_data_file;
 
 const FSHOST_COMPONENT_NAME: &'static str = std::env!("FSHOST_COMPONENT_NAME");
