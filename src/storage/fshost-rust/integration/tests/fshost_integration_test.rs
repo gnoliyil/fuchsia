@@ -59,18 +59,12 @@ fn data_fs_type() -> u32 {
 #[fuchsia::test]
 async fn blobfs_and_data_mounted() {
     let mut builder = new_builder();
-    builder.with_disk().format_data(DATA_FILESYSTEM_FORMAT);
+    builder.with_disk().format_data(true, DATA_FILESYSTEM_FORMAT);
     let fixture = builder.build().await;
 
     fixture.check_fs_type("blob", VFS_TYPE_BLOBFS).await;
     fixture.check_fs_type("data", data_fs_type()).await;
-
-    let (file, server) = create_proxy::<fio::NodeMarker>().unwrap();
-    fixture
-        .dir("data")
-        .open(fio::OpenFlags::RIGHT_READABLE, 0, "foo", server)
-        .expect("open failed");
-    file.get_attr().await.expect("get_attr failed");
+    fixture.check_test_data_file().await;
 
     fixture.tear_down().await;
 }
@@ -94,7 +88,7 @@ async fn data_reformatted_when_corrupt() {
         return;
     }
     let mut builder = new_builder();
-    builder.with_disk().format_data(DATA_FILESYSTEM_FORMAT).corrupt_data();
+    builder.with_disk().format_data(true, DATA_FILESYSTEM_FORMAT).corrupt_data();
     let mut fixture = builder.build().await;
 
     fixture.check_fs_type("data", data_fs_type()).await;
@@ -145,16 +139,11 @@ async fn data_formatted_with_small_initial_volume_big_target() {
 #[fuchsia::test]
 async fn data_mounted_legacy_crypto_format() {
     let mut builder = new_builder();
-    builder.with_disk().format_data(DATA_FILESYSTEM_FORMAT).legacy_crypto_format();
+    builder.with_disk().format_data(true, DATA_FILESYSTEM_FORMAT).legacy_crypto_format();
     let fixture = builder.build().await;
 
     fixture.check_fs_type("data", data_fs_type()).await;
-    let (file, server) = create_proxy::<fio::NodeMarker>().unwrap();
-    fixture
-        .dir("data")
-        .open(fio::OpenFlags::RIGHT_READABLE, 0, "foo", server)
-        .expect("open failed");
-    file.get_attr().await.expect("get_attr failed");
+    fixture.check_test_data_file().await;
 
     fixture.tear_down().await;
 }
@@ -163,16 +152,11 @@ async fn data_mounted_legacy_crypto_format() {
 async fn data_mounted_no_zxcrypt() {
     let mut builder = new_builder();
     builder.fshost().set_no_zxcrypt();
-    builder.with_disk().format_data(DATA_FILESYSTEM_FORMAT).without_zxcrypt();
+    builder.with_disk().format_data(false, DATA_FILESYSTEM_FORMAT);
     let fixture = builder.build().await;
 
     fixture.check_fs_type("data", data_fs_type()).await;
-    let (file, server) = create_proxy::<fio::NodeMarker>().unwrap();
-    fixture
-        .dir("data")
-        .open(fio::OpenFlags::RIGHT_READABLE, 0, "foo", server)
-        .expect("open failed");
-    file.get_attr().await.expect("get_attr failed");
+    fixture.check_test_data_file().await;
 
     fixture.tear_down().await;
 }
@@ -215,17 +199,12 @@ async fn wipe_storage_not_supported() {
 async fn ramdisk_blob_and_data_mounted() {
     let mut builder = new_builder();
     builder.fshost().set_fvm_ramdisk();
-    builder.with_disk().format_data(DATA_FILESYSTEM_FORMAT).without_zxcrypt();
+    builder.with_disk().format_data(false, DATA_FILESYSTEM_FORMAT);
     let fixture = builder.build().await;
 
     fixture.check_fs_type("blob", VFS_TYPE_BLOBFS).await;
     fixture.check_fs_type("data", data_fs_type()).await;
-    let (file, server) = create_proxy::<fio::NodeMarker>().unwrap();
-    fixture
-        .dir("data")
-        .open(fio::OpenFlags::RIGHT_READABLE, 0, "foo", server)
-        .expect("open failed");
-    file.get_attr().await.expect("get_attr failed");
+    fixture.check_test_data_file().await;
 
     fixture.tear_down().await;
 }
@@ -235,7 +214,7 @@ async fn ramdisk_data_ignores_non_ramdisk() {
     let mut builder = new_builder();
     // Fake out the ramdisk checking by providing a nonsense ramdisk prefix.
     builder.fshost().set_fvm_ramdisk().set_ramdisk_prefix("/not/the/prefix");
-    builder.with_disk().format_data(DATA_FILESYSTEM_FORMAT).without_zxcrypt();
+    builder.with_disk().format_data(false, DATA_FILESYSTEM_FORMAT);
     let fixture = builder.build().await;
 
     let dev = fixture.dir("dev-topological/class/block");
@@ -370,7 +349,7 @@ async fn netboot_set() {
 async fn fvm_ramdisk_serves_zbi_ramdisk_contents_with_unformatted_data() {
     let mut builder = new_builder();
     builder.fshost().set_fvm_ramdisk();
-    builder.with_zbi_ramdisk().without_zxcrypt();
+    builder.with_zbi_ramdisk();
     let fixture = builder.build().await;
 
     fixture.check_fs_type("blob", VFS_TYPE_BLOBFS).await;
@@ -383,7 +362,7 @@ async fn fvm_ramdisk_serves_zbi_ramdisk_contents_with_unformatted_data() {
 #[fuchsia::test]
 async fn fvm_within_gpt() {
     let mut builder = new_builder();
-    builder.with_disk().with_gpt().format_data(DATA_FILESYSTEM_FORMAT);
+    builder.with_disk().with_gpt().format_data(true, DATA_FILESYSTEM_FORMAT);
     let fixture = builder.build().await;
     let dev = fixture.dir("dev-topological/class/block");
 
@@ -409,13 +388,7 @@ async fn fvm_within_gpt() {
     // Make sure we can access the blob/data partitions within the FVM.
     fixture.check_fs_type("blob", VFS_TYPE_BLOBFS).await;
     fixture.check_fs_type("data", data_fs_type()).await;
-
-    let (file, server) = create_proxy::<fio::NodeMarker>().unwrap();
-    fixture
-        .dir("data")
-        .open(fio::OpenFlags::RIGHT_READABLE, 0, "foo", server)
-        .expect("open failed");
-    file.get_attr().await.expect("get_attr failed");
+    fixture.check_test_data_file().await;
 
     fixture.tear_down().await;
 }
@@ -427,7 +400,7 @@ async fn pausing_block_watcher_ignores_devices() {
 
     // The second disk has a formatted data filesystem with a test file inside it.
     let mut disk_builder2 = fshost_test_fixture::disk_builder::DiskBuilder::new();
-    disk_builder2.format_data(DATA_FILESYSTEM_FORMAT);
+    disk_builder2.format_data(true, DATA_FILESYSTEM_FORMAT);
     let disk_vmo2 = disk_builder2.build().await;
 
     let mut fixture = new_builder().build().await;
@@ -455,12 +428,7 @@ async fn pausing_block_watcher_ignores_devices() {
     fixture.check_fs_type("data", data_fs_type()).await;
     // Only the second disk we attached has a file inside. We use it as a proxy for testing that
     // only the second one was processed.
-    let (file, server) = create_proxy::<fio::NodeMarker>().unwrap();
-    fixture
-        .dir("data")
-        .open(fio::OpenFlags::RIGHT_READABLE, 0, "foo", server)
-        .expect("open failed");
-    file.get_attr().await.expect("get_attr failed");
+    fixture.check_test_data_file().await;
 
     fixture.tear_down().await;
 }

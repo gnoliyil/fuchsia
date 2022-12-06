@@ -154,7 +154,7 @@ async fn data_unformatted() {
     const BUFF_LEN: usize = 512;
     let mut builder = new_builder();
     builder.fshost().set_fvm_ramdisk().set_ramdisk_prefix("/nada/zip/zilch");
-    builder.with_disk().format_data(DATA_FILESYSTEM_FORMAT);
+    builder.with_disk().format_data(true, DATA_FILESYSTEM_FORMAT);
     let fixture = builder.build().await;
     let dev = fixture.dir("dev-topological/class/block");
 

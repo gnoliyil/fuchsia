@@ -216,11 +216,11 @@ impl Disk {
 pub struct DiskBuilder {
     size: u64,
     data_volume_size: u64,
+    format_zxcrypt: bool,
     format: Option<&'static str>,
     // Only used if `format` is Some.
     corrupt_contents: bool,
     legacy_crypto_format: bool,
-    zxcrypt: bool,
     gpt: bool,
 }
 
@@ -229,10 +229,10 @@ impl DiskBuilder {
         DiskBuilder {
             size: DEFAULT_DISK_SIZE,
             data_volume_size: DEFAULT_DATA_VOLUME_SIZE,
+            format_zxcrypt: false,
             format: None,
             corrupt_contents: false,
             legacy_crypto_format: false,
-            zxcrypt: true,
             gpt: false,
         }
     }
@@ -247,8 +247,17 @@ impl DiskBuilder {
         self
     }
 
-    pub fn format_data(&mut self, format: &'static str) -> &mut Self {
+    /// Format the data partition with zxcrypt, unless the data format is set to something that
+    /// doesn't need it, like Fxfs. This will format the data partition with just zxcrypt if no
+    /// data format is set.
+    pub fn format_zxcrypt_if_needed(&mut self) -> &mut Self {
+        self.format_zxcrypt = true;
+        self
+    }
+
+    pub fn format_data(&mut self, with_zxcrypt_if_needed: bool, format: &'static str) -> &mut Self {
         self.format = Some(format);
+        self.format_zxcrypt = with_zxcrypt_if_needed;
         self
     }
 
@@ -259,11 +268,6 @@ impl DiskBuilder {
 
     pub fn legacy_crypto_format(&mut self) -> &mut Self {
         self.legacy_crypto_format = true;
-        self
-    }
-
-    pub fn without_zxcrypt(&mut self) -> &mut Self {
-        self.zxcrypt = false;
         self
     }
 
@@ -346,11 +350,30 @@ impl DiskBuilder {
         )
         .await
         .expect("create_fvm_volume failed");
+
+        let data_path = format!("{}/fvm/data-p-2/block", base_path);
+        let mut data_device =
+            recursive_wait_and_open_node(&dev, &data_path.strip_prefix("/dev/").unwrap())
+                .await
+                .expect("recursive_wait_and_open_node failed");
+
+        // Potentially set up zxcrypt, if we are configured to and aren't using Fxfs.
+        if self.format != Some("fxfs") && self.format_zxcrypt {
+            let zxcrypt_path = zxcrypt::set_up_insecure_zxcrypt(Path::new(&data_path))
+                .await
+                .expect("failed to set up zxcrypt");
+            let zxcrypt_path = zxcrypt_path.as_os_str().to_str().unwrap();
+            data_device =
+                recursive_wait_and_open_node(&dev, zxcrypt_path.strip_prefix("/dev/").unwrap())
+                    .await
+                    .expect("recursive_wait_and_open_node failed");
+        }
+
         if let Some(format) = self.format {
             match format {
-                "fxfs" => self.init_data_fxfs(base_path.as_str(), &dev).await,
-                "minfs" => self.init_data_minfs(base_path.as_str(), &dev).await,
-                "f2fs" => self.init_data_f2fs(base_path.as_str(), &dev).await,
+                "fxfs" => self.init_data_fxfs(data_device).await,
+                "minfs" => self.init_data_minfs(data_device).await,
+                "f2fs" => self.init_data_f2fs(data_device).await,
                 _ => panic!("unsupported data filesystem format type"),
             }
         }
@@ -360,22 +383,7 @@ impl DiskBuilder {
         vmo
     }
 
-    async fn init_data_minfs(&self, device_path: &str, dev: &fio::DirectoryProxy) {
-        let data_path = format!("{}/fvm/data-p-2/block", device_path);
-        let mut data_device =
-            recursive_wait_and_open_node(&dev, &data_path.strip_prefix("/dev/").unwrap())
-                .await
-                .expect("recursive_wait_and_open_node failed");
-        if self.zxcrypt {
-            let zxcrypt_path = zxcrypt::set_up_insecure_zxcrypt(Path::new(&data_path))
-                .await
-                .expect("failed to set up zxcrypt");
-            let zxcrypt_path = zxcrypt_path.as_os_str().to_str().unwrap();
-            data_device =
-                recursive_wait_and_open_node(dev, zxcrypt_path.strip_prefix("/dev/").unwrap())
-                    .await
-                    .expect("recursive_wait_and_open_node failed");
-        }
+    async fn init_data_minfs(&self, data_device: fio::NodeProxy) {
         if self.corrupt_contents {
             // Just write the magic so it appears formatted to fshost.
             self.write_magic(
@@ -386,6 +394,7 @@ impl DiskBuilder {
             .await;
             return;
         }
+
         let mut minfs = fs_management::Minfs::from_channel(
             data_device.into_channel().unwrap().into_zx_channel(),
         )
@@ -410,22 +419,7 @@ impl DiskBuilder {
         fs.shutdown().await.expect("shutdown failed");
     }
 
-    async fn init_data_f2fs(&self, device_path: &str, dev: &fio::DirectoryProxy) {
-        let data_path = format!("{}/fvm/data-p-2/block", device_path);
-        let mut data_device =
-            recursive_wait_and_open_node(&dev, &data_path.strip_prefix("/dev/").unwrap())
-                .await
-                .expect("recursive_wait_and_open_node failed");
-        if self.zxcrypt {
-            let zxcrypt_path = zxcrypt::set_up_insecure_zxcrypt(Path::new(&data_path))
-                .await
-                .expect("failed to set up zxcrypt");
-            let zxcrypt_path = zxcrypt_path.as_os_str().to_str().unwrap();
-            data_device =
-                recursive_wait_and_open_node(dev, zxcrypt_path.strip_prefix("/dev/").unwrap())
-                    .await
-                    .expect("recursive_wait_and_open_node failed");
-        }
+    async fn init_data_f2fs(&self, data_device: fio::NodeProxy) {
         if self.corrupt_contents {
             // Just write the magic so it appears formatted to fshost.
             self.write_magic(
@@ -436,6 +430,7 @@ impl DiskBuilder {
             .await;
             return;
         }
+
         let mut f2fs = fs_management::F2fs::from_channel(
             data_device.into_channel().unwrap().into_zx_channel(),
         )
@@ -460,12 +455,7 @@ impl DiskBuilder {
         fs.shutdown().await.expect("shutdown failed");
     }
 
-    async fn init_data_fxfs(&self, device_path: &str, dev: &fio::DirectoryProxy) {
-        let data_path = format!("{}/fvm/data-p-2/block", device_path);
-        let data_device =
-            recursive_wait_and_open_node(dev, data_path.strip_prefix("/dev/").unwrap())
-                .await
-                .expect("recursive_wait_and_open_node failed");
+    async fn init_data_fxfs(&self, data_device: fio::NodeProxy) {
         if self.corrupt_contents {
             // Just write the magic so it appears formatted to fshost.
             self.write_magic(
@@ -476,6 +466,7 @@ impl DiskBuilder {
             .await;
             return;
         }
+
         let (data_key, metadata_key) = if self.legacy_crypto_format {
             (LEGACY_DATA_KEY, LEGACY_METADATA_KEY)
         } else {

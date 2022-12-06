@@ -172,6 +172,16 @@ impl TestFixture {
         assert_eq!(info.unwrap().fs_type, fs_type);
     }
 
+    /// Check for the existence of a well-known test file in the data volume. This file is placed
+    /// by the disk builder if it formats the filesystem beforehand.
+    pub async fn check_test_data_file(&self) {
+        let (file, server) = create_proxy::<fio::NodeMarker>().unwrap();
+        self.dir("data")
+            .open(fio::OpenFlags::RIGHT_READABLE, 0, "foo", server)
+            .expect("open failed");
+        file.get_attr().await.expect("get_attr failed");
+    }
+
     pub fn ramdisk_vmo(&self) -> Option<&zx::Vmo> {
         self.ramdisk_vmo.as_ref()
     }
