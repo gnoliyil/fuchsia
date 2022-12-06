@@ -574,7 +574,11 @@ async fn test_udp_send_msg_preflight_autogen_addr_invalidation() {
     // SLAAC, but specify a very short valid lifetime so the address
     // will expire quickly.
     let fake_ep = net.create_fake_endpoint().expect("create fake endpoint");
-    const VALID_LIFETIME_SECONDS: u32 = 2;
+    // NB: we want this lifetime to be short so the test does not take too long
+    // to run. However, if we make it too short, the test will be flaky, because
+    // it's possible for the address lifetime to expire before the subsequent
+    // SendMsgPreflight call.
+    const VALID_LIFETIME_SECONDS: u32 = 4;
     let options = [NdpOptionBuilder::PrefixInformation(PrefixInformation::new(
         ipv6_consts::PREFIX.prefix(),  /* prefix_length */
         false,                         /* on_link_flag */
