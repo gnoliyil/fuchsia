@@ -113,6 +113,7 @@ if (is_fuchsia) {
     testonly = fuchsia_zbi_testonly
     generate_fvm = true
     board_name = board_name
+    output_dir = root_build_dir
     fshost_config = board_fshost_config
 
     check_production_tag = check_production_eligibility
@@ -310,7 +311,6 @@ if (is_fuchsia) {
 
   assembled_system("fuchsia_assembly") {
     forward_variables_from(fuchsia_base, "*")
-    output_dir = root_build_dir
     image_name = "fuchsia"
 
     create_legacy_aib_package = !is_debug
@@ -568,9 +568,6 @@ if (is_fuchsia) {
 
   assembled_system("fuchsia_prime_assembly") {
     forward_variables_from(fuchsia_base, "*")
-    image_name = "fuchsia"
-    namespace = "fuchsia_prime_assembly"
-
     system_image_deps += [ ":dummy" ]
     base_package_name = "system_image_prime"
   }

@@ -32,16 +32,15 @@ import("//src/storage/fshost/generated_fshost_config.gni")
 # Parameters:
 #
 #   image_name (optional; default: target_name)
-#     [string] The filename to give the ZBIs and VBMetas.
-#
-#   namespace (optional; default: image_name)
-#     [string] A namespace to use for naming all the outputs and generated files.
+#     [string] A name to use for naming all outputs and generated files, instead
+#     of $target_name.
 #
 #   output_dir (optional; default: target_out_dir)
 #     [string] The output directory into which the final system ZBI is written.
 #
 #   output_name (optional; default: <target_name>.zbi)
 #     [string] The name of the final system ZBI file.
+#
 #
 #   generate_image_metadata (optional, default=true)
 #     [boolean] if true, assembled_system() will generate the appropiate image
@@ -285,11 +284,6 @@ template("assembled_system") {
     image_name = invoker.image_name
   }
 
-  namespace = image_name
-  if (defined(invoker.namespace)) {
-    namespace = invoker.namespace
-  }
-
   base_package_name = "system_image"
   if (defined(invoker.base_package_name)) {
     base_package_name = invoker.base_package_name
@@ -297,35 +291,35 @@ template("assembled_system") {
 
   # Internal labels used for Image Assembly.
   labels = {
-    base_packages_group = "${namespace}.base_packages"
-    cache_packages_group = "${namespace}.cache_packages"
-    meta_packages_group = "${namespace}.meta_packages"
-    all_packages_group = "${namespace}.packages"
-    legacy_assembly_input_bundle = "${namespace}.legacy_input_bundle"
+    base_packages_group = "${image_name}.base_packages"
+    cache_packages_group = "${image_name}.cache_packages"
+    meta_packages_group = "${image_name}.meta_packages"
+    all_packages_group = "${image_name}.packages"
+    legacy_assembly_input_bundle = "${image_name}.legacy_input_bundle"
     if (defined(invoker.product_assembly_config_dep)) {
       product_assembly_config_deps = [ invoker.product_assembly_config_dep ]
     } else {
       product_assembly_config_deps = []
     }
     generated_config_for_legacy_bundle =
-        "${namespace}.legacy_image_assembly_config"
-    image_assembly_inputs = "${namespace}.image_assembly_inputs"
-    images_config_old = "${namespace}.images_config_old"
-    images_config = "${namespace}.images_config"
-    images_config_matches = "${namespace}.images_config_matches"
-    product_assembler = "${namespace}.product_assembler"
-    image_assembler = "${namespace}.image_assembler"
-    copy_vbmeta = "${namespace}.copy_vbmeta"
-    copy_zbi = "${namespace}.copy_zbi"
-    copy_zbi_signed = "${namespace}.copy_zbi_signed"
-    copy_zbi_manifest = "${namespace}.copy_zbi_manifest"
-    copy_images = "${namespace}.copy_images"
-    config_data = "${namespace}.config-data"
-    shell_commands = "${namespace}.shell_commands"
-    assembly_generated_packages = "${namespace}.assembly_generated_packages"
-    fshost = "${namespace}.fs_host"
-    compare_command_logs = "${namespace}.compare_command_logs"
-    compare_images_manifests = "${namespace}.compare_images_manifests"
+        "${image_name}.legacy_image_assembly_config"
+    image_assembly_inputs = "${image_name}.image_assembly_inputs"
+    images_config_old = "${image_name}.images_config_old"
+    images_config = "${image_name}.images_config"
+    images_config_matches = "${image_name}.images_config_matches"
+    product_assembler = "${image_name}.product_assembler"
+    image_assembler = "${image_name}.image_assembler"
+    copy_vbmeta = "${image_name}.copy_vbmeta"
+    copy_zbi = "${image_name}.copy_zbi"
+    copy_zbi_signed = "${image_name}.copy_zbi_signed"
+    copy_zbi_manifest = "${image_name}.copy_zbi_manifest"
+    copy_images = "${image_name}.copy_images"
+    config_data = "${image_name}.config-data"
+    shell_commands = "${image_name}.shell_commands"
+    assembly_generated_packages = "${image_name}.assembly_generated_packages"
+    fshost = "${image_name}.fs_host"
+    compare_command_logs = "${image_name}.compare_command_logs"
+    compare_images_manifests = "${image_name}.compare_images_manifests"
 
     # The names of all of the platform's Assembly Input Bundles
     _platform_aib_names = [
@@ -346,8 +340,8 @@ template("assembled_system") {
       platform_common_aibs += [ "//bundles/assembly:${name}" ]
     }
 
-    bazel_images_config_inputs = "${namespace}.bazel_images_config_inputs"
-    bazel_legacy_aib = "${namespace}.bazel_legacy_aib"
+    bazel_images_config_inputs = "${image_name}.bazel_images_config_inputs"
+    bazel_legacy_aib = "${image_name}.bazel_legacy_aib"
   }
 
   # Intermediate files produced for Image Assembly.
@@ -358,17 +352,18 @@ template("assembled_system") {
       product_assembly_config = "//build/assembly/default_product_config.json"
     }
     generated_config_for_legacy_bundle =
-        "$target_out_dir/${namespace}.legacy_image_assembly_config.json"
-    image_assembly_inputs = "$target_out_dir/${namespace}.image_assembly_inputs"
+        "$target_out_dir/${image_name}.legacy_image_assembly_config.json"
+    image_assembly_inputs =
+        "$target_out_dir/${image_name}.image_assembly_inputs"
 
-    images_config_old = "$target_out_dir/${namespace}.images_config_old.json"
-    images_config = "$target_out_dir/${namespace}.images_config.json"
+    images_config_old = "$target_out_dir/${image_name}.images_config_old.json"
+    images_config = "$target_out_dir/${image_name}.images_config.json"
 
-    outdir = "$target_out_dir/$namespace"
+    outdir = "$target_out_dir/$image_name"
     gendir = "$outdir/gen"
 
     # The cmc_merge() template this is used with prepends $target_out_dir.
-    fshost_merged_cml = "${namespace}/fshost.merged.cml"
+    fshost_merged_cml = "${image_name}/fshost.merged.cml"
 
     legacy_assembly_input_bundle_dir = "${outdir}/legacy"
     legacy_assembly_input_bundle_manifest =
@@ -500,7 +495,7 @@ template("assembled_system") {
                             invoker.include_component_id_index
   if (include_component_index) {
     # For details, see //docs/development/components/component_id_index.md#system-assembly
-    component_id_index_config("${namespace}.component_id_index_config") {
+    component_id_index_config("${image_name}.component_id_index_config") {
       forward_variables_from(invoker,
                              [
                                "testonly",
@@ -515,9 +510,9 @@ template("assembled_system") {
       }
     }
 
-    component_id_index_dep = [ ":${namespace}.component_id_index_config" ]
+    component_id_index_dep = [ ":${image_name}.component_id_index_config" ]
     component_id_index_config_data_dep =
-        [ ":${namespace}.component_id_index_config-config-data" ]
+        [ ":${image_name}.component_id_index_config-config-data" ]
     _meta_packages += component_id_index_dep
   }
 
@@ -836,7 +831,7 @@ template("assembled_system") {
                              "testonly",
                              "visibility",
                            ])
-    image_assembly_label = ":${namespace}"
+    image_assembly_label = ":${image_name}"
     bundles_dir = files.outdir
     include_config_data = generate_fvm
     create_package = defined(invoker.create_legacy_aib_package) &&
@@ -1363,7 +1358,7 @@ template("assembled_system") {
 
       assembly_manifests = [
         {
-          image_name = namespace
+          image_name = image_name
           assembly_manifest_path =
               rebase_path(files.assembly_manifest, root_build_dir)
           label = get_label_info(target_name, "label_with_toolchain")
