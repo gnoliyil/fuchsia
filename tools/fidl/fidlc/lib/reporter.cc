@@ -97,8 +97,8 @@ void Reporter::Report(std::unique_ptr<Diagnostic> diag) {
       AddWarning(std::move(diag));
       break;
     case DiagnosticKind::kRetired:
-      assert(false &&
-             "this diagnostic kind must never be shown - it only reserves retired error numerals");
+      ZX_PANIC(
+          "this diagnostic kind must never be shown - it only reserves retired error numerals");
       break;
   }
 }
@@ -107,9 +107,15 @@ std::vector<Diagnostic*> Reporter::Diagnostics() const {
   std::vector<Diagnostic*> diagnostics;
   diagnostics.reserve(errors_.size() + warnings_.size());
   for (const auto& err : errors_) {
+    if (silence_fixables_ && err->is_diagnostic_fixable()) {
+      continue;
+    }
     diagnostics.push_back(err.get());
   }
   for (const auto& warn : warnings_) {
+    if (silence_fixables_ && warn->is_diagnostic_fixable()) {
+      continue;
+    }
     diagnostics.push_back(warn.get());
   }
 
@@ -138,9 +144,19 @@ std::vector<Diagnostic*> Reporter::Diagnostics() const {
 
 void Reporter::PrintReports(bool enable_color) const {
   const auto diags = Diagnostics();
+  size_t errors_reported = 0;
+  size_t warnings_reported = 0;
   for (const auto& diag : diags) {
-    std::string qualifier = diag->get_severity() == DiagnosticKind::kError ? "error" : "warning";
-    auto msg = Format(qualifier, diag->span, diag->Print(), enable_color);
+    std::string qualifier;
+    if (diag->get_severity() == DiagnosticKind::kError) {
+      errors_reported++;
+      qualifier = "error";
+    } else {
+      warnings_reported++;
+      qualifier = "warning";
+    }
+
+    auto msg = Format(qualifier, diag->span, diag->Print(program_invocation()), enable_color);
     fprintf(stderr, "%s\n", msg.c_str());
     // There should never be errors in virtual files. These contain code
     // synthesized by the compiler, and the user has no control over them.
@@ -150,12 +166,12 @@ void Reporter::PrintReports(bool enable_color) const {
   }
 
   if (!errors_.empty() && warnings_.empty()) {
-    fprintf(stderr, "%zu error(s) reported.\n", errors_.size());
+    fprintf(stderr, "%zu error(s) reported.\n", errors_reported);
   } else if (errors_.empty() && !warnings_.empty()) {
-    fprintf(stderr, "%zu warning(s) reported.\n", warnings_.size());
+    fprintf(stderr, "%zu warning(s) reported.\n", warnings_reported);
   } else if (!errors_.empty() && !warnings_.empty()) {
-    fprintf(stderr, "%zu error(s) and %zu warning(s) reported.\n", errors_.size(),
-            warnings_.size());
+    fprintf(stderr, "%zu error(s) and %zu warning(s) reported.\n", errors_reported,
+            warnings_reported);
   }
 }
 

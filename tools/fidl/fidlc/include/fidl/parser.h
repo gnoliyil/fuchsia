@@ -211,7 +211,7 @@ class Parser {
     return ReadToken(p, OnNoMatch::kIgnore);
   }
 
-  static auto OfKind(Token::Kind expected_kind) {
+  auto OfKind(Token::Kind expected_kind) {
     return [expected_kind](const Token& actual) -> std::unique_ptr<Diagnostic> {
       if (actual.kind() != expected_kind) {
         return Diagnostic::MakeError(ErrUnexpectedTokenOfKind, actual.span(),
@@ -222,7 +222,7 @@ class Parser {
     };
   }
 
-  static auto IdentifierOfSubkind(Token::Subkind expected_subkind) {
+  auto IdentifierOfSubkind(Token::Subkind expected_subkind) {
     return [expected_subkind](const Token& actual) -> std::unique_ptr<Diagnostic> {
       auto expected = Token::KindAndSubkind(Token::Kind::kIdentifier, expected_subkind);
       if (actual.kind_and_subkind().combined() != expected.combined()) {

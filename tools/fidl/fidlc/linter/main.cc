@@ -20,6 +20,7 @@
 #include "tools/fidl/fidlc/include/fidl/lexer.h"
 #include "tools/fidl/fidlc/include/fidl/linter.h"
 #include "tools/fidl/fidlc/include/fidl/parser.h"
+#include "tools/fidl/fidlc/include/fidl/program_invocation.h"
 #include "tools/fidl/fidlc/include/fidl/source_manager.h"
 #include "tools/fidl/fidlc/include/fidl/tree_visitor.h"
 #include "tools/fidl/fidlc/linter/command_line_options.h"
@@ -43,7 +44,8 @@ namespace {
   exit(2);  // Exit code 1 is reserved to indicate lint findings
 }
 
-fidl::Finding DiagnosticToFinding(const fidl::Diagnostic& diag) {
+fidl::Finding DiagnosticToFinding(const fidl::Diagnostic& diag,
+                                  const fidl::ProgramInvocation& program_invocation) {
   const char* check_id = nullptr;
   switch (diag.get_severity()) {
     case fidl::DiagnosticKind::kError:
@@ -57,7 +59,7 @@ fidl::Finding DiagnosticToFinding(const fidl::Diagnostic& diag) {
              "this diagnostic kind must never be shown - it only reserves retired error numerals");
       break;
   }
-  return fidl::Finding(diag.span, check_id, diag.Print());
+  return fidl::Finding(diag.span, check_id, diag.Print(program_invocation));
 }
 
 void Lint(const fidl::SourceFile& source_file, fidl::Findings* findings,
@@ -71,7 +73,7 @@ void Lint(const fidl::SourceFile& source_file, fidl::Findings* findings,
   fidl::Parser parser(&lexer, &reporter, experimental_flags);
   std::unique_ptr<fidl::raw::File> ast = parser.Parse();
   for (auto* diag : reporter.Diagnostics()) {
-    findings->push_back(DiagnosticToFinding(*diag));
+    findings->push_back(DiagnosticToFinding(*diag, reporter.program_invocation()));
   }
   if (!parser.Success()) {
     return;

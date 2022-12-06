@@ -12,7 +12,9 @@
 #include <sstream>
 #include <string_view>
 
+#include "tools/fidl/fidlc/include/fidl/fixes.h"
 #include "tools/fidl/fidlc/include/fidl/flat_ast.h"
+#include "tools/fidl/fidlc/include/fidl/program_invocation.h"
 #include "tools/fidl/fidlc/include/fidl/source_span.h"
 #include "tools/fidl/fidlc/include/fidl/token.h"
 #include "tools/fidl/fidlc/include/fidl/types.h"
@@ -134,13 +136,14 @@ enum class DiagnosticDocumented {
 
 struct DiagnosticDef {
   constexpr explicit DiagnosticDef(ErrorId id, DiagnosticKind kind, DiagnosticDocumented documented,
-                                   std::string_view msg)
-      : id(id), kind(kind), documented(documented), msg(msg) {}
+                                   std::optional<Fix::Kind> fixable, std::string_view msg)
+      : id(id), kind(kind), documented(documented), fixable(fixable), msg(msg) {}
   DiagnosticDef(const DiagnosticDef&) = delete;
 
   ErrorId id;
   DiagnosticKind kind;
   DiagnosticDocumented documented;
+  std::optional<Fix::Kind> fixable = std::nullopt;
   std::string_view msg;
 };
 
@@ -149,7 +152,8 @@ struct DiagnosticDef {
 template <ErrorId Id, typename... Args>
 struct ErrorDef final : DiagnosticDef {
   constexpr explicit ErrorDef(std::string_view msg)
-      : DiagnosticDef(Id, DiagnosticKind::kError, DiagnosticDocumented::kDocumented, msg) {
+      : DiagnosticDef(Id, DiagnosticKind::kError, DiagnosticDocumented::kDocumented, std::nullopt,
+                      msg) {
     internal::CheckFormatArgs<Args...>(msg);
   }
 };
@@ -159,7 +163,8 @@ struct ErrorDef final : DiagnosticDef {
 template <ErrorId Id, typename... Args>
 struct UndocumentedErrorDef final : DiagnosticDef {
   constexpr explicit UndocumentedErrorDef(std::string_view msg)
-      : DiagnosticDef(Id, DiagnosticKind::kError, DiagnosticDocumented::kNotDocumented, msg) {
+      : DiagnosticDef(Id, DiagnosticKind::kError, DiagnosticDocumented::kNotDocumented,
+                      std::nullopt, msg) {
     internal::CheckFormatArgs<Args...>(msg);
   }
 };
@@ -169,7 +174,8 @@ struct UndocumentedErrorDef final : DiagnosticDef {
 template <ErrorId Id, typename... Args>
 struct WarningDef final : DiagnosticDef {
   constexpr explicit WarningDef(std::string_view msg)
-      : DiagnosticDef(Id, DiagnosticKind::kWarning, DiagnosticDocumented::kDocumented, msg) {
+      : DiagnosticDef(Id, DiagnosticKind::kWarning, DiagnosticDocumented::kDocumented, std::nullopt,
+                      msg) {
     internal::CheckFormatArgs<Args...>(msg);
   }
 };
@@ -179,7 +185,55 @@ struct WarningDef final : DiagnosticDef {
 template <ErrorId Id, typename... Args>
 struct RetiredDef final : DiagnosticDef {
   constexpr explicit RetiredDef(std::string_view msg)
-      : DiagnosticDef(Id, DiagnosticKind::kRetired, DiagnosticDocumented::kDocumented, msg) {
+      : DiagnosticDef(Id, DiagnosticKind::kRetired, DiagnosticDocumented::kDocumented, std::nullopt,
+                      msg) {
+    internal::CheckFormatArgs<Args...>(msg);
+  }
+};
+
+// The definition of a fixable diagnostic. See |FixableErrorDef| and |FixableWarningDef| for more
+// information on how these should be used.
+template <ErrorId Id, Fix::Kind FixKind>
+struct FixableDiagnosticDef : DiagnosticDef {
+  constexpr explicit FixableDiagnosticDef(DiagnosticKind kind, std::string_view msg)
+      : DiagnosticDef(Id, kind, DiagnosticDocumented::kDocumented, FixKind, msg),
+        fix_kind_(FixKind) {}
+
+ private:
+  const Fix::Kind fix_kind_;
+};
+
+// The definition of a fixable error. This diagnostic will only be surfaced to the user in the
+// following circumstances:
+//
+//   1. There are no non-fixable errors to report.
+//   2. The |Reporter| class holding it is not |set_silence_fixables(true)|.
+//
+// This ensures that users only see fixable error notifications for inputs that would otherwise
+// compile if the fix were performed, and that the fixable error notifications can be turned off
+// when fidlc is used to apply the fix itself.
+template <ErrorId Id, Fix::Kind FixKind, typename... Args>
+struct FixableErrorDef final : FixableDiagnosticDef<Id, FixKind> {
+  constexpr explicit FixableErrorDef(std::string_view msg)
+      : FixableDiagnosticDef<Id, FixKind>(DiagnosticKind::kError, msg) {
+    internal::CheckFormatArgs<Args...>(msg);
+  }
+};
+
+// The definition of a fixable warning. This diagnostic will only be surfaced to the user in the
+// following circumstances:
+//
+//   1. There are no non-fixable errors or warnings to report.
+//   2. The |Reporter| class holding it is not |set_silence_fixables(true)|.
+//
+// This ensures that users only see fixable warning notifications for inputs that would otherwise
+// compile if the fix were performed, and that the fixable warning notifications can be turned off
+// when fidlc is used to apply the fix itself.
+template <ErrorId Id, Fix::Kind FixKind, typename... Args>
+struct FixableWarningDef final : DiagnosticDef {
+  constexpr explicit FixableWarningDef(std::string_view msg)
+      : DiagnosticDef(Id, DiagnosticKind::kWarning, DiagnosticDocumented::kDocumented, FixKind,
+                      msg) {
     internal::CheckFormatArgs<Args...>(msg);
   }
 };
@@ -198,49 +252,55 @@ struct Diagnostic {
   // functions because it doesn't have to try every constructor.
 
   template <ErrorId Id, typename... Args>
-  static std::unique_ptr<Diagnostic> MakeError(const ErrorDef<Id, Args...>& def, SourceSpan span,
-                                               const identity_t<Args>&... args) {
+  static std::unique_ptr<Diagnostic> MakeError(const ErrorDef<Id, Args...>& def,
+
+                                               SourceSpan span, const identity_t<Args>&... args) {
+    return std::make_unique<Diagnostic>(def, span, args...);
+  }
+
+  template <ErrorId Id, Fix::Kind FixKind, typename... Args>
+  static std::unique_ptr<Diagnostic> MakeError(const FixableErrorDef<Id, FixKind, Args...>& def,
+
+                                               SourceSpan span, const identity_t<Args>&... args) {
     return std::make_unique<Diagnostic>(def, span, args...);
   }
 
   // TODO(fxbug.dev/108248): Remove once all outstanding errors are documented.
   template <ErrorId Id, typename... Args>
   static std::unique_ptr<Diagnostic> MakeError(const UndocumentedErrorDef<Id, Args...>& def,
+
                                                SourceSpan span, const identity_t<Args>&... args) {
     return std::make_unique<Diagnostic>(def, span, args...);
   }
 
   template <ErrorId Id, typename... Args>
   static std::unique_ptr<Diagnostic> MakeWarning(const WarningDef<Id, Args...>& def,
+
+                                                 SourceSpan span, const identity_t<Args>&... args) {
+    return std::make_unique<Diagnostic>(def, span, args...);
+  }
+
+  template <ErrorId Id, Fix::Kind FixKind, typename... Args>
+  static std::unique_ptr<Diagnostic> MakeWarning(const FixableWarningDef<Id, FixKind, Args...>& def,
+
                                                  SourceSpan span, const identity_t<Args>&... args) {
     return std::make_unique<Diagnostic>(def, span, args...);
   }
 
   // Print the full error ID ("fi-NNNN") in string form.
-  std::string PrintId() const {
-    char id_str[8];
-    std::snprintf(id_str, 8, "fi-%04d", def.id);
-    return id_str;
-  }
+  std::string PrintId() const;
 
   // Print the permalink ("https://fuchsia.dev/error/fi-NNNN") in string form.
-  std::string PrintLink() const {
-    char shortlink_str[34];
-    std::snprintf(shortlink_str, 34, "https://fuchsia.dev/error/%s", PrintId().c_str());
-    return shortlink_str;
-  }
+  std::string PrintLink() const;
 
   // Print the full error message.
-  std::string Print() const {
-    if (def.documented == DiagnosticDocumented::kNotDocumented) {
-      return std::string(msg);
-    }
-    return std::string(msg) + " [" + PrintLink() + "]";
-  }
+  std::string Print(const ProgramInvocation& program_invocation) const;
 
   ErrorId get_id() const { return def.id; }
 
   DiagnosticKind get_severity() const { return def.kind; }
+
+  bool is_diagnostic_fixable() const { return def.fixable.has_value(); }
 
   const DiagnosticDef& def;
   SourceSpan span;

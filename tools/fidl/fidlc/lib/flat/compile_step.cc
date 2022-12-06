@@ -15,6 +15,7 @@
 #include "tools/fidl/fidlc/include/fidl/flat_ast.h"
 #include "tools/fidl/fidlc/include/fidl/names.h"
 #include "tools/fidl/fidlc/include/fidl/ordinals.h"
+#include "tools/fidl/fidlc/include/fidl/program_invocation.h"
 
 namespace fidl::flat {
 

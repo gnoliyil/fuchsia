@@ -6,12 +6,16 @@
 
 #include <zircon/assert.h>
 
+#include <ostream>
+
 #include "tools/fidl/fidlc/include/fidl/flat_ast.h"
 #include "tools/fidl/fidlc/include/fidl/names.h"
 #include "tools/fidl/fidlc/include/fidl/raw_ast.h"
 #include "tools/fidl/fidlc/include/fidl/source_span.h"
 
-namespace fidl::internal {
+namespace fidl {
+
+namespace internal {
 
 std::string Display(char c) { return std::string(1, c); }
 
@@ -287,4 +291,44 @@ std::string Display(const VersionSet& s) {
   return Display(x) + " and " + Display(maybe_y.value());
 }
 
-}  // namespace fidl::internal
+}  // namespace internal
+
+std::string Diagnostic::PrintId() const {
+  char id_str[8];
+  std::snprintf(id_str, 8, "fi-%04d", def.id);
+  return id_str;
+}
+
+std::string Diagnostic::PrintLink() const {
+  char shortlink_str[34];
+  std::snprintf(shortlink_str, 34, "https://fuchsia.dev/error/%s", PrintId().c_str());
+  return shortlink_str;
+}
+
+std::string Diagnostic::Print(const ProgramInvocation& program_invocation) const {
+  std::ostringstream out;
+  if (def.documented == DiagnosticDocumented::kNotDocumented) {
+    out << std::string(msg);
+  } else {
+    out << std::string(msg) + " [" + PrintLink() + "]";
+  }
+
+  if (def.fixable.has_value()) {
+    ZX_ASSERT(program_invocation.is_populated());
+    std::ostringstream fixme;
+    fixme << "\n\n  This is a fixable error.\n"
+          << "  Please run the following command to update your FIDL files and fix the issue:\n\n"
+          << "    [[[ FIXME ]]]\n\n"
+          << "    >>> " << program_invocation.binary_path().c_str()
+          << "/fidl-fix --fix=" << Fix::FixKindName(def.fixable.value())
+          << program_invocation.ExperimentsAsString(" --experiment=", " ").c_str()
+          << program_invocation.DependenciesAsString(" --dep=", ",").c_str() << " "
+          << program_invocation.LibraryFilesAsString(" ").value().c_str() << "\n\n"
+          << "    [[[ /FIXME ]]]\n\n";
+    out << fixme.str();
+  }
+
+  return out.str();
+}
+
+}  // namespace fidl

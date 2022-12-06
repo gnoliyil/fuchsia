@@ -16,8 +16,10 @@ class ExperimentalFlags {
  public:
   using FlagSet = uint32_t;
   enum class Flag : FlagSet {
-    // TODO(fxbug.dev/100478): Allows backends to implement overflowing experiments.
-    kAllowOverflowing = 1 << 0,
+    // Used for testing, and to keep an "example experiment" if we ever have no experiments at
+    // all.
+    kNoop = 1 << 0,
+
     kAllowNewTypes = 1 << 1,
     // TODO(fxbug.dev/88366): Remove once unknown interactions are supported.
     kUnknownInteractions = 1 << 2,
@@ -33,6 +35,9 @@ class ExperimentalFlags {
 
     // TODO(fxbug.dev/88366): Remove once unknown interactions are supported.
     kUnknownInteractionsMigration = 1 << 7,
+
+    // TODO(fxbug.dev/100478): Allows backends to implement overflowing experiments.
+    kAllowOverflowing = 1 << 8,
   };
 
   ExperimentalFlags() = default;

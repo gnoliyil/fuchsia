@@ -15,6 +15,10 @@
 #include <vector>
 
 #include "tools/fidl/fidlc/include/fidl/diagnostic_types.h"
+#include "tools/fidl/fidlc/include/fidl/experimental_flags.h"
+#include "tools/fidl/fidlc/include/fidl/fixes.h"
+#include "tools/fidl/fidlc/include/fidl/program_invocation.h"
+#include "tools/fidl/fidlc/include/fidl/source_manager.h"
 #include "tools/fidl/fidlc/include/fidl/source_span.h"
 #include "tools/fidl/fidlc/include/fidl/utils.h"
 
@@ -25,8 +29,12 @@ using utils::identity_t;
 class Reporter {
  public:
   Reporter() = default;
+  Reporter(std::string binary_path, const ExperimentalFlags experimental_flags,
+           const std::vector<SourceManager>* source_managers)
+      : program_invocation_(
+            ProgramInvocation(std::move(binary_path), experimental_flags, source_managers)) {}
+
   Reporter(const Reporter&) = delete;
-  Reporter(Reporter&&) = default;
 
   class Counts {
    public:
@@ -62,6 +70,22 @@ class Reporter {
   // Reports an error or warning.
   void Report(std::unique_ptr<Diagnostic> diag);
 
+  // Reports a fixable error. This differs slightly from |Fail| in that it should never stop
+  // compilation, but rather may optionally be reported when it completes.
+  template <ErrorId Id, Fix::Kind FixKind, typename... Args>
+  void FixableFail(const FixableErrorDef<Id, FixKind, Args...>& def, SourceSpan span,
+                   const identity_t<Args>&... args) {
+    Report(Diagnostic::MakeError(def, span, args...));
+  }
+
+  // Reports a fixable warning. This differs slightly from |Fail| in that it should never stop
+  // compilation, but rather may optionally be reported when it completes.
+  template <ErrorId Id, Fix::Kind FixKind, typename... Args>
+  void FixableWarn(const FixableWarningDef<Id, FixKind, Args...>& def, SourceSpan span,
+                   const identity_t<Args>&... args) {
+    Report(Diagnostic::MakeWarning(def, span, args...));
+  }
+
   // Combines errors and warnings and sorts by (file, span).
   std::vector<Diagnostic*> Diagnostics() const;
   // Prints a report based on Diagnostics() in text format, with ANSI color
@@ -72,10 +96,11 @@ class Reporter {
   // Creates a checkpoint. This lets you detect how many new errors
   // have been added since the checkpoint.
   Counts Checkpoint() const { return Counts(this); }
-
+  const ProgramInvocation& program_invocation() const { return program_invocation_; }
   const std::vector<std::unique_ptr<Diagnostic>>& errors() const { return errors_; }
   const std::vector<std::unique_ptr<Diagnostic>>& warnings() const { return warnings_; }
   void set_warnings_as_errors(bool value) { warnings_as_errors_ = value; }
+  void set_silence_fixables(bool value) { silence_fixables_ = value; }
 
   // Formats a diagnostic message for the command line, displaying the filename,
   // line, column, diagnostic kind, and the full line where the span occurs,
@@ -89,6 +114,14 @@ class Reporter {
   void AddWarning(std::unique_ptr<Diagnostic> warning);
 
   bool warnings_as_errors_ = false;
+
+  // This mode is useful when we are running |fidl-fix| itself. We don't want parsing to fail due to
+  // the error we are trying to fix, or for one fixable error to interfere with the fixing operation
+  // on another, so we just turn of fix reporting altogether. We still record the errors/warning
+  // like usual, but simply refrain from reporting them.
+  bool silence_fixables_ = false;
+
+  const ProgramInvocation program_invocation_;
 
   // The reporter collects error and warnings separately so that we can easily
   // keep track of the current number of errors during compilation. The number
