@@ -11,12 +11,13 @@ group("tests") {
   testonly = true
   deps = []
 
-  if (target_cpu == "x64" && !is_asan) {
+  if (target_cpu == "x64") {
     deps += [ ":test_chromiumos_syscalls" ]
   }
 }
 
 test("syscalls_test_bin") {
+  exclude_toolchain_tags = [ "asan" ]
   sources = [
     "bpf_test.cc",
     "custom_artifact_test.cc",

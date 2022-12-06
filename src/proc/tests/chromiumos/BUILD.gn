@@ -12,10 +12,10 @@ group("tests") {
   testonly = true
   deps = [ "syscalls:tests" ]
 
-  if (target_cpu == "x64" && !is_asan) {
+  if (target_cpu == "x64") {
     deps += [ ":test_chromiumos_distro" ]
 
-    # TODO(lindkvist): Remove !is_asan check when Starnix can run binaries built for
+    # TODO(https://fxbug.dev/116773): Remove !is_asan check when Starnix can run binaries built for
     # ASAN.
     if (!is_asan) {
       deps += [ ":test_starnix_magma" ]
@@ -38,7 +38,7 @@ if (host_os == "linux" && host_cpu == "x64") {
 starmium_test_package("test_chromiumos_distro") {
   test_components = [ ":sh_test" ]
 
-  # TODO(abarth): Remove !is_asan check when Starnix can run binaries built for
+  # TODO(https://fxbug.dev/116773): Remove !is_asan check when Starnix can run binaries built for
   # ASAN.
   if (host_os == "linux" && host_cpu == "x64" && !is_asan) {
     test_components += [ ":fdio-test" ]
