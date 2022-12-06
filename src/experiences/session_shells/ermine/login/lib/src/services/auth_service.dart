@@ -27,6 +27,8 @@ const kAccountTmpDirectory = 'account_tmp';
 const kCacheSubdirectory = 'cache/';
 const kIncomingTmpDirectory = '/tmp/';
 const kTmpSubdirectory = 'account/';
+const kDeprecatedAccountMgr =
+    'fuchsia.identity.account.DeprecatedAccountManager';
 
 enum AuthOp { enrollment, authentication }
 
@@ -56,7 +58,8 @@ class AuthService {
   bool useNewAccountManager = false;
 
   AuthService() {
-    Incoming.fromSvcPath().connectToService(_accountManager);
+    Incoming.fromSvcPath()
+        .connectToService(_accountManager, name: kDeprecatedAccountMgr);
 
     useNewAccountManager =
         io.File(kUseNewAccountManagerMarkerFile).existsSync();

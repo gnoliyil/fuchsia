@@ -11,7 +11,7 @@
         // The routes listed below originate from other core components.
         // Routes are sorted by source component name.
         {
-            protocol: [ "fuchsia.identity.account.AccountManager" ],
+            protocol: [ "fuchsia.identity.account.DeprecatedAccountManager" ],
             from: "#account",
             to: "#session-manager",
             source_availability: "unknown",

@@ -164,14 +164,16 @@ impl TestEnv {
         builder
             .add_route(
                 Route::new()
-                    .capability(Capability::protocol::<AccountManagerMarker>())
+                    .capability(Capability::protocol_by_name(
+                        "fuchsia.identity.account.DeprecatedAccountManager",
+                    ))
                     .from(&password_authenticator)
                     .to(Ref::parent()),
             )
             .await
             .unwrap();
 
-        // Offer /dev from DriverTestrealm to password_authenticator, which makes use of it.
+        // Offer /dev from DriverTestRealm to password_authenticator, which makes use of it.
         builder
             .add_route(
                 Route::new()
@@ -195,7 +197,9 @@ impl TestEnv {
     pub fn account_manager(&self) -> AccountManagerProxy {
         self.realm_instance
             .root
-            .connect_to_protocol_at_exposed_dir::<AccountManagerMarker>()
+            .connect_to_named_protocol_at_exposed_dir::<AccountManagerMarker>(
+                "fuchsia.identity.account.DeprecatedAccountManager",
+            )
             .expect("connect to account manager")
     }
 

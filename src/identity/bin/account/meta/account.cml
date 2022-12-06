@@ -69,7 +69,7 @@
     ],
     expose: [
         {
-            protocol: "fuchsia.identity.account.AccountManager",
+            protocol: "fuchsia.identity.account.DeprecatedAccountManager",
             from: "#password_authenticator",
         },
         {
