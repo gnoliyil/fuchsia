@@ -8,6 +8,7 @@
 #include <lib/dma-buffer/buffer.h>
 #include <lib/mmio/mmio.h>
 #include <lib/synchronous-executor/executor.h>
+#include <lib/trace/event.h>
 #include <lib/zx/bti.h>
 
 #include <optional>
@@ -135,7 +136,7 @@ class EventRing {
   //                usually expect), but the current TRB already evaluated.
   // Returns the next TRB pointed to by ERDP.
   void AdvanceErdp();
-  zx_paddr_t UpdateErdpReg(zx_paddr_t last_phys);
+  zx_paddr_t UpdateErdpReg(zx_paddr_t last_phys, size_t processed_trb_count);
 
   std::optional<Control> CurrentErdp();
 
@@ -221,6 +222,8 @@ class EventRing {
   inspect::UintProperty total_event_trbs_;
   inspect::UintProperty max_single_irq_event_trbs_;
   uint64_t max_single_irq_event_trbs_value_{0};
+
+  std::optional<trace_async_id_t> async_id_;
 };
 }  // namespace usb_xhci
 

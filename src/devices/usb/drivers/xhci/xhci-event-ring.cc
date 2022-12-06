@@ -543,8 +543,12 @@ std::optional<Control> EventRing::CurrentErdp() {
   return control;
 }
 
-zx_paddr_t EventRing::UpdateErdpReg(zx_paddr_t last_phys) {
+zx_paddr_t EventRing::UpdateErdpReg(zx_paddr_t last_phys, size_t processed_trb_count) {
   if (last_phys != erdp_phys_) {
+    if (async_id_.has_value()) {
+      TRACE_ASYNC_END("UsbXhci", "EventRing::UpdateErdpReg", async_id_.value(),
+                      "processed_trb_count", processed_trb_count);
+    }
     executor_.run_until_idle();
     {
       fbl::AutoLock l(&segment_mutex_);
@@ -552,6 +556,8 @@ zx_paddr_t EventRing::UpdateErdpReg(zx_paddr_t last_phys) {
           erdp_reg_.set_Pointer(erdp_phys_).set_DESI(segment_index_).set_EHB(1).WriteTo(mmio_);
     }
     last_phys = erdp_phys_;
+    async_id_.emplace(TRACE_NONCE());
+    TRACE_ASYNC_BEGIN("UsbXhci", "EventRing::UpdateErdpReg", async_id_.value(), erdp_phys_);
   }
   return last_phys;
 }
@@ -619,11 +625,11 @@ zx_status_t EventRing::HandleIRQ() {
       control = CurrentErdp();
 
       if (processed_trbs % kUpdateERDPAfterTRBs) {
-        last_phys = UpdateErdpReg(last_phys);
+        last_phys = UpdateErdpReg(last_phys, processed_trbs / kUpdateERDPAfterTRBs + 1);
       }
     }
 
-    last_phys = UpdateErdpReg(last_phys);
+    last_phys = UpdateErdpReg(last_phys, processed_trbs / kUpdateERDPAfterTRBs + 1);
     if (!hci_->HasCoherentState()) {
       // Check for stale value in cache
       InvalidatePageCache(erdp_virt_, ZX_CACHE_FLUSH_INVALIDATE | ZX_CACHE_FLUSH_DATA);
