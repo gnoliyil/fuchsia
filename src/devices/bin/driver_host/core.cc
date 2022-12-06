@@ -53,10 +53,6 @@ void set_creation_context(CreationContext* ctx) {
 
 }  // namespace internal
 
-static zx_status_t default_open(void* ctx, zx_device_t** out, uint32_t flags) { return ZX_OK; }
-
-static zx_status_t default_close(void* ctx, uint32_t flags) { return ZX_OK; }
-
 static void default_unbind(void* ctx) {}
 static void default_suspend(void* ctx, uint8_t requested_state, bool enable_wake,
                             uint8_t suspend_reason) {}
@@ -85,8 +81,6 @@ static zx_status_t default_service_connect(void* ctx, const char* service_name,
 
 const zx_protocol_device_t internal::kDeviceDefaultOps = []() {
   zx_protocol_device_t ops = {};
-  ops.open = default_open;
-  ops.close = default_close;
   ops.unbind = default_unbind;
   ops.release = default_release;
   ops.suspend = default_suspend;
@@ -106,8 +100,6 @@ const zx_protocol_device_t internal::kDeviceDefaultOps = []() {
 
 static zx_protocol_device_t device_invalid_ops = []() {
   zx_protocol_device_t ops = {};
-  ops.open = +[](void* ctx, zx_device_t**, uint32_t) -> zx_status_t { device_invalid_fatal(ctx); };
-  ops.close = +[](void* ctx, uint32_t) -> zx_status_t { device_invalid_fatal(ctx); };
   ops.unbind = +[](void* ctx) { device_invalid_fatal(ctx); };
   ops.suspend = +[](void* ctx, uint8_t requested_state, bool enable_wake, uint8_t suspend_reason) {
     device_invalid_fatal(ctx);
@@ -271,7 +263,7 @@ namespace internal {
 
 namespace {
 
-#define REMOVAL_BAD_FLAGS (DEV_FLAG_DEAD | DEV_FLAG_BUSY | DEV_FLAG_INSTANCE | DEV_FLAG_MULTI_BIND)
+#define REMOVAL_BAD_FLAGS (DEV_FLAG_DEAD | DEV_FLAG_BUSY | DEV_FLAG_MULTI_BIND)
 
 const char* removal_problem(uint32_t flags) {
   if (flags & DEV_FLAG_DEAD) {
@@ -279,9 +271,6 @@ const char* removal_problem(uint32_t flags) {
   }
   if (flags & DEV_FLAG_BUSY) {
     return "being created";
-  }
-  if (flags & DEV_FLAG_INSTANCE) {
-    return "ephemeral device";
   }
   if (flags & DEV_FLAG_MULTI_BIND) {
     return "multi-bind-able device";
@@ -402,28 +391,26 @@ zx_status_t DriverHostContext::DeviceAdd(const fbl::RefPtr<zx_device_t>& dev,
   // attach to our parent
   parent->add_child(dev.get());
 
-  if (!(dev->flags() & DEV_FLAG_INSTANCE)) {
-    // Add always consumes the handle
-    status = DriverManagerAdd(parent, dev, add_args, std::move(inspect), std::move(outgoing_dir));
-    if (status < 0) {
-      constexpr char kLogFormat[] = "Failed to add device %p to driver_manager: %s";
-      if (status == ZX_ERR_PEER_CLOSED) {
-        // TODO(https://fxbug.dev/52627): change to an ERROR log once driver
-        // manager can shut down gracefully.
-        LOGD(WARNING, *dev, kLogFormat, dev.get(), zx_status_get_string(status));
-      } else {
-        LOGD(ERROR, *dev, kLogFormat, dev.get(), zx_status_get_string(status));
-      }
-
-      dev->parent()->remove_child(*dev);
-      dev->set_parent(nullptr);
-
-      // since we are under the lock the whole time, we added the node
-      // to the tail and then we peeled it back off the tail when we
-      // failed, we don't need to interact with the enum lock mechanism
-      dev->unset_flag(DEV_FLAG_BUSY);
-      return status;
+  // Add always consumes the handle
+  status = DriverManagerAdd(parent, dev, add_args, std::move(inspect), std::move(outgoing_dir));
+  if (status < 0) {
+    constexpr char kLogFormat[] = "Failed to add device %p to driver_manager: %s";
+    if (status == ZX_ERR_PEER_CLOSED) {
+      // TODO(https://fxbug.dev/52627): change to an ERROR log once driver
+      // manager can shut down gracefully.
+      LOGD(WARNING, *dev, kLogFormat, dev.get(), zx_status_get_string(status));
+    } else {
+      LOGD(ERROR, *dev, kLogFormat, dev.get(), zx_status_get_string(status));
     }
+
+    dev->parent()->remove_child(*dev);
+    dev->set_parent(nullptr);
+
+    // since we are under the lock the whole time, we added the node
+    // to the tail and then we peeled it back off the tail when we
+    // failed, we don't need to interact with the enum lock mechanism
+    dev->unset_flag(DEV_FLAG_BUSY);
+    return status;
   }
   dev->set_flag(DEV_FLAG_ADDED);
   dev->unset_flag(DEV_FLAG_BUSY);
@@ -598,51 +585,6 @@ zx_status_t DriverHostContext::DeviceRebind(const fbl::RefPtr<zx_device_t>& dev)
     return DeviceBind(dev, drv.c_str());
   }
   return ZX_OK;
-}
-
-zx_status_t DriverHostContext::DeviceOpen(const fbl::RefPtr<zx_device_t>& dev,
-                                          fbl::RefPtr<zx_device_t>* out, uint32_t flags) {
-  inspect_.DeviceOpenStats().Update();
-  if (dev->flags() & DEV_FLAG_DEAD) {
-    LOGD(ERROR, *dev, "Cannot open device %p, device is dead", dev.get());
-    return ZX_ERR_BAD_STATE;
-  }
-  fbl::RefPtr<zx_device_t> new_ref(dev);
-  zx_status_t r;
-  zx_device_t* opened_dev = nullptr;
-  {
-    api_lock_.Release();
-    r = dev->OpenOp(&opened_dev, flags);
-    if (r == ZX_OK) {
-      dev->inspect().increment_open_count();
-    }
-    api_lock_.Acquire();
-  }
-  if (r < 0) {
-    new_ref.reset();
-  } else if (opened_dev != nullptr) {
-    // open created a per-instance device for us
-    new_ref.reset();
-    // Claim the reference from open
-    new_ref = fbl::ImportFromRawPtr(opened_dev);
-
-    if (!(opened_dev->flags() & DEV_FLAG_INSTANCE)) {
-      LOGD(FATAL, *new_ref, "Cannot open device %p, bad state %#x", opened_dev, flags);
-    }
-  }
-  *out = std::move(new_ref);
-  return r;
-}
-
-zx_status_t DriverHostContext::DeviceClose(fbl::RefPtr<zx_device_t> dev, uint32_t flags) {
-  inspect_.DeviceCloseStats().Update();
-  api_lock_.Release();
-  zx_status_t status = dev->CloseOp(flags);
-  if (status == ZX_OK) {
-    dev->inspect().increment_close_count();
-  }
-  api_lock_.Acquire();
-  return status;
 }
 
 void DriverHostContext::DeviceSystemSuspend(const fbl::RefPtr<zx_device>& dev, uint32_t flags) {

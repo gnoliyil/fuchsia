@@ -146,8 +146,7 @@ with Inspect included, see the following [example test driver][example_test_driv
   }
   ```
 
-  You can publish one inspect VMO per device; Instance devices do not count. To add inspect for
-  instance devices, you can create child nodes from the devices’ inspect and add to it.
+  You can publish one inspect VMO per device.
 
 1. Done. Now you can view Inspect data for the driver.
 

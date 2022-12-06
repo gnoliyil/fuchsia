@@ -935,25 +935,12 @@ zx::result<bool> DriverHostContext::ScheduleUnbindChildren(const fbl::RefPtr<zx_
 
 zx_status_t DriverHostContext::GetTopoPath(const fbl::RefPtr<zx_device_t>& dev, char* path,
                                            size_t max, size_t* actual) {
-  fbl::RefPtr<zx_device_t> remote_dev = dev;
-  if (dev->flags() & DEV_FLAG_INSTANCE) {
-    // Instances cannot be opened a second time. If dev represents an instance, return the path
-    // to its parent, prefixed with an '@'.
-    if (max < 1) {
-      return ZX_ERR_BUFFER_TOO_SMALL;
-    }
-    path[0] = '@';
-    path++;
-    max--;
-    remote_dev = dev->parent();
-  }
-
-  const auto& client = remote_dev->coordinator_client;
+  const auto& client = dev->coordinator_client;
   if (!client) {
     return ZX_ERR_IO_REFUSED;
   }
 
-  VLOGD(1, *remote_dev, "get-topo-path");
+  VLOGD(1, *dev, "get-topo-path");
   auto result = client.sync()->GetTopologicalPath();
   zx_status_t status = result.status();
   zx_status_t call_status = ZX_OK;
@@ -978,10 +965,6 @@ zx_status_t DriverHostContext::GetTopoPath(const fbl::RefPtr<zx_device_t>& dev, 
   path[*actual] = 0;
   *actual += 1;
 
-  // Account for the prefixed '@' we may have added above.
-  if (dev->flags() & DEV_FLAG_INSTANCE) {
-    *actual += 1;
-  }
   return ZX_OK;
 }
 

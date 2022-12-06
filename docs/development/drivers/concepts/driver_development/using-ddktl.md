@@ -20,8 +20,6 @@ Mixin class            | Function             | Purpose
 -----------------------|----------------------|------------------------------
 `ddk::GetProtocolable`    | **DdkGetProtocol()** | fetches the protocol
 `ddk::Initializable`      | **DdkInit()**        | called after **DdkAdd()**, for completing initialization of a device safely
-`ddk::Openable`           | **DdkOpen()**        | client's **open()**
-`ddk::Closable`           | **DdkClose()**       | client's **close()**
 `ddk::Unbindable`         | **DdkUnbind()**      | called when this device is being removed
 `ddk::Suspendable`        | **DdkSuspend()**     | to suspend device
 `ddk::Resumable`          | **DdkResume()**      | to resume device
@@ -36,9 +34,7 @@ For example (line numbers added for documentation purposes only):
 ```c++
 [01] using DeviceType = ddk::Device<MyDevice,
 [02]                                ddk::Initializable,   // safely initialize after **DdkAdd()**
-[03]                                ddk::Openable,        // we support open()
-[04]                                ddk::Closable,        // close()
-[05]                                ddk::Unbindable>;     // and the device can be unbound
+[03]                                ddk::Unbindable>;     // safely clean up before **DdkRelease()**
 ```
 
 This creates a shortcut to `DeviceType`.
@@ -51,32 +47,29 @@ Once defined, we can then declare our device class (`MyDevice`) as inheriting
 from `DeviceType`:
 
 ```c++
-[07] class MyDevice : public DeviceType {
-[08]   public:
-[09]     explicit MyDevice(zx_device_t* parent)
-[10]       : DeviceType(parent) {}
-[11]
-[12]     zx_status_t Bind() {
-[13]         // Any other setup required by MyDevice.
-[14]         // The device_add_args_t will be filled out by the base class.
-[15]         return DdkAdd("my-device-name");
-[16]     }
-[17]
-[18]     // Methods required by the ddk mixins
-[19]     void DdkInit(ddk::InitTxn txn);
-[20]     zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags);
-[21]     zx_status_t DdkClose(uint32_t flags);
-[23]     void DdkUnbind(ddk::UnbindTxn txn);
-[24]     void DdkRelease();
-[25] };
+[05] class MyDevice : public DeviceType {
+[06]   public:
+[07]     explicit MyDevice(zx_device_t* parent)
+[08]       : DeviceType(parent) {}
+[09]
+[10]     zx_status_t Bind() {
+[11]         // Any other setup required by MyDevice.
+[12]         // The device_add_args_t will be filled out by the base class.
+[13]         return DdkAdd("my-device-name");
+[14]     }
+[15]
+[16]     // Methods required by the ddk mixins
+[17]     void DdkInit(ddk::InitTxn txn);
+[18]     void DdkUnbind(ddk::UnbindTxn txn);
+[19]     void DdkRelease();
+[20] };
 ```
 
-Because the `DeviceType` class contains five mixins (lines `[02` .. `06]`: `Initializable`,
-`Openable`, `Closable`, `Readable`, and `Unbindable`), we're required to provide
-the respective function implementations (lines `[18` .. `23]`)
-in our class.
+Because the `DeviceType` class contains mixins (lines `[02` .. `03]`:
+`Initializable` and `Unbindable`), we're required to provide the respective
+function implementations (lines `[17` .. `28]`) in our class.
 
-All DDKTL classes must provide a release function (here, line `[24]` provides
+All DDKTL classes must provide a release function (here, line `[19]` provides
 **DdkRelease()**), so that's why we didn't specify this in the mixin definition
 for `DeviceType`.
 
@@ -115,8 +108,7 @@ unbound until the device replies to the `InitTxn`. This reply can be done from a
 thread &mdash; it does not necessarily need to be before returning from **DdkInit()**.
 
 After replying to the `InitTxn`, your device will be visible in the Device
-filesystem, and any **open()** or **close()** client calls will now flow to your
-implementations of **DdkOpen()** and **DdkClose()**, , respectively.
+filesystem.
 
 As an example, in the directory [`//src/devices/block/drivers/zxcrypt`](/src/devices/block/drivers/zxcrypt)
 we have a typical device declaration ([`device.h`](/src/devices/block/drivers/zxcrypt/device.h)):

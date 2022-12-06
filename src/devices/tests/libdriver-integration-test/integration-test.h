@@ -85,18 +85,6 @@ class IntegrationTest : public testing::Test {
                                     UnbindOnce::Callback actions_callback);
 
   // Returns a promise that will be complete after the device invokes its
-  // open() hook and performs the given |actions|.  |device| must outlive
-  // this promise.
-  static Promise<void> ExpectOpen(const std::unique_ptr<MockDevice>& device,
-                                  OpenOnce::Callback actions_callback);
-
-  // Returns a promise that will be complete after the device invokes its
-  // close() hook and performs the given |actions|.  |device| must outlive
-  // this promise.
-  static Promise<void> ExpectClose(const std::unique_ptr<MockDevice>& device,
-                                   CloseOnce::Callback actions_callback);
-
-  // Returns a promise that will be complete after the device invokes its
   // release() hook. |device| must outive this promise.
   static Promise<void> ExpectRelease(const std::unique_ptr<MockDevice>& device);
 

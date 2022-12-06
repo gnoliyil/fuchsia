@@ -240,8 +240,6 @@ TEST_F(HidDeviceTest, TestQuery) {
 
   zx::result instance = device_->CreateInstance();
   ASSERT_OK(instance);
-  // Opening the device created an instance device to be created, and we can
-  // get its arguments here.
   auto endpoints = fidl::CreateEndpoints<fuchsia_hardware_input::Device>();
   ASSERT_OK(endpoints.status_value());
   auto sync_client =
@@ -256,7 +254,6 @@ TEST_F(HidDeviceTest, TestQuery) {
   ASSERT_EQ(kProductId, ids.product_id);
   ASSERT_EQ(kVersion, ids.version);
 
-  // Close the instance device.
   instance.value()->CloseInstance();
 }
 

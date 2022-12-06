@@ -47,11 +47,6 @@ class DevfsVnode : public fs::Vnode, public fidl::WireServer<fuchsia_device::Con
                            SetPerformanceStateCompleter::Sync& _completer) override;
 
  private:
-  // Vnode protected implementation:
-  zx_status_t OpenNode(fs::Vnode::ValidatedOptions options,
-                       fbl::RefPtr<Vnode>* out_redirect) override;
-  zx_status_t CloseNode() override;
-
   fbl::RefPtr<zx_device> dev_;
   async_dispatcher_t* dispatcher_;
 };

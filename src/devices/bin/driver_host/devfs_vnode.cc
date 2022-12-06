@@ -68,33 +68,6 @@ void FidlDispatcher::dispatch_message(fidl::IncomingHeaderAndMessage&& msg,
 
 }  // namespace
 
-zx_status_t DevfsVnode::OpenNode(fs::Vnode::ValidatedOptions options,
-                                 fbl::RefPtr<Vnode>* out_redirect) {
-  if (dev_->Unbound()) {
-    return ZX_ERR_IO_NOT_PRESENT;
-  }
-  fbl::RefPtr<zx_device_t> new_dev;
-  zx_status_t status = device_open(dev_, &new_dev, static_cast<uint32_t>(options->ToIoV1Flags()));
-  if (status != ZX_OK) {
-    return status;
-  }
-  if (new_dev != dev_) {
-    *out_redirect = new_dev->vnode;
-  }
-  return ZX_OK;
-}
-
-zx_status_t DevfsVnode::CloseNode() {
-  zx_status_t status = device_close(dev_, 0);
-  // If this vnode is for an instance device, drop its reference on close to break
-  // the reference cycle.  This is handled for non-instance devices during the device
-  // remove path.
-  if (dev_->flags() & DEV_FLAG_INSTANCE) {
-    dev_->vnode.reset();
-  }
-  return status;
-}
-
 zx_status_t DevfsVnode::GetAttributes(fs::VnodeAttributes* a) {
   if (dev_->Unbound()) {
     return ZX_ERR_IO_NOT_PRESENT;

@@ -123,34 +123,6 @@ IntegrationTest::Promise<void> IntegrationTest::ExpectUnbind(
   });
 }
 
-IntegrationTest::Promise<void> IntegrationTest::ExpectOpen(
-    const std::unique_ptr<MockDevice>& device, OpenOnce::Callback actions_callback) {
-  fpromise::bridge<void, Error> bridge;
-  auto open_hook =
-      std::make_unique<OpenOnce>(std::move(bridge.completer), std::move(actions_callback));
-  // Wrap the body in a promise, since we want to defer the evaluation of
-  // device->set_hooks.
-  return fpromise::make_promise(
-      [consumer = std::move(bridge.consumer), &device, open_hook = std::move(open_hook)]() mutable {
-        device->set_hooks(std::move(open_hook));
-        return consumer.promise_or(::fpromise::error("open abandoned"));
-      });
-}
-
-IntegrationTest::Promise<void> IntegrationTest::ExpectClose(
-    const std::unique_ptr<MockDevice>& device, CloseOnce::Callback actions_callback) {
-  fpromise::bridge<void, Error> bridge;
-  auto close_hook =
-      std::make_unique<CloseOnce>(std::move(bridge.completer), std::move(actions_callback));
-  // Wrap the body in a promise, since we want to defer the evaluation of
-  // device->set_hooks.
-  return fpromise::make_promise([consumer = std::move(bridge.consumer), &device,
-                                 close_hook = std::move(close_hook)]() mutable {
-    device->set_hooks(std::move(close_hook));
-    return consumer.promise_or(::fpromise::error("close abandoned"));
-  });
-}
-
 IntegrationTest::Promise<void> IntegrationTest::ExpectRelease(
     const std::unique_ptr<MockDevice>& device) {
   // Wrap the body in a promise, since we want to defer the evaluation of

@@ -137,8 +137,6 @@ struct MockDevice : public std::enable_shared_from_this<MockDevice> {
   // Functions for calling into the driver.
   // These are functions that the DDK normally calls, but are exposed here for testing purposes.
   void InitOp();
-  zx_status_t OpenOp(zx_device_t** dev_out, uint32_t flags);
-  zx_status_t CloseOp(uint32_t flags);
   void UnbindOp();
   void ReleaseOp();
   void SuspendNewOp(uint8_t requested_state, bool enable_wake, uint8_t suspend_reason);

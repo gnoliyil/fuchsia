@@ -134,8 +134,6 @@ typedef struct zx_protocol_device {
   //@ ## init
   // The init hook is called when a device is initially added.
   //
-  // This hook is not supported for DEVICE_ADD_INSTANCE devices.
-  //
   // If implemented, the device is guaranteed to be invisible and not able to be unbound until the
   // driver calls **device_init_reply()** on itself. **device_init_reply()** can be called from
   // any thread - it does not necessarily need to be called before the |init| hook returns.
@@ -147,46 +145,6 @@ typedef struct zx_protocol_device {
   //
   // The hook is always called from the devhost's main thread.
   void (*init)(void* ctx);
-
-  //@ ## open
-  // The open hook is called when a device is opened via the device filesystem,
-  // or when an existing open connection to a device is cloned (for example,
-  // when a device fd is shared with another process).  The default open hook,
-  // if a driver does not implement one, simply returns **ZX_OK**.
-  //
-  // Drivers may want to implement open to disallow simultaneous access (by
-  // failing if the device is already open), or to return a new **device instance**
-  // instead.
-  //
-  // The optional *dev_out* parameter allows a device to create and return a
-  // **device instance** child device, which can be used to manage per-instance
-  // state instead of all client connections interacting with the device itself.
-  // A child created for return as an instance **must** be created with the
-  // **DEVICE_ADD_INSTANCE** flag set in the arguments to **device_add()**.
-  //
-  // This hook is almost always called from the devhost's main thread.  The
-  // one exception is if **device_add()** is invoked with *client_remote* provided and
-  // the neither **DEVICE_ADD_MUST_ISOLATE** nor **DEVICE_ADD_INVISIBLE** were
-  // provided, in which case this hook will be executed synchronously from the thread
-  // that invoked **device_add()**, before **device_add()** returns.
-  // DO NOT rely on that exception being true.  The implementation may in the
-  // future push all invocations to the main thread.
-  zx_status_t (*open)(void* ctx, zx_device_t** dev_out, uint32_t flags);
-
-  //@ ## close
-  // The close hook is called when a connection to a device is closed. These
-  // calls will balance the calls to open.
-  //
-  // **Note:** If open returns a **device instance**, the balancing close hook
-  // that is called is the close hook on the **instance**, not the parent.
-  //
-  // The default close implementation returns **ZX_OK**.
-  //
-  // This hook is almost always called from the devhost's main thread.  The one
-  // exception is in the same situation as for the open hook described
-  // above, in which the close hook may run to handle certain failure conditions
-  // after the open hook ran.
-  zx_status_t (*close)(void* ctx, uint32_t flags);
 
   //@ ## unbind
   // The unbind hook is called to begin removal of a device (due to hot unplug, fatal error, etc).

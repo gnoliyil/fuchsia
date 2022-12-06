@@ -323,9 +323,6 @@ zx_status_t Device::Add(device_add_args_t* zx_args, zx_device_t** out) {
 
   device->properties_ = CreateProperties(arena_, *logger_, zx_args);
   device->device_flags_ = zx_args->flags;
-  if (device->device_flags_ & DEVICE_ADD_INSTANCE) {
-    device->device_flags_ |= DEVICE_ADD_NON_BINDABLE;
-  }
 
   bool has_init = HasOp(device->ops_, &zx_protocol_device_t::init);
   if (!has_init) {
@@ -341,15 +338,6 @@ zx_status_t Device::Add(device_add_args_t* zx_args, zx_device_t** out) {
 
 fpromise::promise<void, zx_status_t> Device::Export() {
   auto dev_vnode_name = OutgoingName();
-
-  // TODO(fxbug.dev/113001) Remove this check when instance drivers are removed
-  if (device_flags_ & DEVICE_ADD_INSTANCE) {
-    // Instance devices still have a vnode which needs to be properly closed.
-    dev_vnode_auto_free_ = driver()->CreateDevNodeAutoRemoveCallback(dev_vnode(), dev_vnode_name);
-    // Devices with the flag DEVICE_ADD_INSTANCE do not get a node in devfs nor do
-    // they need to be initialized.
-    return fpromise::make_result_promise<void, zx_status_t>(fpromise::ok());
-  }
 
   zx_status_t status = device_server_.Serve(dispatcher_, &driver()->outgoing());
   if (status != ZX_OK) {
@@ -728,20 +716,6 @@ void Device::InitReply(zx_status_t status) {
     }
   }
   init_waiters_.clear();
-}
-
-zx_status_t Device::OpenOp(zx_device_t** dev_out, uint32_t flags) {
-  if (!HasOp(ops_, &zx_protocol_device_t::open)) {
-    return ZX_OK;
-  }
-  return ops_->open(compat_symbol_.context, dev_out, flags);
-}
-
-zx_status_t Device::CloseOp(uint32_t flags) {
-  if (!HasOp(ops_, &zx_protocol_device_t::close)) {
-    return ZX_OK;
-  }
-  return ops_->close(compat_symbol_.context, flags);
 }
 
 fpromise::promise<void, zx_status_t> Device::WaitForInitToComplete() {

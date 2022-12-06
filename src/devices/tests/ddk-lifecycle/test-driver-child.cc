@@ -54,10 +54,6 @@ zx_status_t TestLifecycleDriverChild::Create(zx_device_t* parent, bool complete_
   return ZX_OK;
 }
 
-zx_status_t TestLifecycleDriverChild::DdkOpen(zx_device_t** dev_out, uint32_t flags) {
-  return (new InstanceDevice(zxdev()))->Add(dev_out);
-}
-
 void TestLifecycleDriverChild::DdkInit(ddk::InitTxn txn) {
   if (complete_init_) {
     txn.Reply(init_status_);

@@ -142,36 +142,6 @@ struct zx_device
     completion.Wait();
   }
 
-  zx_status_t OpenOp(zx_device_t** dev_out, uint32_t flags) {
-    libsync::Completion completion;
-    zx_status_t status;
-
-    async::PostTask(driver->dispatcher()->async_dispatcher(), [&]() {
-      TraceLabelBuffer trace_label;
-      TRACE_DURATION("driver_host:driver-hooks", get_trace_label("open", &trace_label));
-      status = Dispatch(ops_->open, ZX_OK, dev_out, flags);
-      completion.Signal();
-    });
-
-    completion.Wait();
-    return status;
-  }
-
-  zx_status_t CloseOp(uint32_t flags) {
-    libsync::Completion completion;
-    zx_status_t status;
-
-    async::PostTask(driver->dispatcher()->async_dispatcher(), [&]() {
-      TraceLabelBuffer trace_label;
-      TRACE_DURATION("driver_host:driver-hooks", get_trace_label("close", &trace_label));
-      status = Dispatch(ops_->close, ZX_OK, flags);
-      completion.Signal();
-    });
-
-    completion.Wait();
-    return status;
-  }
-
   void UnbindOp() {
     libsync::Completion completion;
 
@@ -621,7 +591,6 @@ struct zx_device
 #define DEV_FLAG_INITIALIZING          0x00000002  // device is being initialized
 #define DEV_FLAG_UNBINDABLE            0x00000004  // nobody may autobind to this device
 #define DEV_FLAG_BUSY                  0x00000010  // device being created
-#define DEV_FLAG_INSTANCE              0x00000020  // this device was created-on-open
 #define DEV_FLAG_MULTI_BIND            0x00000080  // this device accepts many children
 #define DEV_FLAG_ADDED                 0x00000100  // device_add() has been called for this device
 #define DEV_FLAG_INVISIBLE             0x00000200  // device not visible via devfs
@@ -642,10 +611,5 @@ zx_status_t device_schedule_remove(const fbl::RefPtr<zx_device_t>& dev, bool unb
 zx_status_t device_run_compatibility_tests(const fbl::RefPtr<zx_device_t>& dev,
                                            int64_t hook_wait_time,
                                            fit::callback<void(zx_status_t)> cb);
-zx_status_t device_open(const fbl::RefPtr<zx_device_t>& dev, fbl::RefPtr<zx_device_t>* out,
-                        uint32_t flags);
-// Note that device_close() is intended to consume a reference (logically, the
-// one created by device_open).
-zx_status_t device_close(fbl::RefPtr<zx_device_t> dev, uint32_t flags);
 
 #endif  // SRC_DEVICES_BIN_DRIVER_HOST_ZX_DEVICE_H_

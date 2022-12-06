@@ -64,25 +64,6 @@ void FidlDispatcher::dispatch_message(fidl::IncomingHeaderAndMessage&& msg,
 
 }  // namespace
 
-zx_status_t DevfsVnode::OpenNode(fs::Vnode::ValidatedOptions options,
-                                 fbl::RefPtr<Vnode>* out_redirect) {
-  zx_device_t* dev_out = nullptr;
-  auto status = dev_->OpenOp(&dev_out, static_cast<uint32_t>(options->ToIoV1Flags()));
-  if (status != ZX_OK) {
-    return status;
-  }
-
-  if (dev_out != nullptr && dev_out != dev_) {
-    *out_redirect = dev_out->dev_vnode();
-  }
-  return ZX_OK;
-}
-
-zx_status_t DevfsVnode::CloseNode() {
-  return dev_->CloseOp(0);
-  ;
-}
-
 zx_status_t DevfsVnode::GetAttributes(fs::VnodeAttributes* a) {
   a->mode = V_TYPE_CDEV | V_IRUSR | V_IWUSR;
   a->content_size = 0;

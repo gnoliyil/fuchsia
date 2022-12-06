@@ -124,8 +124,6 @@ class DriverHostInspect {
   InspectCallStats& DeviceCreateStats();
   InspectCallStats& DeviceDestroyStats();
   InspectCallStats& DeviceInitStats();
-  InspectCallStats& DeviceOpenStats();
-  InspectCallStats& DeviceCloseStats();
   InspectCallStats& DeviceAddStats();
   InspectCallStats& DeviceRemoveStats();
   InspectCallStats& DeviceSuspendStats();
@@ -241,14 +239,8 @@ class DeviceInspect {
   void set_fidl_offers(cpp20::span<const char*> fidl_offers);
   void set_fidl_service_offers(cpp20::span<const char*> fidl_offers);
 
-  void increment_instance_count();
-  void decrement_instance_count();
-
   void increment_child_count();
   void decrement_child_count();
-
-  void increment_open_count();
-  void increment_close_count();
 
   void set_parent(fbl::RefPtr<zx_device> parent);
 
@@ -268,7 +260,6 @@ class DeviceInspect {
   inspect::BoolProperty auto_suspend_;
 
   inspect::UintProperty child_count_;
-  inspect::UintProperty instance_count_;
   inspect::UintProperty open_count_;
   inspect::UintProperty close_count_;
 

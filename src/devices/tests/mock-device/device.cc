@@ -36,8 +36,8 @@ namespace mock_device {
 
 class MockDevice;
 using MockDeviceType =
-    ddk::Device<MockDevice, ddk::GetProtocolable, ddk::Initializable, ddk::Openable, ddk::Closable,
-                ddk::Unbindable, ddk::Suspendable, ddk::Resumable, ddk::Rxrpcable>;
+    ddk::Device<MockDevice, ddk::GetProtocolable, ddk::Initializable, ddk::Unbindable,
+                ddk::Suspendable, ddk::Resumable, ddk::Rxrpcable>;
 
 class MockDevice : public MockDeviceType {
  public:
@@ -50,8 +50,6 @@ class MockDevice : public MockDeviceType {
   void DdkRelease();
   zx_status_t DdkGetProtocol(uint32_t proto_id, void* out);
   void DdkInit(ddk::InitTxn txn) { txn.Reply(ZX_OK); }
-  zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags);
-  zx_status_t DdkClose(uint32_t flags);
   void DdkUnbind(ddk::UnbindTxn txn);
   void DdkSuspend(ddk::SuspendTxn txn);
   void DdkResume(ddk::ResumeTxn txn);
@@ -265,26 +263,6 @@ zx_status_t MockDevice::DdkGetProtocol(uint32_t proto_id, void* out) {
   return ctx.hook_status;
 }
 
-zx_status_t MockDevice::DdkOpen(zx_device_t** dev_out, uint32_t flags) {
-  auto result = controller_->Open(ConstructHookInvocation(), flags);
-  ZX_ASSERT(result.ok());
-  ProcessActionsContext::ChannelVariants channel = controller_.client_end().borrow().channel();
-  ProcessActionsContext ctx(channel, true, this, zxdev());
-  zx_status_t status = ProcessActions(result.value().actions, &ctx);
-  ZX_ASSERT(status == ZX_OK);
-  return ctx.hook_status;
-}
-
-zx_status_t MockDevice::DdkClose(uint32_t flags) {
-  auto result = controller_->Close(ConstructHookInvocation(), flags);
-  ZX_ASSERT(result.ok());
-  ProcessActionsContext::ChannelVariants channel = controller_.client_end().borrow().channel();
-  ProcessActionsContext ctx(channel, true, this, zxdev());
-  zx_status_t status = ProcessActions(result.value().actions, &ctx);
-  ZX_ASSERT(status == ZX_OK);
-  return ctx.hook_status;
-}
-
 void MockDevice::DdkUnbind(ddk::UnbindTxn txn) {
   auto result = controller_->Unbind(ConstructHookInvocation());
   ZX_ASSERT(result.ok());
@@ -351,20 +329,6 @@ zx_status_t ProcessActions(fidl::VectorView<device_mock::wire::Action> actions,
         }
         ctx->hook_status = action.return_status();
         return ZX_OK;
-      }
-      case device_mock::wire::Action::Tag::kWrite: {
-        if (ctx->associated_buf == nullptr) {
-          printf("MockDevice::ProcessActions: write action with no associated buf\n");
-          return ZX_ERR_INVALID_ARGS;
-        }
-        auto& write_action = action.write();
-        if (write_action.count() > ctx->associated_buf_count) {
-          printf("MockDevice::ProcessActions: write action too large\n");
-          return ZX_ERR_INVALID_ARGS;
-        }
-        ctx->associated_buf_actual = write_action.count();
-        memcpy(ctx->associated_buf, write_action.data(), write_action.count());
-        break;
       }
       case device_mock::wire::Action::Tag::kCreateThread: {
         if (ctx->mock_device == nullptr) {

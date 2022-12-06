@@ -11,8 +11,7 @@
 #include <fbl/ref_ptr.h>
 
 class TestLifecycleDriverChild;
-using DeviceType =
-    ddk::Device<TestLifecycleDriverChild, ddk::Initializable, ddk::Unbindable, ddk::Openable>;
+using DeviceType = ddk::Device<TestLifecycleDriverChild, ddk::Initializable, ddk::Unbindable>;
 
 class TestLifecycleDriverChild : public DeviceType,
                                  public fbl::RefCounted<TestLifecycleDriverChild> {
@@ -30,7 +29,6 @@ class TestLifecycleDriverChild : public DeviceType,
   void DdkRelease();
   void AsyncRemove(fit::function<void()> callback);
   void CompleteUnbind();
-  zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags);
 
   zx_status_t CompleteInit();
 
@@ -44,20 +42,4 @@ class TestLifecycleDriverChild : public DeviceType,
   std::optional<fit::function<void()>> unbind_callback_;
   std::optional<ddk::InitTxn> init_txn_;
   std::optional<ddk::UnbindTxn> unbind_txn_;
-};
-
-class InstanceDevice;
-using InstanceDeviceType = ddk::Device<InstanceDevice>;
-class InstanceDevice : public InstanceDeviceType {
- public:
-  InstanceDevice(zx_device_t* parent) : InstanceDeviceType(parent) {}
-  zx_status_t Add(zx_device_t** dev_out) {
-    zx_status_t result = DdkAdd("test-child", DEVICE_ADD_INSTANCE);
-    if (result != ZX_OK) {
-      return result;
-    }
-    *dev_out = zxdev();
-    return ZX_OK;
-  }
-  void DdkRelease() { delete this; }
 };

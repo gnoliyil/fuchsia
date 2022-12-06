@@ -137,7 +137,7 @@ TEST_F(LifecycleTest, Init) {
 }
 
 #ifndef DFV2
-TEST_F(LifecycleTest, CloseAllConnectionsOnInstanceUnbind) {
+TEST_F(LifecycleTest, CloseAllConnectionsOnChildUnbind) {
   auto result = fidl::WireCall(chan_)->AddChild(true /* complete_init */, ZX_OK /* init_status */);
   ASSERT_OK(result.status());
   ASSERT_FALSE(result->is_error());

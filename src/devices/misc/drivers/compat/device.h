@@ -95,9 +95,6 @@ class Device : public std::enable_shared_from_this<Device>,
   zx_status_t ConnectRuntime(const char* service_name, const char* protocol_name,
                              fdf::Channel request);
 
-  zx_status_t OpenOp(zx_device_t** dev_out, uint32_t flags);
-  zx_status_t CloseOp(uint32_t flags);
-
   fpromise::promise<void, zx_status_t> RebindToLibname(std::string_view libname);
 
   fpromise::promise<void, zx_status_t> WaitForInitToComplete();

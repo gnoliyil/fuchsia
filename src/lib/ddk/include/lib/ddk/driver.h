@@ -70,15 +70,12 @@ enum {
   // Do not attempt to bind drivers to this device automatically
   DEVICE_ADD_NON_BINDABLE = (1 << 0),
 
-  // This is a device instance (not visible in devfs or eligible for binding)
-  DEVICE_ADD_INSTANCE = (1 << 1),
-
   // Children of this device will be loaded in their own devhost process,
   // behind a proxy of this device
-  DEVICE_ADD_MUST_ISOLATE = (1 << 2),
+  DEVICE_ADD_MUST_ISOLATE = (1 << 1),
 
   // This device is allowed to be bindable in multiple composite devices
-  DEVICE_ADD_ALLOW_MULTI_COMPOSITE = (1 << 4),
+  DEVICE_ADD_ALLOW_MULTI_COMPOSITE = (1 << 2),
 };
 
 // Device Manager API

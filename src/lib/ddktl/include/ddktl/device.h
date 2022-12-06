@@ -58,11 +58,6 @@
 // |                            |                                                    |
 // | ddk::Initializable         | void DdkInit(ddk::InitTxn txn)                     |
 // |                            |                                                    |
-// | ddk::Openable              | zx_status_t DdkOpen(zx_device_t** dev_out,         |
-// |                            |                     uint32_t flags)                |
-// |                            |                                                    |
-// | ddk::Closable              | zx_status_t DdkClose(uint32_t flags)               |
-// |                            |                                                    |
 // | ddk::Unbindable            | void DdkUnbind(ddk::UnbindTxn txn)                 |
 // |                            |                                                    |
 // | ddk::PerformanceTunable    | zx_status_t DdkSetPerformanceState(                |
@@ -86,8 +81,7 @@
 //
 // // Define our device type using a type alias.
 // class MyDevice;
-// using DeviceType = ddk::Device<MyDevice, ddk::Openable, ddk::Closable,
-//                                          ddk::Unbindable, ddk::Suspendable>;
+// using DeviceType = ddk::Device<MyDevice, ddk::Unbindable, ddk::Suspendable>;
 //
 // class MyDevice : public DeviceType {
 //   public:
@@ -101,8 +95,6 @@
 //     }
 //
 //     // Methods required by the ddk mixins
-//     zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags);
-//     zx_status_t DdkClose(uint32_t flags);
 //     void DdkUnbind(ddk::UnbindTxn txn);
 //     void DdkSuspend(ddk::SuspendTxn txn);
 //     void DdkRelease();
@@ -163,34 +155,6 @@ class Initializable : public base_mixin {
     auto dev = static_cast<D*>(ctx);
     InitTxn txn(dev->zxdev());
     dev->DdkInit(std::move(txn));
-  }
-};
-
-template <typename D>
-class Openable : public base_mixin {
- protected:
-  static constexpr void InitOp(zx_protocol_device_t* proto) {
-    internal::CheckOpenable<D>();
-    proto->open = Open;
-  }
-
- private:
-  static zx_status_t Open(void* ctx, zx_device_t** dev_out, uint32_t flags) {
-    return static_cast<D*>(ctx)->DdkOpen(dev_out, flags);
-  }
-};
-
-template <typename D>
-class Closable : public base_mixin {
- protected:
-  static constexpr void InitOp(zx_protocol_device_t* proto) {
-    internal::CheckClosable<D>();
-    proto->close = Close;
-  }
-
- private:
-  static zx_status_t Close(void* ctx, uint32_t flags) {
-    return static_cast<D*>(ctx)->DdkClose(flags);
   }
 };
 

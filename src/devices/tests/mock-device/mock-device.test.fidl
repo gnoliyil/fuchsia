@@ -64,30 +64,26 @@ type Action = strict resource union {
     /// Return this status.
     1: return_status zx.status;
 
-    /// Write these bytes to the buffer associated with the hook.
-    2: write vector<uint8>:MAX_WRITE_BYTES;
-
     /// Create a new thread with a processing loop.
-    3: create_thread server_end:MockDeviceThread;
+    2: create_thread server_end:MockDeviceThread;
 
     /// Invoke device_async_remove() on our device.
-    4: async_remove_device bool;
+    3: async_remove_device bool;
 
     /// Signal that the unbind has completed.
-    5: unbind_reply UnbindReplyAction;
+    4: unbind_reply UnbindReplyAction;
 
     /// Create a new child device
-    6: add_device AddDeviceAction;
+    5: add_device AddDeviceAction;
 
     /// Signal that the suspend has completed.
-    7: suspend_reply SuspendReplyAction;
+    6: suspend_reply SuspendReplyAction;
 
     // Signal that the suspend has completed.
-    8: resume_reply ResumeReplyAction;
+    7: resume_reply ResumeReplyAction;
 };
 
 const MAX_ACTIONS uint32 = 10;
-const MAX_WRITE_BYTES uint32 = 16384;
 
 /// Interface for controlling a mock device.  The test suite will implement this interface.
 /// Any method that returns a list of actions is interpreted as requesting the corresponding hook
@@ -109,38 +105,7 @@ protocol MockDevice {
     }) -> (resource struct {
         actions vector<Action>:MAX_ACTIONS;
     });
-    Open(struct {
-        record HookInvocation;
-        flags uint32;
-    }) -> (resource struct {
-        actions vector<Action>:MAX_ACTIONS;
-    });
-    Close(struct {
-        record HookInvocation;
-        flags uint32;
-    }) -> (resource struct {
-        actions vector<Action>:MAX_ACTIONS;
-    });
     Unbind(struct {
-        record HookInvocation;
-    }) -> (resource struct {
-        actions vector<Action>:MAX_ACTIONS;
-    });
-    Read(struct {
-        record HookInvocation;
-        count uint64;
-        off zx.off;
-    }) -> (resource struct {
-        actions vector<Action>:MAX_ACTIONS;
-    });
-    Write(struct {
-        record HookInvocation;
-        buffer vector<uint8>:MAX_WRITE_BYTES;
-        off zx.off;
-    }) -> (resource struct {
-        actions vector<Action>:MAX_ACTIONS;
-    });
-    GetSize(struct {
         record HookInvocation;
     }) -> (resource struct {
         actions vector<Action>:MAX_ACTIONS;

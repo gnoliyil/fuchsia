@@ -98,18 +98,18 @@ class base_device : public Mixins<D>... {
     // for (typename Mixin : Mixins<D>) Mixin::Protocol(&ops);
     //
     // template <typename D>
-    // class Openable : public base_mixin {
-    //   public:
-    //     static constexpr void InitOp(zx_protocol_device_t* proto) {
-    //         internal::CheckOpenable<D>();
-    //         proto->open = Open;
-    //     }
-    //   private:
-    //     static zx_status_t Open(void* ctx, zx_device_t** dev_out, uint32_t flags) {
-    //         return static_cast<D*>(ctx)->DdkOpen(dev_out, flags);
-    //     }
-    // };
+    // class GetProtocolable : public base_mixin {
+    //  protected:
+    //   static constexpr void InitOp(zx_protocol_device_t* proto) {
+    //     internal::CheckGetProtocolable<D>();
+    //     proto->get_protocol = GetProtocol;
+    //   }
     //
+    //  private:
+    //   static zx_status_t GetProtocol(void* ctx, uint32_t proto_id, void* out) {
+    //     return static_cast<D*>(ctx)->DdkGetProtocol(proto_id, out);
+    //   }
+    // };
     (Mixins<D>::InitOp(&ops), ...);
     return ops;
   }();
@@ -221,27 +221,6 @@ constexpr void CheckInitializable() {
   static_assert(std::is_same<decltype(&D::DdkInit), void (D::*)(InitTxn txn)>::value,
                 "DdkInit must be a public non-static member function with signature "
                 "'void DdkInit(ddk::InitTxn)'.");
-}
-
-DDKTL_INTERNAL_DECLARE_HAS_MEMBER_FN(has_ddk_open, DdkOpen);
-
-template <typename D>
-constexpr void CheckOpenable() {
-  static_assert(has_ddk_open<D>::value, "Openable classes must implement DdkOpen");
-  static_assert(
-      std::is_same<decltype(&D::DdkOpen), zx_status_t (D::*)(zx_device_t**, uint32_t)>::value,
-      "DdkOpen must be a public non-static member function with signature "
-      "'zx_status_t DdkOpen(zx_device_t**, uint32_t)'.");
-}
-
-DDKTL_INTERNAL_DECLARE_HAS_MEMBER_FN(has_ddk_close, DdkClose);
-
-template <typename D>
-constexpr void CheckClosable() {
-  static_assert(has_ddk_close<D>::value, "Closable classes must implement DdkClose");
-  static_assert(std::is_same<decltype(&D::DdkClose), zx_status_t (D::*)(uint32_t)>::value,
-                "DdkClose must be a public non-static member function with signature "
-                "'zx_status_t DdkClose(uint32)'.");
 }
 
 DDKTL_INTERNAL_DECLARE_HAS_MEMBER_FN(has_ddk_unbind, DdkUnbind);

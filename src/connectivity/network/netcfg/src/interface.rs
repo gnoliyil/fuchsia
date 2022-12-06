@@ -289,7 +289,7 @@ mod tests {
             // usb interfaces
             TestCase {
                 topological_path: String::from(
-                    "@/dev/pci-00:14.0-fidl/xhci/usb/004/004/ifc-000/ax88179/ethernet",
+                    "/dev/pci-00:14.0-fidl/xhci/usb/004/004/ifc-000/ax88179/ethernet",
                 ),
                 mac: [0x01, 0x01, 0x01, 0x01, 0x01, 0x01],
                 interface_type: crate::InterfaceType::Wlan,
@@ -297,7 +297,7 @@ mod tests {
             },
             TestCase {
                 topological_path: String::from(
-                    "@/dev/pci-00:15.0-fidl/xhci/usb/004/004/ifc-000/ax88179/ethernet",
+                    "/dev/pci-00:15.0-fidl/xhci/usb/004/004/ifc-000/ax88179/ethernet",
                 ),
                 mac: [0x02, 0x02, 0x02, 0x02, 0x02, 0x02],
                 interface_type: crate::InterfaceType::Ethernet,
@@ -305,13 +305,13 @@ mod tests {
             },
             // pci intefaces
             TestCase {
-                topological_path: String::from("@/dev/pci-00:14.0/ethernet"),
+                topological_path: String::from("/dev/pci-00:14.0/ethernet"),
                 mac: [0x03, 0x03, 0x03, 0x03, 0x03, 0x03],
                 interface_type: crate::InterfaceType::Wlan,
                 want_name: "wlanp0014",
             },
             TestCase {
-                topological_path: String::from("@/dev/pci-00:15.0/ethernet"),
+                topological_path: String::from("/dev/pci-00:15.0/ethernet"),
                 mac: [0x04, 0x04, 0x04, 0x04, 0x04, 0x04],
                 interface_type: crate::InterfaceType::Ethernet,
                 want_name: "ethp0015",
@@ -319,7 +319,7 @@ mod tests {
             // platform interfaces (ethernet jack and sdio devices)
             TestCase {
                 topological_path: String::from(
-                    "@/dev/sys/platform/05:00:6/aml-sd-emmc/sdio/broadcom-wlanphy/wlanphy",
+                    "/dev/sys/platform/05:00:6/aml-sd-emmc/sdio/broadcom-wlanphy/wlanphy",
                 ),
                 mac: [0x05, 0x05, 0x05, 0x05, 0x05, 0x05],
                 interface_type: crate::InterfaceType::Wlan,
@@ -327,7 +327,7 @@ mod tests {
             },
             TestCase {
                 topological_path: String::from(
-                    "@/dev/sys/platform/04:02:7/aml-ethernet/Designware-MAC/ethernet",
+                    "/dev/sys/platform/04:02:7/aml-ethernet/Designware-MAC/ethernet",
                 ),
                 mac: [0x07, 0x07, 0x07, 0x07, 0x07, 0x07],
                 interface_type: crate::InterfaceType::Ethernet,
@@ -335,7 +335,7 @@ mod tests {
             },
             // unknown interfaces
             TestCase {
-                topological_path: String::from("@/dev/sys/unknown"),
+                topological_path: String::from("/dev/sys/unknown"),
                 mac: [0x08, 0x08, 0x08, 0x08, 0x08, 0x08],
                 interface_type: crate::InterfaceType::Wlan,
                 want_name: "wlanx8",
@@ -364,7 +364,7 @@ mod tests {
     #[test]
     fn test_generate_stable_name() {
         let test1 = TestCase {
-            topological_path: String::from("@/dev/pci-00:14.0/ethernet"),
+            topological_path: String::from("/dev/pci-00:14.0/ethernet"),
             mac: [0x01, 0x01, 0x01, 0x01, 0x01, 0x01],
             interface_type: crate::InterfaceType::Wlan,
             want_name: "wlanp0014",
@@ -412,7 +412,7 @@ mod tests {
     #[test]
     fn test_get_usb_255() {
         let topo_usb =
-            String::from("@/dev/pci-00:14.0-fidl/xhci/usb/004/004/ifc-000/ax88179/ethernet");
+            String::from("/dev/pci-00:14.0-fidl/xhci/usb/004/004/ifc-000/ax88179/ethernet");
 
         // test cases for 256 usb interfaces
         let mut config = Config { names: vec![] };

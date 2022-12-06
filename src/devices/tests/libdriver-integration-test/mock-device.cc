@@ -23,29 +23,8 @@ void MockDevice::GetProtocol(HookInvocation record, uint32_t protocol_id,
   hooks_->GetProtocol(record, protocol_id, std::move(callback));
 }
 
-void MockDevice::Open(HookInvocation record, uint32_t flags, OpenCallback callback) {
-  hooks_->Open(record, flags, std::move(callback));
-}
-
-void MockDevice::Close(HookInvocation record, uint32_t flags, CloseCallback callback) {
-  hooks_->Close(record, flags, std::move(callback));
-}
-
 void MockDevice::Unbind(HookInvocation record, UnbindCallback callback) {
   hooks_->Unbind(record, std::move(callback));
-}
-
-void MockDevice::Read(HookInvocation record, uint64_t count, uint64_t off, ReadCallback callback) {
-  hooks_->Read(record, count, off, std::move(callback));
-}
-
-void MockDevice::Write(HookInvocation record, std::vector<uint8_t> buffer, uint64_t off,
-                       WriteCallback callback) {
-  hooks_->Write(record, std::move(buffer), off, std::move(callback));
-}
-
-void MockDevice::GetSize(HookInvocation record, GetSizeCallback callback) {
-  hooks_->GetSize(record, std::move(callback));
 }
 
 void MockDevice::Suspend(HookInvocation record, uint8_t requested_state, bool enable_wake,

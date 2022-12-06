@@ -25,7 +25,7 @@ class MockDevice : public fuchsia::device::mock::MockDevice {
 
   MockDevice(fidl::InterfaceRequest<Interface> request, async_dispatcher_t* dispatcher,
              std::string device_path);
-  virtual ~MockDevice() = default;
+  ~MockDevice() override = default;
 
   void set_hooks(std::unique_ptr<MockDeviceHooks> hooks) {
     hooks->set_action_list_finalizer(fit::bind_member(this, &MockDevice::FinalizeActionList));
@@ -40,13 +40,7 @@ class MockDevice : public fuchsia::device::mock::MockDevice {
   void Release(HookInvocation record) override;
   void GetProtocol(HookInvocation record, uint32_t protocol_id,
                    GetProtocolCallback callback) override;
-  void Open(HookInvocation record, uint32_t flags, OpenCallback callback) override;
-  void Close(HookInvocation record, uint32_t flags, CloseCallback callback) override;
   void Unbind(HookInvocation record, UnbindCallback callback) override;
-  void Read(HookInvocation record, uint64_t count, uint64_t off, ReadCallback callback) override;
-  void Write(HookInvocation record, std::vector<uint8_t> buffer, uint64_t off,
-             WriteCallback callback) override;
-  void GetSize(HookInvocation record, GetSizeCallback callback) override;
   void Suspend(HookInvocation record, uint8_t requested_state, bool enable_wake,
                uint8_t suspend_reason, SuspendCallback callback) override;
   void Resume(HookInvocation record, uint32_t requested_perf_state,

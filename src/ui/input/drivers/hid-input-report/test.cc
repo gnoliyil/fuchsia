@@ -633,7 +633,7 @@ TEST_F(HidDevTest, ConsumerControlTest) {
     fake_hid_.SetReportDesc(desc_vector);
   }
 
-  // Create the initial report that will be queried on DdkOpen().
+  // Create the initial report that will be queried on OpenSession.
   {
     struct buttons_input_rpt report = {};
     report.rpt_id = BUTTONS_RPT_ID_INPUT;
@@ -736,7 +736,7 @@ TEST_F(HidDevTest, ConsumerControlTwoClientsTest) {
     fake_hid_.SetReportDesc(desc_vector);
   }
 
-  // Create the initial report that will be queried on DdkOpen().
+  // Create the initial report that will be queried on OpenSession.
   {
     struct buttons_input_rpt report = {};
     report.rpt_id = BUTTONS_RPT_ID_INPUT;

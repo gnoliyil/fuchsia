@@ -127,15 +127,7 @@ TEST_F(CompositeDeviceTest, DISABLED_UnbindFragment) {
           })
           .and_then([&]() -> Promise<void> {
             // Open up child1, so we can send it an unbind request
-            auto wait_for_open = DoOpen(child_device1->path(), &client);
-            auto expect_open = ExpectOpen(child_device1, [](HookInvocation record, uint32_t flags,
-                                                            Completer<void> completer) {
-              completer.complete_ok();
-              ActionList actions;
-              actions.AppendReturnStatus(ZX_OK);
-              return actions;
-            });
-            return expect_open.and_then(std::move(wait_for_open));
+            return DoOpen(child_device1->path(), &client);
           })
           .and_then([&]() -> Promise<void> {
             // Send the unbind request to child1
@@ -175,15 +167,8 @@ TEST_F(CompositeDeviceTest, DISABLED_UnbindFragment) {
           })
           .and_then([&]() -> Promise<void> {
             child1_controller.Unbind();
-            return ExpectClose(child_device1, [](HookInvocation record, uint32_t flags,
-                                                 Completer<void> completer) {
-              completer.complete_ok();
-              ActionList actions;
-              actions.AppendReturnStatus(ZX_OK);
-              return actions;
-            });
+            return ExpectRelease(child_device1);
           })
-          .and_then(ExpectRelease(child_device1))
           .and_then([&]() -> Promise<void> {
             // Destroy the test device.  This should cause an unbind of the last child
             // device.

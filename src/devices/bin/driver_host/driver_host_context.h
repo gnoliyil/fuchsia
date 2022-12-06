@@ -76,9 +76,6 @@ class DriverHostContext {
   zx_status_t DeviceCreate(fbl::RefPtr<Driver> drv, const char* name, void* ctx,
                            const zx_protocol_device_t* ops, fbl::RefPtr<zx_device_t>* out)
       TA_REQ(api_lock_);
-  zx_status_t DeviceOpen(const fbl::RefPtr<zx_device_t>& dev, fbl::RefPtr<zx_device_t>* out,
-                         uint32_t flags) TA_REQ(api_lock_);
-  zx_status_t DeviceClose(fbl::RefPtr<zx_device_t> dev, uint32_t flags) TA_REQ(api_lock_);
   void DeviceSystemSuspend(const fbl::RefPtr<zx_device_t>& dev, uint32_t flags) TA_REQ(api_lock_);
   zx_status_t DeviceSetPerformanceState(const fbl::RefPtr<zx_device_t>& dev,
                                         uint32_t requested_state, uint32_t* out_state);

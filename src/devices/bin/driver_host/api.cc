@@ -39,9 +39,8 @@ namespace fio = fuchsia_io;
 // LibDriver Device Interface
 //
 
-#define ALLOWED_FLAGS                                                        \
-  (DEVICE_ADD_NON_BINDABLE | DEVICE_ADD_INSTANCE | DEVICE_ADD_MUST_ISOLATE | \
-   DEVICE_ADD_ALLOW_MULTI_COMPOSITE)
+#define ALLOWED_FLAGS \
+  (DEVICE_ADD_NON_BINDABLE | DEVICE_ADD_MUST_ISOLATE | DEVICE_ADD_ALLOW_MULTI_COMPOSITE)
 
 namespace internal {
 
@@ -95,13 +94,6 @@ __EXPORT zx_status_t device_add_from_driver(zx_driver_t* drv, zx_device_t* paren
     return ZX_ERR_INVALID_ARGS;
   }
   if (args->flags & ~ALLOWED_FLAGS) {
-    return ZX_ERR_INVALID_ARGS;
-  }
-  if ((args->flags & DEVICE_ADD_INSTANCE) && (args->flags & (DEVICE_ADD_MUST_ISOLATE))) {
-    return ZX_ERR_INVALID_ARGS;
-  }
-
-  if ((args->flags & DEVICE_ADD_INSTANCE) && args->ops->init) {
     return ZX_ERR_INVALID_ARGS;
   }
 
@@ -222,13 +214,6 @@ __EXPORT zx_status_t device_add_from_driver(zx_driver_t* drv, zx_device_t* paren
   }
   if (args->flags & DEVICE_ADD_MUST_ISOLATE) {
     r = api_ctx->DeviceAdd(dev, parent_ref, args, std::move(inspect), std::move(outgoing_dir));
-  } else if (args->flags & DEVICE_ADD_INSTANCE) {
-    dev->set_flag(DEV_FLAG_INSTANCE | DEV_FLAG_UNBINDABLE);
-    // Set props and proxy args to null just in case:
-    args->str_prop_count = 0;
-    args->prop_count = 0;
-    args->proxy_args = nullptr;
-    r = api_ctx->DeviceAdd(dev, parent_ref, args, zx::vmo(), fidl::ClientEnd<fio::Directory>());
   } else {
     args->proxy_args = nullptr;
     r = api_ctx->DeviceAdd(dev, parent_ref, args, std::move(inspect),
@@ -251,17 +236,9 @@ __EXPORT zx_status_t device_add_from_driver(zx_driver_t* drv, zx_device_t* paren
               dev, fio::wire::OpenFlags::kRightReadable | fio::wire::OpenFlags::kRightWritable,
               std::move(client_remote));
         });
-
-    // Leak the reference that was written to |out|, it will be recovered in device_remove().
-    // For device instances we mimic the behavior of |open| by not leaking the reference,
-    // effectively passing owenership to the new connection.
-    if (!(args->flags & DEVICE_ADD_INSTANCE)) {
-      [[maybe_unused]] auto ptr = fbl::ExportToRawPtr(&dev);
-    }
-  } else {
-    // Leak the reference that was written to |out|, it will be recovered in device_remove().
-    [[maybe_unused]] auto ptr = fbl::ExportToRawPtr(&dev);
   }
+  // Leak the reference that was written to |out|, it will be recovered in device_remove().
+  [[maybe_unused]] auto ptr = fbl::ExportToRawPtr(&dev);
 
   return r;
 }
@@ -457,18 +434,6 @@ zx_status_t device_schedule_remove(const fbl::RefPtr<zx_device_t>& dev, bool unb
 zx::result<bool> device_schedule_unbind_children(const fbl::RefPtr<zx_device_t>& dev) {
   fbl::AutoLock lock(&internal::ContextForApi()->api_lock());
   return internal::ContextForApi()->ScheduleUnbindChildren(dev);
-}
-
-zx_status_t device_open(const fbl::RefPtr<zx_device_t>& dev, fbl::RefPtr<zx_device_t>* out,
-                        uint32_t flags) {
-  fbl::AutoLock lock(&internal::ContextForApi()->api_lock());
-  return internal::ContextForApi()->DeviceOpen(dev, out, flags);
-}
-
-// This function is intended to consume the reference produced by device_open()
-zx_status_t device_close(fbl::RefPtr<zx_device_t> dev, uint32_t flags) {
-  fbl::AutoLock lock(&internal::ContextForApi()->api_lock());
-  return internal::ContextForApi()->DeviceClose(std::move(dev), flags);
 }
 
 __EXPORT zx_status_t device_get_metadata(zx_device_t* dev, uint32_t type, void* buf, size_t buflen,

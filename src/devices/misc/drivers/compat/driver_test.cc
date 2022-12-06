@@ -571,43 +571,6 @@ TEST_F(DriverTest, ClientRemote) {
   ASSERT_TRUE(RunTestLoopUntilIdle());
 }
 
-TEST_F(DriverTest, Start_ChildDeviceInstance) {
-  zx_protocol_device_t ops{
-      .get_protocol = [](void*, uint32_t, void*) { return ZX_OK; },
-  };
-  auto driver = StartDriver("/pkg/driver/v1_child_device_instance_test.so", &ops);
-
-  // Verify that v1_child_device_instance_test.so has added a child device.
-  WaitForChildDeviceAdded();
-
-  // Verify that v1_child_device_instance_test.so has set a context.
-  std::unique_ptr<V1Test> v1_test(static_cast<V1Test*>(driver->Context()));
-  ASSERT_NE(nullptr, v1_test.get());
-
-  // Verify v1_child_device_instance_test.so state after bind.
-  {
-    const std::lock_guard<std::mutex> lock(v1_test->lock);
-    EXPECT_TRUE(v1_test->did_bind);
-    EXPECT_EQ(ZX_OK, v1_test->status);
-    EXPECT_FALSE(v1_test->did_create);
-    EXPECT_FALSE(v1_test->did_release);
-  }
-
-  // The `v1-child` device should appear in devfs but not `v1-child-instance`
-  // because `v1-child-instance` is a device instance which should not have a
-  // devfs path.
-  AssertDevfsPaths({"/dev/test/my-device/v1", "/dev/test/my-device/v1/v1-child"});
-
-  // Verify v1_child_device_instance_test.so state after release.
-  RunOnDispatcher([&] { driver.reset(); });
-  ShutdownDriverDispatcher();
-  ASSERT_TRUE(RunTestLoopUntilIdle());
-  {
-    const std::lock_guard<std::mutex> lock(v1_test->lock);
-    EXPECT_TRUE(v1_test->did_release);
-  }
-}
-
 TEST_F(DriverTest, Start_WithCreate) {
   zx_protocol_device_t ops{};
   auto driver = StartDriver("/pkg/driver/v1_create_test.so", &ops);

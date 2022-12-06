@@ -119,20 +119,6 @@ InspectCallStats& DriverHostInspect::DeviceRemoveStats() {
   return *device_remove_stats_;
 }
 
-InspectCallStats& DriverHostInspect::DeviceOpenStats() {
-  if (!device_open_stats_) {
-    device_open_stats_.emplace(GetCallStatsNode(), "device_open");
-  }
-  return *device_open_stats_;
-}
-
-InspectCallStats& DriverHostInspect::DeviceCloseStats() {
-  if (!device_close_stats_) {
-    device_close_stats_.emplace(GetCallStatsNode(), "device_close");
-  }
-  return *device_close_stats_;
-}
-
 InspectCallStats& DriverHostInspect::DeviceSuspendStats() {
   if (!device_suspend_stats_) {
     device_suspend_stats_.emplace(GetCallStatsNode(), "device_suspend");
@@ -236,9 +222,6 @@ void DeviceInspect::set_flags(uint32_t flags) {
   if (flags & DEV_FLAG_BUSY) {
     flags_str.Append("busy ");
   }
-  if (flags & DEV_FLAG_INSTANCE) {
-    flags_str.Append("instance ");
-  }
   if (flags & DEV_FLAG_MULTI_BIND) {
     flags_str.Append("multi-bind ");
   }
@@ -273,12 +256,6 @@ void DeviceInspect::set_ops(const zx_protocol_device_t* ops) {
   }
   if (ops->init) {
     ops_str.Append("init ");
-  }
-  if (ops->open) {
-    ops_str.Append("open ");
-  }
-  if (ops->close) {
-    ops_str.Append("close ");
   }
   if (ops->unbind) {
     ops_str.Append("unbind ");
@@ -356,32 +333,6 @@ void DeviceInspect::increment_child_count() {
 void DeviceInspect::decrement_child_count() {
   ZX_ASSERT(child_count_);
   child_count_.Subtract(1);
-}
-
-void DeviceInspect::increment_instance_count() {
-  if (!instance_count_) {
-    instance_count_ = device_node_.CreateUint("instance_count", 0);
-  }
-  instance_count_.Add(1);
-}
-
-void DeviceInspect::decrement_instance_count() {
-  ZX_ASSERT(instance_count_);
-  instance_count_.Subtract(1);
-}
-
-void DeviceInspect::increment_open_count() {
-  if (!open_count_) {
-    open_count_ = device_node_.CreateUint("opened_connections", 0);
-  }
-  open_count_.Add(1);
-}
-
-void DeviceInspect::increment_close_count() {
-  if (!close_count_) {
-    close_count_ = device_node_.CreateUint("closed_connections", 0);
-  }
-  close_count_.Add(1);
 }
 
 void DeviceInspect::set_parent(fbl::RefPtr<zx_device> parent) {

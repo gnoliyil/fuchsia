@@ -86,14 +86,6 @@ void Dispatch(void* ctx, void (*op)(void* ctx, ArgTypes...), ArgTypes... args) {
 
 void MockDevice::InitOp() { Dispatch(ctx_, ops_->init); }
 
-zx_status_t MockDevice::OpenOp(zx_device_t** dev_out, uint32_t flags) {
-  return Dispatch(ctx_, ops_->open, ZX_OK, dev_out, flags);
-}
-
-zx_status_t MockDevice::CloseOp(uint32_t flags) {
-  return Dispatch(ctx_, ops_->close, ZX_OK, flags);
-}
-
 void MockDevice::UnbindOp() { Dispatch(ctx_, ops_->unbind); }
 
 void MockDevice::ReleaseOp() {

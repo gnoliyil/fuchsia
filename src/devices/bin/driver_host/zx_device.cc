@@ -225,11 +225,6 @@ zx_status_t zx_device_t::get_dev_power_state_from_mapping(
 }
 
 void zx_device::CloseAllConnections() {
-  for (auto& child : children_) {
-    if (child.flags_ & DEV_FLAG_INSTANCE) {
-      child.CloseAllConnections();
-    }
-  }
   // Posted to the main event loop to synchronize with any other calls that may manipulate
   // the state of this Vnode (such as dev->vnode being reset by DevfsVnode::Close or
   // DriverHostContext::DriverManagerRemove)
@@ -275,10 +270,6 @@ void zx_device::fbl_recycle() TA_NO_THREAD_SAFETY_ANALYSIS {
     }
   });
 
-  if (this->flags_ & DEV_FLAG_INSTANCE) {
-    // these don't get removed, so mark dead state here
-    this->set_flag(DEV_FLAG_DEAD);
-  }
   if (this->flags() & DEV_FLAG_BUSY) {
     // this can happen if creation fails
     // the caller to device_add() will free it
@@ -337,12 +328,7 @@ fbl::RefPtr<zx_device> zx_device::GetDeviceFromLocalId(uint64_t local_id) {
   return fbl::RefPtr(&*itr);
 }
 
-bool zx_device::Unbound() {
-  if (flags_ & DEV_FLAG_INSTANCE) {
-    return parent_->Unbound();
-  }
-  return flags_ & DEV_FLAG_UNBOUND;
-}
+bool zx_device::Unbound() { return flags_ & DEV_FLAG_UNBOUND; }
 
 bool zx_device::has_composite() const { return !!composite_; }
 
@@ -383,17 +369,9 @@ bool zx_device::IsPerformanceStateSupported(uint32_t requested_state) {
 
 void zx_device::add_child(zx_device* child) {
   children_.push_back(child);
-  if (child->flags_ & DEV_FLAG_INSTANCE) {
-    inspect_->increment_instance_count();
-  } else {
-    inspect_->increment_child_count();
-  }
+  inspect_->increment_child_count();
 }
 void zx_device::remove_child(zx_device& child) {
   children_.erase(child);
-  if (child.flags_ & DEV_FLAG_INSTANCE) {
-    inspect_->decrement_instance_count();
-  } else {
-    inspect_->decrement_child_count();
-  }
+  inspect_->decrement_child_count();
 }

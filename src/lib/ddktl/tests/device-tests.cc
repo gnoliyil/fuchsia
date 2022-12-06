@@ -47,14 +47,6 @@ BEGIN_SUCCESS_CASE(Initializable)
 void DdkInit(ddk::InitTxn txn) {}
 END_SUCCESS_CASE
 
-BEGIN_SUCCESS_CASE(Openable)
-zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags) { return ZX_OK; }
-END_SUCCESS_CASE
-
-BEGIN_SUCCESS_CASE(Closable)
-zx_status_t DdkClose(uint32_t flags) { return ZX_OK; }
-END_SUCCESS_CASE
-
 BEGIN_SUCCESS_CASE(Unbindable)
 // As the txn does not contain a valid device pointer, the destructor won't throw an error
 // if we don't reply.
@@ -96,8 +88,8 @@ static void do_test() {
 
 struct TestDispatch;
 using TestDispatchType =
-    ddk::Device<TestDispatch, ddk::GetProtocolable, ddk::Initializable, ddk::Openable,
-                ddk::Closable, ddk::Unbindable, ddk::Suspendable, ddk::Resumable, ddk::Rxrpcable>;
+    ddk::Device<TestDispatch, ddk::GetProtocolable, ddk::Initializable, ddk::Unbindable,
+                ddk::Suspendable, ddk::Resumable, ddk::Rxrpcable>;
 
 struct TestDispatch : public TestDispatchType {
   TestDispatch() : TestDispatchType(nullptr) {}
@@ -111,16 +103,6 @@ struct TestDispatch : public TestDispatchType {
   }
 
   void DdkInit(ddk::InitTxn txn) { init_called = true; }
-
-  zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags) {
-    open_called = true;
-    return ZX_OK;
-  }
-
-  zx_status_t DdkClose(uint32_t flags) {
-    close_called = true;
-    return ZX_OK;
-  }
 
   void DdkUnbind(ddk::UnbindTxn txn) { unbind_called = true; }
 
@@ -137,8 +119,6 @@ struct TestDispatch : public TestDispatchType {
 
   bool get_protocol_called = false;
   bool init_called = false;
-  bool open_called = false;
-  bool close_called = false;
   bool unbind_called = false;
   bool release_called = false;
   bool suspend_called = false;
@@ -155,8 +135,6 @@ TEST(DdktlDevice, Dispatch) {
   auto ops = dev->GetDeviceOps();
   EXPECT_EQ(ZX_OK, ops->get_protocol(ctx, 0, nullptr), "");
   ops->init(ctx);
-  EXPECT_EQ(ZX_OK, ops->open(ctx, nullptr, 0), "");
-  EXPECT_EQ(ZX_OK, ops->close(ctx, 0), "");
   ops->unbind(ctx);
   ops->release(ctx);
   ops->suspend(ctx, 2, false, 0);
@@ -165,8 +143,6 @@ TEST(DdktlDevice, Dispatch) {
 
   EXPECT_TRUE(dev->get_protocol_called, "");
   EXPECT_TRUE(dev->init_called, "");
-  EXPECT_TRUE(dev->open_called, "");
-  EXPECT_TRUE(dev->close_called, "");
   EXPECT_TRUE(dev->unbind_called, "");
   EXPECT_TRUE(dev->release_called, "");
   EXPECT_TRUE(dev->suspend_called, "");
@@ -190,39 +166,29 @@ class TestNotReleasable : public ddk::Device<TestNotReleasable> {
 
 DEFINE_FAIL_CASE(GetProtocolable)
 DEFINE_FAIL_CASE(Initializable)
-DEFINE_FAIL_CASE(Openable)
-DEFINE_FAIL_CASE(Closable)
 DEFINE_FAIL_CASE(Unbindable)
-DEFINE_FAIL_CASE(Readable)
-DEFINE_FAIL_CASE(Writable)
-DEFINE_FAIL_CASE(GetSizable)
 DEFINE_FAIL_CASE(Suspendable)
 DEFINE_FAIL_CASE(Resumable)
 DEFINE_FAIL_CASE(Rxrpcable)
 
-class TestBadOverride : public ddk::Device<TestBadOverride, ddk::Closable> {
+class TestBadOverride : public ddk::Device<TestBadOverride> {
  public:
-  TestBadOverride() : ddk::Device<TestBadOverride, ddk::Closable>(nullptr) {}
+  TestBadOverride() : ddk::Device<TestBadOverride>(nullptr) {}
   void DdkRelease() {}
-
-  void DdkClose(uint32_t flags) {}
 };
 
-class TestHiddenOverride : public ddk::Device<TestHiddenOverride, ddk::Closable> {
+class TestHiddenOverride : public ddk::Device<TestHiddenOverride> {
  public:
-  TestHiddenOverride() : ddk::Device<TestHiddenOverride, ddk::Closable>(nullptr) {}
-  void DdkRelease() {}
+  TestHiddenOverride() : ddk::Device<TestHiddenOverride>(nullptr) {}
 
  private:
-  zx_status_t DdkClose(uint32_t flags) { return ZX_OK; }
+  void DdkRelease() {}
 };
 
-class TestStaticOverride : public ddk::Device<TestStaticOverride, ddk::Closable> {
+class TestStaticOverride : public ddk::Device<TestStaticOverride> {
  public:
-  TestStaticOverride() : ddk::Device<TestStaticOverride, ddk::Closable>(nullptr) {}
-  void DdkRelease() {}
-
-  static zx_status_t DdkClose(uint32_t flags) { return ZX_OK; }
+  TestStaticOverride() : ddk::Device<TestStaticOverride>(nullptr) {}
+  static void DdkRelease() {}
 };
 
 template <typename D>
@@ -237,21 +203,17 @@ class TestNotAMixin : public ddk::Device<TestNotAMixin, A> {
 };
 
 class TestNotAllMixins;
-using TestNotAllMixinsType = ddk::Device<TestNotAllMixins, ddk::Openable, ddk::Closable, A>;
+using TestNotAllMixinsType = ddk::Device<TestNotAllMixins, A>;
 class TestNotAllMixins : public TestNotAllMixinsType {
  public:
   TestNotAllMixins() : TestNotAllMixinsType(nullptr) {}
   void DdkRelease() {}
-  zx_status_t DdkOpen(zx_device_t** dev_out, uint32_t flags) { return ZX_OK; }
-  zx_status_t DdkClose(uint32_t flags) { return ZX_OK; }
 };
 #endif
 
 TEST(DdktlDevice, NoMixins) { do_test<TestNone>(); }
 TEST(DdktlDevice, MixinGetProtocolable) { do_test<TestGetProtocolable>(); }
 TEST(DdktlDevice, MixinInitializable) { do_test<TestInitializable>(); }
-TEST(DdktlDevice, MixinOpenable) { do_test<TestOpenable>(); }
-TEST(DdktlDevice, MixinClosable) { do_test<TestClosable>(); }
 TEST(DdktlDevice, MixinUnbindable) { do_test<TestUnbindable>(); }
 TEST(DdktlDevice, MixinSuspendable) { do_test<TestSuspendable>(); }
 TEST(DdktlDevice, MixinResumable) { do_test<TestResumable>(); }
@@ -262,12 +224,7 @@ TEST(DdktlDevice, MixinRxrpcable) { do_test<TestRxrpcable>(); }
 #if TEST_WILL_NOT_COMPILE || 0
 TEST(DdktlDevice, FailNoGetProtocol) { do_test<TestNotGetProtocolable>(); }
 TEST(DdktlDevice, FailNoInitialize) { do_test<TestNotInitializable>(); }
-TEST(DdktlDevice, FailNoOpen) { do_test<TestNotOpenable>(); }
-TEST(DdktlDevice, FailNoClose) { do_test<TestNotClosable>(); }
 TEST(DdktlDevice, FailNoUnbind) { do_test<TestNotUnbindable>(); }
-TEST(DdktlDevice, FailNoReade) { do_test<TestNotReadable>(); }
-TEST(DdktlDevice, FailNoWrite) { do_test<TestNotWritable>(); }
-TEST(DdktlDevice, FailNoGetSize) { do_test<TestNotGetSizable>(); }
 TEST(DdktlDevice, FailNoSuspende) { do_test<TestNotSuspendable>(); }
 TEST(DdktlDevice, FailNoResume) { do_test<TestNotResumable>(); }
 TEST(DdktlDevice, FailNoRxrpc) { do_test<TestNotRxrpcable>(); }
