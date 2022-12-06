@@ -51,7 +51,7 @@ zx_status_t SinkPolicyEngine::Init() {
 }
 
 uint8_t SinkPolicyEngine::FindPdo(uint32_t max_voltage_mV, uint32_t max_current_mA) {
-  for (size_t i = source_capabilities_.size() - 1; i >= 0; i--) {
+  for (int64_t i = source_capabilities_.size() - 1; i >= 0; i--) {
     const auto& pdo = source_capabilities_.get(i);
     switch (pdo.power_type()) {
       case PowerType::FIXED_SUPPLY: {
