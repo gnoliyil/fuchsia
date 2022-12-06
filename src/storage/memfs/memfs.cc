@@ -16,7 +16,7 @@
 #include <safemath/safe_math.h>
 
 #include "src/lib/storage/vfs/cpp/fuchsia_vfs.h"
-#include "src/lib/storage/vfs/cpp/managed_vfs.h"
+#include "src/lib/storage/vfs/cpp/paged_vfs.h"
 #include "src/storage/memfs/dnode.h"
 #include "src/storage/memfs/vnode_dir.h"
 
@@ -54,11 +54,15 @@ zx_status_t Memfs::Create(async_dispatcher_t* dispatcher, std::string_view fs_na
                           std::unique_ptr<memfs::Memfs>* out_vfs, fbl::RefPtr<VnodeDir>* out_root) {
   auto fs = std::unique_ptr<memfs::Memfs>(new memfs::Memfs(dispatcher));
 
-  fbl::RefPtr<VnodeDir> root = fbl::MakeRefCounted<VnodeDir>();
+  fbl::RefPtr<VnodeDir> root = fbl::MakeRefCounted<VnodeDir>(*fs);
   std::unique_ptr<Dnode> dn = Dnode::Create(fs_name, root);
   root->dnode_ = dn.get();
   root->dnode_parent_ = dn->GetParent();
   fs->root_ = std::move(dn);
+
+  if (zx::result<> result = fs->Init(); result.is_error()) {
+    return result.status_value();
+  }
 
   if (zx_status_t status = zx::event::create(0, &fs->fs_id_); status != ZX_OK)
     return status;
@@ -68,7 +72,9 @@ zx_status_t Memfs::Create(async_dispatcher_t* dispatcher, std::string_view fs_na
   return ZX_OK;
 }
 
-Memfs::Memfs(async_dispatcher_t* dispatcher) : fs::ManagedVfs(dispatcher) {}
+Memfs::Memfs(async_dispatcher_t* dispatcher) : fs::PagedVfs(dispatcher) {}
+
+Memfs::~Memfs() { TearDown(); }
 
 zx_status_t Memfs::CreateFromVmo(VnodeDir* parent, std::string_view name, zx_handle_t vmo,
                                  zx_off_t off, zx_off_t len) {

@@ -6,24 +6,36 @@
 
 #include <lib/zx/stream.h>
 #include <lib/zx/vmo.h>
+#include <zircon/syscalls-next.h>
 
 #include "src/lib/storage/vfs/cpp/vfs_types.h"
 #include "src/storage/memfs/memfs.h"
 
 namespace memfs {
 
+VnodeFile::VnodeFile(Memfs& memfs) : Vnode(memfs), memfs_(memfs) {}
+
+VnodeFile::~VnodeFile() {
+  fbl::RefPtr<fs::Vnode> file = FreePagedVmo();
+  // FreePagedVmo is being called from the destructor so PagedVnode shouldn't have been holding onto
+  // reference at this point.
+  ZX_DEBUG_ASSERT(file == nullptr);
+}
+
 fs::VnodeProtocolSet VnodeFile::GetProtocols() const { return fs::VnodeProtocol::kFile; }
 
 zx_status_t VnodeFile::CreateStream(uint32_t stream_options, zx::stream* out_stream) {
+  std::lock_guard lock(mutex_);
   if (zx_status_t status = CreateBackingStoreIfNeeded(); status != ZX_OK) {
     return status;
   }
-  return zx::stream::create(stream_options, vmo_, 0u, out_stream);
+  return zx::stream::create(stream_options, paged_vmo(), 0u, out_stream);
 }
 
 void VnodeFile::DidModifyStream() { UpdateModified(); }
 
 zx_status_t VnodeFile::GetVmo(fuchsia_io::wire::VmoFlags flags, zx::vmo* out_vmo) {
+  std::lock_guard lock(mutex_);
   if (zx_status_t status = CreateBackingStoreIfNeeded(); status != ZX_OK) {
     return status;
   }
@@ -36,8 +48,8 @@ zx_status_t VnodeFile::GetVmo(fuchsia_io::wire::VmoFlags flags, zx::vmo* out_vmo
   zx::vmo result;
   if (flags & fuchsia_io::wire::VmoFlags::kPrivateClone) {
     rights |= ZX_RIGHT_SET_PROPERTY;  // Only allow object_set_property on private VMO.
-    if (zx_status_t status =
-            vmo_.create_child(ZX_VMO_CHILD_SNAPSHOT_AT_LEAST_ON_WRITE, 0, content_size, &result);
+    if (zx_status_t status = paged_vmo().create_child(ZX_VMO_CHILD_SNAPSHOT_AT_LEAST_ON_WRITE, 0,
+                                                      content_size, &result);
         status != ZX_OK) {
       return status;
     }
@@ -46,7 +58,7 @@ zx_status_t VnodeFile::GetVmo(fuchsia_io::wire::VmoFlags flags, zx::vmo* out_vmo
       return status;
     }
   } else {
-    if (zx_status_t status = vmo_.duplicate(rights, &result); status != ZX_OK) {
+    if (zx_status_t status = paged_vmo().duplicate(rights, &result); status != ZX_OK) {
       return status;
     }
   }
@@ -56,10 +68,19 @@ zx_status_t VnodeFile::GetVmo(fuchsia_io::wire::VmoFlags flags, zx::vmo* out_vmo
 }
 
 zx_status_t VnodeFile::GetAttributes(fs::VnodeAttributes* attr) {
+  uint64_t content_size = 0;
+  {
+    fs::SharedLock lock(mutex_);
+    if (paged_vmo().is_valid()) {
+      content_size = GetContentSize();
+      UpdateModifiedIfVmoChanged();
+    }
+  }
+
   *attr = fs::VnodeAttributes();
   attr->inode = ino_;
   attr->mode = V_TYPE_FILE | V_IRUSR | V_IWUSR | V_IRGRP | V_IROTH;
-  attr->content_size = GetContentSize();
+  attr->content_size = content_size;
   attr->storage_size = fbl::round_up(attr->content_size, GetPageSize());
   attr->link_count = link_count_;
   attr->creation_time = create_time_;
@@ -75,10 +96,11 @@ zx_status_t VnodeFile::GetNodeInfoForProtocol([[maybe_unused]] fs::VnodeProtocol
 }
 
 zx_status_t VnodeFile::Truncate(size_t length) {
+  std::lock_guard lock(mutex_);
   if (zx_status_t status = CreateBackingStoreIfNeeded(); status != ZX_OK) {
     return status;
   }
-  if (zx_status_t status = vmo_.set_size(length); status != ZX_OK) {
+  if (zx_status_t status = paged_vmo().set_size(length); status != ZX_OK) {
     return status;
   }
 
@@ -87,21 +109,53 @@ zx_status_t VnodeFile::Truncate(size_t length) {
 }
 
 zx_status_t VnodeFile::CreateBackingStoreIfNeeded() {
-  if (vmo_.is_valid()) {
-    return ZX_OK;
-  }
   // TODO(fxbug.dev/116484): Use a fixed sized VMO.
-  return zx::vmo::create(0, ZX_VMO_RESIZABLE, &vmo_);
+  return EnsureCreatePagedVmo(0, ZX_VMO_RESIZABLE).status_value();
 }
 
 uint64_t VnodeFile::GetContentSize() const {
-  if (!vmo_.is_valid()) {
-    return 0u;
-  }
-  uint64_t content_size = 0;
-  zx_status_t status = vmo_.get_prop_content_size(&content_size);
+  ZX_DEBUG_ASSERT(paged_vmo().is_valid());
+  uint64_t content_size = 0u;
+  zx_status_t status = paged_vmo().get_prop_content_size(&content_size);
   ZX_DEBUG_ASSERT(status == ZX_OK);
   return content_size;
+}
+
+bool VnodeFile::SupportsClientSideStreams() {
+#if defined(MEMFS_ENABLE_CLIENT_SIDE_STREAMS)
+  return true;
+#else
+  return false;
+#endif
+}
+
+zx_status_t VnodeFile::CloseNode() {
+  fs::SharedLock lock(mutex_);
+  UpdateModifiedIfVmoChanged();
+  return ZX_OK;
+}
+
+void VnodeFile::Sync(SyncCallback closure) {
+  closure(ZX_OK);
+  fs::SharedLock lock(mutex_);
+  UpdateModifiedIfVmoChanged();
+}
+
+void VnodeFile::UpdateModifiedIfVmoChanged() {
+#if defined(MEMFS_ENABLE_CLIENT_SIDE_STREAMS)
+  if (!paged_vmo().is_valid()) {
+    return;
+  }
+
+  zx_pager_vmo_stats vmo_stats;
+  zx_status_t status =
+      zx_pager_query_vmo_stats(memfs_.pager_for_next_vdso_syscalls().get(), paged_vmo().get(),
+                               ZX_PAGER_RESET_VMO_STATS, &vmo_stats, sizeof(vmo_stats));
+  ZX_ASSERT(status == ZX_OK);
+  if (vmo_stats.modified == ZX_PAGER_VMO_STATS_MODIFIED) {
+    UpdateModified();
+  }
+#endif
 }
 
 }  // namespace memfs

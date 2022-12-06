@@ -16,7 +16,7 @@
 #include <fbl/ref_ptr.h>
 
 #include "src/lib/storage/vfs/cpp/fuchsia_vfs.h"
-#include "src/lib/storage/vfs/cpp/managed_vfs.h"
+#include "src/lib/storage/vfs/cpp/paged_vfs.h"
 #include "src/storage/memfs/dnode.h"
 
 namespace memfs {
@@ -26,12 +26,12 @@ class VnodeDir;
 // Returns the page size used by Memfs (this is just the system memory page size).
 uint64_t GetPageSize();
 
-class Memfs : public fs::ManagedVfs {
+class Memfs : public fs::PagedVfs {
  public:
   static zx_status_t Create(async_dispatcher_t* dispatcher, std::string_view fs_name,
                             std::unique_ptr<Memfs>* out_vfs, fbl::RefPtr<VnodeDir>* out_root);
 
-  ~Memfs() override = default;
+  ~Memfs() override;
 
   // Creates a VnodeVmo under |parent| with |name| which is backed by |vmo|.
   // N.B. The VMO will not be taken into account when calculating
@@ -41,6 +41,12 @@ class Memfs : public fs::ManagedVfs {
 
   // fs::FuchsiaVfs override:
   zx::result<fs::FilesystemInfo> GetFilesystemInfo() override;
+
+#if defined(MEMFS_ENABLE_CLIENT_SIDE_STREAMS)
+  const zx::pager& pager_for_next_vdso_syscalls() const {
+    return PagedVfs::pager_for_next_vdso_syscalls();
+  }
+#endif
 
  private:
   explicit Memfs(async_dispatcher_t* dispatcher);

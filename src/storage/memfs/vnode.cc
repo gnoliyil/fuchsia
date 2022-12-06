@@ -4,6 +4,7 @@
 
 #include "src/storage/memfs/vnode.h"
 
+#include "src/lib/storage/vfs/cpp/paged_vnode.h"
 #include "src/storage/memfs/dnode.h"
 
 namespace memfs {
@@ -11,7 +12,8 @@ namespace memfs {
 std::atomic<uint64_t> Vnode::ino_ctr_ = 0;
 std::atomic<uint64_t> Vnode::deleted_ino_ctr_ = 0;
 
-Vnode::Vnode() : ino_(ino_ctr_.fetch_add(1, std::memory_order_relaxed)) {
+Vnode::Vnode(Memfs& memfs)
+    : fs::PagedVnode(memfs), ino_(ino_ctr_.fetch_add(1, std::memory_order_relaxed)) {
   std::timespec ts;
   if (std::timespec_get(&ts, TIME_UTC)) {
     create_time_ = modify_time_ = zx_time_from_timespec(ts);

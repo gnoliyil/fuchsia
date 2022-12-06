@@ -5,17 +5,19 @@
 #ifndef SRC_STORAGE_MEMFS_VNODE_H_
 #define SRC_STORAGE_MEMFS_VNODE_H_
 
+#include "src/lib/storage/vfs/cpp/paged_vnode.h"
 #include "src/lib/storage/vfs/cpp/vfs_types.h"
 #include "src/lib/storage/vfs/cpp/vnode.h"
+#include "src/storage/memfs/memfs.h"
 
 namespace memfs {
 
 class Dnode;
 
-class Vnode : public fs::Vnode {
+class Vnode : public fs::PagedVnode {
  public:
   zx_status_t SetAttributes(fs::VnodeAttributesUpdate a) final;
-  void Sync(SyncCallback closure) final;
+  void Sync(SyncCallback closure) override;
 
   // To be more specific: Is this vnode connected into the directory hierarchy?
   // VnodeDirs can be unlinked, and this method will subsequently return false.
@@ -44,11 +46,14 @@ class Vnode : public fs::Vnode {
   uint32_t link_count_ = 0;
 
  protected:
-  Vnode();
+  explicit Vnode(Memfs& memfs);
 
   uint64_t ino_ = 0;
   uint64_t create_time_ = 0;
   uint64_t modify_time_ = 0;
+
+  void VmoRead(uint64_t offset, uint64_t length) final { ZX_PANIC("Not supported"); }
+  void VmoDirty(uint64_t offset, uint64_t length) final { ZX_PANIC("Not supported"); }
 
  private:
   static std::atomic<uint64_t> ino_ctr_;

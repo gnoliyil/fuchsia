@@ -6,13 +6,14 @@
 #define SRC_STORAGE_MEMFS_VNODE_DIR_H_
 
 #include "src/lib/storage/vfs/cpp/watcher.h"
+#include "src/storage/memfs/memfs.h"
 #include "src/storage/memfs/vnode.h"
 
 namespace memfs {
 
 class VnodeDir final : public Vnode {
  public:
-  VnodeDir();
+  explicit VnodeDir(Memfs& memfs);
   ~VnodeDir() override;
 
   fs::VnodeProtocolSet GetProtocols() const final;
@@ -50,6 +51,7 @@ class VnodeDir final : public Vnode {
                                      fs::VnodeRepresentation* info) final;
   zx_status_t GetVmo(fuchsia_io::wire::VmoFlags flags, zx::vmo* out_vmo) final;
 
+  Memfs& memfs_;
   fs::WatcherContainer watcher_;
 };
 

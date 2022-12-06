@@ -7,12 +7,13 @@
 #include <sys/stat.h>
 
 #include "src/storage/memfs/dnode.h"
+#include "src/storage/memfs/memfs.h"
 #include "src/storage/memfs/vnode_file.h"
 #include "src/storage/memfs/vnode_vmo.h"
 
 namespace memfs {
 
-VnodeDir::VnodeDir() {
+VnodeDir::VnodeDir(Memfs& memfs) : Vnode(memfs), memfs_(memfs) {
   link_count_ = 1;  // Implied '.'
 }
 
@@ -94,9 +95,9 @@ zx_status_t VnodeDir::Create(std::string_view name, uint32_t mode, fbl::RefPtr<f
   fbl::RefPtr<memfs::Vnode> vn;
   {
     if (S_ISDIR(mode)) {
-      vn = fbl::AdoptRef(new (&ac) memfs::VnodeDir());
+      vn = fbl::AdoptRef(new (&ac) memfs::VnodeDir(memfs_));
     } else {
-      vn = fbl::AdoptRef(new (&ac) memfs::VnodeFile());
+      vn = fbl::AdoptRef(new (&ac) memfs::VnodeFile(memfs_));
     }
   }
 
@@ -259,7 +260,7 @@ zx_status_t VnodeDir::CreateFromVmo(std::string_view name, zx_handle_t vmo, zx_o
 
   fbl::AllocChecker ac;
   fbl::RefPtr<Vnode> vn;
-  vn = fbl::AdoptRef(new (&ac) VnodeVmo(vmo, off, len));
+  vn = fbl::AdoptRef(new (&ac) VnodeVmo(memfs_, vmo, off, len));
   if (!ac.check()) {
     return ZX_ERR_NO_MEMORY;
   }

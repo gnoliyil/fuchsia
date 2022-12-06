@@ -5,13 +5,14 @@
 #ifndef SRC_STORAGE_MEMFS_VNODE_VMO_H_
 #define SRC_STORAGE_MEMFS_VNODE_VMO_H_
 
+#include "src/storage/memfs/memfs.h"
 #include "src/storage/memfs/vnode.h"
 
 namespace memfs {
 
 class VnodeVmo final : public Vnode {
  public:
-  VnodeVmo(zx_handle_t vmo, zx_off_t offset, zx_off_t length);
+  VnodeVmo(Memfs& memfs, zx_handle_t vmo, zx_off_t offset, zx_off_t length);
   ~VnodeVmo() override;
 
   fs::VnodeProtocolSet GetProtocols() const final;

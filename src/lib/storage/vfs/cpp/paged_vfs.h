@@ -106,6 +106,11 @@ class PagedVfs : public ManagedVfs {
   size_t GetRegisteredPagedVmoCount() const __TA_EXCLUDES(vfs_lock_)
       __TA_EXCLUDES(live_nodes_lock_);
 
+ protected:
+  // Provides direct access to the underlying zx::pager. This is only exposed so clients can make
+  // pager syscalls that haven't been stabilized yet.
+  const zx::pager& pager_for_next_vdso_syscalls() const { return pager_; }
+
  private:
   std::unique_ptr<PagerThreadPool> pager_pool_;  // Threadsafe, does not need locking.
   zx::pager pager_;                              // Does not need locking.

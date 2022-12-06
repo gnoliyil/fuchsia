@@ -6,7 +6,6 @@
 
 #include <lib/syslog/cpp/macros.h>
 
-#include "src/storage/memfs/dnode.h"
 #include "src/storage/memfs/memfs.h"
 
 namespace memfs {
@@ -26,8 +25,8 @@ bool WindowMatchesVMO(zx_handle_t vmo, zx_off_t offset, zx_off_t length) {
 
 }  // namespace
 
-VnodeVmo::VnodeVmo(zx_handle_t vmo, zx_off_t offset, zx_off_t length)
-    : vmo_(vmo), offset_(offset), length_(length) {
+VnodeVmo::VnodeVmo(Memfs& memfs, zx_handle_t vmo, zx_off_t offset, zx_off_t length)
+    : Vnode(memfs), vmo_(vmo), offset_(offset), length_(length) {
   // Check whether the backing VMO has ZX_RIGHT_EXECUTE, which influences later validation and
   // behavior.
   zx_info_handle_basic_t handle_info;

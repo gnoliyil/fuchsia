@@ -233,6 +233,51 @@ TEST_P(MmapTest, Unlinked) {
   ASSERT_EQ(munmap(addr, PAGE_SIZE), 0);
 }
 
+// For filesystems with pager backed VMOs, uncommitted pages should still be able to be supplied
+// even after the file is unlinked.
+TEST_P(MmapTest, ReadableAfterUnlink) {
+  constexpr size_t kPageCount = 4;
+  size_t page_size = static_cast<size_t>(zx_system_get_page_size());
+  size_t file_size = kPageCount * page_size;
+  const std::string filename = GetPath("readable_after_unlink");
+  fbl::unique_fd fd(open(filename.c_str(), O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR));
+  ASSERT_TRUE(fd);
+  ASSERT_EQ(ftruncate(fd.get(), file_size), 0);
+  void* addr = mmap(nullptr, file_size, PROT_READ, MAP_SHARED, fd.get(), 0);
+  ASSERT_NE(addr, MAP_FAILED);
+  ASSERT_EQ(close(fd.release()), 0);
+  ASSERT_EQ(unlink(filename.c_str()), 0);
+
+  const char* buf = static_cast<const char*>(addr);
+  for (size_t i = 0; i < kPageCount; ++i) {
+    ASSERT_EQ(buf[i * page_size], 0);
+  }
+
+  ASSERT_EQ(munmap(addr, file_size), 0);
+}
+
+// For filesystems with pager backed VMOs, clean pages should still be able to be dirtied even after
+// the file is unlinked.
+TEST_P(MmapSharedWriteTest, WriteableAfterUnlink) {
+  constexpr size_t kPageCount = 4;
+  size_t page_size = static_cast<size_t>(zx_system_get_page_size());
+  size_t file_size = kPageCount * page_size;
+  const std::string filename = GetPath("writeable_after_unlink");
+  fbl::unique_fd fd(open(filename.c_str(), O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR));
+  ASSERT_TRUE(fd);
+  ASSERT_EQ(ftruncate(fd.get(), file_size), 0);
+  void* addr = mmap(nullptr, file_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd.get(), 0);
+  ASSERT_NE(addr, MAP_FAILED);
+  ASSERT_EQ(close(fd.release()), 0);
+  ASSERT_EQ(unlink(filename.c_str()), 0);
+
+  char* buf = static_cast<char*>(addr);
+  for (size_t i = 0; i < kPageCount; ++i) {
+    buf[i * page_size] = 5;
+  }
+
+  ASSERT_EQ(munmap(addr, file_size), 0);
+}
 // Test that MAP_SHARED propagates updates to the file.
 TEST_P(MmapSharedWriteTest, Shared) {
   const std::string filename = GetPath("mmap_shared");
