@@ -104,7 +104,9 @@ class TreeVisitor {
     element->Accept(this);
   }
 
-  virtual void OnLibraryDecl(std::unique_ptr<LibraryDecl> const& element) { element->Accept(this); }
+  virtual void OnLibraryDeclaration(std::unique_ptr<LibraryDeclaration> const& element) {
+    element->Accept(this);
+  }
 
   virtual void OnUsing(std::unique_ptr<Using> const& element) { element->Accept(this); }
 
@@ -230,7 +232,9 @@ class TreeVisitor {
     element->Accept(this);
   }
 
-  virtual void OnTypeDecl(std::unique_ptr<TypeDecl> const& element) { element->Accept(this); }
+  virtual void OnTypeDeclaration(std::unique_ptr<TypeDeclaration> const& element) {
+    element->Accept(this);
+  }
   // --- end new syntax ---
 
   virtual void OnFile(std::unique_ptr<File> const& element) { element->Accept(this); }

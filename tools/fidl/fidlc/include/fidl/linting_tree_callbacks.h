@@ -104,10 +104,10 @@ class LintingTreeCallbacks {
   void OnExitLayout(fit::function<void(const raw::Layout&)> callback) {
     exit_layout_callbacks_.push_back(std::move(callback));
   }
-  void OnTypeDecl(fit::function<void(const raw::TypeDecl&)> callback) {
+  void OnTypeDeclaration(fit::function<void(const raw::TypeDeclaration&)> callback) {
     type_decl_callbacks_.push_back(std::move(callback));
   }
-  void OnExitTypeDecl(fit::function<void(const raw::TypeDecl&)> callback) {
+  void OnExitTypeDeclaration(fit::function<void(const raw::TypeDeclaration&)> callback) {
     exit_type_decl_callbacks_.push_back(std::move(callback));
   }
   void OnIdentifierLayoutParameter(
@@ -157,8 +157,8 @@ class LintingTreeCallbacks {
   std::vector<fit::function<void(const raw::Layout&)>> exit_layout_callbacks_;
   std::vector<fit::function<void(const raw::IdentifierLayoutParameter&)>>
       identifier_layout_parameter_callbacks_;
-  std::vector<fit::function<void(const raw::TypeDecl&)>> type_decl_callbacks_;
-  std::vector<fit::function<void(const raw::TypeDecl&)>> exit_type_decl_callbacks_;
+  std::vector<fit::function<void(const raw::TypeDeclaration&)>> type_decl_callbacks_;
+  std::vector<fit::function<void(const raw::TypeDeclaration&)>> exit_type_decl_callbacks_;
   std::vector<fit::function<void(const raw::TypeConstructor&)>> type_constructor_callbacks_;
 };
 

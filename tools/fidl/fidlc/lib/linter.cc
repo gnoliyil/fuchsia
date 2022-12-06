@@ -602,10 +602,10 @@ Linter::Linter()
           }
         }
       });
-  callbacks_.OnTypeDecl(
+  callbacks_.OnTypeDeclaration(
       [&linter = *this]
       //
-      (const raw::TypeDecl& element) {
+      (const raw::TypeDeclaration& element) {
         auto* layout_ref = element.type_ctor->layout_ref.get();
 
         // TODO(fxbug.dev/7807): Delete this check once new-types are supported. Instead, we should

@@ -343,10 +343,10 @@ class AliasDeclaration final : public SourceElement {
   std::unique_ptr<TypeConstructor> type_ctor;
 };
 
-class LibraryDecl final : public SourceElement {
+class LibraryDeclaration final : public SourceElement {
  public:
-  LibraryDecl(SourceElement const& element, std::unique_ptr<AttributeList> attributes,
-              std::unique_ptr<CompoundIdentifier> path)
+  LibraryDeclaration(SourceElement const& element, std::unique_ptr<AttributeList> attributes,
+                     std::unique_ptr<CompoundIdentifier> path)
       : SourceElement(element), attributes(std::move(attributes)), path(std::move(path)) {}
 
   void Accept(TreeVisitor* visitor) const;
@@ -802,10 +802,11 @@ class TypeConstraints final : public SourceElement {
   std::vector<std::unique_ptr<raw::Constant>> items;
 };
 
-class TypeDecl final : public SourceElement {
+class TypeDeclaration final : public SourceElement {
  public:
-  TypeDecl(SourceElement const& element, std::unique_ptr<AttributeList> attributes,
-           std::unique_ptr<Identifier> identifier, std::unique_ptr<TypeConstructor> type_ctor)
+  TypeDeclaration(SourceElement const& element, std::unique_ptr<AttributeList> attributes,
+                  std::unique_ptr<Identifier> identifier,
+                  std::unique_ptr<TypeConstructor> type_ctor)
       : SourceElement(element),
         attributes(std::move(attributes)),
         identifier(std::move(identifier)),
@@ -820,14 +821,14 @@ class TypeDecl final : public SourceElement {
 
 class File final : public SourceElement {
  public:
-  File(SourceElement const& element, Token end, std::unique_ptr<LibraryDecl> library_decl,
+  File(SourceElement const& element, Token end, std::unique_ptr<LibraryDeclaration> library_decl,
        std::vector<std::unique_ptr<AliasDeclaration>> alias_list,
        std::vector<std::unique_ptr<Using>> using_list,
        std::vector<std::unique_ptr<ConstDeclaration>> const_declaration_list,
        std::vector<std::unique_ptr<ProtocolDeclaration>> protocol_declaration_list,
        std::vector<std::unique_ptr<ResourceDeclaration>> resource_declaration_list,
        std::vector<std::unique_ptr<ServiceDeclaration>> service_declaration_list,
-       std::vector<std::unique_ptr<TypeDecl>> type_decls, std::vector<Token> tokens)
+       std::vector<std::unique_ptr<TypeDeclaration>> type_decls, std::vector<Token> tokens)
       : SourceElement(element),
         library_decl(std::move(library_decl)),
         alias_list(std::move(alias_list)),
@@ -842,14 +843,14 @@ class File final : public SourceElement {
 
   void Accept(TreeVisitor* visitor) const;
 
-  std::unique_ptr<LibraryDecl> library_decl;
+  std::unique_ptr<LibraryDeclaration> library_decl;
   std::vector<std::unique_ptr<AliasDeclaration>> alias_list;
   std::vector<std::unique_ptr<Using>> using_list;
   std::vector<std::unique_ptr<ConstDeclaration>> const_declaration_list;
   std::vector<std::unique_ptr<ProtocolDeclaration>> protocol_declaration_list;
   std::vector<std::unique_ptr<ResourceDeclaration>> resource_declaration_list;
   std::vector<std::unique_ptr<ServiceDeclaration>> service_declaration_list;
-  std::vector<std::unique_ptr<TypeDecl>> type_decls;
+  std::vector<std::unique_ptr<TypeDeclaration>> type_decls;
 
   // An ordered list of all tokens (including comments) in the source file.
   std::vector<Token> tokens;

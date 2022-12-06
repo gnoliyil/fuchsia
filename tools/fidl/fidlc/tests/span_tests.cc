@@ -73,7 +73,7 @@ namespace {
   DO(ParameterListNew)          \
   DO(TypeConstraints)           \
   DO(TypeConstructorNew)        \
-  DO(TypeDecl)
+  DO(TypeDeclaration)
 
 #define MAKE_ENUM_VARIANT(VAR) VAR,
 enum ElementType { FOR_ENUM_VARIANTS(MAKE_ENUM_VARIANT) };
@@ -132,9 +132,10 @@ class SourceSpanVisitor : public fidl::raw::TreeVisitor {
     CheckSpanOfType(ElementType::BinaryOperatorConstant, *element);
     TreeVisitor::OnBinaryOperatorConstant(element);
   }
-  void OnLibraryDecl(std::unique_ptr<fidl::raw::LibraryDecl> const& element) override {
+  void OnLibraryDeclaration(
+      std::unique_ptr<fidl::raw::LibraryDeclaration> const& element) override {
     CheckSpanOfType(ElementType::Library, *element);
-    TreeVisitor::OnLibraryDecl(element);
+    TreeVisitor::OnLibraryDeclaration(element);
   }
   void OnUsing(std::unique_ptr<fidl::raw::Using> const& element) override {
     CheckSpanOfType(ElementType::Using, *element);
@@ -251,9 +252,9 @@ class SourceSpanVisitor : public fidl::raw::TreeVisitor {
     CheckSpanOfType(ElementType::TypeConstructorNew, *element);
     TreeVisitor::OnTypeConstructor(element);
   }
-  void OnTypeDecl(std::unique_ptr<fidl::raw::TypeDecl> const& element) override {
-    CheckSpanOfType(ElementType::TypeDecl, *element);
-    TreeVisitor::OnTypeDecl(element);
+  void OnTypeDeclaration(std::unique_ptr<fidl::raw::TypeDeclaration> const& element) override {
+    CheckSpanOfType(ElementType::TypeDeclaration, *element);
+    TreeVisitor::OnTypeDeclaration(element);
   }
 
  private:
@@ -587,7 +588,7 @@ const std::vector<TestCase> test_cases = {
           };
          )FIDL",
      }},
-    {ElementType::TypeDecl,
+    {ElementType::TypeDeclaration,
      {
          R"FIDL(library x;
           «type E = enum : int8 {

@@ -12,7 +12,7 @@ namespace fidl::raw {
 
 void DeclarationOrderTreeVisitor::OnFile(std::unique_ptr<File> const& element) {
   OnSourceElementStart(*element);
-  OnLibraryDecl(element->library_decl);
+  OnLibraryDeclaration(element->library_decl);
 
   auto alias_decls_it = element->alias_list.begin();
   auto const_decls_it = element->const_declaration_list.begin();
@@ -94,7 +94,7 @@ void DeclarationOrderTreeVisitor::OnFile(std::unique_ptr<File> const& element) {
         ++service_decls_it;
         break;
       case type_decl_t:
-        OnTypeDecl(*type_decls_it);
+        OnTypeDeclaration(*type_decls_it);
         ++type_decls_it;
         break;
       case using_t:

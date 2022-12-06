@@ -155,7 +155,7 @@ std::unique_ptr<raw::CompoundIdentifier> Parser::ParseCompoundIdentifier(
   return std::make_unique<raw::CompoundIdentifier>(scope.GetSourceElement(), std::move(components));
 }
 
-std::unique_ptr<raw::LibraryDecl> Parser::ParseLibraryDecl() {
+std::unique_ptr<raw::LibraryDeclaration> Parser::ParseLibraryDeclaration() {
   ASTScope scope(this);
   auto attributes = MaybeParseAttributeList();
   if (!Ok())
@@ -176,8 +176,8 @@ std::unique_ptr<raw::LibraryDecl> Parser::ParseLibraryDecl() {
     }
   }
 
-  return std::make_unique<raw::LibraryDecl>(scope.GetSourceElement(), std::move(attributes),
-                                            std::move(library_name));
+  return std::make_unique<raw::LibraryDeclaration>(scope.GetSourceElement(), std::move(attributes),
+                                                   std::move(library_name));
 }
 
 std::unique_ptr<raw::StringLiteral> Parser::ParseStringLiteral() {
@@ -1579,8 +1579,8 @@ std::unique_ptr<raw::TypeConstructor> Parser::ParseTypeConstructor() {
                                                 std::move(parameters), std::move(constraints));
 }
 
-std::unique_ptr<raw::TypeDecl> Parser::ParseTypeDecl(std::unique_ptr<raw::AttributeList> attributes,
-                                                     ASTScope& scope) {
+std::unique_ptr<raw::TypeDeclaration> Parser::ParseTypeDeclaration(
+    std::unique_ptr<raw::AttributeList> attributes, ASTScope& scope) {
   ConsumeToken(IdentifierOfSubkind(Token::Subkind::kType));
   if (!Ok())
     return Fail();
@@ -1602,14 +1602,14 @@ std::unique_ptr<raw::TypeDecl> Parser::ParseTypeDecl(std::unique_ptr<raw::Attrib
       static_cast<raw::InlineLayoutReference*>(layout->layout_ref.get())->attributes != nullptr;
   if (attributes != nullptr && layout_has_attributes)
     return Fail(ErrRedundantAttributePlacement, scope.GetSourceElement().span());
-  return std::make_unique<raw::TypeDecl>(scope.GetSourceElement(), std::move(attributes),
-                                         std::move(identifier), std::move(layout));
+  return std::make_unique<raw::TypeDeclaration>(scope.GetSourceElement(), std::move(attributes),
+                                                std::move(identifier), std::move(layout));
 }
 
 std::unique_ptr<raw::File> Parser::ParseFile() {
   ASTScope scope(this);
 
-  auto library_decl = ParseLibraryDecl();
+  auto library_decl = ParseLibraryDeclaration();
   if (!Ok())
     return Fail();
   ConsumeToken(OfKind(Token::Kind::kSemicolon));
@@ -1623,7 +1623,7 @@ std::unique_ptr<raw::File> Parser::ParseFile() {
   std::vector<std::unique_ptr<raw::ProtocolDeclaration>> protocol_declaration_list;
   std::vector<std::unique_ptr<raw::ResourceDeclaration>> resource_declaration_list;
   std::vector<std::unique_ptr<raw::ServiceDeclaration>> service_declaration_list;
-  std::vector<std::unique_ptr<raw::TypeDecl>> type_decls;
+  std::vector<std::unique_ptr<raw::TypeDeclaration>> type_decls;
   auto parse_declaration = [&]() {
     ASTScope scope(this);
     std::unique_ptr<raw::AttributeList> attributes = MaybeParseAttributeList();
@@ -1653,7 +1653,7 @@ std::unique_ptr<raw::File> Parser::ParseFile() {
 
       case CASE_IDENTIFIER(Token::Subkind::kType): {
         done_with_library_imports = true;
-        add(&type_decls, [&] { return ParseTypeDecl(std::move(attributes), scope); });
+        add(&type_decls, [&] { return ParseTypeDeclaration(std::move(attributes), scope); });
         return More;
       }
 

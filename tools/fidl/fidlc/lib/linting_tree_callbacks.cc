@@ -139,12 +139,12 @@ LintingTreeCallbacks::LintingTreeCallbacks() {
       }
       ProcessGapText(element->end());
     }
-    void OnTypeDecl(std::unique_ptr<raw::TypeDecl> const& element) override {
+    void OnTypeDeclaration(std::unique_ptr<raw::TypeDeclaration> const& element) override {
       ProcessGapText(element->start());
       for (auto& callback : callbacks_.type_decl_callbacks_) {
         callback(*element);
       }
-      DeclarationOrderTreeVisitor::OnTypeDecl(element);
+      DeclarationOrderTreeVisitor::OnTypeDeclaration(element);
       for (auto& callback : callbacks_.exit_type_decl_callbacks_) {
         callback(*element);
       }

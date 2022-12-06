@@ -41,7 +41,7 @@ class SpanSequenceTreeVisitor : public raw::DeclarationOrderTreeVisitor {
   void OnLayout(std::unique_ptr<raw::Layout> const& element) override;
   void OnInlineLayoutReference(std::unique_ptr<raw::InlineLayoutReference> const& element) override;
   void OnLayoutMember(std::unique_ptr<raw::LayoutMember> const& element) override;
-  void OnLibraryDecl(std::unique_ptr<raw::LibraryDecl> const& element) override;
+  void OnLibraryDeclaration(std::unique_ptr<raw::LibraryDeclaration> const& element) override;
   void OnLiteral(std::unique_ptr<raw::Literal> const& element) override;
   void OnLiteralConstant(std::unique_ptr<raw::LiteralConstant> const& element) override;
   void OnNamedLayoutReference(std::unique_ptr<raw::NamedLayoutReference> const& element) override;
@@ -57,7 +57,7 @@ class SpanSequenceTreeVisitor : public raw::DeclarationOrderTreeVisitor {
   void OnServiceMember(std::unique_ptr<raw::ServiceMember> const& element) override;
   void OnStructLayoutMember(std::unique_ptr<raw::StructLayoutMember> const& element) override;
   void OnTypeConstructor(std::unique_ptr<raw::TypeConstructor> const& element) override;
-  void OnTypeDecl(std::unique_ptr<raw::TypeDecl> const& element) override;
+  void OnTypeDeclaration(std::unique_ptr<raw::TypeDeclaration> const& element) override;
   void OnUsing(std::unique_ptr<raw::Using> const& element) override;
   void OnValueLayoutMember(std::unique_ptr<raw::ValueLayoutMember> const& element) override;
 
@@ -82,7 +82,7 @@ class SpanSequenceTreeVisitor : public raw::DeclarationOrderTreeVisitor {
     kInlineLayoutReference,
     kLayout,
     kLayoutMember,
-    kLibraryDecl,
+    kLibraryDeclaration,
     kLiteral,
     kLiteralConstant,
     kNamedLayoutReference,
@@ -102,7 +102,7 @@ class SpanSequenceTreeVisitor : public raw::DeclarationOrderTreeVisitor {
     kStructLayout,
     kStructLayoutMember,
     kTypeConstructorNew,
-    kTypeDecl,
+    kTypeDeclaration,
     kUsing,
     kValueLayout,
     kValueLayoutMember,

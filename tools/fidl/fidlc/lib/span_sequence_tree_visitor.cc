@@ -694,15 +694,16 @@ void SpanSequenceTreeVisitor::OnLayoutMember(const std::unique_ptr<raw::LayoutMe
   TreeVisitor::OnLayoutMember(element);
 }
 
-void SpanSequenceTreeVisitor::OnLibraryDecl(const std::unique_ptr<raw::LibraryDecl>& element) {
-  const auto visiting = Visiting(this, VisitorKind::kLibraryDecl);
+void SpanSequenceTreeVisitor::OnLibraryDeclaration(
+    const std::unique_ptr<raw::LibraryDeclaration>& element) {
+  const auto visiting = Visiting(this, VisitorKind::kLibraryDeclaration);
   if (element->attributes != nullptr) {
     OnAttributeList(element->attributes);
   }
 
   const auto builder = StatementBuilder<AtomicSpanSequence>(
       this, *element, SpanSequence::Position::kNewlineUnindented);
-  TreeVisitor::OnLibraryDecl(element);
+  TreeVisitor::OnLibraryDeclaration(element);
   ClearBlankLinesAfterAttributeList(element->attributes, building_.top());
 }
 
@@ -1028,15 +1029,16 @@ void SpanSequenceTreeVisitor::OnTypeConstructor(
   }
 }
 
-void SpanSequenceTreeVisitor::OnTypeDecl(const std::unique_ptr<raw::TypeDecl>& element) {
-  const auto visiting = Visiting(this, VisitorKind::kTypeDecl);
+void SpanSequenceTreeVisitor::OnTypeDeclaration(
+    const std::unique_ptr<raw::TypeDeclaration>& element) {
+  const auto visiting = Visiting(this, VisitorKind::kTypeDeclaration);
   if (element->attributes != nullptr) {
     OnAttributeList(element->attributes);
   }
 
   const auto builder = StatementBuilder<DivisibleSpanSequence>(
       this, *element, SpanSequence::Position::kNewlineUnindented);
-  TreeVisitor::OnTypeDecl(element);
+  TreeVisitor::OnTypeDeclaration(element);
   SetSpacesBetweenChildren(building_.top(), true);
   ClearBlankLinesAfterAttributeList(element->attributes, building_.top());
 }

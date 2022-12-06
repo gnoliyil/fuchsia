@@ -81,7 +81,7 @@ void AttributeList::Accept(TreeVisitor* visitor) const {
   }
 }
 
-void LibraryDecl::Accept(TreeVisitor* visitor) const {
+void LibraryDeclaration::Accept(TreeVisitor* visitor) const {
   SourceElementMark sem(visitor, *this);
   if (attributes != nullptr) {
     visitor->OnAttributeList(attributes);
@@ -319,7 +319,7 @@ void TypeConstructor::Accept(TreeVisitor* visitor) const {
   }
 }
 
-void TypeDecl::Accept(TreeVisitor* visitor) const {
+void TypeDeclaration::Accept(TreeVisitor* visitor) const {
   if (attributes != nullptr) {
     visitor->OnAttributeList(attributes);
   }
@@ -330,7 +330,7 @@ void TypeDecl::Accept(TreeVisitor* visitor) const {
 
 void File::Accept(TreeVisitor* visitor) const {
   SourceElementMark sem(visitor, *this);
-  visitor->OnLibraryDecl(library_decl);
+  visitor->OnLibraryDeclaration(library_decl);
   for (auto& i : using_list) {
     visitor->OnUsing(i);
   }
@@ -347,7 +347,7 @@ void File::Accept(TreeVisitor* visitor) const {
     visitor->OnServiceDeclaration(i);
   }
   for (auto& i : type_decls) {
-    visitor->OnTypeDecl(i);
+    visitor->OnTypeDeclaration(i);
   }
 }
 

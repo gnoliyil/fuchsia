@@ -778,7 +778,7 @@ type Foo = struct {
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrCannotSpecifyModifier);
 }
 
-TEST(ParsingTests, BadTypeDeclWithConstraintsModifiers) {
+TEST(ParsingTests, BadTypeDeclarationWithConstraintsModifiers) {
   TestLibrary library(R"FIDL(
 library example;
 
@@ -808,7 +808,7 @@ type Foo = struct {
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrCannotAttachAttributeToIdentifier);
 }
 
-TEST(ParsingTests, BadTypeDeclOfEnumLayoutWithInvalidSubtype) {
+TEST(ParsingTests, BadTypeDeclarationOfEnumLayoutWithInvalidSubtype) {
   TestLibrary library;
   library.AddFile("bad/fi-0013.test.fidl");
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrInvalidWrappedType);

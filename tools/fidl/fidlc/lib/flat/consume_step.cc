@@ -66,7 +66,7 @@ void ConsumeStep::RunImpl() {
     ConsumeServiceDeclaration(std::move(service_declaration));
   }
   for (auto& type_decl : std::move(file_->type_decls)) {
-    ConsumeTypeDecl(std::move(type_decl));
+    ConsumeTypeDeclaration(std::move(type_decl));
   }
 }
 
@@ -884,7 +884,7 @@ bool ConsumeStep::ConsumeTypeConstructor(std::unique_ptr<raw::TypeConstructor> r
                                 out_type, /*out_inline_decl=*/nullptr);
 }
 
-void ConsumeStep::ConsumeTypeDecl(std::unique_ptr<raw::TypeDecl> type_decl) {
+void ConsumeStep::ConsumeTypeDeclaration(std::unique_ptr<raw::TypeDeclaration> type_decl) {
   auto name = Name::CreateSourced(library(), type_decl->identifier->span());
   auto& layout_ref = type_decl->type_ctor->layout_ref;
 
@@ -903,7 +903,7 @@ void ConsumeStep::ConsumeTypeDecl(std::unique_ptr<raw::TypeDecl> type_decl) {
                          /*out_type=*/nullptr, /*out_inline_decl=*/nullptr);
 }
 
-void ConsumeStep::ConsumeNewType(std::unique_ptr<raw::TypeDecl> type_decl) {
+void ConsumeStep::ConsumeNewType(std::unique_ptr<raw::TypeDeclaration> type_decl) {
   ZX_ASSERT(type_decl->type_ctor->layout_ref->kind == raw::LayoutReference::Kind::kNamed);
   ZX_ASSERT(experimental_flags().IsFlagEnabled(ExperimentalFlags::Flag::kAllowNewTypes));
 
