@@ -35,6 +35,9 @@ import (
 {{ else if .IsAlias }}
 {{ template "GenerateGoAlias" .AsAlias }}
 
+{{ else if .IsHandle }}
+{{ template "GenerateGoHandle" .AsHandle }}
+
 {{ end }}
 {{ end }}
 {{ end }}

@@ -24,6 +24,7 @@ group("tests") {
     ":enums",
     ":experimental_zx_types",
     ":multifile",
+    ":resources",
     ":structs",
     ":syscalls",
   ]
@@ -516,6 +517,22 @@ zither_golden_test("experimental_zx_types") {
     {
       backend = "go"
       files = [ "experimental_zx_types.go" ]
+    },
+  ]
+}
+
+# FIDL: testdata/resources/
+# Goldens: testdata/resources/goldens/${backend}/
+zither_golden_test("resources") {
+  sources = [ "resources.test.fidl" ]
+  cases = [
+    {
+      backend = "c"
+      files = [ "resources.h" ]
+    },
+    {
+      backend = "go"
+      files = [ "resources.go" ]
     },
   ]
 }

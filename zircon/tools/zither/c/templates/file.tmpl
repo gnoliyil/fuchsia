@@ -46,6 +46,9 @@ extern "C" {
 {{ else if .IsAlias }}
 {{ template "GenerateCAlias" .AsAlias }}
 
+{{ else if .IsHandle }}
+{{ template "GenerateCHandle" .AsHandle }}
+
 {{ end }}
 {{ end }}
 

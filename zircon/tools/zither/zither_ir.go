@@ -59,6 +59,7 @@ var _ = []Element{
 	(*Struct)(nil),
 	(*StructMember)(nil),
 	(*Alias)(nil),
+	(*Handle)(nil),
 	(*SyscallFamily)(nil),
 	(*Syscall)(nil),
 	(*SyscallParameter)(nil),
@@ -76,6 +77,7 @@ var _ = []Decl{
 	(*Bits)(nil),
 	(*Struct)(nil),
 	(*Alias)(nil),
+	(*Handle)(nil),
 	(*SyscallFamily)(nil),
 }
 
@@ -190,6 +192,11 @@ func (decl DeclWrapper) IsAlias() bool {
 	return ok
 }
 
+func (decl DeclWrapper) IsHandle() bool {
+	_, ok := decl.value.(*Handle)
+	return ok
+}
+
 func (decl DeclWrapper) IsSyscallFamily() bool {
 	_, ok := decl.value.(*SyscallFamily)
 	return ok
@@ -197,6 +204,10 @@ func (decl DeclWrapper) IsSyscallFamily() bool {
 
 func (decl DeclWrapper) AsAlias() Alias {
 	return *decl.value.(*Alias)
+}
+
+func (decl DeclWrapper) AsHandle() Handle {
+	return *decl.value.(*Handle)
 }
 
 func (decl DeclWrapper) AsSyscallFamily() SyscallFamily {
@@ -332,6 +343,8 @@ func Summarize(ir fidlgen.Root, sourceDir string, order DeclOrder) ([]FileSummar
 			decl, err = newStruct(*fidlDecl, processedDecls, typeKinds)
 		case *fidlgen.Alias:
 			decl, err = newAlias(*fidlDecl, processedDecls, typeKinds)
+		case *fidlgen.Resource:
+			decl, err = newHandle(*fidlDecl, typeKinds)
 		case *fidlgen.Protocol:
 			decl, err = newSyscallFamily(*fidlDecl, processedDecls)
 		}
@@ -422,6 +435,7 @@ const (
 	// interim, v2 form of FIDL library zx.
 	TypeKindPointer     TypeKind = "pointer"
 	TypeKindVoidPointer TypeKind = "voidptr"
+	TypeKindHandle      TypeKind = "handle"
 )
 
 // Const is a representation of a constant FIDL declaration.
@@ -729,6 +743,10 @@ func resolveType(typ recursiveType, attrs fidlgen.Attributes, decls declMap, typ
 			}
 			desc.Kind = TypeKindVoidPointer
 		}
+	case fidlgen.HandleType:
+		desc.Kind = TypeKindHandle
+		desc.Type = string(typ.GetIdentifierType())
+		desc.Decl = decls[desc.Type]
 	default: // TODO(fxbug.dev/106538): Skip if unknown.
 		return nil, nil
 	}
@@ -747,6 +765,9 @@ func (typ fidlgenType) GetPrimitiveSubtype() fidlgen.PrimitiveSubtype {
 }
 
 func (typ fidlgenType) GetIdentifierType() fidlgen.EncodedCompoundIdentifier {
+	if typ.ResourceIdentifier != "" {
+		return fidlgen.EncodedCompoundIdentifier(typ.ResourceIdentifier)
+	}
 	return typ.Identifier
 }
 
@@ -921,6 +942,24 @@ func (ctor fidlgenTypeCtor) GetElementCount() *int {
 		panic(fmt.Sprintf("could not interpret %s as an int", ctor.MaybeSize.Value))
 	}
 	return &count
+}
+
+// Handle represents a Zircon handle, as represented by a FIDL resource declaration.
+//
+// There is little value in modeling things in terms of generic resources, as
+// the construction is already arbitrarily constrained to handle-like things
+// and handles are currently the only use-case.
+type Handle struct {
+	decl
+}
+
+func newHandle(resource fidlgen.Resource, typeKinds map[TypeKind]struct{}) (*Handle, error) {
+	name := fidlgen.MustReadName(string(resource.Name)).DeclarationName()
+	if name != "handle" {
+		return nil, fmt.Errorf("resource declarations must be named \"handle\", not %s", name)
+	}
+	typeKinds[TypeKindInteger] = struct{}{}
+	return &Handle{decl: newDecl(resource)}, nil
 }
 
 // SyscallFamily represents a logical family of syscalls, usually corresponding

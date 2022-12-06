@@ -1,0 +1,23 @@
+// Copyright 2022 The Fuchsia Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+library zither.resources;
+
+type Subtype = enum : uint32 {
+    A = 0;
+    B = 1;
+};
+
+/// This is a handle.
+resource_definition handle : uint32 { // fidlc constraint: must be uint32
+    properties {
+        subtype Subtype; // fidlc constraint: must have a property called "subtype"
+    };
+};
+
+type StructWithHandleMembers = resource struct {
+    untyped_handle handle;
+    handle_a handle:A;
+    handle_b handle:B;
+};

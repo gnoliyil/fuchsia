@@ -1,0 +1,8 @@
+{{- define "GenerateGoHandle" -}}
+
+{{ range .Comments }}
+//{{ . }}
+{{- end }}
+type {{ Name . }} uint32
+
+{{ end }}
