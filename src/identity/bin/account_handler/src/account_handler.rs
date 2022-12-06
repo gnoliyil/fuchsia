@@ -24,7 +24,7 @@ use {
     },
     fidl_fuchsia_process_lifecycle::{LifecycleRequest, LifecycleRequestStream},
     fuchsia_async as fasync,
-    fuchsia_component::client,
+    fuchsia_component::client::connect_to_protocol_at_path,
     fuchsia_inspect::{Inspector, Property},
     futures::{channel::oneshot, lock::Mutex, prelude::*},
     identity_common::TaskGroupError,
@@ -52,6 +52,23 @@ lazy_static! {
                 "/svc/fuchsia.identity.authentication.AlwaysFailStorageUnlockMechanism"
             )
         ]);
+}
+
+/// Connects to a specified authentication mechanism and return a proxy to it.
+async fn get_auth_mechanism_connection(
+    auth_mechanism_id: &str,
+) -> Result<StorageUnlockMechanismProxy, ApiError> {
+    let key = match DEV_AUTHENTICATION_MECHANISM_PATHS.get(auth_mechanism_id) {
+        Some(key) => key,
+        None => {
+            warn!("Invalid auth mechanism id: {}", auth_mechanism_id);
+            return Err(ApiError::InvalidRequest);
+        }
+    };
+    connect_to_protocol_at_path::<StorageUnlockMechanismMarker>(key).map_err(|err| {
+        warn!("Failed to connect to authenticator {:?}", err);
+        ApiError::Resource
+    })
 }
 
 // A static enrollment id which represents the only enrollment.
@@ -180,25 +197,6 @@ where
         Ok(())
     }
 
-    /// Connects to a specified authentication mechanism and return a proxy to it.
-    async fn get_auth_mechanism_connection(
-        auth_mechanism_id: &'_ str,
-    ) -> Result<StorageUnlockMechanismProxy, ApiError> {
-        if !DEV_AUTHENTICATION_MECHANISM_PATHS.contains_key(auth_mechanism_id) {
-            warn!("Invalid auth mechanism id: {}", auth_mechanism_id);
-            return Err(ApiError::InvalidRequest);
-        }
-
-        let auth_mechanism_proxy = client::connect_to_protocol_at_path::<
-            StorageUnlockMechanismMarker,
-        >(DEV_AUTHENTICATION_MECHANISM_PATHS[auth_mechanism_id])
-        .map_err(|err| {
-            warn!("Failed to connect to authenticator {:?}", err);
-            ApiError::Resource
-        })?;
-        Ok(auth_mechanism_proxy)
-    }
-
     /// Creates a new system account and attaches it to this handler.  Moves
     /// the handler from the `Uninitialized` to the `Initialized` state.
     // TODO(fxb/104199): Remove auth_mechanism once interaction is used for tests.
@@ -226,7 +224,7 @@ where
                 let enrollment_state = match (&self.lifetime, maybe_auth_mechanism_id) {
                     (AccountLifetime::Persistent { .. }, Some(auth_mechanism_id)) => {
                         let auth_mechanism_proxy =
-                            Self::get_auth_mechanism_connection(&auth_mechanism_id).await?;
+                            get_auth_mechanism_connection(&auth_mechanism_id).await?;
                         let (data, prekey_material) = auth_mechanism_proxy
                             .enroll(&mut test_ipse)
                             .await
@@ -533,8 +531,7 @@ where
             ref wrapped_key_material,
         } = enrollment_state
         {
-            let auth_mechanism_proxy =
-                Self::get_auth_mechanism_connection(auth_mechanism_id).await?;
+            let auth_mechanism_proxy = get_auth_mechanism_connection(auth_mechanism_id).await?;
             let mut enrollments = vec![Enrollment { id: ENROLLMENT_ID, data: data.clone() }];
             let fut =
                 auth_mechanism_proxy.authenticate(&mut test_ipse, &mut enrollments.iter_mut());
