@@ -24,11 +24,9 @@ package(
     default_visibility = ["//visibility:public"],
 )
 
-# TODO(digit): Redirect to @platforms//os:fuchsia once this is available
-# from our prebuilt Bazel built-in @platforms// repository.
 alias(
     name = "fuchsia",
-    actual = "@rules_fuchsia//fuchsia/constraints/os:fuchsia",
+    actual = "@platforms//os:fuchsia",
 )
 
 alias(
