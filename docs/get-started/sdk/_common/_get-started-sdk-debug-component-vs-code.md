@@ -31,7 +31,7 @@ In VS Code, do the following:
 
    This shows the console output of the Fuchsia debugger (`zxdb`).
 
-1. Click the **FUCHISA LOGS** tab on the VS Code panel.
+1. Click the **FUCHSIA LOGS** tab on the VS Code panel.
 
 1. At the top right corner of the **FUCHSIA LOGS** panel,
    click the **Clear logs** icon.
