@@ -34,7 +34,7 @@ use fidl_fuchsia_starnix_binder as fbinder;
 use fuchsia_async as fasync;
 use fuchsia_zircon as zx;
 use futures::{TryFutureExt, TryStreamExt};
-use std::collections::{btree_map::Entry as BTreeMapEntry, BTreeMap, VecDeque};
+use std::collections::{BTreeMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 use zerocopy::{AsBytes, FromBytes};
@@ -436,32 +436,6 @@ impl BinderProcess {
         Guard::new(self, self.state.lock())
     }
 
-    /// Finds the binder object that corresponds to the process-local addresses `local`, or creates
-    /// a new [`BinderObject`] to represent the one in the process.
-    ///
-    /// Returns the [`BinderObject`] and a boolean indicating whether the object is new.
-    pub fn find_or_register_object(
-        self: &Arc<BinderProcess>,
-        local: LocalBinderObject,
-    ) -> (Arc<BinderObject>, bool) {
-        match self.lock().objects.entry(local.weak_ref_addr) {
-            BTreeMapEntry::Occupied(mut entry) => {
-                if let Some(binder_object) = entry.get().upgrade() {
-                    (binder_object, false)
-                } else {
-                    let binder_object = Arc::new(BinderObject::new(self, local));
-                    entry.insert(Arc::downgrade(&binder_object));
-                    (binder_object, true)
-                }
-            }
-            BTreeMapEntry::Vacant(entry) => {
-                let binder_object = Arc::new(BinderObject::new(self, local));
-                entry.insert(Arc::downgrade(&binder_object));
-                (binder_object, true)
-            }
-        }
-    }
-
     /// A binder thread is done reading a buffer allocated to a transaction. The binder
     /// driver can reclaim this buffer.
     fn handle_free_buffer(self: &Arc<Self>, buffer_ptr: UserAddress) -> Result<(), Errno> {
@@ -683,6 +657,26 @@ impl<'a> BinderProcessGuard<'a> {
         };
         not_implemented_log_once!(current_task, "{} {:?}", msg, &object);
         Ok(())
+    }
+
+    /// Finds the binder object that corresponds to the process-local addresses `local`, or creates
+    /// a new [`BinderObject`] to represent the one in the process.
+    pub fn find_or_register_object(
+        &mut self,
+        binder_thread: &Arc<BinderThread>,
+        local: LocalBinderObject,
+    ) -> Arc<BinderObject> {
+        if let Some(object) = self.objects.get(&local.weak_ref_addr).and_then(Weak::upgrade) {
+            object
+        } else {
+            let object = Arc::new(BinderObject::new(self.base, local));
+            self.objects.insert(object.local.weak_ref_addr, Arc::downgrade(&object));
+            // Tell the owning process that a remote process now has a strong reference to
+            // to this object.
+            binder_thread.state.write().enqueue_command(Command::AcquireRef(object.local));
+
+            object
+        }
     }
 
     /// Whether the driver should request that the client starts a new thread.
@@ -2621,13 +2615,7 @@ impl BinderDriver {
                     // to translate this address to some handle.
 
                     // Register this binder object if it hasn't already been registered.
-                    let (object, is_new) = source_proc.find_or_register_object(local);
-
-                    // Tell the owning process that a remote process now has a strong reference to
-                    // to this object.
-                    if is_new {
-                        source_thread.state.write().enqueue_command(Command::AcquireRef(local));
-                    }
+                    let object = source_proc.lock().find_or_register_object(source_thread, local);
 
                     // Create a handle in the receiving process that references the binder object
                     // in the sender's process.
@@ -4787,14 +4775,17 @@ mod tests {
     fn decrementing_refs_on_dead_binder_succeeds() {
         let driver = BinderDriver::new();
 
-        let owner_proc = driver.create_process(1);
+        let (owner_proc, owner_thread) = driver.create_process_and_thread(1);
         let client_proc = driver.create_process(2);
 
         // Register an object with the owner.
-        let (object, _) = owner_proc.find_or_register_object(LocalBinderObject {
-            weak_ref_addr: UserAddress::from(0x0000000000000001),
-            strong_ref_addr: UserAddress::from(0x0000000000000002),
-        });
+        let object = owner_proc.lock().find_or_register_object(
+            &owner_thread,
+            LocalBinderObject {
+                weak_ref_addr: UserAddress::from(0x0000000000000001),
+                strong_ref_addr: UserAddress::from(0x0000000000000002),
+            },
+        );
 
         // Keep a weak reference to the object.
         let weak_object = Arc::downgrade(&object);
@@ -4844,14 +4835,17 @@ mod tests {
         let (_kernel, current_task) = create_kernel_and_task();
         let driver = BinderDriver::new();
 
-        let owner_proc = driver.create_process(1);
+        let (owner_proc, owner_thread) = driver.create_process_and_thread(1);
         let (client_proc, client_thread) = driver.create_process_and_thread(2);
 
         // Register an object with the owner.
-        let (object, _) = owner_proc.find_or_register_object(LocalBinderObject {
-            weak_ref_addr: UserAddress::from(0x0000000000000001),
-            strong_ref_addr: UserAddress::from(0x0000000000000002),
-        });
+        let object = owner_proc.lock().find_or_register_object(
+            &owner_thread,
+            LocalBinderObject {
+                weak_ref_addr: UserAddress::from(0x0000000000000001),
+                strong_ref_addr: UserAddress::from(0x0000000000000002),
+            },
+        );
 
         // Insert a handle to the object in the client. This also retains a strong reference.
         let handle = client_proc.lock().handles.insert_for_transaction(object);
@@ -4892,14 +4886,17 @@ mod tests {
         let (_kernel, current_task) = create_kernel_and_task();
         let driver = BinderDriver::new();
 
-        let owner_proc = driver.create_process(1);
+        let (owner_proc, owner_thread) = driver.create_process_and_thread(1);
         let (client_proc, client_thread) = driver.create_process_and_thread(2);
 
         // Register an object with the owner.
-        let (object, _) = owner_proc.find_or_register_object(LocalBinderObject {
-            weak_ref_addr: UserAddress::from(0x0000000000000001),
-            strong_ref_addr: UserAddress::from(0x0000000000000002),
-        });
+        let object = owner_proc.lock().find_or_register_object(
+            &owner_thread,
+            LocalBinderObject {
+                weak_ref_addr: UserAddress::from(0x0000000000000001),
+                strong_ref_addr: UserAddress::from(0x0000000000000002),
+            },
+        );
 
         // Insert a handle to the object in the client. This also retains a strong reference.
         let handle = client_proc.lock().handles.insert_for_transaction(object);
@@ -4934,14 +4931,17 @@ mod tests {
         let (_kernel, current_task) = create_kernel_and_task();
         let driver = BinderDriver::new();
 
-        let owner_proc = driver.create_process(1);
+        let (owner_proc, owner_thread) = driver.create_process_and_thread(1);
         let (client_proc, client_thread) = driver.create_process_and_thread(2);
 
         // Register an object with the owner.
-        let (object, _) = owner_proc.find_or_register_object(LocalBinderObject {
-            weak_ref_addr: UserAddress::from(0x0000000000000001),
-            strong_ref_addr: UserAddress::from(0x0000000000000002),
-        });
+        let object = owner_proc.lock().find_or_register_object(
+            &owner_thread,
+            LocalBinderObject {
+                weak_ref_addr: UserAddress::from(0x0000000000000001),
+                strong_ref_addr: UserAddress::from(0x0000000000000002),
+            },
+        );
 
         // Insert a handle to the object in the client. This also retains a strong reference.
         let handle = client_proc.lock().handles.insert_for_transaction(object);
