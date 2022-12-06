@@ -14,7 +14,6 @@
 #include <ddktl/device.h>
 #include <fbl/auto_lock.h>
 #include <fbl/mutex.h>
-#include <fbl/string_printf.h>
 #include <hwreg/bitfields.h>
 
 #include "src/devices/block/drivers/nvme/commands/identify.h"
@@ -190,8 +189,7 @@ int Namespace::IoLoop() {
 }
 
 zx_status_t Namespace::AddNamespace() {
-  auto name = fbl::StringPrintf("namespace-%u", namespace_id_);
-  return DdkAdd(ddk::DeviceAddArgs(name.c_str()));
+  return DdkAdd(ddk::DeviceAddArgs(NamespaceName().c_str()));
 }
 
 zx::result<Namespace*> Namespace::Bind(Nvme* controller, uint32_t namespace_id) {
@@ -244,6 +242,44 @@ void Namespace::DdkInit(ddk::InitTxn txn) {
   txn.Reply(status);
 }
 
+static void PopulateNamespaceInspect(const IdentifyNvmeNamespace& ns,
+                                     const fbl::String& namespace_name,
+                                     uint16_t atomic_write_unit_normal,
+                                     uint16_t atomic_write_unit_power_fail,
+                                     uint32_t max_transfer_bytes, uint32_t block_size_bytes,
+                                     inspect::Inspector* inspect) {
+  auto inspect_ns = inspect->GetRoot().CreateChild(namespace_name);
+  uint16_t nawun = ns.ns_atomics() ? ns.n_aw_un + 1 : atomic_write_unit_normal;
+  uint16_t nawupf = ns.ns_atomics() ? ns.n_aw_u_pf + 1 : atomic_write_unit_power_fail;
+  inspect_ns.CreateInt("atomic_write_unit_normal_blocks", nawun, inspect);
+  inspect_ns.CreateInt("atomic_write_unit_power_fail_blocks", nawupf, inspect);
+  inspect_ns.CreateInt("namespace_atomic_boundary_size_normal_blocks", ns.n_abs_n, inspect);
+  inspect_ns.CreateInt("namespace_atomic_boundary_offset_blocks", ns.n_ab_o, inspect);
+  inspect_ns.CreateInt("namespace_atomic_boundary_size_power_fail_blocks", ns.n_abs_pf, inspect);
+  inspect_ns.CreateInt("namespace_optimal_io_boundary_blocks", ns.n_oio_b, inspect);
+  // table of block formats
+  for (int i = 0; i < ns.n_lba_f; i++) {
+    if (ns.lba_formats[i].value) {
+      auto& fmt = ns.lba_formats[i];
+      inspect_ns.CreateInt(fbl::StringPrintf("lba_format_%u_block_size_bytes", i),
+                           fmt.lba_data_size_bytes(), inspect);
+      inspect_ns.CreateInt(fbl::StringPrintf("lba_format_%u_relative_performance", i),
+                           fmt.relative_performance(), inspect);
+      inspect_ns.CreateInt(fbl::StringPrintf("lba_format_%u_metadata_size_bytes", i),
+                           fmt.metadata_size_bytes(), inspect);
+    }
+  }
+  inspect_ns.CreateInt("active_lba_format_index", ns.lba_format_index(), inspect);
+  inspect_ns.CreateInt("data_protection_caps", ns.dpc & 0x3F, inspect);
+  inspect_ns.CreateInt("data_protection_set", ns.dps & 3, inspect);
+  inspect_ns.CreateInt("namespace_size_blocks", ns.n_sze, inspect);
+  inspect_ns.CreateInt("namespace_cap_blocks", ns.n_cap, inspect);
+  inspect_ns.CreateInt("namespace_util_blocks", ns.n_use, inspect);
+  inspect_ns.CreateInt("max_transfer_bytes", max_transfer_bytes, inspect);
+  inspect_ns.CreateInt("block_size_bytes", block_size_bytes, inspect);
+  inspect->emplace(std::move(inspect_ns));
+}
+
 zx_status_t Namespace::Init() {
   list_initialize(&pending_commands_);
   list_initialize(&active_commands_);
@@ -275,28 +311,6 @@ zx_status_t Namespace::Init() {
   }
 
   auto ns = static_cast<IdentifyNvmeNamespace*>(mapper.start());
-
-  uint16_t nawun = ns->ns_atomics() ? ns->n_aw_un + 1U : controller_->atomic_write_unit_normal();
-  uint16_t nawupf =
-      ns->ns_atomics() ? ns->n_aw_u_pf + 1U : controller_->atomic_write_unit_power_fail();
-  zxlogf(DEBUG, "ns: atomic write unit (AWUN)/(AWUPF): %u/%u blks", nawun, nawupf);
-  zxlogf(DEBUG, "ns: NABSN/NABO/NABSPF/NOIOB: %u/%u/%u/%u", ns->n_abs_n, ns->n_ab_o, ns->n_abs_pf,
-         ns->n_oio_b);
-
-  // table of block formats
-  for (int i = 0; i < ns->n_lba_f; i++) {
-    if (ns->lba_formats[i].value) {
-      auto& fmt = ns->lba_formats[i];
-      zxlogf(DEBUG,
-             "ns: LBA format %02d has LBAs of size %u bytes (log2 %u), perf %u, metadata size %u "
-             "bytes.",
-             i, fmt.lba_data_size_bytes(), fmt.lba_data_size_log2(), fmt.relative_performance(),
-             fmt.metadata_size_bytes());
-    }
-  }
-  zxlogf(DEBUG, "ns: LBA format #%u active.", ns->lba_format_index());
-  zxlogf(DEBUG, "ns: data protection: caps/set: 0x%02x/%u", ns->dpc & 0x3F, ns->dps & 3);
-  zxlogf(DEBUG, "ns: size/cap/util: %zu/%zu/%zu blks", ns->n_sze, ns->n_cap, ns->n_use);
 
   block_info_.block_count = ns->n_sze;
   auto& fmt = ns->lba_formats[ns->lba_format_index()];
@@ -334,8 +348,10 @@ zx_status_t Namespace::Init() {
 
   // Convert to block units.
   max_transfer_blocks_ = max_transfer_bytes / block_info_.block_size;
-  zxlogf(DEBUG, "Max transfer per r/w op: %u blocks (%u bytes).", max_transfer_blocks_,
-         max_transfer_blocks_ * block_info_.block_size);
+
+  PopulateNamespaceInspect(*ns, NamespaceName(), controller_->atomic_write_unit_normal(),
+                           controller_->atomic_write_unit_power_fail(), max_transfer_bytes,
+                           block_info_.block_size, &controller_->inspect());
 
   // Spin up IO thread so we can start issuing IO commands to the namespace.
   auto name = fbl::StringPrintf("nvme-io-thread-%u", namespace_id_);

@@ -155,31 +155,113 @@ void Nvme::DdkInit(ddk::InitTxn txn) {
   txn.Reply(status);
 }
 
-zx_status_t Nvme::Init() {
-  caps_ = CapabilityReg::Get().ReadFrom(mmio_.get());
-  version_ = VersionReg::Get().ReadFrom(mmio_.get());
+static void PopulateVersionInspect(const VersionReg& version_reg, inspect::Inspector* inspect) {
+  auto version = inspect->GetRoot().CreateChild("version");
+  version.CreateInt("major", version_reg.major(), inspect);
+  version.CreateInt("minor", version_reg.minor(), inspect);
+  version.CreateInt("tertiary", version_reg.tertiary(), inspect);
+  inspect->emplace(std::move(version));
+}
 
-  zxlogf(INFO, "Version %d.%d.%d", version_.major(), version_.minor(), version_.tertiary());
-  zxlogf(DEBUG, "Memory page size: (MPSMIN) %u bytes, (MPSMAX) %u bytes",
-         caps_.memory_page_size_min_bytes(), caps_.memory_page_size_max_bytes());
-  zxlogf(DEBUG, "Doorbell stride (DSTRD): %u bytes", caps_.doorbell_stride_bytes());
-  zxlogf(DEBUG, "Timeout (TO): %u ms", caps_.timeout_ms());
-  zxlogf(DEBUG, "Boot partition support (BPS): %c", caps_.boot_partition_support() ? 'Y' : 'N');
-  zxlogf(DEBUG, "Supports NVM command set (CSS:NVM): %c",
-         caps_.nvm_command_set_support() ? 'Y' : 'N');
-  zxlogf(DEBUG, "NVM subsystem reset supported (NSSRS): %c",
-         caps_.nvm_subsystem_reset_supported() ? 'Y' : 'N');
-  zxlogf(DEBUG, "Weighted round robin supported (AMS:WRR): %c",
-         caps_.weighted_round_robin_arbitration_supported() ? 'Y' : 'N');
-  zxlogf(DEBUG, "Vendor specific arbitration supported (AMS:VS): %c",
-         caps_.vendor_specific_arbitration_supported() ? 'Y' : 'N');
-  zxlogf(DEBUG, "Contiguous queues required (CQR): %c",
-         caps_.contiguous_queues_required() ? 'Y' : 'N');
-  zxlogf(DEBUG, "Maximum queue entries supported (MQES): %u", caps_.max_queue_entries());
+static void PopulateCapabilitiesInspect(const CapabilityReg& caps_reg,
+                                        const VersionReg& version_reg,
+                                        inspect::Inspector* inspect) {
+  auto caps = inspect->GetRoot().CreateChild("capabilities");
+  if (version_reg >= VersionReg::FromVer(1, 4, 0)) {
+    caps.CreateBool("controller_ready_independent_media_supported",
+                    caps_reg.controller_ready_independent_media_supported(), inspect);
+    caps.CreateBool("controller_ready_with_media_supported",
+                    caps_reg.controller_ready_with_media_supported(), inspect);
+  }
+  caps.CreateBool("subsystem_shutdown_supported", caps_reg.subsystem_shutdown_supported(), inspect);
+  caps.CreateBool("controller_memory_buffer_supported",
+                  caps_reg.controller_memory_buffer_supported(), inspect);
+  caps.CreateBool("persistent_memory_region_supported",
+                  caps_reg.persistent_memory_region_supported(), inspect);
+  caps.CreateInt("memory_page_size_max_bytes", caps_reg.memory_page_size_max_bytes(), inspect);
+  caps.CreateInt("memory_page_size_min_bytes", caps_reg.memory_page_size_min_bytes(), inspect);
+  caps.CreateInt("controller_power_scope", caps_reg.controller_power_scope(), inspect);
+  caps.CreateBool("boot_partition_support", caps_reg.boot_partition_support(), inspect);
+  caps.CreateBool("no_io_command_set_support", caps_reg.no_io_command_set_support(), inspect);
+  caps.CreateBool("identify_io_command_set_support", caps_reg.identify_io_command_set_support(),
+                  inspect);
+  caps.CreateBool("nvm_command_set_support", caps_reg.nvm_command_set_support(), inspect);
+  caps.CreateBool("nvm_subsystem_reset_supported", caps_reg.nvm_subsystem_reset_supported(),
+                  inspect);
+  caps.CreateInt("doorbell_stride_bytes", caps_reg.doorbell_stride_bytes(), inspect);
+  // TODO(fxbug.dev/102133): interpret CRTO register if version > 1.4
+  caps.CreateInt("ready_timeout_ms", caps_reg.timeout_ms(), inspect);
+  caps.CreateBool("vendor_specific_arbitration_supported",
+                  caps_reg.vendor_specific_arbitration_supported(), inspect);
+  caps.CreateBool("weighted_round_robin_arbitration_supported",
+                  caps_reg.weighted_round_robin_arbitration_supported(), inspect);
+  caps.CreateBool("contiguous_queues_required", caps_reg.contiguous_queues_required(), inspect);
+  caps.CreateInt("max_queue_entries", caps_reg.max_queue_entries(), inspect);
+  inspect->emplace(std::move(caps));
+}
+
+static void PopulateControllerInspect(const IdentifyController& identify,
+                                      uint32_t max_data_transfer_bytes,
+                                      uint16_t atomic_write_unit_normal,
+                                      uint16_t atomic_write_unit_power_fail,
+                                      inspect::Inspector* inspect) {
+  auto controller = inspect->GetRoot().CreateChild("controller");
+  auto model_number = std::string(identify.model_number, sizeof(identify.model_number));
+  auto serial_number = std::string(identify.serial_number, sizeof(identify.serial_number));
+  auto firmware_rev = std::string(identify.firmware_rev, sizeof(identify.firmware_rev));
+  zxlogf(INFO, "Model number:  '%s'", model_number.c_str());
+  zxlogf(INFO, "Serial number: '%s'", serial_number.c_str());
+  zxlogf(INFO, "Firmware rev.: '%s'", firmware_rev.c_str());
+  controller.CreateString("model_number", model_number, inspect);
+  controller.CreateString("serial_number", serial_number, inspect);
+  controller.CreateString("firmware_rev", firmware_rev, inspect);
+  controller.CreateInt("max_outstanding_commands", identify.max_cmd, inspect);
+  controller.CreateInt("num_namespaces", identify.num_namespaces, inspect);
+  controller.CreateInt("max_allowed_namespaces", identify.max_allowed_namespaces, inspect);
+  controller.CreateBool("sgl_support", identify.sgl_support & 3, inspect);
+  controller.CreateInt("max_data_transfer_bytes", max_data_transfer_bytes, inspect);
+  controller.CreateInt("sanitize_caps", identify.sanicap & 3, inspect);
+  controller.CreateInt("abort_command_limit", identify.acl + 1, inspect);
+  controller.CreateInt("asynch_event_req_limit", identify.aerl + 1, inspect);
+  controller.CreateInt("firmware_slots", (identify.frmw >> 1) & 3, inspect);
+  controller.CreateBool("firmware_reset", !(identify.frmw & (1 << 4)), inspect);
+  controller.CreateBool("firmware_slot1ro", identify.frmw & 1, inspect);
+  controller.CreateInt("host_buffer_min_pages", identify.hmmin, inspect);
+  controller.CreateInt("host_buffer_preferred_pages", identify.hmpre, inspect);
+  controller.CreateInt("capacity_total", identify.tnvmcap[0], inspect);
+  controller.CreateInt("capacity_unalloc", identify.unvmcap[0], inspect);
+  controller.CreateBool("volatile_write_cache", identify.vwc & 1, inspect);
+  controller.CreateInt("atomic_write_unit_normal_blocks", atomic_write_unit_normal, inspect);
+  controller.CreateInt("atomic_write_unit_power_fail_blocks", atomic_write_unit_power_fail,
+                       inspect);
+  controller.CreateBool("doorbell_buffer_config", identify.doorbell_buffer_config(), inspect);
+  controller.CreateBool("virtualization_management", identify.virtualization_management(), inspect);
+  controller.CreateBool("nvme_mi_send_recv", identify.nvme_mi_send_recv(), inspect);
+  controller.CreateBool("directive_send_recv", identify.directive_send_recv(), inspect);
+  controller.CreateBool("device_self_test", identify.device_self_test(), inspect);
+  controller.CreateBool("namespace_management", identify.namespace_management(), inspect);
+  controller.CreateBool("firmware_download_commit", identify.firmware_download_commit(), inspect);
+  controller.CreateBool("format_nvm", identify.format_nvm(), inspect);
+  controller.CreateBool("security_send_recv", identify.security_send_recv(), inspect);
+  controller.CreateBool("timestamp", identify.timestamp(), inspect);
+  controller.CreateBool("reservations", identify.reservations(), inspect);
+  controller.CreateBool("save_select_nonzero", identify.save_select_nonzero(), inspect);
+  controller.CreateBool("write_uncorrectable", identify.write_uncorrectable(), inspect);
+  controller.CreateBool("compare", identify.compare(), inspect);
+  inspect->emplace(std::move(controller));
+}
+
+zx_status_t Nvme::Init() {
+  VersionReg version_reg = VersionReg::Get().ReadFrom(mmio_.get());
+  CapabilityReg caps_reg = CapabilityReg::Get().ReadFrom(mmio_.get());
+
+  PopulateVersionInspect(version_reg, &inspect_);
+  PopulateCapabilitiesInspect(caps_reg, version_reg, &inspect_);
 
   const size_t kPageSize = zx_system_get_page_size();
-  zx_status_t status = CheckMinMaxSize("System page", kPageSize, caps_.memory_page_size_min_bytes(),
-                                       caps_.memory_page_size_max_bytes());
+  zx_status_t status =
+      CheckMinMaxSize("System page", kPageSize, caps_reg.memory_page_size_min_bytes(),
+                      caps_reg.memory_page_size_max_bytes());
   if (status != ZX_OK) {
     return status;
   }
@@ -194,7 +276,7 @@ zx_status_t Nvme::Init() {
   }
 
   // Set up admin submission and completion queues.
-  auto admin_queue = QueuePair::Create(bti_.borrow(), 0, kAdminQueueMaxEntries, caps_, *mmio_,
+  auto admin_queue = QueuePair::Create(bti_.borrow(), 0, kAdminQueueMaxEntries, caps_reg, *mmio_,
                                        /*prealloc_prp=*/false);
   if (admin_queue.is_error()) {
     zxlogf(ERROR, "Failed to set up admin queue: %s", admin_queue.status_string());
@@ -239,18 +321,21 @@ zx_status_t Nvme::Init() {
   }
 
   // Timeout may have changed, so double check it.
-  caps_.ReadFrom(&*mmio_);
+  caps_reg.ReadFrom(&*mmio_);
 
   // Set up IO submission and completion queues.
-  auto io_queue = QueuePair::Create(bti_.borrow(), 1, caps_.max_queue_entries(), caps_, *mmio_,
-                                    /*prealloc_prp=*/true);
+  auto io_queue =
+      QueuePair::Create(bti_.borrow(), 1, caps_reg.max_queue_entries(), caps_reg, *mmio_,
+                        /*prealloc_prp=*/true);
   if (io_queue.is_error()) {
     zxlogf(ERROR, "Failed to set up io queue: %s", io_queue.status_string());
     return io_queue.status_value();
   }
   io_queue_ = std::move(*io_queue);
-  zxlogf(DEBUG, "Using IO submission queue size of %lu, IO completion queue size of %lu.",
-         io_queue_->submission().entry_count(), io_queue_->completion().entry_count());
+  inspect_.GetRoot().CreateInt("io_submission_queue_size", io_queue_->submission().entry_count(),
+                               &inspect_);
+  inspect_.GetRoot().CreateInt("io_completion_queue_size", io_queue_->completion().entry_count(),
+                               &inspect_);
 
   // Spin up IRQ thread so we can start issuing admin commands to the device.
   int thrd_status = thrd_create_with_name(&irq_thread_, IrqThread, this, "nvme-irq-thread");
@@ -283,12 +368,6 @@ zx_status_t Nvme::Init() {
   }
 
   auto identify = static_cast<IdentifyController*>(mapper.start());
-  zxlogf(INFO, "Model number:  '%s'",
-         std::string(identify->model_number, sizeof(identify->model_number)).c_str());
-  zxlogf(INFO, "Serial number: '%s'",
-         std::string(identify->serial_number, sizeof(identify->serial_number)).c_str());
-  zxlogf(INFO, "Firmware rev.: '%s'",
-         std::string(identify->firmware_rev, sizeof(identify->firmware_rev)).c_str());
 
   status = CheckMinMaxSize("Submission queue entry", sizeof(Submission),
                            identify->minimum_sq_entry_size(), identify->maximum_sq_entry_size());
@@ -301,57 +380,17 @@ zx_status_t Nvme::Init() {
     return status;
   }
 
-  zxlogf(DEBUG, "Maximum outstanding commands: %u", identify->max_cmd);
-  zxlogf(DEBUG, "Number of namespaces: %u", identify->num_namespaces);
-  if (identify->max_allowed_namespaces != 0) {
-    zxlogf(DEBUG, "Maximum number of allowed namespaces: %u", identify->max_allowed_namespaces);
-  }
-  zxlogf(DEBUG, "SGL support: %c (0x%08x)", (identify->sgl_support & 3) ? 'Y' : 'N',
-         identify->sgl_support);
   if (identify->max_data_transfer == 0) {
     max_data_transfer_bytes_ = 0;
   } else {
     max_data_transfer_bytes_ =
-        caps_.memory_page_size_min_bytes() * (1 << identify->max_data_transfer);
-    zxlogf(DEBUG, "Maximum data transfer size: %u bytes", max_data_transfer_bytes_);
-  }
-
-  zxlogf(DEBUG, "sanitize caps: %u", identify->sanicap & 3);
-  zxlogf(DEBUG, "abort command limit (ACL): %u", identify->acl + 1);
-  zxlogf(DEBUG, "asynch event req limit (AERL): %u", identify->aerl + 1);
-  zxlogf(DEBUG, "firmware: slots: %u reset: %c slot1ro: %c", (identify->frmw >> 1) & 3,
-         (identify->frmw & (1 << 4)) ? 'N' : 'Y', (identify->frmw & 1) ? 'Y' : 'N');
-  zxlogf(DEBUG, "host buffer: min/preferred: %u/%u pages", identify->hmmin, identify->hmpre);
-  zxlogf(DEBUG, "capacity: total/unalloc: %zu/%zu", identify->tnvmcap[0], identify->unvmcap[0]);
-
-  if (identify->vwc & 1) {
-    volatile_write_cache_ = true;
+        caps_reg.memory_page_size_min_bytes() * (1 << identify->max_data_transfer);
   }
   atomic_write_unit_normal_ = identify->atomic_write_unit_normal + 1;
   atomic_write_unit_power_fail_ = identify->atomic_write_unit_power_fail + 1;
-  zxlogf(DEBUG, "volatile write cache (VWC): %s", volatile_write_cache_ ? "Y" : "N");
-  zxlogf(DEBUG, "atomic write unit (AWUN)/(AWUPF): %u/%u blks", atomic_write_unit_normal_,
-         atomic_write_unit_power_fail_);
 
-#define LOG_NVME_FEATURE(name)           \
-  if (identify->name()) {                \
-    zxlogf(DEBUG, "feature: %s", #name); \
-  }
-  LOG_NVME_FEATURE(doorbell_buffer_config);
-  LOG_NVME_FEATURE(virtualization_management);
-  LOG_NVME_FEATURE(nvme_mi_send_recv);
-  LOG_NVME_FEATURE(directive_send_recv);
-  LOG_NVME_FEATURE(device_self_test);
-  LOG_NVME_FEATURE(namespace_management);
-  LOG_NVME_FEATURE(firmware_download_commit);
-  LOG_NVME_FEATURE(format_nvm);
-  LOG_NVME_FEATURE(security_send_recv);
-  LOG_NVME_FEATURE(timestamp);
-  LOG_NVME_FEATURE(reservations);
-  LOG_NVME_FEATURE(save_select_nonzero);
-  LOG_NVME_FEATURE(write_uncorrectable);
-  LOG_NVME_FEATURE(compare);
-#undef LOG_NVME_FEATURE
+  PopulateControllerInspect(*identify, max_data_transfer_bytes_, atomic_write_unit_normal_,
+                            atomic_write_unit_power_fail_, &inspect_);
 
   // Set feature (number of queues) to 1 IO submission queue and 1 IO completion queue.
   SetIoQueueCountSubmission set_queue_count;
@@ -468,7 +507,7 @@ zx_status_t Nvme::AddDevice(zx_device_t* dev) {
   }
   bti_ = zx::bti(bti_handle);
 
-  status = DdkAdd(ddk::DeviceAddArgs("nvme"));
+  status = DdkAdd(ddk::DeviceAddArgs("nvme").set_inspect_vmo(inspect_.DuplicateVmo()));
   if (status != ZX_OK) {
     zxlogf(ERROR, "Failed DdkAdd: %s", zx_status_get_string(status));
     return ZX_ERR_NOT_SUPPORTED;

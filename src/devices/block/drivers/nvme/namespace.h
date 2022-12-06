@@ -14,6 +14,7 @@
 
 #include <ddktl/device.h>
 #include <fbl/mutex.h>
+#include <fbl/string_printf.h>
 
 namespace nvme {
 
@@ -31,6 +32,7 @@ class Namespace : public NamespaceDeviceType,
   // Create a namespace on |controller| with |namespace_id|.
   static zx::result<Namespace*> Bind(Nvme* controller, uint32_t namespace_id);
   zx_status_t AddNamespace();
+  fbl::String NamespaceName() const { return fbl::StringPrintf("namespace-%u", namespace_id_); }
 
   void DdkInit(ddk::InitTxn txn);
   void DdkRelease();

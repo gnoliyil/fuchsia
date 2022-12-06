@@ -6,6 +6,7 @@
 #define SRC_DEVICES_BLOCK_DRIVERS_NVME_NVME_H_
 
 #include <lib/device-protocol/pci.h>
+#include <lib/inspect/cpp/inspect.h>
 #include <lib/mmio/mmio-buffer.h>
 #include <lib/sync/completion.h>
 #include <threads.h>
@@ -39,6 +40,8 @@ class Nvme : public DeviceType {
   zx_status_t DoAdminCommandSync(Submission& submission,
                                  std::optional<zx::unowned_vmo> admin_data = std::nullopt);
 
+  inspect::Inspector& inspect() { return inspect_; }
+
   QueuePair* io_queue() const { return io_queue_.get(); }
   uint32_t max_data_transfer_bytes() const { return max_data_transfer_bytes_; }
   uint16_t atomic_write_unit_normal() const { return atomic_write_unit_normal_; }
@@ -55,8 +58,7 @@ class Nvme : public DeviceType {
   std::unique_ptr<fdf::MmioBuffer> mmio_;
   zx_handle_t irqh_;
   zx::bti bti_;
-  CapabilityReg caps_;
-  VersionReg version_;
+  inspect::Inspector inspect_;
 
   // Admin submission and completion queues.
   std::unique_ptr<QueuePair> admin_queue_;
@@ -71,7 +73,6 @@ class Nvme : public DeviceType {
   bool irq_thread_started_ = false;
 
   uint32_t max_data_transfer_bytes_;
-  bool volatile_write_cache_ = false;
   uint16_t atomic_write_unit_normal_;
   uint16_t atomic_write_unit_power_fail_;
 
