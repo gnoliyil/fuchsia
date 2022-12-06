@@ -12,6 +12,7 @@ group("tests") {
     "handle-alias:tests",
     "kernel-clocks:tests",
     "next-vdso:tests",
+    "process:tests",
     "processor:tests",
     "profile:tests",
     "register-state:tests",

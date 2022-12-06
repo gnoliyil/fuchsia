@@ -27,6 +27,15 @@ _ZX_SYSCALL_DECL(pager_query_vmo_stats, zx_status_t, /* no attributes */, 5,
     void* buffer,
     size_t buffer_size))
 
+_ZX_SYSCALL_DECL(process_create_shared, zx_status_t, /* no attributes */, 6,
+    (shared_proc, options, name, name_size, proc_handle, restricted_vmar_handle), (
+    _ZX_SYSCALL_ANNO(use_handle("Fuchsia")) zx_handle_t shared_proc,
+    uint32_t options,
+    const char* name,
+    size_t name_size,
+    _ZX_SYSCALL_ANNO(acquire_handle("Fuchsia")) zx_handle_t* proc_handle,
+    _ZX_SYSCALL_ANNO(acquire_handle("Fuchsia")) zx_handle_t* restricted_vmar_handle))
+
 _ZX_SYSCALL_DECL(restricted_enter, zx_status_t, /* no attributes */, 3,
     (options, vector_table_ptr, context), (
     uint32_t options,

@@ -222,6 +222,7 @@ protocol Process {
     ///  - [`zx_process_create()`]
     ///
     /// [`zx_process_create()`]: process_create.md
+    @next
     CreateShared(resource struct {
         shared_proc handle:PROCESS;
         options uint32;

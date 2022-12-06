@@ -5,9 +5,9 @@
     include: [ "syslog/client.shard.cml" ],
     program: {
         runner: "elf",
-        binary: "bin/security-policy-create-raw-processes-test",
+        binary: "test/process-test",
         job_policy_create_raw_processes: "true",
-        is_shared_process: "true",
+        job_policy_ambient_mark_vmo_exec: "true",
         use_next_vdso: "true",
     },
     capabilities: [

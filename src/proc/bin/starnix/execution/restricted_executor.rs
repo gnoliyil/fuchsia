@@ -155,10 +155,9 @@ pub fn create_zircon_process(
     signal_actions: Arc<SignalActions>,
     name: &[u8],
 ) -> Result<TaskInfo, Errno> {
-    let (process, root_vmar) = kernel
-        .starnix_process
-        .create_shared(zx::ProcessOptions::empty(), name)
-        .map_err(|status| from_status_like_fdio!(status))?;
+    let (process, root_vmar) =
+        create_shared(&kernel.starnix_process, zx::ProcessOptions::empty(), name)
+            .map_err(|status| from_status_like_fdio!(status))?;
 
     let debug_addr =
         kernel.starnix_process.get_debug_addr().map_err(|status| from_status_like_fdio!(status))?;
@@ -247,4 +246,42 @@ fn handle_exceptions(task: Arc<Task>, exception_channel: zx::Channel) {
             }
         }
     });
+}
+
+/// Creates a process that shares half its address space with this process.
+///
+/// The created process will also share its handle table and futex context with `self`.
+///
+/// Returns the created process and a handle to the created process' restricted address space.
+///
+/// Wraps the
+/// [zx_process_create_shared](https://fuchsia.dev/fuchsia-src/reference/syscalls/process_create_shared.md)
+/// syscall.
+pub fn create_shared(
+    process: &zx::Process,
+    options: zx::ProcessOptions,
+    name: &[u8],
+) -> Result<(zx::Process, zx::Vmar), zx::Status> {
+    let self_raw = process.raw_handle();
+    let name_ptr = name.as_ptr();
+    let name_len = name.len();
+    let mut process_out = 0;
+    let mut restricted_vmar_out = 0;
+    let status = unsafe {
+        zx::sys::zx_process_create_shared(
+            self_raw,
+            options.bits(),
+            name_ptr,
+            name_len,
+            &mut process_out,
+            &mut restricted_vmar_out,
+        )
+    };
+    zx::ok(status)?;
+    unsafe {
+        Ok((
+            zx::Process::from(zx::Handle::from_raw(process_out)),
+            zx::Vmar::from(zx::Handle::from_raw(restricted_vmar_out)),
+        ))
+    }
 }

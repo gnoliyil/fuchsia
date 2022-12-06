@@ -9,6 +9,7 @@
 #include <lib/zx/vmar.h>
 #include <zircon/process.h>
 #include <zircon/status.h>
+#include <zircon/syscalls-next.h>
 
 #include "examples/tests/test_suite.h"
 

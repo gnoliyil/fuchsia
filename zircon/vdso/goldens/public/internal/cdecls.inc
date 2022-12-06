@@ -673,15 +673,6 @@ _ZX_SYSCALL_DECL(process_create, zx_status_t, /* no attributes */, 6,
     _ZX_SYSCALL_ANNO(acquire_handle("Fuchsia")) zx_handle_t* proc_handle,
     _ZX_SYSCALL_ANNO(acquire_handle("Fuchsia")) zx_handle_t* vmar_handle))
 
-_ZX_SYSCALL_DECL(process_create_shared, zx_status_t, /* no attributes */, 6,
-    (shared_proc, options, name, name_size, proc_handle, restricted_vmar_handle), (
-    _ZX_SYSCALL_ANNO(use_handle("Fuchsia")) zx_handle_t shared_proc,
-    uint32_t options,
-    const char* name,
-    size_t name_size,
-    _ZX_SYSCALL_ANNO(acquire_handle("Fuchsia")) zx_handle_t* proc_handle,
-    _ZX_SYSCALL_ANNO(acquire_handle("Fuchsia")) zx_handle_t* restricted_vmar_handle))
-
 _ZX_SYSCALL_DECL(process_exit, void, __NO_RETURN, 1,
     (retcode), (
     int64_t retcode))
