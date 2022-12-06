@@ -28,8 +28,7 @@ void fxt_kernel_object(uint32_t tag, bool always, zx_koid_t koid, zx_obj_type_t 
                        const fxt::StringRef<name_type>& name_arg,
                        const fxt::Argument<arg_types, arg_name_types, arg_val_types>&... args) {
   if (always || unlikely(KTRACE_STATE.tag_enabled(tag))) {
-    auto writer = KTRACE_STATE.make_fxt_writer(tag);
-    (void)fxt::WriteKernelObjectRecord(&writer, koid, obj_type, name_arg, args...);
+    fxt::WriteKernelObjectRecord(&KTRACE_STATE, koid, obj_type, name_arg, args...);
   }
 }
 
@@ -40,16 +39,14 @@ void fxt_context_switch(uint32_t tag, uint64_t timestamp, uint8_t cpu_number,
                         const fxt::ThreadRef<incoming_type>& incoming_thread,
                         uint8_t outgoing_thread_priority, uint8_t incoming_thread_priority) {
   if (unlikely(KTRACE_STATE.tag_enabled(tag))) {
-    auto writer = KTRACE_STATE.make_fxt_writer(tag);
-    (void)fxt::WriteContextSwitchRecord(&writer, timestamp, cpu_number, outgoing_thread_state,
-                                        outgoing_thread, incoming_thread, outgoing_thread_priority,
-                                        incoming_thread_priority);
+    fxt::WriteContextSwitchRecord(&KTRACE_STATE, timestamp, cpu_number, outgoing_thread_state,
+                                  outgoing_thread, incoming_thread, outgoing_thread_priority,
+                                  incoming_thread_priority);
   }
 }
 
 void fxt_string_record(uint16_t index, const char* string, size_t string_length) {
-  auto writer = KTRACE_STATE.make_fxt_writer(TAG_PROBE_NAME);
-  (void)fxt::WriteStringRecord(&writer, index, string, string_length);
+  fxt::WriteStringRecord(&KTRACE_STATE, index, string, string_length);
 }
 
 template <fxt::RefType thread_type, fxt::RefType category_type, fxt::RefType name_type,
@@ -60,9 +57,8 @@ void fxt_instant(uint32_t tag, uint64_t timestamp, const fxt::ThreadRef<thread_t
                  const fxt::StringRef<name_type>& name_ref,
                  const fxt::Argument<arg_types, arg_name_types, arg_val_types>&... args) {
   if (unlikely(KTRACE_STATE.tag_enabled(tag))) {
-    auto writer = KTRACE_STATE.make_fxt_writer(tag);
-    (void)fxt::WriteInstantEventRecord(&writer, timestamp, thread_ref, category_ref, name_ref,
-                                       args...);
+    fxt::WriteInstantEventRecord(&KTRACE_STATE, timestamp, thread_ref, category_ref, name_ref,
+                                 args...);
   }
 }
 
@@ -75,9 +71,8 @@ void fxt_duration_begin(uint32_t tag, uint64_t timestamp,
                         const fxt::StringRef<name_type>& name_ref,
                         const fxt::Argument<arg_types, arg_name_types, arg_val_types>&... args) {
   if (unlikely(KTRACE_STATE.tag_enabled(tag))) {
-    auto writer = KTRACE_STATE.make_fxt_writer(tag);
-    (void)fxt::WriteDurationBeginEventRecord(&writer, timestamp, thread_ref, category_ref, name_ref,
-                                             args...);
+    fxt::WriteDurationBeginEventRecord(&KTRACE_STATE, timestamp, thread_ref, category_ref, name_ref,
+                                       args...);
   }
 }
 
@@ -90,9 +85,8 @@ void fxt_duration_end(uint32_t tag, uint64_t timestamp,
                       const fxt::StringRef<name_type>& name_ref,
                       const fxt::Argument<arg_types, arg_name_types, arg_val_types>&... args) {
   if (unlikely(KTRACE_STATE.tag_enabled(tag))) {
-    auto writer = KTRACE_STATE.make_fxt_writer(tag);
-    (void)fxt::WriteDurationEndEventRecord(&writer, timestamp, thread_ref, category_ref, name_ref,
-                                           args...);
+    fxt::WriteDurationEndEventRecord(&KTRACE_STATE, timestamp, thread_ref, category_ref, name_ref,
+                                     args...);
   }
 }
 
@@ -105,9 +99,8 @@ void fxt_duration_complete(uint32_t tag, uint64_t start,
                            const fxt::StringRef<name_type>& name_ref, uint64_t end,
                            const fxt::Argument<arg_types, arg_name_types, arg_val_types>&... args) {
   if (unlikely(KTRACE_STATE.tag_enabled(tag))) {
-    auto writer = KTRACE_STATE.make_fxt_writer(tag);
-    (void)fxt::WriteDurationCompleteEventRecord(&writer, start, thread_ref, category_ref, name_ref,
-                                                end, args...);
+    fxt::WriteDurationCompleteEventRecord(&KTRACE_STATE, start, thread_ref, category_ref, name_ref,
+                                          end, args...);
   }
 }
 
@@ -119,9 +112,8 @@ void fxt_counter(uint32_t tag, uint64_t timestamp, const fxt::ThreadRef<thread_t
                  const fxt::StringRef<name_type>& name_ref, uint64_t counter_id,
                  const fxt::Argument<arg_types, arg_name_types, arg_val_types>&... args) {
   if (unlikely(KTRACE_STATE.tag_enabled(tag))) {
-    auto writer = KTRACE_STATE.make_fxt_writer(tag);
-    (void)fxt::WriteCounterEventRecord(&writer, timestamp, thread_ref, category_ref, name_ref,
-                                       counter_id, args...);
+    fxt::WriteCounterEventRecord(&KTRACE_STATE, timestamp, thread_ref, category_ref, name_ref,
+                                 counter_id, args...);
   }
 }
 
@@ -133,9 +125,8 @@ void fxt_flow_begin(uint32_t tag, uint64_t timestamp, const fxt::ThreadRef<threa
                     const fxt::StringRef<name_type>& name_ref, uint64_t flow_id,
                     const fxt::Argument<arg_types, arg_name_types, arg_val_types>&... args) {
   if (unlikely(KTRACE_STATE.tag_enabled(tag))) {
-    auto writer = KTRACE_STATE.make_fxt_writer(tag);
-    (void)fxt::WriteFlowBeginEventRecord(&writer, timestamp, thread_ref, category_ref, name_ref,
-                                         flow_id, args...);
+    fxt::WriteFlowBeginEventRecord(&KTRACE_STATE, timestamp, thread_ref, category_ref, name_ref,
+                                   flow_id, args...);
   }
 }
 
@@ -147,9 +138,8 @@ void fxt_flow_step(uint32_t tag, uint64_t timestamp, const fxt::ThreadRef<thread
                    const fxt::StringRef<name_type>& name_ref, uint64_t flow_id,
                    const fxt::Argument<arg_types, arg_name_types, arg_val_types>&... args) {
   if (unlikely(KTRACE_STATE.tag_enabled(tag))) {
-    auto writer = KTRACE_STATE.make_fxt_writer(tag);
-    (void)fxt::WriteFlowStepEventRecord(&writer, timestamp, thread_ref, category_ref, name_ref,
-                                        flow_id, args...);
+    fxt::WriteFlowStepEventRecord(&KTRACE_STATE, timestamp, thread_ref, category_ref, name_ref,
+                                  flow_id, args...);
   }
 }
 
@@ -161,9 +151,8 @@ void fxt_flow_end(uint32_t tag, uint64_t timestamp, const fxt::ThreadRef<thread_
                   const fxt::StringRef<name_type>& name_ref, uint64_t flow_id,
                   const fxt::Argument<arg_types, arg_name_types, arg_val_types>&... args) {
   if (unlikely(KTRACE_STATE.tag_enabled(tag))) {
-    auto writer = KTRACE_STATE.make_fxt_writer(tag);
-    (void)fxt::WriteFlowEndEventRecord(&writer, timestamp, thread_ref, category_ref, name_ref,
-                                       flow_id, args...);
+    fxt::WriteFlowEndEventRecord(&KTRACE_STATE, timestamp, thread_ref, category_ref, name_ref,
+                                 flow_id, args...);
   }
 }
 

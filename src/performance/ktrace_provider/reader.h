@@ -9,8 +9,6 @@
 
 #include <iterator>
 
-#include <fbl/unique_fd.h>
-
 namespace ktrace_provider {
 
 class Reader {
@@ -18,7 +16,7 @@ class Reader {
   Reader(const char* buffer, size_t buffer_size);
   virtual ~Reader() = default;
 
-  const ktrace_header_t* ReadNextRecord();
+  const uint64_t* ReadNextRecord();
 
   size_t number_bytes_read() const { return number_bytes_read_; }
   size_t number_records_read() const { return number_records_read_; }

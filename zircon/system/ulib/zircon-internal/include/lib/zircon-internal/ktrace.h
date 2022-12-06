@@ -31,7 +31,6 @@ __BEGIN_CDECLS
 
 #define KTRACE_TAG_FLAGS(tag, flags) ((tag) | (((flags)&0xF)<<4))
 
-#define KTRACE_LEN(tag)           (((tag)&0xF)<<3)
 #define KTRACE_GROUP(tag)         (((tag)>>20)&0xFFF)
 #define KTRACE_EVENT(tag)         (((tag)>>8)&0xFFF)
 #define KTRACE_FLAGS(tag)         (((tag)>>4)&0xF)
@@ -40,11 +39,6 @@ __BEGIN_CDECLS
 
 #define KTRACE_NAMED_EVENT(id)    ((id) | KTRACE_NAMED_EVENT_BIT)
 #define KTRACE_EVENT_NAME_ID(tag) (KTRACE_EVENT(tag) & 0x7ff)
-
-#define KTRACE_HDRSIZE            (16)
-#define KTRACE_RECSIZE            (32)
-#define KTRACE_NAMESIZE           (12)
-#define KTRACE_NAMEOFF            (8)
 
 #define KTRACE_VERSION            (0x00020000u)
 
@@ -70,31 +64,6 @@ __BEGIN_CDECLS
 #define KTRACE_FLAGS_FLOW         (0x8)
 #define KTRACE_FLAGS_COUNTER      (KTRACE_FLAGS_BEGIN | KTRACE_FLAGS_END)
 
-typedef struct ktrace_header {
-    uint32_t tag;
-    uint32_t tid;
-    uint64_t ts;
-} ktrace_header_t;
-
-static_assert(sizeof(ktrace_header_t) == KTRACE_HDRSIZE,
-              "ktrace_header_t is not KTRACE_HDRSIZE bytes");
-
-typedef struct ktrace_rec_32b {
-    uint32_t tag;
-    uint32_t tid;
-    uint64_t ts;
-    uint32_t a;
-    uint32_t b;
-    uint32_t c;
-    uint32_t d;
-} ktrace_rec_32b_t;
-
-typedef struct ktrace_rec_name {
-    uint32_t tag;
-    uint32_t id;
-    uint32_t arg;
-    char name[1];
-} ktrace_rec_name_t;
 
 #define KTRACE_DEF(num,type,name,group) TAG_##name = KTRACE_TAG_##type(num,KTRACE_GRP_##group),
 enum {

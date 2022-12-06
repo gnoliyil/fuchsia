@@ -4,26 +4,6 @@
 
 import("//build/components.gni")
 
-source_set("importer") {
-  sources = [
-    "importer.cc",
-    "importer.h",
-    "reader.cc",
-    "reader.h",
-    "tags.cc",
-    "tags.h",
-  ]
-
-  public_deps = [
-    "//src/lib/fxl",
-    "//src/performance/lib/fxt",
-    "//zircon/system/ulib/fbl",
-    "//zircon/system/ulib/trace-engine",
-    "//zircon/system/ulib/zircon-internal",
-    "//zircon/system/ulib/zx",
-  ]
-}
-
 executable("bin") {
   output_name = "ktrace_provider"
 
@@ -35,15 +15,17 @@ executable("bin") {
     "log_importer.cc",
     "log_importer.h",
     "main.cc",
+    "reader.cc",
+    "reader.h",
   ]
 
   deps = [
-    ":importer",
     "//sdk/fidl/fuchsia.boot:fuchsia.boot_c",
     "//sdk/fidl/fuchsia.tracing.kernel:fuchsia.tracing.kernel_hlcpp",
     "//sdk/lib/fdio",
     "//sdk/lib/sys/cpp",
     "//src/lib/fxl",
+    "//src/performance/lib/fxt",
     "//zircon/system/ulib/async-loop:async-loop-cpp",
     "//zircon/system/ulib/async-loop:async-loop-default",
     "//zircon/system/ulib/trace",

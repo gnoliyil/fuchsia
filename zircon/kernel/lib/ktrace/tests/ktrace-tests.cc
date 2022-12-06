@@ -28,10 +28,10 @@ class TestKTraceState : public ::internal::KTraceState {
   // default buffer size, minus the two metadata records we consume up front.  Since we
   // always allocate buffers in multiples of page size, we should be able to
   // assert that this is an integral number of records.
-  static_assert(kDefaultBufferSize > (sizeof(ktrace_rec_32b_t) * 2));
-  static_assert(((kDefaultBufferSize - (sizeof(ktrace_rec_32b_t) * 2)) % 32) == 0);
-  static constexpr uint32_t kMax32bRecords =
-      (kDefaultBufferSize - (sizeof(ktrace_rec_32b_t) * 2)) / 32;
+  static_assert(kDefaultBufferSize > (sizeof(uint64_t) * 3));
+  static_assert(((kDefaultBufferSize - (sizeof(uint64_t) * 3)) % 8) == 0);
+  static constexpr uint32_t kMaxWords =
+      (kDefaultBufferSize - (sizeof(uint64_t) * 3)) / sizeof(uint64_t);
 
   static bool InitStartTest() {
     BEGIN_TEST;
@@ -127,95 +127,34 @@ class TestKTraceState : public ::internal::KTraceState {
     TestKTraceState state;
     ASSERT_TRUE(state.Init(kDefaultBufferSize, kGroups));
 
-    uint32_t expected_offset = sizeof(ktrace_rec_32b_t) * 2;
+    uint32_t expected_offset = sizeof(uint64_t) * 3;
     ASSERT_TRUE(state.CheckExpectedOffset(expected_offset));
-
-    // Exercise each of the supported forms of WriteRecord.  There are 7 in total:
-    // 1) No payload
-    // 2) Payloads with 1-4 u32 arguments.
-    // 3) Payloads with 1-2 u64 arguments.
-    constexpr uint64_t kFirstTS = 0x1234567890abcdef;
-    constexpr uint32_t kBaseSz = sizeof(ktrace_header_t);
-    constexpr uint32_t kBaseU32 = 0xbaad0000;
-    constexpr uint64_t kBaseU64 = 0xbaadbaadf00d0000;
-
-    auto MakeTag = [](uint32_t wr_ndx, uint32_t arg_cnt, uint32_t arg_sz) {
-      const uint32_t sz = (kBaseSz + (arg_cnt * arg_sz) + 0x7) & ~0x7;
-      return KTRACE_TAG(wr_ndx + 1, 1, sz);
-    };
-    auto TS = [](uint32_t wr_ndx) { return kFirstTS + wr_ndx; };
-    auto U32 = [](uint32_t wr_ndx, uint32_t arg) { return kBaseU32 + (wr_ndx * 16) + arg; };
-    auto U64 = [](uint32_t wr_ndx, uint32_t arg) { return kBaseU64 + (wr_ndx * 16) + arg; };
-
-    state.WriteRecord(MakeTag(0, 0, 0), TS(0));
-    state.WriteRecord(MakeTag(1, 1, 4), TS(1), U32(1, 0));
-    state.WriteRecord(MakeTag(2, 2, 4), TS(2), U32(2, 0), U32(2, 1));
-    state.WriteRecord(MakeTag(3, 3, 4), TS(3), U32(3, 0), U32(3, 1), U32(3, 2));
-    state.WriteRecord(MakeTag(4, 4, 4), TS(4), U32(4, 0), U32(4, 1), U32(4, 2), U32(4, 3));
-    state.WriteRecord(MakeTag(5, 1, 8), TS(5), U64(5, 0));
-    state.WriteRecord(MakeTag(6, 2, 8), TS(6), U64(6, 0), U64(6, 1));
+    fxt::WriteInstantEventRecord(&state, 0xAAAA'AAAA'AAAA'AAAA, fxt::ThreadRef{0x0A},
+                                 fxt::StringRef{1}, fxt::StringRef{2});
+    fxt::WriteInstantEventRecord(&state, 1, fxt::ThreadRef{0x0B}, fxt::StringRef{3},
+                                 fxt::StringRef{0x4});
 
     // Now, stop the trace and read the records back out and verify their contents.
-    constexpr struct {
-      uint32_t num_args;
-      uint32_t arg_size;
-    } kTestVectors[] = {{0, 0}, {1, 4}, {2, 4}, {3, 4}, {4, 4}, {1, 8}, {2, 8}};
-
     uint32_t records_enumerated = 0;
-    uint32_t vec_id = 0;
-    auto checker = [&](const ktrace_header_t* hdr) -> bool {
+    auto checker = [&](const uint64_t* record) -> bool {
       BEGIN_TEST;
-
-      ASSERT_NONNULL(hdr);
-      const ktrace_header_t& rec = *(reinterpret_cast<const ktrace_header_t*>(hdr));
-
-      ASSERT_LT(vec_id, ktl::size(kTestVectors));
-      const auto& vec = kTestVectors[vec_id];
-
-      const uint32_t expected_size = static_cast<uint32_t>(
-          (sizeof(ktrace_header_t) + (vec.num_args * vec.arg_size) + 0x7) & ~0x7);
-      const uint32_t expected_tag = MakeTag(vec_id, vec.num_args, vec.arg_size);
-
-      // Check the tag fields
-      EXPECT_EQ(expected_size, KTRACE_LEN(rec.tag));
-      EXPECT_EQ(KTRACE_GROUP(expected_tag), KTRACE_GROUP(rec.tag));
-      EXPECT_EQ(KTRACE_EVENT(expected_tag), KTRACE_EVENT(rec.tag));
-      EXPECT_EQ(KTRACE_FLAGS(expected_tag), KTRACE_FLAGS(rec.tag));
-
-      // Check the timestamp
-      EXPECT_EQ(TS(vec_id), rec.ts);
-
-      // Check the payload
-      switch (vec.arg_size) {
-        case 0:
+      const uint16_t threadref = fxt::EventRecordFields::ThreadRef::Get<uint16_t>(*record);
+      switch (threadref) {
+        case 0xAA:
+          EXPECT_EQ(uint64_t{0x0001'0002'0A00'0024}, record[0]);
+          EXPECT_EQ(uint64_t{0x0}, record[1]);
           break;
-
-        case 4: {
-          auto payload = reinterpret_cast<const uint32_t*>(hdr + 1);
-          for (uint32_t i = 0; i < vec.num_args; ++i) {
-            ASSERT_EQ(U32(vec_id, i), payload[i]);
-          }
-        } break;
-
-        case 8: {
-          auto payload = reinterpret_cast<const uint64_t*>(hdr + 1);
-          for (uint32_t i = 0; i < vec.num_args; ++i) {
-            ASSERT_EQ(U64(vec_id, i), payload[i]);
-          }
-        } break;
-
-        default:
-          ASSERT_TRUE(false);
+        case 0xBB:
+          EXPECT_EQ(uint64_t{0x0003'0004'0B00'0024}, record[0]);
+          EXPECT_EQ(uint64_t{0x1}, record[1]);
           break;
       }
-
-      ++vec_id;
       END_TEST;
     };
 
     ASSERT_OK(state.Stop());
     ASSERT_TRUE(state.TestAllRecords(records_enumerated, checker));
-    EXPECT_EQ(7u, records_enumerated);
+    EXPECT_EQ(2u, records_enumerated);
 
     END_TEST;
   }
@@ -229,24 +168,25 @@ class TestKTraceState : public ::internal::KTraceState {
     ASSERT_TRUE(state.Init(kDefaultBufferSize, kGroups));
 
     // Write the (max - 1) 32 byte records to the buffer, then write a single 24 byte record.
-    for (uint32_t i = 0; i < kMax32bRecords - 1; ++i) {
-      state.WriteRecord(TAG_PROBE_32(1), kRecordCurrentTimestamp, 5u, 6u, 7u, 8u);
+    for (uint32_t i = 0; i + 2 < kMaxWords; i += 2) {
+      // Instant records are 2 words
+      fxt::WriteInstantEventRecord(&state, 0, fxt::ThreadRef{0x0A}, fxt::StringRef{0x1},
+                                   fxt::StringRef{0x2});
     }
-    state.WriteRecord(TAG_PROBE_24(1), kRecordCurrentTimestamp, 5u, 6u);
 
     // The buffer will not think that it is full just yet.
     uint32_t rcnt = 0;
-    auto checker = [&](const ktrace_header_t* hdr) -> bool { return true; };
+    auto checker = [&](const uint64_t* hdr) -> bool { return true; };
     EXPECT_EQ(KTRACE_GRP_TO_MASK(kGroups), state.grpmask());
     ASSERT_OK(state.Stop());
     EXPECT_TRUE(state.TestAllRecords(rcnt, checker));
     EXPECT_TRUE(state.CheckExpectedOffset(kDefaultBufferSize - 8));
-    EXPECT_EQ(kMax32bRecords, rcnt);
+    EXPECT_EQ(kMaxWords / 2, rcnt);
 
     // Now write one more record, this time with a different payload.
     ASSERT_OK(state.Start(kGroups, internal::KTraceState::StartMode::Saturate));
-    state.WriteRecord(TAG_PROBE_32(1), kRecordCurrentTimestamp, 0xbaadf00d, 0xf00dbaad, ~0xbaadf00d,
-                      ~0xf00dbaad);
+    fxt::WriteInstantEventRecord(&state, 0xABCDABCD, fxt::ThreadRef{0x0B}, fxt::StringRef{0x3},
+                                 fxt::StringRef{0x4});
 
     // The buffer should now think that it is full (the group mask will be
     // cleared), and all of the original records should be present (but not the
@@ -254,30 +194,19 @@ class TestKTraceState : public ::internal::KTraceState {
     EXPECT_EQ(0u, state.grpmask());
     ASSERT_OK(state.Stop());
 
-    auto payload_checker = [&](const ktrace_header_t* hdr) -> bool {
+    auto payload_checker = [&](const uint64_t* hdr) -> bool {
       BEGIN_TEST;
       ASSERT_NONNULL(hdr);
-
-      auto payload = reinterpret_cast<const uint32_t*>(hdr + 1);
-      const uint32_t len = KTRACE_LEN(hdr->tag);
-      switch (len) {
-        case 32:
-          EXPECT_EQ(7u, payload[2]);
-          EXPECT_EQ(8u, payload[3]);
-          __FALLTHROUGH;
-        case 24:
-          EXPECT_EQ(5u, payload[0]);
-          EXPECT_EQ(6u, payload[1]);
-          break;
-        default:
-          EXPECT_EQ(32u, len);
-          break;
-      }
-
+      const size_t len = fxt::EventRecordFields::RecordSize::Get<size_t>(*hdr);
+      const uint64_t* ts = reinterpret_cast<const uint64_t*>(hdr + 1);
+      // All records that we get should be the first record
+      EXPECT_EQ(uint64_t{0x0002'0001'0A00'0024}, *hdr);
+      EXPECT_EQ(uint64_t{0}, *ts);
+      EXPECT_EQ(2u, len);
       END_TEST;
     };
     EXPECT_TRUE(state.TestAllRecords(rcnt, payload_checker));
-    EXPECT_EQ(kMax32bRecords, rcnt);
+    EXPECT_EQ(kMaxWords / 2, rcnt);
 
     END_TEST;
   }
@@ -290,16 +219,19 @@ class TestKTraceState : public ::internal::KTraceState {
     TestKTraceState state;
     ASSERT_TRUE(state.Init(kDefaultBufferSize, kGroups));
 
-    uint32_t expected_offset = sizeof(ktrace_rec_32b_t) * 2;
+    uint32_t expected_offset = sizeof(uint64_t) * 3;
     ASSERT_TRUE(state.CheckExpectedOffset(expected_offset));
 
     // Write a couple of records.
-    state.WriteRecord(TAG_PROBE_32(1), kRecordCurrentTimestamp, 5u, 6u);
-    state.WriteRecord(TAG_PROBE_32(1), kRecordCurrentTimestamp, 5u, 6u);
+    fxt::WriteInstantEventRecord(&state, 0, fxt::ThreadRef{0x0A}, fxt::StringRef{0x1},
+                                 fxt::StringRef{0x2});
+
+    fxt::WriteInstantEventRecord(&state, 1, fxt::ThreadRef{0x0A}, fxt::StringRef{0x1},
+                                 fxt::StringRef{0x2});
 
     // The offset should have moved, and the number of records in the buffer should now be 2.
     uint32_t rcnt = 0;
-    auto checker = [&](const ktrace_header_t* hdr) -> bool { return true; };
+    auto checker = [&](const uint64_t* hdr) -> bool { return true; };
     EXPECT_TRUE(state.CheckExpectedOffset(expected_offset, CheckOp::LT));
     EXPECT_EQ(KTRACE_GRP_TO_MASK(kGroups), state.grpmask());
     ASSERT_OK(state.Stop());
@@ -316,13 +248,14 @@ class TestKTraceState : public ::internal::KTraceState {
 
     // Start again, and this time saturate the buffer
     ASSERT_OK(state.Start(kGroups, StartMode::Saturate));
-    for (uint32_t i = 0; i < kMax32bRecords + 10; ++i) {
-      state.WriteRecord(TAG_PROBE_32(1), kRecordCurrentTimestamp, 5u, 6u, 7u, 8u);
+    for (uint32_t i = 0; i <= kMaxWords; i += 2) {
+      fxt::WriteInstantEventRecord(&state, 0, fxt::ThreadRef{0x0A}, fxt::StringRef{0x1},
+                                   fxt::StringRef{0x2});
     }
     EXPECT_EQ(0u, state.grpmask());
     ASSERT_OK(state.Stop());
     EXPECT_TRUE(state.TestAllRecords(rcnt, checker));
-    EXPECT_EQ(kMax32bRecords, rcnt);
+    EXPECT_EQ(kMaxWords / 2, rcnt);
 
     // Finally, rewind again.  The offset should return to the
     // beginning, and there should be no records in the buffer.
@@ -378,7 +311,7 @@ class TestKTraceState : public ::internal::KTraceState {
       // Now that we are stopped, we can read, rewind, and stop again.  Since we
       // have started before, we expect that the amount of data available to
       // read should be equal to the size of the two static metadata records.
-      const ssize_t expected_size = sizeof(ktrace_rec_32b_t) * 2;
+      const ssize_t expected_size = sizeof(uint64_t) * 3;
       ASSERT_EQ(expected_size, state.ReadUser(user_out_ptr<void>(nullptr), 0, 0));
       ASSERT_OK(state.Rewind());
     }
@@ -405,7 +338,7 @@ class TestKTraceState : public ::internal::KTraceState {
       ASSERT_EQ(KTRACE_GRP_TO_MASK(0u), state.grpmask());
 
       // Stopping again, rewinding, and reading are all OK now.
-      const ssize_t expected_size = sizeof(ktrace_rec_32b_t) * 2;
+      const ssize_t expected_size = sizeof(uint64_t) * 3;
       ASSERT_OK(state.Stop());
       ASSERT_EQ(expected_size, state.ReadUser(user_out_ptr<void>(nullptr), 0, 0));
       ASSERT_OK(state.Rewind());
@@ -454,51 +387,53 @@ class TestKTraceState : public ::internal::KTraceState {
     };
 
     for (const Padding pass : kPasses) {
-      auto payload_checker = [&](const ktrace_header_t* hdr) {
+      auto payload_checker = [&](const uint64_t* hdr) {
         BEGIN_TEST;
 
         ASSERT_NONNULL(hdr);
-        auto payload = reinterpret_cast<const uint32_t*>(hdr + 1);
-        const uint32_t len = KTRACE_LEN(hdr->tag);
+        const uint32_t len = fxt::RecordFields::RecordSize::Get<uint32_t>(*hdr);
 
         if (record_count == 0) {
-          // Record number #0 should always be present, always be 32 bytes
-          // long, and always have the 0xAAAAAAAA, 0, 0, 0 payload.
-          ASSERT_EQ(32u, len);
-          EXPECT_EQ(0xaaaaaaaa, payload[0]);
-          EXPECT_EQ(0u, payload[1]);
-          EXPECT_EQ(0u, payload[2]);
-          EXPECT_EQ(0u, payload[3]);
+          // Record number #0 should always be present, and always have a 0xAAAA'AAAA'AAAA'AAAA
+          // timestamp
+          ASSERT_EQ(4u, len);
+          EXPECT_EQ(0xAAAA'AAAA'AAAA'AAAA, hdr[1]);
+          // Argument data
+          EXPECT_EQ(uint64_t{0x0000'0000'0003'0023}, hdr[2]);
+          EXPECT_EQ(uint64_t{0x2222'2222'2222'2222}, hdr[3]);
         } else if (record_count == 1) {
           // Record number #1 should always be present, and will have a length
-          // of 24 or 32 bytes, and a 0xbbbbbbbb or 0xcccccccc payload,
+          // of 4 or 5 words, and a 0xBBBB'BBBB'BBBB'BBBB or 0xCCCC'CCCC'CCCC'CCCC payload,
           // depending on whether or not this pass of the test is one where we
           // expect to need a padding record or not.
-          // long, and always have the 0xAAAAAAAA, 0, 0, 0 payload.
           if (pass == Padding::Needed) {
-            ASSERT_EQ(24u, len);
-            EXPECT_EQ(0xbbbbbbbb, payload[0]);
-            EXPECT_EQ(0u, payload[1]);
+            ASSERT_EQ(4u, len);
+            EXPECT_EQ(uint64_t{0x0002'0001'0110'0044}, hdr[0]);
+            EXPECT_EQ(uint64_t{0xBBBB'BBBB'BBBB'BBBB}, hdr[1]);
+            EXPECT_EQ(uint64_t{0x0000'0000'0003'0023}, hdr[2]);
+            EXPECT_EQ(uint64_t{0x3333'3333'3333'3333}, hdr[3]);
           } else {
-            ASSERT_EQ(32u, len);
-            EXPECT_EQ(0xcccccccc, payload[0]);
-            EXPECT_EQ(0u, payload[1]);
-            EXPECT_EQ(0u, payload[2]);
-            EXPECT_EQ(0u, payload[3]);
+            ASSERT_EQ(5u, len);
+            EXPECT_EQ(uint64_t{0x0002'0001'0120'0054}, hdr[0]);
+            EXPECT_EQ(uint64_t{0xCCCC'CCCC'CCCC'CCCC}, hdr[1]);
+            EXPECT_EQ(uint64_t{0x0000'0000'0003'0023}, hdr[2]);
+            EXPECT_EQ(uint64_t{0x4444'4444'4444'4444}, hdr[3]);
+            EXPECT_EQ(uint64_t{0x4444'4444'0004'0011}, hdr[4]);
           }
         } else {
           // All subsequent records should either be a padding record, or a 32
           // byte record whose payload values are a function of their index.
-          if (KTRACE_GROUP(hdr->tag) != 0) {
+          const uint32_t record_type = fxt::RecordFields::Type::Get<uint32_t>(*hdr);
+          if (record_type != 0) {
             // A non-zero group indicates a normal record.
             const uint32_t ndx = record_count + expected_first_circular - 2;
-            ASSERT_EQ(32u, len);
-            EXPECT_EQ(ndx + 0, payload[0]);
-            EXPECT_EQ(ndx + 1, payload[1]);
-            EXPECT_EQ(ndx + 2, payload[2]);
-            EXPECT_EQ(ndx + 3, payload[3]);
+            ASSERT_EQ(4u, len);
+            EXPECT_EQ(uint64_t{0x0006'0005'0A10'0044}, hdr[0]);
+            EXPECT_EQ(uint64_t{ndx}, hdr[1]);
+            EXPECT_EQ(uint64_t{0x0000'0000'0007'0023}, hdr[2]);
+            EXPECT_EQ(uint64_t{0x6666'6666'6666'6666}, hdr[3]);
           } else {
-            // A group of 0 indicates a padding record.
+            // A record type 0 indicates a padding record.
             if (pass == Padding::Needed) {
               // should only ever see (at most) a single padding record per check.
               ASSERT_FALSE(saw_padding);
@@ -522,20 +457,29 @@ class TestKTraceState : public ::internal::KTraceState {
       ASSERT_TRUE(state.Init(kDefaultBufferSize, kAllGroups));
 
       // In order to run this test, we need enough space in our buffer after the
-      // 2 reserved metadata records for a least two "static" records, and a
+      // 3 reserved metadata words for a least two "static" records, and a
       // small number of extra records.
-      constexpr uint32_t kOverhead = sizeof(ktrace_rec_32b_t) * 2;
+      constexpr uint32_t kOverhead = sizeof(uint64_t) * 3;
       constexpr uint32_t kExtraRecords = 5;
-      const uint32_t kStaticOverhead = 32 + ((pass == Padding::Needed) ? 24 : 32);
+      const uint32_t kStaticOverhead = 32 + ((pass == Padding::Needed) ? 32 : 40);
       ASSERT_GE(kDefaultBufferSize, (kOverhead + kStaticOverhead + (32 * kExtraRecords)));
 
-      state.WriteRecord(TAG_PROBE_32(1), kRecordCurrentTimestamp, 0xaaaaaaaa, 0u, 0u, 0u);
+      fxt::WriteInstantEventRecord(
+          &state, 0xAAAA'AAAA'AAAA'AAAA, fxt::ThreadRef{0x01}, fxt::StringRef{1}, fxt::StringRef{2},
+          fxt::Argument{fxt::StringRef{3}, int64_t{0x2222'2222'2222'2222}});
       if (pass == Padding::Needed) {
+        // 8 bytes header, 8 bytes ts, 16 bytes int64 arg = 32 bytes
         ASSERT_NE(0u, (kDefaultBufferSize - (kOverhead + kStaticOverhead)) % 32);
-        state.WriteRecord(TAG_PROBE_24(1), kRecordCurrentTimestamp, 0xbbbbbbbb, 0u);
+        fxt::WriteInstantEventRecord(
+            &state, 0xBBBB'BBBB'BBBB'BBBB, fxt::ThreadRef{0x01}, fxt::StringRef{1},
+            fxt::StringRef{2}, fxt::Argument{fxt::StringRef{3}, int64_t{0x3333'3333'3333'3333}});
       } else {
         ASSERT_EQ(0u, (kDefaultBufferSize - (kOverhead + kStaticOverhead)) % 32);
-        state.WriteRecord(TAG_PROBE_32(1), kRecordCurrentTimestamp, 0xcccccccc, 0u, 0u, 0u);
+        // 8 bytes header, 8 bytes ts, 16 bytes int64 arg, 8 bytes int32 arg = 40 bytes
+        fxt::WriteInstantEventRecord(
+            &state, 0xCCCC'CCCC'CCCC'CCCC, fxt::ThreadRef{0x01}, fxt::StringRef{1},
+            fxt::StringRef{2}, fxt::Argument{fxt::StringRef{3}, int64_t{0x4444'4444'4444'4444}},
+            fxt::Argument{fxt::StringRef{4}, int32_t{0x4444'4444}});
       }
       ASSERT_TRUE(state.CheckExpectedOffset(kOverhead + kStaticOverhead));
 
@@ -555,8 +499,10 @@ class TestKTraceState : public ::internal::KTraceState {
       ASSERT_OK(state.Start(kAllGroups, StartMode::Circular));
       for (uint32_t i = 0; i < kMaxCircular32bRecords; ++i) {
         const uint32_t ndx = i;
-        state.WriteRecord(TAG_PROBE_32(1), kRecordCurrentTimestamp, ndx + 0, ndx + 1, ndx + 2,
-                          ndx + 3);
+        EXPECT_EQ(ZX_OK,
+                  fxt::WriteInstantEventRecord(
+                      &state, ndx, fxt::ThreadRef{0x0A}, fxt::StringRef{5}, fxt::StringRef{6},
+                      fxt::Argument{fxt::StringRef{7}, int64_t{0x6666'6666'6666'6666}}));
       }
 
       // Stop, and check the contents.
@@ -574,8 +520,10 @@ class TestKTraceState : public ::internal::KTraceState {
       ASSERT_OK(state.Start(kAllGroups, StartMode::Circular));
       for (uint32_t i = 0; i < kExtraRecords; ++i) {
         const uint32_t ndx = i + kMaxCircular32bRecords;
-        state.WriteRecord(TAG_PROBE_32(1), kRecordCurrentTimestamp, ndx + 0, ndx + 1, ndx + 2,
-                          ndx + 3);
+        EXPECT_EQ(ZX_OK,
+                  fxt::WriteInstantEventRecord(
+                      &state, ndx, fxt::ThreadRef{0x0A}, fxt::StringRef{5}, fxt::StringRef{6},
+                      fxt::Argument{fxt::StringRef{7}, int64_t{0x6666'6666'6666'6666}}));
       }
 
       // Stop, and check the contents.
@@ -607,33 +555,32 @@ class TestKTraceState : public ::internal::KTraceState {
     // expressing the version of the trace buffer format, as well as the
     // resolution of the timestamps in the trace.  Make sure that the offset
     // reflects this.
-    uint32_t expected_offset = sizeof(ktrace_rec_32b_t) * 2;
+    uint32_t expected_offset = sizeof(uint64_t) * 3;
     ASSERT_TRUE(state.CheckExpectedOffset(expected_offset));
 
-    // This test works with the FxtCompatWriter and Reservation objects directly
+    // This test works with the Reservation objects directly
     // rather than using the libfxt functions. Here we build a valid string
     // record in a convoluted way to cover various methods that libfxt uses to
     // write bytes.
     constexpr uint64_t fxt_header = 0x0000'0026'0001'0062;
 
-    auto wrapper = state.make_fxt_writer(KTRACE_TAG(0x1, 0x1, 0));
-    auto reservation = wrapper.Reserve(fxt_header);
-    ASSERT_OK(reservation.status_value());
-    reservation->WriteWord(0x6867'6665'6463'6261);
-    reservation->WriteBytes("0123456789ABCDEF", 16);
-    reservation->WriteBytes("remaining data", 14);
-    reservation->Commit();
+    {
+      auto reservation = state.Reserve(fxt_header);
+      ASSERT_OK(reservation.status_value());
+      reservation->WriteWord(0x6867'6665'6463'6261);
+      reservation->WriteBytes("0123456789ABCDEF", 16);
+      reservation->WriteBytes("remaining data", 14);
+      reservation->Commit();
+    }
 
-    auto record_checker = [&](const ktrace_header_t* hdr) {
+    auto record_checker = [&](const uint64_t* hdr) {
       BEGIN_TEST;
 
       ASSERT_NONNULL(hdr);
 
-      EXPECT_EQ(KTRACE_GROUP(hdr->tag), 0x1u | KTRACE_GRP_FXT);
       // KTrace length field should be computed from the FXT header.
-      ASSERT_EQ(KTRACE_LEN(hdr->tag), 7 * sizeof(uint64_t));
 
-      const char* fxt_start = reinterpret_cast<const char*>(hdr) + sizeof(uint64_t);
+      const char* fxt_start = reinterpret_cast<const char*>(hdr);
 
       EXPECT_EQ(0, memcmp(fxt_start,
                           "\x62\x00\x01\x00\x26\x00\x00\x00"
@@ -756,7 +703,6 @@ class TestKTraceState : public ::internal::KTraceState {
   bool TestAllRecords(uint32_t& records_enumerated_out, const Checker& do_check)
       TA_EXCL(write_lock_) {
     BEGIN_TEST;
-
     // Make sure that we give a value to all of our out parameters.
     records_enumerated_out = 0;
 
@@ -772,42 +718,40 @@ class TestKTraceState : public ::internal::KTraceState {
         ReadUser(user_out_ptr<void>(validation_buffer_.get()), 0, validation_buffer_size_);
     ASSERT_EQ(static_cast<size_t>(available), to_validate);
 
-    uint32_t rd_offset = sizeof(ktrace_rec_32b_t) * 2;
+    size_t rd_offset = sizeof(uint64_t) * 3;
     ASSERT_GE(to_validate, rd_offset);
 
     // We expect all trace buffers to start with a metadata records indicating the
     // version of the trace buffer format, and the clock resolution.  Verify that
     // these are present.
     const uint8_t* buffer = validation_buffer_.get();
-    const ktrace_rec_32b_t& version_rec = reinterpret_cast<const ktrace_rec_32b_t*>(buffer)[0];
-    const ktrace_rec_32b_t& clock_res_rec = reinterpret_cast<const ktrace_rec_32b_t*>(buffer)[1];
+    const uint64_t magic = reinterpret_cast<const uint64_t*>(buffer)[0];
+    const uint64_t init_header = reinterpret_cast<const uint64_t*>(buffer)[1];
+    const uint64_t fxt_ticks = reinterpret_cast<const uint64_t*>(buffer)[2];
 
-    EXPECT_EQ(TAG_VERSION, version_rec.tag);
-    EXPECT_EQ(KTRACE_VERSION, version_rec.a);
-    EXPECT_EQ(sizeof(ktrace_rec_32b_t), KTRACE_LEN(version_rec.tag));
-
-    const uint64_t clock_res = ticks_per_second() / 1000;
-    EXPECT_EQ(TAG_TICKS_PER_MS, clock_res_rec.tag);
-    EXPECT_EQ(static_cast<uint32_t>(clock_res), clock_res_rec.a);
-    EXPECT_EQ(static_cast<uint32_t>(clock_res >> 32), clock_res_rec.b);
-    EXPECT_EQ(sizeof(ktrace_rec_32b_t), KTRACE_LEN(clock_res_rec.tag));
+    EXPECT_EQ(uint64_t{0x0016547846040010}, magic);
 
     // If something goes wrong while testing records, report _which_ record has
     // trouble, to assist with debugging.
     auto ReportRecord = fit::defer(
         [&]() { printf("\nFAILED while enumerating record (%u)\n", records_enumerated_out); });
 
+    const uint64_t clock_res = ticks_per_second() / 1000;
+    EXPECT_EQ(uint64_t{0x21}, init_header);
+    EXPECT_EQ(clock_res, fxt_ticks);
+
     while (rd_offset < to_validate) {
-      auto hdr = reinterpret_cast<const ktrace_header_t*>(buffer + rd_offset);
+      const uint64_t* hdr = reinterpret_cast<const uint64_t*>(buffer + rd_offset);
+      size_t record_size = fxt::RecordFields::RecordSize::Get<size_t>(*hdr);
       // Zero length records are not legal.
-      ASSERT_GT(KTRACE_LEN(hdr->tag), 0u);
+      ASSERT_GT(record_size, size_t{0});
 
       // Make sure the record matches expectations.
       ASSERT_TRUE(do_check(hdr));
 
       // Advance to the next record.
       ++records_enumerated_out;
-      rd_offset += KTRACE_LEN(hdr->tag);
+      rd_offset += record_size * 8;
     }
 
     EXPECT_EQ(rd_offset, to_validate);

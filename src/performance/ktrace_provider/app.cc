@@ -8,6 +8,7 @@
 #include <fuchsia/tracing/kernel/cpp/fidl.h>
 #include <lib/async/default.h>
 #include <lib/fdio/fdio.h>
+#include <lib/fxt/fields.h>
 #include <lib/syslog/cpp/macros.h>
 #include <lib/trace-engine/instrumentation.h>
 #include <lib/trace-provider/provider.h>
@@ -19,7 +20,6 @@
 #include <iterator>
 
 #include "src/performance/ktrace_provider/device_reader.h"
-#include "src/performance/ktrace_provider/importer.h"
 
 namespace ktrace_provider {
 namespace {
@@ -217,10 +217,23 @@ void App::StopKTrace() {
 
   DeviceReader reader;
   if (reader.Init() == ZX_OK) {
-    Importer importer(buffer_context);
-    if (!importer.Import(reader)) {
-      FX_LOGS(ERROR) << "Errors encountered while importing ktrace data";
+    zx::time start = zx::clock::get_monotonic();
+    while (const uint64_t* fxt_header = reader.ReadNextRecord()) {
+      // A record header 0 is a padding record.  It contains no info, and is just used to pad the
+      // kernel's ring buffer to maintain continuity when need.  Skip it.
+      if (*fxt_header == 0) {
+        continue;
+      }
+
+      size_t record_size_bytes = fxt::RecordFields::RecordSize::Get<size_t>(*fxt_header) * 8;
+      void* dst = trace_context_alloc_record(buffer_context, record_size_bytes);
+      if (dst != nullptr) {
+        memcpy(dst, reinterpret_cast<const char*>(fxt_header), record_size_bytes);
+      }
     }
+    FX_LOGS(INFO) << "Import of " << reader.number_records_read() << " kernel records"
+                  << "(" << reader.number_bytes_read()
+                  << " bytes) took: " << (zx::clock::get_monotonic() - start).to_usecs() << "us";
   } else {
     FX_LOGS(ERROR) << "Failed to initialize ktrace reader";
   }

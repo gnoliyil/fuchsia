@@ -194,10 +194,13 @@ zx_status_t KTraceState::RewindLocked() {
 
   {
     Guard<SpinLock, IrqSave> write_guard{&write_lock_};
+    // 1 magic bytes record: 8 bytes
+    // 1 Initialization/tickrate record: 16 bytes
+    const size_t fxt_metadata_size = 24;
 
     // roll back to just after the metadata
     rd_ = 0;
-    wr_ = KTRACE_RECSIZE * 2;
+    wr_ = fxt_metadata_size;
 
     // After a rewind, we are no longer in circular buffer mode.
     wrap_offset_ = 0;
@@ -209,14 +212,13 @@ zx_status_t KTraceState::RewindLocked() {
       return ZX_OK;
     }
 
-    // Stash our version and timestamp resolution.
-    uint64_t n = ktrace_ticks_per_ms();
-    ktrace_rec_32b_t* rec = reinterpret_cast<ktrace_rec_32b_t*>(buffer_);
-    rec[0].tag = TAG_VERSION;
-    rec[0].a = KTRACE_VERSION;
-    rec[1].tag = TAG_TICKS_PER_MS;
-    rec[1].a = static_cast<uint32_t>(n);
-    rec[1].b = static_cast<uint32_t>(n >> 32);
+    // Write our fxt metadata -- our magic number and timestamp resolution.
+    uint64_t* recs = reinterpret_cast<uint64_t*>(buffer_);
+    // FXT Magic bytes
+    recs[0] = 0x0016547846040010;
+    // FXT Initialization Record
+    recs[1] = 0x21;
+    recs[2] = ktrace_ticks_per_ms();
   }
 
   return ZX_OK;
@@ -389,63 +391,6 @@ ssize_t KTraceState::ReadUser(user_out_ptr<void> ptr, uint32_t off, size_t len) 
   return done;
 }
 
-// Write out a ktrace record with no payload.
-template <>
-void KTraceState::WriteRecord(uint32_t effective_tag, uint64_t explicit_ts) {
-  DEBUG_ASSERT(KTRACE_LEN(effective_tag) >= sizeof(ktrace_header_t));
-
-  AutoWriteInFlight inflight_manager(*this);
-  if (unlikely(!tag_enabled(effective_tag, inflight_manager.observed_grpmask()))) {
-    return;
-  }
-
-  if (explicit_ts == kRecordCurrentTimestamp) {
-    explicit_ts = ktrace_timestamp();
-  }
-
-  if (PendingCommit reservation = Reserve(effective_tag); reservation.is_valid()) {
-    reservation.hdr()->ts = explicit_ts;
-    reservation.hdr()->tid = MakeTidField(effective_tag);
-  } else {
-    DisableGroupMask();
-  }
-}
-
-// Write out a ktrace record with the given arguments as a payload.
-//
-// Arguments must be of the same type.
-template <typename... Args>
-void KTraceState::WriteRecord(uint32_t effective_tag, uint64_t explicit_ts, Args... args) {
-  DEBUG_ASSERT(KTRACE_LEN(effective_tag) >= (sizeof(ktrace_header_t) + sizeof...(Args)));
-
-  AutoWriteInFlight inflight_manager(*this);
-  if (unlikely(!tag_enabled(effective_tag, inflight_manager.observed_grpmask()))) {
-    return;
-  }
-
-  if (explicit_ts == kRecordCurrentTimestamp) {
-    explicit_ts = ktrace_timestamp();
-  }
-
-  if (PendingCommit reservation = Reserve(effective_tag); reservation.is_valid()) {
-    // Fill out most of the header.  Do not commit the tag until we have the
-    // entire record written.
-    reservation.hdr()->ts = explicit_ts;
-    reservation.hdr()->tid = MakeTidField(effective_tag);
-
-    // Fill out the payload.
-    auto payload_src = {args...};
-    using PayloadType = typename decltype(payload_src)::value_type;
-    auto payload_tgt = reinterpret_cast<PayloadType*>(reservation.hdr() + 1);
-    uint32_t i = 0;
-    for (auto arg : payload_src) {
-      payload_tgt[i++] = arg;
-    }
-  } else {
-    DisableGroupMask();
-  }
-}
-
 void KTraceState::ReportStaticNames() {
   ktrace_report_probes();
   ktrace_report_cpu_pseudo_threads();
@@ -503,22 +448,23 @@ zx_status_t KTraceState::AllocBuffer() {
   return ZX_OK;
 }
 
-KTraceState::PendingCommit KTraceState::Reserve(uint32_t tag) {
-  void* ptr = ReserveRaw(KTRACE_LEN(tag));
-  if (ptr != nullptr) {
-    return {ptr, tag};
-  } else {
-    return nullptr;
+zx::result<KTraceState::PendingCommit> KTraceState::Reserve(uint64_t header) {
+  uint32_t fxt_words = fxt::RecordFields::RecordSize::Get<uint32_t>(header);
+  uint64_t* ptr = reinterpret_cast<uint64_t*>(ReserveRaw(fxt_words * sizeof(uint64_t)));
+  if (ptr == nullptr) {
+    DisableGroupMask();
+    return zx::error(ZX_ERR_NO_MEMORY);
   }
+  return zx::ok(PendingCommit(ptr, header, this));
 }
 
 void* KTraceState::ReserveRaw(uint32_t num_bytes) {
-  constexpr uint32_t kUncommitedRecordTag = 0;
-  auto Commit = [](void* ptr, uint32_t tag) -> void {
-    ktl::atomic_ref(*static_cast<uint32_t*>(ptr)).store(tag, ktl::memory_order_release);
+  constexpr uint64_t kUncommitedRecordTag = 0;
+  auto Commit = [](void* ptr, uint64_t tag) -> void {
+    ktl::atomic_ref(*static_cast<uint64_t*>(ptr)).store(tag, ktl::memory_order_release);
   };
 
-  DEBUG_ASSERT(num_bytes >= sizeof(uint32_t));
+  DEBUG_ASSERT(num_bytes >= sizeof(uint64_t));
   DEBUG_ASSERT(num_bytes % sizeof(uint64_t) == 0);
 
   Guard<SpinLock, IrqSave> write_guard{&write_lock_};
@@ -568,7 +514,7 @@ void* KTraceState::ReserveRaw(uint32_t num_bytes) {
       while (avail < to_reserve) {
         // We have to have space for a header tag.
         const uint32_t rd_offset = PtrToCircularOffset(rd_);
-        DEBUG_ASSERT(bufsize_ - rd_offset >= sizeof(uint32_t));
+        DEBUG_ASSERT(bufsize_ - rd_offset >= sizeof(uint64_t));
 
         // Make sure that we read the next tag in the sequence with acquire
         // semantics.  Before committing, records which have been reserved in
@@ -576,13 +522,13 @@ void* KTraceState::ReserveRaw(uint32_t num_bytes) {
         // lock. During commit, however, the actual record tag (with non-zero
         // length) will be written to memory atomically with release semantics,
         // outside of the lock.
-        uint32_t* rd_tag_ptr = reinterpret_cast<uint32_t*>(buffer_ + rd_offset);
-        const uint32_t rd_tag =
-            ktl::atomic_ref<uint32_t>(*rd_tag_ptr).load(ktl::memory_order_acquire);
-        const uint32_t sz = KTRACE_LEN(rd_tag);
+        uint64_t* rd_tag_ptr = reinterpret_cast<uint64_t*>(buffer_ + rd_offset);
+        const uint64_t rd_tag =
+            ktl::atomic_ref<uint64_t>(*rd_tag_ptr).load(ktl::memory_order_acquire);
+        const uint32_t sz = fxt::RecordFields::RecordSize::Get<uint32_t>(rd_tag) * 8;
 
         // If our size is 0, it implies that we managed to wrap around and catch
-        // and catch the read pointer when it is pointing to a still uncommitted
+        // the read pointer when it is pointing to a still uncommitted
         // record.  We are not in a position where we can wait.  Simply fail the
         // reservation.
         if (sz == 0) {
@@ -605,74 +551,11 @@ void* KTraceState::ReserveRaw(uint32_t num_bytes) {
         return ptr;
       } else {
         DEBUG_ASSERT(num_bytes > to_reserve);
-        Commit(ptr, KTRACE_TAG(0u, 0u, to_reserve));
+        Commit(ptr, fxt::RecordFields::RecordSize::Make((to_reserve + 7) / 8));
       }
     }
   }
 }
-
-zx::result<KTraceState::FxtCompatWriter::Reservation> KTraceState::FxtCompatWriter::Reserve(
-    uint64_t header) {
-  // Combine the record size from the provided FXT header with the rest of the
-  // KTrace tag.
-  uint32_t fxt_words = fxt::RecordFields::RecordSize::Get<uint32_t>(header);
-
-  // KTrace size field is 4 bits, making a maximum of 15 words, and one word is
-  // used for the KTrace header, so we can only fit a maximum of 14 words of
-  // FXT.
-  if (fxt_words > 14) {
-    return zx::error(ZX_ERR_OUT_OF_RANGE);
-  }
-
-  void* ptr = ks_.ReserveRaw((fxt_words + 1) * sizeof(uint64_t));
-  if (ptr == nullptr) {
-    ks_.DisableGroupMask();
-    return zx::error(ZX_ERR_NO_RESOURCES);
-  }
-
-  // Combine the size from the FXT header with the rest of the previously
-  // provided ktrace header. Additionally, set KTRACE_GRP_FXT bit.
-  uint64_t ktrace_header = (tag_ & ~0xF) | (fxt_words + 1) | KTRACE_GRP_TO_MASK(KTRACE_GRP_FXT);
-
-  KTraceState::FxtCompatWriter::Reservation reservation{reinterpret_cast<uint64_t*>(ptr),
-                                                        ktrace_header};
-  // Immediately write the FXT header. The KTrace header will be written on
-  // commit to finalize the record.
-  reservation.WriteWord(header);
-
-  return zx::ok(reservation);
-}
-
-void KTraceState::FxtCompatWriter::Reservation::WriteWord(uint64_t word) {
-  DEBUG_ASSERT(word_offset_ < (ktrace_header_ & 0xF));
-  *(ptr_ + word_offset_) = word;
-  word_offset_++;
-}
-
-void KTraceState::FxtCompatWriter::Reservation::WriteBytes(const void* bytes, size_t num_bytes) {
-  size_t num_words = (num_bytes + 7) / 8;
-  DEBUG_ASSERT(word_offset_ + num_words - 1 < (ktrace_header_ & 0xF));
-  // Write 0 to the last word to cover any padding bytes.
-  *(ptr_ + (word_offset_ + num_words - 1)) = 0;
-  memcpy(static_cast<void*>(ptr_ + word_offset_), bytes, num_bytes);
-  word_offset_ += num_words;
-}
-
-void KTraceState::FxtCompatWriter::Reservation::Commit() {
-  ktl::atomic_ref(*ptr_).store(ktrace_header_, ktl::memory_order_release);
-}
-
-// Instantiate used versions of |KTraceState::WriteRecord|.
-template void KTraceState::WriteRecord(uint32_t effective_tag, uint64_t explicit_ts, uint32_t a);
-template void KTraceState::WriteRecord(uint32_t effective_tag, uint64_t explicit_ts, uint32_t a,
-                                       uint32_t b);
-template void KTraceState::WriteRecord(uint32_t effective_tag, uint64_t explicit_ts, uint32_t a,
-                                       uint32_t b, uint32_t c);
-template void KTraceState::WriteRecord(uint32_t effective_tag, uint64_t explicit_ts, uint32_t a,
-                                       uint32_t b, uint32_t c, uint32_t d);
-template void KTraceState::WriteRecord(uint32_t effective_tag, uint64_t explicit_ts, uint64_t a);
-template void KTraceState::WriteRecord(uint32_t effective_tag, uint64_t explicit_ts, uint64_t a,
-                                       uint64_t b);
 
 }  // namespace internal
 

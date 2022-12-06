@@ -26,11 +26,13 @@ source_set("lib") {
     "//sdk/lib/fdio",
     "//src/lib/files",
     "//src/lib/fxl",
+    "//src/performance/lib/fxt",
     "//third_party/rapidjson",
     "//third_party/re2",
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/fzl",
     "//zircon/system/ulib/sync",
+    "//zircon/system/ulib/trace-reader",
     "//zircon/system/ulib/zircon-internal",
     "//zircon/system/ulib/zx",
   ]
@@ -58,6 +60,7 @@ executable("loadbench_unittests") {
   deps = [
     ":lib",
     "//src/lib/fxl/test:gtest_main",
+    "//src/performance/lib/fxt",
     "//third_party/googletest:gmock",
     "//third_party/re2",
   ]

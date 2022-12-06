@@ -755,6 +755,8 @@ class Record final {
 
   fbl::String ToString() const;
 
+  std::optional<fbl::String> GetName() const;
+
  private:
   void Destroy();
   void MoveFrom(Record&& other);

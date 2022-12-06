@@ -22,7 +22,7 @@ TraceReader::TraceReader(RecordConsumer record_consumer, ErrorHandler error_hand
 
 bool TraceReader::ReadRecords(Chunk& chunk) {
   while (true) {
-    if (pending_header_ == 0) {
+    while (pending_header_ == 0) {
       std::optional next = chunk.ReadUint64();
       if (!next.has_value()) {
         return true;  // need more data

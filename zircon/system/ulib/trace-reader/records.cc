@@ -595,4 +595,24 @@ fbl::String Record::ToString() const {
   ZX_ASSERT(false);
 }
 
+std::optional<fbl::String> Record::GetName() const {
+  switch (type_) {
+    // Do not have a namefield
+    case RecordType::kMetadata:
+    case RecordType::kInitialization:
+    case RecordType::kString:
+    case RecordType::kThread:
+    case RecordType::kContextSwitch:
+    case RecordType::kLog:
+    case RecordType::kLargeRecord:
+      return std::nullopt;
+    case RecordType::kEvent:
+      return {event_.name};
+    case RecordType::kBlob:
+      return {blob_.name};
+    case RecordType::kKernelObject:
+      return {kernel_object_.name};
+  }
+}
+
 }  // namespace trace

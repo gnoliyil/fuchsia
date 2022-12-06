@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// Given a Writer implementing the Writer CRTP in writer.h, provide an api
+// Given a Writer implementing the Writer interface in writer-internal.h, provide an api
 // over the writer to allow serializing fxt to the Writer.
 //
 // Based heavily on libTrace in zircon/system/ulib/trace to allow compatibility,
