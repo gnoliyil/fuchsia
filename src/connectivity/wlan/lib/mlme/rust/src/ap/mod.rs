@@ -405,8 +405,9 @@ impl Ap {
             return;
         }
 
-        let body_aligned =
-            (rx_info.rx_flags & banjo_wlan_softmac::WlanRxInfoFlags::FRAME_BODY_PADDING_4.0) != 0;
+        let body_aligned = (rx_info.rx_flags
+            & banjo_wlan_softmac::WlanRxInfoFlags::FRAME_BODY_PADDING_4)
+            != banjo_wlan_softmac::WlanRxInfoFlags(0);
 
         let mac_frame = match mac::MacFrame::parse(bytes, body_aligned) {
             Some(mac_frame) => mac_frame,
@@ -787,7 +788,7 @@ mod tests {
         ap.handle_mac_frame_rx(
             &[0][..],
             banjo_wlan_softmac::WlanRxInfo {
-                rx_flags: 0,
+                rx_flags: banjo_wlan_softmac::WlanRxInfoFlags(0),
                 valid_fields: 0,
                 phy: banjo_common::WlanPhyType::DSSS,
                 data_rate: 0,
@@ -833,7 +834,7 @@ mod tests {
             0, 7, 0x63, 0x6f, 0x6f, 0x6c, 0x6e, 0x65, 0x74, 0x0a,
         ];
         let rx_info_wrong_channel = banjo_wlan_softmac::WlanRxInfo {
-            rx_flags: 0,
+            rx_flags: banjo_wlan_softmac::WlanRxInfoFlags(0),
             valid_fields: 0,
             phy: banjo_common::WlanPhyType::DSSS,
             data_rate: 0,

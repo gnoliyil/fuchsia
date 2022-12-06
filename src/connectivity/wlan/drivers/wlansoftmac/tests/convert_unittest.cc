@@ -8,6 +8,8 @@
 #include <gtest/gtest.h>
 #include <src/connectivity/wlan/drivers/wlansoftmac/convert.h>
 
+#include "fidl/fuchsia.wlan.softmac/cpp/wire_types.h"
+
 namespace wlan {
 namespace {
 namespace wlan_softmac = fuchsia_wlan_softmac::wire;
@@ -62,6 +64,8 @@ static constexpr wlan_common::DataPlaneType kFakeFidlDataPlaneType =
     wlan_common::DataPlaneType::kEthernetDevice;
 static constexpr wlan_common::MacImplementationType kFakeFidlMacImplementationType =
     wlan_common::MacImplementationType::kFullmac;
+static constexpr wlan_softmac::WlanRxInfoFlags kFakeRxFlags =
+    wlan_softmac::WlanRxInfoFlags::TruncatingUnknown(kRandomPopulaterUint32);
 
 // Fake metadata -- banjo
 static constexpr uint32_t kFakeBanjoMacRole = WLAN_MAC_ROLE_AP;
@@ -254,7 +258,7 @@ TEST(ConvertTest, ToBanjoRxPacket) {
       .mac_frame = fidl::VectorView<uint8_t>::FromExternal(rx_packet, kFakePacketSize),
       .info =
           {
-              .rx_flags = kRandomPopulaterUint32,
+              .rx_flags = kFakeRxFlags,
               .valid_fields = kRandomPopulaterUint32,
               .phy = kFakeFidlPhyType,
               .data_rate = kRandomPopulaterUint32,
@@ -281,7 +285,7 @@ TEST(ConvertTest, ToBanjoRxPacket) {
     EXPECT_EQ(kRandomPopulaterUint8, out.mac_frame_buffer[i]);
   }
 
-  EXPECT_EQ(kRandomPopulaterUint32, out.info.rx_flags);
+  EXPECT_EQ(static_cast<uint32_t>(kFakeRxFlags), out.info.rx_flags);
   EXPECT_EQ(kRandomPopulaterUint32, out.info.valid_fields);
   EXPECT_EQ(kFakeBanjoPhyType, out.info.phy);
   EXPECT_EQ(kRandomPopulaterUint32, out.info.data_rate);

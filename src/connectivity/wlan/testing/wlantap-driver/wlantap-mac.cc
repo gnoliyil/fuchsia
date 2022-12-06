@@ -252,7 +252,9 @@ struct WlantapMacImpl : WlantapMac,
                   const wlan_tap::WlanRxInfo& rx_info) override {
     std::lock_guard<std::mutex> guard(lock_);
 
-    wlan_softmac::WlanRxInfo converted_info = {.rx_flags = rx_info.rx_flags,
+    wlan_softmac::WlanRxInfoFlags rx_flags =
+        wlan_softmac::WlanRxInfoFlags::TruncatingUnknown(rx_info.rx_flags);
+    wlan_softmac::WlanRxInfo converted_info = {.rx_flags = rx_flags,
                                                .valid_fields = rx_info.valid_fields,
                                                .phy = rx_info.phy,
                                                .data_rate = rx_info.data_rate,

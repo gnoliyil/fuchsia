@@ -949,8 +949,9 @@ impl States {
             }
         }
 
-        let body_aligned =
-            (rx_info.rx_flags & banjo_wlan_softmac::WlanRxInfoFlags::FRAME_BODY_PADDING_4.0) != 0;
+        let body_aligned = (rx_info.rx_flags
+            & banjo_wlan_softmac::WlanRxInfoFlags::FRAME_BODY_PADDING_4)
+            != banjo_wlan_softmac::WlanRxInfoFlags(0);
 
         // Parse mac frame. Drop corrupted ones.
         trace!("Parsing MAC frame:\n  {:02x?}", bytes.deref());

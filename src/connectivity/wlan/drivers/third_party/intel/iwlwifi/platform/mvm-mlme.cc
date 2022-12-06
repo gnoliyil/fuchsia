@@ -923,7 +923,7 @@ void mac_ifc_recv(void* ctx, const wlan_rx_packet_t* rx_packet) {
   const auto& banjo_info = rx_packet->info;
 
   // TODO(fxbug.dev/109461): Seek a way to remove the conversion below.
-  fidl_info.rx_flags = banjo_info.rx_flags;
+  fidl_info.rx_flags = wlan_softmac_wire::WlanRxInfoFlags::TruncatingUnknown(banjo_info.rx_flags);
   fidl_info.valid_fields = banjo_info.valid_fields;
 
   switch (banjo_info.phy) {

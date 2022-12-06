@@ -65,8 +65,7 @@ type WlanSoftmacInfo = table {
     5: band_caps vector<WlanSoftmacBandCapability>:fuchsia.wlan.common.MAX_BANDS;
 };
 
-// TODO(fxbug.dev/114778): Change to bits
-type WlanRxInfoFlags = strict enum : uint32 {
+type WlanRxInfoFlags = flexible bits : uint32 {
     /// The FCS for the received frame was invalid.
     FCS_INVALID = 0x1;
     /// Padding was added after the MAC header to align the frame body to 4 bytes.
@@ -77,7 +76,7 @@ type WlanRxInfoFlags = strict enum : uint32 {
 type WlanRxInfo = struct {
     /// Receive flags. These represent boolean flags as opposed to enums or value-based info which
     /// are represented below. Values should be taken from the WLAN_RX_INFO_FLAGS_* enum.
-    rx_flags uint32;
+    rx_flags WlanRxInfoFlags;
 
     /// Bitmask indicating which of the following fields are valid in this struct. Reserved flags
     /// must be zero.
@@ -98,8 +97,7 @@ type WlanRxInfo = struct {
     snr_dbh int16;
 };
 
-// TODO(fxbug.dev/114778): Change to bits
-type WlanTxInfoFlags = strict enum : uint32 {
+type WlanTxInfoFlags = flexible bits : uint32 {
     /// Indicate this packet should be protected.
     PROTECTED = 0x1;
     /// For rate control: indicate an important data frame, such as EAPOL, which should be sent
@@ -110,8 +108,7 @@ type WlanTxInfoFlags = strict enum : uint32 {
     QOS = 0x4;
 };
 
-// TODO(fxbug.dev/114778): Change to bits
-type WlanTxInfoValid = strict enum : uint32 {
+type WlanTxInfoValid = flexible bits : uint32 {
     DATA_RATE = 0x1;
     TX_VECTOR_IDX = 0x2;
     PHY = 0x4;
