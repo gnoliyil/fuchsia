@@ -358,6 +358,9 @@ mtx_unlock
 pthread_attr_destroy
 pthread_attr_init
 pthread_attr_setstacksize
+pthread_barrier_init
+pthread_barrier_destroy
+pthread_barrier_wait
 pthread_cond_broadcast
 pthread_cond_destroy
 pthread_cond_init
@@ -411,6 +414,7 @@ localtime_r
 nanosleep
 strftime
 time
+timespec_get
 
 # UNISTD
 usleep
