@@ -280,7 +280,7 @@ bool ConsumeStep::CreateMethodResult(
   ZX_ASSERT(err_variant_context != nullptr);
   ZX_ASSERT(transport_err_variant_context != nullptr);
 
-  raw::SourceElement sourceElement = raw::SourceElement(fidl::Token(), fidl::Token());
+  auto ordinal_source = raw::TokenChain(fidl::Token(), fidl::Token());
   std::vector<Union::Member> result_members;
 
   enum {
@@ -290,7 +290,7 @@ bool ConsumeStep::CreateMethodResult(
   };
 
   result_members.emplace_back(
-      ConsumeOrdinal(std::make_unique<raw::Ordinal64>(sourceElement, kSuccessOrdinal)),
+      ConsumeOrdinal(std::make_unique<raw::Ordinal64>(ordinal_source, kSuccessOrdinal)),
       std::move(success_variant), success_variant_context->name(),
       std::make_unique<AttributeList>());
 
@@ -304,12 +304,12 @@ bool ConsumeStep::CreateMethodResult(
     ZX_ASSERT_MSG(error_type_ctor != nullptr, "missing err type ctor");
 
     result_members.emplace_back(
-        ConsumeOrdinal(std::make_unique<raw::Ordinal64>(sourceElement, kErrorOrdinal)),
+        ConsumeOrdinal(std::make_unique<raw::Ordinal64>(ordinal_source, kErrorOrdinal)),
         std::move(error_type_ctor), err_variant_context->name(), std::make_unique<AttributeList>());
   } else {
     // If there's no error, the error variant is reserved.
     result_members.emplace_back(Union::Member::Reserved(
-        ConsumeOrdinal(std::make_unique<raw::Ordinal64>(sourceElement, kErrorOrdinal)),
+        ConsumeOrdinal(std::make_unique<raw::Ordinal64>(ordinal_source, kErrorOrdinal)),
         err_variant_context->name(), std::make_unique<AttributeList>()));
   }
 
@@ -317,7 +317,7 @@ bool ConsumeStep::CreateMethodResult(
     std::unique_ptr<TypeConstructor> error_type_ctor = IdentifierTypeForDecl(transport_err_type_);
     ZX_ASSERT_MSG(error_type_ctor != nullptr, "missing transport_err type ctor");
     result_members.emplace_back(
-        ConsumeOrdinal(std::make_unique<raw::Ordinal64>(sourceElement, kTransportErrorOrdinal)),
+        ConsumeOrdinal(std::make_unique<raw::Ordinal64>(ordinal_source, kTransportErrorOrdinal)),
         std::move(error_type_ctor), transport_err_variant_context->name(),
         std::make_unique<AttributeList>());
   }

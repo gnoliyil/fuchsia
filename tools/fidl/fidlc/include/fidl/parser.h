@@ -36,7 +36,7 @@ class Parser {
   bool Success() const { return checkpoint_.NoNewErrors(); }
 
  private:
-  // currently the only usecase for this enum is to identify the case where the parser
+  // currently the only use case for this enum is to identify the case where the parser
   // has seen a doc comment block, followed by a regular comment block, followed by
   // a doc comment block
   enum class State {
@@ -97,12 +97,12 @@ class Parser {
       suppress_ = parser_->suppress_gap_checks_;
       parser_->suppress_gap_checks_ = suppress;
     }
-    raw::SourceElement GetSourceElement() {
+    raw::TokenChain GetTokenChain() {
       parser_->active_ast_scopes_.back().set_end(parser_->previous_token_);
       if (!parser_->suppress_gap_checks_) {
         parser_->last_was_gap_start_ = true;
       }
-      return raw::SourceElement(parser_->active_ast_scopes_.back());
+      return raw::TokenChain(parser_->active_ast_scopes_.back());
     }
     ~ASTScope() {
       parser_->suppress_gap_checks_ = suppress_;
@@ -402,7 +402,7 @@ class Parser {
 
   // The stack of information interesting to the currently active ASTScope
   // objects.
-  std::vector<raw::SourceElement> active_ast_scopes_;
+  std::vector<raw::TokenChain> active_ast_scopes_;
   // The most recent start of a "gap" - the uninteresting source prior to the
   // beginning of a token (usually mostly containing whitespace).
   SourceSpan gap_start_;

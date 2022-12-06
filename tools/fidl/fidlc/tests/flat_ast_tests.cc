@@ -34,7 +34,8 @@ TEST(FlatAstTests, GoodImplicitAssumptions) {
 
 TEST(FlatAstTests, GoodCompareHandles) {
   auto name_not_important = Name::CreateIntrinsic(nullptr, "ignore");
-  auto fake_source_element = SourceElement(Token(), Token());
+  auto fake_source_element =
+      SourceElement(SourceElement::NodeKind::kNumericLiteral, Token(), Token());
   auto fake_literal = Literal(fake_source_element, Literal::Kind::kNumeric);
   auto rights1Constant = std::make_unique<LiteralConstant>(&fake_literal);
   rights1Constant->ResolveTo(std::make_unique<HandleRights>(1), nullptr);

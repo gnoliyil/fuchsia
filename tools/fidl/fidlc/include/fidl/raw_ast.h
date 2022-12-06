@@ -52,10 +52,11 @@ namespace fidl::raw {
 // of the last interesting token.
 class TreeVisitor;
 
-class SourceElement {
+// A collection of one or more consecutive |Token|s from a single |SourceFile|.
+class TokenChain {
  public:
-  SourceElement(Token start, Token end) : start_(start), end_(end) {}
-  virtual ~SourceElement() = default;
+  TokenChain(Token start, Token end) : start_(start), end_(end) {}
+  virtual ~TokenChain() = default;
 
   bool has_span() const {
     return start_.span().valid() && end_.span().valid() &&
@@ -80,7 +81,7 @@ class SourceElement {
     return std::string(start_pos, end_pos);
   }
 
-  void update_span(SourceElement const& element) {
+  void update_span(TokenChain const& element) {
     start_ = element.start_;
     end_ = element.end_;
   }
@@ -98,6 +99,65 @@ class SourceElement {
   Token end_;
 };
 
+// A collection of one or more consecutive |Token|s from a single |SourceFile|, with a |NodeKind|
+// attached. All other nodes in the raw abstract syntax tree inherit from this class.
+class SourceElement : public TokenChain {
+ public:
+  enum NodeKind {
+    kAliasDeclaration,
+    kAttribute,
+    kAttributeArg,
+    kAttributeList,
+    kBinaryOperatorConstant,
+    kBoolLiteral,
+    kCompoundIdentifier,
+    kConstDeclaration,
+    kDocCommentLiteral,
+    kFile,
+    kIdentifier,
+    kIdentifierConstant,
+    kIdentifierLayoutParameter,
+    kInlineLayoutReference,
+    kLayoutParameterList,
+    kLibraryDeclaration,
+    kLiteralConstant,
+    kLiteralLayoutParameter,
+    kNamedLayoutReference,
+    kNumericLiteral,
+    kModifiers,
+    kOrdinal64,
+    kOrdinaledLayout,
+    kOrdinaledLayoutMember,
+    kParameterList,
+    kProtocolCompose,
+    kProtocolDeclaration,
+    kProtocolMethod,
+    kResourceDeclaration,
+    kResourceProperty,
+    kServiceDeclaration,
+    kServiceMember,
+    kStringLiteral,
+    kStructLayout,
+    kStructLayoutMember,
+    kTypeConstraints,
+    kTypeConstructor,
+    kTypeDeclaration,
+    kTypeLayoutParameter,
+    kUsing,
+    kValueLayout,
+    kValueLayoutMember,
+  };
+
+  SourceElement(NodeKind node_kind, Token start, Token end)
+      : TokenChain(start, end), node_kind_(node_kind) {}
+  SourceElement(const TokenChain& element, NodeKind node_kind)
+      : TokenChain(element), node_kind_(node_kind) {}
+
+  NodeKind node_kind() const { return node_kind_; }
+
+  NodeKind node_kind_;
+};
+
 class SourceElementMark {
  public:
   SourceElementMark(TreeVisitor* tv, const SourceElement& element);
@@ -111,16 +171,15 @@ class SourceElementMark {
 
 class Identifier final : public SourceElement {
  public:
-  explicit Identifier(SourceElement const& element) : SourceElement(element) {}
+  explicit Identifier(TokenChain const& element) : SourceElement(element, kIdentifier) {}
 
   void Accept(TreeVisitor* visitor) const;
 };
 
 class CompoundIdentifier final : public SourceElement {
  public:
-  CompoundIdentifier(SourceElement const& element,
-                     std::vector<std::unique_ptr<Identifier>> components)
-      : SourceElement(element), components(std::move(components)) {}
+  CompoundIdentifier(TokenChain const& element, std::vector<std::unique_ptr<Identifier>> components)
+      : SourceElement(element, kCompoundIdentifier), components(std::move(components)) {}
 
   void Accept(TreeVisitor* visitor) const;
 
@@ -130,20 +189,34 @@ class CompoundIdentifier final : public SourceElement {
 class Literal : public SourceElement {
  public:
   enum struct Kind {
-    kDocComment,
-    kString,
-    kNumeric,
     kBool,
+    kDocComment,
+    kNumeric,
+    kString,
   };
 
-  explicit Literal(SourceElement const& element, Kind kind) : SourceElement(element), kind(kind) {}
+  explicit Literal(TokenChain const& element, Kind kind)
+      : SourceElement(element, NodeKind(kind)), kind(kind) {}
+
+  static SourceElement::NodeKind NodeKind(Kind kind) {
+    switch (kind) {
+      case Kind::kBool:
+        return SourceElement::NodeKind::kBoolLiteral;
+      case Kind::kDocComment:
+        return SourceElement::NodeKind::kDocCommentLiteral;
+      case Kind::kNumeric:
+        return SourceElement::NodeKind::kNumericLiteral;
+      case Kind::kString:
+        return SourceElement::NodeKind::kStringLiteral;
+    }
+  }
 
   const Kind kind;
 };
 
 class DocCommentLiteral final : public Literal {
  public:
-  explicit DocCommentLiteral(SourceElement const& element) : Literal(element, Kind::kDocComment) {}
+  explicit DocCommentLiteral(TokenChain const& element) : Literal(element, Kind::kDocComment) {}
 
   void Accept(TreeVisitor* visitor) const;
 
@@ -157,7 +230,7 @@ class DocCommentLiteral final : public Literal {
 
 class StringLiteral final : public Literal {
  public:
-  explicit StringLiteral(SourceElement const& element) : Literal(element, Kind::kString) {}
+  explicit StringLiteral(TokenChain const& element) : Literal(element, Kind::kString) {}
 
   void Accept(TreeVisitor* visitor) const;
 
@@ -171,23 +244,14 @@ class StringLiteral final : public Literal {
 
 class NumericLiteral final : public Literal {
  public:
-  explicit NumericLiteral(SourceElement const& element) : Literal(element, Kind::kNumeric) {}
+  explicit NumericLiteral(TokenChain const& element) : Literal(element, Kind::kNumeric) {}
 
   void Accept(TreeVisitor* visitor) const;
-};
-
-class Ordinal64 final : public SourceElement {
- public:
-  Ordinal64(SourceElement const& element, uint64_t value) : SourceElement(element), value(value) {}
-
-  void Accept(TreeVisitor* visitor) const;
-
-  const uint64_t value;
 };
 
 class BoolLiteral final : public Literal {
  public:
-  BoolLiteral(SourceElement const& element, bool value)
+  BoolLiteral(TokenChain const& element, bool value)
       : Literal(element, Kind::kBool), value(value) {}
 
   void Accept(TreeVisitor* visitor) const;
@@ -195,12 +259,35 @@ class BoolLiteral final : public Literal {
   const bool value;
 };
 
+class Ordinal64 final : public SourceElement {
+ public:
+  Ordinal64(TokenChain const& element, uint64_t value)
+      : SourceElement(element, kOrdinal64), value(value) {}
+
+  void Accept(TreeVisitor* visitor) const;
+
+  const uint64_t value;
+};
+
 class Constant : public SourceElement {
  public:
   enum class Kind { kIdentifier, kLiteral, kBinaryOperator };
 
-  explicit Constant(Token start, Token end, Kind kind) : SourceElement(start, end), kind(kind) {}
-  explicit Constant(const SourceElement& element, Kind kind) : SourceElement(element), kind(kind) {}
+  explicit Constant(Token start, Token end, Kind kind)
+      : SourceElement(TokenChain(start, end), NodeKind(kind)), kind(kind) {}
+  explicit Constant(TokenChain const& element, Kind kind)
+      : SourceElement(element, NodeKind(kind)), kind(kind) {}
+
+  static SourceElement::NodeKind NodeKind(Kind kind) {
+    switch (kind) {
+      case Kind::kBinaryOperator:
+        return SourceElement::NodeKind::kBinaryOperatorConstant;
+      case Kind::kIdentifier:
+        return SourceElement::NodeKind::kIdentifierConstant;
+      case Kind::kLiteral:
+        return SourceElement::NodeKind::kLiteralConstant;
+    }
+  }
 
   const Kind kind;
 };
@@ -208,7 +295,8 @@ class Constant : public SourceElement {
 class IdentifierConstant final : public Constant {
  public:
   explicit IdentifierConstant(std::unique_ptr<CompoundIdentifier> identifier)
-      : Constant(SourceElement(identifier->start(), identifier->end()), Kind::kIdentifier),
+      : Constant(SourceElement(kIdentifierConstant, identifier->start(), identifier->end()),
+                 Kind::kIdentifier),
         identifier(std::move(identifier)) {}
 
   std::unique_ptr<CompoundIdentifier> identifier;
@@ -231,7 +319,9 @@ class BinaryOperatorConstant final : public Constant {
   enum class Operator { kOr };
   explicit BinaryOperatorConstant(std::unique_ptr<Constant> left_operand,
                                   std::unique_ptr<Constant> right_operand, Operator op)
-      : Constant(SourceElement(left_operand->start(), right_operand->end()), Kind::kBinaryOperator),
+      : Constant(
+            SourceElement(kBinaryOperatorConstant, left_operand->start(), right_operand->end()),
+            Kind::kBinaryOperator),
         left_operand(std::move(left_operand)),
         right_operand(std::move(right_operand)),
         op(op) {}
@@ -246,13 +336,15 @@ class BinaryOperatorConstant final : public Constant {
 class AttributeArg final : public SourceElement {
  public:
   // Constructor for cases where the arg name has been explicitly defined in the text.
-  AttributeArg(SourceElement const& element, std::unique_ptr<Identifier> name,
+  AttributeArg(TokenChain const& element, std::unique_ptr<Identifier> name,
                std::unique_ptr<Constant> value)
-      : SourceElement(element), maybe_name(std::move(name)), value(std::move(value)) {}
+      : SourceElement(element, kAttributeArg),
+        maybe_name(std::move(name)),
+        value(std::move(value)) {}
 
   // Constructor for cases where the arg name is inferred.
-  AttributeArg(SourceElement const& element, std::unique_ptr<Constant> value)
-      : SourceElement(element), maybe_name(nullptr), value(std::move(value)) {}
+  AttributeArg(TokenChain const& element, std::unique_ptr<Constant> value)
+      : SourceElement(element, kAttributeArg), maybe_name(nullptr), value(std::move(value)) {}
 
   void Accept(TreeVisitor* visitor) const;
 
@@ -268,12 +360,14 @@ class Attribute final : public SourceElement {
   };
 
   // Constructor for cases where the name of the attribute is explicitly defined in the text.
-  Attribute(SourceElement const& element, std::unique_ptr<Identifier> maybe_name,
+  Attribute(TokenChain const& element, std::unique_ptr<Identifier> maybe_name,
             std::vector<std::unique_ptr<AttributeArg>> args)
-      : SourceElement(element), maybe_name(std::move(maybe_name)), args(std::move(args)) {}
+      : SourceElement(element, kAttribute),
+        maybe_name(std::move(maybe_name)),
+        args(std::move(args)) {}
 
   // Factory for "///"-style doc comments, which have no attribute name.
-  static Attribute CreateDocComment(SourceElement const& element,
+  static Attribute CreateDocComment(TokenChain const& element,
                                     std::vector<std::unique_ptr<AttributeArg>> args) {
     auto attr = Attribute(element, nullptr, std::move(args));
     attr.provenance = kDocComment;
@@ -292,8 +386,8 @@ class Attribute final : public SourceElement {
 // the opposite: never null, but the vector can be empty.)
 class AttributeList final : public SourceElement {
  public:
-  AttributeList(SourceElement const& element, std::vector<std::unique_ptr<Attribute>> attributes)
-      : SourceElement(element), attributes(std::move(attributes)) {}
+  AttributeList(TokenChain const& element, std::vector<std::unique_ptr<Attribute>> attributes)
+      : SourceElement(element, kAttributeList), attributes(std::move(attributes)) {}
 
   void Accept(TreeVisitor* visitor) const;
 
@@ -312,10 +406,10 @@ using ConstraintOrSubtype = std::variant<std::unique_ptr<TypeConstraints>,
 
 class TypeConstructor final : public SourceElement {
  public:
-  TypeConstructor(SourceElement const& element, std::unique_ptr<LayoutReference> layout_ref,
+  TypeConstructor(TokenChain const& element, std::unique_ptr<LayoutReference> layout_ref,
                   std::unique_ptr<LayoutParameterList> parameters,
                   std::unique_ptr<TypeConstraints> constraints)
-      : SourceElement(element),
+      : SourceElement(element, kTypeConstructor),
         layout_ref(std::move(layout_ref)),
         parameters(std::move(parameters)),
         constraints(std::move(constraints)) {}
@@ -329,9 +423,9 @@ class TypeConstructor final : public SourceElement {
 
 class AliasDeclaration final : public SourceElement {
  public:
-  AliasDeclaration(SourceElement const& element, std::unique_ptr<AttributeList> attributes,
+  AliasDeclaration(TokenChain const& element, std::unique_ptr<AttributeList> attributes,
                    std::unique_ptr<Identifier> alias, std::unique_ptr<TypeConstructor> type_ctor)
-      : SourceElement(element),
+      : SourceElement(element, kAliasDeclaration),
         attributes(std::move(attributes)),
         alias(std::move(alias)),
         type_ctor(std::move(type_ctor)) {}
@@ -345,9 +439,11 @@ class AliasDeclaration final : public SourceElement {
 
 class LibraryDeclaration final : public SourceElement {
  public:
-  LibraryDeclaration(SourceElement const& element, std::unique_ptr<AttributeList> attributes,
+  LibraryDeclaration(TokenChain const& element, std::unique_ptr<AttributeList> attributes,
                      std::unique_ptr<CompoundIdentifier> path)
-      : SourceElement(element), attributes(std::move(attributes)), path(std::move(path)) {}
+      : SourceElement(element, kLibraryDeclaration),
+        attributes(std::move(attributes)),
+        path(std::move(path)) {}
 
   void Accept(TreeVisitor* visitor) const;
 
@@ -357,9 +453,9 @@ class LibraryDeclaration final : public SourceElement {
 
 class Using final : public SourceElement {
  public:
-  Using(SourceElement const& element, std::unique_ptr<AttributeList> attributes,
+  Using(TokenChain const& element, std::unique_ptr<AttributeList> attributes,
         std::unique_ptr<CompoundIdentifier> using_path, std::unique_ptr<Identifier> maybe_alias)
-      : SourceElement(element),
+      : SourceElement(element, kUsing),
         attributes(std::move(attributes)),
         using_path(std::move(using_path)),
         maybe_alias(std::move(maybe_alias)) {}
@@ -373,10 +469,10 @@ class Using final : public SourceElement {
 
 class ConstDeclaration final : public SourceElement {
  public:
-  ConstDeclaration(SourceElement const& element, std::unique_ptr<AttributeList> attributes,
+  ConstDeclaration(TokenChain const& element, std::unique_ptr<AttributeList> attributes,
                    std::unique_ptr<TypeConstructor> type_ctor,
                    std::unique_ptr<Identifier> identifier, std::unique_ptr<Constant> constant)
-      : SourceElement(element),
+      : SourceElement(element, kConstDeclaration),
         attributes(std::move(attributes)),
         type_ctor(std::move(type_ctor)),
         identifier(std::move(identifier)),
@@ -405,28 +501,27 @@ class Modifier final {
 class Modifiers final : public SourceElement {
  public:
   // Constructor for Layouts (has resourceness and strictness, but not openness).
-  Modifiers(SourceElement const& element,
+  Modifiers(TokenChain const& element,
             std::optional<Modifier<types::Resourceness>> maybe_resourceness,
             std::optional<Modifier<types::Strictness>> maybe_strictness,
             bool resourceness_comes_first)
-      : SourceElement(element),
+      : SourceElement(element, kModifiers),
         maybe_resourceness(maybe_resourceness),
         maybe_strictness(maybe_strictness),
         maybe_openness(std::nullopt),
         resourceness_comes_first(resourceness_comes_first) {}
 
   // Constructor for Protocols (only has openness).
-  Modifiers(SourceElement const& element, std::optional<Modifier<types::Openness>> maybe_openness)
-      : SourceElement(element),
+  Modifiers(TokenChain const& element, std::optional<Modifier<types::Openness>> maybe_openness)
+      : SourceElement(element, kModifiers),
         maybe_resourceness(std::nullopt),
         maybe_strictness(std::nullopt),
         maybe_openness(maybe_openness),
         resourceness_comes_first(false) {}
 
   // Constructor for Protocol methods (only has strictness).
-  Modifiers(SourceElement const& element,
-            std::optional<Modifier<types::Strictness>> maybe_strictness)
-      : SourceElement(element),
+  Modifiers(TokenChain const& element, std::optional<Modifier<types::Strictness>> maybe_strictness)
+      : SourceElement(element, kModifiers),
         maybe_resourceness(std::nullopt),
         maybe_strictness(maybe_strictness),
         maybe_openness(std::nullopt),
@@ -444,8 +539,8 @@ class Modifiers final : public SourceElement {
 
 class ParameterList final : public SourceElement {
  public:
-  ParameterList(SourceElement const& element, std::unique_ptr<TypeConstructor> type_ctor)
-      : SourceElement(element), type_ctor(std::move(type_ctor)) {}
+  ParameterList(TokenChain const& element, std::unique_ptr<TypeConstructor> type_ctor)
+      : SourceElement(element, kParameterList), type_ctor(std::move(type_ctor)) {}
 
   void Accept(TreeVisitor* visitor) const;
 
@@ -454,12 +549,12 @@ class ParameterList final : public SourceElement {
 
 class ProtocolMethod : public SourceElement {
  public:
-  ProtocolMethod(SourceElement const& element, std::unique_ptr<AttributeList> attributes,
+  ProtocolMethod(TokenChain const& element, std::unique_ptr<AttributeList> attributes,
                  std::unique_ptr<Modifiers> modifiers, std::unique_ptr<Identifier> identifier,
                  std::unique_ptr<ParameterList> maybe_request,
                  std::unique_ptr<ParameterList> maybe_response,
                  std::unique_ptr<TypeConstructor> maybe_error_ctor)
-      : SourceElement(element),
+      : SourceElement(element, kProtocolMethod),
         attributes(std::move(attributes)),
         modifiers(std::move(modifiers)),
         identifier(std::move(identifier)),
@@ -479,9 +574,9 @@ class ProtocolMethod : public SourceElement {
 
 class ProtocolCompose final : public SourceElement {
  public:
-  ProtocolCompose(SourceElement const& element, std::unique_ptr<AttributeList> attributes,
+  ProtocolCompose(TokenChain const& element, std::unique_ptr<AttributeList> attributes,
                   std::unique_ptr<CompoundIdentifier> protocol_name)
-      : SourceElement(element),
+      : SourceElement(element, kProtocolCompose),
         attributes(std::move(attributes)),
         protocol_name(std::move(protocol_name)) {}
 
@@ -493,11 +588,11 @@ class ProtocolCompose final : public SourceElement {
 
 class ProtocolDeclaration final : public SourceElement {
  public:
-  ProtocolDeclaration(SourceElement const& element, std::unique_ptr<AttributeList> attributes,
+  ProtocolDeclaration(TokenChain const& element, std::unique_ptr<AttributeList> attributes,
                       std::unique_ptr<Modifiers> modifiers, std::unique_ptr<Identifier> identifier,
                       std::vector<std::unique_ptr<ProtocolCompose>> composed_protocols,
                       std::vector<std::unique_ptr<ProtocolMethod>> methods)
-      : SourceElement(element),
+      : SourceElement(element, kProtocolDeclaration),
         attributes(std::move(attributes)),
         modifiers(std::move(modifiers)),
         identifier(std::move(identifier)),
@@ -515,10 +610,10 @@ class ProtocolDeclaration final : public SourceElement {
 
 class ResourceProperty final : public SourceElement {
  public:
-  ResourceProperty(SourceElement const& element, std::unique_ptr<TypeConstructor> type_ctor,
+  ResourceProperty(TokenChain const& element, std::unique_ptr<TypeConstructor> type_ctor,
                    std::unique_ptr<Identifier> identifier,
                    std::unique_ptr<AttributeList> attributes)
-      : SourceElement(element),
+      : SourceElement(element, kResourceProperty),
         type_ctor(std::move(type_ctor)),
         identifier(std::move(identifier)),
         attributes(std::move(attributes)) {}
@@ -532,11 +627,11 @@ class ResourceProperty final : public SourceElement {
 
 class ResourceDeclaration final : public SourceElement {
  public:
-  ResourceDeclaration(SourceElement const& element, std::unique_ptr<AttributeList> attributes,
+  ResourceDeclaration(TokenChain const& element, std::unique_ptr<AttributeList> attributes,
                       std::unique_ptr<Identifier> identifier,
                       std::unique_ptr<TypeConstructor> maybe_type_ctor,
                       std::vector<std::unique_ptr<ResourceProperty>> properties)
-      : SourceElement(element),
+      : SourceElement(element, kResourceDeclaration),
         attributes(std::move(attributes)),
         identifier(std::move(identifier)),
         maybe_type_ctor(std::move(maybe_type_ctor)),
@@ -552,9 +647,9 @@ class ResourceDeclaration final : public SourceElement {
 
 class ServiceMember final : public SourceElement {
  public:
-  ServiceMember(SourceElement const& element, std::unique_ptr<TypeConstructor> type_ctor,
+  ServiceMember(TokenChain const& element, std::unique_ptr<TypeConstructor> type_ctor,
                 std::unique_ptr<Identifier> identifier, std::unique_ptr<AttributeList> attributes)
-      : SourceElement(element),
+      : SourceElement(element, kServiceMember),
         type_ctor(std::move(type_ctor)),
         identifier(std::move(identifier)),
         attributes(std::move(attributes)) {}
@@ -568,10 +663,10 @@ class ServiceMember final : public SourceElement {
 
 class ServiceDeclaration final : public SourceElement {
  public:
-  ServiceDeclaration(SourceElement const& element, std::unique_ptr<AttributeList> attributes,
+  ServiceDeclaration(TokenChain const& element, std::unique_ptr<AttributeList> attributes,
                      std::unique_ptr<Identifier> identifier,
                      std::vector<std::unique_ptr<ServiceMember>> members)
-      : SourceElement(element),
+      : SourceElement(element, kServiceDeclaration),
         attributes(std::move(attributes)),
         identifier(std::move(identifier)),
         members(std::move(members)) {}
@@ -582,6 +677,7 @@ class ServiceDeclaration final : public SourceElement {
   std::unique_ptr<Identifier> identifier;
   std::vector<std::unique_ptr<ServiceMember>> members;
 };
+
 class LayoutMember : public SourceElement {
  public:
   enum Kind {
@@ -590,15 +686,26 @@ class LayoutMember : public SourceElement {
     kValue,
   };
 
-  explicit LayoutMember(SourceElement const& element, Kind kind,
+  explicit LayoutMember(TokenChain const& element, Kind kind,
                         std::unique_ptr<AttributeList> attributes,
                         std::unique_ptr<Identifier> identifier)
-      : SourceElement(element),
+      : SourceElement(element, NodeKind(kind)),
         kind(kind),
         attributes(std::move(attributes)),
         identifier(std::move(identifier)) {}
 
   void Accept(TreeVisitor* visitor) const;
+
+  static SourceElement::NodeKind NodeKind(Kind kind) {
+    switch (kind) {
+      case Kind::kOrdinaled:
+        return SourceElement::NodeKind::kOrdinaledLayoutMember;
+      case Kind::kStruct:
+        return SourceElement::NodeKind::kStructLayoutMember;
+      case Kind::kValue:
+        return SourceElement::NodeKind::kValueLayoutMember;
+    }
+  }
 
   const Kind kind;
   std::unique_ptr<AttributeList> attributes;
@@ -607,7 +714,7 @@ class LayoutMember : public SourceElement {
 
 class OrdinaledLayoutMember final : public LayoutMember {
  public:
-  explicit OrdinaledLayoutMember(SourceElement const& element,
+  explicit OrdinaledLayoutMember(TokenChain const& element,
                                  std::unique_ptr<AttributeList> attributes,
                                  std::unique_ptr<Ordinal64> ordinal,
                                  std::unique_ptr<Identifier> identifier,
@@ -615,7 +722,7 @@ class OrdinaledLayoutMember final : public LayoutMember {
       : LayoutMember(element, Kind::kOrdinaled, std::move(attributes), std::move(identifier)),
         ordinal(std::move(ordinal)),
         type_ctor(std::move(type_ctor)) {}
-  explicit OrdinaledLayoutMember(SourceElement const& element,
+  explicit OrdinaledLayoutMember(TokenChain const& element,
                                  std::unique_ptr<AttributeList> attributes,
                                  std::unique_ptr<Ordinal64> ordinal)
       : LayoutMember(element, Kind::kOrdinaled, std::move(attributes), nullptr),
@@ -632,8 +739,7 @@ class OrdinaledLayoutMember final : public LayoutMember {
 
 class ValueLayoutMember final : public LayoutMember {
  public:
-  explicit ValueLayoutMember(SourceElement const& element,
-                             std::unique_ptr<AttributeList> attributes,
+  explicit ValueLayoutMember(TokenChain const& element, std::unique_ptr<AttributeList> attributes,
                              std::unique_ptr<Identifier> identifier,
                              std::unique_ptr<Constant> value)
       : LayoutMember(element, Kind::kValue, std::move(attributes), std::move(identifier)),
@@ -646,8 +752,7 @@ class ValueLayoutMember final : public LayoutMember {
 
 class StructLayoutMember final : public LayoutMember {
  public:
-  explicit StructLayoutMember(SourceElement const& element,
-                              std::unique_ptr<AttributeList> attributes,
+  explicit StructLayoutMember(TokenChain const& element, std::unique_ptr<AttributeList> attributes,
                               std::unique_ptr<Identifier> identifier,
                               std::unique_ptr<TypeConstructor> type_ctor,
                               std::unique_ptr<Constant> default_value)
@@ -671,16 +776,28 @@ class Layout final : public SourceElement {
     kUnion,
   };
 
-  Layout(SourceElement const& element, Kind kind,
-         std::vector<std::unique_ptr<LayoutMember>> members, std::unique_ptr<Modifiers> modifiers,
-         std::unique_ptr<TypeConstructor> subtype_ctor)
-      : SourceElement(element),
+  Layout(TokenChain const& element, Kind kind, std::vector<std::unique_ptr<LayoutMember>> members,
+         std::unique_ptr<Modifiers> modifiers, std::unique_ptr<TypeConstructor> subtype_ctor)
+      : SourceElement(element, NodeKind(kind)),
         kind(kind),
         members(std::move(members)),
         modifiers(std::move(modifiers)),
         subtype_ctor(std::move(subtype_ctor)) {}
 
   void Accept(TreeVisitor* visitor) const;
+
+  static SourceElement::NodeKind NodeKind(Kind kind) {
+    switch (kind) {
+      case Kind::kBits:
+      case Kind::kEnum:
+        return SourceElement::NodeKind::kValueLayout;
+      case Kind::kStruct:
+        return SourceElement::NodeKind::kStructLayout;
+      case Kind::kTable:
+      case Kind::kUnion:
+        return SourceElement::NodeKind::kOrdinaledLayout;
+    }
+  }
 
   Kind kind;
   std::vector<std::unique_ptr<raw::LayoutMember>> members;
@@ -700,16 +817,26 @@ class LayoutReference : public SourceElement {
     kNamed,
   };
 
-  LayoutReference(SourceElement const& element, Kind kind) : SourceElement(element), kind(kind) {}
+  LayoutReference(TokenChain const& element, Kind kind)
+      : SourceElement(element, NodeKind(kind)), kind(kind) {}
 
   void Accept(TreeVisitor* visitor) const;
+
+  static SourceElement::NodeKind NodeKind(Kind kind) {
+    switch (kind) {
+      case Kind::kInline:
+        return SourceElement::NodeKind::kInlineLayoutReference;
+      case Kind::kNamed:
+        return SourceElement::NodeKind::kNamedLayoutReference;
+    }
+  }
 
   const Kind kind;
 };
 
 class InlineLayoutReference final : public LayoutReference {
  public:
-  explicit InlineLayoutReference(SourceElement const& element,
+  explicit InlineLayoutReference(TokenChain const& element,
                                  std::unique_ptr<AttributeList> attributes,
                                  std::unique_ptr<Layout> layout)
       : LayoutReference(element, Kind::kInline),
@@ -724,7 +851,7 @@ class InlineLayoutReference final : public LayoutReference {
 
 class NamedLayoutReference final : public LayoutReference {
  public:
-  explicit NamedLayoutReference(SourceElement const& element,
+  explicit NamedLayoutReference(TokenChain const& element,
                                 std::unique_ptr<CompoundIdentifier> identifier)
       : LayoutReference(element, Kind::kNamed), identifier(std::move(identifier)) {}
 
@@ -741,7 +868,19 @@ class LayoutParameter : public SourceElement {
     kType,
   };
 
-  LayoutParameter(SourceElement const& element, Kind kind) : SourceElement(element), kind(kind) {}
+  LayoutParameter(TokenChain const& element, Kind kind)
+      : SourceElement(element, NodeKind(kind)), kind(kind) {}
+
+  static SourceElement::NodeKind NodeKind(Kind kind) {
+    switch (kind) {
+      case Kind::kIdentifier:
+        return SourceElement::NodeKind::kIdentifierLayoutParameter;
+      case Kind::kLiteral:
+        return SourceElement::NodeKind::kLiteralLayoutParameter;
+      case Kind::kType:
+        return SourceElement::NodeKind::kTypeLayoutParameter;
+    }
+  }
 
   void Accept(TreeVisitor* visitor) const;
 
@@ -750,7 +889,7 @@ class LayoutParameter : public SourceElement {
 
 class LiteralLayoutParameter final : public LayoutParameter {
  public:
-  explicit LiteralLayoutParameter(SourceElement const& element,
+  explicit LiteralLayoutParameter(TokenChain const& element,
                                   std::unique_ptr<LiteralConstant> literal)
       : LayoutParameter(element, Kind::kLiteral), literal(std::move(literal)) {}
 
@@ -761,7 +900,7 @@ class LiteralLayoutParameter final : public LayoutParameter {
 
 class TypeLayoutParameter final : public LayoutParameter {
  public:
-  explicit TypeLayoutParameter(SourceElement const& element,
+  explicit TypeLayoutParameter(TokenChain const& element,
                                std::unique_ptr<TypeConstructor> type_ctor)
       : LayoutParameter(element, Kind::kType), type_ctor(std::move(type_ctor)) {}
 
@@ -772,7 +911,7 @@ class TypeLayoutParameter final : public LayoutParameter {
 
 class IdentifierLayoutParameter final : public LayoutParameter {
  public:
-  explicit IdentifierLayoutParameter(SourceElement const& element,
+  explicit IdentifierLayoutParameter(TokenChain const& element,
                                      std::unique_ptr<CompoundIdentifier> identifier)
       : LayoutParameter(element, Kind::kIdentifier), identifier(std::move(identifier)) {}
 
@@ -783,9 +922,9 @@ class IdentifierLayoutParameter final : public LayoutParameter {
 
 class LayoutParameterList final : public SourceElement {
  public:
-  LayoutParameterList(SourceElement const& element,
+  LayoutParameterList(TokenChain const& element,
                       std::vector<std::unique_ptr<raw::LayoutParameter>> items)
-      : SourceElement(element), items(std::move(items)) {}
+      : SourceElement(element, kLayoutParameterList), items(std::move(items)) {}
 
   void Accept(TreeVisitor* visitor) const;
 
@@ -794,8 +933,8 @@ class LayoutParameterList final : public SourceElement {
 
 class TypeConstraints final : public SourceElement {
  public:
-  TypeConstraints(SourceElement const& element, std::vector<std::unique_ptr<raw::Constant>> items)
-      : SourceElement(element), items(std::move(items)) {}
+  TypeConstraints(TokenChain const& element, std::vector<std::unique_ptr<raw::Constant>> items)
+      : SourceElement(element, kTypeConstraints), items(std::move(items)) {}
 
   void Accept(TreeVisitor* visitor) const;
 
@@ -804,10 +943,10 @@ class TypeConstraints final : public SourceElement {
 
 class TypeDeclaration final : public SourceElement {
  public:
-  TypeDeclaration(SourceElement const& element, std::unique_ptr<AttributeList> attributes,
+  TypeDeclaration(TokenChain const& element, std::unique_ptr<AttributeList> attributes,
                   std::unique_ptr<Identifier> identifier,
                   std::unique_ptr<TypeConstructor> type_ctor)
-      : SourceElement(element),
+      : SourceElement(element, kTypeDeclaration),
         attributes(std::move(attributes)),
         identifier(std::move(identifier)),
         type_ctor(std::move(type_ctor)) {}
@@ -821,7 +960,7 @@ class TypeDeclaration final : public SourceElement {
 
 class File final : public SourceElement {
  public:
-  File(SourceElement const& element, Token end, std::unique_ptr<LibraryDeclaration> library_decl,
+  File(TokenChain const& element, Token end, std::unique_ptr<LibraryDeclaration> library_decl,
        std::vector<std::unique_ptr<AliasDeclaration>> alias_list,
        std::vector<std::unique_ptr<Using>> using_list,
        std::vector<std::unique_ptr<ConstDeclaration>> const_declaration_list,
@@ -829,7 +968,7 @@ class File final : public SourceElement {
        std::vector<std::unique_ptr<ResourceDeclaration>> resource_declaration_list,
        std::vector<std::unique_ptr<ServiceDeclaration>> service_declaration_list,
        std::vector<std::unique_ptr<TypeDeclaration>> type_decls, std::vector<Token> tokens)
-      : SourceElement(element),
+      : SourceElement(element, kFile),
         library_decl(std::move(library_decl)),
         alias_list(std::move(alias_list)),
         using_list(std::move(using_list)),
