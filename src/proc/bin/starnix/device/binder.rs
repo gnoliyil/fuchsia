@@ -9,9 +9,9 @@ use crate::device::DeviceOps;
 use crate::dynamic_thread_pool::DynamicThreadPool;
 use crate::fs::devtmpfs::dev_tmp_fs;
 use crate::fs::{
-    fs_node_impl_dir_readonly, DirEntryHandle, FdEvents, FdNumber, FdTable, FileObject, FileOps,
-    FileSystem, FileSystemHandle, FileSystemOps, FsNode, FsNodeOps, FsStr, MemoryDirectoryFile,
-    NamespaceNode, SeekOrigin, SpecialNode, WaitAsyncOptions,
+    fs_node_impl_dir_readonly, DirEntryHandle, FdEvents, FdFlags, FdNumber, FileHandle, FileObject,
+    FileOps, FileSystem, FileSystemHandle, FileSystemOps, FsNode, FsNodeOps, FsStr,
+    MemoryDirectoryFile, NamespaceNode, SeekOrigin, SpecialNode, WaitAsyncOptions,
 };
 use crate::lock::{
     Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
@@ -383,7 +383,7 @@ impl<'a> TransientTransactionState<'a> {
 impl<'a> Drop for TransientTransactionState<'a> {
     fn drop(&mut self) {
         for fd in &self.transient_fds {
-            let _: Result<(), Errno> = self.task.files().close(*fd);
+            let _: Result<(), Errno> = self.task.close_fd(*fd);
         }
     }
 }
@@ -1708,9 +1708,11 @@ impl std::fmt::Display for Handle {
 
 /// Abstraction over a thread that has a connection to the binder driver.
 trait BinderTask: std::fmt::Debug + MemoryAccessor {
-    // TODO(qsr): This API needs to be changed to access files in remote processes.
     fn creds(&self) -> Credentials;
-    fn files(&self) -> &FdTable;
+
+    fn close_fd(&self, fd: FdNumber) -> Result<(), Errno>;
+    fn get_file_with_flags(&self, fd: FdNumber) -> Result<(FileHandle, FdFlags), Errno>;
+    fn add_file_with_flags(&self, file: FileHandle, flags: FdFlags) -> Result<FdNumber, Errno>;
 }
 
 impl MemoryAccessorExt for dyn BinderTask + '_ {}
@@ -1747,9 +1749,14 @@ impl<'a> BinderTask for CurrentBinderTask<'a> {
     fn creds(&self) -> Credentials {
         self.task.creds()
     }
-
-    fn files(&self) -> &FdTable {
-        &self.task.files
+    fn close_fd(&self, fd: FdNumber) -> Result<(), Errno> {
+        self.task.files.close(fd)
+    }
+    fn get_file_with_flags(&self, fd: FdNumber) -> Result<(FileHandle, FdFlags), Errno> {
+        self.task.files.get_with_flags(fd)
+    }
+    fn add_file_with_flags(&self, file: FileHandle, flags: FdFlags) -> Result<FdNumber, Errno> {
+        self.task.files.add_with_flags(file, flags)
     }
 }
 
@@ -1830,8 +1837,14 @@ impl BinderTask for RemoteBinderTask {
         // TODO(qsr): uid/gid should be set in the configuration
         Credentials::root()
     }
-    fn files(&self) -> &FdTable {
-        panic!("files is not implemented for remote binder access");
+    fn close_fd(&self, _fd: FdNumber) -> Result<(), Errno> {
+        error!(ENOTSUP)
+    }
+    fn get_file_with_flags(&self, _fd: FdNumber) -> Result<(FileHandle, FdFlags), Errno> {
+        error!(ENOTSUP)
+    }
+    fn add_file_with_flags(&self, _file: FileHandle, _flags: FdFlags) -> Result<FdNumber, Errno> {
+        error!(ENOTSUP)
     }
 }
 
@@ -1869,9 +1882,14 @@ impl BinderTask for LocalBinderTask {
     fn creds(&self) -> Credentials {
         self.task.creds()
     }
-
-    fn files(&self) -> &FdTable {
-        &self.task.files
+    fn close_fd(&self, fd: FdNumber) -> Result<(), Errno> {
+        self.task.files.close(fd)
+    }
+    fn get_file_with_flags(&self, fd: FdNumber) -> Result<(FileHandle, FdFlags), Errno> {
+        self.task.files.get_with_flags(fd)
+    }
+    fn add_file_with_flags(&self, file: FileHandle, flags: FdFlags) -> Result<FdNumber, Errno> {
+        self.task.files.add_with_flags(file, flags)
     }
 }
 
@@ -2628,8 +2646,8 @@ impl BinderDriver {
                     SerializedBinderObject::Handle { handle, flags, cookie: 0 }
                 }
                 SerializedBinderObject::File { fd, flags, cookie } => {
-                    let (file, fd_flags) = source_task.files().get_with_flags(fd)?;
-                    let new_fd = target_task.files().add_with_flags(file, fd_flags)?;
+                    let (file, fd_flags) = source_task.get_file_with_flags(fd)?;
+                    let new_fd = target_task.add_file_with_flags(file, fd_flags)?;
 
                     // Close this FD if the transaction fails.
                     transaction_state.push_fd(new_fd);
@@ -2729,8 +2747,8 @@ impl BinderDriver {
                     // Dup each file descriptor and re-write the value of the new FD.
                     for fd in fd_array {
                         let (file, flags) =
-                            source_task.files().get_with_flags(FdNumber::from_raw(*fd as i32))?;
-                        let new_fd = target_task.files().add_with_flags(file, flags)?;
+                            source_task.get_file_with_flags(FdNumber::from_raw(*fd as i32))?;
+                        let new_fd = target_task.add_file_with_flags(file, flags)?;
 
                         // Close this FD if the transaction fails.
                         transaction_state.push_fd(new_fd);
