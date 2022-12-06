@@ -187,10 +187,7 @@ fn double<'a>(i: ParsingContext<'a>) -> ParsingResult<'a, f64> {
                 recognize(decimal_literal),
             )),
         ))),
-        |d: ParsingContext<'_>| {
-            dbg!(d);
-            d.into_inner().replace("_", "").parse::<f64>().unwrap()
-        },
+        |d: ParsingContext<'_>| d.into_inner().replace("_", "").parse::<f64>().unwrap(),
     )(i)
 }
 
