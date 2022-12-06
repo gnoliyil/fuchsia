@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#ifndef SRC_MEDIA_AUDIO_AUDIO_CORE_V2_AUDIO_RENDERER_SERVER_H_
-#define SRC_MEDIA_AUDIO_AUDIO_CORE_V2_AUDIO_RENDERER_SERVER_H_
+#ifndef SRC_MEDIA_AUDIO_AUDIO_CORE_V2_AUDIO_CAPTURER_SERVER_H_
+#define SRC_MEDIA_AUDIO_AUDIO_CORE_V2_AUDIO_CAPTURER_SERVER_H_
 
 #include <fidl/fuchsia.audio.mixer/cpp/wire.h>
 #include <fidl/fuchsia.audio/cpp/wire.h>
@@ -12,7 +12,6 @@
 #include <lib/fit/function.h>
 #include <lib/zx/vmo.h>
 
-#include <map>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -21,15 +20,16 @@
 #include "src/media/audio/audio_core/shared/stream_usage.h"
 #include "src/media/audio/audio_core/v2/graph_types.h"
 #include "src/media/audio/audio_core/v2/reference_clock.h"
+#include "src/media/audio/audio_core/v2/stream_sink_server.h"
 #include "src/media/audio/lib/format2/format.h"
 #include "src/media/audio/services/common/base_fidl_server.h"
-#include "src/media/audio/services/common/delay_watcher_client.h"
+#include "src/media/audio/services/common/memory_mapped_buffer.h"
 
 namespace media_audio {
 
-class AudioRendererServer
-    : public BaseFidlServer<AudioRendererServer, fidl::WireServer, fuchsia_media::AudioRenderer>,
-      public std::enable_shared_from_this<AudioRendererServer> {
+class AudioCapturerServer
+    : public BaseFidlServer<AudioCapturerServer, fidl::WireServer, fuchsia_media::AudioCapturer>,
+      public std::enable_shared_from_this<AudioCapturerServer> {
  public:
   struct Args {
     // Connection to the mixer service.
@@ -37,56 +37,49 @@ class AudioRendererServer
 
     // Initial configuration. If `usage == ULTRASOUND`, then `format` must be set and cannot be
     // changed by the client. Otherwise, the `format` is optional here and can be set by the client.
-    media::audio::RenderUsage usage;
+    media::audio::CaptureUsage usage;
     std::optional<Format> format;
 
     // Default clock to use if the client does not explicitly choose one.
     // Required.
     zx::clock default_reference_clock;
 
-    // If true, ramp gain up on play and down on pause. Otherwise, no gain ramping on play/pause.
-    bool ramp_on_play_pause;
-
     // TODO(fxbug.dev/98652): callback to invoke when this is configured and ready to be routed
   };
 
-  static std::shared_ptr<AudioRendererServer> Create(
+  static std::shared_ptr<AudioCapturerServer> Create(
       std::shared_ptr<const FidlThread> fidl_thread,
-      fidl::ServerEnd<fuchsia_media::AudioRenderer> server_end, Args args);
+      fidl::ServerEnd<fuchsia_media::AudioCapturer> server_end, Args args);
 
   //
-  // Implementation of fidl::WireServer<fuchsia_media::AudioRenderer>.
+  // Implementation of fidl::WireServer<fuchsia_media::AudioCapturer>.
   //
 
   // If these functions are called, the call must happen before SetPcmStreamType.
-  // For ULTRASOUND renderers, these cannot be called at all.
-  void SetPtsUnits(SetPtsUnitsRequestView request, SetPtsUnitsCompleter::Sync& completer) final;
-  void SetPtsContinuityThreshold(SetPtsContinuityThresholdRequestView request,
-                                 SetPtsContinuityThresholdCompleter::Sync& completer) final;
+  // For ULTRASOUND capturers, these cannot be called at all.
   void SetReferenceClock(SetReferenceClockRequestView request,
                          SetReferenceClockCompleter::Sync& completer) final;
   void SetUsage(SetUsageRequestView request, SetUsageCompleter::Sync& completer) final;
 
   // Must be called exactly once, after the above and before the below.
-  // For ULTRASOUND renderers, this cannot be called at all.
+  // For ULTRASOUND capturers, this cannot be called at all.
   void SetPcmStreamType(SetPcmStreamTypeRequestView request,
                         SetPcmStreamTypeCompleter::Sync& completer) final;
 
   // Must be called after SetPcmStreamType + AddPayloadBuffer.
-  void SendPacket(SendPacketRequestView request, SendPacketCompleter::Sync& completer) final;
-  void SendPacketNoReply(SendPacketNoReplyRequestView request,
-                         SendPacketNoReplyCompleter::Sync& completer) final;
+  void CaptureAt(CaptureAtRequestView request, CaptureAtCompleter::Sync& completer) final;
 
-  void EndOfStream(EndOfStreamCompleter::Sync& completer) final;
+  void StartAsyncCapture(StartAsyncCaptureRequestView request,
+                         StartAsyncCaptureCompleter::Sync& completer) final;
+
+  void StopAsyncCapture(StopAsyncCaptureCompleter::Sync& completer) final;
+  void StopAsyncCaptureNoReply(StopAsyncCaptureNoReplyCompleter::Sync& completer) final;
+
+  void ReleasePacket(ReleasePacketRequestView request,
+                     ReleasePacketCompleter::Sync& completer) final;
 
   void DiscardAllPackets(DiscardAllPacketsCompleter::Sync& completer) final;
   void DiscardAllPacketsNoReply(DiscardAllPacketsNoReplyCompleter::Sync& completer) final;
-
-  void Play(PlayRequestView request, PlayCompleter::Sync& completer) final;
-  void PlayNoReply(PlayNoReplyRequestView request, PlayNoReplyCompleter::Sync& completer) final;
-
-  void Pause(PauseCompleter::Sync& completer) final;
-  void PauseNoReply(PauseNoReplyCompleter::Sync& completer) final;
 
   // Can be called at any time.
   void AddPayloadBuffer(AddPayloadBufferRequestView request,
@@ -98,37 +91,36 @@ class AudioRendererServer
                        BindGainControlCompleter::Sync& completer) final;
 
   void GetReferenceClock(GetReferenceClockCompleter::Sync& completer) final;
-  void GetMinLeadTime(GetMinLeadTimeCompleter::Sync& completer) final;
-
-  void EnableMinLeadTimeEvents(EnableMinLeadTimeEventsRequestView request,
-                               EnableMinLeadTimeEventsCompleter::Sync& completer) final;
+  void GetStreamType(GetStreamTypeCompleter::Sync& completer) final;
 
  private:
-  static inline constexpr std::string_view kClassName = "AudioRendererServer";
+  static inline constexpr std::string_view kClassName = "AudioCapturerServer";
   template <typename ServerT, template <typename T> typename FidlServerT, typename ProtocolT>
   friend class BaseFidlServer;
 
-  AudioRendererServer(std::shared_ptr<const FidlThread> fidl_thread, Args args);
+  AudioCapturerServer(std::shared_ptr<const FidlThread> fidl_thread, Args args);
 
-  void SendPacketInternal(fuchsia_media::StreamPacket packet,
-                          std::optional<SendPacketCompleter::Async> completer);
-  void EndOfStreamInternal();
+  void CaptureAtInternal(uint32_t payload_buffer_id, uint32_t payload_offset,
+                         uint32_t frames_per_packet, CaptureAtCompleter::Async completer);
+  void StartAsyncCaptureInternal(uint32_t frames_per_packet);
+  void StopAsyncCaptureInternal(std::optional<StopAsyncCaptureCompleter::Async> completer);
+  void ReleasePacketInternal(fuchsia_media::wire::StreamPacket packet);
   void DiscardAllPacketsInternal(std::optional<DiscardAllPacketsCompleter::Async> completer);
-  void PlayInternal(zx::time reference_time, int64_t media_time,
-                    std::optional<PlayCompleter::Async> completer);
-  void PauseInternal(std::optional<PauseCompleter::Async> completer);
+
+  void Start();
+  void Stop();
+  void SendPacket(fuchsia_media::wire::StreamPacket packet, zx::duration overflow,
+                  std::optional<CaptureAtCompleter::Async> capture_at_completer);
 
   void OnShutdown(fidl::UnbindInfo info) final;
-  void OnMinLeadTimeUpdated(std::optional<zx::duration> min_lead_time);
   void MaybeConfigure();
-  void MaybeSetReadyToPlay();
+  void MaybeSetReadyToCapture();
   void RunWhenReady(const char* debug_string, fit::closure fn);
   fuchsia_audio_mixer::wire::ReferenceClock ReferenceClockToFidl(fidl::AnyArena& arena);
   bool IsConfigured() const { return state_ >= State::kConfigured; }
 
-  const int64_t renderer_id_;
+  const int64_t capturer_id_;
   const zx::clock default_reference_clock_;
-  const bool ramp_on_play_pause_;
 
   enum class State {
     // Server has shut down.
@@ -138,37 +130,42 @@ class AudioRendererServer
     // Finalized the format and payload buffer. Started graph node creations.
     kConfigured,
     // Graph nodes created.
-    kReadyToPlay,
+    kReadyToCapture,
+    // Capturing started on behalf of CaptureAt.
+    kCapturingSync,
+    // Capturing started on behalf of StartAsyncCapture.
+    kCapturingAsync,
   };
   State state_ = State::kWaitingForConfig;
 
   // Objects in the mixer graph.
   std::shared_ptr<fidl::WireSharedClient<fuchsia_audio_mixer::Graph>> graph_client_;
-  std::optional<NodeId> producer_node_;
+  std::optional<NodeId> consumer_node_;
   std::optional<GainControlId> stream_gain_id_;
-  std::optional<GainControlId> play_pause_ramp_gain_id_;
-  std::shared_ptr<DelayWatcherClient> delay_watcher_client_;
-  fidl::ServerEnd<fuchsia_audio::DelayWatcher> delay_watcher_server_end_;
 
   // Configuration which is mutable before the StreamSink channel is created.
   // Optional fields will be set to a default value if not set explicitly by the client.
-  std::optional<TimelineRate> media_ticks_per_second_;
-  std::optional<float> media_ticks_continuity_threshold_seconds_;
-  media::audio::RenderUsage usage_;
+  media::audio::CaptureUsage usage_;
   std::optional<Format> format_;
   zx::clock reference_clock_;
-  std::map<int64_t, zx::vmo> payload_buffers_;
+  std::optional<zx::vmo> payload_buffer_;
 
-  // For sending packets to the mixer service.
-  std::optional<fidl::WireSharedClient<fuchsia_audio::StreamSink>> stream_sink_client_;
+  // As in audio_core/v1, only one payload buffer (id=0) is supported. We use two copies of that
+  // buffer: the Graph's ConsumerNode writes to `payload_buffer_source_`, then audio is copied from
+  // that buffer into `payload_buffer_dest`, which is the actual buffer read by the client.
+  //
+  // We need two copies because the ConsumerNode's `frames_per_packet` must be set when the
+  // ConsumerNode is created, however the CaptureAt and StartAsyncCapture APIs allow the client to
+  // decide on packet sizes dynamically. The source payload buffer (passed to the ConsumerNode) uses
+  // a fixed packet size of 10ms. The dest payload buffer (read by the client) uses
+  // dynamically-sized packets.
+  std::shared_ptr<MemoryMappedBuffer> payload_buffer_source_;
+  std::shared_ptr<MemoryMappedBuffer> payload_buffer_dest_;
+
+  // For capturing packets from the mixer service.
+  std::shared_ptr<StreamSinkServer> stream_sink_server_;
   std::optional<fidl::WireSharedClient<fuchsia_audio::GainControl>> stream_gain_control_client_;
-  std::optional<fidl::WireSharedClient<fuchsia_audio::GainControl>>
-      play_pause_ramp_gain_control_client_;
-  std::optional<int64_t> last_pause_media_time_;
-  int64_t segment_id_ = 0;
-
-  bool enable_min_lead_time_events_ = false;
-  zx::duration min_lead_time_;
+  int64_t pending_sync_captures_ = 0;
 
   // Commands that are queued between State::kConfigured and State::kReadyToPlay.
   std::vector<fit::closure> queued_tasks_;
@@ -176,4 +173,4 @@ class AudioRendererServer
 
 }  // namespace media_audio
 
-#endif  // SRC_MEDIA_AUDIO_AUDIO_CORE_V2_AUDIO_RENDERER_SERVER_H_
+#endif  // SRC_MEDIA_AUDIO_AUDIO_CORE_V2_AUDIO_CAPTURER_SERVER_H_

@@ -259,65 +259,58 @@ void AudioRendererServer::SetPcmStreamType(SetPcmStreamTypeRequestView request,
 
 void AudioRendererServer::SendPacket(SendPacketRequestView request,
                                      SendPacketCompleter::Sync& completer) {
-  RunWhenReady("SendPacket",
-               [this, self = shared_from_this(), packet = fidl::ToNatural(request->packet),
-                completer = completer.ToAsync()]() mutable {
-                 SendPacketInternal(packet, std::move(completer));
-               });
+  RunWhenReady("SendPacket", [this, packet = fidl::ToNatural(request->packet),
+                              completer = completer.ToAsync()]() mutable {
+    SendPacketInternal(packet, std::move(completer));
+  });
 }
 
 void AudioRendererServer::SendPacketNoReply(SendPacketNoReplyRequestView request,
                                             SendPacketNoReplyCompleter::Sync& completer) {
-  RunWhenReady("SendPacketNoReply",
-               [this, self = shared_from_this(), packet = fidl::ToNatural(request->packet)]() {
-                 SendPacketInternal(packet, std::nullopt);
-               });
+  RunWhenReady("SendPacketNoReply", [this, packet = fidl::ToNatural(request->packet)]() {
+    SendPacketInternal(packet, std::nullopt);
+  });
 }
 
 void AudioRendererServer::EndOfStream(EndOfStreamCompleter::Sync& completer) {
-  RunWhenReady("EndOfStream", [this, self = shared_from_this()]() { EndOfStreamInternal(); });
+  RunWhenReady("EndOfStream", [this]() { EndOfStreamInternal(); });
 }
 
 void AudioRendererServer::DiscardAllPackets(DiscardAllPacketsCompleter::Sync& completer) {
-  RunWhenReady("DiscardAllPackets",
-               [this, self = shared_from_this(), completer = completer.ToAsync()]() mutable {
-                 DiscardAllPacketsInternal(std::move(completer));
-               });
+  RunWhenReady("DiscardAllPackets", [this, completer = completer.ToAsync()]() mutable {
+    DiscardAllPacketsInternal(std::move(completer));
+  });
 }
 
 void AudioRendererServer::DiscardAllPacketsNoReply(
     DiscardAllPacketsNoReplyCompleter::Sync& completer) {
-  RunWhenReady("DiscardAllPacketsNoReply",
-               [this, self = shared_from_this()]() { DiscardAllPacketsInternal(std::nullopt); });
+  RunWhenReady("DiscardAllPacketsNoReply", [this]() { DiscardAllPacketsInternal(std::nullopt); });
 }
 
 void AudioRendererServer::Play(PlayRequestView request, PlayCompleter::Sync& completer) {
   RunWhenReady("Play",
-               [this, self = shared_from_this(), reference_time = request->reference_time,
-                media_time = request->media_time, completer = completer.ToAsync()]() mutable {
+               [this, reference_time = request->reference_time, media_time = request->media_time,
+                completer = completer.ToAsync()]() mutable {
                  PlayInternal(zx::time(reference_time), media_time, std::move(completer));
                });
 }
 
 void AudioRendererServer::PlayNoReply(PlayNoReplyRequestView request,
                                       PlayNoReplyCompleter::Sync& completer) {
-  RunWhenReady("PlayNoReply",
-               [this, self = shared_from_this(), reference_time = request->reference_time,
-                media_time = request->media_time]() {
-                 PlayInternal(zx::time(reference_time), media_time, std::nullopt);
-               });
+  RunWhenReady("PlayNoReply", [this, reference_time = request->reference_time,
+                               media_time = request->media_time]() {
+    PlayInternal(zx::time(reference_time), media_time, std::nullopt);
+  });
 }
 
 void AudioRendererServer::Pause(PauseCompleter::Sync& completer) {
-  RunWhenReady("Pause",
-               [this, self = shared_from_this(), completer = completer.ToAsync()]() mutable {
-                 PauseInternal(std::move(completer));
-               });
+  RunWhenReady("Pause", [this, completer = completer.ToAsync()]() mutable {
+    PauseInternal(std::move(completer));
+  });
 }
 
 void AudioRendererServer::PauseNoReply(PauseNoReplyCompleter::Sync& completer) {
-  RunWhenReady("PauseNoReply",
-               [this, self = shared_from_this()]() { PauseInternal(std::nullopt); });
+  RunWhenReady("PauseNoReply", [this]() { PauseInternal(std::nullopt); });
 }
 
 void AudioRendererServer::AddPayloadBuffer(AddPayloadBufferRequestView request,
@@ -666,7 +659,11 @@ void AudioRendererServer::PauseInternal(std::optional<PauseCompleter::Async> com
       });
 }
 
+// TODO(fxbug.dev/98652): need to delete all graph objects
 void AudioRendererServer::OnShutdown(fidl::UnbindInfo info) {
+  state_ = State::kShutdown;
+  queued_tasks_.clear();
+
   // Disconnect all clients.
   graph_client_ = nullptr;
   delay_watcher_client_ = nullptr;
@@ -691,6 +688,10 @@ void AudioRendererServer::OnMinLeadTimeUpdated(std::optional<zx::duration> min_l
 }
 
 void AudioRendererServer::MaybeConfigure() {
+  if (state_ == State::kShutdown) {
+    return;
+  }
+
   // We can configure once we have a format and a payload buffer.
   if (!format_ || !payload_buffers_.count(0)) {
     return;
@@ -831,6 +832,9 @@ void AudioRendererServer::MaybeConfigure() {
 }
 
 void AudioRendererServer::MaybeSetReadyToPlay() {
+  if (state_ == State::kShutdown) {
+    return;
+  }
   if (!producer_node_ || !stream_gain_id_ || (ramp_on_play_pause_ && !play_pause_ramp_gain_id_)) {
     return;
   }
@@ -849,10 +853,12 @@ void AudioRendererServer::MaybeSetReadyToPlay() {
 
 void AudioRendererServer::RunWhenReady(const char* debug_string, fit::closure fn) {
   switch (state_) {
+    case State::kShutdown:
+      break;
     case State::kWaitingForConfig:
       FX_LOGS(WARNING) << debug_string << ": cannot call until configured";
       Shutdown(ZX_ERR_BAD_STATE);
-      return;
+      break;
     case State::kConfigured:
       queued_tasks_.push_back(std::move(fn));
       break;

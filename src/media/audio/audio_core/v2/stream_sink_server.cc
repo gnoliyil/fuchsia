@@ -73,7 +73,7 @@ void StreamSinkServer::PutPacket(PutPacketRequestView request,
       break;
     case Timestamp::Tag::kUnspecifiedContinuous:
       // The mixer service uses Specified for the first packet in a sequence, therefore
-      // `next_continuous_timstamp_` should always be defined.
+      // `next_continuous_timestamp_` should always be defined.
       if (!next_continuous_timestamp_) {
         FX_LOGS(WARNING) << "kUnspecifiedContinuous timestamp not preceded by Specified timestamp";
         Shutdown(ZX_ERR_NOT_SUPPORTED);
@@ -173,76 +173,68 @@ void StreamSinkServer::DiscardPackets() {
 }
 
 void StreamSinkServer::ServePendingCaptures() {
-  if (pending_captures_.empty() || pending_packets_.empty()) {
-    return;
-  }
+  while (!pending_captures_.empty() && !pending_packets_.empty()) {
+    auto& packet = pending_packets_.front();
+    auto& capture = pending_captures_.front();
 
-  auto* packet = &pending_packets_.front();
-  auto* capture = &pending_captures_.front();
+    capture.overflow += packet.overflow;
+    packet.overflow = zx::nsec(0);
 
-  while (packet && capture) {
-    capture->overflow += packet->overflow;
-    packet->overflow = zx::nsec(0);
-
-    if (!capture->start_timestamp) {
+    if (!capture.start_timestamp) {
       // We haven't copied anything into `capture` yet, so start from `packet`'s current position.
-      capture->start_timestamp = packet->timestamp;
-      capture->next_timestamp = packet->timestamp;
+      capture.start_timestamp = packet.timestamp;
+      capture.next_timestamp = packet.timestamp;
     } else {
-      FX_CHECK(capture->next_timestamp);
+      FX_CHECK(capture.next_timestamp);
       // If `capture`'s current position doesn't align with `packet`, fill with silence. `capture`
       // cannot be ahead of `packet`, since consecutive packet timestamps cannot go backwards.
-      const auto duration_ahead = packet->timestamp - *capture->next_timestamp;
+      const auto duration_ahead = packet.timestamp - *capture.next_timestamp;
       const auto frames_ahead = format_.integer_frames_per(duration_ahead);
       FX_CHECK(frames_ahead >= 0);
       if (frames_ahead > 0) {
-        const auto capture_frames_needed = capture->bytes_remaining / format_.bytes_per_frame();
+        const auto capture_frames_needed = capture.bytes_remaining / format_.bytes_per_frame();
         const auto silent_frames = std::max(frames_ahead, capture_frames_needed);
         const auto silent_duration = format_.duration_per(Fixed(silent_frames));
         const auto silent_bytes = silent_frames * format_.bytes_per_frame();
 
-        stream_converter_->WriteSilence(capture->data, silent_frames);
-        capture->bytes_remaining -= silent_bytes;
-        capture->bytes_captured += silent_bytes;
-        *capture->next_timestamp += silent_duration;
+        stream_converter_->WriteSilence(capture.data, silent_frames);
+        capture.bytes_remaining -= silent_bytes;
+        capture.bytes_captured += silent_bytes;
+        *capture.next_timestamp += silent_duration;
 
         // If this `capture` is done, advance to the next `capture`.
-        if (capture->bytes_remaining == 0) {
-          capture->callback(capture->start_timestamp->get(), capture->bytes_captured,
-                            capture->overflow);
+        if (capture.bytes_remaining == 0) {
+          capture.callback(capture.start_timestamp->get(), capture.bytes_captured,
+                           capture.overflow);
           pending_captures_.pop_front();
-          capture = pending_captures_.empty() ? nullptr : &pending_captures_.front();
           continue;
         }
       }
     }
 
     // Copy `packet` into `capture`.
-    const auto bytes_to_copy = std::min(capture->bytes_remaining, packet->bytes_remaining);
-    memmove(capture->data, packet->data, bytes_to_copy);
+    const auto bytes_to_copy = std::min(capture.bytes_remaining, packet.bytes_remaining);
+    memmove(capture.data, packet.data, bytes_to_copy);
 
-    capture->data += bytes_to_copy;
-    capture->bytes_remaining -= bytes_to_copy;
-    capture->bytes_captured += bytes_to_copy;
+    capture.data += bytes_to_copy;
+    capture.bytes_remaining -= bytes_to_copy;
+    capture.bytes_captured += bytes_to_copy;
 
-    packet->data += bytes_to_copy;
-    packet->bytes_remaining -= bytes_to_copy;
+    packet.data += bytes_to_copy;
+    packet.bytes_remaining -= bytes_to_copy;
 
     const auto frames_copied = bytes_to_copy / format_.bytes_per_frame();
     const auto duration_copied = format_.duration_per(Fixed(frames_copied));
-    *capture->next_timestamp += duration_copied;
-    packet->timestamp += duration_copied;
+    *capture.next_timestamp += duration_copied;
+    packet.timestamp += duration_copied;
 
-    if (packet->bytes_remaining == 0) {
+    if (packet.bytes_remaining == 0) {
       pending_packets_.pop_front();
-      packet = pending_packets_.empty() ? nullptr : &pending_packets_.front();
     }
 
-    if (capture->bytes_remaining == 0) {
-      capture->callback(capture->start_timestamp->get(), capture->bytes_captured,
-                        capture->overflow);
+    if (capture.bytes_remaining == 0) {
+      capture.callback(capture.start_timestamp->get(), capture.bytes_captured, capture.overflow);
       pending_captures_.pop_front();
-      capture = pending_captures_.empty() ? nullptr : &pending_captures_.front();
     }
   }
 }
