@@ -115,13 +115,13 @@ def _googletest_repository_impl(repo_ctx):
     # than the previous approach that relied on patching.
     repo_ctx.execute(
         [
-            workspace_dir + "/build/bazel/scripts/git-clone-then-apply-bundle.py",
+            repo_ctx.path(workspace_dir + "/build/bazel/scripts/git-clone-then-apply-bundle.py"),
             "--dst-dir",
             ".",
             "--git-url",
-            workspace_dir + "/third_party/googletest/src",
+            repo_ctx.path(workspace_dir + "/third_party/googletest/src"),
             "--git-bundle",
-            workspace_dir + "/build/bazel/patches/googletest/fuchsia-support.bundle",
+            repo_ctx.path(workspace_dir + "/build/bazel/patches/googletest/fuchsia-support.bundle"),
             "--git-bundle-head",
             "fuchsia-support",
         ],
@@ -132,4 +132,50 @@ googletest_repository = repository_rule(
     implementation = _googletest_repository_impl,
     doc = "A repository rule used to create a googletest repository that " +
           "properly supports Fuchsia through local patching.",
+)
+
+def _mini_chromium_repository_impl(repo_ctx):
+    workspace_dir = str(workspace_root_path(repo_ctx))
+    repo_ctx.execute(
+        [
+            repo_ctx.path(workspace_dir + "/build/bazel/scripts/git-clone-then-apply-bundle.py"),
+            "--dst-dir",
+            ".",
+            "--git-url",
+            repo_ctx.path(workspace_dir + "/third_party/mini_chromium"),
+            "--git-bundle",
+            repo_ctx.path(workspace_dir + "/build/bazel/patches/mini_chromium/fuchsia-support.bundle"),
+            "--git-bundle-head",
+            "fuchsia-support",
+        ],
+        quiet = False,
+    )
+
+mini_chromium_repository = repository_rule(
+    implementation = _mini_chromium_repository_impl,
+    doc = "A repository rule used to create a mini_chromium repository that " +
+          "properly supports Fuchsia through local patching.",
+)
+
+def _linux_syscall_support_repository_impl(repo_ctx):
+    workspace_dir = str(workspace_root_path(repo_ctx))
+    repo_ctx.execute(
+        [
+            repo_ctx.path(workspace_dir + "/build/bazel/scripts/git-clone-then-apply-bundle.py"),
+            "--dst-dir",
+            ".",
+            "--git-url",
+            repo_ctx.path(workspace_dir + "/third_party/linux-syscall-support"),
+            "--git-bundle",
+            repo_ctx.path(workspace_dir + "/build/bazel/patches/linux-syscall-support/fuchsia-support.bundle"),
+            "--git-bundle-head",
+            "fuchsia-support",
+        ],
+        quiet = False,
+    )
+
+linux_syscall_support_repository = repository_rule(
+    implementation = _linux_syscall_support_repository_impl,
+    doc = "A repository rule used to create a linux_syscall_support " +
+          "repository that properly supports Fuchsia through local patching.",
 )

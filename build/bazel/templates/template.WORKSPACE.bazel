@@ -147,10 +147,24 @@ cipd_tool_repository(
 #    path = "third_party/googletest/src",
 # )
 # buildifier: disable=load-on-top
-load("//:build/bazel/repository_rules.bzl", "bazel_inputs_repository", "googletest_repository")
+load(
+    "//:build/bazel/repository_rules.bzl",
+    "bazel_inputs_repository",
+    "googletest_repository",
+    "linux_syscall_support_repository",
+    "mini_chromium_repository",
+)
 
 googletest_repository(
     name = "com_google_googletest",
+)
+
+mini_chromium_repository(
+    name = "mini_chromium",
+)
+
+linux_syscall_support_repository(
+    name = "linux_syscall_support",
 )
 
 bazel_inputs_repository(
