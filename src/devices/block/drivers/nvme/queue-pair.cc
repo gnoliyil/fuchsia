@@ -8,8 +8,6 @@
 #include <zircon/errors.h>
 #include <zircon/syscalls.h>
 
-#include <fbl/auto_lock.h>
-
 #include "src/devices/block/drivers/nvme/commands.h"
 #include "src/devices/block/drivers/nvme/commands/nvme-io.h"
 #include "src/devices/block/drivers/nvme/registers.h"
@@ -45,7 +43,6 @@ zx::result<std::unique_ptr<QueuePair>> QueuePair::Create(zx::unowned_bti bti, ui
 }
 
 zx_status_t QueuePair::PreallocatePrpBuffers() {
-  fbl::AutoLock txn_lock(&transaction_lock_);
   for (auto& txn_data : txns_) {
     zx_status_t status;
     status = txn_data.prp_buffer.Init(bti_->get(), zx_system_get_page_size(), IO_BUFFER_RW);
@@ -61,7 +58,6 @@ zx_status_t QueuePair::PreallocatePrpBuffers() {
 }
 
 zx_status_t QueuePair::CheckForNewCompletion(Completion** completion, IoCommand** io_cmd) {
-  fbl::AutoLock lock(&completion_lock_);
   if (static_cast<Completion*>(completion_.Peek())->phase() != completion_ready_phase_) {
     return ZX_ERR_SHOULD_WAIT;
   }
@@ -71,11 +67,10 @@ zx_status_t QueuePair::CheckForNewCompletion(Completion** completion, IoCommand*
     // Toggle the ready phase when we're about to wrap around.
     completion_ready_phase_ ^= 1;
   }
-  sq_head_.store((*completion)->sq_head());
+  sq_head_ = (*completion)->sq_head();
 
   auto txn_id = (*completion)->command_id();
   {
-    fbl::AutoLock txn_lock(&transaction_lock_);
     if (txn_id > txns_.size()) {
       zxlogf(ERROR, "Completed transaction has invalid ID: %u", txn_id);
       return ZX_ERR_BAD_STATE;
@@ -104,16 +99,13 @@ zx_status_t QueuePair::CheckForNewCompletion(Completion** completion, IoCommand*
 
 void QueuePair::RingCompletionDb() {
   // Ring the doorbell.
-  // TODO(fxbug.dev/102133): Retire this lock, and document the class as thread-unsafe.
-  fbl::AutoLock lock(&completion_lock_);
   completion_doorbell_.set_value(static_cast<uint32_t>(completion_.NextIndex())).WriteTo(&mmio_);
 }
 
 zx_status_t QueuePair::Submit(cpp20::span<uint8_t> submission_data,
                               std::optional<zx::unowned_vmo> data_vmo, zx_off_t vmo_offset,
                               size_t bytes, IoCommand* io_cmd) {
-  fbl::AutoLock lock(&submission_lock_);
-  if ((submission_.NextIndex() + 1) % submission_.entry_count() == sq_head_.load()) {
+  if ((submission_.NextIndex() + 1) % submission_.entry_count() == sq_head_) {
     // No room. Try again later.
     return ZX_ERR_SHOULD_WAIT;
   }
@@ -121,7 +113,6 @@ zx_status_t QueuePair::Submit(cpp20::span<uint8_t> submission_data,
     return ZX_ERR_INVALID_ARGS;
   }
 
-  fbl::AutoLock txn_lock(&transaction_lock_);
   // Allocate a new submission
   size_t index = submission_.NextIndex();
   TransactionData& txn_data = txns_[index];

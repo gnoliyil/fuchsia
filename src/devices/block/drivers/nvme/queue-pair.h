@@ -14,9 +14,6 @@
 #include <memory>
 #include <vector>
 
-#include <fbl/auto_lock.h>
-#include <fbl/mutex.h>
-
 #include "src/devices/block/drivers/nvme/commands.h"
 #include "src/devices/block/drivers/nvme/queue.h"
 #include "src/devices/block/drivers/nvme/registers.h"
@@ -48,6 +45,7 @@ struct TransactionData {
 // It manages the relationship between the two.
 // While the spec allows many submission queues to map to one completion queue, for simplicity
 // we always assume there is a 1:1 relationship between the two.
+// This class is thread-unsafe.
 class QueuePair {
  public:
   // TODO(fxbug.dev/102133): Tune kMaxTransferPages vs. preallocated PRP buffer usage.
@@ -109,21 +107,16 @@ class QueuePair {
   const uint64_t kPageShift;
 
   // Completion queue.
-  Queue completion_ __TA_GUARDED(completion_lock_);
+  Queue completion_;
   // Submission queue.
-  Queue submission_ __TA_GUARDED(submission_lock_);
+  Queue submission_;
   // This is an array of data associated with each transaction.
   // Each transaction's ID is equal to its index in the queue, and this array works the same way.
-  std::vector<TransactionData> txns_ __TA_GUARDED(transaction_lock_);
+  std::vector<TransactionData> txns_;
   // Entries in the completion queue with phase equal to this are done.
-  uint8_t completion_ready_phase_ __TA_GUARDED(completion_lock_) = 1;
+  uint8_t completion_ready_phase_ = 1;
   // Last position the controller reported it was up to in the submission queue.
-  std::atomic_size_t sq_head_ = submission_.entry_count() - 1;
-
-  fbl::Mutex submission_lock_;
-  fbl::Mutex completion_lock_;
-  // We always acquire transaction_lock_ after submission/completion lock.
-  fbl::Mutex transaction_lock_;
+  size_t sq_head_ = submission_.entry_count() - 1;
 
   zx::unowned_bti bti_;
 

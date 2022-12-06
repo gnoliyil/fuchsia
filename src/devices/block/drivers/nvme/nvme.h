@@ -12,6 +12,7 @@
 #include <zircon/types.h>
 
 #include <ddktl/device.h>
+#include <fbl/mutex.h>
 
 #include "src/devices/block/drivers/nvme/commands.h"
 #include "src/devices/block/drivers/nvme/queue-pair.h"
