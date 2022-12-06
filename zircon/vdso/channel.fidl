@@ -14,12 +14,8 @@ type HandleInfo = resource struct {
     unused uint32;
 };
 
-type ChannelCallArgs = resource struct {
-    wr_bytes vector<byte>;
-    wr_handles vector<handle>;
-    rd_bytes vector<byte>;
-    rd_handles vector<handle>;
-};
+// TODO(fxbug.dev/110021): We cannot yet conveniently express this.
+type ChannelCallArgs = resource struct {};
 
 type HandleDisposition = resource struct {
     operation HandleOp;
@@ -29,16 +25,8 @@ type HandleDisposition = resource struct {
     result status;
 };
 
-type ChannelCallEtcArgs = resource struct {
-    wr_bytes vector<byte>;
-    @inout
-    @size32
-    wr_handles vector<HandleDisposition>;
-    rd_bytes vector<byte>;
-    @inout
-    @size32
-    rd_handles vector<HandleDisposition>;
-};
+// TODO(fxbug.dev/110021): We cannot yet conveniently express this.
+type ChannelCallEtcArgs = resource struct {};
 
 @transport("Syscall")
 protocol Channel {

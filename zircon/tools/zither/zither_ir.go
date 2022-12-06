@@ -433,10 +433,26 @@ const (
 
 	// TODO(fxbug.dev/110021): These kinds exist only for the sake of the
 	// interim, v2 form of FIDL library zx.
-	TypeKindPointer     TypeKind = "pointer"
-	TypeKindVoidPointer TypeKind = "voidptr"
-	TypeKindHandle      TypeKind = "handle"
+	TypeKindPointer      TypeKind = "pointer"
+	TypeKindVoidPointer  TypeKind = "voidptr"
+	TypeKindVector       TypeKind = "vector"        // pointer + size_t
+	TypeKindVector32     TypeKind = "vector32"      // pointer + uint32_t
+	TypeKindVoidVector   TypeKind = "void_vector"   // void* + size_t
+	TypeKindVoidVector32 TypeKind = "void_vector32" // void* + uint32_t
+	TypeKindHandle       TypeKind = "handle"
 )
+
+func (kind TypeKind) IsVectorLike() bool {
+	return kind == TypeKindVector || kind == TypeKindVector32 || kind == TypeKindVoidVector || kind == TypeKindVoidVector32
+}
+
+func (kind TypeKind) IsVector32Like() bool {
+	return kind == TypeKindVector32 || kind == TypeKindVoidVector32
+}
+
+func (kind TypeKind) IsVoidVectorLike() bool {
+	return kind == TypeKindVoidVector || kind == TypeKindVoidVector32
+}
 
 // Const is a representation of a constant FIDL declaration.
 type Const struct {
@@ -713,8 +729,12 @@ func resolveType(typ recursiveType, attrs fidlgen.Attributes, decls declMap, typ
 			return nil, nil
 		}
 		desc.ElementType = nested
-	case fidlgen.ZxExperimentalPointerType:
-		desc.Kind = TypeKindPointer
+	case fidlgen.ZxExperimentalPointerType, fidlgen.VectorType:
+		if typ.GetKind() == fidlgen.ZxExperimentalPointerType {
+			desc.Kind = TypeKindPointer
+		} else {
+			desc.Kind = TypeKindVector
+		}
 
 		// TODO(fxbug.dev/105758): Temporary contriving of alias name currently
 		// lost in the IR.
@@ -741,7 +761,20 @@ func resolveType(typ recursiveType, attrs fidlgen.Attributes, decls declMap, typ
 			if nested.Type != string(fidlgen.Uint8) {
 				return nil, fmt.Errorf("@voidptr may only annotate `experimental_pointer` for a pointee type of `uint8`")
 			}
-			desc.Kind = TypeKindVoidPointer
+			if desc.Kind == TypeKindPointer {
+				desc.Kind = TypeKindVoidPointer
+			} else {
+				desc.Kind = TypeKindVoidVector
+			}
+		}
+		if attrs.HasAttribute("size32") {
+			if desc.Kind == TypeKindVector {
+				desc.Kind = TypeKindVector32
+			} else if desc.Kind == TypeKindVoidVector {
+				desc.Kind = TypeKindVoidVector32
+			} else {
+				return nil, fmt.Errorf("@size32 may only annotate `vector`s")
+			}
 		}
 	case fidlgen.HandleType:
 		desc.Kind = TypeKindHandle
@@ -1068,6 +1101,17 @@ const (
 	ParameterOrientationInOut
 )
 
+// ParameterTag gives additional, miscellaneous information about a syscall
+// parameter, informing how it should be processed.
+type ParameterTag int
+
+const (
+	// ParameterTagDecayedFromVector gives whether this parameter derives
+	// from one given originally as a `vector`. This should only be the case
+	// when the associated parameter gives a 'pointer' or a 'length'.
+	ParameterTagDecayedFromVector ParameterTag = iota
+)
+
 // SyscallParameter represents a C syscall parameter.
 type SyscallParameter struct {
 	member
@@ -1077,6 +1121,30 @@ type SyscallParameter struct {
 
 	// Orientation gives whether this is an in, out, or in-out parameter.
 	Orientation ParameterOrientation
+
+	// Tags gives additional metadata about the parameter.
+	Tags map[ParameterTag]struct{}
+}
+
+// HasTag checks whether the parameter has a given tag. This method is a safety
+// and convenience accessor around SyscallParameter.Tags that handles the case
+// of an uninitialized nil value.
+func (param SyscallParameter) HasTag(tag ParameterTag) bool {
+	if param.Tags == nil {
+		return false
+	}
+	_, ok := param.Tags[tag]
+	return ok
+}
+
+// SetTag sets a given tag on the parameter. This method is a safety and
+// convenience accessor around SyscallParameter.Tags that handles the case of
+// an uninitialized nil value.
+func (param *SyscallParameter) SetTag(tag ParameterTag) {
+	if param.Tags == nil {
+		param.Tags = make(map[ParameterTag]struct{})
+	}
+	param.Tags[tag] = struct{}{}
 }
 
 func newSyscallFamily(protocol fidlgen.Protocol, decls declMap) (*SyscallFamily, error) {
@@ -1196,17 +1264,59 @@ func newSyscallFamily(protocol fidlgen.Protocol, decls declMap) (*SyscallFamily,
 
 			for _, m := range s.Members {
 				param := SyscallParameter{
-					member: m.member,
-					Type:   m.Type,
+					member:      m.member,
+					Type:        m.Type,
+					Orientation: ParameterOrientationIn,
 				}
 				if !request || m.out {
 					param.Orientation = ParameterOrientationOut
 				} else if m.inout {
 					param.Orientation = ParameterOrientationInOut
-				} else {
-					param.Orientation = ParameterOrientationIn
 				}
-				syscall.Parameters = append(syscall.Parameters, param)
+
+				// Vector parameters decay into separate pointer and length
+				// parameters.
+				if param.Type.Kind.IsVectorLike() {
+					pointer := param
+					pointer.SetTag(ParameterTagDecayedFromVector)
+					if param.Type.Kind.IsVoidVectorLike() {
+						pointer.Type.Kind = TypeKindVoidPointer
+					} else {
+						pointer.Type.Kind = TypeKindPointer
+					}
+
+					length := SyscallParameter{
+						member: m.member,
+						// We always regard lengths as inputs.
+						Orientation: ParameterOrientationIn,
+					}
+					length.SetTag(ParameterTagDecayedFromVector)
+
+					// Usually arrays with names that end in "s" are plurals,
+					// and usually arrays that refer to a plurality of objects
+					// deal in counts and not sizes. This is a cheesy
+					// heuristic, but it matches our reality close enough.
+					if strings.HasSuffix(param.Name, "s") {
+						length.Name = "num_" + length.Name
+					} else {
+						length.Name += "_size"
+					}
+
+					if param.Type.Kind.IsVector32Like() {
+						length.Type = TypeDescriptor{
+							Kind: TypeKindInteger,
+							Type: string(fidlgen.Uint32),
+						}
+					} else {
+						length.Type = TypeDescriptor{
+							Kind: TypeKindSize,
+							Type: string(fidlgen.ZxExperimentalUsize),
+						}
+					}
+					syscall.Parameters = append(syscall.Parameters, pointer, length)
+				} else {
+					syscall.Parameters = append(syscall.Parameters, param)
+				}
 			}
 
 		}

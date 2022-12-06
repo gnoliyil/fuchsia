@@ -1360,3 +1360,248 @@ protocol Foo {
 		t.Error(diff)
 	}
 }
+
+func TestCanSummarizeSyscallsWithVectors(t *testing.T) {
+	wd := t.TempDir()
+	ir := fidlgentest.EndToEndTest{T: t}.WithWorkingDirectory(wd).Single(`
+library example;
+
+type EmptyStruct = struct {};
+
+@transport("Syscall")
+protocol Syscall {
+	WithVectors(struct{
+		structs vector<EmptyStruct>;
+
+		@size32
+		u16_vec32 vector<uint16>;
+
+		@voidptr
+		void_vec vector<uint8>;
+
+		@size32
+		@voidptr
+		void_vec32 vector<uint8>;
+
+		@inout
+		inout_i8s vector<int8>;
+
+		@inout
+		@size32
+		inout_i8_vec32 vector<int8>;
+	}) -> (struct {
+		out_bools vector<bool>;
+	});
+};
+`)
+
+	emptyStruct := Struct{
+		decl: decl{Name: fidlgen.MustReadName("example/EmptyStruct")},
+		Size: 1,
+	}
+
+	summaries, err := Summarize(ir, wd, SourceDeclOrder)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var actual []SyscallFamily
+	for _, decl := range summaries[0].Decls {
+		if decl.IsSyscallFamily() {
+			actual = append(actual, decl.AsSyscallFamily())
+		}
+	}
+
+	expected := []SyscallFamily{
+		{
+			decl: decl{Name: fidlgen.MustReadName("example/Syscall")},
+			Syscalls: []Syscall{
+				{
+					member: member{Name: "SyscallWithVectors"},
+					Parameters: []SyscallParameter{
+						{
+							member: member{Name: "structs"},
+							Type: TypeDescriptor{
+								Kind: TypeKindPointer,
+								ElementType: &TypeDescriptor{
+									Kind: TypeKindStruct,
+									Type: "example/EmptyStruct",
+									Decl: &emptyStruct,
+								},
+							},
+							Orientation: ParameterOrientationIn,
+							Tags: map[ParameterTag]struct{}{
+								ParameterTagDecayedFromVector: {},
+							},
+						},
+						{
+							member: member{Name: "num_structs"},
+							Type: TypeDescriptor{
+								Kind: TypeKindSize,
+								Type: "usize",
+							},
+							Orientation: ParameterOrientationIn,
+							Tags: map[ParameterTag]struct{}{
+								ParameterTagDecayedFromVector: {},
+							},
+						},
+						{
+							member: member{Name: "u16_vec32"},
+							Type: TypeDescriptor{
+								Kind: TypeKindPointer,
+								ElementType: &TypeDescriptor{
+									Kind: TypeKindInteger,
+									Type: "uint16",
+								},
+							},
+							Orientation: ParameterOrientationIn,
+							Tags: map[ParameterTag]struct{}{
+								ParameterTagDecayedFromVector: {},
+							},
+						},
+						{
+							member: member{Name: "u16_vec32_size"},
+							Type: TypeDescriptor{
+								Kind: TypeKindInteger,
+								Type: "uint32",
+							},
+							Orientation: ParameterOrientationIn,
+							Tags: map[ParameterTag]struct{}{
+								ParameterTagDecayedFromVector: {},
+							},
+						},
+						{
+							member: member{Name: "void_vec"},
+							Type: TypeDescriptor{
+								Kind: TypeKindVoidPointer,
+								ElementType: &TypeDescriptor{
+									Kind: TypeKindInteger,
+									Type: "uint8",
+								},
+							},
+							Orientation: ParameterOrientationIn,
+							Tags: map[ParameterTag]struct{}{
+								ParameterTagDecayedFromVector: {},
+							},
+						},
+						{
+							member: member{Name: "void_vec_size"},
+							Type: TypeDescriptor{
+								Kind: TypeKindSize,
+								Type: "usize",
+							},
+							Orientation: ParameterOrientationIn,
+							Tags: map[ParameterTag]struct{}{
+								ParameterTagDecayedFromVector: {},
+							},
+						},
+						{
+							member: member{Name: "void_vec32"},
+							Type: TypeDescriptor{
+								Kind: TypeKindVoidPointer,
+								ElementType: &TypeDescriptor{
+									Kind: TypeKindInteger,
+									Type: "uint8",
+								},
+							},
+							Orientation: ParameterOrientationIn,
+							Tags: map[ParameterTag]struct{}{
+								ParameterTagDecayedFromVector: {},
+							},
+						},
+						{
+							member: member{Name: "void_vec32_size"},
+							Type: TypeDescriptor{
+								Kind: TypeKindInteger,
+								Type: "uint32",
+							},
+							Orientation: ParameterOrientationIn,
+							Tags: map[ParameterTag]struct{}{
+								ParameterTagDecayedFromVector: {},
+							},
+						},
+						{
+							member: member{Name: "inout_i8s"},
+							Type: TypeDescriptor{
+								Kind: TypeKindPointer,
+								ElementType: &TypeDescriptor{
+									Kind: TypeKindInteger,
+									Type: "int8",
+								},
+							},
+							Orientation: ParameterOrientationInOut,
+							Tags: map[ParameterTag]struct{}{
+								ParameterTagDecayedFromVector: {},
+							},
+						},
+						{
+							member: member{Name: "num_inout_i8s"},
+							Type: TypeDescriptor{
+								Kind: TypeKindSize,
+								Type: "usize",
+							},
+							Orientation: ParameterOrientationIn,
+							Tags: map[ParameterTag]struct{}{
+								ParameterTagDecayedFromVector: {},
+							},
+						},
+						{
+							member: member{Name: "inout_i8_vec32"},
+							Type: TypeDescriptor{
+								Kind: TypeKindPointer,
+								ElementType: &TypeDescriptor{
+									Kind: TypeKindInteger,
+									Type: "int8",
+								},
+							},
+							Orientation: ParameterOrientationInOut,
+							Tags: map[ParameterTag]struct{}{
+								ParameterTagDecayedFromVector: {},
+							},
+						},
+						{
+							member: member{Name: "inout_i8_vec32_size"},
+							Type: TypeDescriptor{
+								Kind: TypeKindInteger,
+								Type: "uint32",
+							},
+							Orientation: ParameterOrientationIn,
+							Tags: map[ParameterTag]struct{}{
+								ParameterTagDecayedFromVector: {},
+							},
+						},
+						{
+							member: member{Name: "out_bools"},
+							Type: TypeDescriptor{
+								Kind: TypeKindPointer,
+								ElementType: &TypeDescriptor{
+									Kind: TypeKindBool,
+									Type: "bool",
+								},
+							},
+							Orientation: ParameterOrientationOut,
+							Tags: map[ParameterTag]struct{}{
+								ParameterTagDecayedFromVector: {},
+							},
+						},
+						{
+							member: member{Name: "num_out_bools"},
+							Type: TypeDescriptor{
+								Kind: TypeKindSize,
+								Type: "usize",
+							},
+							Orientation: ParameterOrientationIn,
+							Tags: map[ParameterTag]struct{}{
+								ParameterTagDecayedFromVector: {},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(expected, actual, cmpOpt); diff != "" {
+		t.Error(diff)
+	}
+}
