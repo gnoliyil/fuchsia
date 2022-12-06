@@ -851,7 +851,6 @@ impl BuiltinEnvironment {
 
         let component_startup_time_stats = Arc::new(ComponentEarlyStartupTimeStats::new(
             inspector.root().create_child("early_start_times"),
-            zx::Time::get_monotonic(),
         ));
         model.root().hooks.install(component_startup_time_stats.hooks()).await;
 

@@ -17,27 +17,24 @@ use {
     },
 };
 
+const MAX_NUMBER_OF_STARTUP_TIME_TRACKED_COMPONENTS: usize = 75;
+
 lazy_static! {
     static ref MONIKER: inspect::StringReference<'static> = "moniker".into();
     static ref START_TIME: inspect::StringReference<'static> = "time".into();
 }
 
-/// Allows to track startup times of components that start early in the boot process, within 5s of
-/// the given time.
+/// Allows to track startup times of components that start early in the boot process (the first
+/// 75 components).
 pub struct ComponentEarlyStartupTimeStats {
     node: inspect::Node,
-    after_five_seconds: zx::Time,
     next_id: AtomicUsize,
 }
 
 impl ComponentEarlyStartupTimeStats {
     /// Creates a new startup time tracker. Data will be written to the given inspect node.
-    pub fn new(node: inspect::Node, initial_time: zx::Time) -> Self {
-        Self {
-            node,
-            after_five_seconds: initial_time + zx::Duration::from_seconds(5),
-            next_id: AtomicUsize::new(0),
-        }
+    pub fn new(node: inspect::Node) -> Self {
+        Self { node, next_id: AtomicUsize::new(0) }
     }
 
     /// Provides the hook events that are needed to work.
@@ -54,10 +51,10 @@ impl ComponentEarlyStartupTimeStats {
         moniker: &AbsoluteMoniker,
         start_time: zx::Time,
     ) {
-        if start_time > self.after_five_seconds {
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        if id >= MAX_NUMBER_OF_STARTUP_TIME_TRACKED_COMPONENTS {
             return;
         }
-        let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         self.node.record_child(id.to_string(), |node| {
             node.record_string(&*MONIKER, moniker.to_string());
             node.record_int(&*START_TIME, start_time.into_nanos());
@@ -93,7 +90,8 @@ mod tests {
         testing::test_helpers::{component_decl_with_test_runner, ActionsTest},
     };
     use cm_rust_testing::ComponentDeclBuilder;
-    use fuchsia_inspect::assert_data_tree;
+    use fuchsia_inspect::{assert_data_tree, DiagnosticsHierarchyGetter};
+    use moniker::{AbsoluteMonikerBase, ChildMoniker, ChildMonikerBase};
 
     #[fuchsia::test]
     async fn tracks_started_components() {
@@ -107,7 +105,6 @@ mod tests {
         let inspector = inspect::Inspector::new();
         let stats = Arc::new(ComponentEarlyStartupTimeStats::new(
             inspector.root().create_child("start_times"),
-            zx::Time::get_monotonic(),
         ));
         test.model.root().hooks.install(stats.hooks()).await;
 
@@ -137,32 +134,24 @@ mod tests {
     }
 
     #[fuchsia::test]
-    async fn doesnt_track_components_started_more_than_five_seconds_after_the_given_time() {
-        let components = vec![
-            ("root", ComponentDeclBuilder::new().add_lazy_child("a").build()),
-            ("a", ComponentDeclBuilder::new().add_lazy_child("b").build()),
-            ("b", component_decl_with_test_runner()),
-        ];
-        let test = ActionsTest::new("root", components, None).await;
-
+    async fn doesnt_track_more_than_75_components() {
         let inspector = inspect::Inspector::new();
         let stats = Arc::new(ComponentEarlyStartupTimeStats::new(
             inspector.root().create_child("start_times"),
-            zx::Time::get_monotonic() - zx::Duration::from_seconds(6),
         ));
-        test.model.root().hooks.install(stats.hooks()).await;
 
-        let _root_timestamp =
-            start_and_get_timestamp(test.model.clone(), vec![].into()).await.into_nanos();
-        let _a_timestamp =
-            start_and_get_timestamp(test.model.clone(), vec!["a"].into()).await.into_nanos();
-        let _b_timestamp =
-            start_and_get_timestamp(test.model.clone(), vec!["a", "b"].into()).await.into_nanos();
+        for i in 0..2 * MAX_NUMBER_OF_STARTUP_TIME_TRACKED_COMPONENTS {
+            stats
+                .on_component_started(
+                    &AbsoluteMoniker::new(vec![ChildMoniker::parse(format!("{}", i)).unwrap()]),
+                    zx::Time::from_nanos(i as i64),
+                )
+                .await;
+        }
 
-        assert_data_tree!(inspector, root: {
-            start_times: {
-            }
-        });
+        let hierarchy = inspector.get_diagnostics_hierarchy();
+        let child_count = hierarchy.children[0].children.len();
+        assert_eq!(child_count, MAX_NUMBER_OF_STARTUP_TIME_TRACKED_COMPONENTS);
     }
 
     async fn start_and_get_timestamp(model: Arc<Model>, moniker: AbsoluteMoniker) -> zx::Time {
