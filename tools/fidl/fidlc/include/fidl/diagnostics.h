@@ -331,9 +331,9 @@ constexpr ErrorDef<137, flat::Name> ErrUnionCannotBeSimple(
 constexpr ErrorDef<138, std::string_view> ErrElementMustBeSimple(
     "element '{}' does not have a simple type, so it cannot be used in "
     "@for_deprecated_c_bindings");
-constexpr UndocumentedErrorDef<139, uint32_t, uint32_t> ErrTooManyBytes(
+constexpr ErrorDef<139, uint32_t, uint32_t> ErrTooManyBytes(
     "too large: only {} bytes allowed, but {} bytes found");
-constexpr UndocumentedErrorDef<140, uint32_t, uint32_t> ErrTooManyHandles(
+constexpr ErrorDef<140, uint32_t, uint32_t> ErrTooManyHandles(
     "too many handles: only {} allowed, but {} found");
 constexpr UndocumentedErrorDef<141> ErrInvalidErrorType(
     "invalid error type: must be int32, uint32 or an enum thereof");

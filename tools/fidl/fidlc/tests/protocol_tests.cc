@@ -994,6 +994,28 @@ ajar protocol MyProtocol {
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrSimpleProtocolMustBeClosed);
 }
 
+TEST(ProtocolTests, BadTooManyBytesSimple) {
+  TestLibrary library;
+  library.AddFile("bad/fi-0139.test.fidl");
+  ASSERT_FALSE(library.Compile());
+
+  // Both uses of "MyStruct," use too many bytes.
+  EXPECT_EQ(library.errors().size(), 2);
+  EXPECT_ERR(library.errors()[0], fidl::ErrTooManyBytes);
+  EXPECT_ERR(library.errors()[1], fidl::ErrTooManyBytes);
+}
+
+TEST(ProtocolTests, BadTooManyHandlesSimple) {
+  TestLibrary library;
+  library.AddFile("bad/fi-0140.test.fidl");
+  ASSERT_FALSE(library.Compile());
+
+  // Both uses of "MyProtocolEnds," use too many handles.
+  EXPECT_EQ(library.errors().size(), 2);
+  EXPECT_ERR(library.errors()[0], fidl::ErrTooManyHandles);
+  EXPECT_ERR(library.errors()[1], fidl::ErrTooManyHandles);
+}
+
 TEST(ProtocolTests, BadMethodStructSizeConstraints) {
   TestLibrary library(R"FIDL(
 library example;
