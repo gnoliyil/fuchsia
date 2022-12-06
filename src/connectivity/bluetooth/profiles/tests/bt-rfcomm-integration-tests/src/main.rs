@@ -122,7 +122,7 @@ async fn expect_peer_advertising(
     let request = search_results.select_next_some().await.unwrap();
     let bredr::SearchResultsRequest::ServiceFound { peer_id, protocol, responder, .. } = request;
     assert_eq!(expected_id, peer_id.into());
-    log::info!("Discovered service with protocol: {:?}", protocol);
+    tracing::info!("Discovered service with protocol: {:?}", protocol);
     responder.send().unwrap();
     let protocol = protocol.unwrap().iter().map(Into::into).collect();
     server_channel_from_protocol(&protocol).expect("is rfcomm")

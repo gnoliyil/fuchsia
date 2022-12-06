@@ -2,31 +2,26 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use {
-    anyhow::{format_err, Context, Error},
-    bt_device_watcher::{DeviceFile, DeviceWatcher, WatchFilter},
-    device_watcher, fdio,
-    fidl::endpoints::Proxy,
-    fidl_fuchsia_bluetooth_test::{EmulatorSettings, HciEmulatorProxy},
-    fidl_fuchsia_device::ControllerProxy,
-    fidl_fuchsia_hardware_bluetooth::{EmulatorProxy, VirtualControllerProxy},
-    fidl_fuchsia_io as fio,
-    fuchsia_async::{self as fasync, DurationExt, TimeoutExt},
-    fuchsia_bluetooth::{
-        constants::{HOST_DEVICE_DIR, INTEGRATION_TIMEOUT as WATCH_TIMEOUT},
-        util::open_rdwr,
-    },
-    fuchsia_component_test::ScopedInstance,
-    fuchsia_fs,
-    fuchsia_zircon::{self as zx, HandleBased},
-    fuchsia_zircon_status as zx_status,
-    futures::TryFutureExt,
-    log::error,
-    std::{
-        fs::File,
-        path::{Path, PathBuf},
-    },
-};
+use anyhow::{format_err, Context, Error};
+use bt_device_watcher::{DeviceFile, DeviceWatcher, WatchFilter};
+use device_watcher;
+use fdio;
+use fidl::endpoints::Proxy;
+use fidl_fuchsia_bluetooth_test::{EmulatorSettings, HciEmulatorProxy};
+use fidl_fuchsia_device::ControllerProxy;
+use fidl_fuchsia_hardware_bluetooth::{EmulatorProxy, VirtualControllerProxy};
+use fidl_fuchsia_io as fio;
+use fuchsia_async::{self as fasync, DurationExt, TimeoutExt};
+use fuchsia_bluetooth::constants::{HOST_DEVICE_DIR, INTEGRATION_TIMEOUT as WATCH_TIMEOUT};
+use fuchsia_bluetooth::util::open_rdwr;
+use fuchsia_component_test::ScopedInstance;
+use fuchsia_fs;
+use fuchsia_zircon::{self as zx, HandleBased};
+use fuchsia_zircon_status as zx_status;
+use futures::TryFutureExt;
+use std::fs::File;
+use std::path::{Path, PathBuf};
+use tracing::error;
 
 pub mod types;
 

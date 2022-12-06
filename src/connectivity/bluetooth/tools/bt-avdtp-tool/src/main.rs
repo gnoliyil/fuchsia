@@ -2,21 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use {
-    anyhow::{format_err, Context as _, Error},
-    fidl::endpoints::create_endpoints,
-    fidl_fuchsia_bluetooth_avdtp::*,
-    fuchsia_async as fasync,
-    futures::{
-        channel::mpsc::{channel, SendError},
-        try_join, FutureExt, Sink, SinkExt, Stream, StreamExt, TryStreamExt,
-    },
-    log::info,
-    parking_lot::RwLock,
-    pin_utils::pin_mut,
-    rustyline::{error::ReadlineError, CompletionType, Config, EditMode, Editor},
-    std::{collections::hash_map::Entry, collections::HashMap, sync::Arc, thread},
-};
+use anyhow::{format_err, Context as _, Error};
+use fidl::endpoints::create_endpoints;
+use fidl_fuchsia_bluetooth_avdtp::*;
+use fuchsia_async as fasync;
+use futures::channel::mpsc::{channel, SendError};
+use futures::{try_join, FutureExt, Sink, SinkExt, Stream, StreamExt, TryStreamExt};
+use parking_lot::RwLock;
+use pin_utils::pin_mut;
+use rustyline::{error::ReadlineError, CompletionType, Config, EditMode, Editor};
+use std::{collections::hash_map::Entry, collections::HashMap, sync::Arc, thread};
+use tracing::info;
 
 use crate::commands::{Cmd, CmdHelper, ReplControl};
 use crate::types::{PeerFactoryMap, CLEAR_LINE, PROMPT};
