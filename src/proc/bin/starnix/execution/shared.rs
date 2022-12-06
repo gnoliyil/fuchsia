@@ -173,18 +173,13 @@ pub fn set_process_debug_addr(current_task: &mut CurrentTask) -> Result<(), Errn
         .process
         .get_debug_addr()
         .map_err(|err| from_status_like_fdio!(err))?;
-    let debug_addr = current_task
-        .kernel()
-        .starnix_process
-        .get_debug_addr()
-        .map_err(|status| from_status_like_fdio!(status))?;
 
     // If existing_debug_addr != ZX_PROCESS_DEBUG_ADDR_BREAK_ON_SET then there is no reason to
     // insert the interrupt.
     if existing_debug_addr != ZX_PROCESS_DEBUG_ADDR_BREAK_ON_SET as u64 {
         // Still set the debug address, and clear the debug address from `current_task` to avoid
         // entering this function again.
-        match current_task.thread_group.process.set_debug_addr(&debug_addr) {
+        match current_task.thread_group.process.set_debug_addr(&debug_address.value) {
             Err(zx::Status::ACCESS_DENIED) => {}
             status => status.map_err(|err| from_status_like_fdio!(err))?,
         };
@@ -225,7 +220,7 @@ pub fn set_process_debug_addr(current_task: &mut CurrentTask) -> Result<(), Errn
     current_task
         .thread_group
         .process
-        .set_debug_addr(&debug_addr)
+        .set_debug_addr(&debug_address.value)
         .map_err(|err| from_status_like_fdio!(err))?;
     current_task.dt_debug_address = None;
 

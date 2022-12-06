@@ -965,8 +965,6 @@ impl CurrentTask {
         // TODO: POSIX timers are not preserved.
 
         self.thread_group.write().did_exec = true;
-        set_zx_name(&self.thread_group.process, path.as_bytes());
-        set_zx_name(&fuchsia_runtime::thread_self(), path.as_bytes());
 
         // Get the basename of the path, which will be used as the name displayed with
         // `prctl(PR_GET_NAME)` and `/proc/self/stat`
@@ -976,7 +974,10 @@ impl CurrentTask {
         } else {
             path
         };
+        set_zx_name(&fuchsia_runtime::thread_self(), basename.as_bytes());
+        set_zx_name(&self.thread_group.process, basename.as_bytes());
         self.set_command_name(basename);
+
         Ok(())
     }
 }

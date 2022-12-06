@@ -159,10 +159,6 @@ pub fn create_zircon_process(
         create_shared(&kernel.starnix_process, zx::ProcessOptions::empty(), name)
             .map_err(|status| from_status_like_fdio!(status))?;
 
-    let debug_addr =
-        kernel.starnix_process.get_debug_addr().map_err(|status| from_status_like_fdio!(status))?;
-    process.set_debug_addr(&debug_addr).map_err(|status| from_status_like_fdio!(status))?;
-
     let memory_manager =
         Arc::new(MemoryManager::new(root_vmar).map_err(|status| from_status_like_fdio!(status))?);
 
