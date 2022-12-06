@@ -206,7 +206,13 @@ where
         // recursive call, in case the directory contains itself directly or through a number of
         // other directories.  `get_entry` is responsible for locking `self` and it will unlock it
         // before returning.
-        let found = match self.get_or_insert_entry(scope.clone(), flags, mode, name, path_ref) {
+
+        let res = if !path_ref.is_empty() {
+            self.get_entry(name)
+        } else {
+            self.get_or_insert_entry(scope.clone(), flags, mode, name, path_ref)
+        };
+        let found = match res {
             Err(status) => {
                 send_on_open_with_error(flags, server_end, status);
                 false

@@ -9,6 +9,43 @@ use {
 };
 
 #[fuchsia::test]
+async fn create_directory_with_create_if_absent_flag() {
+    let harness = TestHarness::new().await;
+    if !harness.config.supports_create.unwrap_or_default() {
+        return;
+    }
+
+    let root = root_directory(vec![]);
+    let root_dir = harness.get_directory(root, harness.dir_rights.all());
+
+    let mnt_dir = open_dir_with_flags(
+        &root_dir,
+        fio::OpenFlags::RIGHT_WRITABLE | fio::OpenFlags::CREATE_IF_ABSENT | fio::OpenFlags::CREATE,
+        "mnt",
+    )
+    .await;
+    let _tmp_dir = open_dir_with_flags(
+        &mnt_dir,
+        fio::OpenFlags::RIGHT_WRITABLE | fio::OpenFlags::CREATE_IF_ABSENT | fio::OpenFlags::CREATE,
+        "tmp",
+    )
+    .await;
+
+    let (client, server) = create_proxy::<fio::NodeMarker>().expect("Cannot create proxy.");
+
+    root_dir
+        .open(
+            fio::OpenFlags::CREATE_IF_ABSENT | fio::OpenFlags::CREATE | fio::OpenFlags::DESCRIBE,
+            fio::MODE_TYPE_DIRECTORY,
+            "mnt/tmp/foo",
+            server,
+        )
+        .expect("Cannot open file");
+
+    assert_eq!(get_open_status(&client).await, zx::Status::OK);
+}
+
+#[fuchsia::test]
 async fn create_file_with_sufficient_rights() {
     let harness = TestHarness::new().await;
     if !harness.config.supports_create.unwrap_or_default() {
