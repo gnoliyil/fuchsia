@@ -267,7 +267,7 @@ rewrapped_command=(
   --cfg="$rewrapper_cfg"
   --exec_root="$project_root"
   "${rewrapper_options[@]+"${rewrapper_options[@]}"}"
-
+  --
   "${log_wrapper[@]+"${log_wrapper[@]}"}"
   "${fsatrace_prefix[@]+"${fsatrace_prefix[@]}"}"
   "$@"
