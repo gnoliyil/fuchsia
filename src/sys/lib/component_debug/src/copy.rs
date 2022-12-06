@@ -67,6 +67,10 @@ pub enum CopyError {
     NamespaceFileNotFound { file: String },
 }
 
+// Constant used to compare the number of components within a path.
+// For example, the path data/nested contains 2 components.
+const NESTED_PATH_DEPTH: usize = 2;
+
 /// Transfer files between a component's namespace to/from the host machine.
 ///
 /// # Arguments
@@ -133,11 +137,11 @@ pub async fn copy(
                 )
                 .await?;
 
-                let (paths, opened_namespace) =
+                let (paths, opened_source) =
                     normalize_paths(source.clone(), &source_namespace).await?;
 
                 for remote_path in paths {
-                    if is_remote_file(remote_path.clone(), &opened_namespace).await? {
+                    if is_remote_file(remote_path.clone(), &opened_source).await? {
                         copy_remote_file_to_remote(
                             NamespacedPath { path: remote_path, ns: source_namespace.to_owned() },
                             NamespacedPath {
@@ -167,7 +171,7 @@ pub async fn copy(
 
                 copy_host_file_to_remote(
                     source,
-                    NamespacedPath { path: destination, ns: destination_namespace },
+                    NamespacedPath { path: destination, ns: destination_namespace.to_owned() },
                 )
                 .await
             }
@@ -226,7 +230,6 @@ pub async fn normalize_paths(
             return Err(CopyError::NoParentFolder { path: source.relative_path_string() }.into())
         }
     };
-
     let namespace = Directory::from_proxy(namespace.to_owned())
         .open_dir(&directory, fio::OpenFlags::RIGHT_READABLE)?;
 
@@ -325,6 +328,26 @@ pub async fn retrieve_namespace(
     Ok(namespace)
 }
 
+/// Normalizes all paths in the namespace such that the namespace is always opened
+/// at the parent of the provided path.
+///
+/// The namespace for paths with a depth of at least two will
+/// have the parent of the path opened. For example, the path "data/nested"
+/// will result in the "data" path to be opened already in the namespace.
+///
+/// # Arguments
+/// * `namespace`: A proxy to a namespace directory.
+/// * `path`: A path within a component's namespace.
+pub fn normalize_namespace(namespace: fio::DirectoryProxy, path: RemotePath) -> Result<Directory> {
+    if path.relative_path.components().count() >= NESTED_PATH_DEPTH {
+        let directory = path.relative_path.parent().unwrap();
+        Directory::from_proxy(namespace)
+            .open_dir(&directory, fio::OpenFlags::RIGHT_READABLE | fio::OpenFlags::RIGHT_WRITABLE)
+    } else {
+        Ok(Directory::from_proxy(namespace))
+    }
+}
+
 /// Writes file contents from a directory to a component's namespace.
 ///
 /// # Arguments
@@ -333,14 +356,13 @@ pub async fn retrieve_namespace(
 pub async fn copy_host_file_to_remote(source: PathBuf, destination: NamespacedPath) -> Result<()> {
     let destination_namespace = Directory::from_proxy(destination.ns.to_owned());
     let destination_path = normalize_destination(
-        &destination_namespace,
+        &normalize_namespace(destination.ns, destination.path.clone())?,
         HostOrRemotePath::Host(source.clone()),
-        HostOrRemotePath::Remote(destination.path),
+        HostOrRemotePath::Remote(destination.path.clone()),
     )
     .await?;
 
     let data = read(&source)?;
-
     destination_namespace
         .verify_directory_is_read_write(&destination_path.parent().unwrap())
         .await?;
@@ -362,6 +384,7 @@ pub async fn copy_remote_file_to_host(source: NamespacedPath, destination: PathB
         HostOrRemotePath::Host(destination),
     )
     .await?;
+
     let data = source_namespace.read_file_bytes(file_path).await?;
     write(destination_path, data).map_err(|e| CopyError::FailedToWriteToHost { error: e })?;
 
@@ -380,7 +403,7 @@ pub async fn copy_remote_file_to_remote(
     let source_namespace = Directory::from_proxy(source.ns.to_owned());
     let destination_namespace = Directory::from_proxy(destination.ns.to_owned());
     let destination_path = normalize_destination(
-        &destination_namespace,
+        &normalize_namespace(destination.ns, destination.path.clone())?,
         HostOrRemotePath::Remote(source.path.clone()),
         HostOrRemotePath::Remote(destination.path),
     )
@@ -706,6 +729,12 @@ mod tests {
     #[test_case(Input{source: "/foo.txt".to_string(), destination: path_for_foo_moniker("/data/")},
                 generate_file_paths(vec![File{on_host: false, name: "data/foo.txt", data: "Hello"}]),
                 Expectation{path: "/data/foo.txt", data: "Hello"}; "infer_slash_path")]
+    #[test_case(Input{source: "/foo.txt".to_string(), destination: path_for_foo_moniker("/data/nested/foo.txt")},
+                generate_directory_paths(vec!["/data", "/data/nested"]),
+                Expectation{path: "/data/nested/foo.txt", data: "Hello"}; "nested_path")]
+    #[test_case(Input{source: "/foo.txt".to_string(), destination: path_for_foo_moniker("/data/nested")},
+                generate_directory_paths(vec!["/data", "/data/nested"]),
+                Expectation{path: "/data/nested/foo.txt", data: "Hello"}; "infer_nested_path")]
     #[test_case(Input{source: "/foo.txt".to_string(), destination: path_for_foo_moniker("/data/")},
                 generate_directory_paths(vec!["/data"]),
                 Expectation{path: "/data/foo.txt", data: LARGE_FILE_DATA}; "large_file")]
@@ -735,6 +764,10 @@ mod tests {
                 vec![Component{name: RELATIVE_FOO_MONIKER, moniker: RELATIVE_FOO_MONIKER, seed_files: generate_file_paths(vec![File{on_host: false, name: "data/foo.txt", data: "Hello"}, File{on_host: false, name: "data/bar.txt", data: "World"}])},
                      Component{name: RELATIVE_BAR_MONIKER, moniker: RELATIVE_BAR_MONIKER, seed_files: generate_directory_paths(vec!["data"])}],
                 vec![Expectation{path: "/data/foo.txt", data: "Hello"}]; "single_file")]
+    #[test_case(Input{source: path_for_foo_moniker("/data/foo.txt"), destination: path_for_bar_moniker("/data/nested/foo.txt")},
+                vec![Component{name: RELATIVE_FOO_MONIKER, moniker: RELATIVE_FOO_MONIKER, seed_files: generate_file_paths(vec![File{on_host: false, name: "data/foo.txt", data: "Hello"}, File{on_host: false, name: "data/bar.txt", data: "World"}])},
+                     Component{name: RELATIVE_BAR_MONIKER, moniker: RELATIVE_BAR_MONIKER, seed_files: generate_directory_paths(vec!["data", "data/nested"])}],
+                vec![Expectation{path: "/data/nested/foo.txt", data: "Hello"}]; "nested")]
     #[test_case(Input{source: path_for_foo_moniker("/data/foo.txt"), destination: path_for_bar_moniker("/data/bar.txt")},
                 vec![Component{name: RELATIVE_FOO_MONIKER, moniker: RELATIVE_FOO_MONIKER, seed_files: generate_file_paths(vec![File{on_host: false, name: "data/foo.txt", data: "Hello"}, File{on_host: false, name: "data/bar.txt", data: "World"}])},
                      Component{name: RELATIVE_BAR_MONIKER, moniker: RELATIVE_BAR_MONIKER, seed_files: generate_directory_paths(vec!["data"])}],
