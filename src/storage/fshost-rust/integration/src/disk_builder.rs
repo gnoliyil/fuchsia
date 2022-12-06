@@ -8,13 +8,17 @@ use {
     fidl_fuchsia_device::ControllerProxy,
     fidl_fuchsia_fxfs::{CryptManagementMarker, CryptMarker, KeyPurpose},
     fidl_fuchsia_io as fio, fidl_fuchsia_logger as flogger,
-    fs_management::{Blobfs, Fxfs, BLOBFS_TYPE_GUID, DATA_TYPE_GUID, FVM_TYPE_GUID_STR},
+    fs_management::{
+        format::constants::{F2FS_MAGIC, FXFS_MAGIC, MINFS_MAGIC},
+        Blobfs, Fxfs, BLOBFS_TYPE_GUID, DATA_TYPE_GUID, FVM_TYPE_GUID_STR,
+    },
     fuchsia_component_test::{Capability, ChildOptions, RealmBuilder, RealmInstance, Ref, Route},
     fuchsia_runtime::vmar_root_self,
     fuchsia_zircon::{self as zx, HandleBased},
     gpt::{partition_types, GptConfig},
     key_bag::Aes256Key,
     ramdevice_client::{RamdiskClient, VmoRamdiskClientBuilder},
+    remote_block_device::BlockClient as _,
     std::{io::Write, ops::Deref, path::Path},
     storage_isolated_driver_manager::{
         fvm::{create_fvm_volume, set_up_fvm},
@@ -213,6 +217,8 @@ pub struct DiskBuilder {
     size: u64,
     data_volume_size: u64,
     format: Option<&'static str>,
+    // Only used if `format` is Some.
+    corrupt_contents: bool,
     legacy_crypto_format: bool,
     zxcrypt: bool,
     gpt: bool,
@@ -224,6 +230,7 @@ impl DiskBuilder {
             size: DEFAULT_DISK_SIZE,
             data_volume_size: DEFAULT_DATA_VOLUME_SIZE,
             format: None,
+            corrupt_contents: false,
             legacy_crypto_format: false,
             zxcrypt: true,
             gpt: false,
@@ -242,6 +249,11 @@ impl DiskBuilder {
 
     pub fn format_data(&mut self, format: &'static str) -> &mut Self {
         self.format = Some(format);
+        self
+    }
+
+    pub fn corrupt_data(&mut self) -> &mut Self {
+        self.corrupt_contents = true;
         self
     }
 
@@ -364,6 +376,16 @@ impl DiskBuilder {
                     .await
                     .expect("recursive_wait_and_open_node failed");
         }
+        if self.corrupt_contents {
+            // Just write the magic so it appears formatted to fshost.
+            self.write_magic(
+                fidl_fuchsia_hardware_block::BlockProxy::new(data_device.into_channel().unwrap()),
+                MINFS_MAGIC,
+                0,
+            )
+            .await;
+            return;
+        }
         let mut minfs = fs_management::Minfs::from_channel(
             data_device.into_channel().unwrap().into_zx_channel(),
         )
@@ -404,6 +426,16 @@ impl DiskBuilder {
                     .await
                     .expect("recursive_wait_and_open_node failed");
         }
+        if self.corrupt_contents {
+            // Just write the magic so it appears formatted to fshost.
+            self.write_magic(
+                fidl_fuchsia_hardware_block::BlockProxy::new(data_device.into_channel().unwrap()),
+                F2FS_MAGIC,
+                1024,
+            )
+            .await;
+            return;
+        }
         let mut f2fs = fs_management::F2fs::from_channel(
             data_device.into_channel().unwrap().into_zx_channel(),
         )
@@ -429,17 +461,27 @@ impl DiskBuilder {
     }
 
     async fn init_data_fxfs(&self, device_path: &str, dev: &fio::DirectoryProxy) {
+        let data_path = format!("{}/fvm/data-p-2/block", device_path);
+        let data_device =
+            recursive_wait_and_open_node(dev, data_path.strip_prefix("/dev/").unwrap())
+                .await
+                .expect("recursive_wait_and_open_node failed");
+        if self.corrupt_contents {
+            // Just write the magic so it appears formatted to fshost.
+            self.write_magic(
+                fidl_fuchsia_hardware_block::BlockProxy::new(data_device.into_channel().unwrap()),
+                FXFS_MAGIC,
+                0,
+            )
+            .await;
+            return;
+        }
         let (data_key, metadata_key) = if self.legacy_crypto_format {
             (LEGACY_DATA_KEY, LEGACY_METADATA_KEY)
         } else {
             (DATA_KEY, METADATA_KEY)
         };
         let crypt_realm = create_hermetic_crypt_service(data_key, metadata_key).await;
-        let data_path = format!("{}/fvm/data-p-2/block", device_path);
-        let data_device =
-            recursive_wait_and_open_node(dev, data_path.strip_prefix("/dev/").unwrap())
-                .await
-                .expect("recursive_wait_and_open_node failed");
         let mut fxfs = Fxfs::from_channel(data_device.into_channel().unwrap().into_zx_channel())
             .expect("from_channel failed");
         fxfs.format().await.expect("format failed");
@@ -493,6 +535,23 @@ impl DiskBuilder {
         // the file could get dropped.
         let _: Vec<_> = file.query().await.expect("query failed");
         fs.shutdown().await.expect("shutdown failed");
+    }
+
+    async fn write_magic<const N: usize>(
+        &self,
+        block_proxy: fidl_fuchsia_hardware_block::BlockProxy,
+        value: [u8; N],
+        offset: u64,
+    ) {
+        let client = remote_block_device::RemoteBlockClient::new(block_proxy)
+            .await
+            .expect("Failed to create client");
+        let block_size = client.block_size() as usize;
+        assert!(value.len() <= block_size);
+        let mut data = vec![0xffu8; block_size];
+        data[..value.len()].copy_from_slice(&value);
+        let buffer = remote_block_device::BufferSlice::Memory(&data[..]);
+        client.write_at(buffer, offset).await.expect("write failed");
     }
 
     /// Create a vmo artifact with the format of a compressed zbi boot item containing this

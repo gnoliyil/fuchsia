@@ -29,6 +29,30 @@ pub enum DiskFormat {
     NandBroker,
 }
 
+impl DiskFormat {
+    // These are copied verbatim from //src/lib/storage/fs_management/cpp/format.cc, and should be
+    // kept in sync.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Unknown => "unknown!",
+            Self::Gpt => "gpt",
+            Self::Mbr => "mbr",
+            Self::Minfs => "minfs",
+            Self::Fat => "fat",
+            Self::Blobfs => "blobfs",
+            Self::Fvm => "fvm",
+            Self::Zxcrypt => "zxcrypt",
+            Self::FactoryFs => "factoryfs",
+            Self::BlockVerity => "block verity",
+            Self::VbMeta => "vbmeta",
+            Self::BootPart => "bootpart",
+            Self::Fxfs => "fxfs",
+            Self::F2fs => "f2fs",
+            Self::NandBroker => "nand broker",
+        }
+    }
+}
+
 pub fn round_up(val: u64, divisor: u64) -> u64 {
     ((val + (divisor - 1)) / divisor) * divisor
 }

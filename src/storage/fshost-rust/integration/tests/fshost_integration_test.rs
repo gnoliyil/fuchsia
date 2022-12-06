@@ -88,6 +88,34 @@ async fn data_formatted() {
 }
 
 #[fuchsia::test]
+async fn data_reformatted_when_corrupt() {
+    if DATA_FILESYSTEM_FORMAT == "f2fs" {
+        // TODO(fxbug.dev/116784): Re-enable this test.
+        return;
+    }
+    let mut builder = new_builder();
+    builder.with_disk().format_data(DATA_FILESYSTEM_FORMAT).corrupt_data();
+    let mut fixture = builder.build().await;
+
+    fixture.check_fs_type("data", data_fs_type()).await;
+    let (file, server) = create_proxy::<fio::NodeMarker>().unwrap();
+    fixture
+        .dir("data")
+        .open(fio::OpenFlags::RIGHT_READABLE, 0, "foo", server)
+        .expect("open failed");
+    file.get_attr().await.expect_err("foo shouldn't exist");
+
+    fixture
+        .wait_for_crash_reports(
+            1,
+            DATA_FILESYSTEM_FORMAT,
+            &format!("fuchsia-{}-corruption", DATA_FILESYSTEM_FORMAT),
+        )
+        .await;
+    fixture.tear_down().await;
+}
+
+#[fuchsia::test]
 async fn data_formatted_with_small_initial_volume() {
     let mut builder = new_builder();
     builder.with_disk().data_volume_size(1);

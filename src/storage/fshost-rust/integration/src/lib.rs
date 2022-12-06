@@ -5,11 +5,14 @@
 use {
     device_watcher::recursive_wait_and_open_node,
     fidl::endpoints::{create_proxy, Proxy},
-    fidl_fuchsia_boot as fboot, fidl_fuchsia_io as fio, fidl_fuchsia_logger as flogger,
-    fidl_fuchsia_process as fprocess,
+    fidl_fuchsia_boot as fboot, fidl_fuchsia_feedback as ffeedback, fidl_fuchsia_io as fio,
+    fidl_fuchsia_logger as flogger, fidl_fuchsia_process as fprocess,
     fuchsia_component_test::{Capability, ChildOptions, RealmBuilder, RealmInstance, Ref, Route},
     fuchsia_zircon as zx,
-    futures::FutureExt,
+    futures::{
+        channel::mpsc::{self},
+        FutureExt as _, StreamExt as _,
+    },
     ramdevice_client::{RamdiskClient, VmoRamdiskClientBuilder},
 };
 
@@ -66,7 +69,8 @@ impl TestFixtureBuilder {
             Some(disk_builder) => Some(disk_builder.build_as_zbi_ramdisk().await),
             None => None,
         };
-        let mocks = mocks::new_mocks(self.netboot, maybe_zbi_vmo).await;
+        let (tx, crash_reports) = mpsc::channel(32);
+        let mocks = mocks::new_mocks(self.netboot, maybe_zbi_vmo, tx).await;
 
         let mocks = builder
             .add_local_child("mocks", move |h| mocks(h).boxed(), ChildOptions::new())
@@ -77,6 +81,7 @@ impl TestFixtureBuilder {
                 Route::new()
                     .capability(Capability::protocol::<fboot::ArgumentsMarker>())
                     .capability(Capability::protocol::<fboot::ItemsMarker>())
+                    .capability(Capability::protocol::<ffeedback::CrashReporterMarker>())
                     .from(&mocks)
                     .to(&fshost),
             )
@@ -116,6 +121,7 @@ impl TestFixtureBuilder {
             realm: builder.build().await.unwrap(),
             ramdisks: Vec::new(),
             ramdisk_vmo: None,
+            crash_reports,
         };
 
         if let Some(disk) = self.disk {
@@ -135,11 +141,13 @@ pub struct TestFixture {
     pub realm: RealmInstance,
     pub ramdisks: Vec<RamdiskClient>,
     pub ramdisk_vmo: Option<zx::Vmo>,
+    pub crash_reports: mpsc::Receiver<ffeedback::CrashReport>,
 }
 
 impl TestFixture {
-    pub async fn tear_down(self) {
+    pub async fn tear_down(mut self) {
         self.realm.destroy().await.unwrap();
+        assert_eq!(self.crash_reports.next().await, None);
     }
 
     pub fn dir(&self, dir: &str) -> fio::DirectoryProxy {
@@ -180,5 +188,20 @@ impl TestFixture {
         let ramdisk =
             VmoRamdiskClientBuilder::new(vmo).dev_root(dev_fd).block_size(512).build().unwrap();
         self.ramdisks.push(ramdisk);
+    }
+
+    /// This must be called if any crash reports are expected, since spurious reports will cause a
+    /// failure in TestFixture::tear_down.
+    pub async fn wait_for_crash_reports(
+        &mut self,
+        count: usize,
+        expected_program: &'_ str,
+        expected_signature: &'_ str,
+    ) {
+        for _ in 0..count {
+            let report = self.crash_reports.next().await.expect("Sender closed");
+            assert_eq!(report.program_name.as_deref(), Some(expected_program));
+            assert_eq!(report.crash_signature.as_deref(), Some(expected_signature));
+        }
     }
 }

@@ -5,7 +5,10 @@
 use {
     crate::{
         boot_args::BootArgs,
-        crypt::{fxfs, zxcrypt},
+        crypt::{
+            fxfs::{self, UnlockError},
+            zxcrypt,
+        },
         device::{constants::DEFAULT_F2FS_MIN_BYTES, Device},
         volume::resize_volume,
     },
@@ -21,7 +24,8 @@ use {
         format::DiskFormat,
         Blobfs, F2fs, FSConfig, Fxfs, Minfs,
     },
-    fuchsia_component::client::connect_to_protocol_at_path,
+    fuchsia_async as fasync,
+    fuchsia_component::client::{connect_to_protocol, connect_to_protocol_at_path},
     fuchsia_zircon as zx,
     std::sync::Arc,
 };
@@ -227,49 +231,56 @@ impl<'a> FshostEnvironment<'a> {
             config,
         )?;
 
-        let mut reformatted = false;
         if detected_format != format {
             tracing::info!(
                 ?detected_format,
                 expected_format = ?format,
                 "Expected format not detected. Reformatting.",
             );
-            self.format_data(&mut fs, volume_proxy, inside_zxcrypt).await?;
-            reformatted = true;
-        } else if self.config.check_filesystems {
+            return self.format_data(&mut fs, volume_proxy, inside_zxcrypt).await;
+        }
+
+        if self.config.check_filesystems {
             tracing::info!(?format, "fsck started");
             if let Err(error) = fs.fsck().await {
-                tracing::error!(?format, ?error, "FILESYSTEM CORRUPTION DETECTED!");
-                tracing::error!(
-                    "Please file a bug to the Storage component in http://fxbug.dev, including a\
-                    device snapshot collected with `ffx target snapshot` if possible.",
-                );
-
-                // TODO(fxbug.dev/109290): file a crash report
-
-                if !self.config.format_data_on_corruption {
+                self.report_corruption(format, &error);
+                if self.config.format_data_on_corruption {
+                    tracing::info!("Reformatting filesystem, expect data loss...");
+                    return self.format_data(&mut fs, volume_proxy, inside_zxcrypt).await;
+                } else {
                     tracing::error!(?format, "format on corruption is disabled, not continuing");
                     return Err(error);
                 }
-                self.format_data(&mut fs, volume_proxy, inside_zxcrypt).await?;
-                reformatted = true;
             } else {
                 tracing::info!(?format, "fsck completed OK");
             }
         }
 
-        Ok(match format {
+        match format {
             DiskFormat::Fxfs => {
                 let mut serving_fs = fs.serve_multi_volume().await?;
-                let (volume_name, _) = if reformatted {
-                    fxfs::init_data_volume(&mut serving_fs, &self.config).await?
-                } else {
-                    fxfs::unlock_data_volume(&mut serving_fs, &self.config).await?
-                };
-                Filesystem::ServingMultiVolume(serving_fs, volume_name)
+                match fxfs::unlock_data_volume(&mut serving_fs, &self.config).await {
+                    Ok((volume_name, _)) => {
+                        Ok(Filesystem::ServingMultiVolume(serving_fs, volume_name))
+                    }
+                    Err(UnlockError::FsckError(error)) => {
+                        self.report_corruption(format, &error);
+                        if self.config.format_data_on_corruption {
+                            tracing::info!("Reformatting filesystem, expect data loss...");
+                            self.format_data(&mut fs, volume_proxy, inside_zxcrypt).await
+                        } else {
+                            tracing::error!(
+                                ?format,
+                                "format on corruption is disabled, not continuing"
+                            );
+                            Err(error)
+                        }
+                    }
+                    Err(UnlockError::OtherError(error)) => Err(error),
+                }
             }
-            _ => Filesystem::Serving(fs.serve().await?),
-        })
+            _ => Ok(Filesystem::Serving(fs.serve().await?)),
+        }
     }
 
     async fn format_data<FSC: FSConfig>(
@@ -277,7 +288,7 @@ impl<'a> FshostEnvironment<'a> {
         fs: &mut fs_management::filesystem::Filesystem<FSC>,
         volume_proxy: fidl_fuchsia_hardware_block_volume::VolumeProxy,
         inside_zxcrypt: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<Filesystem, Error> {
         let format = fs.config().disk_format();
         tracing::info!(?format, "Formatting");
         match format {
@@ -331,7 +342,43 @@ impl<'a> FshostEnvironment<'a> {
             _ => (),
         }
 
-        fs.format().await
+        fs.format().await?;
+        if let DiskFormat::Fxfs = format {
+            let mut serving_fs = fs.serve_multi_volume().await?;
+            let (volume_name, _) = fxfs::init_data_volume(&mut serving_fs, &self.config).await?;
+            Ok(Filesystem::ServingMultiVolume(serving_fs, volume_name))
+        } else {
+            Ok(Filesystem::Serving(fs.serve().await?))
+        }
+    }
+
+    fn report_corruption(&self, format: DiskFormat, error: &Error) {
+        tracing::error!(?format, ?error, "FILESYSTEM CORRUPTION DETECTED!");
+        tracing::error!(
+            "Please file a bug to the Storage component in http://fxbug.dev, including a \
+            device snapshot collected with `ffx target snapshot` if possible.",
+        );
+
+        fasync::Task::spawn(async move {
+            let proxy = if let Ok(proxy) =
+                connect_to_protocol::<fidl_fuchsia_feedback::CrashReporterMarker>()
+            {
+                proxy
+            } else {
+                tracing::error!("Failed to connect to crash report service");
+                return;
+            };
+            let report = fidl_fuchsia_feedback::CrashReport {
+                program_name: Some(format.as_str().to_owned()),
+                crash_signature: Some(format!("fuchsia-{}-corruption", format.as_str())),
+                is_fatal: Some(false),
+                ..fidl_fuchsia_feedback::CrashReport::EMPTY
+            };
+            if let Err(e) = proxy.file(report).await {
+                tracing::error!(?e, "Failed to file crash report");
+            }
+        })
+        .detach();
     }
 }
 

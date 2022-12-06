@@ -5,10 +5,14 @@
 use {
     anyhow::Error,
     fidl::prelude::*,
-    fidl_fuchsia_boot as fboot, fidl_fuchsia_io as fio,
+    fidl_fuchsia_boot as fboot, fidl_fuchsia_feedback as ffeedback, fidl_fuchsia_io as fio,
     fuchsia_component_test::LocalComponentHandles,
     fuchsia_zircon as zx,
-    futures::{future::BoxFuture, FutureExt, StreamExt},
+    futures::{
+        channel::mpsc::{self},
+        future::BoxFuture,
+        FutureExt as _, SinkExt as _, StreamExt as _,
+    },
     std::sync::Arc,
     vfs::{directory::entry::DirectoryEntry, execution_scope::ExecutionScope, path::Path, service},
 };
@@ -19,12 +23,13 @@ const ZBI_TYPE_STORAGE_RAMDISK: u32 = 0x4b534452;
 pub async fn new_mocks(
     netboot: bool,
     vmo: Option<zx::Vmo>,
+    crash_reports_sink: mpsc::Sender<ffeedback::CrashReport>,
 ) -> impl Fn(LocalComponentHandles) -> BoxFuture<'static, Result<(), Error>> + Sync + Send + 'static
 {
     let vmo = vmo.map(Arc::new);
     let mock = move |handles: LocalComponentHandles| {
         let vmo_clone = vmo.clone();
-        run_mocks(handles, netboot, vmo_clone).boxed()
+        run_mocks(handles, netboot, vmo_clone, crash_reports_sink.clone()).boxed()
     };
 
     mock
@@ -34,6 +39,7 @@ async fn run_mocks(
     handles: LocalComponentHandles,
     netboot: bool,
     vmo: Option<Arc<zx::Vmo>>,
+    crash_reports_sink: mpsc::Sender<ffeedback::CrashReport>,
 ) -> Result<(), Error> {
     let export = vfs::pseudo_directory! {
         "svc" => vfs::pseudo_directory! {
@@ -43,6 +49,9 @@ async fn run_mocks(
             fboot::ItemsMarker::PROTOCOL_NAME => service::host(move |stream| {
                 let vmo_clone = vmo.clone();
                 run_boot_items(stream, vmo_clone)
+            }),
+            ffeedback::CrashReporterMarker::PROTOCOL_NAME => service::host(move |stream| {
+                run_crash_reporter(stream, crash_reports_sink.clone())
             }),
         },
     };
@@ -130,6 +139,20 @@ async fn run_boot_args(mut stream: fboot::ArgumentsRequestStream, netboot: bool)
             fboot::ArgumentsRequest::Collect { .. } => {
                 // This seems to be deprecated. Either way, fshost doesn't use it.
                 panic!("unexpectedly called Collect on {}", fboot::ArgumentsMarker::PROTOCOL_NAME);
+            }
+        }
+    }
+}
+
+async fn run_crash_reporter(
+    mut stream: ffeedback::CrashReporterRequestStream,
+    mut crash_reports_sink: mpsc::Sender<ffeedback::CrashReport>,
+) {
+    while let Some(request) = stream.next().await {
+        match request.unwrap() {
+            ffeedback::CrashReporterRequest::File { report, responder } => {
+                crash_reports_sink.send(report).await.unwrap();
+                responder.send(&mut Ok(())).unwrap();
             }
         }
     }

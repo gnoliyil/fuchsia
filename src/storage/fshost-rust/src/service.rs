@@ -162,10 +162,12 @@ async fn write_data_file(
             if different_format {
                 fxfs::init_data_volume(&mut serving_fxfs, config)
                     .await
+                    .map_err(Error::from)
                     .context("Failed to initialize the data volume")?
             } else {
                 fxfs::unlock_data_volume(&mut serving_fxfs, config)
                     .await
+                    .map_err(Error::from)
                     .context("Failed to unlock the data volume")?
             };
             Filesystem::ServingMultiVolume(serving_fxfs)
