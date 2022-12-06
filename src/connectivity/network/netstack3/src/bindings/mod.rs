@@ -75,7 +75,7 @@ use netstack3_core::{
         },
         icmp, IpExt,
     },
-    transport::udp::{BufferUdpContext, UdpBoundId, UdpConnId, UdpContext, UdpListenerId},
+    transport::udp::{self, BufferUdpContext, UdpContext},
     Ctx, NonSyncContext, SyncCtx, TimerId,
 };
 
@@ -423,7 +423,7 @@ impl<I> UdpContext<I> for BindingsNonSyncCtxImpl
 where
     I: socket::datagram::SocketCollectionIpExt<socket::datagram::Udp> + icmp::IcmpIpExt,
 {
-    fn receive_icmp_error(&mut self, id: UdpBoundId<I>, err: I::ErrorCode) {
+    fn receive_icmp_error(&mut self, id: udp::BoundId<I>, err: I::ErrorCode) {
         I::get_collection_mut(self).receive_icmp_error(id, err)
     }
 }
@@ -434,7 +434,7 @@ where
 {
     fn receive_udp_from_conn(
         &mut self,
-        conn: UdpConnId<I>,
+        conn: udp::ConnId<I>,
         src_ip: I::Addr,
         src_port: NonZeroU16,
         body: &B,
@@ -444,7 +444,7 @@ where
 
     fn receive_udp_from_listen(
         &mut self,
-        listener: UdpListenerId<I>,
+        listener: udp::ListenerId<I>,
         src_ip: I::Addr,
         dst_ip: I::Addr,
         src_port: Option<NonZeroU16>,

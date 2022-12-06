@@ -35,7 +35,7 @@ use netstack3_core::{
             socket::{ListenerId, TcpNonSyncContext},
             BufferSizes,
         },
-        udp::{BufferUdpContext, UdpBoundId, UdpContext},
+        udp::{self, BufferUdpContext, UdpContext},
     },
     Ctx, NonSyncContext, TimerId,
 };
@@ -246,7 +246,7 @@ impl<T: 'static + Send> EventContext<T> for TestNonSyncCtx {
 }
 
 impl<I: SocketCollectionIpExt<Udp> + IcmpIpExt> UdpContext<I> for TestNonSyncCtx {
-    fn receive_icmp_error(&mut self, id: UdpBoundId<I>, err: I::ErrorCode) {
+    fn receive_icmp_error(&mut self, id: udp::BoundId<I>, err: I::ErrorCode) {
         UdpContext::receive_icmp_error(&mut self.ctx, id, err)
     }
 }
@@ -256,7 +256,7 @@ impl<I: SocketCollectionIpExt<Udp> + IpExt, B: BufferMut> BufferUdpContext<I, B>
 {
     fn receive_udp_from_conn(
         &mut self,
-        conn: netstack3_core::transport::udp::UdpConnId<I>,
+        conn: netstack3_core::transport::udp::ConnId<I>,
         src_ip: I::Addr,
         src_port: NonZeroU16,
         body: &B,
@@ -267,7 +267,7 @@ impl<I: SocketCollectionIpExt<Udp> + IpExt, B: BufferMut> BufferUdpContext<I, B>
     /// Receive a UDP packet for a listener.
     fn receive_udp_from_listen(
         &mut self,
-        listener: netstack3_core::transport::udp::UdpListenerId<I>,
+        listener: netstack3_core::transport::udp::ListenerId<I>,
         src_ip: I::Addr,
         dst_ip: I::Addr,
         src_port: Option<NonZeroU16>,

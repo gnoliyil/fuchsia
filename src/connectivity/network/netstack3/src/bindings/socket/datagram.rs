@@ -41,10 +41,7 @@ use netstack3_core::{
         SetMulticastMembershipError, SockCreationError,
     },
     sync::Mutex,
-    transport::udp::{
-        self as core_udp, BufferUdpContext, UdpBoundId, UdpConnId, UdpConnInfo, UdpContext,
-        UdpListenerId, UdpListenerInfo, UdpSendToError, UdpSocketId, UdpUnboundId,
-    },
+    transport::udp::{self, BufferUdpContext, UdpContext},
     BufferNonSyncContext, Ctx, NonSyncContext, SyncCtx,
 };
 use packet::{Buf, BufferMut, SerializeError};
@@ -400,21 +397,21 @@ pub(crate) enum Udp {}
 
 impl<I: Ip> Transport<I> for Udp {
     const PROTOCOL: DatagramProtocol = DatagramProtocol::Udp;
-    type UnboundId = UdpUnboundId<I>;
-    type ConnId = UdpConnId<I>;
-    type ListenerId = UdpListenerId<I>;
+    type UnboundId = udp::UnboundId<I>;
+    type ConnId = udp::ConnId<I>;
+    type ListenerId = udp::ListenerId<I>;
 }
 
-impl<I: Ip> From<BoundSocketId<I, Udp>> for UdpBoundId<I> {
+impl<I: Ip> From<BoundSocketId<I, Udp>> for udp::BoundId<I> {
     fn from(id: BoundSocketId<I, Udp>) -> Self {
         match id {
-            BoundSocketId::Connected(c) => UdpBoundId::Connected(c),
-            BoundSocketId::Listener(c) => UdpBoundId::Listening(c),
+            BoundSocketId::Connected(c) => udp::BoundId::Connected(c),
+            BoundSocketId::Listener(c) => udp::BoundId::Listening(c),
         }
     }
 }
 
-impl<I: Ip> From<SocketId<I, Udp>> for UdpSocketId<I> {
+impl<I: Ip> From<SocketId<I, Udp>> for udp::UdpSocketId<I> {
     fn from(id: SocketId<I, Udp>) -> Self {
         match id {
             SocketId::Unbound(id) => Self::Unbound(id),
@@ -440,7 +437,7 @@ impl<I: IpExt> TransportState<I> for Udp {
     type RemoteIdentifier = NonZeroU16;
 
     fn create_unbound<C: NonSyncContext>(ctx: &SyncCtx<C>) -> Self::UnboundId {
-        core_udp::create_udp_unbound(ctx)
+        udp::create_udp_unbound(ctx)
     }
 
     fn connect_unbound<C: NonSyncContext>(
@@ -450,7 +447,7 @@ impl<I: IpExt> TransportState<I> for Udp {
         remote_ip: ZonedAddr<I::Addr, DeviceId<C::Instant>>,
         remote_id: Self::RemoteIdentifier,
     ) -> Result<Self::ConnId, Self::CreateConnError> {
-        core_udp::connect_udp(sync_ctx, ctx, id, remote_ip, remote_id)
+        udp::connect_udp(sync_ctx, ctx, id, remote_ip, remote_id)
     }
 
     fn listen_on_unbound<C: NonSyncContext>(
@@ -460,7 +457,7 @@ impl<I: IpExt> TransportState<I> for Udp {
         addr: Option<ZonedAddr<I::Addr, DeviceId<C::Instant>>>,
         port: Option<Self::LocalIdentifier>,
     ) -> Result<Self::ListenerId, Self::CreateListenerError> {
-        core_udp::listen_udp(sync_ctx, ctx, id, addr, port)
+        udp::listen_udp(sync_ctx, ctx, id, addr, port)
     }
 
     fn connect_listener<C: NonSyncContext>(
@@ -470,7 +467,7 @@ impl<I: IpExt> TransportState<I> for Udp {
         remote_ip: ZonedAddr<I::Addr, DeviceId<C::Instant>>,
         remote_id: Self::RemoteIdentifier,
     ) -> Result<Self::ConnId, (Self::ConnectListenerError, Self::ListenerId)> {
-        core_udp::connect_udp_listener(sync_ctx, ctx, id, remote_ip, remote_id)
+        udp::connect_udp_listener(sync_ctx, ctx, id, remote_ip, remote_id)
     }
 
     fn disconnect_connected<C: NonSyncContext>(
@@ -478,7 +475,7 @@ impl<I: IpExt> TransportState<I> for Udp {
         ctx: &mut C,
         id: Self::ConnId,
     ) -> Self::ListenerId {
-        core_udp::disconnect_udp_connected(sync_ctx, ctx, id)
+        udp::disconnect_udp_connected(sync_ctx, ctx, id)
     }
 
     fn reconnect_conn<C: NonSyncContext>(
@@ -488,7 +485,7 @@ impl<I: IpExt> TransportState<I> for Udp {
         remote_ip: ZonedAddr<I::Addr, DeviceId<C::Instant>>,
         remote_id: Self::RemoteIdentifier,
     ) -> Result<Self::ConnId, (Self::ReconnectConnError, Self::ConnId)> {
-        core_udp::reconnect_udp(sync_ctx, ctx, id, remote_ip, remote_id)
+        udp::reconnect_udp(sync_ctx, ctx, id, remote_ip, remote_id)
     }
 
     fn get_conn_info<C: NonSyncContext>(
@@ -501,8 +498,8 @@ impl<I: IpExt> TransportState<I> for Udp {
         ZonedAddr<I::Addr, DeviceId<C::Instant>>,
         Self::RemoteIdentifier,
     ) {
-        let UdpConnInfo { local_ip, local_port, remote_ip, remote_port } =
-            core_udp::get_udp_conn_info(sync_ctx, ctx, id);
+        let udp::UdpConnInfo { local_ip, local_port, remote_ip, remote_port } =
+            udp::get_udp_conn_info(sync_ctx, ctx, id);
         (local_ip, local_port, remote_ip, remote_port)
     }
 
@@ -511,8 +508,8 @@ impl<I: IpExt> TransportState<I> for Udp {
         ctx: &mut C,
         id: Self::ListenerId,
     ) -> (Option<ZonedAddr<I::Addr, DeviceId<C::Instant>>>, Self::LocalIdentifier) {
-        let UdpListenerInfo { local_ip, local_port } =
-            core_udp::get_udp_listener_info(sync_ctx, ctx, id);
+        let udp::UdpListenerInfo { local_ip, local_port } =
+            udp::get_udp_listener_info(sync_ctx, ctx, id);
         (local_ip, local_port)
     }
 
@@ -526,8 +523,8 @@ impl<I: IpExt> TransportState<I> for Udp {
         ZonedAddr<I::Addr, DeviceId<C::Instant>>,
         Self::RemoteIdentifier,
     ) {
-        let UdpConnInfo { local_ip, local_port, remote_ip, remote_port } =
-            core_udp::remove_udp_conn(sync_ctx, ctx, id);
+        let udp::UdpConnInfo { local_ip, local_port, remote_ip, remote_port } =
+            udp::remove_udp_conn(sync_ctx, ctx, id);
         (local_ip, local_port, remote_ip, remote_port)
     }
 
@@ -536,13 +533,13 @@ impl<I: IpExt> TransportState<I> for Udp {
         ctx: &mut C,
         id: Self::ListenerId,
     ) -> (Option<ZonedAddr<I::Addr, DeviceId<C::Instant>>>, Self::LocalIdentifier) {
-        let UdpListenerInfo { local_ip, local_port } =
-            core_udp::remove_udp_listener(sync_ctx, ctx, id);
+        let udp::UdpListenerInfo { local_ip, local_port } =
+            udp::remove_udp_listener(sync_ctx, ctx, id);
         (local_ip, local_port)
     }
 
     fn remove_unbound<C: NonSyncContext>(sync_ctx: &SyncCtx<C>, ctx: &mut C, id: Self::UnboundId) {
-        core_udp::remove_udp_unbound(sync_ctx, ctx, id)
+        udp::remove_udp_unbound(sync_ctx, ctx, id)
     }
 
     fn set_socket_device<C: NonSyncContext>(
@@ -553,17 +550,15 @@ impl<I: IpExt> TransportState<I> for Udp {
     ) -> Result<(), Self::SetSocketDeviceError> {
         match id {
             SocketId::Unbound(id) => {
-                core_udp::set_unbound_udp_device(sync_ctx, ctx, id, device);
+                udp::set_unbound_udp_device(sync_ctx, ctx, id, device);
                 Ok(())
             }
             SocketId::Bound(id) => match id {
                 BoundSocketId::Listener(id) => {
-                    core_udp::set_listener_udp_device(sync_ctx, ctx, id, device)
+                    udp::set_listener_udp_device(sync_ctx, ctx, id, device)
                         .map_err(SocketError::Local)
                 }
-                BoundSocketId::Connected(id) => {
-                    core_udp::set_conn_udp_device(sync_ctx, ctx, id, device)
-                }
+                BoundSocketId::Connected(id) => udp::set_conn_udp_device(sync_ctx, ctx, id, device),
             },
         }
     }
@@ -573,7 +568,7 @@ impl<I: IpExt> TransportState<I> for Udp {
         ctx: &C,
         id: SocketId<I, Self>,
     ) -> Option<DeviceId<C::Instant>> {
-        core_udp::get_udp_bound_device(sync_ctx, ctx, id.into())
+        udp::get_udp_bound_device(sync_ctx, ctx, id.into())
     }
 
     fn set_reuse_port<C: NonSyncContext>(
@@ -582,7 +577,7 @@ impl<I: IpExt> TransportState<I> for Udp {
         id: Self::UnboundId,
         reuse_port: bool,
     ) {
-        core_udp::set_udp_posix_reuse_port(sync_ctx, ctx, id, reuse_port)
+        udp::set_udp_posix_reuse_port(sync_ctx, ctx, id, reuse_port)
     }
 
     fn get_reuse_port<C: NonSyncContext>(
@@ -590,7 +585,7 @@ impl<I: IpExt> TransportState<I> for Udp {
         ctx: &C,
         id: SocketId<I, Self>,
     ) -> bool {
-        core_udp::get_udp_posix_reuse_port(sync_ctx, ctx, id.into())
+        udp::get_udp_posix_reuse_port(sync_ctx, ctx, id.into())
     }
 
     fn set_multicast_membership<C: NonSyncContext>(
@@ -601,7 +596,7 @@ impl<I: IpExt> TransportState<I> for Udp {
         interface: MulticastMembershipInterfaceSelector<I::Addr, DeviceId<C::Instant>>,
         want_membership: bool,
     ) -> Result<(), Self::SetMulticastMembershipError> {
-        core_udp::set_udp_multicast_membership(
+        udp::set_udp_multicast_membership(
             sync_ctx,
             ctx,
             id.into(),
@@ -617,7 +612,7 @@ impl<I: IpExt> TransportState<I> for Udp {
         id: SocketId<I, Self>,
         hop_limit: Option<NonZeroU8>,
     ) {
-        core_udp::set_udp_unicast_hop_limit(sync_ctx, ctx, id.into(), hop_limit)
+        udp::set_udp_unicast_hop_limit(sync_ctx, ctx, id.into(), hop_limit)
     }
 
     fn set_multicast_hop_limit<C: NonSyncContext>(
@@ -626,7 +621,7 @@ impl<I: IpExt> TransportState<I> for Udp {
         id: SocketId<I, Self>,
         hop_limit: Option<NonZeroU8>,
     ) {
-        core_udp::set_udp_multicast_hop_limit(sync_ctx, ctx, id.into(), hop_limit)
+        udp::set_udp_multicast_hop_limit(sync_ctx, ctx, id.into(), hop_limit)
     }
 
     fn get_unicast_hop_limit<C: NonSyncContext>(
@@ -634,7 +629,7 @@ impl<I: IpExt> TransportState<I> for Udp {
         ctx: &C,
         id: SocketId<I, Self>,
     ) -> NonZeroU8 {
-        core_udp::get_udp_unicast_hop_limit(sync_ctx, ctx, id.into())
+        udp::get_udp_unicast_hop_limit(sync_ctx, ctx, id.into())
     }
 
     fn get_multicast_hop_limit<C: NonSyncContext>(
@@ -642,14 +637,14 @@ impl<I: IpExt> TransportState<I> for Udp {
         ctx: &C,
         id: SocketId<I, Self>,
     ) -> NonZeroU8 {
-        core_udp::get_udp_multicast_hop_limit(sync_ctx, ctx, id.into())
+        udp::get_udp_multicast_hop_limit(sync_ctx, ctx, id.into())
     }
 }
 
 impl<I: IpExt, B: BufferMut> BufferTransportState<I, B> for Udp {
     type SendConnError = IpSockSendError;
-    type SendConnToError = UdpSendToError;
-    type SendListenerError = UdpSendToError;
+    type SendConnToError = udp::UdpSendToError;
+    type SendListenerError = udp::UdpSendToError;
 
     fn send_conn<C: BufferNonSyncContext<B>>(
         sync_ctx: &SyncCtx<C>,
@@ -657,7 +652,7 @@ impl<I: IpExt, B: BufferMut> BufferTransportState<I, B> for Udp {
         conn: Self::ConnId,
         body: B,
     ) -> Result<(), (B, Self::SendConnError)> {
-        core_udp::send_udp_conn(sync_ctx, ctx, conn, body)
+        udp::send_udp_conn(sync_ctx, ctx, conn, body)
     }
 
     fn send_conn_to<C: BufferNonSyncContext<B>>(
@@ -670,7 +665,7 @@ impl<I: IpExt, B: BufferMut> BufferTransportState<I, B> for Udp {
             Self::RemoteIdentifier,
         ),
     ) -> Result<(), (B, Self::SendConnToError)> {
-        core_udp::send_udp_conn_to(sync_ctx, ctx, conn, remote_ip, remote_port, body)
+        udp::send_udp_conn_to(sync_ctx, ctx, conn, remote_ip, remote_port, body)
     }
 
     fn send_listener<C: BufferNonSyncContext<B>>(
@@ -681,16 +676,16 @@ impl<I: IpExt, B: BufferMut> BufferTransportState<I, B> for Udp {
         remote_id: Self::RemoteIdentifier,
         body: B,
     ) -> Result<(), (B, Self::SendListenerError)> {
-        core_udp::send_udp_listener(sync_ctx, ctx, listener, remote_ip, remote_id, body)
+        udp::send_udp_listener(sync_ctx, ctx, listener, remote_ip, remote_id, body)
     }
 }
 
 impl<I: icmp::IcmpIpExt> UdpContext<I> for SocketCollection<I, Udp> {
-    fn receive_icmp_error(&mut self, id: UdpBoundId<I>, err: I::ErrorCode) {
+    fn receive_icmp_error(&mut self, id: udp::BoundId<I>, err: I::ErrorCode) {
         let Self { conns, listeners } = self;
         let id = match &id {
-            UdpBoundId::Connected(conn) => conns.get(conn),
-            UdpBoundId::Listening(listener) => listeners.get(listener),
+            udp::BoundId::Connected(conn) => conns.get(conn),
+            udp::BoundId::Listening(listener) => listeners.get(listener),
         };
         // NB: Logging at error as a means of failing tests that provoke this condition.
         error!("unimplemented receive_icmp_error {:?} on {:?}", err, id)
@@ -700,7 +695,7 @@ impl<I: icmp::IcmpIpExt> UdpContext<I> for SocketCollection<I, Udp> {
 impl<I: IpExt, B: BufferMut> BufferUdpContext<I, B> for SocketCollection<I, Udp> {
     fn receive_udp_from_conn(
         &mut self,
-        conn: UdpConnId<I>,
+        conn: udp::ConnId<I>,
         src_ip: I::Addr,
         src_port: NonZeroU16,
         body: &B,
@@ -712,7 +707,7 @@ impl<I: IpExt, B: BufferMut> BufferUdpContext<I, B> for SocketCollection<I, Udp>
 
     fn receive_udp_from_listen(
         &mut self,
-        listener: UdpListenerId<I>,
+        listener: udp::ListenerId<I>,
         src_ip: I::Addr,
         _dst_ip: I::Addr,
         src_port: Option<NonZeroU16>,
