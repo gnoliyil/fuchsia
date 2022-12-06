@@ -16,6 +16,8 @@ source_set("audio_core_lib") {
     "output_device_pipeline.h",
     "reference_clock.cc",
     "reference_clock.h",
+    "stream_sink_server.cc",
+    "stream_sink_server.h",
     "task_barrier.h",
   ]
 
@@ -59,6 +61,7 @@ executable("unittest_bin") {
     "audio_renderer_server_unittest.cc",
     "input_device_pipeline_unittest.cc",
     "output_device_pipeline_unittest.cc",
+    "stream_sink_server_unittest.cc",
   ]
 
   deps = [
@@ -69,6 +72,7 @@ executable("unittest_bin") {
     "//src/media/audio/lib/format",
     "//src/media/audio/lib/processing:prebuilt_coefficient_tables",
     "//src/media/audio/services/common",
+    "//src/media/audio/services/common/testing",
     "//third_party/googletest:gmock",
     "//third_party/googletest:gtest",
     "//zircon/system/ulib/async-loop:async-loop-cpp",

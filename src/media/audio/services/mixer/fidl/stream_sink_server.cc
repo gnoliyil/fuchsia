@@ -107,7 +107,7 @@ void StreamSinkServer::PutPacket(PutPacketRequestView request,
       .format = format_,
       .start_frame = packet_start,
       .frame_count = static_cast<int64_t>(payload.size) / format_.bytes_per_frame(),
-      .payload = static_cast<char*>(buffer.start()) + payload.offset,
+      .payload = buffer.offset(payload.offset),
   });
 
   next_continuous_frame_ = packet_view.end_frame();
