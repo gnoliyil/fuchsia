@@ -507,6 +507,8 @@ test("fidlc-test") {
     "structs_tests.cc",
     "table_tests.cc",
     "test_library.cc",
+    "token_list_tests.cc",
+    "token_tests.cc",
     "transport_tests.cc",
     "types_tests.cc",
     "typeshape_tests.cc",

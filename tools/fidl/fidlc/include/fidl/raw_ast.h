@@ -199,7 +199,7 @@ class Constant : public SourceElement {
  public:
   enum class Kind { kIdentifier, kLiteral, kBinaryOperator };
 
-  explicit Constant(Token token, Kind kind) : SourceElement(token, token), kind(kind) {}
+  explicit Constant(Token start, Token end, Kind kind) : SourceElement(start, end), kind(kind) {}
   explicit Constant(const SourceElement& element, Kind kind) : SourceElement(element), kind(kind) {}
 
   const Kind kind;
@@ -219,7 +219,7 @@ class IdentifierConstant final : public Constant {
 class LiteralConstant final : public Constant {
  public:
   explicit LiteralConstant(std::unique_ptr<Literal> literal)
-      : Constant(literal->start(), Kind::kLiteral), literal(std::move(literal)) {}
+      : Constant(literal->start(), literal->end(), Kind::kLiteral), literal(std::move(literal)) {}
 
   std::unique_ptr<Literal> literal;
 
@@ -827,8 +827,7 @@ class File final : public SourceElement {
        std::vector<std::unique_ptr<ProtocolDeclaration>> protocol_declaration_list,
        std::vector<std::unique_ptr<ResourceDeclaration>> resource_declaration_list,
        std::vector<std::unique_ptr<ServiceDeclaration>> service_declaration_list,
-       std::vector<std::unique_ptr<TypeDecl>> type_decls,
-       std::vector<std::unique_ptr<Token>> tokens)
+       std::vector<std::unique_ptr<TypeDecl>> type_decls, std::vector<Token> tokens)
       : SourceElement(element),
         library_decl(std::move(library_decl)),
         alias_list(std::move(alias_list)),
@@ -853,7 +852,7 @@ class File final : public SourceElement {
   std::vector<std::unique_ptr<TypeDecl>> type_decls;
 
   // An ordered list of all tokens (including comments) in the source file.
-  std::vector<std::unique_ptr<Token>> tokens;
+  std::vector<Token> tokens;
   Token end_;
 };
 

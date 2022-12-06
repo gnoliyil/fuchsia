@@ -11,6 +11,7 @@
 
 #include "tools/fidl/fidlc/include/fidl/raw_ast.h"
 #include "tools/fidl/fidlc/include/fidl/span_sequence.h"
+#include "tools/fidl/fidlc/include/fidl/token_list.h"
 #include "tools/fidl/fidlc/include/fidl/tree_visitor.h"
 
 namespace fidl::fmt {
@@ -20,8 +21,7 @@ namespace fidl::fmt {
 // from which that raw AST was generated.
 class SpanSequenceTreeVisitor : public raw::DeclarationOrderTreeVisitor {
  public:
-  explicit SpanSequenceTreeVisitor(std::string_view file,
-                                   std::vector<std::unique_ptr<Token>> tokens)
+  explicit SpanSequenceTreeVisitor(std::string_view file, raw::TokenPointerList tokens)
       : file_(file), tokens_(std::move(tokens)) {}
   void OnAliasDeclaration(std::unique_ptr<raw::AliasDeclaration> const& element) override;
   void OnAttributeArg(std::unique_ptr<raw::AttributeArg> const& element) override;
@@ -335,7 +335,7 @@ class SpanSequenceTreeVisitor : public raw::DeclarationOrderTreeVisitor {
   const std::string_view file_;
 
   // An ordered list of all tokens (including comments) in the source file.
-  std::vector<std::unique_ptr<Token>> tokens_;
+  std::vector<const Token*> tokens_;
 
   // The index of the next token to be visited.
   size_t next_token_index_ = 0;

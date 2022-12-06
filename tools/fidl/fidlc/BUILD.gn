@@ -57,6 +57,7 @@ source_set("fidl") {
     "lib/span_sequence_tree_visitor.cc",
     "lib/tables_generator.cc",
     "lib/template_string.cc",
+    "lib/token_list.cc",
     "lib/tree_visitor.cc",
     "lib/type_shape.cc",
     "lib/utils.cc",

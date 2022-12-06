@@ -24,7 +24,8 @@ std::optional<std::string> NewFormatter::Format(
 
 std::string NewFormatter::Print(std::unique_ptr<raw::File> ast, size_t original_file_size) const {
   std::string out;
-  auto visitor = SpanSequenceTreeVisitor(ast->span().source_file().data(), std::move(ast->tokens));
+  auto visitor = SpanSequenceTreeVisitor(ast->span().source_file().data(),
+                                         raw::TokenPointerListBuilder(ast).Build());
   visitor.OnFile(ast);
   MultilineSpanSequence result = visitor.Result();
 

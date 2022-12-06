@@ -52,12 +52,13 @@ class Token {
     Subkind subkind_;
   };
 
-  Token(SourceSpan previous_end, SourceSpan span, Kind kind, Subkind subkind)
+  Token(SourceSpan previous_end, SourceSpan span, Kind kind, Subkind subkind, uint32_t ordinal)
       : previous_end_(previous_end),
         span_(span),
-        kind_and_subkind_(KindAndSubkind(kind, subkind)) {}
+        kind_and_subkind_(KindAndSubkind(kind, subkind)),
+        ordinal_(ordinal) {}
 
-  Token() : Token(SourceSpan(), SourceSpan(), Token::Kind::kNotAToken, Token::Subkind::kNone) {}
+  Token() : Token(SourceSpan(), SourceSpan(), Token::Kind::kNotAToken, Token::Subkind::kNone, 0) {}
 
   static const char* Name(KindAndSubkind kind_and_subkind) {
     switch (kind_and_subkind.combined()) {
@@ -83,10 +84,31 @@ class Token {
   Kind kind() const { return kind_and_subkind_.kind(); }
   Subkind subkind() const { return kind_and_subkind_.subkind(); }
   KindAndSubkind kind_and_subkind() const { return kind_and_subkind_; }
+  uint32_t ordinal() const { return ordinal_; }
+  void set_ordinal(uint32_t ordinal) { ordinal_ = ordinal; }
 
-  constexpr bool operator==(const Token& rhs) const { return span_ == rhs.span_; }
+  bool same_file_as(const Token& rhs) const {
+    return span_.source_file().filename() == rhs.span().source_file().filename();
+  }
+
+  constexpr bool operator==(const Token& rhs) const {
+    return this->same_file_as(rhs) && ordinal_ == rhs.ordinal_;
+  }
   constexpr bool operator!=(const Token& rhs) const { return !(*this == rhs); }
-  constexpr bool operator<(const Token& rhs) const { return span_ < rhs.span_; }
+
+  // Files are sorted alphabetically for the purpose of ordering. Generally speaking, however,
+  // tokens (synthetic or sourced) that do not represent spans in the same source file should not be
+  // compared against one another. The |same_file_as()| method may be used first to ensure that this
+  // is the case.
+  constexpr bool operator<(const Token& rhs) const {
+    if (this->same_file_as(rhs)) {
+      return ordinal_ < rhs.ordinal_;
+    }
+    return span_.source_file().filename() < rhs.span_.source_file().filename();
+  }
+  constexpr bool operator>=(const Token& rhs) const { return !(*this < rhs); }
+  constexpr bool operator>(const Token& rhs) const { return !(rhs >= *this); }
+  constexpr bool operator<=(const Token& rhs) const { return !(*this > rhs); }
 
  private:
   // The end of the previous token.  Everything between this and span_ is
@@ -95,6 +117,7 @@ class Token {
   SourceSpan previous_end_;
   SourceSpan span_;
   KindAndSubkind kind_and_subkind_;
+  uint32_t ordinal_;
 };
 
 }  // namespace fidl

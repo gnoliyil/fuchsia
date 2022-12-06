@@ -65,6 +65,7 @@ class Lexer : private ReporterMixin {
   const char* token_start_ = nullptr;
   const char* previous_end_ = nullptr;
   size_t token_size_ = 0u;
+  uint32_t next_ordinal = 0;
 };
 
 }  // namespace fidl

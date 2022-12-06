@@ -153,7 +153,8 @@ Token Lexer::Finish(Token::Kind kind) {
   ZX_ASSERT(kind != Token::Kind::kIdentifier);
   std::string_view previous(previous_end_, token_start_ - previous_end_);
   SourceSpan previous_span(previous, source_file_);
-  return Token(previous_span, SourceSpan(Reset(kind), source_file_), kind, Token::Subkind::kNone);
+  return Token(previous_span, SourceSpan(Reset(kind), source_file_), kind, Token::Subkind::kNone,
+               next_ordinal++);
 }
 
 Token Lexer::LexEndOfStream() { return Finish(Token::Kind::kEndOfFile); }
@@ -175,7 +176,7 @@ Token Lexer::LexIdentifier() {
   if (lookup != token_subkinds.end())
     subkind = lookup->second;
   return Token(previous_end, SourceSpan(identifier_data, source_file_), Token::Kind::kIdentifier,
-               subkind);
+               subkind, next_ordinal++);
 }
 
 static bool IsHexDigit(char c) {

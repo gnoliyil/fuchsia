@@ -15,6 +15,7 @@
 #include "tools/fidl/fidlc/include/fidl/lexer.h"
 #include "tools/fidl/fidlc/include/fidl/raw_ast.h"
 #include "tools/fidl/fidlc/include/fidl/reporter.h"
+#include "tools/fidl/fidlc/include/fidl/token.h"
 #include "tools/fidl/fidlc/include/fidl/types.h"
 #include "tools/fidl/fidlc/include/fidl/utils.h"
 
@@ -51,7 +52,7 @@ class Parser {
   Token Lex() {
     for (;;) {
       auto token = lexer_->Lex();
-      tokens_.emplace_back(std::make_unique<Token>(token));
+      tokens_.emplace_back(token);
 
       switch (token.kind()) {
         case Token::Kind::kComment:
@@ -419,7 +420,7 @@ class Parser {
   State state_;
 
   // An ordered list of all tokens (including comments) in the source file.
-  std::vector<std::unique_ptr<Token>> tokens_;
+  std::vector<Token> tokens_;
 };
 
 }  // namespace fidl

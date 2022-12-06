@@ -114,8 +114,8 @@ void ConstDeclaration::Accept(TreeVisitor* visitor) const {
   if (attributes != nullptr) {
     visitor->OnAttributeList(attributes);
   }
-  visitor->OnTypeConstructor(type_ctor);
   visitor->OnIdentifier(identifier);
+  visitor->OnTypeConstructor(type_ctor);
   visitor->OnConstant(constant);
 }
 
