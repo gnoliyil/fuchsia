@@ -1,6 +1,6 @@
 # README
 
-This directory contains all of the example code for the "${series_text_case}"
+This directory contains all of the example code for the "calculator"
 series of FIDL examples. See the associated [docs] for more information.
 
 Each example should include the following:
@@ -14,12 +14,12 @@ Each example should include the following:
 * An [implementation][impl-hlcpp] of the client and server using the HLCPP bindings.
 * An [implementation][impl-rust] of the client and server using the Rust bindings.
 
-[docs]: /docs/development/languages/fidl/examples/${series_snake_case}/README.md
-[impl-cml]: ${variant_snake_case}/meta
-[impl-cpp-natural]: ${variant_snake_case}/cpp-natural
-[impl-cpp-wire]: ${variant_snake_case}/cpp-wire
-[impl-dart]: ${variant_snake_case}/dart
-[impl-fidl]: ${variant_snake_case}/fidl
-[impl-hlcpp]: ${variant_snake_case}/hlcpp
-[impl-rust]: ${variant_snake_case}/rust
-[impl-realm]: ${variant_snake_case}/realm
+[docs]: /docs/development/languages/fidl/examples/calculator/README.md
+[impl-cml]: baseline/meta
+[impl-cpp-natural]: baseline/cpp-natural
+[impl-cpp-wire]: baseline/cpp-wire
+[impl-dart]: baseline/dart
+[impl-fidl]: baseline/fidl
+[impl-hlcpp]: baseline/hlcpp
+[impl-rust]: baseline/rust
+[impl-realm]: baseline/realm

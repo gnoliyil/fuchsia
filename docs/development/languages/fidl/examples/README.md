@@ -9,6 +9,11 @@ The following examples sequentially demonstrate useful FIDL concepts.
 
 <!-- DO_NOT_REMOVE_COMMENT:examples (Why? See: /tools/fidl/scripts/canonical_example/README.md) -->
 
+### Calculator
+
+The [calculator][example_calculator] example shows fundamental building blocks
+for creating your first FIDL protocol.
+
 ### Key-value store
 
 The [key-value store][example_key_value_store] example demonstrates how to build
@@ -40,6 +45,8 @@ section.
 
 <<../widgets/_bits.md>>
 
+<<../widgets/_discoverable.md>>
+
 <<../widgets/_enum.md>>
 
 <<../widgets/_feed_forward_pattern.md>>
@@ -47,6 +54,8 @@ section.
 <<../widgets/_generated_name.md>>
 
 <<../widgets/_handle_rights.md>>
+
+<<../widgets/_infallible_two_way_method.md>>
 
 <<../widgets/_named_payload.md>>
 
@@ -58,6 +67,8 @@ section.
 
 <<../widgets/_protocol_end.md>>
 
+<<../widgets/_protocol.md>>
+
 <<../widgets/_recursive_type.md>>
 
 <<../widgets/_resource_type.md>>
@@ -65,6 +76,8 @@ section.
 <<../widgets/_scalar_type.md>>
 
 <<../widgets/_size_constraint.md>>
+
+<<../widgets/_struct_payload.md>>
 
 <<../widgets/_table_payload.md>>
 
@@ -74,5 +87,6 @@ section.
 
 <!-- /DO_NOT_REMOVE_COMMENT:concepts (Why? See: /tools/fidl/scripts/canonical_example/README.md) -->
 
+[example_calculator]: calculator/README.md
 [example_canvas]: canvas/README.md
 [example_key_value_store]: key_value_store/README.md

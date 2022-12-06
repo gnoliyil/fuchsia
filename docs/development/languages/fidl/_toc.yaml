@@ -85,4 +85,6 @@ toc:
     path: /docs/development/languages/fidl/examples/canvas/README.md
   - title: "Key value store"
     path: /docs/development/languages/fidl/examples/key_value_store/README.md
+  - title: "Calculator"
+    path: /docs/development/languages/fidl/examples/calculator/README.md
   # /DO_NOT_REMOVE_COMMENT (Why? See: /tools/fidl/scripts/canonical_example/README.md)
