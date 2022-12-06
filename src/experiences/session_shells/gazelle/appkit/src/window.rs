@@ -16,6 +16,7 @@ use fidl::{
 use fidl_fuchsia_element as felement;
 use fidl_fuchsia_math as fmath;
 use fidl_fuchsia_ui_composition as ui_comp;
+use fidl_fuchsia_ui_focus as ui_focus;
 use fidl_fuchsia_ui_input3 as ui_input3;
 use fidl_fuchsia_ui_pointer as fptr;
 use fidl_fuchsia_ui_shortcut2 as ui_shortcut2;
@@ -32,7 +33,7 @@ use crate::{
     child_view::ChildView,
     event::{Event, EventSender, ViewSpecHolder, WindowEvent},
     image::{load_image_from_bytes_using_allocators, Image, ImageData},
-    utils::{ProductionProtocolConnector, ProtocolConnector},
+    utils::{view_ref_is_same, ProductionProtocolConnector, ProtocolConnector},
 };
 
 struct Presenter {
@@ -96,6 +97,8 @@ pub(crate) struct WindowAttributes {
     /// The [ViewCreationToken] passed to the application's [ViewProvider]. Unused for windows
     /// presented to the system's GraphicalPresenter.
     pub view_creation_token: Option<ui_views::ViewCreationToken>,
+    /// Listen to focus chain for updates in focus to ChildViews.
+    pub use_focus_chain_listener: bool,
 }
 
 const ROOT_TRANSFORM_ID: ui_comp::TransformId = ui_comp::TransformId { value: 1 };
@@ -118,6 +121,8 @@ pub struct Window {
     presenter: Option<Arc<Mutex<Presenter>>>,
     protocol_connector: Box<dyn ProtocolConnector>,
 }
+
+unsafe impl Send for Window {}
 
 impl Window {
     pub fn new(event_sender: EventSender) -> Window {
@@ -161,6 +166,11 @@ impl Window {
         self
     }
 
+    pub fn use_focus_chain_listener(mut self, use_focus_chain_listener: bool) -> Window {
+        self.attributes.use_focus_chain_listener = use_focus_chain_listener;
+        self
+    }
+
     pub fn with_protocol_connector(
         mut self,
         protocol_connector: Box<dyn ProtocolConnector>,
@@ -189,6 +199,15 @@ impl Window {
         self.id_generator.next_content_id()
     }
 
+    pub fn get_view_ref(&self) -> Result<ui_views::ViewRef, Error> {
+        let view_ref = fuchsia_scenic::duplicate_view_ref(&self.view_ref)?;
+        Ok(view_ref)
+    }
+
+    pub fn get_focuser(&self) -> Option<ui_views::FocuserProxy> {
+        self.focuser.clone()
+    }
+
     pub fn set_content(
         &self,
         mut transform_id: ui_comp::TransformId,
@@ -213,47 +232,32 @@ impl Window {
         Ok(())
     }
 
-    pub fn request_focus(&mut self, view_ref: ui_views::ViewRef) {
-        if let Some(focuser) = self.focuser.clone() {
-            let mut dup_view_ref = fuchsia_scenic::duplicate_view_ref(&view_ref)
-                .expect("Failed to duplicate view_ref for request_focus");
-            let task = fasync::Task::spawn(async move {
-                if let Err(error) = focuser.request_focus(&mut dup_view_ref).await {
-                    error!("Failed to request focus on a view: {:?}", error);
-                }
-            });
-            self.running_tasks.push(task);
-        }
-    }
-
-    pub fn register_shortcuts(&mut self, shortcuts: Vec<ui_shortcut2::Shortcut>) {
-        let mut view_ref_for_shortcuts = fuchsia_scenic::duplicate_view_ref(&self.view_ref)
-            .expect("Failed to duplicate ViewRef");
+    pub async fn register_shortcuts(
+        &mut self,
+        shortcuts: Vec<ui_shortcut2::Shortcut>,
+    ) -> Result<(), Error> {
+        let mut view_ref_for_shortcuts = self.get_view_ref()?;
         let window_id = self.id();
         let event_sender = self.event_sender.clone();
 
-        let registry = self
-            .protocol_connector
-            .connect_to_shortcuts_registry()
-            .expect("failed to connect to fuchsia.ui.shortcut2.Registry");
+        let registry = self.protocol_connector.connect_to_shortcuts_registry()?;
 
+        let (listener_client_end, mut listener_stream) =
+            create_request_stream::<ui_shortcut2::ListenerMarker>()?;
+
+        if let Err(error) = registry.set_view(&mut view_ref_for_shortcuts, listener_client_end) {
+            error!("Failed to set_view on fuchsia.ui.shortcut2.Registry: {:?}", error);
+            return Err(error.into());
+        }
+
+        for shortcut in &shortcuts {
+            if let Err(error) = registry.register_shortcut(&mut shortcut.clone()).await {
+                error!("Encountered error {:?} registering shortcut: {:?}", error, shortcut);
+            }
+        }
+
+        // Listen for shortcut activation on a spawned task.
         let task = fasync::Task::spawn(async move {
-            let (listener_client_end, mut listener_stream) =
-                create_request_stream::<ui_shortcut2::ListenerMarker>()
-                    .expect("Failed to create shortcut listener stream");
-
-            if let Err(error) = registry.set_view(&mut view_ref_for_shortcuts, listener_client_end)
-            {
-                error!("Failed to set_view on fuchsia.ui.shortcut2.Registry: {:?}", error);
-                return;
-            }
-
-            for shortcut in &shortcuts {
-                if let Err(error) = registry.register_shortcut(&mut shortcut.clone()).await {
-                    error!("Encountered error {:?} registering shortcut: {:?}", error, shortcut);
-                }
-            }
-
             while let Some(request) = listener_stream.next().await {
                 match request {
                     Ok(ui_shortcut2::ListenerRequest::OnShortcut { id, responder }) => {
@@ -263,7 +267,7 @@ impl Window {
                         });
                     }
                     Err(fidl::Error::ClientChannelClosed { .. }) => {
-                        error!("Shortcut listener connection closed.");
+                        warn!("Shortcut listener connection closed.");
                         break;
                     }
                     Err(fidl_error) => {
@@ -280,6 +284,8 @@ impl Window {
             let _ = task.cancel();
         }
         self.shortcut_task = Some(task);
+
+        Ok(())
     }
 
     pub fn redraw(&mut self) {
@@ -378,8 +384,7 @@ impl Window {
                     create_endpoints::<felement::AnnotationControllerMarker>()?;
                 let (view_controller_proxy, view_controller_request) =
                     create_proxy::<felement::ViewControllerMarker>()?;
-                let view_ref_for_graphical_presenter =
-                    fuchsia_scenic::duplicate_view_ref(&self.view_ref)?;
+                let view_ref_for_graphical_presenter = self.get_view_ref()?;
                 let graphical_presenter = self
                     .protocol_connector
                     .connect_to_graphical_presenter()
@@ -410,7 +415,7 @@ impl Window {
             None => (async {}.boxed(), async {}.boxed()),
         };
 
-        let view_ref_for_keyboard = fuchsia_scenic::duplicate_view_ref(&self.view_ref)?;
+        let view_ref_for_keyboard = self.get_view_ref()?;
         let keyboard =
             self.protocol_connector.connect_to_keyboard().expect("Failed to connect to Keyboard");
 
@@ -421,6 +426,23 @@ impl Window {
             event_sender.clone(),
         )
         .boxed();
+
+        let focus_chain_fut = if self.attributes.use_focus_chain_listener {
+            let view_ref_for_focus_chain = self.get_view_ref()?;
+            let focus_chain = self
+                .protocol_connector
+                .connect_to_focus_chain_listener()
+                .expect("Failed to connect to FocusChainListener");
+            serve_focus_chain_listener(
+                window_id,
+                view_ref_for_focus_chain,
+                focus_chain,
+                event_sender.clone(),
+            )
+            .boxed()
+        } else {
+            async {}.boxed()
+        };
 
         // Collect all futures into an abortable spawned task. The task is aborted in [Drop].
         let task = fasync::Task::spawn(async move {
@@ -466,6 +488,7 @@ impl Window {
                 viewref_focused_fut,
                 view_controller_fut,
                 keyboard_fut,
+                focus_chain_fut,
                 pointer_fut,
                 mouse_fut,
                 touch_fut,
@@ -821,6 +844,58 @@ async fn serve_keyboard_listener(
         }
         Err(e) => {
             error!("Failed to add listener to the keyboard: {:?}", e)
+        }
+    }
+}
+
+async fn serve_focus_chain_listener(
+    window_id: WindowId,
+    view_ref: ui_views::ViewRef,
+    focus_chain: ui_focus::FocusChainListenerRegistryProxy,
+    event_sender: EventSender,
+) {
+    let (focus_chain_listener_client_end, mut focus_chain_listener) =
+        create_request_stream::<ui_focus::FocusChainListenerMarker>()
+            .expect("failed to create listener stream");
+
+    if let Err(error) = focus_chain.register(focus_chain_listener_client_end) {
+        error!("Failed to register with FocusChainListenerRegistry: {:?}", error);
+    } else {
+        while let Some(focus_change) = focus_chain_listener.next().await {
+            match focus_change {
+                Ok(ui_focus::FocusChainListenerRequest::OnFocusChange {
+                    focus_chain,
+                    responder,
+                    ..
+                }) => {
+                    if let Some(ref focus_chain) = focus_chain.focus_chain {
+                        // Get the index of [Window]'s view_ref.
+                        if let Some(index) = focus_chain.iter().position(|view_ref_focus_chain| {
+                            view_ref_is_same(view_ref_focus_chain, &view_ref)
+                        }) {
+                            // Generate ChildViewFocused event if there is a view_ref following
+                            // [Window]'s view_ref, implying a [ChildView] or it's descenant
+                            // has focus.
+                            if index + 2 <= focus_chain.len() {
+                                let child_view_ref = &focus_chain[index + 1];
+                                let dup_view_ref =
+                                    fuchsia_scenic::duplicate_view_ref(child_view_ref)
+                                        .expect("Failed to duplicate child view ref");
+                                event_sender.send(Event::WindowEvent {
+                                    window_id,
+                                    event: WindowEvent::ChildViewFocused {
+                                        view_ref: dup_view_ref,
+                                        descendant: index + 2 < focus_chain.len(),
+                                    },
+                                });
+                            }
+                        }
+                    };
+
+                    responder.send().expect("while sending focus chain listener response");
+                }
+                Err(e) => error!("FocusChainListenerRequest has error: {}.", e),
+            }
         }
     }
 }

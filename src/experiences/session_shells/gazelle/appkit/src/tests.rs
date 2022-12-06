@@ -18,6 +18,7 @@ use fidl_fuchsia_input::Key;
 use fidl_fuchsia_sysmem as sysmem;
 use fidl_fuchsia_ui_app as ui_app;
 use fidl_fuchsia_ui_composition as ui_comp;
+use fidl_fuchsia_ui_focus as ui_focus;
 use fidl_fuchsia_ui_input3 as ui_input3;
 use fidl_fuchsia_ui_input3::{KeyEvent, KeyEventStatus, KeyEventType, KeyMeaning, NonPrintableKey};
 use fidl_fuchsia_ui_shortcut2 as ui_shortcut2;
@@ -41,7 +42,7 @@ use crate::{
     child_view::{ChildView, ChildViewId},
     event::{ChildViewEvent, Event, EventSender, SystemEvent, ViewSpecHolder, WindowEvent},
     image::{load_image_from_bytes_using_allocators, load_png},
-    utils::ProtocolConnector,
+    utils::{spawn_async_on_err, ProtocolConnector},
     window::{Window, WindowId},
 };
 
@@ -121,7 +122,8 @@ async fn test_appkit() -> Result<(), Error> {
                 SystemEvent::ViewCreationToken { token: view_creation_token } => {
                     let mut window = Window::new(event_sender.clone())
                         .with_view_creation_token(view_creation_token)
-                        .with_protocol_connector(test_protocol_connector.box_clone());
+                        .with_protocol_connector(test_protocol_connector.box_clone())
+                        .use_focus_chain_listener(true);
                     window.create_view().expect("Failed to create view for window");
                     app.windows.insert(window.id(), window);
                 }
@@ -150,9 +152,13 @@ async fn test_appkit() -> Result<(), Error> {
                         );
                         window.redraw();
                     }
-                    ChildViewEvent::Attached { view_ref } => {
+                    ChildViewEvent::Attached { mut view_ref } => {
                         // Set focus to child view.
-                        window.request_focus(view_ref);
+                        if let Some(focuser) = window.get_focuser() {
+                            spawn_async_on_err(focuser.request_focus(&mut view_ref), |err| {
+                                error!("Failed to request focus: {:?}", err)
+                            });
+                        }
                     }
                     ChildViewEvent::Detached | ChildViewEvent::Dismissed => {
                         window.set_content(
@@ -338,10 +344,13 @@ async fn create_child_view_spec(
                         .with_view_creation_token(view_creation_token.take().unwrap())
                         .with_protocol_connector(protocol_connector.box_clone());
                     window.create_view().expect("Failed to create window for child view");
-                    window.register_shortcuts(vec![create_shortcut(
-                        1,
-                        vec![KeyMeaning::NonPrintableKey(NonPrintableKey::Tab)],
-                    )]);
+                    window
+                        .register_shortcuts(vec![create_shortcut(
+                            1,
+                            vec![KeyMeaning::NonPrintableKey(NonPrintableKey::Tab)],
+                        )])
+                        .await
+                        .expect("Failed to register shortcuts");
                     window_holder = Some(window);
                 }
                 Event::WindowEvent { event: window_event, .. } => match window_event {
@@ -521,6 +530,12 @@ impl ProtocolConnector for TestProtocolConnector {
         self.connect_to_protocol::<ui_input3::KeyboardMarker>()
     }
 
+    fn connect_to_focus_chain_listener(
+        &self,
+    ) -> Result<ui_focus::FocusChainListenerRegistryProxy, Error> {
+        self.connect_to_protocol::<ui_focus::FocusChainListenerRegistryMarker>()
+    }
+
     fn connect_to_sysmem_allocator(&self) -> Result<sysmem::AllocatorProxy, Error> {
         connect_to_protocol::<sysmem::AllocatorMarker>()
     }
@@ -582,6 +597,9 @@ async fn build_realm() -> anyhow::Result<RealmInstance> {
                 .capability(Capability::protocol_by_name("fuchsia.ui.composition.Allocator"))
                 .capability(Capability::protocol_by_name("fuchsia.ui.composition.Flatland"))
                 .capability(Capability::protocol_by_name("fuchsia.ui.composition.Screenshot"))
+                .capability(Capability::protocol_by_name(
+                    "fuchsia.ui.focus.FocusChainListenerRegistry",
+                ))
                 .capability(Capability::protocol_by_name("fuchsia.ui.input3.Keyboard"))
                 .capability(Capability::protocol_by_name("fuchsia.ui.shortcut2.Registry"))
                 .capability(Capability::protocol_by_name("fuchsia.ui.test.input.Registry"))

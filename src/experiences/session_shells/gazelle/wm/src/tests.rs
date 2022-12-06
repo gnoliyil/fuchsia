@@ -11,6 +11,7 @@ use fidl::endpoints::{create_proxy, create_proxy_and_stream, DiscoverableProtoco
 use fidl_fuchsia_element as felement;
 use fidl_fuchsia_sysmem as sysmem;
 use fidl_fuchsia_ui_composition as ui_comp;
+use fidl_fuchsia_ui_focus as ui_focus;
 use fidl_fuchsia_ui_input3 as ui_input3;
 use fidl_fuchsia_ui_shortcut2 as ui_shortcut2;
 use fidl_fuchsia_ui_test_scene as ui_test_scene;
@@ -73,6 +74,16 @@ async fn test_wm() -> Result<(), Error> {
     let cloned_test_protocol_connector = test_protocol_connector.clone();
     let test_fut = async move {
         let test_protocol_connector = cloned_test_protocol_connector;
+        // Wait for window manager to get focus.
+        wait_for_notification_callback(
+            move |notification| match notification {
+                Notification::FocusChanged { target: Either::Left(..) } => true,
+                _ => false,
+            },
+            &mut notification_receiver,
+        )
+        .await;
+
         // Add child view 1. [ChildView1 (Focus)]
         info!("Add child_view1");
         let (child_view_id1, _, _child_task1) =
@@ -207,6 +218,15 @@ async fn test_dismiss_window_in_background() -> Result<(), Error> {
     let cloned_test_protocol_connector = test_protocol_connector.clone();
     let test_fut = async move {
         let test_protocol_connector = cloned_test_protocol_connector;
+        // Wait for window manager to get focus.
+        wait_for_notification_callback(
+            move |notification| match notification {
+                Notification::FocusChanged { target: Either::Left(..) } => true,
+                _ => false,
+            },
+            &mut notification_receiver,
+        )
+        .await;
 
         // Add child view 1. [ChildView1 (Focus)]
         info!("Add child_view1");
@@ -516,6 +536,12 @@ impl ProtocolConnector for TestProtocolConnector {
         self.connect_to_protocol::<ui_input3::KeyboardMarker>()
     }
 
+    fn connect_to_focus_chain_listener(
+        &self,
+    ) -> Result<ui_focus::FocusChainListenerRegistryProxy, Error> {
+        self.connect_to_protocol::<ui_focus::FocusChainListenerRegistryMarker>()
+    }
+
     fn connect_to_sysmem_allocator(&self) -> Result<sysmem::AllocatorProxy, Error> {
         connect_to_protocol::<sysmem::AllocatorMarker>()
     }
@@ -569,6 +595,9 @@ async fn build_realm() -> anyhow::Result<RealmInstance> {
                 .capability(Capability::protocol_by_name("fuchsia.ui.composition.Allocator"))
                 .capability(Capability::protocol_by_name("fuchsia.ui.composition.Flatland"))
                 .capability(Capability::protocol_by_name("fuchsia.ui.composition.Screenshot"))
+                .capability(Capability::protocol_by_name(
+                    "fuchsia.ui.focus.FocusChainListenerRegistry",
+                ))
                 .capability(Capability::protocol_by_name("fuchsia.ui.input3.Keyboard"))
                 .capability(Capability::protocol_by_name("fuchsia.ui.shortcut2.Registry"))
                 .capability(Capability::protocol_by_name("fuchsia.ui.test.input.Registry"))

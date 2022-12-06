@@ -56,6 +56,8 @@ pub enum WindowEvent {
     NeedsRedraw { next_present_time: NextPresentTimeInNanos },
     /// Window has received or lost focus.
     Focused { focused: bool },
+    /// A ChildView of Window or it's descendant has received focus.
+    ChildViewFocused { view_ref: ui_views::ViewRef, descendant: bool },
     /// A keyboard key event when the window is in focus.
     Keyboard {
         event: ui_input3::KeyEvent,
@@ -114,7 +116,7 @@ impl EventSender {
 
     pub fn send(&self, event: Event) {
         if let Err(e) = self.0.unbounded_send(event) {
-            error!("Failed to send event {:?}", e.into_inner());
+            error!("Failed to send event: {:?}", e.into_inner());
         }
     }
 }

@@ -7,6 +7,7 @@
 #include <fuchsia/input/interaction/cpp/fidl.h>
 #include <fuchsia/ui/composition/cpp/fidl.h>
 #include <fuchsia/ui/display/singleton/cpp/fidl.h>
+#include <fuchsia/ui/focus/cpp/fidl.h>
 #include <fuchsia/ui/input/cpp/fidl.h>
 #include <fuchsia/ui/input3/cpp/fidl.h>
 #include <fuchsia/ui/pointerinjector/cpp/fidl.h>
@@ -81,6 +82,8 @@ int run_test_ui_stack(int argc, const char** argv) {
                                                         realm_exposed_services.get());
   AddPublicService<fuchsia::ui::composition::Flatland>(context.get(), realm_exposed_services.get());
   AddPublicService<fuchsia::ui::scenic::Scenic>(context.get(), realm_exposed_services.get());
+  AddPublicService<fuchsia::ui::focus::FocusChainListenerRegistry>(context.get(),
+                                                                   realm_exposed_services.get());
   AddPublicService<fuchsia::ui::input::ImeService>(context.get(), realm_exposed_services.get());
   AddPublicService<fuchsia::ui::input3::Keyboard>(context.get(), realm_exposed_services.get());
   AddPublicService<fuchsia::ui::input3::KeyEventInjector>(context.get(),

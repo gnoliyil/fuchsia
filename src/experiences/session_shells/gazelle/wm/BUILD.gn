@@ -49,6 +49,7 @@ rustc_binary("bin") {
 
   test_deps = [
     "//sdk/fidl/fuchsia.sysmem:fuchsia.sysmem_rust",
+    "//sdk/fidl/fuchsia.ui.focus:fuchsia.ui.focus_rust",
     "//sdk/fidl/fuchsia.ui.test.scene:fuchsia.ui.test.scene_rust",
     "//src/lib/fidl/rust/fidl",
     "//src/lib/fuchsia-async",

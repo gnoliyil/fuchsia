@@ -25,6 +25,7 @@ rustc_library("appkit") {
     "//sdk/fidl/fuchsia.math:fuchsia.math_rust",
     "//sdk/fidl/fuchsia.sysmem:fuchsia.sysmem_rust",
     "//sdk/fidl/fuchsia.ui.composition:fuchsia.ui.composition_rust",
+    "//sdk/fidl/fuchsia.ui.focus:fuchsia.ui.focus_rust",
     "//sdk/fidl/fuchsia.ui.input3:fuchsia.ui.input3_rust",
     "//sdk/fidl/fuchsia.ui.pointer:fuchsia.ui.pointer_rust",
     "//sdk/fidl/fuchsia.ui.shortcut2:fuchsia.ui.shortcut2_rust",

@@ -128,10 +128,9 @@ impl WindowManager {
     ) -> Result<WindowManager, Error> {
         let mut window = Window::new(event_sender.clone())
             .with_view_creation_token(view_creation_token)
-            .with_protocol_connector(protocol_connector.box_clone());
+            .with_protocol_connector(protocol_connector.box_clone())
+            .use_focus_chain_listener(true);
         window.create_view()?;
-
-        window.register_shortcuts(all_shortcuts());
 
         let flatland = window.get_flatland();
         let mut background = window.next_content_id();
@@ -186,6 +185,8 @@ impl WindowManager {
         &mut self,
         mut receiver: impl Stream<Item = Event> + std::marker::Unpin,
     ) -> Result<(), Error> {
+        self.window.register_shortcuts(all_shortcuts()).await?;
+
         // Load the keyboard shortcuts image.
         self.load_shortcuts_image().await?;
 
@@ -306,6 +307,20 @@ impl WindowManager {
 
                             responder.send(ui_shortcut2::Handled::Handled)?;
                         }
+                        WindowEvent::ChildViewFocused { view_ref, .. } => {
+                            // Get the child view with view_ref.
+                            for (child_view_id, child_view) in &self.child_views {
+                                let child_view_ref = child_view
+                                    .get_view_ref()
+                                    .expect("Failed to get child view ref");
+                                if view_ref_is_same(&child_view_ref, &view_ref) {
+                                    self.notify(Notification::FocusChanged {
+                                        target: Either::Right(*child_view_id),
+                                    })?;
+                                    break;
+                                }
+                            }
+                        }
                         WindowEvent::NeedsRedraw { .. } | WindowEvent::Pointer { .. } => {}
                     }
                 }
@@ -319,12 +334,7 @@ impl WindowManager {
                     ChildViewEvent::Attached { view_ref } => {
                         if let Some(child_view) = self.child_views.get_mut(&child_view_id) {
                             child_view.set_view_ref(view_ref);
-                            self.window.request_focus(
-                                child_view.get_view_ref().expect("Failed to get child view ref"),
-                            );
-                            self.notify(Notification::FocusChanged {
-                                target: Either::Right(child_view_id),
-                            })?;
+                            self.refocus()?;
                         } else if let Some((_, kind)) = self.shell_views.get(&child_view_id) {
                             self.notify(Notification::AddedShellView {
                                 id: child_view_id,
@@ -422,11 +432,11 @@ impl WindowManager {
     }
 
     // Requests focus to the top-most child view.
-    fn refocus(&mut self) -> Result<(), Error> {
+    fn refocus(&self) -> Result<(), Error> {
         if let Some((_, child_view)) = self.child_views.last() {
             if let Some(view_ref) = child_view.get_view_ref() {
-                self.window.request_focus(view_ref);
-                self.notify(Notification::FocusChanged { target: Either::Right(child_view.id()) })?;
+                let focuser = self.window.get_focuser().expect("Failed to retrieve window focuser");
+                set_focus(focuser, view_ref);
             }
         }
 
@@ -517,9 +527,8 @@ impl WindowManager {
             return Ok(());
         }
 
-        if let Some((child_view_id, child_view)) = self.child_views.shift_remove_index(index) {
-            self.child_views.insert(child_view_id, child_view);
-        }
+        // Move the view at index to the top.
+        self.child_views.move_index(index, self.child_views.len() - 1);
 
         self.refocus()?;
 
@@ -537,11 +546,8 @@ impl WindowManager {
             return Ok(());
         }
 
-        // We drain all elements except the last, and then re-add them back.
-        let rest: Vec<_> = self.child_views.drain(..self.child_views.len() - 1).collect();
-        for (child_view_id, child_view) in rest {
-            self.child_views.insert(child_view_id, child_view);
-        }
+        // Move the top-most view to the bottom, thereby making the previous view top-most.
+        self.child_views.move_index(self.child_views.len() - 1, 0);
 
         self.refocus()?;
 
@@ -553,6 +559,12 @@ impl WindowManager {
         self.notification_sender.unbounded_send(notification)?;
         Ok(())
     }
+}
+
+fn set_focus(focuser: ui_views::FocuserProxy, mut view_ref: ui_views::ViewRef) {
+    spawn_async_on_err(focuser.request_focus(&mut view_ref), |error| {
+        error!("Failed to request_focus: {:?}", error)
+    });
 }
 
 /// Returns the first ViewCreationToken received by ViewProvider service and all requests to
