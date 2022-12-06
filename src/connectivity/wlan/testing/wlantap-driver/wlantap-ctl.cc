@@ -33,21 +33,6 @@ constexpr size_t kWlantapPhyConfigBufferSize =
 static fidl::Arena<kWlantapPhyConfigBufferSize> phy_config_arena;
 
 class WlantapDriver {
- public:
-  zx_status_t GetOrStartLoop(async_dispatcher_t** out) {
-    std::lock_guard<std::mutex> guard(mutex_);
-    if (!loop_) {
-      auto l = std::make_unique<async::Loop>(&kAsyncLoopConfigNoAttachToCurrentThread);
-      zx_status_t status = l->StartThread("wlantap-loop");
-      if (status != ZX_OK) {
-        return status;
-      }
-      loop_ = std::move(l);
-    }
-    *out = loop_->dispatcher();
-    return ZX_OK;
-  }
-
  private:
   std::mutex mutex_;
   std::unique_ptr<async::Loop> loop_;
@@ -62,17 +47,11 @@ struct WlantapCtl : fidl::WireServer<fuchsia_wlan_tap::WlantapCtl> {
     zx_status_t status;
     phy_config_arena.Reset();
 
-    async_dispatcher_t* loop;
-    if ((status = driver_->GetOrStartLoop(&loop)) != ZX_OK) {
-      completer.Reply(status);
-      return;
-    }
     auto natural_config = fidl::ToNatural(request->config);
     auto wire_config = fidl::ToWire(phy_config_arena, std::move(natural_config));
     auto phy_config = std::make_shared<wlan_tap::WlantapPhyConfig>(wire_config);
 
-    if ((status = wlan::CreatePhy(device_, request->proxy.TakeChannel(), phy_config, loop)) !=
-        ZX_OK) {
+    if ((status = wlan::CreatePhy(device_, request->proxy.TakeChannel(), phy_config)) != ZX_OK) {
       completer.Reply(status);
     } else {
       completer.Reply(ZX_OK);

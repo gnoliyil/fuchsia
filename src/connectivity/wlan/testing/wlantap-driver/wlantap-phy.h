@@ -15,8 +15,7 @@ namespace wlan_tap = fuchsia_wlan_tap::wire;
 namespace wlan {
 
 zx_status_t CreatePhy(zx_device_t* wlantapctl, zx::channel user_channel,
-                      std::shared_ptr<wlan_tap::WlantapPhyConfig> phy_config_from_fidl,
-                      async_dispatcher_t* loop);
+                      std::shared_ptr<wlan_tap::WlantapPhyConfig> phy_config_from_fidl);
 
 }  // namespace wlan
 
