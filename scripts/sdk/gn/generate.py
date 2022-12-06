@@ -25,6 +25,8 @@ FUCHSIA_ROOT = os.path.dirname(  # $root
     os.path.dirname(  # scripts
         os.path.dirname(  # sdk
             SCRIPT_DIR)))  # gn
+PIGZ_PATH = os.path.join(
+    FUCHSIA_ROOT, "prebuilt", "third_party", "pigz", "pigz")
 
 sys.path += [os.path.join(FUCHSIA_ROOT, 'scripts', 'sdk', 'common')]
 from files import copy_tree
@@ -495,8 +497,15 @@ def create_archive(output_archive, output):
     if not os.path.exists(output):
         return False
     # Create GN SDK archive
-    with tarfile.open(output_archive, "w:gz") as archive_file:
-        archive_file.add(output, arcname='')
+    if os.path.isfile(PIGZ_PATH):
+        temp_tar = output_archive + ".tmp.tar"
+        with tarfile.open(temp_tar, "w") as archive_file:
+            archive_file.add(output, arcname='')
+        subprocess.run([PIGZ_PATH, temp_tar, "-9"])
+        os.rename(temp_tar + ".gz", output_archive)
+    else:
+        with tarfile.open(output_archive, "w:gz") as archive_file:
+            archive_file.add(output, arcname='')
 
     return True
 

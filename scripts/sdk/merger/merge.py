@@ -38,6 +38,14 @@ import tempfile
 from functools import total_ordering
 from typing import Any, Dict, Optional, Sequence, Set, Tuple
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+FUCHSIA_ROOT = os.path.dirname(  # $root
+    os.path.dirname(  # scripts
+        os.path.dirname(  # sdk
+            SCRIPT_DIR)))  # merger
+PIGZ_PATH = os.path.join(
+    FUCHSIA_ROOT, "prebuilt", "third_party", "pigz", "pigz")
+
 # Reminder about the layout of each SDK directory:
 #
 # The top-level meta/manifest.json describes the whole SDK content
@@ -281,27 +289,14 @@ def tarfile_writer(archive_file: Path, source_dir: Path):
         archive.add(source_dir, arcname='')
 
 
-def tarmaker_writer(archive_file: Path, source_dir: Path, tarmaker: Path):
-    """Write an archive using the tarmaker tool."""
-    # Generate a temporary tarmaker manifest, since it will be
-    # opened by tarmaker, do not use tempfile.NamedTemporaryFile()
-    # because this would fail on Windows.
-    manifest_file = archive_file + '.tarmaker-manifest'
-    try:
-        with open(manifest_file, 'w') as manifest:
-            for root, _, files in os.walk(source_dir):
-                for file in files:
-                    src_path = os.path.join(root, file)
-                    dst_path = os.path.relpath(src_path, source_dir)
-                    print('%s=%s' % (dst_path, src_path), file=manifest)
-
-        # NOTE: tarmaker always sorts manifest entries by
-        # destination path before creating the archive to ensure
-        # deterministic output.
-        subprocess.check_call(
-            [tarmaker, '--manifest', manifest_file, '--output', archive_file])
-    finally:
-        os.unlink(manifest_file)
+def pigz_writer(archive_file: Path, source_dir: Path):
+    """Write an uncompressed archive using the Python tarfile module,
+    then compress with pigz."""
+    temp_archive = archive_file + ".tmp.tar"
+    with tarfile.open(temp_archive, "w") as archive:
+        archive.add(source_dir, arcname='')
+    subprocess.check_call([PIGZ_PATH, temp_archive, "-9"])
+    os.rename(temp_archive + ".gz", archive_file)
 
 
 class MergeState(object):
@@ -311,10 +306,6 @@ class MergeState(object):
         self._all_outputs: Set[Path] = set()
         self._all_inputs: Set[Path] = set()
         self._temp_dirs: Set[Path] = set()
-        self._tarmaker_tool: Path = None
-
-    def set_tarmaker_tool(self, tarmaker_tool: Path):
-        self._tarmaker_tool = tarmaker_tool
 
     def __enter__(self):
         return self
@@ -375,9 +366,9 @@ class MergeState(object):
         return extract_dir
 
     def write_archive(self, archive: Path, source_dir: Path):
-        """Write a compressed archive."""
-        if self._tarmaker_tool:
-            tarmaker_writer(archive, source_dir, self._tarmaker_tool)
+        """Write a compressed archive, using the pigz prebuilt if available"""
+        if os.path.isfile(PIGZ_PATH):
+            pigz_writer(archive, source_dir)
         else:
             tarfile_writer(archive, source_dir)
         self.add_output(archive)
@@ -667,8 +658,6 @@ def main(main_args=None):
         help='Path to the merged SDK - as a directory',
         metavar='OUT_DIR',
         default='')
-    parser.add_argument(
-        '--tarmaker', help='Use tarmaker tool for faster archive generation')
     parser.add_argument('--stamp-file', help='Path to the stamp file')
     hermetic_group = parser.add_mutually_exclusive_group()
     hermetic_group.add_argument('--depfile', help='Path to the stamp file')
@@ -713,9 +702,6 @@ def main(main_args=None):
     has_errors = False
 
     with MergeState() as state:
-        if args.tarmaker:
-            state.set_tarmaker_tool(args.tarmaker)
-
         num_inputs = len(args.inputs)
         for n, input in enumerate(args.inputs):
             input_sdk = InputSdk(
