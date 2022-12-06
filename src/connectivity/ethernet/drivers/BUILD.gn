@@ -17,6 +17,7 @@ group("tests") {
     "realtek-8211f:tests",
     "rndis-function:tests",
     "rndis-host:tests",
+    "third_party/igc/test:igc_tests",
     "usb-cdc-ecm:tests",
     "usb-cdc-function:tests",
     "virtio:tests",

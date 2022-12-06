@@ -15,9 +15,9 @@ driver_bind_rules("igc_bind") {
   ]
 }
 
-fuchsia_driver("igc-driver") {
-  output_name = "igc"
+source_set("igc_core") {
   configs += [ "//build/config:all_source" ]
+
   sources = [
     "igc_api.cc",
     "igc_base.cc",
@@ -27,11 +27,18 @@ fuchsia_driver("igc-driver") {
     "igc_nvm.cc",
     "igc_phy.cc",
   ]
-  deps = [
+
+  public = [ "igc_osdep.h" ]
+
+  public_deps = [
     ":igc_bind",
     "//sdk/banjo/fuchsia.hardware.network.device:fuchsia.hardware.network.device_banjo_cpp",
     "//sdk/banjo/fuchsia.hardware.network.mac:fuchsia.hardware.network.mac_banjo_cpp",
     "//sdk/fidl/fuchsia.hardware.network:fuchsia.hardware.network_cpp_wire",
+    "//src/lib/vmo_store",
+  ]
+
+  deps = [
     "//src/connectivity/network/drivers/network-device/device:shared_lock",
     "//src/connectivity/wlan/drivers/lib/components:cpp",
     "//src/devices/lib/driver",
@@ -41,8 +48,12 @@ fuchsia_driver("igc-driver") {
     "//src/devices/pci/lib/pci",
     "//src/lib/ddktl",
     "//src/lib/listnode",
-    "//src/lib/vmo_store",
   ]
+}
+
+fuchsia_driver("igc-driver") {
+  output_name = "igc"
+  deps = [ ":igc_core" ]
 }
 
 fuchsia_driver_component("igc") {

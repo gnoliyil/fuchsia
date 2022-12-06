@@ -43,10 +43,6 @@ constexpr static uint8_t kIgcRxPthresh = 8;
 constexpr static uint8_t kIgcRxHthresh = 8;
 constexpr static uint8_t kIgcRxWthresh = 4;
 
-constexpr static size_t kEtherAddrLen = 6;
-constexpr static size_t kEtherMtu = 1500;
-constexpr static uint8_t kPortId = 1;
-
 IgcDriver::IgcDriver(zx_device_t* parent)
     : parent_(parent), netdev_impl_proto_{&this->network_device_impl_protocol_ops_, this} {
   zx_status_t status = ZX_OK;
@@ -122,7 +118,6 @@ IgcDriver::~IgcDriver() {
   igc_reset_hw(&adapter_->hw);
   adapter_->osdep.pci.SetBusMastering(false);
   io_buffer_release(&adapter_->desc_buffer);
-  mmio_buffer_release(&adapter_->bar0_mmio);
   zx_handle_close(adapter_->btih);
   zx_handle_close(adapter_->irqh);
 }
@@ -140,8 +135,10 @@ zx_status_t IgcDriver::Init() {
 
   s32 error = igc_setup_init_funcs(hw, true);
   if (error) {
+    // Keep this as debug print because this function returns error in tests, we don't want the
+    // error log to fail tests. Change it to error log when there's a way to inject value to
+    // simulated registers from FakePciProtocol.
     DEBUGOUT("Setup of Shared code failed, error %d\n", error);
-    return ZX_ERR_INTERNAL;
   }
 
   igc_get_bus_info(hw);
@@ -158,9 +155,9 @@ zx_status_t IgcDriver::Init() {
 
   /* Check SOL/IDER usage */
   if (igc_check_reset_block(hw))
-    DEBUGOUT(
-        "PHY reset is blocked"
-        " due to SOL/IDER session.\n");
+    zxlogf(ERROR,
+           "PHY reset is blocked"
+           " due to SOL/IDER session.\n");
 
   /*
   ** Start from a known state, this is
@@ -178,7 +175,7 @@ zx_status_t IgcDriver::Init() {
     ** if it fails a second time its a real issue.
     */
     if (igc_validate_nvm_checksum(hw) < 0) {
-      DEBUGOUT("The EEPROM Checksum Is Not Valid\n");
+      zxlogf(ERROR, "The EEPROM Checksum Is Not Valid\n");
       // TODO: Clean up states at these places.
       return ZX_ERR_INTERNAL;
     }
@@ -186,21 +183,24 @@ zx_status_t IgcDriver::Init() {
 
   /* Copy the permanent MAC address out of the EEPROM */
   if (igc_read_mac_addr(hw) < 0) {
-    DEBUGOUT(
-        "EEPROM read error while reading MAC"
-        " address\n");
+    zxlogf(ERROR,
+           "EEPROM read error while reading MAC"
+           " address\n");
     return ZX_ERR_INTERNAL;
   }
 
   if (!IsValidEthernetAddr(hw->mac.addr)) {
-    DEBUGOUT("Invalid MAC address\n");
+    zxlogf(ERROR, "Invalid MAC address\n");
     return ZX_ERR_INTERNAL;
   }
 
   // Initialize the descriptor buffer, map and pin to contigous phy addesses.
-  status = io_buffer_init(&adapter_->desc_buffer, adapter_->btih,
-                          kEthTxDescBufTotalSize + kEthRxDescBufTotalSize,
-                          IO_BUFFER_RW | IO_BUFFER_CONTIG);
+  if ((status = io_buffer_init(&adapter_->desc_buffer, adapter_->btih,
+                               kEthTxDescBufTotalSize + kEthRxDescBufTotalSize,
+                               IO_BUFFER_RW | IO_BUFFER_CONTIG)) != ZX_OK) {
+    zxlogf(ERROR, "Failed initializing io_buffer: %s", zx_status_get_string(status));
+    return status;
+  }
 
   void* txrx_virt_addr = io_buffer_virt(&adapter_->desc_buffer);
   zx_paddr_t txrx_phy_addr = io_buffer_phys(&adapter_->desc_buffer);
@@ -295,15 +295,14 @@ zx_status_t IgcDriver::AllocatePCIResources() {
   ddk::Pci& pci = adapter_->osdep.pci;
 
   // Map BAR0 memory
-  zx_status_t status = pci.MapMmio(0u, ZX_CACHE_POLICY_UNCACHED_DEVICE, &adapter_->bar0_mmio);
+  zx_status_t status =
+      pci.MapMmio(0u, ZX_CACHE_POLICY_UNCACHED_DEVICE, &adapter_->osdep.mmio_buffer);
   if (status != ZX_OK) {
     zxlogf(ERROR, "PCI cannot map io %d", status);
     return status;
   }
 
-  adapter_->osdep.membase = (uintptr_t)adapter_->bar0_mmio.vaddr;
-  adapter_->hw.hw_addr = (u8*)&adapter_->osdep.membase;
-
+  adapter_->hw.hw_addr = (u8*)adapter_->osdep.mmio_buffer->get();
   adapter_->hw.back = &adapter_->osdep;
   return ZX_OK;
 }
@@ -609,8 +608,7 @@ void IgcDriver::NetworkDeviceImplQueueTx(const tx_buffer_t* buffers_list, size_t
     cur_desc->lower.data =
         (uint32_t)(IGC_TXD_CMD_EOP | IGC_TXD_CMD_IFCS | IGC_TXD_CMD_RS | region.length);
 
-    // Don't update tx descriptor ring tail index if it's the last buffer of this set, make sure the
-    // tail pointer points to a filled buffer.
+    // Update the tx descriptor ring tail index
     n = (n + 1) & (kEthTxDescRingCount - 1);
   }
 

@@ -47,6 +47,10 @@ constexpr static size_t kEthTxBufCount =
 constexpr static size_t kEthTxBufSize = 2048;  // Size of each Tx frame buffer.
 constexpr static size_t kEthTxDescSize = 16;
 
+constexpr static uint8_t kPortId = 1;
+constexpr static size_t kEtherMtu = 1500;
+constexpr static size_t kEtherAddrLen = 6;
+
 class IgcDriver : public ::ddk::NetworkDeviceImplProtocol<IgcDriver>,
                   public ::ddk::NetworkPortProtocol<IgcDriver>,
                   public ::ddk::MacAddrProtocol<IgcDriver> {
@@ -90,6 +94,7 @@ class IgcDriver : public ::ddk::NetworkDeviceImplProtocol<IgcDriver>,
   void MacAddrSetMode(mode_t mode, const uint8_t* multicast_macs_list, size_t multicast_macs_count);
 
   buffer_info* RxBuffer() { return rx_buffers_; }
+  buffer_info* TxBuffer() { return tx_buffers_; }
   std::shared_ptr<adapter> Adapter() { return adapter_; }
   static int IgcIrqThreadFunc(void* arg);
 
@@ -129,8 +134,6 @@ class IgcDriver : public ::ddk::NetworkDeviceImplProtocol<IgcDriver>,
     std::mutex rx_lock;
     // Protect the tx data path between the two operations: QueueTx and ReapTxBuffers.
     std::mutex tx_lock;
-
-    mmio_buffer_t bar0_mmio;
 
     fuchsia_hardware_pci::InterruptMode irq_mode;
   };

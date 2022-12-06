@@ -60,35 +60,34 @@ typedef int8_t s8;
 
 struct igc_osdep {
   ddk::Pci pci;
-  uintptr_t membase;
-  uintptr_t iobase;
-  uintptr_t flashbase;
+  std::optional<fdf::MmioBuffer> mmio_buffer;
 };
 
 #define hw2pci(hw) (&((struct igc_osdep *)(hw)->back)->pci)
 #define hw2membase(hw) (((struct igc_osdep *)(hw)->back)->membase)
 #define hw2iobase(hw) (((struct igc_osdep *)(hw)->back)->iobase)
 #define hw2flashbase(hw) (((struct igc_osdep *)(hw)->back)->flashbase)
+#define hw2mmiobuffer(hw) (((struct igc_osdep *)(hw)->back)->mmio_buffer)
 
-#define igc_writeb(v, a) MmioWrite8((v), (MMIO_PTR uint8_t volatile *)(uintptr_t)(a))
-#define igc_writew(v, a) MmioWrite16((v), (MMIO_PTR uint16_t volatile *)(uintptr_t)(a))
-#define igc_writel(v, a) MmioWrite32((v), (MMIO_PTR uint32_t volatile *)(uintptr_t)(a))
-#define igc_writell(v, a) MmioWrite64((v), (MMIO_PTR uint64_t volatile *)(uintptr_t)(a))
+#define igc_writeb(buf, val, offs) buf->Write8(val, offs)
+#define igc_writew(buf, val, offs) buf->Write16(val, offs)
+#define igc_writel(buf, val, offs) buf->Write32(val, offs)
+#define igc_writell(buf, val, offs) buf->Write64(val, offs)
 
-#define igc_readb(a) MmioRead8((MMIO_PTR uint8_t const volatile *)(uintptr_t)(a))
-#define igc_readw(a) MmioRead16((MMIO_PTR uint16_t const volatile *)(uintptr_t)(a))
-#define igc_readl(a) MmioRead32((MMIO_PTR uint32_t const volatile *)(uintptr_t)(a))
-#define igc_readll(a) MmioRead64((MMIO_PTR uint64_t const volatile *)(uintptr_t)(a))
+#define igc_readb(buf, offs) buf->Read8(offs)
+#define igc_readw(buf, offs) buf->Read16(offs)
+#define igc_readl(buf, offs) buf->Read32(offs)
+#define igc_readll(buf, offs) buf->Read64(offs)
 
 #define IGC_REGISTER(hw, reg) (u32) reg
 
 #define IGC_WRITE_FLUSH(a) IGC_READ_REG(a, IGC_STATUS)
 
 /* Read from an absolute offset in the adapter's memory space */
-#define IGC_READ_OFFSET(hw, offset) igc_readl(hw2membase(hw) + (offset))
+#define IGC_READ_OFFSET(hw, offset) igc_readl(hw2mmiobuffer(hw), offset)
 
 /* Write to an absolute offset in the adapter's memory space */
-#define IGC_WRITE_OFFSET(hw, offset, value) igc_writel((value), hw2membase(hw) + (offset))
+#define IGC_WRITE_OFFSET(hw, offset, value) igc_writel(hw2mmiobuffer(hw), (value),  (offset))
 
 /* Register READ/WRITE macros */
 
@@ -106,13 +105,13 @@ struct igc_osdep {
 #define IGC_WRITE_REG_ARRAY_DWORD IGC_WRITE_REG_ARRAY
 
 #define IGC_READ_REG_ARRAY_BYTE(hw, reg, index) \
-  igc_readb(hw2membase(hw) + IGC_REGISTER((hw), (reg)) + (index))
+  igc_readb(hw2mmiobuffer(hw), IGC_REGISTER((hw), (reg)) + (index))
 
 #define IGC_WRITE_REG_ARRAY_BYTE(hw, reg, index, value) \
-  igc_writeb((value), hw2membase(hw) + IGC_REGISTER((hw), (reg)) + (index))
+  igc_writeb(hw2mmiobuffer(hw), (value),  IGC_REGISTER((hw), (reg)) + (index))
 
 #define IGC_WRITE_REG_ARRAY_WORD(hw, reg, index, value) \
-  igc_writew((value), hw2membase(hw) + IGC_REGISTER((hw), (reg)) + ((index) << 1))
+  igc_writew(hw2mmiobuffer(hw),(value),  IGC_REGISTER((hw), (reg)) + ((index) << 1))
 
 #endif // SRC_CONNECTIVITY_ETHERNET_DRIVERS_THIRD_PARTY_IGC_IGC_OSDEP_H_
 // clang-format on
