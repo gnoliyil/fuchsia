@@ -116,7 +116,7 @@ class PtyServer : public std::enable_shared_from_this<PtyServer>,
   // The dimensions (in characters) of the window
   fuchsia_hardware_pty::wire::WindowSize size_ = {};
 
-  std::unordered_map<zx_handle_t, fidl::ServerBindingRef<fuchsia_hardware_pty::Device>> bindings_;
+  fidl::ServerBindingGroup<fuchsia_hardware_pty::Device> bindings_;
 };
 
 #endif  // SRC_BRINGUP_BIN_PTYSVC_PTY_SERVER_H_

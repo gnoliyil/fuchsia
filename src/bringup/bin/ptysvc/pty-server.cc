@@ -27,28 +27,21 @@ zx::result<PtyServer::Args> PtyServer::Args::Create() {
 }
 
 PtyServer::PtyServer(Args args, async_dispatcher_t* dispatcher)
-    : local_(std::move(args.local_)), remote_(std::move(args.remote_)), dispatcher_(dispatcher) {}
+    : local_(std::move(args.local_)), remote_(std::move(args.remote_)), dispatcher_(dispatcher) {
+  bindings_.set_empty_set_handler([this]() {
+    for (auto& [id, client] : clients_) {
+      // inform clients that server is gone
+      client.AssertHangupSignal();
+    }
+    active_.reset();
+  });
+}
 
 PtyServer::~PtyServer() = default;
 
 void PtyServer::AddConnection(fidl::ServerEnd<fuchsia_hardware_pty::Device> request) {
-  const zx_handle_t key = request.channel().get();
-  auto [it, inserted] = bindings_.insert(
-      {key, fidl::BindServer(dispatcher(), std::move(request), shared_from_this(),
-                             [](PtyServer* impl, fidl::UnbindInfo,
-                                fidl::ServerEnd<fuchsia_hardware_pty::Device> key) {
-                               PtyServer& self = *impl;
-                               size_t erased = self.bindings_.erase(key.channel().get());
-                               ZX_ASSERT_MSG(erased == 1, "erased=%zu", erased);
-                               if (self.bindings_.empty()) {
-                                 for (auto& [id, client] : self.clients_) {
-                                   // inform clients that server is gone
-                                   client.AssertHangupSignal();
-                                 }
-                                 self.active_.reset();
-                               }
-                             })});
-  ZX_ASSERT_MSG(inserted, "handle=%d", key);
+  bindings_.AddBinding(dispatcher(), std::move(request), this,
+                       [keep_alive = shared_from_this()](fidl::UnbindInfo) {});
 }
 
 void PtyServer::Clone2(Clone2RequestView request, Clone2Completer::Sync& completer) {

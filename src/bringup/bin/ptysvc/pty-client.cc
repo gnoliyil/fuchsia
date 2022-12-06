@@ -12,22 +12,12 @@
 
 PtyClient::PtyClient(std::shared_ptr<PtyServer> server, uint32_t id, zx::eventpair local,
                      zx::eventpair remote)
-    : server_(std::move(server)), id_(id), local_(std::move(local)), remote_(std::move(remote)) {}
+    : server_(std::move(server)), id_(id), local_(std::move(local)), remote_(std::move(remote)) {
+  bindings_.set_empty_set_handler([this]() { this->server().RemoveClient(id_); });
+}
 
 void PtyClient::AddConnection(fidl::ServerEnd<fuchsia_hardware_pty::Device> request) {
-  const zx_handle_t key = request.channel().get();
-  auto [it, inserted] = bindings_.insert(
-      {key, fidl::BindServer(server().dispatcher(), std::move(request), this,
-                             [](PtyClient* impl, fidl::UnbindInfo,
-                                fidl::ServerEnd<fuchsia_hardware_pty::Device> key) {
-                               PtyClient& self = *impl;
-                               size_t erased = self.bindings_.erase(key.channel().get());
-                               ZX_ASSERT_MSG(erased == 1, "erased=%zu", erased);
-                               if (self.bindings_.empty()) {
-                                 self.server().RemoveClient(self.id_);
-                               }
-                             })});
-  ZX_ASSERT_MSG(inserted, "handle=%d", key);
+  bindings_.AddBinding(server().dispatcher(), std::move(request), this, [](fidl::UnbindInfo) {});
 }
 
 void PtyClient::Clone2(Clone2RequestView request, Clone2Completer::Sync& completer) {

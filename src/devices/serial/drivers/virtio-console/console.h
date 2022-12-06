@@ -122,7 +122,7 @@ class ConsoleDevice : public Device,
 
   zx::eventpair event_, event_remote_;
 
-  std::unordered_map<zx_handle_t, fidl::ServerBindingRef<fuchsia_hardware_pty::Device>> bindings_;
+  fidl::ServerBindingGroup<fuchsia_hardware_pty::Device> bindings_;
   std::optional<ddk::UnbindTxn> unbind_txn_;
 };
 

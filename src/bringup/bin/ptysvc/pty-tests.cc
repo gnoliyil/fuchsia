@@ -6,6 +6,7 @@
 #include <fidl/fuchsia.io/cpp/wire.h>
 #include <lib/async-loop/cpp/loop.h>
 #include <lib/async-loop/default.h>
+#include <lib/async/cpp/task.h>
 #include <lib/sync/completion.h>
 #include <lib/zx/time.h>
 
@@ -28,15 +29,18 @@ class PtyTestCase : public zxtest::Test {
   void SetUp() override {
     zx::result args = PtyServer::Args::Create();
     ASSERT_OK(args.status_value());
-    std::shared_ptr server =
-        std::make_shared<PtyServer>(std::move(args.value()), loop_.dispatcher());
+    std::shared_ptr server = std::make_shared<PtyServer>(std::move(args.value()), dispatcher());
     zx::result endpoints = fidl::CreateEndpoints<Device>();
     ASSERT_OK(endpoints.status_value());
-    server->AddConnection(std::move(endpoints->server));
+    auto& [client_end, server_end] = endpoints.value();
+
+    async::PostTask(dispatcher(),
+                    [server = std::move(server), server_end = std::move(server_end)]() mutable {
+                      server->AddConnection(std::move(server_end));
+                    });
 
     ASSERT_OK(loop_.StartThread("pty-test"));
-
-    server_ = Connection(std::move(endpoints->client));
+    server_ = Connection(std::move(client_end));
   }
 
  protected:

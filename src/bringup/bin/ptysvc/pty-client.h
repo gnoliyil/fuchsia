@@ -102,7 +102,7 @@ class PtyClient : public fidl::WireServer<fuchsia_hardware_pty::Device> {
   uint32_t flags_ = 0;
   Fifo rx_fifo_;
 
-  std::unordered_map<zx_handle_t, fidl::ServerBindingRef<fuchsia_hardware_pty::Device>> bindings_;
+  fidl::ServerBindingGroup<fuchsia_hardware_pty::Device> bindings_;
 };
 
 #endif  // SRC_BRINGUP_BIN_PTYSVC_PTY_CLIENT_H_

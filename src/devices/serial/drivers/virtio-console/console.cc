@@ -197,10 +197,13 @@ zx_status_t ConsoleDevice::Init() TA_NO_THREAD_SAFETY_ANALYSIS {
 }
 
 void ConsoleDevice::DdkUnbind(ddk::UnbindTxn txn) {
-  unbind_txn_ = std::move(txn);
-
-  for (auto& [handle, binding] : bindings_) {
-    binding.Unbind();
+  ZX_ASSERT(!unbind_txn_.has_value());
+  ddk::UnbindTxn& unbind_txn = unbind_txn_.emplace(std::move(txn));
+  auto cleanup = [&unbind_txn]() { unbind_txn.Reply(); };
+  bindings_.set_empty_set_handler(cleanup);
+  if (!bindings_.CloseAll(ZX_OK)) {
+    // Binding set was already empty.
+    cleanup();
   }
 }
 
@@ -261,23 +264,8 @@ void ConsoleDevice::IrqRingUpdate() {
 }
 
 void ConsoleDevice::AddConnection(fidl::ServerEnd<fuchsia_hardware_pty::Device> server_end) {
-  const zx_handle_t key = server_end.channel().get();
-  auto [it, inserted] = bindings_.insert(
-      {key, fidl::BindServer(
-                fdf::Dispatcher::GetCurrent()->async_dispatcher(), std::move(server_end),
-                static_cast<fidl::WireServer<fuchsia_hardware_pty::Device>*>(this),
-                [](fidl::WireServer<fuchsia_hardware_pty::Device>* impl, fidl::UnbindInfo,
-                   fidl::ServerEnd<fuchsia_hardware_pty::Device> key) {
-                  ConsoleDevice& self = *static_cast<ConsoleDevice*>(impl);
-                  size_t erased = self.bindings_.erase(key.channel().get());
-                  ZX_ASSERT_MSG(erased == 1, "erased=%zu", erased);
-                  if (self.bindings_.empty()) {
-                    if (std::optional txn = std::exchange(self.unbind_txn_, {}); txn.has_value()) {
-                      txn.value().Reply();
-                    }
-                  }
-                })});
-  ZX_ASSERT_MSG(inserted, "handle=%d", key);
+  bindings_.AddBinding(fdf::Dispatcher::GetCurrent()->async_dispatcher(), std::move(server_end),
+                       this, [](fidl::UnbindInfo) {});
 }
 
 void ConsoleDevice::Clone2(Clone2RequestView request, Clone2Completer::Sync& completer) {
