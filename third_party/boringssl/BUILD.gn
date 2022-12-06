@@ -250,7 +250,9 @@ if (!is_kernel) {
       deps = [ ":ssl_test" ]
     }
     fuchsia_test_package("boringssl_tests") {
-      test_components = crypto_test_components + [ ":ssl_test_component" ]
+      # ssl_test_component is disabled until upstream fixes b/261632678 which
+      # is breaking one of the tests and we roll the fix in
+      test_components = crypto_test_components  # + [ ":ssl_test_component" ]
       deps = [
         "//src/connectivity/network/netstack:component",
         "//src/sys/stash:stash_secure_v2",
