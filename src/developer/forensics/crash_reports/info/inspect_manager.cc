@@ -14,110 +14,19 @@
 
 #include "src/developer/forensics/crash_reports/constants.h"
 #include "src/developer/forensics/crash_reports/errors.h"
-#include "src/developer/forensics/utils/time.h"
 #include "src/lib/files/path.h"
-#include "src/lib/fxl/strings/substitute.h"
 
 namespace forensics {
 namespace crash_reports {
 namespace {
 
 using files::JoinPath;
-using inspect::Node;
 
 }  // namespace
 
-InspectManager::Report::Report(const std::string& program_name,
-                               const std::string& local_report_id) {
-  path_ = JoinPath("/crash_reporter/reports",
-                   JoinPath(InspectNodeManager::SanitizeString(program_name), local_report_id));
-}
-
-InspectManager::InspectManager(inspect::Node* root_node, timekeeper::Clock* clock)
-    : node_manager_(root_node), clock_(clock) {
+InspectManager::InspectManager(inspect::Node* root_node) : node_manager_(root_node) {
   node_manager_.Get("/config/crash_server");
-  node_manager_.Get("/crash_reporter/queue");
-  node_manager_.Get("/crash_reporter/reports");
   node_manager_.Get("/crash_reporter/settings");
-}
-
-bool InspectManager::AddReport(const std::string& program_name,
-                               const std::string& local_report_id) {
-  if (Contains(local_report_id)) {
-    FX_LOGS(ERROR) << fxl::Substitute("Local report $0 already exposed in Inspect",
-                                      local_report_id);
-    return false;
-  }
-
-  reports_.emplace(local_report_id, Report(program_name, local_report_id));
-
-  Report& report = reports_.at(local_report_id);
-  inspect::Node& report_node = node_manager_.Get(report.Path());
-  report.creation_time_ = report_node.CreateString("creation_time", CurrentUtcTime(clock_));
-
-  return true;
-}
-
-bool InspectManager::SetUploadAttempt(const std::string& local_report_id, uint64_t upload_attempt) {
-  if (!Contains(local_report_id)) {
-    FX_LOGS(ERROR) << "Failed to find local report " << local_report_id;
-    return false;
-  }
-
-  Report& report = reports_.at(local_report_id);
-
-  if (!report.upload_attempts_) {
-    report.upload_attempts_ = node_manager_.Get(report.Path()).CreateUint("upload_attempts", 1u);
-  } else {
-    report.upload_attempts_.Set(upload_attempt);
-  }
-
-  return true;
-}
-
-bool InspectManager::MarkReportAsUploaded(const std::string& local_report_id,
-                                          const std::string& server_properties_report_id) {
-  if (!Contains(local_report_id)) {
-    FX_LOGS(ERROR) << "Failed to find local report " << local_report_id;
-    return false;
-  }
-
-  Report& report = reports_.at(local_report_id);
-  report.final_state_ = node_manager_.Get(report.Path()).CreateString("final_state", "uploaded");
-
-  const std::string server_path = JoinPath(report.Path(), "crash_server");
-
-  inspect::Node& server = node_manager_.Get(server_path);
-
-  report.server_id_ = server.CreateString("id", server_properties_report_id);
-  report.server_creation_time_ = server.CreateString("creation_time", CurrentUtcTime(clock_));
-
-  return true;
-}
-
-bool InspectManager::MarkReportAsArchived(const std::string& local_report_id) {
-  if (!Contains(local_report_id)) {
-    FX_LOGS(ERROR) << "Failed to find local report " << local_report_id;
-    return false;
-  }
-
-  Report& report = reports_.at(local_report_id);
-  report.final_state_ = node_manager_.Get(report.Path()).CreateString("final_state", "archived");
-
-  return true;
-}
-
-bool InspectManager::MarkReportAsGarbageCollected(const std::string& local_report_id) {
-  if (!Contains(local_report_id)) {
-    FX_LOGS(ERROR) << "Failed to find local report " << local_report_id;
-    return false;
-  }
-
-  Report& report = reports_.at(local_report_id);
-  report.final_state_ =
-      node_manager_.Get(report.Path()).CreateString("final_state", "garbage_collected");
-
-  return true;
 }
 
 void InspectManager::ExposeConfig(const feedback::BuildTypeConfig& config) {
@@ -134,19 +43,6 @@ void InspectManager::ExposeReportingPolicy(ReportingPolicyWatcher* watcher) {
 
   watcher->OnPolicyChange(
       [=](const ReportingPolicy policy) { settings_.upload_policy.Set(ToString(policy)); });
-}
-
-void InspectManager::SetQueueSize(const uint64_t size) {
-  inspect::Node& queue = node_manager_.Get("/crash_reporter/queue");
-  if (!queue_.size) {
-    queue_.size = queue.CreateUint("size", size);
-  } else {
-    queue_.size.Set(size);
-  }
-}
-
-bool InspectManager::Contains(const std::string& local_report_id) {
-  return reports_.find(local_report_id) != reports_.end();
 }
 
 void InspectManager::ExposeStore(const StorageSize max_size) {
