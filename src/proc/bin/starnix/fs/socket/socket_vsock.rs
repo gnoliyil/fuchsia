@@ -99,7 +99,7 @@ impl SocketOps for VsockSocket {
     fn accept(&self, socket: &Socket) -> Result<SocketHandle, Errno> {
         match socket.socket_type {
             SocketType::Stream | SocketType::SeqPacket => {}
-            SocketType::Datagram | SocketType::Raw => return error!(EOPNOTSUPP),
+            _ => return error!(EOPNOTSUPP),
         }
         let mut inner = self.lock();
         let queue = match &mut inner.state {
@@ -114,11 +114,8 @@ impl SocketOps for VsockSocket {
         // we only allow non-blocking files here, so that
         // read and write on file can return EAGAIN.
         assert!(file.flags().contains(OpenFlags::NONBLOCK));
-        match socket.socket_type {
-            SocketType::Datagram | SocketType::Raw | SocketType::SeqPacket => {
-                return error!(ENOTSUP);
-            }
-            SocketType::Stream => {}
+        if socket.socket_type != SocketType::Stream {
+            return error!(ENOTSUP);
         }
         if socket.domain != SocketDomain::Vsock {
             return error!(EINVAL);

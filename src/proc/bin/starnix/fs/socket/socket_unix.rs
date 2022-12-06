@@ -416,13 +416,14 @@ impl SocketOps for UnixSocket {
             SocketType::Datagram | SocketType::Raw => {
                 self.connect_datagram(socket, &peer, credentials)
             }
+            _ => error!(EINVAL),
         }
     }
 
     fn listen(&self, socket: &Socket, backlog: i32, credentials: ucred) -> Result<(), Errno> {
         match socket.socket_type {
             SocketType::Stream | SocketType::SeqPacket => {}
-            SocketType::Datagram | SocketType::Raw => return error!(EOPNOTSUPP),
+            _ => return error!(EOPNOTSUPP),
         }
         let mut inner = self.lock();
         inner.credentials = Some(credentials);
@@ -444,7 +445,7 @@ impl SocketOps for UnixSocket {
     fn accept(&self, socket: &Socket) -> Result<SocketHandle, Errno> {
         match socket.socket_type {
             SocketType::Stream | SocketType::SeqPacket => {}
-            SocketType::Datagram | SocketType::Raw => return error!(EOPNOTSUPP),
+            _ => return error!(EOPNOTSUPP),
         }
         let mut inner = self.lock();
         let queue = match &mut inner.state {

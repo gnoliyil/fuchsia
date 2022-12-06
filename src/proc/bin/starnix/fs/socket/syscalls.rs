@@ -754,7 +754,7 @@ mod tests {
             sys_socketpair(
                 &current_task,
                 AF_UNIX as u32,
-                4,
+                7,
                 0,
                 UserRef::new(UserAddress::default())
             ),

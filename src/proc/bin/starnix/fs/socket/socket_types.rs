@@ -87,7 +87,10 @@ pub enum SocketType {
     Stream,
     Datagram,
     Raw,
+    Rdm,
     SeqPacket,
+    Dccp,
+    Packet,
 }
 
 impl SocketType {
@@ -96,7 +99,10 @@ impl SocketType {
             SOCK_STREAM => Some(SocketType::Stream),
             SOCK_DGRAM => Some(SocketType::Datagram),
             SOCK_RAW => Some(SocketType::Raw),
+            SOCK_RDM => Some(SocketType::Rdm),
             SOCK_SEQPACKET => Some(SocketType::SeqPacket),
+            SOCK_DCCP => Some(SocketType::Dccp),
+            SOCK_PACKET => Some(SocketType::Packet),
             _ => None,
         }
     }
@@ -106,7 +112,10 @@ impl SocketType {
             SocketType::Stream => SOCK_STREAM,
             SocketType::Datagram => SOCK_DGRAM,
             SocketType::Raw => SOCK_RAW,
+            SocketType::Rdm => SOCK_RDM,
             SocketType::SeqPacket => SOCK_SEQPACKET,
+            SocketType::Dccp => SOCK_DCCP,
+            SocketType::Packet => SOCK_PACKET,
         }
     }
 }

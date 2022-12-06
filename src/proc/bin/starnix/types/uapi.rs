@@ -143,7 +143,10 @@ pub const SOCK_NONBLOCK: u32 = O_NONBLOCK;
 pub const SOCK_STREAM: u32 = 1;
 pub const SOCK_DGRAM: u32 = 2;
 pub const SOCK_RAW: u32 = 3;
+pub const SOCK_RDM: u32 = 4;
 pub const SOCK_SEQPACKET: u32 = 5;
+pub const SOCK_DCCP: u32 = 6;
+pub const SOCK_PACKET: u32 = 10;
 
 pub const SHUT_RD: u32 = 0;
 pub const SHUT_WR: u32 = 1;
