@@ -324,15 +324,7 @@ void RunStackUsageOnSyncedFrames(Process& process, std::vector<debug_ipc::Addres
   auto stack_pointer_map = std::make_shared<ThreadKoidToStackPointer>();
 
   // Collects the callbacks and dispatches the final result to the RunStackUsage() function.
-  auto join = fxl::MakeRefCounted<JoinCallbacks<void>>([weak_process = process.GetWeakPtr(),
-                                                        map = std::move(map), stack_pointer_map,
-                                                        cmd_context]() {
-    if (!weak_process) {
-      cmd_context->ReportError(Err("Process exited."));
-    } else {
-      RunStackUsage(*weak_process, map, *stack_pointer_map, cmd_context);
-    }
-  });
+  auto join = fxl::MakeRefCounted<JoinCallbacks<void>>();
 
   // Schedule requesting the unsafe stack pointers.
   for (Thread* thread : process.GetThreads()) {
@@ -345,7 +337,14 @@ void RunStackUsageOnSyncedFrames(Process& process, std::vector<debug_ipc::Addres
     });
   }
 
-  join->Ready();
+  join->Ready([weak_process = process.GetWeakPtr(), map = std::move(map), stack_pointer_map,
+               cmd_context]() {
+    if (!weak_process) {
+      cmd_context->ReportError(Err("Process exited."));
+    } else {
+      RunStackUsage(*weak_process, map, *stack_pointer_map, cmd_context);
+    }
+  });
 }
 
 void RunVerbStackUsage(const Command& cmd, fxl::RefPtr<CommandContext> cmd_context) {

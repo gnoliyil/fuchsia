@@ -31,28 +31,30 @@ struct MoveOnly {
 
 TEST(JoinErrCallbacks, NoCallbacks) {
   int called = 0;
-  auto join = fxl::MakeRefCounted<JoinErrCallbacks>([&called](const Err& err) {
+  auto join = fxl::MakeRefCounted<JoinErrCallbacks>();
+  EXPECT_EQ(0, called);
+
+  join->Ready([&called](const Err& err) {
     EXPECT_EQ(0, called);
     called++;
     EXPECT_FALSE(err.has_error());
   });
 
-  EXPECT_EQ(0, called);
-  join->Ready();
   EXPECT_EQ(1, called);
 }
 
 TEST(JoinErrCallbacks, TwoSuccess) {
   int called = 0;
-  auto join = fxl::MakeRefCounted<JoinErrCallbacks>([&called](const Err& err) {
+  auto join = fxl::MakeRefCounted<JoinErrCallbacks>();
+  auto cb1 = join->AddCallback();
+  auto cb2 = join->AddCallback();
+
+  join->Ready([&called](const Err& err) {
     EXPECT_EQ(0, called);
     called++;
     EXPECT_FALSE(err.has_error());
   });
 
-  auto cb1 = join->AddCallback();
-  auto cb2 = join->AddCallback();
-  join->Ready();
   EXPECT_EQ(0, called);
   cb2(Err());
   EXPECT_EQ(0, called);
@@ -62,16 +64,17 @@ TEST(JoinErrCallbacks, TwoSuccess) {
 
 TEST(JoinErrCallbacks, FirstFail) {
   int called = 0;
-  auto join = fxl::MakeRefCounted<JoinErrCallbacks>([&called](const Err& err) {
+  auto join = fxl::MakeRefCounted<JoinErrCallbacks>();
+  auto cb1 = join->AddCallback();
+  auto cb2 = join->AddCallback();
+
+  join->Ready([&called](const Err& err) {
     EXPECT_EQ(0, called);
     called++;
     EXPECT_TRUE(err.has_error());
     EXPECT_EQ("First", err.msg());
   });
 
-  auto cb1 = join->AddCallback();
-  auto cb2 = join->AddCallback();
-  join->Ready();
   cb1(Err("First"));
   EXPECT_EQ(1, called);
   cb2(Err("Second"));
@@ -80,16 +83,17 @@ TEST(JoinErrCallbacks, FirstFail) {
 
 TEST(JoinErrCallbacks, SecondFail) {
   int called = 0;
-  auto join = fxl::MakeRefCounted<JoinErrCallbacks>([&called](const Err& err) {
+  auto join = fxl::MakeRefCounted<JoinErrCallbacks>();
+  auto cb1 = join->AddCallback();
+  auto cb2 = join->AddCallback();
+
+  join->Ready([&called](const Err& err) {
     EXPECT_EQ(0, called);
     called++;
     EXPECT_TRUE(err.has_error());
     EXPECT_EQ("Second", err.msg());
   });
 
-  auto cb1 = join->AddCallback();
-  auto cb2 = join->AddCallback();
-  join->Ready();
   cb1(Err());
   EXPECT_EQ(0, called);
   cb2(Err("Second"));
@@ -98,7 +102,12 @@ TEST(JoinErrCallbacks, SecondFail) {
 
 TEST(JoinCallbacks, TwoCallbacks) {
   int called = 0;
-  auto join = fxl::MakeRefCounted<JoinCallbacks<int>>([&called](std::vector<int> params) {
+  auto join = fxl::MakeRefCounted<JoinCallbacks<int>>();
+  fit::callback<void(int)> cb1 = join->AddCallback();
+  fit::callback<void(const int&)> cb2 = join->AddCallback();
+  EXPECT_EQ(0, called);
+
+  join->Ready([&called](std::vector<int> params) {
     EXPECT_EQ(0, called);
     called++;
     EXPECT_EQ(2u, params.size());
@@ -108,50 +117,31 @@ TEST(JoinCallbacks, TwoCallbacks) {
     EXPECT_EQ(101, params[1]);
   });
 
-  fit::callback<void(int)> cb1 = join->AddCallback();
-  fit::callback<void(const int&)> cb2 = join->AddCallback();
-  EXPECT_EQ(0, called);
-  join->Ready();
   cb2(101);
   EXPECT_EQ(0, called);
   cb1(100);
   EXPECT_EQ(1, called);
 }
 
-TEST(JoinCallbacks, AbandonNoIssued) {
-  auto join = fxl::MakeRefCounted<JoinCallbacks<int>>([](std::vector<int> params) {
-    // Should not be called.
-    EXPECT_FALSE(true);
-  });
-  join->Abandon();
-}
-
-// Abandon with a callbacks issued but not ready.
-TEST(JoinCallbacks, AbandonIssueNotReady) {
-  auto join = fxl::MakeRefCounted<JoinCallbacks<int>>([](std::vector<int> params) {
-    // Should not be called.
-    EXPECT_FALSE(true);
-  });
-  fit::callback<void(int)> cb = join->AddCallback();
-  join->Abandon();
-  cb(1);
-}
-
 TEST(JoinCallbacks, AbandonAfterReady) {
-  auto join = fxl::MakeRefCounted<JoinCallbacks<int>>([](std::vector<int> params) {
+  auto join = fxl::MakeRefCounted<JoinCallbacks<int>>();
+  fit::callback<void(int)> cb = join->AddCallback();
+  join->Ready([](std::vector<int> params) {
     // Should not be called.
     EXPECT_FALSE(true);
   });
-  fit::callback<void(int)> cb = join->AddCallback();
-  join->Ready();
   join->Abandon();
   cb(1);
 }
 
 TEST(JoinCallbacks, MoveOnly) {
   int called = 0;
+  auto join = fxl::MakeRefCounted<JoinCallbacks<MoveOnly>>();
+  auto cb1 = join->AddCallback();
+  auto cb2 = join->AddCallback();
+  cb2(MoveOnly(3, 4));
 
-  auto join = fxl::MakeRefCounted<JoinCallbacks<MoveOnly>>([&called](std::vector<MoveOnly> params) {
+  join->Ready([&called](std::vector<MoveOnly> params) {
     EXPECT_EQ(0, called);
     called++;
     EXPECT_EQ(2u, params.size());
@@ -161,10 +151,6 @@ TEST(JoinCallbacks, MoveOnly) {
     EXPECT_EQ(4, params[1].b);
   });
 
-  auto cb1 = join->AddCallback();
-  auto cb2 = join->AddCallback();
-  cb2(MoveOnly(3, 4));
-  join->Ready();
   cb1(MoveOnly(1, 2));
 
   EXPECT_EQ(1, called);
@@ -173,65 +159,19 @@ TEST(JoinCallbacks, MoveOnly) {
 // Tests the specialization for no parameters.
 TEST(JoinCallbacks, NoParam) {
   int called = 0;
+  auto join = fxl::MakeRefCounted<JoinCallbacks<void>>();
+  auto cb1 = join->AddCallback();
+  auto cb2 = join->AddCallback();
+  cb2();
 
-  auto join = fxl::MakeRefCounted<JoinCallbacks<void>>([&called]() {
+  join->Ready([&called]() {
     EXPECT_EQ(0, called);
     called++;
   });
 
-  auto cb1 = join->AddCallback();
-  auto cb2 = join->AddCallback();
-  cb2();
-  join->Ready();
   cb1();
 
   EXPECT_EQ(1, called);
-}
-
-// Tests default constructing JoinCallbacks and then passing the main callback in
-// ReadyWithCallback after passing out callbacks from AddCallback.
-TEST(JoinCallbacks, DeferMainCallback) {
-  int called = 0;
-  auto join = fxl::MakeRefCounted<JoinCallbacks<bool>>();
-
-  auto cb1 = join->AddCallback();
-  auto cb2 = join->AddCallback();
-
-  join->ReadyWithCallback([&called](const std::vector<bool>& b) {
-    EXPECT_EQ(called, 0);
-    called++;
-    EXPECT_FALSE(b.empty());
-    EXPECT_EQ(b.size(), 2u);
-    EXPECT_EQ(b[0], true);
-    EXPECT_EQ(b[1], false);
-  });
-
-  cb2(false);
-  cb1(true);
-  EXPECT_EQ(called, 1);
-}
-
-// Tests setting the main callback after all callbacks from |AddCallback| have already returned.
-TEST(JoinCallbacks, DeferMainCallbackLast) {
-  int called = 0;
-  auto join = fxl::MakeRefCounted<JoinCallbacks<bool>>();
-
-  auto cb1 = join->AddCallback();
-  auto cb2 = join->AddCallback();
-
-  cb2(false);
-  cb1(true);
-
-  join->ReadyWithCallback([&called](const std::vector<bool>& b) {
-    EXPECT_EQ(called, 0);
-    called++;
-    EXPECT_FALSE(b.empty());
-    EXPECT_EQ(b.size(), 2u);
-    EXPECT_EQ(b[0], true);
-    EXPECT_EQ(b[1], false);
-  });
-
-  EXPECT_EQ(called, 1);
 }
 
 }  // namespace zxdb

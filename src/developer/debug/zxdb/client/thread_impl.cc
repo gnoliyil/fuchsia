@@ -392,31 +392,30 @@ void ThreadImpl::OnException(const StopInfo& info) {
   // If there are any conditional breakpoints that need to evaluate an expression, the callback(s)
   // will be issued asynchronously and collected into a vector. In the case no asynchronous
   // evaluations need to occur, this will return immediately and issue the callback above.
-  conditional_breakpoints_callback->ReadyWithCallback(
-      [weak_this = weak_factory_.GetWeakPtr(), should_stop,
-       external_info](std::vector<bool> results) mutable {
-        if (weak_this) {
-          // Non-debug exceptions (most likely a crash is happening) also mean the thread should
-          // always stop (check this after running the controllers for the same reason as the
-          // breakpoint check above).
-          if (external_info.exception_type != debug_ipc::ExceptionType::kNone &&
-              !debug_ipc::IsDebug(external_info.exception_type))
-            should_stop = true;
+  conditional_breakpoints_callback->Ready([weak_this = weak_factory_.GetWeakPtr(), should_stop,
+                                           external_info](std::vector<bool> results) mutable {
+    if (weak_this) {
+      // Non-debug exceptions (most likely a crash is happening) also mean the thread should
+      // always stop (check this after running the controllers for the same reason as the
+      // breakpoint check above).
+      if (external_info.exception_type != debug_ipc::ExceptionType::kNone &&
+          !debug_ipc::IsDebug(external_info.exception_type))
+        should_stop = true;
 
-          if (std::any_of(results.cbegin(), results.cend(), [](bool result) { return result; }))
-            should_stop = true;
+      if (std::any_of(results.cbegin(), results.cend(), [](bool result) { return result; }))
+        should_stop = true;
 
-          // If there are no conditional breakpoints installed here, and there are no running
-          // controllers, we should stop. This case catches things like __builtin_debugtrap() or
-          // "int 3" on x86_64 architectures.
-          if (!should_stop && results.empty() && weak_this->controllers_.empty())
-            should_stop = true;
+      // If there are no conditional breakpoints installed here, and there are no running
+      // controllers, we should stop. This case catches things like __builtin_debugtrap() or
+      // "int 3" on x86_64 architectures.
+      if (!should_stop && results.empty() && weak_this->controllers_.empty())
+        should_stop = true;
 
-          // Execute the chain of post-stop tasks (may be asynchronous) and then dispatch the stop
-          // notification or continue operation.
-          weak_this->RunNextPostStopTaskOrNotify(external_info, should_stop);
-        }
-      });
+      // Execute the chain of post-stop tasks (may be asynchronous) and then dispatch the stop
+      // notification or continue operation.
+      weak_this->RunNextPostStopTaskOrNotify(external_info, should_stop);
+    }
+  });
 }
 
 void ThreadImpl::ResolveConditionalBreakpoint(const std::string& cond, Breakpoint* bp,
