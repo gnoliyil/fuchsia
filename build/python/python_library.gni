@@ -6,10 +6,6 @@ import("//build/group_with_inputs.gni")
 
 # Defines a python library
 #
-# NOTE: Currently does NOT support depending on other python_libraries.
-# TODO(https://fxbug.dev/73542): Enable other python_libraries as deps when use
-# case show up.
-#
 # Example
 #
 # ```
