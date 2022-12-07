@@ -41,7 +41,7 @@ zx_status_t Nelson::SelinaInit() {
     gpio_impl_.ConfigIn(GPIO_SOC_SELINA_OSC_EN, GPIO_NO_PULL);
   }
 
-  return DdkAddComposite("selina", &composite_dev);
+  return DdkAddComposite("selina-composite", &composite_dev);
 }
 
 }  // namespace nelson
