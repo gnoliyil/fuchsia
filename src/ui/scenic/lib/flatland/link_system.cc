@@ -31,20 +31,27 @@ LinkSystem::LinkToChild LinkSystem::CreateLinkToChild(
     fidl::InterfaceRequest<ChildViewWatcher> child_view_watcher,
     TransformHandle parent_transform_handle, LinkProtocolErrorCallback error_callback) {
   FX_DCHECK(token.value.is_valid());
-  FX_DCHECK(initial_properties.has_logical_size());
-  FX_DCHECK(initial_properties.has_inset());
+
+  {  // Put the initial layout in a map. This lets us update the layout before the link resolves if
+     // necessary.
+    LayoutInfo info;
+    info.set_logical_size(initial_properties.logical_size());
+    info.set_inset(initial_properties.inset());
+    info.set_device_pixel_ratio(device_pixel_ratio_.load());
+
+    std::scoped_lock lock(mutex_);
+    initial_layout_infos_.emplace(parent_transform_handle, std::move(info));
+  }
 
   auto impl = std::make_shared<ChildViewWatcherImpl>(dispatcher_holder,
                                                      std::move(child_view_watcher), error_callback);
   const TransformHandle internal_link_handle = CreateTransformLocked();
 
-  ObjectLinker::ImportLink importer = linker_->CreateImport(
-      LinkToChildInfo{.parent_transform_handle = parent_transform_handle,
-                      .internal_link_handle = internal_link_handle,
-                      .initial_logical_size = initial_properties.logical_size(),
-                      .initial_inset = initial_properties.inset()},
-      std::move(token.value),
-      /* error_reporter */ nullptr);
+  ObjectLinker::ImportLink importer =
+      linker_->CreateImport(LinkToChildInfo{.parent_transform_handle = parent_transform_handle,
+                                            .internal_link_handle = internal_link_handle},
+                            std::move(token.value),
+                            /* error_reporter */ nullptr);
 
   auto child_transform_handle = std::make_shared<TransformHandle>();  // Uninitialized.
   importer.Initialize(
@@ -62,7 +69,7 @@ LinkSystem::LinkToChild LinkSystem::CreateLinkToChild(
         }
       },
       /* link_invalidated = */
-      [ref = shared_from_this(), impl, child_transform_handle,
+      [ref = shared_from_this(), impl, child_transform_handle, parent_transform_handle,
        weak_dispatcher_holder = std::weak_ptr<utils::DispatcherHolder>(dispatcher_holder)](
           bool on_link_destruction) mutable {
         // We expect |child_transform_handle| to be assigned by the "link_resolved" closure,
@@ -72,6 +79,7 @@ LinkSystem::LinkToChild LinkSystem::CreateLinkToChild(
         {
           std::scoped_lock lock(ref->mutex_);
           ref->child_to_parent_map_.erase(*child_transform_handle);
+          ref->initial_layout_infos_.erase(parent_transform_handle);
         }
 
         // Avoid race conditions by destroying ChildViewWatcher on its "own" thread.  For example,
@@ -119,26 +127,22 @@ LinkSystem::LinkToParent LinkSystem::CreateLinkToParent(
       std::move(token.value),
       /* error_reporter */ nullptr);
 
-  auto initial_dpr = initial_device_pixel_ratio_.load();
   auto parent_transform_handle = std::make_shared<TransformHandle>();  // Uninitialized.
   auto topology_map_key = std::make_shared<TransformHandle>();         // Uninitialized.
   exporter.Initialize(
       /* link_resolved = */
       [ref = shared_from_this(), impl, parent_transform_handle, topology_map_key,
-       child_transform_handle, dpr = initial_dpr](LinkToChildInfo info) {
+       child_transform_handle](LinkToChildInfo info) {
         *parent_transform_handle = info.parent_transform_handle;
         *topology_map_key = info.internal_link_handle;
 
         {
           std::scoped_lock lock(ref->mutex_);
-          // TODO(fxbug.dev/80603): When the same parent relinks to different children, we might be
-          // using an outdated logical_size here. It will be corrected in UpdateLinks(), but we
-          // should figure out a way to set the previous ParentViewportWatcherImpl's size here.
-          LayoutInfo layout_info;
-          layout_info.set_logical_size(info.initial_logical_size);
-          layout_info.set_device_pixel_ratio({dpr.x, dpr.y});
-          layout_info.set_inset(info.initial_inset);
-          impl->UpdateLayoutInfo(std::move(layout_info));
+          const auto layout_kv = ref->initial_layout_infos_.find(*parent_transform_handle);
+          FX_DCHECK(layout_kv != ref->initial_layout_infos_.end())
+              << "initial_layout_infos_ for |parent_transform_handle| should exist until the link resolves or is destroyed.";
+          impl->UpdateLayoutInfo(std::move(layout_kv->second));
+          ref->initial_layout_infos_.erase(layout_kv);
 
           ref->parent_to_child_map_[*parent_transform_handle] = ChildEnd{
               .parent_viewport_watcher = impl, .child_transform_handle = child_transform_handle};
@@ -214,7 +218,7 @@ void LinkSystem::UpdateLinks(const GlobalTopologyData::TopologyVector& global_to
     // This is indicated by an UberStruct with the |child_transform_handle| as its first
     // TransformHandle in the snapshot.
     //
-    // NOTE: This does not mean the child content is actually appears on-screen; it simply informs
+    // NOTE: This does not mean the child content actually appears on-screen; it simply informs
     //       the parent that the child has content that is available to present on screen.  This is
     //       intentional; for example, the parent might not want to attach the child to the global
     //       scene graph until it knows the child is ready to present content on screen.
@@ -244,36 +248,55 @@ void LinkSystem::UpdateLinks(const GlobalTopologyData::TopologyVector& global_to
     }
   }
 
-  for (size_t i = 0; i < global_topology.size(); ++i) {
-    const auto& handle = global_topology[i];
+  UpdateDevicePixelRatio({device_pixel_ratio.x, device_pixel_ratio.y});
+}
 
-    // For a particular Link, the ViewportProperties and ParentViewportWatcherImpl both live on the
-    // LinkToChild's |graph_handle|. They can show up in either order (ViewportProperties before
-    // ParentViewportWatcherImpl if the parent Flatland calls Present() first, other way around if
-    // the link resolves first), so one being present without another is not a bug.
-    if (auto parent_to_child_kv = parent_to_child_map_.find(handle);
-        parent_to_child_kv != parent_to_child_map_.end()) {
-      auto uber_struct_kv = uber_structs.find(handle.GetInstanceId());
-      if (uber_struct_kv != uber_structs.end()) {
-        auto properties_kv = uber_struct_kv->second->link_properties.find(handle);
-        if (properties_kv != uber_struct_kv->second->link_properties.end() &&
-            properties_kv->second.has_logical_size()) {
-          LayoutInfo info;
-          info.set_logical_size(properties_kv->second.logical_size());
-          info.set_device_pixel_ratio({device_pixel_ratio.x, device_pixel_ratio.y});
-          info.set_inset(properties_kv->second.inset());
+void LinkSystem::UpdateDevicePixelRatio(const fuchsia::math::VecF& device_pixel_ratio) {
+  if (fidl::Equals(device_pixel_ratio_.exchange(device_pixel_ratio), device_pixel_ratio)) {
+    // The new value is the same as the old.
+    return;
+  }
 
-          // A transform handle may have multiple parents, resulting in the same
-          // handle appearing in the global topology vector multiple times, with
-          // multiple global matrices. As a result, it might appear as if the
-          // watcher will update the client with the layout info multiple times.
-          // However, HangingGetHelper::Update() has an early return that will stop
-          // the client from getting updated multiple times with the same information.
-          const auto& watcher = parent_to_child_kv->second.parent_viewport_watcher;
-          watcher->UpdateLayoutInfo(std::move(info));
-        }
-      }
-    }
+  // We update DPR info for every single View in the scene graph.
+  // TODO(fxbug.dev/108608): This assumes the same DPR for every client. Need to fix it for
+  // multi-display.
+  for (const auto& [handle, child_end] : parent_to_child_map_) {
+    child_end.parent_viewport_watcher->UpdateDevicePixelRatio(device_pixel_ratio);
+  }
+  for (auto& [_, layout] : initial_layout_infos_) {
+    layout.set_device_pixel_ratio(device_pixel_ratio);
+  }
+}
+
+void LinkSystem::UpdateViewportPropertiesFor(
+    const TransformHandle handle, const fuchsia::ui::composition::ViewportProperties& properties) {
+  // May be called from main thread or from a Flatland thread.
+  FX_DCHECK(properties.has_logical_size());
+  FX_DCHECK(properties.has_inset());
+
+  LayoutInfo info;
+  info.set_logical_size(properties.logical_size());
+  info.set_inset(properties.inset());
+  info.set_device_pixel_ratio(device_pixel_ratio_.load());
+
+  // |handle| should always be a valid parent TransformHandle. But since the caller may be a
+  // Flatland instance thread, which may not know about the destruction of a link, we can be in
+  // one of three states:
+  // 1. Unresolved link -> Layout stored in |initial_layout_infos_|.
+  // 2. Resolved link -> Layout stored in |parent_to_child_map_|.
+  // 3. Dead link -> Layout stored nowhere.
+  std::scoped_lock lock(mutex_);
+  FX_DCHECK((initial_layout_infos_.empty() && parent_to_child_map_.empty()) ||
+            (initial_layout_infos_.count(handle) != parent_to_child_map_.count(handle)))
+      << "Layout should only exist in at most one map at a time.";
+  if (auto initial_layout_it = initial_layout_infos_.find(handle);
+      initial_layout_it != initial_layout_infos_.end()) {
+    // The link hasn't resolved yet; just update the initial layout that will be sent to the child
+    // once it resolves.
+    initial_layout_it->second = std::move(info);
+  } else if (const auto child_it = parent_to_child_map_.find(handle);
+             child_it != parent_to_child_map_.end()) {
+    child_it->second.parent_viewport_watcher->UpdateLayoutInfo(std::move(info));
   }
 }
 

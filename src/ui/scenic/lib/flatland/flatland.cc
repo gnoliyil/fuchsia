@@ -50,6 +50,41 @@ namespace {
 // most robust solution should be investigated.
 constexpr float kDefaultHitRegionBounds = 1'000'000.F;
 
+std::optional<std::string> ValidateViewportProperties(const ViewportProperties& properties) {
+  if (properties.has_logical_size()) {
+    const auto logical_size = properties.logical_size();
+    if (logical_size.width == 0 || logical_size.height == 0) {
+      std::ostringstream stream;
+      stream << "Logical_size components must be positive, given (" << logical_size.width << ", "
+             << logical_size.height << ")";
+      return stream.str();
+    }
+  }
+
+  if (properties.has_inset()) {
+    const auto inset = properties.inset();
+    if (inset.top < 0 || inset.right < 0 || inset.bottom < 0 || inset.left < 0) {
+      std::ostringstream stream;
+      stream << "Inset components must be >= 0, given (" << inset.top << ", " << inset.right << ", "
+             << inset.bottom << ", " << inset.left << ")";
+      return stream.str();
+    }
+  }
+
+  return std::nullopt;
+}
+
+void SetViewportPropertiesMissingDefaults(ViewportProperties& properties,
+                                          const fuchsia::math::SizeU& logical_size,
+                                          const fuchsia::math::Inset& inset) {
+  if (!properties.has_logical_size()) {
+    properties.set_logical_size(logical_size);
+  }
+  if (!properties.has_inset()) {
+    properties.set_inset(inset);
+  }
+}
+
 }  // namespace
 
 namespace flatland {
@@ -241,13 +276,6 @@ void Flatland::Present(fuchsia::ui::composition::PresentArgs args) {
 
   auto uber_struct = std::make_unique<UberStruct>();
   uber_struct->local_topology = std::move(data.sorted_transforms);
-
-  for (const auto& [link_id, link_to_child] : links_to_children_) {
-    ViewportProperties initial_properties;
-    fidl::Clone(link_to_child.properties, &initial_properties);
-    uber_struct->link_properties[link_to_child.link.parent_transform_handle] =
-        std::move(initial_properties);
-  }
 
   for (const auto& [handle, matrix_data] : matrices_) {
     uber_struct->local_matrices[handle] = matrix_data.GetMatrix();
@@ -816,26 +844,14 @@ void Flatland::CreateViewport(ContentId link_id, ViewportCreationToken token,
     return;
   }
 
-  auto logical_size = properties.logical_size();
-  if (logical_size.width == 0 || logical_size.height == 0) {
-    error_reporter_->ERROR()
-        << "CreateViewport must be provided a logical size with positive width and height values";
+  if (auto error = ValidateViewportProperties(properties)) {
+    error_reporter_->ERROR() << "CreateViewport failed: " << *error;
     ReportBadOperationError();
     return;
   }
 
-  if (properties.has_inset()) {
-    const auto inset = properties.inset();
-    if (inset.top < 0 || inset.right < 0 || inset.bottom < 0 || inset.left < 0) {
-      error_reporter_->ERROR() << "CreateViewport failed, inset components must be >= 0, "
-                               << "given (" << inset.top << ", " << inset.right << ", "
-                               << inset.bottom << ", " << inset.left << ")";
-      ReportBadOperationError();
-      return;
-    }
-  } else {
-    properties.set_inset({0, 0, 0, 0});
-  }
+  SetViewportPropertiesMissingDefaults(properties, properties.logical_size(),
+                                       /*inset*/ {0, 0, 0, 0});
 
   if (link_id.value == kInvalidId) {
     error_reporter_->ERROR() << "CreateViewport called with ContentId zero";
@@ -857,11 +873,9 @@ void Flatland::CreateViewport(ContentId link_id, ViewportCreationToken token,
   // We can initialize the Link importer immediately, since no state changes actually occur before
   // the feed-forward portion of this method. We also forward the initial ViewportProperties through
   // the LinkSystem immediately, so the child can receive them as soon as possible.
-  ViewportProperties initial_properties;
-  fidl::Clone(properties, &initial_properties);
   LinkSystem::LinkToChild link_to_child = link_system_->CreateLinkToChild(
-      dispatcher_holder_, std::move(token), std::move(initial_properties),
-      std::move(child_view_watcher), parent_transform_handle,
+      dispatcher_holder_, std::move(token), fidl::Clone(properties), std::move(child_view_watcher),
+      parent_transform_handle,
       [ref = weak_from_this(), weak_dispatcher_holder = std::weak_ptr<utils::DispatcherHolder>(
                                    dispatcher_holder_)](const std::string& error_log) {
         if (auto dispatcher_holder = weak_dispatcher_holder.lock()) {
@@ -891,8 +905,7 @@ void Flatland::CreateViewport(ContentId link_id, ViewportCreationToken token,
 
   content_handles_[link_id.value] = link_to_child.parent_transform_handle;
   links_to_children_[link_to_child.parent_transform_handle] = {.link = std::move(link_to_child),
-                                                               .properties = std::move(properties),
-                                                               .size = std::move(size)};
+                                                               .properties = std::move(properties)};
 
   // Set clip bounds on the transform associated with the viewport content.
   SetClipBoundaryInternal(parent_transform_handle, {.x = 0,
@@ -1321,8 +1334,7 @@ void Flatland::SetViewportProperties(ContentId link_id, ViewportProperties prope
     return;
   }
 
-  auto content_kv = content_handles_.find(link_id.value);
-
+  const auto content_kv = content_handles_.find(link_id.value);
   if (content_kv == content_handles_.end()) {
     error_reporter_->ERROR() << "SetViewportProperties failed, link_id " << link_id.value
                              << " not found";
@@ -1330,8 +1342,9 @@ void Flatland::SetViewportProperties(ContentId link_id, ViewportProperties prope
     return;
   }
 
-  auto link_kv = links_to_children_.find(content_kv->second);
+  const auto viewport_handle = content_kv->second;
 
+  auto link_kv = links_to_children_.find(viewport_handle);
   if (link_kv == links_to_children_.end()) {
     error_reporter_->ERROR() << "SetViewportProperties failed, content_id " << link_id.value
                              << " is not a Link";
@@ -1347,45 +1360,24 @@ void Flatland::SetViewportProperties(ContentId link_id, ViewportProperties prope
     return;
   }
 
-  // Callers do not have to provide a new logical size on every call to SetViewportProperties, but
-  // if they do, it must have positive width and height values.
-  if (properties.has_logical_size()) {
-    auto logical_size = properties.logical_size();
-    if (logical_size.width == 0 || logical_size.height == 0) {
-      error_reporter_->ERROR()
-          << "SetViewportProperties failed, logical_size components must be positive, "
-          << "given (" << logical_size.width << ", " << logical_size.height << ")";
-      ReportBadOperationError();
-      return;
-    }
-  } else {
-    // Preserve the old logical size if no logical size was passed as an argument. The
-    // HangingGetHelper no-ops if no data changes, so if logical size is empty and no other
-    // properties changed, the hanging get won't fire.
-    properties.set_logical_size(link_data.properties.logical_size());
+  if (auto error = ValidateViewportProperties(properties)) {
+    error_reporter_->ERROR() << "SetViewportProperties failed: " << *error;
+    ReportBadOperationError();
+    return;
   }
 
-  if (properties.has_inset()) {
-    const auto inset = properties.inset();
-    if (inset.top < 0 || inset.right < 0 || inset.bottom < 0 || inset.left < 0) {
-      error_reporter_->ERROR() << "SetViewportProperties failed, inset components must be >= 0, "
-                               << "given (" << inset.top << ", " << inset.right << ", "
-                               << inset.bottom << ", " << inset.left << ")";
-      ReportBadOperationError();
-      return;
-    }
-  } else {
-    properties.set_inset(link_data.properties.inset());
-  }
+  SetViewportPropertiesMissingDefaults(properties, link_data.properties.logical_size(),
+                                       link_data.properties.inset());
 
   // Update the clip boundaries when the properties change.
-  SetClipBoundaryInternal(content_kv->second,
+  SetClipBoundaryInternal(viewport_handle,
                           {.x = 0,
                            .y = 0,
                            .width = static_cast<int32_t>(properties.logical_size().width),
                            .height = static_cast<int32_t>(properties.logical_size().height)});
 
-  link_data.properties = std::move(properties);
+  link_data.properties = fidl::Clone(properties);
+  link_system_->UpdateViewportPropertiesFor(viewport_handle, std::move(properties));
 }
 
 void Flatland::ReleaseTransform(TransformId transform_id) {

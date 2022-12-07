@@ -331,7 +331,6 @@ class Flatland : public fuchsia::ui::composition::Flatland,
   struct LinkToChildData {
     LinkSystem::LinkToChild link;
     fuchsia::ui::composition::ViewportProperties properties;
-    fuchsia::math::SizeU size;
   };
 
   // A mapping from Flatland-generated TransformHandle to the LinkToChildData it represents.

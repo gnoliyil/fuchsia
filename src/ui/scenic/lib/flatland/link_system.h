@@ -12,13 +12,13 @@
 #include <lib/fidl/cpp/binding.h>
 #include <lib/fidl/cpp/interface_request.h>
 #include <lib/syslog/cpp/macros.h>
-#include <lib/zircon-internal/thread_annotations.h>
 #include <zircon/errors.h>
 
 #include <functional>
 #include <unordered_map>
 #include <unordered_set>
 
+#include "src/lib/fxl/synchronization/thread_annotations.h"
 #include "src/ui/scenic/lib/flatland/global_matrix_data.h"
 #include "src/ui/scenic/lib/flatland/global_topology_data.h"
 #include "src/ui/scenic/lib/flatland/hanging_get_helper.h"
@@ -70,7 +70,14 @@ class ParentViewportWatcherImpl
   }
 
   void UpdateLayoutInfo(fuchsia::ui::composition::LayoutInfo info) {
+    last_layout_info_ = fidl::Clone(info);
     layout_helper_.Update(std::move(info));
+  }
+
+  void UpdateDevicePixelRatio(const fuchsia::math::VecF& device_pixel_ratio) {
+    auto info = fidl::Clone(last_layout_info_);
+    info.set_device_pixel_ratio(device_pixel_ratio);
+    UpdateLayoutInfo(std::move(info));
   }
 
   void UpdateLinkStatus(fuchsia::ui::composition::ParentViewportStatus status) {
@@ -124,6 +131,9 @@ class ParentViewportWatcherImpl
   // Only used to verify that destruction occurs on the correct thread.
   std::weak_ptr<utils::DispatcherHolder> dispatcher_holder_;
 #endif
+
+  fuchsia::ui::composition::LayoutInfo last_layout_info_;
+
   LinkProtocolErrorCallback error_callback_;
   HangingGetHelper<fuchsia::ui::composition::LayoutInfo> layout_helper_;
   HangingGetHelper<fuchsia::ui::composition::ParentViewportStatus> status_helper_;
@@ -274,8 +284,6 @@ class LinkSystem : public std::enable_shared_from_this<LinkSystem> {
   struct LinkToChildInfo {
     TransformHandle parent_transform_handle;
     TransformHandle internal_link_handle;
-    fuchsia::math::SizeU initial_logical_size;
-    fuchsia::math::Inset initial_inset;
   };
 
   struct LinkToParentInfo {
@@ -378,11 +386,22 @@ class LinkSystem : public std::enable_shared_from_this<LinkSystem> {
   // parent_transform_handle from each LinkToChild.
   std::unordered_map<TransformHandle, TransformHandle> const GetLinkChildToParentTransformMap();
 
-  void set_initial_device_pixel_ratio(const glm::vec2& initial_device_pixel_ratio) {
-    initial_device_pixel_ratio_.store(initial_device_pixel_ratio);
+  // Updates |device_pixel_ratio_| for the View with parent |handle|. If the value changed it sends
+  // updates to all waiting clients, otherwise it does nothing.
+  // |handle| should have been previously used as |parent_transform_handle| in CreateLinkToChild().
+  void UpdateViewportPropertiesFor(TransformHandle handle,
+                                   const fuchsia::ui::composition::ViewportProperties& properties);
+
+  void set_device_pixel_ratio(const glm::vec2& initial_device_pixel_ratio) {
+    std::scoped_lock lock(mutex_);
+    UpdateDevicePixelRatio({initial_device_pixel_ratio.x, initial_device_pixel_ratio.y});
   }
 
  private:
+  // Updates |device_pixel_ratio_| and, if the value changed, sends updates to all waiting clients.
+  void UpdateDevicePixelRatio(const fuchsia::math::VecF& device_pixel_raito)
+      FXL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
   TransformHandle CreateTransformLocked() {
     TransformHandle transform;
     {
@@ -398,7 +417,7 @@ class LinkSystem : public std::enable_shared_from_this<LinkSystem> {
   // used by individual Flatland instances. However, this class is shared across all Flatland
   // instances, and therefore different threads. Therefore, access to |link_graph_| should be
   // guarded by |mutex_|.
-  TransformGraph link_graph_ TA_GUARDED(mutex_);
+  TransformGraph link_graph_ FXL_GUARDED_BY(mutex_);
 
   std::shared_ptr<ObjectLinker> linker_;
 
@@ -424,12 +443,16 @@ class LinkSystem : public std::enable_shared_from_this<LinkSystem> {
   // Keyed by LinkToParent::child_transform_handle.
   std::unordered_map<TransformHandle, ParentEnd> child_to_parent_map_;
   // The set of current link topologies. Access is managed by |mutex_|.
-  GlobalTopologyData::LinkTopologyMap link_topologies_ TA_GUARDED(mutex_);
+  GlobalTopologyData::LinkTopologyMap link_topologies_ FXL_GUARDED_BY(mutex_);
+
+  // A map of the most recent LayoutInfo generated for each link that hasn't resolved yet.
+  std::unordered_map<TransformHandle, fuchsia::ui::composition::LayoutInfo> initial_layout_infos_
+      FXL_GUARDED_BY(mutex_);
 
   // The starting DPR used by the link system. The actual DPR used on subsequent calls to
   // UpdateLinks() may be different from this value.
   // TODO(fxbug.dev/108608): This will need to be updated once we have multidisplay setup.
-  std::atomic<glm::vec2> initial_device_pixel_ratio_;
+  std::atomic<fuchsia::math::VecF> device_pixel_ratio_;
 };
 
 }  // namespace flatland

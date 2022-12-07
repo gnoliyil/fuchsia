@@ -124,7 +124,7 @@ TEST_F(LinkSystemTest, ResolvedLinkCreatesLinkTopology) {
   auto child_graph = CreateTransformGraph();
   auto parent_graph = CreateTransformGraph();
 
-  link_system->set_initial_device_pixel_ratio(glm::vec2{2.f, 2.f});
+  link_system->set_device_pixel_ratio(glm::vec2{2.f, 2.f});
 
   ViewportCreationToken parent_token;
   ViewCreationToken child_token;

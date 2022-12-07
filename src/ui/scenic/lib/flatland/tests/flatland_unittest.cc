@@ -2956,62 +2956,6 @@ TEST_F(FlatlandTest, ContentHasPresentedSignalWaitsForAcquireFences) {
   EXPECT_EQ(cvs.value(), ChildViewStatus::CONTENT_HAS_PRESENTED);
 }
 
-TEST_F(FlatlandTest, LayoutOnlyUpdatesChildrenInGlobalTopology) {
-  std::shared_ptr<Flatland> parent = CreateFlatland();
-  std::shared_ptr<Flatland> child = CreateFlatland();
-
-  const TransformId kTransformId = {1};
-  const ContentId kLinkId = {2};
-
-  fidl::InterfacePtr<ChildViewWatcher> child_view_watcher;
-  fidl::InterfacePtr<ParentViewportWatcher> parent_viewport_watcher;
-  CreateViewport(parent.get(), child.get(), kLinkId, &child_view_watcher, &parent_viewport_watcher);
-  UpdateLinks(parent->GetRoot());
-
-  // Confirm that the initial logical size is available immediately.
-  {
-    std::optional<LayoutInfo> layout;
-    parent_viewport_watcher->GetLayout([&](LayoutInfo info) { layout = std::move(info); });
-
-    EXPECT_FALSE(layout.has_value());
-    UpdateLinks(parent->GetRoot());
-    EXPECT_TRUE(layout.has_value());
-    EXPECT_EQ(kDefaultSize, layout->logical_size().width);
-    EXPECT_EQ(kDefaultSize, layout->logical_size().height);
-  }
-
-  // Set the logical size to something new.
-  {
-    ViewportProperties properties;
-    properties.set_logical_size({2, 3});
-    parent->SetViewportProperties(kLinkId, std::move(properties));
-    PRESENT(parent, true);
-  }
-
-  {
-    std::optional<LayoutInfo> layout;
-    parent_viewport_watcher->GetLayout([&](LayoutInfo info) { layout = std::move(info); });
-
-    // Confirm that no update is triggered since the child is not in the global topology.
-    EXPECT_FALSE(layout.has_value());
-    UpdateLinks(parent->GetRoot());
-    EXPECT_FALSE(layout.has_value());
-
-    // Attach the child to the global topology.
-    parent->CreateTransform(kTransformId);
-    parent->SetRootTransform(kTransformId);
-    parent->SetContent(kTransformId, kLinkId);
-    PRESENT(parent, true);
-
-    // Confirm that the new logical size is accessible.
-    EXPECT_FALSE(layout.has_value());
-    UpdateLinks(parent->GetRoot());
-    EXPECT_TRUE(layout.has_value());
-    EXPECT_EQ(2u, layout->logical_size().width);
-    EXPECT_EQ(3u, layout->logical_size().height);
-  }
-}
-
 TEST_F(FlatlandTest, SetViewportProperties_WithDeadViewport_ShouldNotCrash) {
   std::shared_ptr<Flatland> parent = CreateFlatland();
   const TransformId kTransformId = {1};
@@ -3040,176 +2984,203 @@ TEST_F(FlatlandTest, SetViewportProperties_WithDeadViewport_ShouldNotCrash) {
   }
 }
 
-TEST_F(FlatlandTest, SetViewportPropertiesDefaultBehavior) {
+TEST_F(FlatlandTest, CreateViewport_CorrectlySetsPropertiesDefaults) {
   std::shared_ptr<Flatland> parent = CreateFlatland();
   std::shared_ptr<Flatland> child = CreateFlatland();
 
-  const TransformId kTransformId = {1};
   const ContentId kLinkId = {2};
 
   fidl::InterfacePtr<ChildViewWatcher> child_view_watcher;
   fidl::InterfacePtr<ParentViewportWatcher> parent_viewport_watcher;
+
   CreateViewport(parent.get(), child.get(), kLinkId, &child_view_watcher, &parent_viewport_watcher);
 
-  parent->CreateTransform(kTransformId);
-  parent->SetRootTransform(kTransformId);
-  parent->SetContent(kTransformId, kLinkId);
-  PRESENT(parent, true);
-
-  UpdateLinks(parent->GetRoot());
-
-  // Confirm that the initial layout is the default.
   {
     std::optional<LayoutInfo> layout;
     parent_viewport_watcher->GetLayout([&](LayoutInfo info) { layout = std::move(info); });
+    RunLoopUntilIdle();
 
-    EXPECT_FALSE(layout.has_value());
-    UpdateLinks(parent->GetRoot());
-    EXPECT_TRUE(layout.has_value());
-    EXPECT_EQ(kDefaultSize, layout->logical_size().width);
-    EXPECT_EQ(kDefaultSize, layout->logical_size().height);
-    EXPECT_EQ(kDefaultInset, layout->inset().top);
-    EXPECT_EQ(kDefaultInset, layout->inset().left);
-    EXPECT_EQ(kDefaultInset, layout->inset().bottom);
-    EXPECT_EQ(kDefaultInset, layout->inset().right);
+    ASSERT_TRUE(layout.has_value());
+    EXPECT_EQ(layout->logical_size().width, kDefaultSize);
+    EXPECT_EQ(layout->logical_size().height, kDefaultSize);
+    EXPECT_EQ(layout->inset().top, kDefaultInset);
+    EXPECT_EQ(layout->inset().right, kDefaultInset);
+    EXPECT_EQ(layout->inset().bottom, kDefaultInset);
+    EXPECT_EQ(layout->inset().left, kDefaultInset);
+  }
+}
+
+TEST_F(FlatlandTest, AfterSetViewportProperties_NewLayoutIsDeliveredWithoutPresenting) {
+  std::shared_ptr<Flatland> parent = CreateFlatland();
+  std::shared_ptr<Flatland> child = CreateFlatland();
+
+  const ContentId kLinkId = {2};
+
+  fidl::InterfacePtr<ParentViewportWatcher> parent_viewport_watcher;
+
+  {  // Create Viewport and child View.
+    fidl::InterfacePtr<ChildViewWatcher> child_view_watcher;
+    CreateViewport(parent.get(), child.get(), kLinkId, &child_view_watcher,
+                   &parent_viewport_watcher);
   }
 
-  // Set the logical size to something new.
+  // Get and throw away initial layout received.
+  parent_viewport_watcher->GetLayout([](auto...) {});
+  RunLoopUntilIdle();
+
+  {  // Call SetViewportProperties(), but don't present.
+    ViewportProperties properties;
+    properties.set_logical_size({kDefaultSize + 1, kDefaultSize + 2});
+    properties.set_inset({.top = 4, .right = 5, .bottom = 6, .left = 7});
+    parent->SetViewportProperties(kLinkId, std::move(properties));
+  }
+
+  {  // Observe new layout being delivered immediately.
+    std::optional<LayoutInfo> layout;
+    parent_viewport_watcher->GetLayout([&](LayoutInfo info) { layout = std::move(info); });
+    RunLoopUntilIdle();
+
+    ASSERT_TRUE(layout.has_value());
+    EXPECT_EQ(layout->logical_size().width, kDefaultSize + 1);
+    EXPECT_EQ(layout->logical_size().height, kDefaultSize + 2);
+    EXPECT_EQ(layout->inset().top, 4);
+    EXPECT_EQ(layout->inset().right, 5);
+    EXPECT_EQ(layout->inset().bottom, 6);
+    EXPECT_EQ(layout->inset().left, 7);
+  }
+}
+
+TEST_F(FlatlandTest, SetViewportProperties_BeforeLinkResolution_ShouldUpdateInitialLayout) {
+  std::shared_ptr<Flatland> parent = CreateFlatland();
+  std::shared_ptr<Flatland> child = CreateFlatland();
+
+  const ContentId kLinkId = {2};
+
+  fidl::InterfacePtr<ChildViewWatcher> child_view_watcher;
+  fidl::InterfacePtr<ParentViewportWatcher> parent_viewport_watcher;
+
+  ViewportCreationToken parent_token;
+  ViewCreationToken child_token;
+  ASSERT_EQ(ZX_OK, zx::channel::create(0, &parent_token.value, &child_token.value));
+
+  {  // Create the Viewport.
+    ViewportProperties properties;
+    properties.set_logical_size({kDefaultSize, kDefaultSize});
+    parent->CreateViewport(kLinkId, std::move(parent_token), std::move(properties),
+                           child_view_watcher.NewRequest());
+    PRESENT(parent, true);
+  }
+
+  {  // Before the child's View is created, call SetViewportProperties.
+    ViewportProperties properties;
+    properties.set_logical_size({kDefaultSize + 1, kDefaultSize + 2});
+    properties.set_inset({.top = 4, .right = 5, .bottom = 6, .left = 7});
+    parent->SetViewportProperties(kLinkId, std::move(properties));
+  }
+
+  {  // Create the child View to let the link resolve.
+    child->CreateView2(std::move(child_token), scenic::NewViewIdentityOnCreation(),
+                       NoViewProtocols(), parent_viewport_watcher.NewRequest());
+    PRESENT(child, true);
+  }
+
+  {  // Observe that the initial layout received was updated in the SetViewProperties() call.
+    std::optional<LayoutInfo> layout;
+    parent_viewport_watcher->GetLayout([&](LayoutInfo info) { layout = std::move(info); });
+    RunLoopUntilIdle();
+
+    ASSERT_TRUE(layout.has_value());
+    EXPECT_EQ(layout->logical_size().width, kDefaultSize + 1);
+    EXPECT_EQ(layout->logical_size().height, kDefaultSize + 2);
+    EXPECT_EQ(layout->inset().top, 4);
+    EXPECT_EQ(layout->inset().right, 5);
+    EXPECT_EQ(layout->inset().bottom, 6);
+    EXPECT_EQ(layout->inset().left, 7);
+  }
+}
+
+TEST_F(FlatlandTest, SetViewportProperties_HandlesMissingValues) {
+  std::shared_ptr<Flatland> parent = CreateFlatland();
+  std::shared_ptr<Flatland> child = CreateFlatland();
+
+  const ContentId kLinkId = {2};
+
+  fidl::InterfacePtr<ParentViewportWatcher> parent_viewport_watcher;
+
   {
+    fidl::InterfacePtr<ChildViewWatcher> child_view_watcher;
+    CreateViewport(parent.get(), child.get(), kLinkId, &child_view_watcher,
+                   &parent_viewport_watcher);
+  }
+
+  {  // SetViewportProperties with only the logical size set.
     ViewportProperties properties;
     properties.set_logical_size({2, 3});
     parent->SetViewportProperties(kLinkId, std::move(properties));
-    PRESENT(parent, true);
   }
 
-  // Confirm that the new logical size is accessible.
-  {
+  {  // Confirm that the logical size is updated and the rest is unchanged.
     std::optional<LayoutInfo> layout;
     parent_viewport_watcher->GetLayout([&](LayoutInfo info) { layout = std::move(info); });
+    RunLoopUntilIdle();
 
-    EXPECT_FALSE(layout.has_value());
-    UpdateLinks(parent->GetRoot());
-    EXPECT_TRUE(layout.has_value());
-    EXPECT_EQ(2u, layout->logical_size().width);
-    EXPECT_EQ(3u, layout->logical_size().height);
-    EXPECT_EQ(kDefaultInset, layout->inset().top);
-    EXPECT_EQ(kDefaultInset, layout->inset().left);
-    EXPECT_EQ(kDefaultInset, layout->inset().bottom);
-    EXPECT_EQ(kDefaultInset, layout->inset().right);
+    ASSERT_TRUE(layout.has_value());
+    EXPECT_EQ(layout->logical_size().width, 2u);
+    EXPECT_EQ(layout->logical_size().height, 3u);
+    EXPECT_EQ(layout->inset().top, kDefaultInset);
+    EXPECT_EQ(layout->inset().left, kDefaultInset);
+    EXPECT_EQ(layout->inset().bottom, kDefaultInset);
+    EXPECT_EQ(layout->inset().right, kDefaultInset);
   }
 
-  // Set the inset to something new.
-  {
+  {  // Set the inset to something new.
     ViewportProperties properties;
-    properties.set_inset({4, 5, 6, 7});
+    properties.set_inset({.top = 4, .right = 5, .bottom = 6, .left = 7});
     parent->SetViewportProperties(kLinkId, std::move(properties));
-    PRESENT(parent, true);
   }
 
-  // Confirm that the new logical size is updated.
-  {
+  {  // Confirm that the insets are updated and the rest is unchanged.
     std::optional<LayoutInfo> layout;
     parent_viewport_watcher->GetLayout([&](LayoutInfo info) { layout = std::move(info); });
+    RunLoopUntilIdle();
 
-    EXPECT_FALSE(layout.has_value());
-    UpdateLinks(parent->GetRoot());
-    EXPECT_TRUE(layout.has_value());
-    EXPECT_EQ(2u, layout->logical_size().width);
-    EXPECT_EQ(3u, layout->logical_size().height);
-    EXPECT_EQ(4, layout->inset().top);
-    EXPECT_EQ(5, layout->inset().right);
-    EXPECT_EQ(6, layout->inset().bottom);
-    EXPECT_EQ(7, layout->inset().left);
+    ASSERT_TRUE(layout.has_value());
+    EXPECT_EQ(layout->logical_size().width, 2u);
+    EXPECT_EQ(layout->logical_size().height, 3u);
+    EXPECT_EQ(layout->inset().top, 4);
+    EXPECT_EQ(layout->inset().right, 5);
+    EXPECT_EQ(layout->inset().bottom, 6);
+    EXPECT_EQ(layout->inset().left, 7);
   }
 
-  // Set link properties using a properties object with an unset size field.
-  {
-    ViewportProperties default_properties;
-    parent->SetViewportProperties(kLinkId, std::move(default_properties));
-    PRESENT(parent, true);
+  {  // Call SetViewportProperties with an empty table.
+    ViewportProperties empty_properties;
+    parent->SetViewportProperties(kLinkId, std::move(empty_properties));
   }
 
-  // Confirm that no update has been triggered.
-  {
+  {  // Confirm that no update has been triggered.
     std::optional<LayoutInfo> layout;
     parent_viewport_watcher->GetLayout([&](LayoutInfo info) { layout = std::move(info); });
+    RunLoopUntilIdle();
 
-    EXPECT_FALSE(layout.has_value());
-    UpdateLinks(parent->GetRoot());
     EXPECT_FALSE(layout.has_value());
   }
 }
 
-// Test to make sure that if we have a transform containing a viewport as content,
-// that itself has two or more parents, that the viewport properties that are returned
-// to the parent_viewport_watcher are those calculated from the subtree containing the
-// smallest overall scale factor.
-TEST_F(FlatlandTest, SetViewportPropertiesMultiParenting) {
+TEST_F(FlatlandTest,
+       SetViewportProperties_MultipleTimes_ShouldOnlyDeliverTheNewestValue_OnHangingGet) {
   std::shared_ptr<Flatland> parent = CreateFlatland();
   std::shared_ptr<Flatland> child = CreateFlatland();
 
-  const TransformId kTransformId = {1};
-  const TransformId kNormalParentId = {2};
-  const TransformId kMagParentId = {3};
-  const TransformId kChildId = {4};
-  const ContentId kLinkId = {5};
-  const SizeU kMagScale = {5, 5};
-
-  fidl::InterfacePtr<ChildViewWatcher> child_view_watcher;
-  fidl::InterfacePtr<ParentViewportWatcher> parent_viewport_watcher;
-  CreateViewport(parent.get(), child.get(), kLinkId, &child_view_watcher, &parent_viewport_watcher);
-
-  // Create the diamond structure used for magnification in the
-  // parent instance, with the magnification transform having a
-  // non-unit scale factor.
-  parent->CreateTransform(kTransformId);
-  parent->CreateTransform(kNormalParentId);
-  parent->CreateTransform(kMagParentId);
-  parent->CreateTransform(kChildId);
-
-  parent->SetScale(kNormalParentId, {1, 1});
-  parent->SetScale(kMagParentId, {5, 5});
-
-  parent->SetRootTransform(kTransformId);
-  parent->AddChild(kTransformId, kNormalParentId);
-  parent->AddChild(kTransformId, kMagParentId);
-  parent->AddChild(kNormalParentId, kChildId);
-  parent->AddChild(kMagParentId, kChildId);
-
-  parent->SetContent(kChildId, kLinkId);
-  PRESENT(parent, true);
-}
-
-TEST_F(FlatlandTest, SetViewportPropertiesMultisetBehavior) {
-  std::shared_ptr<Flatland> parent = CreateFlatland();
-  std::shared_ptr<Flatland> child = CreateFlatland();
-
-  const TransformId kTransformId = {1};
   const ContentId kLinkId = {2};
 
-  fidl::InterfacePtr<ChildViewWatcher> child_view_watcher;
   fidl::InterfacePtr<ParentViewportWatcher> parent_viewport_watcher;
-  CreateViewport(parent.get(), child.get(), kLinkId, &child_view_watcher, &parent_viewport_watcher);
 
-  // Our initial layout (from link creation) should be the default size.
   {
-    int num_updates = 0;
-    parent_viewport_watcher->GetLayout([&](LayoutInfo info) {
-      EXPECT_EQ(kDefaultSize, info.logical_size().width);
-      EXPECT_EQ(kDefaultSize, info.logical_size().height);
-      ++num_updates;
-    });
-
-    EXPECT_EQ(0, num_updates);
-    UpdateLinks(parent->GetRoot());
-    EXPECT_EQ(1, num_updates);
+    fidl::InterfacePtr<ChildViewWatcher> child_view_watcher;
+    CreateViewport(parent.get(), child.get(), kLinkId, &child_view_watcher,
+                   &parent_viewport_watcher);
   }
-
-  // Create a full chain of transforms from parent root to child root.
-  parent->CreateTransform(kTransformId);
-  parent->SetRootTransform(kTransformId);
-  parent->SetContent(kTransformId, kLinkId);
-  PRESENT(parent, true);
 
   const uint32_t kInitialSize = 100;
 
@@ -3221,88 +3192,62 @@ TEST_F(FlatlandTest, SetViewportPropertiesMultisetBehavior) {
     ViewportProperties properties2;
     properties2.set_logical_size({kInitialSize + i, kInitialSize + i});
     parent->SetViewportProperties(kLinkId, std::move(properties2));
-    PRESENT(parent, true);
   }
 
-  // Confirm that the callback is fired once, and that it has the most up-to-date data.
-  {
-    int num_updates = 0;
-    parent_viewport_watcher->GetLayout([&](LayoutInfo info) {
-      EXPECT_EQ(kInitialSize, info.logical_size().width);
-      EXPECT_EQ(kInitialSize, info.logical_size().height);
-      ++num_updates;
-    });
+  {  // Confirm that the callback fires, and that it has the most up-to-date data.
+    std::optional<LayoutInfo> layout;
+    parent_viewport_watcher->GetLayout([&](LayoutInfo info) { layout = std::move(info); });
+    RunLoopUntilIdle();
 
-    EXPECT_EQ(0, num_updates);
-    UpdateLinks(parent->GetRoot());
-    EXPECT_EQ(1, num_updates);
+    ASSERT_TRUE(layout.has_value());
+    EXPECT_EQ(layout->logical_size().width, kInitialSize);
+    EXPECT_EQ(layout->logical_size().height, kInitialSize);
   }
 
-  const uint32_t kNewSize = 50u;
+  {  // Confirm that calling GetLayout again results in a hung get.
+    std::optional<LayoutInfo> layout;
+    parent_viewport_watcher->GetLayout([&](LayoutInfo info) { layout = std::move(info); });
+    RunLoopUntilIdle();
+    ASSERT_FALSE(layout.has_value());
 
-  // Confirm that calling GetLayout again results in a hung get.
-  int num_updates = 0;
-  parent_viewport_watcher->GetLayout([&](LayoutInfo info) {
-    // When we receive the new layout information, confirm that we receive the last update in the
-    // batch.
-    EXPECT_EQ(kNewSize, info.logical_size().width);
-    EXPECT_EQ(kNewSize, info.logical_size().height);
-    ++num_updates;
-  });
+    // Update the properties again and observe the pending GetLayout() triggering.
+    const uint32_t kNewSize = 50u;
+    {
+      ViewportProperties properties;
+      properties.set_logical_size({kNewSize, kNewSize});
+      parent->SetViewportProperties(kLinkId, std::move(properties));
+    }
+    RunLoopUntilIdle();
 
-  EXPECT_EQ(0, num_updates);
-  UpdateLinks(parent->GetRoot());
-  EXPECT_EQ(0, num_updates);
-
-  // Update the properties twice, once with the old value, once with the new value.
-  {
-    ViewportProperties properties;
-    properties.set_logical_size({kInitialSize, kInitialSize});
-    parent->SetViewportProperties(kLinkId, std::move(properties));
-    ViewportProperties properties2;
-    properties2.set_logical_size({kNewSize, kNewSize});
-    parent->SetViewportProperties(kLinkId, std::move(properties2));
-    PRESENT(parent, true);
+    // Confirm that we receive the update and that it had the newest values.
+    ASSERT_TRUE(layout.has_value());
+    EXPECT_EQ(layout->logical_size().width, kNewSize);
+    EXPECT_EQ(layout->logical_size().height, kNewSize);
   }
-
-  // Confirm that we receive the update.
-  EXPECT_EQ(0, num_updates);
-  UpdateLinks(parent->GetRoot());
-  EXPECT_EQ(1, num_updates);
 }
 
-TEST_F(FlatlandTest, SetViewportPropertiesOnMultipleChildren) {
+TEST_F(FlatlandTest, SetViewportProperties_OnMultipleChildren_ShouldUpdateEachOne) {
   const int kNumChildren = 3;
-  const TransformId kRootTransform = {1};
-  const TransformId kTransformIds[kNumChildren] = {{2}, {3}, {4}};
   const ContentId kLinkIds[kNumChildren] = {{5}, {6}, {7}};
 
   std::shared_ptr<Flatland> parent = CreateFlatland();
   std::shared_ptr<Flatland> children[kNumChildren] = {CreateFlatland(), CreateFlatland(),
                                                       CreateFlatland()};
-  fidl::InterfacePtr<ChildViewWatcher> child_view_watcher[kNumChildren];
   fidl::InterfacePtr<ParentViewportWatcher> parent_viewport_watcher[kNumChildren];
 
-  parent->CreateTransform(kRootTransform);
-  parent->SetRootTransform(kRootTransform);
-
   for (int i = 0; i < kNumChildren; ++i) {
-    parent->CreateTransform(kTransformIds[i]);
-    parent->AddChild(kRootTransform, kTransformIds[i]);
-    CreateViewport(parent.get(), children[i].get(), kLinkIds[i], &child_view_watcher[i],
+    fidl::InterfacePtr<ChildViewWatcher> child_view_watcher;
+    CreateViewport(parent.get(), children[i].get(), kLinkIds[i], &child_view_watcher,
                    &parent_viewport_watcher[i]);
-    parent->SetContent(kTransformIds[i], kLinkIds[i]);
   }
-  UpdateLinks(parent->GetRoot());
 
   // Confirm that all children are at the default value
   for (int i = 0; i < kNumChildren; ++i) {
     std::optional<LayoutInfo> layout;
     parent_viewport_watcher[i]->GetLayout([&](LayoutInfo info) { layout = std::move(info); });
+    RunLoopUntilIdle();
 
-    EXPECT_FALSE(layout.has_value());
-    UpdateLinks(parent->GetRoot());
-    EXPECT_TRUE(layout.has_value());
+    ASSERT_TRUE(layout.has_value());
     EXPECT_EQ(kDefaultSize, layout->logical_size().width);
     EXPECT_EQ(kDefaultSize, layout->logical_size().height);
   }
@@ -3317,45 +3262,57 @@ TEST_F(FlatlandTest, SetViewportPropertiesOnMultipleChildren) {
     parent->SetViewportProperties(id, std::move(properties));
   }
 
-  PRESENT(parent, true);
-
+  // Confirm that all children are updated.
   for (int i = 0; i < kNumChildren; ++i) {
     std::optional<LayoutInfo> layout;
     parent_viewport_watcher[i]->GetLayout([&](LayoutInfo info) { layout = std::move(info); });
+    RunLoopUntilIdle();
 
-    EXPECT_FALSE(layout.has_value());
-    UpdateLinks(parent->GetRoot());
-    EXPECT_TRUE(layout.has_value());
+    ASSERT_TRUE(layout.has_value());
     EXPECT_EQ(kLinkIds[i].value, layout->logical_size().width);
     EXPECT_EQ(kLinkIds[i].value * 2, layout->logical_size().height);
   }
 }
 
-// Make sure that if we set the initial dpr of the link system, that
-// it gets transmitted to the layout info.
-TEST_F(FlatlandTest, LinkSystemInitialDevicePixelRatioTest) {
+TEST_F(FlatlandTest, LinkSystem_WhenSettingDevicePixelRatio_ItShouldBeTransmittedToLayoutInfo) {
   std::shared_ptr<Flatland> parent = CreateFlatland();
   std::shared_ptr<Flatland> child = CreateFlatland();
 
-  const TransformId kTransformId = {1};
   const ContentId kLinkId = {2};
 
-  glm::vec2 initial_dpr = {3.f, 4.f};
-  link_system_->set_initial_device_pixel_ratio(initial_dpr);
+  const glm::vec2 initial_dpr = {3.f, 4.f};
+  link_system_->set_device_pixel_ratio(initial_dpr);
 
-  fidl::InterfacePtr<ChildViewWatcher> child_view_watcher;
   fidl::InterfacePtr<ParentViewportWatcher> parent_viewport_watcher;
-  CreateViewport(parent.get(), child.get(), kLinkId, &child_view_watcher, &parent_viewport_watcher);
+  {
+    fidl::InterfacePtr<ChildViewWatcher> child_view_watcher;
+    CreateViewport(parent.get(), child.get(), kLinkId, &child_view_watcher,
+                   &parent_viewport_watcher);
+  }
 
-  int num_updates = 0;
-  parent_viewport_watcher->GetLayout([&](LayoutInfo info) {
-    EXPECT_EQ(kDefaultSize, info.logical_size().width);
-    EXPECT_EQ(kDefaultSize, info.logical_size().height);
-    EXPECT_EQ(initial_dpr.x, info.device_pixel_ratio().x);
-    EXPECT_EQ(initial_dpr.y, info.device_pixel_ratio().x);
-    // Reset the link system
-    link_system_->set_initial_device_pixel_ratio(glm::vec2(1.f, 1.f));
-  });
+  {  // Observe the DPR in the initial received layout.
+    std::optional<LayoutInfo> layout;
+    parent_viewport_watcher->GetLayout([&](LayoutInfo info) { layout = std::move(info); });
+    RunLoopUntilIdle();
+
+    ASSERT_TRUE(layout.has_value());
+    EXPECT_EQ(layout->device_pixel_ratio().x, initial_dpr.x);
+    EXPECT_EQ(layout->device_pixel_ratio().y, initial_dpr.y);
+  }
+
+  // Set a new DPR.
+  const glm::vec2 new_dpr = {5.f, 6.f};
+  link_system_->set_device_pixel_ratio(new_dpr);
+
+  {  // Observe the new DPR being delivered.
+    std::optional<LayoutInfo> layout;
+    parent_viewport_watcher->GetLayout([&](LayoutInfo info) { layout = std::move(info); });
+    RunLoopUntilIdle();
+
+    ASSERT_TRUE(layout.has_value());
+    EXPECT_EQ(layout->device_pixel_ratio().x, new_dpr.x);
+    EXPECT_EQ(layout->device_pixel_ratio().y, new_dpr.y);
+  }
 }
 
 TEST_F(FlatlandTest, SetLinkOnTransformErrorCases) {

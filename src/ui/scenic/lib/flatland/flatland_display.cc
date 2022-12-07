@@ -109,7 +109,7 @@ void FlatlandDisplay::SetContent(ViewportCreationToken token,
   // NOTE: clients won't receive CONNECTED_TO_DISPLAY until LinkSystem::UpdateLinks() is called,
   // typically during rendering.
   link_to_child_ = link_system_->CreateLinkToChild(
-      dispatcher_holder_, std::move(token), fidl::Clone(properties), std::move(child_view_watcher),
+      dispatcher_holder_, std::move(token), std::move(properties), std::move(child_view_watcher),
       child_transform,
       [ref = weak_from_this(),
        dispatcher_holder = dispatcher_holder_](const std::string& error_log) {
@@ -141,7 +141,6 @@ void FlatlandDisplay::SetContent(ViewportCreationToken token,
   auto uber_struct = std::make_unique<UberStruct>();
   uber_struct->debug_name = "FlatlandDisplay";
   uber_struct->local_topology = std::move(data.sorted_transforms);
-  uber_struct->link_properties[link_to_child_.parent_transform_handle] = std::move(properties);
   uber_struct->local_clip_regions[link_to_child_.parent_transform_handle] = {
       .x = 0,
       .y = 0,
