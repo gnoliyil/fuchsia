@@ -185,6 +185,7 @@ impl SocketOps for InetSocket {
         Ok(Socket::new_with_ops(
             socket.domain,
             socket.socket_type,
+            socket.protocol,
             Box::new(InetSocket { zxio: Arc::new(zxio) }),
         ))
     }

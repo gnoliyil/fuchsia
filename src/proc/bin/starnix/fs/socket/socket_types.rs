@@ -120,7 +120,7 @@ impl SocketType {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Copy, Clone)]
 pub struct SocketProtocol(u32);
 
 impl SocketProtocol {

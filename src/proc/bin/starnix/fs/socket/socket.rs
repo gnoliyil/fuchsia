@@ -196,6 +196,9 @@ pub struct Socket {
     /// The type of this socket.
     pub socket_type: SocketType,
 
+    /// The protocol of this socket.
+    pub protocol: SocketProtocol,
+
     state: Mutex<SocketState>,
 }
 
@@ -244,15 +247,16 @@ impl Socket {
         protocol: SocketProtocol,
     ) -> Result<SocketHandle, Errno> {
         let ops = create_socket_ops(domain, socket_type, protocol)?;
-        Ok(Arc::new(Socket { ops, domain, socket_type, state: Mutex::default() }))
+        Ok(Arc::new(Socket { ops, domain, socket_type, protocol, state: Mutex::default() }))
     }
 
     pub fn new_with_ops(
         domain: SocketDomain,
         socket_type: SocketType,
+        protocol: SocketProtocol,
         ops: Box<dyn SocketOps>,
     ) -> SocketHandle {
-        Arc::new(Socket { ops, domain, socket_type, state: Mutex::default() })
+        Arc::new(Socket { ops, domain, socket_type, protocol, state: Mutex::default() })
     }
 
     /// Creates a `FileHandle` where the associated `FsNode` contains a socket.
@@ -321,6 +325,9 @@ impl Socket {
                 SO_DOMAIN => {
                     let domain = self.domain.as_raw() as u32;
                     domain.to_ne_bytes().to_vec()
+                }
+                SO_PROTOCOL if !self.domain.is_inet() => {
+                    self.protocol.as_raw().to_ne_bytes().to_vec()
                 }
                 SO_RCVTIMEO => {
                     let duration = self.receive_timeout().unwrap_or_default();
