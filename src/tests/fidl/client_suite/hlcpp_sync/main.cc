@@ -124,6 +124,45 @@ class RunnerServer : public fidl::clientsuite::Runner {
     }
   }
 
+  void CallTwoWayStructRequest(fidl::InterfaceHandle<fidl::clientsuite::ClosedTarget> target,
+                               fidl::clientsuite::NonEmptyPayload request,
+                               CallTwoWayStructRequestCallback callback) override {
+    auto client = target.BindSync();
+    auto status = client->TwoWayStructRequest(request.some_field);
+    if (status == ZX_OK) {
+      callback(fidl::clientsuite::EmptyResultClassification::WithSuccess({}));
+    } else {
+      callback(fidl::clientsuite::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(status)));
+    }
+  }
+
+  void CallTwoWayTableRequest(fidl::InterfaceHandle<fidl::clientsuite::ClosedTarget> target,
+                              fidl::clientsuite::TablePayload request,
+                              CallTwoWayTableRequestCallback callback) override {
+    auto client = target.BindSync();
+    auto status = client->TwoWayTableRequest(std::move(request));
+    if (status == ZX_OK) {
+      callback(fidl::clientsuite::EmptyResultClassification::WithSuccess({}));
+    } else {
+      callback(fidl::clientsuite::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(status)));
+    }
+  }
+
+  void CallTwoWayUnionRequest(fidl::InterfaceHandle<fidl::clientsuite::ClosedTarget> target,
+                              fidl::clientsuite::UnionPayload request,
+                              CallTwoWayUnionRequestCallback callback) override {
+    auto client = target.BindSync();
+    auto status = client->TwoWayUnionRequest(std::move(request));
+    if (status == ZX_OK) {
+      callback(fidl::clientsuite::EmptyResultClassification::WithSuccess({}));
+    } else {
+      callback(fidl::clientsuite::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(status)));
+    }
+  }
+
   void CallOneWayNoRequest(::fidl::InterfaceHandle<::fidl::clientsuite::ClosedTarget> target,
                            CallOneWayNoRequestCallback callback) override {
     auto client = target.BindSync();

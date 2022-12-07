@@ -110,6 +110,39 @@ async fn run_runner_server(stream: RunnerRequestStream) -> Result<(), Error> {
                             .context("sending response failed"),
                     }
                 }
+                RunnerRequest::CallTwoWayStructRequest { target, request, responder } => {
+                    let client = ClosedTargetSynchronousProxy::new(target.into_channel());
+                    match client.two_way_struct_request(request.some_field, zx::Time::INFINITE) {
+                        Ok(()) => responder
+                            .send(&mut EmptyResultClassification::Success(Empty))
+                            .context("sending response failed"),
+                        Err(err) => responder
+                            .send(&mut EmptyResultClassification::FidlError(classify_error(err)))
+                            .context("sending response failed"),
+                    }
+                }
+                RunnerRequest::CallTwoWayTableRequest { target, request, responder } => {
+                    let client = ClosedTargetSynchronousProxy::new(target.into_channel());
+                    match client.two_way_table_request(request, zx::Time::INFINITE) {
+                        Ok(()) => responder
+                            .send(&mut EmptyResultClassification::Success(Empty))
+                            .context("sending response failed"),
+                        Err(err) => responder
+                            .send(&mut EmptyResultClassification::FidlError(classify_error(err)))
+                            .context("sending response failed"),
+                    }
+                }
+                RunnerRequest::CallTwoWayUnionRequest { target, mut request, responder } => {
+                    let client = ClosedTargetSynchronousProxy::new(target.into_channel());
+                    match client.two_way_union_request(&mut request, zx::Time::INFINITE) {
+                        Ok(()) => responder
+                            .send(&mut EmptyResultClassification::Success(Empty))
+                            .context("sending response failed"),
+                        Err(err) => responder
+                            .send(&mut EmptyResultClassification::FidlError(classify_error(err)))
+                            .context("sending response failed"),
+                    }
+                }
                 RunnerRequest::CallOneWayNoRequest { target, responder } => {
                     let client = ClosedTargetSynchronousProxy::new(target.into_channel());
                     match client.one_way_no_request() {

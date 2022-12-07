@@ -118,6 +118,51 @@ class RunnerServer : public fidl::Server<fidl_clientsuite::Runner> {
         });
   }
 
+  void CallTwoWayStructRequest(CallTwoWayStructRequestRequest& request,
+                               CallTwoWayStructRequestCompleter::Sync& completer) override {
+    auto client = fidl::SharedClient(std::move(request.target()), dispatcher_);
+    client->TwoWayStructRequest(request.request())
+        .ThenExactlyOnce(
+            [completer = completer.ToAsync(), client = client.Clone()](auto& result) mutable {
+              if (result.is_ok()) {
+                completer.Reply(fidl_clientsuite::EmptyResultClassification::WithSuccess({}));
+              } else {
+                completer.Reply(fidl_clientsuite::EmptyResultClassification::WithFidlError(
+                    clienttest_util::ClassifyError(result.error_value())));
+              }
+            });
+  }
+
+  void CallTwoWayTableRequest(CallTwoWayTableRequestRequest& request,
+                              CallTwoWayTableRequestCompleter::Sync& completer) override {
+    auto client = fidl::SharedClient(std::move(request.target()), dispatcher_);
+    client->TwoWayTableRequest(request.request())
+        .ThenExactlyOnce(
+            [completer = completer.ToAsync(), client = client.Clone()](auto& result) mutable {
+              if (result.is_ok()) {
+                completer.Reply(fidl_clientsuite::EmptyResultClassification::WithSuccess({}));
+              } else {
+                completer.Reply(fidl_clientsuite::EmptyResultClassification::WithFidlError(
+                    clienttest_util::ClassifyError(result.error_value())));
+              }
+            });
+  }
+
+  void CallTwoWayUnionRequest(CallTwoWayUnionRequestRequest& request,
+                              CallTwoWayUnionRequestCompleter::Sync& completer) override {
+    auto client = fidl::SharedClient(std::move(request.target()), dispatcher_);
+    client->TwoWayUnionRequest(request.request())
+        .ThenExactlyOnce(
+            [completer = completer.ToAsync(), client = client.Clone()](auto& result) mutable {
+              if (result.is_ok()) {
+                completer.Reply(fidl_clientsuite::EmptyResultClassification::WithSuccess({}));
+              } else {
+                completer.Reply(fidl_clientsuite::EmptyResultClassification::WithFidlError(
+                    clienttest_util::ClassifyError(result.error_value())));
+              }
+            });
+  }
+
   void CallOneWayNoRequest(CallOneWayNoRequestRequest& request,
                            CallOneWayNoRequestCompleter::Sync& completer) override {
     auto client = fidl::SharedClient(std::move(request.target()), dispatcher_);

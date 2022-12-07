@@ -150,6 +150,43 @@ class RunnerImpl extends Runner {
     }
   }
 
+  Future<EmptyResultClassification> callTwoWayStructRequest(
+      InterfaceHandle<ClosedTarget> targetHandle,
+      NonEmptyPayload request) async {
+    var target = ClosedTargetProxy();
+    target.ctrl.bind(targetHandle);
+    try {
+      await target.twoWayStructRequest(request.someField);
+      return const EmptyResultClassification.withSuccess(Empty());
+    } catch (e) {
+      return EmptyResultClassification.withFidlError(classifyError(e));
+    }
+  }
+
+  Future<EmptyResultClassification> callTwoWayTableRequest(
+      InterfaceHandle<ClosedTarget> targetHandle, TablePayload request) async {
+    var target = ClosedTargetProxy();
+    target.ctrl.bind(targetHandle);
+    try {
+      await target.twoWayTableRequest(request);
+      return const EmptyResultClassification.withSuccess(Empty());
+    } catch (e) {
+      return EmptyResultClassification.withFidlError(classifyError(e));
+    }
+  }
+
+  Future<EmptyResultClassification> callTwoWayUnionRequest(
+      InterfaceHandle<ClosedTarget> targetHandle, UnionPayload request) async {
+    var target = ClosedTargetProxy();
+    target.ctrl.bind(targetHandle);
+    try {
+      await target.twoWayUnionRequest(request);
+      return const EmptyResultClassification.withSuccess(Empty());
+    } catch (e) {
+      return EmptyResultClassification.withFidlError(classifyError(e));
+    }
+  }
+
   Future<EmptyResultClassification> callOneWayNoRequest(
       InterfaceHandle<ClosedTarget> targetHandle) async {
     var target = ClosedTargetProxy();

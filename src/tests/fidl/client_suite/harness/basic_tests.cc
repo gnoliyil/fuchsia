@@ -198,6 +198,95 @@ CLIENT_TEST(TwoWayResultWithError) {
   WAIT_UNTIL_CALLBACK_RUN();
 }
 
+CLIENT_TEST(TwoWayStructRequest) {
+  static const fidl_clientsuite::NonEmptyPayload kRequest{{.some_field = 390023}};
+
+  runner()
+      ->CallTwoWayStructRequest({{.target = TakeClosedClient(), .request = kRequest}})
+      .ThenExactlyOnce(
+          [&](fidl::Result<fidl_clientsuite::Runner::CallTwoWayStructRequest>& result) {
+            MarkCallbackRun();
+            ASSERT_TRUE(result.is_ok()) << result.error_value();
+            ASSERT_EQ(fidl_clientsuite::EmptyResultClassification::WithSuccess({}), result.value());
+          });
+
+  ASSERT_OK(server_end().wait_for_signal(ZX_CHANNEL_READABLE));
+
+  Bytes bytes_out = {
+      header(kTxidNotKnown, kOrdinalTwoWayStructRequest, fidl::MessageDynamicFlags::kStrictMethod),
+      encode(kRequest),
+  };
+  zx_txid_t txid;
+  ASSERT_OK(server_end().read_and_check_unknown_txid(&txid, bytes_out));
+  ASSERT_NE(0u, txid);
+
+  Bytes bytes_in = {
+      header(txid, kOrdinalTwoWayStructRequest, fidl::MessageDynamicFlags::kStrictMethod),
+  };
+  ASSERT_OK(server_end().write(bytes_in));
+
+  WAIT_UNTIL_CALLBACK_RUN();
+}
+
+CLIENT_TEST(TwoWayTableRequest) {
+  static const fidl_clientsuite::TablePayload kRequest{{.some_field = 390023}};
+
+  runner()
+      ->CallTwoWayTableRequest({{.target = TakeClosedClient(), .request = kRequest}})
+      .ThenExactlyOnce([&](fidl::Result<fidl_clientsuite::Runner::CallTwoWayTableRequest>& result) {
+        MarkCallbackRun();
+        ASSERT_TRUE(result.is_ok()) << result.error_value();
+        ASSERT_EQ(fidl_clientsuite::EmptyResultClassification::WithSuccess({}), result.value());
+      });
+
+  ASSERT_OK(server_end().wait_for_signal(ZX_CHANNEL_READABLE));
+
+  Bytes bytes_out = {
+      header(0, kOrdinalTwoWayTableRequest, fidl::MessageDynamicFlags::kStrictMethod),
+      encode(kRequest),
+  };
+  zx_txid_t txid;
+  ASSERT_OK(server_end().read_and_check_unknown_txid(&txid, bytes_out));
+  ASSERT_NE(0u, txid);
+
+  Bytes bytes_in = {
+      header(txid, kOrdinalTwoWayTableRequest, fidl::MessageDynamicFlags::kStrictMethod),
+  };
+  ASSERT_OK(server_end().write(bytes_in));
+
+  WAIT_UNTIL_CALLBACK_RUN();
+}
+
+CLIENT_TEST(TwoWayUnionRequest) {
+  static const fidl_clientsuite::UnionPayload kRequest =
+      fidl_clientsuite::UnionPayload::WithSomeVariant(390023);
+
+  runner()
+      ->CallTwoWayUnionRequest({{.target = TakeClosedClient(), .request = kRequest}})
+      .ThenExactlyOnce([&](fidl::Result<fidl_clientsuite::Runner::CallTwoWayUnionRequest>& result) {
+        MarkCallbackRun();
+        ASSERT_TRUE(result.is_ok()) << result.error_value();
+        ASSERT_EQ(fidl_clientsuite::EmptyResultClassification::WithSuccess({}), result.value());
+      });
+
+  ASSERT_OK(server_end().wait_for_signal(ZX_CHANNEL_READABLE));
+
+  Bytes bytes_out = {
+      header(0, kOrdinalTwoWayUnionRequest, fidl::MessageDynamicFlags::kStrictMethod),
+      encode(kRequest),
+  };
+  zx_txid_t txid;
+  ASSERT_OK(server_end().read_and_check_unknown_txid(&txid, bytes_out));
+  ASSERT_NE(0u, txid);
+
+  Bytes bytes_in = {
+      header(txid, kOrdinalTwoWayUnionRequest, fidl::MessageDynamicFlags::kStrictMethod),
+  };
+  ASSERT_OK(server_end().write(bytes_in));
+
+  WAIT_UNTIL_CALLBACK_RUN();
+}
+
 CLIENT_TEST(OneWayNoRequest) {
   runner()
       ->CallOneWayNoRequest({{.target = TakeClosedClient()}})

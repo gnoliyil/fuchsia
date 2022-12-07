@@ -185,6 +185,45 @@ class RunnerServer : public fidl::clientsuite::Runner {
     });
   }
 
+  void CallTwoWayStructRequest(fidl::InterfaceHandle<fidl::clientsuite::ClosedTarget> target,
+                               fidl::clientsuite::NonEmptyPayload request,
+                               CallTwoWayStructRequestCallback callback) override {
+    SharedCallbackAndClient client_callback(target.Bind(), std::move(callback));
+    client_callback.client().set_error_handler([client_callback](auto status) {
+      client_callback(fidl::clientsuite::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(status)));
+    });
+    client_callback.client()->TwoWayStructRequest(request.some_field, [client_callback]() {
+      client_callback(fidl::clientsuite::EmptyResultClassification::WithSuccess({}));
+    });
+  }
+
+  void CallTwoWayTableRequest(fidl::InterfaceHandle<fidl::clientsuite::ClosedTarget> target,
+                              fidl::clientsuite::TablePayload request,
+                              CallTwoWayTableRequestCallback callback) override {
+    SharedCallbackAndClient client_callback(target.Bind(), std::move(callback));
+    client_callback.client().set_error_handler([client_callback](auto status) {
+      client_callback(fidl::clientsuite::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(status)));
+    });
+    client_callback.client()->TwoWayTableRequest(std::move(request), [client_callback]() {
+      client_callback(fidl::clientsuite::EmptyResultClassification::WithSuccess({}));
+    });
+  }
+
+  void CallTwoWayUnionRequest(fidl::InterfaceHandle<fidl::clientsuite::ClosedTarget> target,
+                              fidl::clientsuite::UnionPayload request,
+                              CallTwoWayUnionRequestCallback callback) override {
+    SharedCallbackAndClient client_callback(target.Bind(), std::move(callback));
+    client_callback.client().set_error_handler([client_callback](auto status) {
+      client_callback(fidl::clientsuite::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(status)));
+    });
+    client_callback.client()->TwoWayUnionRequest(std::move(request), [client_callback]() {
+      client_callback(fidl::clientsuite::EmptyResultClassification::WithSuccess({}));
+    });
+  }
+
   void CallOneWayNoRequest(fidl::InterfaceHandle<fidl::clientsuite::ClosedTarget> target,
                            CallOneWayNoRequestCallback callback) override {
     SharedCallbackAndClient client_callback(target.Bind(), std::move(callback));

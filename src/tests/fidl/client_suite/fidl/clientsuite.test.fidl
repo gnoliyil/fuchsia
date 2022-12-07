@@ -195,6 +195,24 @@ closed protocol Runner {
         target client_end:ClosedTarget;
     }) -> (NonEmptyResultWithErrorClassification);
 
+    // Request that the client call the [`ClosedTarget.TwoWayStructPayload`] method.
+    strict CallTwoWayStructRequest(resource struct {
+        target client_end:ClosedTarget;
+        request NonEmptyPayload;
+    }) -> (EmptyResultClassification);
+
+    // Request that the client call the [`ClosedTarget.TwoWayTablePayload`] method.
+    strict CallTwoWayTableRequest(resource struct {
+        target client_end:ClosedTarget;
+        request TablePayload;
+    }) -> (EmptyResultClassification);
+
+    // Request that the client call the [`ClosedTarget.TwoWayUnionPayload`] method.
+    strict CallTwoWayUnionRequest(resource struct {
+        target client_end:ClosedTarget;
+        request UnionPayload;
+    }) -> (EmptyResultClassification);
+
     // Request that the client call the [`ClosedTarget.OneWayNoRequest`] method.
     strict CallOneWayNoRequest(resource struct {
         target client_end:ClosedTarget;
@@ -331,6 +349,10 @@ closed protocol ClosedTarget {
     strict TwoWayUnionPayload() -> (UnionPayload);
     strict TwoWayStructPayloadErr() -> (NonEmptyPayload) error int32;
 
+    strict TwoWayStructRequest(NonEmptyPayload) -> ();
+    strict TwoWayTableRequest(TablePayload) -> ();
+    strict TwoWayUnionRequest(UnionPayload) -> ();
+
     strict OneWayNoRequest();
     strict OneWayStructRequest(NonEmptyPayload);
     strict OneWayTableRequest(TablePayload);
@@ -422,6 +444,10 @@ type Test = flexible enum : uint32 {
     TWO_WAY_RESULT_WITH_PAYLOAD = 45;
     TWO_WAY_RESULT_WITH_ERROR = 46;
 
+    TWO_WAY_STRUCT_REQUEST = 52;
+    TWO_WAY_TABLE_REQUEST = 53;
+    TWO_WAY_UNION_REQUEST = 54;
+
     ONE_WAY_NO_REQUEST = 48;
     ONE_WAY_STRUCT_REQUEST = 49;
     ONE_WAY_TABLE_REQUEST = 50;
@@ -482,5 +508,5 @@ type Test = flexible enum : uint32 {
     V1_TWO_WAY_NO_PAYLOAD = 40;
     V1_TWO_WAY_STRUCT_PAYLOAD = 41;
 
-    // next available: 52
+    // next available: 55
 };

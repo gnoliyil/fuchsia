@@ -178,6 +178,30 @@ func (*runnerImpl) CallTwoWayStructPayloadErr(ctx fidl.Context, target clientsui
 	}
 }
 
+func (*runnerImpl) CallTwoWayStructRequest(ctx fidl.Context, target clientsuite.ClosedTargetWithCtxInterface, request clientsuite.NonEmptyPayload) (clientsuite.EmptyResultClassification, error) {
+	err := target.TwoWayStructRequest(ctx, request.SomeField)
+	if err != nil {
+		return clientsuite.EmptyResultClassificationWithFidlError(classifyErr(err)), nil
+	}
+	return clientsuite.EmptyResultClassificationWithSuccess(clientsuite.Empty{}), nil
+}
+
+func (*runnerImpl) CallTwoWayTableRequest(ctx fidl.Context, target clientsuite.ClosedTargetWithCtxInterface, request clientsuite.TablePayload) (clientsuite.EmptyResultClassification, error) {
+	err := target.TwoWayTableRequest(ctx, request)
+	if err != nil {
+		return clientsuite.EmptyResultClassificationWithFidlError(classifyErr(err)), nil
+	}
+	return clientsuite.EmptyResultClassificationWithSuccess(clientsuite.Empty{}), nil
+}
+
+func (*runnerImpl) CallTwoWayUnionRequest(ctx fidl.Context, target clientsuite.ClosedTargetWithCtxInterface, request clientsuite.UnionPayload) (clientsuite.EmptyResultClassification, error) {
+	err := target.TwoWayUnionRequest(ctx, request)
+	if err != nil {
+		return clientsuite.EmptyResultClassificationWithFidlError(classifyErr(err)), nil
+	}
+	return clientsuite.EmptyResultClassificationWithSuccess(clientsuite.Empty{}), nil
+}
+
 func (*runnerImpl) CallOneWayNoRequest(ctx fidl.Context, target clientsuite.ClosedTargetWithCtxInterface) (clientsuite.EmptyResultClassification, error) {
 	err := target.OneWayNoRequest(ctx)
 	if err != nil {

@@ -97,6 +97,42 @@ class RunnerServer : public fidl::Server<fidl_clientsuite::Runner> {
     }
   }
 
+  void CallTwoWayStructRequest(CallTwoWayStructRequestRequest& request,
+                               CallTwoWayStructRequestCompleter::Sync& completer) override {
+    auto client = fidl::SyncClient(std::move(request.target()));
+    auto result = client->TwoWayStructRequest(request.request());
+    if (result.is_ok()) {
+      completer.Reply(fidl_clientsuite::EmptyResultClassification::WithSuccess({}));
+    } else {
+      completer.Reply(fidl_clientsuite::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(result.error_value())));
+    }
+  }
+
+  void CallTwoWayTableRequest(CallTwoWayTableRequestRequest& request,
+                              CallTwoWayTableRequestCompleter::Sync& completer) override {
+    auto client = fidl::SyncClient(std::move(request.target()));
+    auto result = client->TwoWayTableRequest(request.request());
+    if (result.is_ok()) {
+      completer.Reply(fidl_clientsuite::EmptyResultClassification::WithSuccess({}));
+    } else {
+      completer.Reply(fidl_clientsuite::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(result.error_value())));
+    }
+  }
+
+  void CallTwoWayUnionRequest(CallTwoWayUnionRequestRequest& request,
+                              CallTwoWayUnionRequestCompleter::Sync& completer) override {
+    auto client = fidl::SyncClient(std::move(request.target()));
+    auto result = client->TwoWayUnionRequest(request.request());
+    if (result.is_ok()) {
+      completer.Reply(fidl_clientsuite::EmptyResultClassification::WithSuccess({}));
+    } else {
+      completer.Reply(fidl_clientsuite::EmptyResultClassification::WithFidlError(
+          clienttest_util::ClassifyError(result.error_value())));
+    }
+  }
+
   void CallOneWayNoRequest(CallOneWayNoRequestRequest& request,
                            CallOneWayNoRequestCompleter::Sync& completer) override {
     auto client = fidl::SyncClient(std::move(request.target()));

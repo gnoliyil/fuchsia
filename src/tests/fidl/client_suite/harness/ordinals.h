@@ -34,6 +34,10 @@ static const uint64_t kOrdinalTwoWayTablePayload = 6034278263774013116lu;
 static const uint64_t kOrdinalTwoWayUnionPayload = 2303581613023334284lu;
 static const uint64_t kOrdinalTwoWayStructPayloadErr = 7112457167486827531lu;
 
+static const uint64_t kOrdinalTwoWayStructRequest = 5762209808438257078lu;
+static const uint64_t kOrdinalTwoWayTableRequest = 4411466441619884495lu;
+static const uint64_t kOrdinalTwoWayUnionRequest = 8852700443574767223lu;
+
 static const uint64_t kOrdinalOneWayNoRequest = 880285710761691653lu;
 static const uint64_t kOrdinalOneWayStructRequest = 2745184144532233426lu;
 static const uint64_t kOrdinalOneWayTableRequest = 1894745725882679327lu;

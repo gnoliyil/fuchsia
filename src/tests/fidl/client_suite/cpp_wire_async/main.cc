@@ -130,6 +130,59 @@ class RunnerServer : public fidl::WireServer<fidl_clientsuite::Runner> {
     });
   }
 
+  void CallTwoWayStructRequest(CallTwoWayStructRequestRequestView request,
+                               CallTwoWayStructRequestCompleter::Sync& completer) override {
+    auto client = fidl::WireSharedClient(std::move(request->target), dispatcher_);
+    client->TwoWayStructRequest(request->request.some_field)
+        .ThenExactlyOnce([completer = completer.ToAsync(),
+                          client = client.Clone()](auto& result) mutable {
+          if (result.ok()) {
+            completer.Reply(
+                fidl::WireResponse<fidl_clientsuite::Runner::CallTwoWayStructRequest>::WithSuccess(
+                    ::fidl_clientsuite::wire::Empty()));
+          } else {
+            completer.Reply(fidl::WireResponse<fidl_clientsuite::Runner::CallTwoWayStructRequest>::
+                                WithFidlError(clienttest_util::ClassifyError(result)));
+          }
+        });
+  }
+
+  void CallTwoWayTableRequest(CallTwoWayTableRequestRequestView request,
+                              CallTwoWayTableRequestCompleter::Sync& completer) override {
+    auto client = fidl::WireSharedClient(std::move(request->target), dispatcher_);
+    client->TwoWayTableRequest(request->request)
+        .ThenExactlyOnce([completer = completer.ToAsync(),
+                          client = client.Clone()](auto& result) mutable {
+          if (result.ok()) {
+            completer.Reply(
+                fidl::WireResponse<fidl_clientsuite::Runner::CallTwoWayTableRequest>::WithSuccess(
+                    ::fidl_clientsuite::wire::Empty()));
+          } else {
+            completer.Reply(
+                fidl::WireResponse<fidl_clientsuite::Runner::CallTwoWayTableRequest>::WithFidlError(
+                    clienttest_util::ClassifyError(result)));
+          }
+        });
+  }
+
+  void CallTwoWayUnionRequest(CallTwoWayUnionRequestRequestView request,
+                              CallTwoWayUnionRequestCompleter::Sync& completer) override {
+    auto client = fidl::WireSharedClient(std::move(request->target), dispatcher_);
+    client->TwoWayUnionRequest(request->request)
+        .ThenExactlyOnce([completer = completer.ToAsync(),
+                          client = client.Clone()](auto& result) mutable {
+          if (result.ok()) {
+            completer.Reply(
+                fidl::WireResponse<fidl_clientsuite::Runner::CallTwoWayUnionRequest>::WithSuccess(
+                    ::fidl_clientsuite::wire::Empty()));
+          } else {
+            completer.Reply(
+                fidl::WireResponse<fidl_clientsuite::Runner::CallTwoWayUnionRequest>::WithFidlError(
+                    clienttest_util::ClassifyError(result)));
+          }
+        });
+  }
+
   void CallOneWayNoRequest(CallOneWayNoRequestRequestView request,
                            CallOneWayNoRequestCompleter::Sync& completer) override {
     auto client = fidl::WireClient(std::move(request->target), dispatcher_);
