@@ -10,7 +10,7 @@ use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use ffx_emulator_common::{config, process};
 use ffx_emulator_config::{
-    EmulatorConfiguration, EmulatorEngine, EngineConsoleType, EngineType, ShowDetail,
+    EmulatorConfiguration, EmulatorEngine, EngineConsoleType, EngineState, EngineType, ShowDetail,
 };
 use fidl_fuchsia_developer_ffx as ffx;
 use serde::{Deserialize, Serialize};
@@ -23,6 +23,23 @@ pub struct FemuEngine {
     pub(crate) emulator_configuration: EmulatorConfiguration,
     pub(crate) pid: u32,
     pub(crate) engine_type: EngineType,
+    #[serde(default)]
+    pub(crate) engine_state: EngineState,
+}
+
+impl FemuEngine {
+    fn validate(&self) -> Result<()> {
+        if !self.emulator_configuration.runtime.headless && std::env::var("DISPLAY").is_err() {
+            eprintln!(
+                "DISPLAY not set in the local environment, try running with --headless if you \
+                encounter failures related to display or Qt.",
+            );
+        }
+        let result = self
+            .validate_network_flags(&self.emulator_configuration)
+            .and_then(|()| self.check_required_files(&self.emulator_configuration.guest));
+        result
+    }
 }
 
 #[async_trait]
@@ -46,7 +63,13 @@ impl EmulatorEngine for FemuEngine {
             bail!("Giving up finding emulator binary. Tried {:?}", self.emulator_binary)
         }
 
-        <Self as QemuBasedEngine>::stage(&mut self.emulator_configuration).await
+        let result = <Self as QemuBasedEngine>::stage(&mut self.emulator_configuration).await;
+        if result.is_ok() {
+            self.engine_state = EngineState::Staged;
+        } else {
+            self.engine_state = EngineState::Error;
+        }
+        result
     }
 
     async fn start(
@@ -54,29 +77,44 @@ impl EmulatorEngine for FemuEngine {
         emulator_cmd: Command,
         proxy: &ffx::TargetCollectionProxy,
     ) -> Result<i32> {
-        self.run(emulator_cmd, proxy).await
+        let result = self.run(emulator_cmd, proxy).await;
+        if result.is_ok() {
+            self.engine_state = EngineState::Running;
+        } else {
+            self.engine_state = EngineState::Error;
+        }
+        result
     }
 
     fn show(&self, details: Vec<ShowDetail>) {
         <Self as QemuBasedEngine>::show(self, details)
     }
 
-    async fn stop(&self, proxy: &ffx::TargetCollectionProxy) -> Result<()> {
+    async fn stop(&mut self, proxy: &ffx::TargetCollectionProxy) -> Result<()> {
         // Extract values from the self here, since there are sharing issues with trying to call
         // shutdown_emulator from another thread.
         let target_id = &self.emulator_configuration.runtime.name;
-        Self::stop_emulator(self.is_running(), self.get_pid(), target_id, proxy).await
+        let result = Self::stop_emulator(self.is_running(), self.get_pid(), target_id, proxy).await;
+        if result.is_ok() {
+            self.engine_state = EngineState::Staged;
+        } else {
+            self.engine_state = EngineState::Error;
+        }
+        result
     }
 
-    fn validate(&self) -> Result<()> {
-        if !self.emulator_configuration.runtime.headless && std::env::var("DISPLAY").is_err() {
-            eprintln!(
-                "No DISPLAY set in the local environment, try running with --headless if you \
-                encounter failures related to display or Qt.",
-            );
+    fn configure(&mut self) -> Result<()> {
+        let result = self.validate();
+        if result.is_ok() {
+            self.engine_state = EngineState::Configured;
+        } else {
+            self.engine_state = EngineState::Error;
         }
-        self.validate_network_flags(&self.emulator_configuration)
-            .and_then(|()| self.check_required_files(&self.emulator_configuration.guest))
+        result
+    }
+
+    fn engine_state(&self) -> EngineState {
+        self.get_engine_state()
     }
 
     fn engine_type(&self) -> EngineType {
@@ -143,5 +181,13 @@ impl QemuBasedEngine for FemuEngine {
 
     fn get_pid(&self) -> u32 {
         self.pid
+    }
+
+    fn set_engine_state(&mut self, state: EngineState) {
+        self.engine_state = state;
+    }
+
+    fn get_engine_state(&self) -> EngineState {
+        self.engine_state
     }
 }

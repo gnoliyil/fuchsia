@@ -8,7 +8,7 @@
 //! runtime.
 
 use crate::enumerations::{
-    AccelerationMode, ConsoleType, EngineConsoleType, EngineType, GpuType, LogLevel,
+    AccelerationMode, ConsoleType, EngineConsoleType, EngineState, EngineType, GpuType, LogLevel,
     NetworkingMode, OperatingSystem, PortMapping, ShowDetail, VirtualCpu,
 };
 use anyhow::Result;
@@ -39,7 +39,7 @@ pub trait EmulatorEngine {
     /// will terminate a running emulator instance, which will be specified on the command line. It
     /// may return an error if the instance doesn't exist or the shut down fails, but should succeed
     /// if it's no longer running or gets successfully shut down.
-    async fn stop(&self, proxy: &ffx::TargetCollectionProxy) -> Result<()>;
+    async fn stop(&mut self, proxy: &ffx::TargetCollectionProxy) -> Result<()>;
 
     /// Output the details of an existing emulation instance. The engine should have been
     /// instantiated from a saved and serialized instance, so no additional initialization should be
@@ -47,12 +47,12 @@ pub trait EmulatorEngine {
     /// and its configuration. This is an engine-specific output with more detail than `ffx list`.
     fn show(&self, details: Vec<ShowDetail>);
 
-    /// Validate the configuration parameters that have been provided to this engine, according to
-    /// the requirements for this engine type. If there are fields which are required, mutually
-    /// exclusive, only work when applied in certain combinations, or don't apply to this engine
-    /// type, this function will return an error indicating which field(s) and why. It also returns
-    /// an error if the engine has already been started. Otherwise, this returns Ok(()).
-    fn validate(&self) -> Result<()>;
+    /// Complete and validate the configuration parameters that have been provided to this engine,
+    /// according to the requirements for this engine type. If there are fields which are required,
+    /// mutually exclusive, only work when applied in certain combinations, or don't apply to this
+    /// engine type, this function will return an error indicating which field(s) and why. It also
+    /// returns an error if the engine has already been started. Otherwise, this returns Ok(()).
+    fn configure(&mut self) -> Result<()>;
 
     /// Returns the EngineType used when building this engine. Each engine implementation should
     /// always return the same EngineType.
@@ -75,6 +75,9 @@ pub trait EmulatorEngine {
 
     /// Attach the current process to one of the emulator's consoles.
     fn attach(&self, console: EngineConsoleType) -> Result<()>;
+
+    /// Access to the engine's engine_state field.
+    fn engine_state(&self) -> EngineState;
 }
 
 /// Collects the specific configurations into a single struct for ease of passing around.

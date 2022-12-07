@@ -26,7 +26,7 @@ use ffx_emulator_common::{
 };
 use ffx_emulator_config::{
     AccelerationMode, ConsoleType, EmulatorConfiguration, EmulatorEngine, EngineConsoleType,
-    GuestConfig, HostConfig, NetworkingMode, ShowDetail,
+    EngineState, GuestConfig, HostConfig, NetworkingMode, ShowDetail,
 };
 use fidl_fuchsia_developer_ffx as ffx;
 use nix::sys::socket::IpAddr;
@@ -623,6 +623,10 @@ pub(crate) trait QemuBasedEngine: EmulatorEngine + SerializingEngine {
     fn set_pid(&mut self, pid: u32);
     fn get_pid(&self) -> u32;
 
+    /// Access to the engine's engine_state field.
+    fn set_engine_state(&mut self, state: EngineState);
+    fn get_engine_state(&self) -> EngineState;
+
     /// Attach to emulator's console socket.
     fn attach_to(&self, path: &Path, console: EngineConsoleType) -> Result<()> {
         let console_path = self.get_path_for_console_type(path, console);
@@ -690,13 +694,17 @@ mod tests {
         fn get_pid(&self) -> u32 {
             todo!()
         }
+        fn set_engine_state(&mut self, _state: EngineState) {}
+        fn get_engine_state(&self) -> EngineState {
+            todo!()
+        }
     }
     #[async_trait]
     impl EmulatorEngine for TestEngine {
         async fn start(&mut self, _: Command, _: &ffx::TargetCollectionProxy) -> Result<i32> {
             todo!()
         }
-        async fn stop(&self, _: &ffx::TargetCollectionProxy) -> Result<()> {
+        async fn stop(&mut self, _: &ffx::TargetCollectionProxy) -> Result<()> {
             todo!()
         }
         fn show(&self, _: Vec<ShowDetail>) {
@@ -705,8 +713,11 @@ mod tests {
         async fn stage(&mut self) -> Result<()> {
             todo!()
         }
-        fn validate(&self) -> Result<()> {
+        fn configure(&mut self) -> Result<()> {
             todo!()
+        }
+        fn engine_state(&self) -> EngineState {
+            EngineState::default()
         }
         fn engine_type(&self) -> EngineType {
             EngineType::default()

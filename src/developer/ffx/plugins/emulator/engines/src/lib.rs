@@ -34,9 +34,10 @@ use port_picker::{is_free_tcp_port, pick_unused_port};
 /// are passed in, so the caller must set up a new structure for each call.
 ///
 /// Once "build" is called, an engine will be instantiated of the indicated type, the configuration
-/// will be loaded into that engine, and the engine's "validate" function will be invoked to ensure
-/// the configuration is acceptable. If validation fails, the engine will be destroyed. The
-/// EngineBuilder instance is consumed when invoking "build" regardless of the outcome.
+/// will be loaded into that engine, and the engine's "configure" function will be invoked to
+/// trigger validation and ensure the configuration is acceptable. If validation fails, the engine
+/// will be destroyed. The EngineBuilder instance is consumed when invoking "build" regardless of
+/// the outcome.
 ///
 /// Example:
 ///
@@ -101,7 +102,7 @@ impl EngineBuilder {
     }
 
     /// Finalize and validate the configuration, set up the engine's instance directory,
-    ///  and return the built engine.
+    /// and return the built engine.
     pub async fn build(mut self) -> Result<Box<dyn EmulatorEngine>> {
         // Set up the instance directory, now that we have enough information.
         let name = &self.emulator_configuration.runtime.name;
@@ -131,8 +132,8 @@ impl EngineBuilder {
         }
         tracing::debug!("Serialized engine file will be created at {:?}", filepath);
 
-        // Build and validate the engine, then pass it back to the caller.
-        let engine: Box<dyn EmulatorEngine> = match self.engine_type {
+        // Build and complete configuration on the engine, then pass it back to the caller.
+        let mut engine: Box<dyn EmulatorEngine> = match self.engine_type {
             EngineType::Femu => Box::new(FemuEngine {
                 emulator_configuration: self.emulator_configuration,
                 engine_type: self.engine_type,
@@ -144,7 +145,7 @@ impl EngineBuilder {
                 ..Default::default()
             }),
         };
-        engine.validate()?;
+        engine.configure()?;
         Ok(engine)
     }
 }

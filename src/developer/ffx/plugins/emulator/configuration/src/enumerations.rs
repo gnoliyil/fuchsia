@@ -79,13 +79,81 @@ impl Default for EngineConsoleType {
 
 display_impl!(EngineConsoleType);
 
+/// The emulator engine follows a strict state transition graph, as outlined below.
+///
+///               ---------------------------------------
+///               |             |                       v
+/// New ---> Configured ---> Staged <---> Running ---> end
+///  |            |             |            |          ^
+///  ----------------> Error <----------------          |
+///                      |                              |
+///                      -------------------------------|
+///
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EngineState {
+    /// The New state is the initial state of the engine. This is the state assigned to the
+    /// emulator when the data structure is first initialized. It indicates nothing has
+    /// occurred yet.
+    New,
+
+    /// When an emulator is in the Configured state, it indicates that the input has been processed
+    /// and the EmulationConfiguration populated with the values provided by the user. The emulator
+    /// instance directory has been created, but only the engine state and configuration are there.
+    /// When the --dry-run flag is included, this is where the `start` subcommand terminates. There
+    /// are no commands to trigger state transitions for an engine that has landed in the
+    /// Configured state, but the configuration can be observed, saved, or modified for use on
+    /// future instances with `ffx emu show --config` or similar subcommands.
+    Configured,
+
+    /// When an emulator is in the Staged state, it indicates that configuration step was
+    /// successful and that the files needed to run the emulator have been copied into the instance
+    /// directory, and any required modifications to those files have been performed. An emulator
+    /// can also reach Staged without copying runtime files to the instance directory if the user
+    /// provides a custom configuration with the --config flag; any files specified in such a
+    /// configuration are unverified, unmodified, and executed from the location provided rather
+    /// than staged.
+    ///
+    /// When the --stage flag is included, this is where the `start` subcommand terminates. This is
+    /// also the state of an emulator that was running but has been stopped by some means, such as
+    /// `ffx emu stop --persist`, or `dm poweroff` in the serial console. A Staged instance can be
+    /// (re)started with `ffx emu start --reuse`.
+    Staged,
+
+    /// When an emulator is in the Running state, it indicates that there is a process on the host
+    /// executing the Fuchsia system according to the engine's configuration. There are no
+    /// guarantees about the guest regarding accessibility or progress on any internal boot
+    /// processes.
+    Running,
+
+    /// An emulator in the Error state has no guarantees about the internal state. This state may
+    /// be entered from any other state for any reason. An emulator in the Error state is no longer
+    /// viable for execution or any other forward progress; it exists for retrospective analysis
+    /// and debugging purposes only. All artifacts that were generated in previous states are
+    /// retained in the instance directory for this purpose.
+    Error,
+    // When an emulator reaches the end state, it indicates that the instance has been terminated
+    // and the instance directory has been removed from the filesystem. There is no enumeration
+    // value for this state, because it can never be assigned or observed.
+    //
+    // The end state can be reached from any other state with the `ffx emu stop` command.
+}
+
+impl Default for EngineState {
+    fn default() -> Self {
+        EngineState::New
+    }
+}
+
+display_impl!(EngineState);
+
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum EngineType {
     /// Fuchsia Emulator based on AEMU. Supports graphics.
     Femu,
 
-    /// Qemu emulator. Version 5.
+    /// Qemu emulator.
     Qemu,
 }
 

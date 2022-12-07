@@ -72,9 +72,9 @@ pub async fn exec_list_impl<W: std::io::Write, E: std::io::Write>(
             Ok(engine) => {
                 let name = some_name.unwrap();
                 if engine.is_running() {
-                    writeln!(writer, "[Active]    {}", name)?;
+                    writeln!(writer, "[Active]    {}: {}", name, engine.engine_state())?;
                 } else {
-                    writeln!(writer, "[Inactive]  {}", name)?;
+                    writeln!(writer, "[Inactive]  {}: {}", name, engine.engine_state())?;
                 }
             }
             Err(_) => {
@@ -99,7 +99,9 @@ mod tests {
     use super::*;
     use anyhow::anyhow;
     use async_trait::async_trait;
-    use ffx_emulator_config::{EmulatorConfiguration, EngineConsoleType, EngineType, ShowDetail};
+    use ffx_emulator_config::{
+        EmulatorConfiguration, EngineConsoleType, EngineState, EngineType, ShowDetail,
+    };
     use fidl_fuchsia_developer_ffx as ffx;
     use lazy_static::lazy_static;
     use std::{
@@ -131,6 +133,7 @@ mod tests {
     /// EmulatorEngine::is_running().
     pub struct TestEngine {
         pub running_flag: bool,
+        pub engine_state: EngineState,
     }
 
     #[async_trait]
@@ -138,7 +141,7 @@ mod tests {
         async fn start(&mut self, _: Command, _: &ffx::TargetCollectionProxy) -> Result<i32> {
             todo!()
         }
-        async fn stop(&self, _: &ffx::TargetCollectionProxy) -> Result<()> {
+        async fn stop(&mut self, _: &ffx::TargetCollectionProxy) -> Result<()> {
             todo!()
         }
         fn show(&self, _: Vec<ShowDetail>) {
@@ -147,8 +150,11 @@ mod tests {
         async fn stage(&mut self) -> Result<()> {
             todo!()
         }
-        fn validate(&self) -> Result<()> {
+        fn configure(&mut self) -> Result<()> {
             todo!()
+        }
+        fn engine_state(&self) -> EngineState {
+            self.engine_state
         }
         fn engine_type(&self) -> EngineType {
             EngineType::default()
@@ -193,7 +199,7 @@ mod tests {
     }
 
     #[fuchsia_async::run_singlethreaded(test)]
-    async fn test_inactive_list() -> Result<()> {
+    async fn test_new_list() -> Result<()> {
         // get the lock for the mock, it is released when
         // the test exits.
         let _m = get_lock(&MTX);
@@ -202,20 +208,70 @@ mod tests {
         ctx.expect().returning(|| Ok(vec!["notrunning_emu".to_string()]));
 
         let engine_ctx = mock_modules::get_engine_by_name_context();
-        engine_ctx.expect().returning(|_| Ok(Box::new(TestEngine { running_flag: false })));
+        engine_ctx.expect().returning(|_| {
+            Ok(Box::new(TestEngine { running_flag: false, engine_state: EngineState::New }))
+        });
 
         let mut stdout: Vec<u8> = vec![];
         let mut stderr: Vec<u8> = vec![];
         exec_list_impl(&mut stdout, &mut stderr).await?;
 
-        let stdout_expected = "[Inactive]  notrunning_emu\n";
+        let stdout_expected = "[Inactive]  notrunning_emu: new\n";
         assert_eq!(str::from_utf8(&stdout)?, stdout_expected);
         assert!(stderr.is_empty());
         Ok(())
     }
 
     #[fuchsia_async::run_singlethreaded(test)]
-    async fn test_active_list() -> Result<()> {
+    async fn test_configured_list() -> Result<()> {
+        // get the lock for the mock, it is released when
+        // the test exits.
+        let _m = get_lock(&MTX);
+
+        let ctx = mock_modules::get_all_instances_context();
+        ctx.expect().returning(|| Ok(vec!["notrunning_emu".to_string()]));
+
+        let engine_ctx = mock_modules::get_engine_by_name_context();
+        engine_ctx.expect().returning(|_| {
+            Ok(Box::new(TestEngine { running_flag: false, engine_state: EngineState::Configured }))
+        });
+
+        let mut stdout: Vec<u8> = vec![];
+        let mut stderr: Vec<u8> = vec![];
+        exec_list_impl(&mut stdout, &mut stderr).await?;
+
+        let stdout_expected = "[Inactive]  notrunning_emu: configured\n";
+        assert_eq!(str::from_utf8(&stdout)?, stdout_expected);
+        assert!(stderr.is_empty());
+        Ok(())
+    }
+
+    #[fuchsia_async::run_singlethreaded(test)]
+    async fn test_staged_list() -> Result<()> {
+        // get the lock for the mock, it is released when
+        // the test exits.
+        let _m = get_lock(&MTX);
+
+        let ctx = mock_modules::get_all_instances_context();
+        ctx.expect().returning(|| Ok(vec!["notrunning_emu".to_string()]));
+
+        let engine_ctx = mock_modules::get_engine_by_name_context();
+        engine_ctx.expect().returning(|_| {
+            Ok(Box::new(TestEngine { running_flag: false, engine_state: EngineState::Staged }))
+        });
+
+        let mut stdout: Vec<u8> = vec![];
+        let mut stderr: Vec<u8> = vec![];
+        exec_list_impl(&mut stdout, &mut stderr).await?;
+
+        let stdout_expected = "[Inactive]  notrunning_emu: staged\n";
+        assert_eq!(str::from_utf8(&stdout)?, stdout_expected);
+        assert!(stderr.is_empty());
+        Ok(())
+    }
+
+    #[fuchsia_async::run_singlethreaded(test)]
+    async fn test_running_list() -> Result<()> {
         // get the lock for the mock, it is released when
         // the test exits.
         let _m = get_lock(&MTX);
@@ -224,14 +280,16 @@ mod tests {
         ctx.expect().returning(|| Ok(vec!["running_emu".to_string()]));
 
         let engine_ctx = mock_modules::get_engine_by_name_context();
-        engine_ctx.expect().returning(|_| Ok(Box::new(TestEngine { running_flag: true })));
+        engine_ctx.expect().returning(|_| {
+            Ok(Box::new(TestEngine { running_flag: true, engine_state: EngineState::Running }))
+        });
 
         let mut stdout: Vec<u8> = vec![];
         let mut stderr: Vec<u8> = vec![];
 
         exec_list_impl(&mut stdout, &mut stderr).await?;
 
-        let stdout_expected = "[Active]    running_emu\n";
+        let stdout_expected = "[Active]    running_emu: running\n";
         assert_eq!(str::from_utf8(&stdout)?, stdout_expected);
         assert!(stderr.is_empty());
         Ok(())
@@ -239,6 +297,31 @@ mod tests {
 
     #[fuchsia_async::run_singlethreaded(test)]
     async fn test_error_list() -> Result<()> {
+        // get the lock for the mock, it is released when
+        // the test exits.
+        let _m = get_lock(&MTX);
+
+        let ctx = mock_modules::get_all_instances_context();
+        ctx.expect().returning(|| Ok(vec!["running_emu".to_string()]));
+
+        let engine_ctx = mock_modules::get_engine_by_name_context();
+        engine_ctx.expect().returning(|_| {
+            Ok(Box::new(TestEngine { running_flag: true, engine_state: EngineState::Error }))
+        });
+
+        let mut stdout: Vec<u8> = vec![];
+        let mut stderr: Vec<u8> = vec![];
+
+        exec_list_impl(&mut stdout, &mut stderr).await?;
+
+        let stdout_expected = "[Active]    running_emu: error\n";
+        assert_eq!(str::from_utf8(&stdout)?, stdout_expected);
+        assert!(stderr.is_empty());
+        Ok(())
+    }
+
+    #[fuchsia_async::run_singlethreaded(test)]
+    async fn test_broken_list() -> Result<()> {
         // get the lock for the mock, it is released when
         // the test exits.
         let _m = get_lock(&MTX);
