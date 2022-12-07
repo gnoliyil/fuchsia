@@ -114,14 +114,8 @@ type Message = struct {
 }
 
 TEST(AliasTests, BadNoOptionalOnPrimitive) {
-  TestLibrary library(R"FIDL(
-library test.optionals;
-
-type Bad = struct {
-    opt_num int64:optional;
-};
-
-)FIDL");
+  TestLibrary library;
+  library.AddFile("bad/fi-0156.test.fidl");
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrCannotBeOptional);
 }
 

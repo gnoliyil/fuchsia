@@ -372,7 +372,7 @@ constexpr ErrorDef<155, const flat::AttributeArg *, std::string_view, const flat
     ErrAvailabilityConflictsWithParent(
         "the argument {}={} conflicts with {}={} at {}; a child element "
         "cannot be {} {} its parent element is {}");
-constexpr UndocumentedErrorDef<156, flat::Name> ErrCannotBeOptional("{} cannot be optional");
+constexpr ErrorDef<156, flat::Name> ErrCannotBeOptional("{} cannot be optional");
 constexpr ErrorDef<157, flat::Name> ErrMustBeAProtocol("{} must be a protocol");
 constexpr ErrorDef<158, flat::Name> ErrCannotBoundTwice("{} cannot bound twice");
 constexpr ErrorDef<159, flat::Name> ErrStructCannotBeOptional(
