@@ -101,6 +101,33 @@ TEST_F(ServerBindingTest, CloseHandler) {
   EXPECT_EQ(1, close_handler_count);
 }
 
+TEST_F(ServerBindingTest, EndpointIsClosedBeforeCloseHandler) {
+  Server server;
+  std::optional<fidl::UnbindInfo> error;
+  int close_handler_count = 0;
+  fidl::ServerBinding<test_basic_protocol::ValueEcho> binding{
+      loop().dispatcher(), std::move(endpoints().server), &server,
+      [this, &close_handler_count, &error](fidl::UnbindInfo info) {
+        error.emplace(info);
+        close_handler_count++;
+
+        // Inside a CloseHandler, the server endpoint should already be closed.
+        zx_signals_t observed = ZX_SIGNAL_NONE;
+        ASSERT_OK(endpoints().client.channel().wait_one(ZX_CHANNEL_PEER_CLOSED,
+                                                        zx::time::infinite_past(), &observed));
+        EXPECT_EQ(ZX_CHANNEL_PEER_CLOSED, observed);
+      }};
+
+  // Send an invalid message to close the connection.
+  uint8_t invalid[1] = {};
+  ASSERT_OK(endpoints().client.channel().write(0, &invalid, sizeof(invalid), nullptr, 0));
+  loop().RunUntilIdle();
+
+  EXPECT_TRUE(error.has_value());
+  EXPECT_EQ(fidl::Reason::kUnexpectedMessage, error->reason());
+  EXPECT_EQ(1, close_handler_count);
+}
+
 TEST_F(ServerBindingTest, CloseBindingCallsTheCloseHandler) {
   Server server;
   std::optional<fidl::UnbindInfo> error;

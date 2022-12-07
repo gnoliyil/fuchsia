@@ -101,12 +101,16 @@ class ServerBindingBase {
         [error_handler = std::forward<CloseHandler>(close_handler),
          weak_lifetime = std::weak_ptr(lifetime_)](
             Impl* impl, fidl::UnbindInfo info,
-            fidl::internal::ServerEndType<FidlProtocol>) mutable {
+            fidl::internal::ServerEndType<FidlProtocol> endpoint) mutable {
           if (weak_lifetime.expired()) {
             // Binding is already destructed. Don't call the error handler to avoid
             // calling into a destructed server.
             return;
           }
+
+          // Close the endpoint before notifying the user of connection closure.
+          endpoint.reset();
+
           if constexpr (std::is_convertible_v<CloseHandler, SimpleErrorHandler>) {
             error_handler(info);
           } else {
