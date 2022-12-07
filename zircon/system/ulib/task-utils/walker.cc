@@ -4,8 +4,9 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <fuchsia/kernel/c/fidl.h>
+#include <fidl/fuchsia.kernel/cpp/fidl.h>
 #include <inttypes.h>
+#include <lib/component/incoming/cpp/service_client.h>
 #include <lib/fdio/directory.h>
 #include <lib/fdio/fd.h>
 #include <lib/fdio/fdio.h>
@@ -322,28 +323,19 @@ zx_status_t walk_job_tree(zx_handle_t root_job, task_callback_t job_callback,
 
 zx_status_t walk_root_job_tree(task_callback_t job_callback, task_callback_t process_callback,
                                task_callback_t thread_callback, void* context) {
-  zx::channel local, remote;
-  zx_status_t status = zx::channel::create(0, &local, &remote);
-  if (status != ZX_OK) {
-    return status;
-  }
-
-  status = fdio_service_connect("/svc/fuchsia.kernel.RootJob", remote.release());
-  if (status != ZX_OK) {
+  auto client_end = component::Connect<fuchsia_kernel::RootJob>();
+  if (client_end.is_error()) {
     fprintf(stderr, "task-utils/walker: cannot open fuchsia.kernel.RootJob: %s\n",
-            zx_status_get_string(status));
-    return status;
+            client_end.status_string());
+    return client_end.status_value();
+  }
+  auto result = fidl::WireSyncClient(std::move(*client_end))->Get();
+  if (!result.ok()) {
+    fprintf(stderr, "task-utils/walker: cannot obtain root job: %s\n", result.status_string());
+    return result.status();
   }
 
-  zx::handle root_job;
-  zx_status_t fidl_status =
-      fuchsia_kernel_RootJobGet(local.get(), root_job.reset_and_get_address());
-
-  if (fidl_status != ZX_OK) {
-    fprintf(stderr, "task-utils/walker: cannot obtain root job: %s\n",
-            zx_status_get_string(fidl_status));
-    return ZX_ERR_NOT_FOUND;
-  }
+  zx::job root_job = std::move(result->job);
 
   zx_status_t s =
       walk_job_tree(root_job.get(), job_callback, process_callback, thread_callback, context);
