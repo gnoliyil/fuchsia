@@ -46,7 +46,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"text/template"
+	"text/template" // NOLINT
 	"time"
 )
 
