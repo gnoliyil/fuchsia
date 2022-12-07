@@ -115,12 +115,14 @@ impl EngineBuilder {
         let filepath =
             self.emulator_configuration.runtime.instance_directory.join(SERIALIZE_FILE_NAME);
         if filepath.exists() {
-            let engine = read_from_disk(&self.emulator_configuration.runtime.instance_directory)
-                .context(format!(
-                    "Found an existing emulator with the name {}, but couldn't load it from disk. \
+            let mut engine = read_from_disk(
+                &self.emulator_configuration.runtime.instance_directory,
+            )
+            .context(format!(
+                "Found an existing emulator with the name {}, but couldn't load it from disk. \
                     Use `ffx emu stop {}` to terminate and clean up the existing emulator.",
-                    name, name
-                ))?;
+                name, name
+            ))?;
             if engine.is_running() {
                 bail!(
                     "An emulator named {} is already running. \

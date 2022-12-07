@@ -456,9 +456,9 @@ pub(crate) trait QemuBasedEngine: EmulatorEngine + SerializingEngine {
                 "Waiting for Fuchsia to start (up to {} seconds)...",
                 &time_left.as_secs()
             );
-            let name = &self.emu_config().runtime.name;
+            let name = self.emu_config().runtime.name.clone();
             while !time_left.is_zero() {
-                if is_active(proxy, name).await {
+                if is_active(proxy, &name).await {
                     println!("\nEmulator is ready.");
                     tracing::debug!("Emulator is ready.");
                     break;
@@ -713,7 +713,7 @@ mod tests {
         fn engine_type(&self) -> EngineType {
             EngineType::default()
         }
-        fn is_running(&self) -> bool {
+        fn is_running(&mut self) -> bool {
             false
         }
         fn build_emulator_cmd(&self) -> Command {

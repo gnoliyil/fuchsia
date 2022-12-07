@@ -61,7 +61,7 @@ pub trait EmulatorEngine {
     /// Returns true if this instance of the emulator is currently running.
     /// This is checked by using signal to the process id, no consideration is
     /// made for multi threaded access.
-    fn is_running(&self) -> bool;
+    fn is_running(&mut self) -> bool;
 
     /// Once the engine has been staged, this generates the command line required to start
     /// emulation. There are no side-effects, and the operation can be repeated as necessary.

@@ -103,8 +103,15 @@ impl EmulatorEngine for FemuEngine {
         self.engine_type
     }
 
-    fn is_running(&self) -> bool {
-        process::is_running(self.pid)
+    fn is_running(&mut self) -> bool {
+        let running = process::is_running(self.pid);
+        if self.engine_state() == EngineState::Running && running == false {
+            self.set_engine_state(EngineState::Staged);
+            if self.save_to_disk().is_err() {
+                tracing::warn!("Problem saving serialized emulator to disk during state update.");
+            }
+        }
+        running
     }
 
     fn attach(&self, console: EngineConsoleType) -> Result<()> {

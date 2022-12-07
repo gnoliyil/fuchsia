@@ -69,7 +69,7 @@ pub async fn exec_list_impl<W: std::io::Write, E: std::io::Write>(
     let mut broken = false;
     for mut some_name in instance_list {
         match get_engine_by_name(&mut some_name).await {
-            Ok(engine) => {
+            Ok(mut engine) => {
                 let name = some_name.unwrap();
                 if engine.is_running() {
                     writeln!(writer, "[Active]    {}: {}", name, engine.engine_state())?;
@@ -159,7 +159,7 @@ mod tests {
         fn engine_type(&self) -> EngineType {
             EngineType::default()
         }
-        fn is_running(&self) -> bool {
+        fn is_running(&mut self) -> bool {
             self.running_flag
         }
         fn build_emulator_cmd(&self) -> Command {
