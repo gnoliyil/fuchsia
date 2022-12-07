@@ -996,8 +996,8 @@ impl BinderObjectRef {
     fn inc_strong(&mut self) -> Result<Option<BinderObjectRef>, Errno> {
         let mut result = None;
         match self {
-            BinderObjectRef::StrongRef { strong_count, .. } => *strong_count += 1,
-            BinderObjectRef::WeakRef { weak_ref, weak_count } => {
+            Self::StrongRef { strong_count, .. } => *strong_count += 1,
+            Self::WeakRef { weak_ref, weak_count } => {
                 let strong_ref = weak_ref.upgrade().ok_or_else(|| errno!(EINVAL))?;
                 // Update `self` value and move the old value into `result`.
                 std::mem::swap(
@@ -1016,8 +1016,9 @@ impl BinderObjectRef {
     /// Increments the weak reference count of the binder object reference.
     fn inc_weak(&mut self) -> Result<Option<BinderObjectRef>, Errno> {
         match self {
-            BinderObjectRef::StrongRef { weak_count, .. }
-            | BinderObjectRef::WeakRef { weak_count, .. } => *weak_count += 1,
+            Self::StrongRef { weak_count, .. } | Self::WeakRef { weak_count, .. } => {
+                *weak_count += 1
+            }
         }
         Ok(None)
     }
@@ -1025,10 +1026,10 @@ impl BinderObjectRef {
     /// Decrements the strong reference count of the binder object reference, demoting the reference
     /// to a weak reference or returning [`HandleAction::Drop`] if the handle should be dropped.
     fn dec_strong(&mut self) -> Result<HandleAction, Errno> {
-        let mut result = None;
         match self {
-            BinderObjectRef::WeakRef { .. } => return error!(EINVAL),
-            BinderObjectRef::StrongRef { strong_ref, strong_count, weak_count } => {
+            Self::WeakRef { .. } => error!(EINVAL),
+            Self::StrongRef { strong_ref, strong_count, weak_count } => {
+                let mut result = None;
                 *strong_count -= 1;
                 if *strong_count == 0 {
                     let weak_count = *weak_count;
@@ -1044,16 +1045,16 @@ impl BinderObjectRef {
                         return Ok(HandleAction::Drop(result));
                     }
                 }
+                Ok(HandleAction::Keep(result))
             }
         }
-        Ok(HandleAction::Keep(result))
     }
 
     /// Decrements the weak reference count of the binder object reference, returning
     /// [`HandleAction::Drop`] if the strong count and weak count both drop to 0.
     fn dec_weak(&mut self) -> Result<HandleAction, Errno> {
         match self {
-            BinderObjectRef::StrongRef { weak_count, .. } => {
+            Self::StrongRef { weak_count, .. } => {
                 if *weak_count == 0 {
                     error!(EINVAL)
                 } else {
@@ -1061,7 +1062,7 @@ impl BinderObjectRef {
                     Ok(HandleAction::Keep(None))
                 }
             }
-            BinderObjectRef::WeakRef { weak_count, .. } => {
+            Self::WeakRef { weak_count, .. } => {
                 *weak_count -= 1;
                 if *weak_count == 0 {
                     Ok(HandleAction::Drop(None))
@@ -1071,6 +1072,33 @@ impl BinderObjectRef {
             }
         }
     }
+
+    fn is_ref_to_object(&self, object: &Arc<BinderObject>) -> bool {
+        let ptr = match self {
+            Self::StrongRef { strong_ref, .. } => Arc::as_ptr(strong_ref),
+            Self::WeakRef { weak_ref, .. } => Weak::as_ptr(weak_ref),
+        };
+        if ptr == Arc::as_ptr(object) {
+            return true;
+        }
+
+        let strong = match self {
+            Self::StrongRef { strong_ref, .. } => Arc::clone(strong_ref),
+            Self::WeakRef { weak_ref, .. } => match weak_ref.upgrade() {
+                Some(strong) => strong,
+                None => return false,
+            },
+        };
+        let deep_equal = strong.local.weak_ref_addr == object.local.weak_ref_addr
+            && Weak::ptr_eq(&strong.owner, &object.owner);
+        // This shouldn't be possible. We have it here as a debugging check.
+        assert!(
+            !deep_equal,
+            "Two different BinderObjects were found referring to the same underlying object"
+        );
+
+        false
+    }
 }
 
 impl HandleTable {
@@ -1079,16 +1107,10 @@ impl HandleTable {
     /// not acquire a strong reference to this handle before the transaction that inserted it is
     /// complete, the handle will be dropped.
     fn insert_for_transaction(&mut self, object: Arc<BinderObject>) -> Handle {
-        let existing_idx = self.table.iter().find_map(|(idx, object_ref)| match object_ref {
-            BinderObjectRef::WeakRef { weak_ref, .. } => {
-                weak_ref.upgrade().and_then(|strong_ref| {
-                    (strong_ref.local.weak_ref_addr == object.local.weak_ref_addr).then_some(idx)
-                })
-            }
-            BinderObjectRef::StrongRef { strong_ref, .. } => {
-                (strong_ref.local.weak_ref_addr == object.local.weak_ref_addr).then_some(idx)
-            }
-        });
+        let existing_idx = self
+            .table
+            .iter()
+            .find_map(|(idx, object_ref)| object_ref.is_ref_to_object(&object).then_some(idx));
 
         if let Some(existing_idx) = existing_idx {
             // Increment the number of strong reference, as the caller expects having a strong
@@ -4206,6 +4228,117 @@ mod tests {
             .expect("expected handle not present");
         assert!(std::ptr::eq(object.owner.as_ptr(), Arc::as_ptr(&owner_proc)));
         assert_eq!(object.local, binder_object);
+    }
+
+    #[test]
+    fn transaction_translate_binder_handles_with_same_address() {
+        let test = TranslateHandlesTestFixture::new();
+        let other_proc = test.driver.create_process(3);
+        let mut receiver_shared_memory = test.lock_receiver_shared_memory();
+        let (_, _, mut sg_buffer) =
+            receiver_shared_memory.allocate_buffers(0, 0, 0).expect("allocate buffers");
+
+        let binder_object_addr = LocalBinderObject {
+            weak_ref_addr: UserAddress::from(0x0000000000000010),
+            strong_ref_addr: UserAddress::from(0x0000000000000100),
+        };
+
+        const SENDING_HANDLE_SENDER: Handle = Handle::from_raw(1);
+        const SENDING_HANDLE_OTHER: Handle = Handle::from_raw(2);
+        const RECEIVING_HANDLE_SENDER: Handle = Handle::from_raw(2);
+        const RECEIVING_HANDLE_OTHER: Handle = Handle::from_raw(3);
+
+        // Add both objects (sender owned and other owned) to sender handle table.
+        let sender_object = Arc::new(BinderObject::new(&test.sender_proc, binder_object_addr));
+        let other_object = Arc::new(BinderObject::new(&other_proc, binder_object_addr));
+        assert_eq!(
+            test.sender_proc.lock().handles.insert_for_transaction(sender_object),
+            SENDING_HANDLE_SENDER
+        );
+        assert_eq!(
+            test.sender_proc.lock().handles.insert_for_transaction(other_object),
+            SENDING_HANDLE_OTHER
+        );
+
+        // Give the receiver another handle so that the input handle numbers and output handle
+        // numbers aren't the same.
+        let obj = Arc::new(BinderObject::new(&other_proc, LocalBinderObject::default()));
+        test.receiver_proc.lock().handles.insert_for_transaction(obj);
+
+        const DATA_PREAMBLE: &[u8; 5] = b"stuff";
+
+        let mut transaction_data = vec![];
+        let mut offsets = vec![];
+        transaction_data.extend(DATA_PREAMBLE);
+        offsets.push(transaction_data.len() as binder_uintptr_t);
+        transaction_data.extend(struct_with_union_into_bytes!(flat_binder_object {
+            hdr.type_: BINDER_TYPE_HANDLE,
+            flags: 0,
+            cookie: 0,
+            __bindgen_anon_1.handle: SENDING_HANDLE_SENDER.into(),
+        }));
+        offsets.push(transaction_data.len() as binder_uintptr_t);
+        transaction_data.extend(struct_with_union_into_bytes!(flat_binder_object {
+            hdr.type_: BINDER_TYPE_HANDLE,
+            flags: 0,
+            cookie: 0,
+            __bindgen_anon_1.handle: SENDING_HANDLE_OTHER.into(),
+        }));
+
+        let target_binder_task = LocalBinderTask { task: test.receiver_task.task_arc_clone() };
+        let transaction_state = test
+            .driver
+            .translate_handles(
+                &CurrentBinderTask { task: &test.sender_task },
+                &test.sender_proc,
+                &test.sender_thread,
+                &target_binder_task,
+                &test.receiver_proc,
+                &offsets,
+                &mut transaction_data,
+                &mut sg_buffer,
+            )
+            .expect("failed to translate handles");
+
+        // Verify that the new handles were returned in `transaction_state` so that it gets dropped
+        // at the end of the transaction.
+        assert_eq!(transaction_state.state.handles[0], RECEIVING_HANDLE_SENDER);
+        assert_eq!(transaction_state.state.handles[1], RECEIVING_HANDLE_OTHER);
+
+        // Verify that the transaction data was mutated.
+        let mut expected_transaction_data = Vec::new();
+        expected_transaction_data.extend(DATA_PREAMBLE);
+        expected_transaction_data.extend(struct_with_union_into_bytes!(flat_binder_object {
+            hdr.type_: BINDER_TYPE_HANDLE,
+            flags: 0,
+            cookie: 0,
+            __bindgen_anon_1.handle: RECEIVING_HANDLE_SENDER.into(),
+        }));
+        expected_transaction_data.extend(struct_with_union_into_bytes!(flat_binder_object {
+            hdr.type_: BINDER_TYPE_HANDLE,
+            flags: 0,
+            cookie: 0,
+            __bindgen_anon_1.handle: RECEIVING_HANDLE_OTHER.into(),
+        }));
+        assert_eq!(&expected_transaction_data, &transaction_data);
+
+        // Verify that two handles were created in the receiver.
+        let object = test
+            .receiver_proc
+            .lock()
+            .handles
+            .get(RECEIVING_HANDLE_SENDER.object_index())
+            .expect("expected handle not present");
+        assert!(std::ptr::eq(object.owner.as_ptr(), Arc::as_ptr(&test.sender_proc)));
+        assert_eq!(object.local, binder_object_addr);
+        let object = test
+            .receiver_proc
+            .lock()
+            .handles
+            .get(RECEIVING_HANDLE_OTHER.object_index())
+            .expect("expected handle not present");
+        assert!(std::ptr::eq(object.owner.as_ptr(), Arc::as_ptr(&other_proc)));
+        assert_eq!(object.local, binder_object_addr);
     }
 
     /// Tests that hwbinder's scatter-gather buffer-fix-up implementation is correct.
