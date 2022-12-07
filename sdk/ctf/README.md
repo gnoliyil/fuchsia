@@ -8,7 +8,7 @@ proposed as [RFC
 0015](https://fuchsia.dev/fuchsia-src/contribute/governance/rfcs/0015_cts).
 
 To learn more, see our documentation on
-[fuchsia.dev](https://fuchsia.dev/fuchsia-src/development/testing/cts/overview).
+[fuchsia.dev](https://fuchsia.dev/fuchsia-src/development/testing/ctf/overview).
 See [//sdk/ctf/examples] for some examples, or peruse the complete set
 of tests under [//sdk/ctf/tests].
 
@@ -110,7 +110,7 @@ out to the team to discuss it.
 Code that runs on the host does not have this restriction.
 
 
-[CTS Contributing Guide]: /docs/development/testing/cts/contributing_tests.md
+[CTS Contributing Guide]: /docs/development/testing/ctf/contributing_tests.md
 [Fuchsia language policy]: https://fuchsia.dev/fuchsia-src/contribute/governance/policy/programming_languages
 [CTS bug component]: https://bugs.fuchsia.dev/p/fuchsia/templates/detail?saved=1&template=Fuchsia%20Compatibility%20Test%20Suite%20%28CTS%29&ts=1627669234
 [//sdk/ctf/examples]: https://fuchsia.googlesource.com/fuchsia/+/refs/heads/main/sdk/ctf/examples/
