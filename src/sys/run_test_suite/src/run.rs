@@ -278,7 +278,7 @@ async fn run_test_chunk<'a, F: 'a + Future<Output = ()> + Unpin>(
 
 async fn run_tests<'a, F: 'a + Future<Output = ()> + Unpin>(
     connector: impl RunBuilderConnector,
-    test_params: impl IntoIterator<Item = TestParams>,
+    test_params: impl Iterator<Item = TestParams>,
     run_params: RunParams,
     run_reporter: &'a RunReporter,
     cancel_fut: F,
@@ -332,20 +332,27 @@ async fn run_tests<'a, F: 'a + Future<Output = ()> + Unpin>(
 /// terminated and recorded when the future resolves. The caller can control when the
 /// future resolves by passing in the receiver end of a `future::channel::oneshot`
 /// channel.
-pub async fn run_tests_and_get_outcome<F: Future<Output = ()>>(
+pub async fn run_tests_and_get_outcome<II, EI, F>(
     connector: impl RunBuilderConnector,
-    test_params: impl IntoIterator<Item = TestParams>,
+    test_params: II,
     run_params: RunParams,
     run_reporter: RunReporter,
     cancel_fut: F,
-) -> Outcome {
+) -> Outcome
+where
+    F: Future<Output = ()>,
+    II: IntoIterator<Item = TestParams, IntoIter = EI>,
+    EI: Iterator<Item = TestParams> + ExactSizeIterator,
+{
+    let params_iter = test_params.into_iter();
     match run_reporter.started(Timestamp::Unknown).await {
         Ok(()) => (),
         Err(e) => return Outcome::error(e),
     }
+    run_reporter.set_expected_suites(params_iter.len() as u32).await;
     let test_outcome = match run_tests(
         connector,
-        test_params,
+        params_iter,
         run_params,
         &run_reporter,
         cancel_fut.boxed_local(),

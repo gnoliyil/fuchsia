@@ -113,6 +113,16 @@ impl RunReporter {
         Self { reporter, entity: EntityId::TestRun, _entity_type: PhantomData }
     }
 
+    /// Set the number of expected suites for the run.
+    pub async fn set_expected_suites(&self, expected_suites: u32) {
+        self.reporter
+            .set_entity_info(
+                &self.entity,
+                &EntityInfo { expected_children: Some(expected_suites), ..EntityInfo::default() },
+            )
+            .await
+    }
+
     /// Record a new suite under the test run.
     pub async fn new_suite(
         &self,
@@ -139,7 +149,12 @@ impl<'a> SuiteReporter<'a> {
 
     /// Set the tags for this suite.
     pub async fn set_tags(&self, tags: Vec<TestTag>) {
-        self.reporter.set_entity_info(&self.entity, &EntityInfo { tags: Some(tags) }).await;
+        self.reporter
+            .set_entity_info(
+                &self.entity,
+                &EntityInfo { tags: Some(tags), ..EntityInfo::default() },
+            )
+            .await;
     }
 }
 
@@ -252,7 +267,9 @@ pub enum EntityId {
     Case { suite: SuiteId, case: CaseId },
 }
 
+#[derive(Default)]
 pub struct EntityInfo {
+    pub expected_children: Option<u32>,
     pub tags: Option<Vec<TestTag>>,
 }
 

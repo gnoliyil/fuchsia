@@ -38,6 +38,8 @@ pub struct ShellReporter<W: 'static + Write + Send + Sync> {
     entity_state_map: Mutex<HashMap<EntityId, EntityState>>,
     /// Number of completed suites, used to output
     completed_suites: AtomicU32,
+    /// Number of suites expected in the run.
+    expected_suites: Mutex<Option<u32>>,
     /// Size of the buffer used for stdio.
     stdio_buffer_size: usize,
     /// Length of time to buffer stdio before printing it to console.
@@ -85,6 +87,7 @@ impl ShellReporter<Vec<u8>> {
                 inner: inner.clone(),
                 entity_state_map: Mutex::new(entity_state_map),
                 completed_suites: AtomicU32::new(0),
+                expected_suites: Mutex::new(None),
                 // Disable buffering for most tests to simplify testing.
                 stdio_buffer_duration: Duration::ZERO,
                 stdio_buffer_size: 0,
@@ -103,6 +106,7 @@ impl<W: 'static + Write + Send + Sync> ShellReporter<W> {
             inner,
             entity_state_map: Mutex::new(entity_state_map),
             completed_suites: AtomicU32::new(0),
+            expected_suites: Mutex::new(None),
             stdio_buffer_duration: STDIO_BUFFERING_DURATION,
             stdio_buffer_size: STDIO_BUFFER_SIZE,
         }
@@ -110,10 +114,6 @@ impl<W: 'static + Write + Send + Sync> ShellReporter<W> {
 
     fn new_writer_handle(&self, prefix: Option<String>) -> ShellWriterHandle<W> {
         ShellWriterHandle::new_handle(Arc::clone(&self.inner), prefix)
-    }
-
-    fn num_known_suites(entity_map: &HashMap<EntityId, EntityState>) -> usize {
-        entity_map.keys().filter(|id| matches!(id, EntityId::Suite(_))).count()
     }
 }
 
@@ -128,7 +128,14 @@ impl<W: 'static + Write + Send + Sync> Reporter for ShellReporter<W> {
         Ok(())
     }
 
-    async fn set_entity_info(&self, _entity: &EntityId, _info: &EntityInfo) {}
+    async fn set_entity_info(&self, entity: &EntityId, info: &EntityInfo) {
+        match (entity, info.expected_children) {
+            (EntityId::TestRun, Some(children)) => {
+                self.expected_suites.lock().replace(children);
+            }
+            (_, _) => (),
+        }
+    }
 
     async fn entity_started(&self, entity: &EntityId, _: Timestamp) -> Result<(), Error> {
         let mut writer = self.new_writer_handle(None);
@@ -258,13 +265,14 @@ impl<W: 'static + Write + Send + Sync> Reporter for ShellReporter<W> {
 
                 let suite_number =
                     self.completed_suites.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                if suite_number > 0 {
-                    writeln!(
+                match &*self.expected_suites.lock() {
+                    Some(total_suites) if *total_suites > 1 => writeln!(
                         writer,
-                        "\nTest run count {}/{}",
+                        "\nTest suite count {}/{}",
                         suite_number + 1,
-                        Self::num_known_suites(&*entity_map_lock),
-                    )?;
+                        total_suites,
+                    )?,
+                    Some(_) | None => (),
                 }
                 writeln!(writer)?;
                 if !failed.is_empty() {
@@ -412,6 +420,54 @@ mod test {
         expected.push_str("1 out of 2 tests passed...\n");
         expected.push_str("test-suite completed with result: FAILED\n");
         assert_eq!(String::from_utf8(output.lock().clone()).unwrap(), expected,);
+    }
+
+    #[fuchsia::test]
+    async fn report_multiple_suites() {
+        const NUM_SUITES: u32 = 5;
+        let (shell_reporter, output) = ShellReporter::new_expose_writer_for_test();
+        let run_reporter = RunReporter::new(shell_reporter);
+        run_reporter.set_expected_suites(NUM_SUITES).await;
+        run_reporter.started(Timestamp::Unknown).await.expect("run started");
+        let mut expected = "".to_string();
+
+        for suite_number in 0..4 {
+            let suite_name = format!("test-suite-{:?}", suite_number);
+            let suite_reporter =
+                run_reporter.new_suite(&suite_name, &SuiteId(0)).await.expect("create suite");
+            suite_reporter.started(Timestamp::Unknown).await.expect("case started");
+            expected.push_str(&format!("Running test '{}'\n", &suite_name));
+            assert_eq!(String::from_utf8(output.lock().clone()).unwrap(), expected,);
+
+            let case_reporter =
+                suite_reporter.new_case("case-1", &CaseId(0)).await.expect("create case");
+            case_reporter.started(Timestamp::Unknown).await.expect("case started");
+            expected.push_str("[RUNNING]\tcase-1\n");
+            assert_eq!(String::from_utf8(output.lock().clone()).unwrap(), expected,);
+            case_reporter
+                .stopped(&ReportedOutcome::Passed, Timestamp::Unknown)
+                .await
+                .expect("stop case");
+            expected.push_str("[PASSED]\tcase-1\n");
+            assert_eq!(String::from_utf8(output.lock().clone()).unwrap(), expected,);
+
+            case_reporter.finished().await.expect("finish case");
+            suite_reporter
+                .stopped(&ReportedOutcome::Passed, Timestamp::Unknown)
+                .await
+                .expect("stop suite");
+            suite_reporter.finished().await.expect("finish suite");
+
+            expected.push_str("\n");
+            expected.push_str(&format!(
+                "Test suite count {:?}/{:?}\n\n",
+                suite_number + 1,
+                NUM_SUITES
+            ));
+            expected.push_str("1 out of 1 tests passed...\n");
+            expected.push_str(&format!("{} completed with result: PASSED\n", suite_name));
+            assert_eq!(String::from_utf8(output.lock().clone()).unwrap(), expected,);
+        }
     }
 
     #[fuchsia::test]
