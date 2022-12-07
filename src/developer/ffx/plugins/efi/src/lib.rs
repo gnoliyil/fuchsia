@@ -2,20 +2,33 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use {
-    anyhow::Result,
-    errors::ffx_bail,
-    fatfs,
-    ffx_core::ffx_plugin,
-    ffx_efi_args::{EfiCommand, EfiSubCommand},
-    std::{
-        cmp::max,
-        collections::HashMap,
-        fs::{File, OpenOptions},
-        io::{prelude::*, BufReader},
-        path::Path,
-    },
+use anyhow::Result;
+use async_trait::async_trait;
+use errors::ffx_bail;
+use fatfs;
+use ffx_efi_args::{EfiCommand, EfiSubCommand};
+use std::{
+    cmp::max,
+    collections::HashMap,
+    fs::{File, OpenOptions},
+    io::{prelude::*, BufReader},
+    path::Path,
 };
+
+#[derive(fho::FfxTool)]
+pub struct Efi {
+    #[command]
+    cmd: EfiCommand,
+}
+
+fho::embedded_plugin!(Efi);
+
+#[async_trait(?Send)]
+impl fho::FfxMain for Efi {
+    async fn main(self) -> fho::Result<()> {
+        command(self.cmd).await.map_err(|e| e.into())
+    }
+}
 
 fn format(volume: &File, size: u64) -> Result<()> {
     volume.set_len(size)?;
@@ -91,7 +104,6 @@ fn load_files<'a>(
     Ok(())
 }
 
-#[ffx_plugin()]
 pub async fn command(cmd: EfiCommand) -> Result<()> {
     match &cmd.subcommand {
         EfiSubCommand::Create(create) => {
