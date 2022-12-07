@@ -111,7 +111,7 @@ class FvmTest : public zxtest::Test {
     ASSERT_OK(ramdisk_destroy(ramdisk_));
   }
 
-  fbl::unique_fd fvm_device() const { return fbl::unique_fd(open(fvm_driver_path_, O_RDWR)); }
+  fbl::unique_fd fvm_device() const { return fbl::unique_fd(open(fvm_driver_path_, O_RDONLY)); }
 
   const char* fvm_path() const { return fvm_driver_path_; }
 
@@ -2030,20 +2030,16 @@ void CorruptMountHelper(const fbl::unique_fd& devfs_root, const char* partition_
                                 mkfs_options),
             ZX_OK);
 
-  auto vp_fd_or =
-      fs_management::OpenPartitionWithDevfs(devfs_root.get(), kPartition1Matcher, 0, nullptr);
-  ASSERT_EQ(vp_fd_or.status_value(), ZX_OK);
-  fbl::unique_fd vp_fd(*std::move(vp_fd_or));
-
   fuchsia_hardware_block_volume::wire::VsliceRange
       initial_ranges[fuchsia_hardware_block_volume::wire::kMaxSliceRequests];
 
   // Check initial slice allocation.
-  //
-  // Avoid keeping the "FdioCaller" in-scope across mount, as the caller prevents
-  // the file descriptor from being transferred.
   {
-    fdio_cpp::UnownedFdioCaller partition_caller(vp_fd);
+    zx::result vp_fd_or =
+        fs_management::OpenPartitionWithDevfs(devfs_root.get(), kPartition1Matcher, 0, nullptr);
+    ASSERT_OK(vp_fd_or);
+    fdio_cpp::FdioCaller partition_caller(std::move(vp_fd_or.value()));
+
     const fidl::WireResult result =
         fidl::WireCall(partition_caller.borrow_as<fuchsia_hardware_block_volume::Volume>())
             ->QuerySlices(fidl::VectorView<uint64_t>::FromExternal(
@@ -2085,23 +2081,23 @@ void CorruptMountHelper(const fbl::unique_fd& devfs_root, const char* partition_
       ASSERT_EQ(response.response[0].count,
                 query_request.vslice_start[1] - query_request.vslice_start[0]);
     }
+
+    // Try to mount the VPart. Since this mount call is supposed to fail, we wait for the spawned
+    // fs process to finish and associated fidl channels to close before continuing to try and
+    // prevent race conditions with the later mount call.
+    zx::result device = partition_caller.take_as<fuchsia_hardware_block::Block>();
+    ASSERT_OK(device);
+    ASSERT_NE(fs_management::Mount(std::move(device.value()), disk_format, mounting_options,
+                                   fs_management::LaunchStdioSync)
+                  .status_value(),
+              ZX_OK);
   }
 
-  // Try to mount the VPart. Since this mount call is supposed to fail, we wait for the spawned
-  // fs process to finish and associated fidl channels to close before continuing to try and prevent
-  // race conditions with the later mount call.
-  ASSERT_NE(fs_management::Mount(std::move(vp_fd), disk_format, mounting_options,
-                                 fs_management::LaunchStdioSync)
-                .status_value(),
-            ZX_OK);
-
   {
-    vp_fd_or =
+    zx::result vp_fd_or =
         fs_management::OpenPartitionWithDevfs(devfs_root.get(), kPartition1Matcher, 0, nullptr);
-    ASSERT_EQ(vp_fd_or.status_value(), ZX_OK);
-    vp_fd = *std::move(vp_fd_or);
-
-    fdio_cpp::UnownedFdioCaller partition_caller(vp_fd);
+    ASSERT_OK(vp_fd_or);
+    fdio_cpp::FdioCaller partition_caller(std::move(vp_fd_or.value()));
 
     // Grow back the slice we shrunk earlier.
     uint64_t offset = query_request.vslice_start[0];
@@ -2160,19 +2156,20 @@ void CorruptMountHelper(const fbl::unique_fd& devfs_root, const char* partition_
                   ranges_before_extend[i].count + query_request.count - i);
       }
     }
+
+    // Try mount again.
+    zx::result device = partition_caller.take_as<fuchsia_hardware_block::Block>();
+    ASSERT_OK(device);
+    ASSERT_EQ(fs_management::Mount(std::move(device.value()), disk_format, mounting_options,
+                                   fs_management::LaunchStdioAsync)
+                  .status_value(),
+              ZX_OK);
   }
 
-  // Try mount again.
-  ASSERT_EQ(fs_management::Mount(std::move(vp_fd), disk_format, mounting_options,
-                                 fs_management::LaunchStdioAsync)
-                .status_value(),
-            ZX_OK);
-
-  vp_fd_or =
+  zx::result vp_fd_or =
       fs_management::OpenPartitionWithDevfs(devfs_root.get(), kPartition1Matcher, 0, nullptr);
-  ASSERT_EQ(vp_fd_or.status_value(), ZX_OK);
-  vp_fd = *std::move(vp_fd_or);
-  fdio_cpp::UnownedFdioCaller partition_caller(vp_fd);
+  ASSERT_OK(vp_fd_or);
+  fdio_cpp::FdioCaller partition_caller(std::move(vp_fd_or.value()));
 
   // Verify that slices were fixed on mount.
   const fidl::WireResult result =
@@ -2412,10 +2409,14 @@ TEST_F(FvmTest, TestMounting) {
                                 fs_management::LaunchStdioSync, fs_management::MkfsOptions()),
             ZX_OK);
 
+  fdio_cpp::FdioCaller partition_caller(std::move(vp_fd));
+  zx::result device = partition_caller.take_as<fuchsia_hardware_block::Block>();
+  ASSERT_OK(device);
+
   // Mount the VPart
   auto mounted_filesystem =
-      fs_management::Mount(std::move(vp_fd), fs_management::kDiskFormatMinfs, mounting_options_,
-                           fs_management::LaunchStdioAsync);
+      fs_management::Mount(std::move(device.value()), fs_management::kDiskFormatMinfs,
+                           mounting_options_, fs_management::LaunchStdioAsync);
   ASSERT_EQ(mounted_filesystem.status_value(), ZX_OK);
   auto data = mounted_filesystem->DataRoot();
   ASSERT_EQ(data.status_value(), ZX_OK);
@@ -2487,20 +2488,32 @@ TEST_F(FvmTest, TestMkfs) {
 
   // Demonstrate that mounting as minfs will fail, but mounting as blobfs
   // is successful.
-  ASSERT_NE(fs_management::Mount(std::move(vp_fd), fs_management::kDiskFormatMinfs,
-                                 mounting_options_, fs_management::LaunchStdioSync)
-                .status_value(),
-            ZX_OK);
-  vp_fd.reset(open(partition_path->c_str(), O_RDWR));
-  ASSERT_TRUE(vp_fd);
 
-  fs_management::MountOptions mounting_options = mounting_options_;
-  mounting_options.component_child_name = kTestBlobfsChildName;
-  mounting_options.component_collection_name = kTestCollectionName;
-  ASSERT_EQ(fs_management::Mount(std::move(vp_fd), fs_management::kDiskFormatBlobfs,
-                                 mounting_options, fs_management::LaunchStdioAsync)
-                .status_value(),
-            ZX_OK);
+  {
+    fdio_cpp::FdioCaller partition_caller(std::move(vp_fd));
+    zx::result device = partition_caller.take_as<fuchsia_hardware_block::Block>();
+    ASSERT_OK(device);
+    ASSERT_NE(fs_management::Mount(std::move(device.value()), fs_management::kDiskFormatMinfs,
+                                   mounting_options_, fs_management::LaunchStdioSync)
+                  .status_value(),
+              ZX_OK);
+  }
+
+  {
+    vp_fd.reset(open(partition_path->c_str(), O_RDONLY));
+    ASSERT_TRUE(vp_fd);
+    fdio_cpp::FdioCaller partition_caller(std::move(vp_fd));
+    zx::result device = partition_caller.take_as<fuchsia_hardware_block::Block>();
+    ASSERT_OK(device);
+
+    fs_management::MountOptions mounting_options = mounting_options_;
+    mounting_options.component_child_name = kTestBlobfsChildName;
+    mounting_options.component_collection_name = kTestCollectionName;
+    ASSERT_EQ(fs_management::Mount(std::move(device.value()), fs_management::kDiskFormatBlobfs,
+                                   mounting_options, fs_management::LaunchStdioAsync)
+                  .status_value(),
+              ZX_OK);
+  }
 
   // ... and reformat back to MinFS again.
   ASSERT_EQ(fs_management::Mkfs(partition_path->c_str(), fs_management::kDiskFormatMinfs,
@@ -2508,11 +2521,14 @@ TEST_F(FvmTest, TestMkfs) {
             ZX_OK);
 
   // Mount the VPart.
-  vp_fd.reset(open(partition_path->c_str(), O_RDWR));
+  vp_fd.reset(open(partition_path->c_str(), O_RDONLY));
   ASSERT_TRUE(vp_fd);
+  fdio_cpp::FdioCaller partition_caller(std::move(vp_fd));
+  zx::result device = partition_caller.take_as<fuchsia_hardware_block::Block>();
+  ASSERT_OK(device);
   auto mounted_filesystem =
-      fs_management::Mount(std::move(vp_fd), fs_management::kDiskFormatMinfs, mounting_options_,
-                           fs_management::LaunchStdioAsync);
+      fs_management::Mount(std::move(device.value()), fs_management::kDiskFormatMinfs,
+                           mounting_options_, fs_management::LaunchStdioAsync);
   ASSERT_EQ(mounted_filesystem.status_value(), ZX_OK);
   auto data = mounted_filesystem->DataRoot();
   ASSERT_EQ(data.status_value(), ZX_OK);

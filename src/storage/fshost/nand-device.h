@@ -16,7 +16,6 @@
 #include <fbl/algorithm.h>
 #include <fbl/string_buffer.h>
 
-#include "src/lib/storage/fs_management/cpp/mount.h"
 #include "src/storage/fshost/block-device.h"
 #include "src/storage/fshost/filesystem-mounter.h"
 #include "src/storage/fshost/fshost_config.h"
@@ -26,9 +25,10 @@ namespace fshost {
 // A concrete implementation of the block device interface for NAND devices.
 class NandDevice : public BlockDevice {
  public:
-  NandDevice(FilesystemMounter* mounter, fbl::unique_fd fd,
+  NandDevice(FilesystemMounter* mounter,
+             fidl::ClientEnd<fuchsia_hardware_block::Block> block_device,
              const fshost_config::Config* device_config)
-      : BlockDevice(mounter, std::move(fd), device_config) {}
+      : BlockDevice(mounter, std::move(block_device), device_config) {}
   NandDevice(const NandDevice&) = delete;
   NandDevice& operator=(const NandDevice&) = delete;
 

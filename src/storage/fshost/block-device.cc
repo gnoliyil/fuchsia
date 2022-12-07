@@ -71,46 +71,6 @@ using fs_management::DiskFormat;
 
 const char kAllowAuthoringFactoryConfigFile[] = "/boot/config/allow-authoring-factory";
 
-// return value is ignored
-int UnsealZxcryptThread(void* arg) {
-  std::unique_ptr<int> fd_ptr(static_cast<int*>(arg));
-  fbl::unique_fd fd(*fd_ptr);
-  fbl::unique_fd devfs_root(open("/dev", O_RDONLY));
-  EncryptedVolume volume(std::move(fd), std::move(devfs_root));
-  volume.EnsureUnsealedAndFormatIfNeeded();
-  return 0;
-}
-
-// Holds thread state for OpenVerityDeviceThread
-struct VerityDeviceThreadState {
-  fbl::unique_fd fd;
-  digest::Digest seal;
-};
-
-// return value is ignored
-int OpenVerityDeviceThread(void* arg) {
-  std::unique_ptr<VerityDeviceThreadState> state(static_cast<VerityDeviceThreadState*>(arg));
-  fbl::unique_fd devfs_root(open("/dev", O_RDONLY));
-
-  fdio_cpp::UnownedFdioCaller caller(state->fd);
-  std::unique_ptr<block_verity::VerifiedVolumeClient> vvc;
-  zx_status_t status = block_verity::VerifiedVolumeClient::CreateFromBlockDevice(
-      caller.borrow_as<fuchsia_device::Controller>(), std::move(devfs_root),
-      block_verity::VerifiedVolumeClient::Disposition::kDriverAlreadyBound, zx::sec(5), &vvc);
-  if (status != ZX_OK) {
-    FX_LOGS(ERROR) << "Couldn't create VerifiedVolumeClient: " << zx_status_get_string(status);
-    return 1;
-  }
-
-  fbl::unique_fd inner_block_fd;
-  status = vvc->OpenForVerifiedRead(state->seal, zx::sec(5), inner_block_fd);
-  if (status != ZX_OK) {
-    FX_LOGS(ERROR) << "OpenForVerifiedRead failed: " << zx_status_get_string(status);
-    return 1;
-  }
-  return 0;
-}
-
 // Runs the binary indicated in `argv`, which must always be terminated with nullptr.
 // `device_channel`, containing a handle to the block device, is passed to the binary.  If
 // `export_root` is specified, the binary is launched asynchronously.  Otherwise, this waits for the
@@ -212,10 +172,8 @@ Copier TryReadingMinfs(fidl::ClientEnd<fuchsia_io::Node> device) {
 
 }  // namespace
 
-std::string GetTopologicalPath(int fd) {
-  fdio_cpp::UnownedFdioCaller disk_connection(fd);
-  auto resp =
-      fidl::WireCall(disk_connection.borrow_as<fuchsia_device::Controller>())->GetTopologicalPath();
+std::string GetTopologicalPath(fidl::UnownedClientEnd<fuchsia_device::Controller> controller) {
+  auto resp = fidl::WireCall(controller)->GetTopologicalPath();
   if (resp.status() != ZX_OK) {
     FX_LOGS(WARNING) << "Unable to get topological path (fidl error): "
                      << zx_status_get_string(resp.status());
@@ -266,28 +224,34 @@ fs_management::MountOptions GetBlobfsMountOptionsForRecovery(const fshost_config
   };
 }
 
-BlockDevice::BlockDevice(FilesystemMounter* mounter, fbl::unique_fd fd,
+BlockDevice::BlockDevice(FilesystemMounter* mounter,
+                         fidl::ClientEnd<fuchsia_hardware_block::Block> block,
                          const fshost_config::Config* device_config)
     : mounter_(mounter),
       device_config_(device_config),
-      fd_(std::move(fd)),
+      block_(std::move(block)),
       content_format_(fs_management::kDiskFormatUnknown),
-      topological_path_(GetTopologicalPath(fd_.get())) {}
+      topological_path_(GetTopologicalPath(
+          fidl::UnownedClientEnd<fuchsia_device::Controller>(block_.channel().borrow()))) {}
 
 zx::result<std::unique_ptr<BlockDeviceInterface>> BlockDevice::OpenBlockDevice(
     const char* topological_path) const {
-  fbl::unique_fd fd(open(topological_path, O_RDWR, S_IFBLK));
-  if (!fd) {
-    FX_LOGS(WARNING) << "Failed to open block device " << topological_path << ": "
-                     << strerror(errno);
-    return zx::error(ZX_ERR_INVALID_ARGS);
+  zx::result device = component::Connect<fuchsia_hardware_block::Block>(topological_path);
+  if (device.is_error()) {
+    FX_PLOGS(WARNING, device.error_value()) << "Failed to open block device " << topological_path;
+    return device.take_error();
   }
-  return OpenBlockDeviceByFd(std::move(fd));
+  return zx::ok(std::make_unique<BlockDevice>(mounter_, std::move(device.value()), device_config_));
 }
 
 zx::result<std::unique_ptr<BlockDeviceInterface>> BlockDevice::OpenBlockDeviceByFd(
     fbl::unique_fd fd) const {
-  return zx::ok(std::make_unique<BlockDevice>(mounter_, std::move(fd), device_config_));
+  zx::result device = fdio_cpp::FdioCaller(std::move(fd)).take_as<fuchsia_hardware_block::Block>();
+  if (device.is_error()) {
+    FX_PLOGS(WARNING, device.error_value()) << "Failed to acquire block channel";
+    return device.take_error();
+  }
+  return zx::ok(std::make_unique<BlockDevice>(mounter_, std::move(device.value()), device_config_));
 }
 
 void BlockDevice::AddData(Copier copier) { source_data_ = std::move(copier); }
@@ -296,19 +260,19 @@ zx::result<Copier> BlockDevice::ExtractData() {
   if (content_format() != fs_management::kDiskFormatMinfs) {
     return zx::error(ZX_ERR_NOT_SUPPORTED);
   }
-  auto device_or = GetDeviceEndPoint();
-  if (device_or.is_error())
-    return device_or.take_error();
-  return zx::ok(TryReadingMinfs(std::move(device_or).value()));
+  zx::result cloned = component::Clone(block_, component::AssumeProtocolComposesNode);
+  if (cloned.is_error()) {
+    return cloned.take_error();
+  }
+  fidl::ClientEnd<fuchsia_io::Node> node(cloned.value().TakeChannel());
+  return zx::ok(TryReadingMinfs(std::move(node)));
 }
 
 DiskFormat BlockDevice::content_format() const {
   if (content_format_ != fs_management::kDiskFormatUnknown) {
     return content_format_;
   }
-  fdio_cpp::UnownedFdioCaller caller(fd_);
-  content_format_ =
-      fs_management::DetectDiskFormat(caller.borrow_as<fuchsia_hardware_block::Block>());
+  content_format_ = fs_management::DetectDiskFormat(block_);
   return content_format_;
 }
 
@@ -326,9 +290,9 @@ const std::string& BlockDevice::partition_name() const {
   // TODO(https://fxbug.dev/112484): this relies on multiplexing.
   //
   // TODO(https://fxbug.dev/113512): Remove this.
-  fdio_cpp::UnownedFdioCaller connection(fd_);
   zx::result channel =
-      component::Clone(connection.borrow_as<fuchsia_hardware_block_partition::Partition>(),
+      component::Clone(fidl::UnownedClientEnd<fuchsia_hardware_block_partition::Partition>(
+                           block_.channel().borrow()),
                        component::AssumeProtocolComposesNode);
   if (channel.is_error()) {
     FX_PLOGS(ERROR, channel.status_value()) << "Unable to clone partition channel";
@@ -352,9 +316,7 @@ zx::result<fuchsia_hardware_block::wire::BlockInfo> BlockDevice::GetInfo() const
   if (info_.has_value()) {
     return zx::ok(*info_);
   }
-  fdio_cpp::UnownedFdioCaller connection(fd_);
-  const fidl::WireResult result =
-      fidl::WireCall(connection.borrow_as<fuchsia_hardware_block::Block>())->GetInfo();
+  const fidl::WireResult result = fidl::WireCall(block_)->GetInfo();
   if (!result.ok()) {
     return zx::error(result.status());
   }
@@ -376,9 +338,9 @@ const fuchsia_hardware_block_partition::wire::Guid& BlockDevice::GetInstanceGuid
   // TODO(https://fxbug.dev/112484): this relies on multiplexing.
   //
   // TODO(https://fxbug.dev/113512): Remove this.
-  fdio_cpp::UnownedFdioCaller connection(fd_);
   zx::result channel =
-      component::Clone(connection.borrow_as<fuchsia_hardware_block_partition::Partition>(),
+      component::Clone(fidl::UnownedClientEnd<fuchsia_hardware_block_partition::Partition>(
+                           block_.channel().borrow()),
                        component::AssumeProtocolComposesNode);
   if (channel.is_error()) {
     FX_PLOGS(ERROR, channel.status_value()) << "Unable to clone partition channel";
@@ -410,9 +372,9 @@ const fuchsia_hardware_block_partition::wire::Guid& BlockDevice::GetTypeGuid() c
   // TODO(https://fxbug.dev/112484): this relies on multiplexing.
   //
   // TODO(https://fxbug.dev/113512): Remove this.
-  fdio_cpp::UnownedFdioCaller connection(fd_);
   zx::result channel =
-      component::Clone(connection.borrow_as<fuchsia_hardware_block_partition::Partition>(),
+      component::Clone(fidl::UnownedClientEnd<fuchsia_hardware_block_partition::Partition>(
+                           block_.channel().borrow()),
                        component::AssumeProtocolComposesNode);
   if (channel.is_error()) {
     FX_PLOGS(ERROR, channel.status_value()) << "Unable to clone partition channel";
@@ -435,9 +397,9 @@ const fuchsia_hardware_block_partition::wire::Guid& BlockDevice::GetTypeGuid() c
 
 zx_status_t BlockDevice::AttachDriver(const std::string_view& driver) {
   FX_LOGS(INFO) << "Binding: " << driver;
-  fdio_cpp::UnownedFdioCaller connection(fd_);
-  const fidl::WireResult result = fidl::WireCall(connection.borrow_as<fuchsia_device::Controller>())
-                                      ->Bind(fidl::StringView::FromExternal(driver));
+  const fidl::WireResult result =
+      fidl::WireCall(fidl::UnownedClientEnd<fuchsia_device::Controller>(block_.channel().borrow()))
+          ->Bind(fidl::StringView::FromExternal(driver));
   if (!result.ok()) {
     FX_PLOGS(ERROR, result.status()) << "Failed to attach driver: " << driver;
     return result.status();
@@ -458,19 +420,22 @@ zx_status_t BlockDevice::UnsealZxcrypt() {
   // and we don't want to block block-watcher for any nontrivial
   // length of time.
 
-  // We transfer fd to the spawned thread.  Since it's UB to cast
-  // ints to pointers and back, we allocate the fd on the heap.
-  int loose_fd = fd_.release();
-  int* raw_fd_ptr = new int(loose_fd);
-  thrd_t th;
-  int err = thrd_create_with_name(&th, &UnsealZxcryptThread, raw_fd_ptr, "zxcrypt-unseal");
-  if (err != thrd_success) {
-    FX_LOGS(ERROR) << "failed to spawn zxcrypt worker thread";
-    close(loose_fd);
-    delete raw_fd_ptr;
-    return ZX_ERR_INTERNAL;
+  zx::result cloned = component::Clone(block_, component::AssumeProtocolComposesNode);
+  if (cloned.is_error()) {
+    return cloned.error_value();
   }
-  thrd_detach(th);
+  fbl::unique_fd fd;
+  if (zx_status_t status =
+          fdio_fd_create(cloned.value().TakeChannel().release(), fd.reset_and_get_address());
+      status != ZX_OK) {
+    return status;
+  }
+
+  std::thread thread(
+      [volume = EncryptedVolume(std::move(fd), fbl::unique_fd(open("/dev", O_RDONLY)))]() mutable {
+        volume.EnsureUnsealedAndFormatIfNeeded();
+      });
+  thread.detach();
 
   return ZX_OK;
 }
@@ -478,26 +443,34 @@ zx_status_t BlockDevice::UnsealZxcrypt() {
 zx_status_t BlockDevice::OpenBlockVerityForVerifiedRead(std::string seal_hex) {
   FX_LOGS(INFO) << "preparing block-verity";
 
-  std::unique_ptr<VerityDeviceThreadState> state = std::make_unique<VerityDeviceThreadState>();
-  zx_status_t rc = state->seal.Parse(seal_hex.c_str());
-  if (rc != ZX_OK) {
-    FX_LOGS(ERROR) << "block-verity seal " << seal_hex
-                   << " did not parse as SHA256 hex digest: " << zx_status_get_string(rc);
-    return rc;
+  digest::Digest seal;
+  if (zx_status_t status = seal.Parse(seal_hex.c_str()); status != ZX_OK) {
+    FX_PLOGS(ERROR, status) << "block-verity seal " << seal_hex
+                            << " did not parse as SHA256 hex digest";
+    return status;
   }
 
-  // Transfer FD to thread state.
-  state->fd = std::move(fd_);
+  std::thread thread([controller = fidl::UnownedClientEnd<fuchsia_device::Controller>(
+                          block_.channel().borrow()),
+                      seal = std::move(seal)]() {
+    fbl::unique_fd devfs_root(open("/dev", O_RDONLY));
 
-  thrd_t th;
-  int err = thrd_create_with_name(&th, OpenVerityDeviceThread, state.get(), "block-verity-open");
-  if (err != thrd_success) {
-    FX_LOGS(ERROR) << "failed to spawn block-verity worker thread";
-    return ZX_ERR_INTERNAL;
-  }
-  // Release our reference to the state now owned by the other thread.
-  static_cast<void>(state.release());
-  thrd_detach(th);
+    std::unique_ptr<block_verity::VerifiedVolumeClient> vvc;
+    if (zx_status_t status = block_verity::VerifiedVolumeClient::CreateFromBlockDevice(
+            controller, std::move(devfs_root),
+            block_verity::VerifiedVolumeClient::Disposition::kDriverAlreadyBound, zx::sec(5), &vvc);
+        status != ZX_OK) {
+      FX_PLOGS(ERROR, status) << "Couldn't create VerifiedVolumeClient";
+      return;
+    }
+
+    fbl::unique_fd inner_block_fd;
+    if (zx_status_t status = vvc->OpenForVerifiedRead(seal, zx::sec(5), inner_block_fd);
+        status != ZX_OK) {
+      FX_PLOGS(ERROR, status) << "OpenForVerifiedRead failed";
+    }
+  });
+  thread.detach();
 
   return ZX_OK;
 }
@@ -507,7 +480,18 @@ zx_status_t BlockDevice::FormatZxcrypt() {
   if (!devfs_root_fd) {
     return ZX_ERR_NOT_FOUND;
   }
-  EncryptedVolume volume(fd_.duplicate(), std::move(devfs_root_fd));
+  zx::result cloned = component::Clone(block_, component::AssumeProtocolComposesNode);
+  if (cloned.is_error()) {
+    return cloned.error_value();
+  }
+  fbl::unique_fd fd;
+  if (zx_status_t status =
+          fdio_fd_create(cloned.value().TakeChannel().release(), fd.reset_and_get_address());
+      status != ZX_OK) {
+    return status;
+  }
+
+  EncryptedVolume volume(std::move(fd), std::move(devfs_root_fd));
   return volume.Format();
 }
 
@@ -649,13 +633,19 @@ zx_status_t BlockDevice::CheckFilesystem() {
     case fs_management::kDiskFormatMinfs: {
       // With minfs, we can run the library directly without needing to start a new process.
       uint64_t device_size = info->block_size * info->block_count / minfs::kMinfsBlockSize;
-      auto device_or = block_client::RemoteBlockDevice::Create(fd_.get());
-      if (device_or.is_error()) {
-        FX_LOGS(ERROR) << "Cannot convert fd to block device: " << device_or.error_value();
-        return device_or.error_value();
+      zx::result cloned = component::Clone(block_, component::AssumeProtocolComposesNode);
+      if (cloned.is_error()) {
+        FX_PLOGS(ERROR, cloned.error_value()) << "Cannot clone block channel";
+        return cloned.error_value();
       }
-      auto bc_or =
-          minfs::Bcache::Create(std::move(device_or.value()), static_cast<uint32_t>(device_size));
+      std::unique_ptr<block_client::RemoteBlockDevice> device;
+      if (zx_status_t status =
+              block_client::RemoteBlockDevice::Create(std::move(cloned.value()), &device);
+          status != ZX_OK) {
+        FX_PLOGS(ERROR, status) << "Cannot create block device";
+        return status;
+      }
+      auto bc_or = minfs::Bcache::Create(std::move(device), static_cast<uint32_t>(device_size));
       if (bc_or.is_error()) {
         FX_LOGS(ERROR) << "Could not initialize minfs bcache.";
         return bc_or.error_value();
@@ -717,13 +707,18 @@ zx_status_t BlockDevice::FormatFilesystem() {
       // With minfs, we can run the library directly without needing to start a new process.
       FX_LOGS(INFO) << "Formatting minfs.";
       uint64_t blocks = info->block_size * info->block_count / minfs::kMinfsBlockSize;
-      auto device_or = block_client::RemoteBlockDevice::Create(fd_.get());
-      if (device_or.is_error()) {
-        FX_LOGS(ERROR) << "Cannot convert fd to block device: " << device_or.error_value();
-        return device_or.status_value();
+      zx::result cloned = component::Clone(block_, component::AssumeProtocolComposesNode);
+      if (cloned.is_error()) {
+        return cloned.error_value();
       }
-      auto bc_or =
-          minfs::Bcache::Create(std::move(device_or.value()), static_cast<uint32_t>(blocks));
+      std::unique_ptr<block_client::RemoteBlockDevice> device;
+      if (zx_status_t status =
+              block_client::RemoteBlockDevice::Create(std::move(cloned.value()), &device);
+          status != ZX_OK) {
+        FX_PLOGS(ERROR, status) << "Cannot clone block channel";
+        return status;
+      }
+      auto bc_or = minfs::Bcache::Create(std::move(device), static_cast<uint32_t>(blocks));
       if (bc_or.is_error()) {
         FX_LOGS(ERROR) << "Could not initialize minfs bcache.";
         return bc_or.error_value();
@@ -744,13 +739,8 @@ zx_status_t BlockDevice::FormatFilesystem() {
 }
 
 zx_status_t BlockDevice::MountFilesystem() {
-  if (!fd_) {
-    return ZX_ERR_BAD_HANDLE;
-  }
   // TODO(https://fxbug.dev/112484): this relies on multiplexing.
-  zx::result block_device = [connection = fdio_cpp::UnownedFdioCaller(fd_)]() {
-    return component::Clone(connection.node());
-  }();
+  zx::result block_device = component::Clone(block_, component::AssumeProtocolComposesNode);
   if (block_device.is_error()) {
     return block_device.status_value();
   }
@@ -760,7 +750,7 @@ zx_status_t BlockDevice::MountFilesystem() {
       fs_management::MountOptions options;
       options.readonly = true;
 
-      zx_status_t status = mounter_->MountFactoryFs(block_device.value().TakeChannel(), options);
+      zx_status_t status = mounter_->MountFactoryFs(std::move(block_device.value()), options);
       if (status != ZX_OK) {
         FX_LOGS(ERROR) << "Failed to mount factoryfs partition: " << zx_status_get_string(status)
                        << ".";
@@ -770,7 +760,7 @@ zx_status_t BlockDevice::MountFilesystem() {
     case fs_management::kDiskFormatBlobfs: {
       FX_LOGS(INFO) << "BlockDevice::MountFilesystem(blobfs)";
       if (zx_status_t status = mounter_->MountBlob(
-              block_device.value().TakeChannel(),
+              std::move(block_device.value()),
               GetBlobfsMountOptions(*device_config_, mounter_->boot_args().get()));
           status != ZX_OK) {
         FX_PLOGS(ERROR, status) << "Failed to mount blobfs partition";
@@ -788,7 +778,7 @@ zx_status_t BlockDevice::MountFilesystem() {
 
       FX_LOGS(INFO) << "BlockDevice::MountFilesystem(data partition)";
       if (zx_status_t status =
-              MountData(options, std::move(copier), block_device.value().TakeChannel());
+              MountData(options, std::move(copier), std::move(block_device.value()));
           status != ZX_OK) {
         FX_LOGS(ERROR) << "Failed to mount data partition: " << zx_status_get_string(status) << ".";
         return status;
@@ -812,7 +802,8 @@ zx_status_t BlockDevice::MountFilesystem() {
 // ZX_ERR_NOT_SUPPORTED if the GUID is a system GUID. Returns ZX_OK if an
 // attempt to mount is made, without checking mount success.
 zx_status_t BlockDevice::MountData(const fs_management::MountOptions& options,
-                                   std::optional<Copier> copier, zx::channel block_device) {
+                                   std::optional<Copier> copier,
+                                   fidl::ClientEnd<fuchsia_hardware_block::Block> block_device) {
   const uint8_t* guid = GetTypeGuid().value.data();
   FX_LOGS(INFO) << "Detected type GUID " << gpt::KnownGuid::TypeDescription(guid)
                 << " for data partition";
@@ -920,28 +911,10 @@ zx_status_t BlockDeviceInterface::Add(bool format_on_corruption) {
   return ZX_ERR_NOT_SUPPORTED;
 }
 
-// Clones the device handle.
-zx::result<fidl::ClientEnd<fuchsia_io::Node>> BlockDevice::GetDeviceEndPoint() const {
-  auto end_points_or = fidl::CreateEndpoints<fuchsia_io::Node>();
-  if (end_points_or.is_error())
-    return end_points_or.take_error();
-
-  fdio_cpp::UnownedFdioCaller caller(fd_);
-  if (zx_status_t status = fidl::WireCall(caller.borrow_as<fuchsia_io::Node>())
-                               ->Clone(fuchsia_io::wire::OpenFlags::kCloneSameRights,
-                                       std::move(end_points_or->server))
-                               .status();
-      status != ZX_OK) {
-    return zx::error(status);
-  }
-
-  return zx::ok(std::move(end_points_or->client));
-}
-
 zx_status_t BlockDevice::CheckCustomFilesystem(fs_management::DiskFormat format) const {
-  auto device_or = GetDeviceEndPoint();
-  if (device_or.is_error()) {
-    return device_or.error_value();
+  zx::result cloned = component::Clone(block_, component::AssumeProtocolComposesNode);
+  if (cloned.is_error()) {
+    return cloned.error_value();
   }
 
   if (format == fs_management::kDiskFormatFxfs) {
@@ -954,9 +927,8 @@ zx_status_t BlockDevice::CheckCustomFilesystem(fs_management::DiskFormat format)
       return startup_client_end.error_value();
     }
     auto startup_client = fidl::WireSyncClient(std::move(*startup_client_end));
-    fidl::ClientEnd<fuchsia_hardware_block::Block> block_client_end(device_or->TakeChannel());
     fs_management::FsckOptions options;
-    auto res = startup_client->Check(std::move(block_client_end), options.as_check_options());
+    auto res = startup_client->Check(std::move(cloned.value()), options.as_check_options());
     if (!res.ok()) {
       FX_PLOGS(ERROR, res.status()) << "Failed to fsck (FIDL error)";
       return res.status();
@@ -973,7 +945,8 @@ zx_status_t BlockDevice::CheckCustomFilesystem(fs_management::DiskFormat format)
     return ZX_ERR_INVALID_ARGS;
   }
 
-  return RunBinary({binary_path.c_str(), "fsck", nullptr}, std::move(device_or).value());
+  fidl::ClientEnd<fuchsia_io::Node> node(cloned.value().TakeChannel());
+  return RunBinary({binary_path.c_str(), "fsck", nullptr}, std::move(node));
 }
 
 // This is a destructive operation and isn't atomic (i.e. not resilient to power interruption).
@@ -981,23 +954,25 @@ zx_status_t BlockDevice::FormatCustomFilesystem(fs_management::DiskFormat format
   // Try mounting minfs and slurp all existing data off.
   if (content_format() == fs_management::kDiskFormatMinfs) {
     FX_LOGS(INFO) << "Attempting to read existing Minfs data";
-    auto device_or = GetDeviceEndPoint();
-    if (device_or.is_error())
-      return device_or.error_value();
-    if (Copier copier = TryReadingMinfs(std::move(device_or).value()); !copier.empty()) {
+    zx::result cloned = component::Clone(block_, component::AssumeProtocolComposesNode);
+    if (cloned.is_error()) {
+      return cloned.error_value();
+    }
+    fidl::ClientEnd<fuchsia_io::Node> node(cloned.value().TakeChannel());
+    if (Copier copier = TryReadingMinfs(std::move(node)); !copier.empty()) {
       FX_LOGS(INFO) << "Successfully read Minfs data";
       source_data_.emplace(std::move(copier));
     }
   }
 
   FX_LOGS(INFO) << "Formatting " << DiskFormatString(format);
-  zx::result device = GetDeviceEndPoint();
-  if (device.is_error()) {
-    return device.error_value();
+  zx::result cloned = component::Clone(block_, component::AssumeProtocolComposesNode);
+  if (cloned.is_error()) {
+    return cloned.error_value();
   }
 
   fidl::UnownedClientEnd<fuchsia_hardware_block_volume::Volume> volume_client(
-      device.value().channel().borrow());
+      cloned.value().channel().borrow());
   uint64_t target_bytes = device_config_->data_max_bytes();
   const bool inside_zxcrypt = (topological_path_.find("zxcrypt") != std::string::npos);
   if (format == fs_management::kDiskFormatF2fs) {
@@ -1033,14 +1008,7 @@ zx_status_t BlockDevice::FormatCustomFilesystem(fs_management::DiskFormat format
   }
 
   if (format == fs_management::kDiskFormatFxfs) {
-    auto block_device = GetDeviceEndPoint();
-    if (block_device.is_error()) {
-      FX_PLOGS(ERROR, block_device.status_value()) << "Failed to get device endpoint";
-      return block_device.status_value();
-    }
-    if (auto status = FormatFxfsAndInitDataVolume(
-            fidl::ClientEnd<fuchsia_hardware_block::Block>(std::move(block_device)->TakeChannel()),
-            *device_config_);
+    if (auto status = FormatFxfsAndInitDataVolume(std::move(cloned.value()), *device_config_);
         status.is_error()) {
       FX_PLOGS(ERROR, status.status_value()) << "Failed to format Fxfs";
       return status.status_value();
@@ -1051,9 +1019,8 @@ zx_status_t BlockDevice::FormatCustomFilesystem(fs_management::DiskFormat format
       FX_LOGS(ERROR) << "Unsupported data format";
       return ZX_ERR_INVALID_ARGS;
     }
-
-    if (zx_status_t status =
-            RunBinary({binary_path.c_str(), "mkfs", nullptr}, std::move(device.value()));
+    fidl::ClientEnd<fuchsia_io::Node> node(cloned.value().TakeChannel());
+    if (zx_status_t status = RunBinary({binary_path.c_str(), "mkfs", nullptr}, std::move(node));
         status != ZX_OK) {
       return status;
     }

@@ -26,7 +26,7 @@
 namespace fshost {
 
 // Get the topological path of the device backing |fd|.
-std::string GetTopologicalPath(int fd);
+std::string GetTopologicalPath(fidl::UnownedClientEnd<fuchsia_device::Controller> controller);
 
 // Collect and synthesize the blobfs mount options.
 fs_management::MountOptions GetBlobfsMountOptions(const fshost_config::Config& config,
@@ -40,7 +40,7 @@ fs_management::MountOptions GetBlobfsMountOptionsForRecovery(const fshost_config
 // Used by fshost to attach either drivers or filesystems to incoming block devices.
 class BlockDevice : public BlockDeviceInterface {
  public:
-  BlockDevice(FilesystemMounter* mounter, fbl::unique_fd fd,
+  BlockDevice(FilesystemMounter* mounter, fidl::ClientEnd<fuchsia_hardware_block::Block> block,
               const fshost_config::Config* device_config);
   BlockDevice(const BlockDevice&) = delete;
   BlockDevice& operator=(const BlockDevice&) = delete;
@@ -74,7 +74,6 @@ class BlockDevice : public BlockDeviceInterface {
   fs_management::DiskFormat content_format() const override;
   const std::string& topological_path() const override { return topological_path_; }
   const std::string& partition_name() const override;
-  zx::result<fidl::ClientEnd<fuchsia_io::Node>> GetDeviceEndPoint() const;
   zx_status_t CheckCustomFilesystem(fs_management::DiskFormat format) const;
   zx_status_t FormatCustomFilesystem(fs_management::DiskFormat format);
 
@@ -84,9 +83,9 @@ class BlockDevice : public BlockDeviceInterface {
 
  private:
   zx_status_t MountData(const fs_management::MountOptions& options, std::optional<Copier> copier,
-                        zx::channel block_device);
+                        fidl::ClientEnd<fuchsia_hardware_block::Block> block_device);
 
-  fbl::unique_fd fd_;
+  fidl::ClientEnd<fuchsia_hardware_block::Block> block_;
   mutable std::optional<fuchsia_hardware_block::wire::BlockInfo> info_;
   mutable fs_management::DiskFormat content_format_;
   fs_management::DiskFormat format_ = fs_management::kDiskFormatUnknown;

@@ -10,6 +10,7 @@
 #include <fidl/fuchsia.hardware.block.volume/cpp/wire.h>
 #include <fidl/fuchsia.hardware.block/cpp/wire.h>
 #include <fidl/fuchsia.io/cpp/wire.h>
+#include <lib/component/incoming/cpp/service_client.h>
 #include <lib/fdio/cpp/caller.h>
 #include <lib/fdio/vfs.h>
 #include <lib/syslog/cpp/macros.h>
@@ -68,11 +69,6 @@ class RamdiskTestFixture : public testing::Test {
 
   std::string ramdisk_path() const { return ramdisk_.path(); }
   ramdisk_client_t* ramdisk_client() const { return ramdisk_.client(); }
-  fbl::unique_fd ramdisk_fd() const {
-    fbl::unique_fd fd(open(ramdisk_path().c_str(), O_RDWR));
-    EXPECT_TRUE(fd);
-    return fd;
-  }
 
   // Mounts a minfs formatted partition to the desired point.
   zx::result<std::pair<fs_management::StartedSingleVolumeFilesystem, NamespaceBinding>> MountMinfs(
@@ -80,7 +76,18 @@ class RamdiskTestFixture : public testing::Test {
     MountOptions options;
     options.readonly = read_only;
 
-    auto mounted_filesystem = Mount(ramdisk_fd(), kDiskFormatMinfs, options, LaunchStdioAsync);
+    zx_handle_t handle = ramdisk_get_block_interface(ramdisk_client());
+    if (handle == ZX_HANDLE_INVALID) {
+      return zx::error(ZX_ERR_INTERNAL);
+    }
+    fidl::UnownedClientEnd<fuchsia_hardware_block::Block> unowned(handle);
+    zx::result device = component::Clone(unowned, component::AssumeProtocolComposesNode);
+    if (device.is_error()) {
+      return device.take_error();
+    }
+
+    auto mounted_filesystem =
+        Mount(std::move(device.value()), kDiskFormatMinfs, options, LaunchStdioAsync);
     if (mounted_filesystem.is_error())
       return mounted_filesystem.take_error();
     auto data_root = mounted_filesystem->DataRoot();

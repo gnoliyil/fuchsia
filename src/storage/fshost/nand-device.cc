@@ -6,6 +6,7 @@
 
 #include <fcntl.h>
 #include <fidl/fuchsia.device/cpp/wire.h>
+#include <lib/component/incoming/cpp/service_client.h>
 #include <lib/fdio/cpp/caller.h>
 #include <lib/syslog/cpp/macros.h>
 #include <sys/stat.h>
@@ -20,13 +21,12 @@ namespace fshost {
 
 zx::result<std::unique_ptr<BlockDeviceInterface>> NandDevice::OpenBlockDevice(
     const char* topological_path) const {
-  fbl::unique_fd fd(::open(topological_path, O_RDWR, S_IFBLK));
-  if (!fd) {
-    FX_LOGS(WARNING) << "Failed to open block device " << topological_path << ": "
-                     << strerror(errno);
-    return zx::error(ZX_ERR_INVALID_ARGS);
+  zx::result device = component::Connect<fuchsia_hardware_block::Block>(topological_path);
+  if (device.is_error()) {
+    FX_PLOGS(WARNING, device.error_value()) << "Failed to open block device " << topological_path;
+    return device.take_error();
   }
-  return zx::ok(std::make_unique<NandDevice>(mounter_, std::move(fd), device_config_));
+  return zx::ok(std::make_unique<NandDevice>(mounter_, std::move(device.value()), device_config_));
 }
 
 }  // namespace fshost
