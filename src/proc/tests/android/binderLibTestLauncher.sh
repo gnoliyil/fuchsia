@@ -18,18 +18,7 @@ GTEST_EXCLUDE_FILTER=""
 GTEST_EXCLUDE_FILTER="$GTEST_EXCLUDE_FILTER:BinderLibTest.SchedPolicySet"
 GTEST_EXCLUDE_FILTER="$GTEST_EXCLUDE_FILTER:BinderLibTest.InheritRt"
 GTEST_EXCLUDE_FILTER="$GTEST_EXCLUDE_FILTER:BinderLibTest.GotSid"
-GTEST_EXCLUDE_FILTER="$GTEST_EXCLUDE_FILTER:BinderLibTest.HangingServices"
 GTEST_EXCLUDE_FILTER="$GTEST_EXCLUDE_FILTER:BinderLibTest.TooManyFdsFlattenable"
-GTEST_EXCLUDE_FILTER="$GTEST_EXCLUDE_FILTER:ServiceNotifications.Unregister"
-GTEST_EXCLUDE_FILTER="$GTEST_EXCLUDE_FILTER:BinderLibRpcTest*"
-GTEST_EXCLUDE_FILTER="$GTEST_EXCLUDE_FILTER:BinderLibTest/BinderLibRpcTestP.*"
-
-# Flaking tests fxb/101486
-GTEST_EXCLUDE_FILTER="$GTEST_EXCLUDE_FILTER:BinderLibTest.BinderCallContextGuard"
-GTEST_EXCLUDE_FILTER="$GTEST_EXCLUDE_FILTER:BinderLibTest.CallBack"
-GTEST_EXCLUDE_FILTER="$GTEST_EXCLUDE_FILTER:BinderLibTest.DeathNotificationMultiple"
-GTEST_EXCLUDE_FILTER="$GTEST_EXCLUDE_FILTER:BinderLibTest.IndirectGetId2"
-GTEST_EXCLUDE_FILTER="$GTEST_EXCLUDE_FILTER:BinderLibTest.IndirectGetId3"
 
 # Change directory to the temporary directory, as the expected /data/local/tmp
 # directory doesn't exist.
