@@ -65,6 +65,8 @@ In VS Code, do the following:
 
 1. Click the **FUCHSIA LOGS** tab on the VS Code panel.
 
+1. Click the text box (which already has the filter `qemu-edu`) and press **Enter**.
+
    ![More logs](images/get-started-vscode-qemu-edu-more-device-logs.png "More messages in the Fuchsia logs panel of VS Code"){: .screenshot}
 
    Notice that more messages are now logged from the `qemu_edu` driver.
