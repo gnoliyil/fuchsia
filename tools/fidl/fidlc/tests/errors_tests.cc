@@ -137,13 +137,8 @@ TEST(ErrorsTests, BadErrorUnknownIdentifier) {
 }
 
 TEST(ErrorsTests, BadErrorWrongPrimitive) {
-  TestLibrary library(R"FIDL(
-library example;
-
-protocol Example {
-    Method() -> (struct { foo string; }) error float32;
-};
-)FIDL");
+  TestLibrary library;
+  library.AddFile("bad/fi-0141.test.fidl");
 
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrInvalidErrorType);
 }

@@ -449,16 +449,9 @@ TEST(AttributesTests, BadEmptyTransport) {
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrMissingRequiredAnonymousAttributeArg);
 }
 
-TEST(AttributesTests, BadBogusTransport) {
-  TestLibrary library(R"FIDL(
-library fidl.test.transportattributes;
-
-@transport("Bogus")
-protocol A {
-    MethodA();
-};
-
-)FIDL");
+TEST(AttributesTests, BadUnrecognizedTransport) {
+  TestLibrary library;
+  library.AddFile("bad/fi-0142.test.fidl");
   ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrInvalidTransportType);
 }
 

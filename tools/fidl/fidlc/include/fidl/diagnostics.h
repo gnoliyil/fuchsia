@@ -337,10 +337,10 @@ constexpr ErrorDef<139, uint32_t, uint32_t> ErrTooManyBytes(
     "too large: only {} bytes allowed, but {} bytes found");
 constexpr ErrorDef<140, uint32_t, uint32_t> ErrTooManyHandles(
     "too many handles: only {} allowed, but {} found");
-constexpr UndocumentedErrorDef<141> ErrInvalidErrorType(
+constexpr ErrorDef<141> ErrInvalidErrorType(
     "invalid error type: must be int32, uint32 or an enum thereof");
-constexpr UndocumentedErrorDef<142, std::string_view, std::set<std::string_view>>
-    ErrInvalidTransportType("invalid transport type: got {} expected one of {}");
+constexpr ErrorDef<142, std::string_view, std::set<std::string_view>> ErrInvalidTransportType(
+    "invalid transport type: got {} expected one of {}");
 constexpr ErrorDef<143, const flat::Attribute *, std::string_view> ErrBoundIsTooBig(
     "'{}' bound of '{}' is too big");
 constexpr ErrorDef<144, const flat::Attribute *, std::string_view> ErrUnableToParseBound(
