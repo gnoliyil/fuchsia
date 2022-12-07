@@ -89,7 +89,7 @@ pub async fn copy(
     let destination_path = paths.pop().unwrap();
 
     for source_path in paths {
-        let result = match (
+        let result: Result<()> = match (
             HostOrRemotePath::parse(&source_path),
             HostOrRemotePath::parse(&destination_path),
         ) {
@@ -111,6 +111,13 @@ pub async fn copy(
                             destination.clone(),
                         )
                         .await?;
+
+                        if verbose {
+                            println!(
+                                "Successfully copied {} to {}",
+                                &source_path, &destination_path
+                            );
+                        }
                     } else if verbose {
                         //TODO(https://fxrev.dev/116065): add recursive flag for wildcards.
                         println!(
@@ -150,6 +157,13 @@ pub async fn copy(
                             },
                         )
                         .await?;
+
+                        if verbose {
+                            println!(
+                                "Successfully copied {} to {}",
+                                &source_path, &destination_path
+                            );
+                        }
                     } else if verbose {
                         //TODO(https://fxrev.dev/116065): add recursive flag for wildcards.
                         println!(
@@ -158,6 +172,7 @@ pub async fn copy(
                         );
                     }
                 }
+
                 Ok(())
             }
 
@@ -173,7 +188,13 @@ pub async fn copy(
                     source,
                     NamespacedPath { path: destination, ns: destination_namespace.to_owned() },
                 )
-                .await
+                .await?;
+
+                if verbose {
+                    println!("Successfully copied {} to {}", &source_path, &destination_path);
+                }
+
+                Ok(())
             }
 
             (HostOrRemotePath::Host(_), HostOrRemotePath::Host(_)) => {
@@ -367,6 +388,7 @@ pub async fn copy_host_file_to_remote(source: PathBuf, destination: NamespacedPa
         .verify_directory_is_read_write(&destination_path.parent().unwrap())
         .await?;
     destination_namespace.create_file(destination_path, data.as_slice()).await?;
+
     Ok(())
 }
 
