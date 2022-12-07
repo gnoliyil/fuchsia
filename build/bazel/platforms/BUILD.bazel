@@ -37,6 +37,16 @@ platform(
     constraint_values = [],
 )
 
+# The //build/bazel/platforms:host platform is used to target
+# the build configuration matching the current host machine.
+platform(
+    name = "host",
+    constraint_values = [
+        build_config.host_platform_os_constraint,
+        build_config.host_platform_cpu_constraint,
+    ],
+)
+
 # The following platforms will be used to generate binaries
 # for Fuchsia, Linux and MacOS systems respectively. Other
 # parts of Bazel should define C++ and Rust toolchain instances

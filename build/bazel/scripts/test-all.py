@@ -48,10 +48,38 @@ def get_fx_build_dir(fuchsia_dir):
     return os.path.join(fuchsia_dir, build_dir)
 
 
+# The list of known product names that are supported from //build/assembly/BUILD.gn
+# If the value returned by get_product_name() is not one of them, then fallback
+# to _FALLBACK_PRODUCT_NAME
+_KNOWN_PRODUCT_NAMES = ('bringup', 'minimal', 'core', 'workstation_eng')
+_FALLBACK_PRODUCT_NAME = 'minimal'
+
+
 def get_product_name(fuchsia_build_dir):
     with open(os.path.join(fuchsia_build_dir, 'args.json')) as f:
         args = json.load(f)
-        return args['build_info_product']
+        product_name = args['build_info_product']
+        if product_name not in _KNOWN_PRODUCT_NAMES:
+            product_name = _FALLBACK_PRODUCT_NAME
+        return product_name
+
+
+def get_host_bazel_platform():
+    """Return host --platform name for the current build machine."""
+    sysname = os.uname().sysname
+    machine = os.uname().machine
+    host_os = {
+        'Linux': 'linux',
+        'Darwin': 'mac',
+        'Windows': 'win',
+    }.get(sysname)
+
+    host_cpu = {
+        'aarch64': 'arm64',
+        'x86_64': 'x64',
+    }.get(machine, machine)
+
+    return f'//build/bazel/platforms:{host_os}_{host_cpu}'
 
 
 class CommandLauncher(object):
@@ -319,14 +347,21 @@ def main():
             file=sys.stderr)
         return 1
 
-    log('Checking `fx bazel run //build/bazel/tests/hello_world`.')
     # This builds and runs a simple hello_world host binary using the
     # @prebuilt_clang toolchain (which differs from sdk-integration's
     # @fuchsia_clang that can only generate Fuchsia binaries so far.
-    run_bazel_command(['run', '//build/bazel/tests/hello_world'])
+    log(
+        'Checking `fx bazel run --platforms=//build/bazel/platforms:host //build/bazel/examples/hello_world`.'
+    )
+    run_bazel_command(
+        [
+            'run', '--platforms=//build/bazel/platforms:host',
+            '//build/bazel/examples/hello_world'
+        ])
 
-    log('Checking `fx bazel run //build/bazel/tests/hello_python:bin`.')
-    run_bazel_command(['run', '//build/bazel/tests/hello_python:bin'])
+    # This creates a py_binary launcher script + runfiles directory, then calls it.
+    log(f'Checking `fx bazel run //build/bazel/examples/hello_python:bin`.')
+    run_bazel_command(['run', '//build/bazel/examples/hello_python:bin'])
 
     # Run a few simple Starlark unit tests.
     log('@prebuilt_clang test suite')

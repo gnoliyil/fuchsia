@@ -340,6 +340,9 @@ def maybe_regenerate_ninja(gn_output_dir, ninja):
     return False
 
 
+_VALID_TARGET_CPUS = ('arm64', 'x64')
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
@@ -351,8 +354,8 @@ def main():
         help='GN output directory, auto-detected by default.')
     parser.add_argument(
         '--target_arch',
-        help='Equivalent to `target_cpu` in GN. Defaults to host CPU.',
-        choices=['arm64', 'x64'])
+        help='Equivalent to `target_cpu` in GN. Defaults to args.gn setting.',
+        choices=_VALID_TARGET_CPUS)
     parser.add_argument(
         '--bazel-bin',
         help=
@@ -399,7 +402,21 @@ def main():
     gn_output_dir = os.path.abspath(args.gn_output_dir)
 
     if not args.target_arch:
-        args.target_arch = get_host_arch()
+        # Extract default target architecture from args.json file, which is
+        # created after calling `gn gen`. If the file is missing print an error
+        args_json_path = os.path.join(args.gn_output_dir, 'args.json')
+        if not os.path.exists(args_json_path):
+            parser.error(
+                f'Cannot determine target architecture ({args_json_path} is missing). Please use --target-arch=ARCH'
+            )
+        with open(args_json_path) as f:
+            args_json = json.load(f)
+            target_cpu = args_json.get('target_cpu', None)
+            if target_cpu not in _VALID_TARGET_CPUS:
+                parser.error(
+                    f'Unsupported target cpu value "{target_cpu}" from {args_json_path}'
+                )
+            args.target_arch = target_cpu
 
     if not args.topdir:
         args.topdir = os.path.join(gn_output_dir, 'gen/build/bazel')
@@ -564,6 +581,20 @@ block *
         'template.fuchsia_build_config.bzl', **build_config)
     generated.add_file(
         'workspace/fuchsia_build_config.bzl', fuchsia_build_config_content)
+
+    # Generate a platform mapping file to ensure that using --platforms=<value>
+    # also sets --cpu properly, as required by the Bazel SDK rules. See comments
+    # in template file for more details.
+    _BAZEL_CPU_MAP = {'x64': 'k8', 'arm64': 'aarch64'}
+    host_os = get_host_platform()
+    host_cpu = get_host_arch()
+    platform_mappings_content = expand_template_file(
+        'template.platform_mappings',
+        host_os=host_os,
+        host_cpu=host_cpu,
+        bazel_host_cpu=_BAZEL_CPU_MAP[host_cpu],
+    )
+    generated.add_file('workspace/platform_mappings', platform_mappings_content)
 
     # Generate the content of .bazelrc
     bazelrc_content = expand_template_file(

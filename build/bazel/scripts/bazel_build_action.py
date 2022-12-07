@@ -34,14 +34,6 @@ def copy_file_if_changed(src_path, dst_path):
             raise
 
 
-# Map Fuchsia-specific CPU architecture names to equivalent Bazel ones.
-# Also serves as an allowlist for the --bazel-cpu option.
-_BAZEL_CPU_MAP = {
-    'x64': 'k8',
-    'arm64': 'aarch64',
-}
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -72,12 +64,6 @@ def main():
     parser.add_argument(
         '--bazel-platform',
         help='Set the Bazel target/default platform for this action.')
-    parser.add_argument(
-        '--bazel-cpu',
-        choices=_BAZEL_CPU_MAP.keys(),
-        help=
-        'Set the Bazel --cpu value according to a Fuchsia-specific input value.'
-    )
     parser.add_argument(
         '--ninja-outputs',
         default=[],
@@ -143,9 +129,6 @@ For more details, see the comments in //build/bazel/legacy_ninja_build_outputs.g
 
     if args.bazel_platform:
         cmd.append('--platforms=' + args.bazel_platform)
-
-    if args.bazel_cpu:
-        cmd.append('--cpu=' + _BAZEL_CPU_MAP[args.bazel_cpu])
 
     cmd += [
         shlex.quote(arg) for arg in args.extra_bazel_args
