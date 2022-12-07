@@ -6,12 +6,12 @@
 
 #include <fidl/fuchsia.io/cpp/fidl.h>
 #include <lib/async/cpp/task.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/driver/component/cpp/start_args.h>
 #include <lib/fdf/cpp/dispatcher.h>
 #include <lib/fdf/cpp/env.h>
 #include <lib/fit/defer.h>
 #include <lib/fit/function.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 #include <lib/syslog/cpp/macros.h>
 #include <zircon/dlfcn.h>
 

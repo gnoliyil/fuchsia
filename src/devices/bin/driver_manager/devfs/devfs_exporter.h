@@ -6,7 +6,7 @@
 #define SRC_DEVICES_BIN_DRIVER_MANAGER_DEVFS_DEVFS_EXPORTER_H_
 
 #include <fidl/fuchsia.device.fs/cpp/wire.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 
 #include "src/devices/bin/driver_manager/devfs/devfs.h"
 

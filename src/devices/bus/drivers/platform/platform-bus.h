@@ -36,7 +36,7 @@
 #include <fbl/auto_lock.h>
 #include <fbl/mutex.h>
 #include <fbl/vector.h>
-#include <sdk/lib/sys/component/cpp/outgoing_directory.h>
+#include <sdk/lib/component/outgoing/cpp/outgoing_directory.h>
 
 #include "platform-device.h"
 #include "proxy-protocol.h"

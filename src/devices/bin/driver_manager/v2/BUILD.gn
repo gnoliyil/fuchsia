@@ -29,8 +29,8 @@ source_set("driver_runner") {
 
   deps = [
     "//sdk/lib/component/incoming/cpp",
+    "//sdk/lib/component/outgoing/cpp",
     "//sdk/lib/driver/component/cpp:cpp",
-    "//sdk/lib/sys/component/cpp",
     "//src/bringup/lib/mexec",
     "//src/devices/bin/driver_manager:binding",
     "//src/devices/bin/driver_manager/node_group:lib",

@@ -6,13 +6,13 @@
 
 #include <fuchsia/hardware/sysmem/c/banjo.h>
 #include <lib/async/cpp/executor.h>
+#include <lib/component/outgoing/cpp/handlers.h>
 #include <lib/ddk/debug.h>
 #include <lib/ddk/driver.h>
 #include <lib/ddk/metadata.h>
 #include <lib/fidl-async/cpp/bind.h>
 #include <lib/fit/defer.h>
 #include <lib/fpromise/promise.h>
-#include <lib/sys/component/cpp/handlers.h>
 #include <zircon/errors.h>
 #include <zircon/syscalls/resource.h>
 #include <zircon/types.h>

@@ -36,11 +36,11 @@
 #include <fuchsia/hardware/usb/phy/cpp/banjo.h>
 #include <fuchsia/hardware/vreg/cpp/banjo.h>
 #include <lib/async/cpp/wait.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/ddk/device.h>
 #include <lib/ddk/driver.h>
 #include <lib/ddk/fragment-device.h>
 #include <lib/sync/completion.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 #include <lib/zx/channel.h>
 
 #include <ddktl/device.h>

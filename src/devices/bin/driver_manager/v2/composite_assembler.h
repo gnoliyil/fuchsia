@@ -7,8 +7,8 @@
 
 #include <fidl/fuchsia.device.composite/cpp/fidl.h>
 #include <fidl/fuchsia.device.manager/cpp/fidl.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/inspect/cpp/inspect.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 
 #include "src/devices/bin/driver_manager/binding.h"
 #include "src/devices/bin/driver_manager/v2/node.h"

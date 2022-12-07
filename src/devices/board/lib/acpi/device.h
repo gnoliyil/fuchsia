@@ -5,10 +5,10 @@
 #ifndef SRC_DEVICES_BOARD_LIB_ACPI_DEVICE_H_
 #define SRC_DEVICES_BOARD_LIB_ACPI_DEVICE_H_
 #include <fidl/fuchsia.hardware.acpi/cpp/wire.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/ddk/binding.h>
 #include <lib/fpromise/promise.h>
 #include <lib/svc/outgoing.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 #include <zircon/compiler.h>
 
 #include <cstdint>

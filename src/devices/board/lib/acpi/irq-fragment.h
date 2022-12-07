@@ -6,7 +6,7 @@
 #define SRC_DEVICES_BOARD_LIB_ACPI_IRQ_FRAGMENT_H_
 
 #include <fidl/fuchsia.hardware.interrupt/cpp/wire.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 
 #include <ddktl/device.h>
 

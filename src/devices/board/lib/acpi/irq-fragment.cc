@@ -7,8 +7,8 @@
 #include "ddktl/device.h"
 #include "fbl/string_printf.h"
 #include "fidl/fuchsia.hardware.interrupt/cpp/wire_messaging.h"
-#include "lib/sys/component/cpp/handlers.h"
-#include "lib/sys/component/cpp/outgoing_directory.h"
+#include "lib/component/outgoing/cpp/handlers.h"
+#include "lib/component/outgoing/cpp/outgoing_directory.h"
 #include "src/devices/board/lib/acpi/device.h"
 
 namespace acpi {

@@ -9,8 +9,8 @@
 #include <fidl/fuchsia.process.lifecycle/cpp/wire.h>
 #include <lib/async-loop/cpp/loop.h>
 #include <lib/component/incoming/cpp/service_client.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/fdio/directory.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 #include <lib/zx/resource.h>
 #include <lib/zx/vmo.h>
 

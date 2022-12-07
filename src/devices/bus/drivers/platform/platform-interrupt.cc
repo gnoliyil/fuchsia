@@ -5,10 +5,10 @@
 #include "platform-interrupt.h"
 
 #include <fidl/fuchsia.hardware.interrupt/cpp/markers.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/ddk/binding_priv.h>
 #include <lib/ddk/device.h>
 #include <lib/ddk/platform-defs.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 
 #include "src/devices/bus/drivers/platform/platform-device.h"
 

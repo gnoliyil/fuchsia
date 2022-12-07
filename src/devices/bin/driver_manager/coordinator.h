@@ -14,11 +14,11 @@
 #include <fidl/fuchsia.hardware.power.statecontrol/cpp/wire.h>
 #include <fidl/fuchsia.power.manager/cpp/wire.h>
 #include <lib/async/cpp/wait.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/ddk/binding.h>
 #include <lib/ddk/device.h>
 #include <lib/fidl/cpp/wire/server.h>
 #include <lib/stdcompat/optional.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 #include <lib/zircon-internal/thread_annotations.h>
 #include <lib/zx/channel.h>
 #include <lib/zx/event.h>

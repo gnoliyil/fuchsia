@@ -7,8 +7,8 @@
 
 #include <fidl/fuchsia.hardware.google.ec/cpp/wire_messaging.h>
 #include <lib/async-loop/cpp/loop.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/inspect/cpp/inspect.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 
 #include <ddktl/device.h>
 

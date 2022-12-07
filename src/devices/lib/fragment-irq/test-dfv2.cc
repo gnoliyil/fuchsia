@@ -4,8 +4,8 @@
 
 #include <fidl/fuchsia.component.runner/cpp/fidl.h>
 #include <fidl/fuchsia.hardware.interrupt/cpp/fidl.h>
-#include <lib/sys/component/cpp/handlers.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
+#include <lib/component/outgoing/cpp/handlers.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 
 #include <gtest/gtest.h>
 

@@ -99,8 +99,8 @@ source_set("common") {
 
     # TODO(fxb/38132): Migrate to the new bind rules and delete the below
     "//sdk/lib/component/incoming/cpp",
+    "//sdk/lib/component/outgoing/cpp",
     "//sdk/lib/fidl",
-    "//sdk/lib/sys/component/cpp",
     "//src/lib/ddk:ddk-deprecated-binding-headers",
     "//src/lib/ddktl",
     "//src/lib/storage/vfs/cpp",
@@ -240,8 +240,8 @@ test("driver_host_test") {
     "//sdk/fidl/fuchsia.device.test:fuchsia.device.test_cpp_wire",
     "//sdk/fidl/fuchsia.driver.development:fuchsia.driver.development_hlcpp",
     "//sdk/lib/component/incoming/cpp",
+    "//sdk/lib/component/outgoing/cpp",
     "//sdk/lib/inspect/testing/cpp:zxtest",
-    "//sdk/lib/sys/component/cpp",
     "//sdk/lib/sys/cpp",
     "//src/devices/testing/devmgr-integration-test-shim",
     "//src/devices/testing/driver-integration-test-shim",

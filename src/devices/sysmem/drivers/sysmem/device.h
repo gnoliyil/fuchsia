@@ -14,12 +14,12 @@
 #include <lib/async-loop/cpp/loop.h>
 #include <lib/async/cpp/wait.h>
 #include <lib/closure-queue/closure_queue.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/ddk/debug.h>
 #include <lib/ddk/device.h>
 #include <lib/ddk/driver.h>
 #include <lib/fit/thread_checker.h>
 #include <lib/inspect/cpp/inspect.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 #include <lib/zx/bti.h>
 #include <lib/zx/channel.h>
 

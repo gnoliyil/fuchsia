@@ -7,7 +7,7 @@
 
 #include <fidl/fuchsia.hardware.interrupt/cpp/wire_messaging.h>
 #include <fidl/fuchsia.hardware.platform.bus/cpp/fidl.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 
 #include <ddktl/device.h>
 

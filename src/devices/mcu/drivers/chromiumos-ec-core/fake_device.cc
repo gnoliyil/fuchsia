@@ -5,8 +5,8 @@
 #include "src/devices/mcu/drivers/chromiumos-ec-core/fake_device.h"
 
 #include <fidl/fuchsia.hardware.google.ec/cpp/wire_test_base.h>
+#include <lib/component/outgoing/cpp/handlers.h>
 #include <lib/ddk/debug.h>
-#include <lib/sys/component/cpp/handlers.h>
 
 #include <memory>
 

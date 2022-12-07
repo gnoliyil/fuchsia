@@ -4,11 +4,11 @@
 
 #include <fidl/fuchsia.driverhost.test/cpp/wire.h>
 #include <lib/component/incoming/cpp/service_client.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/driver/component/cpp/start_args.h>
 #include <lib/driver/record/record.h>
 #include <lib/fdio/directory.h>
 #include <lib/fidl/epitaph.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 
 namespace fdf = fuchsia_driver_framework;
 namespace ftest = fuchsia_driverhost_test;

@@ -6,7 +6,7 @@
 #define SRC_DEVICES_BIN_DRIVER_MANAGER_V2_DRIVER_DEVELOPMENT_SERVICE_H_
 
 #include <fidl/fuchsia.driver.development/cpp/wire.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 
 #include "fidl/fuchsia.driver.development/cpp/markers.h"
 #include "src/devices/bin/driver_manager/v2/driver_runner.h"

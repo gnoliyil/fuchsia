@@ -58,8 +58,8 @@ source_set("test-common") {
   public_deps = [
     ":core",
     "//sdk/fidl/fuchsia.hardware.google.ec:fuchsia.hardware.google.ec_cpp_wire_testing",
+    "//sdk/lib/component/outgoing/cpp",
     "//sdk/lib/inspect/testing/cpp:zxtest",
-    "//sdk/lib/sys/component/cpp:cpp",
     "//src/devices/lib/acpi/mock:mock-acpi",
     "//src/devices/testing/mock-ddk",
     "//zircon/system/ulib/zxtest",

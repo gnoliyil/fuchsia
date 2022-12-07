@@ -5,8 +5,8 @@
 #include <fidl/fuchsia.hardware.google.ec/cpp/markers.h>
 #include <fidl/fuchsia.hardware.google.ec/cpp/wire_test_base.h>
 #include <lib/async/dispatcher.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/inspect/testing/cpp/zxtest/inspect.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 
 #include <unordered_map>
 #include <utility>

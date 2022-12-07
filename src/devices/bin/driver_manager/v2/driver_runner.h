@@ -11,12 +11,12 @@
 #include <fidl/fuchsia.driver.index/cpp/wire.h>
 #include <fidl/fuchsia.ldsvc/cpp/wire.h>
 #include <lib/async/cpp/wait.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/fidl/cpp/wire/client.h>
 #include <lib/fidl/cpp/wire/wire_messaging.h>
 #include <lib/fit/function.h>
 #include <lib/fpromise/promise.h>
 #include <lib/inspect/cpp/inspect.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 #include <lib/zircon-internal/thread_annotations.h>
 #include <lib/zx/result.h>
 

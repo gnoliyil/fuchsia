@@ -6,9 +6,9 @@
 #include <fidl/fuchsia.inspect/cpp/wire.h>
 #include <lib/async-loop/cpp/loop.h>
 #include <lib/async-loop/default.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/fdf/env.h>
 #include <lib/inspect/service/cpp/service.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 #include <lib/syslog/cpp/macros.h>
 #include <lib/trace-provider/provider.h>
 #include <lib/vfs/cpp/pseudo_dir.h>
