@@ -5,7 +5,6 @@
 #ifndef SRC_MEDIA_AUDIO_DRIVERS_LIB_INTEL_HDA_INCLUDE_INTEL_HDA_UTILS_UTILS_H_
 #define SRC_MEDIA_AUDIO_DRIVERS_LIB_INTEL_HDA_INCLUDE_INTEL_HDA_UTILS_UTILS_H_
 
-#include <lib/edid/edid.h>
 #include <lib/fit/function.h>
 #include <lib/zx/bti.h>
 #include <lib/zx/channel.h>
@@ -22,6 +21,8 @@
 #include <fbl/ref_ptr.h>
 #include <fbl/vector.h>
 #include <intel-hda/utils/codec-caps.h>
+
+#include "src/graphics/display/lib/edid/edid.h"
 
 namespace audio {
 namespace intel_hda {

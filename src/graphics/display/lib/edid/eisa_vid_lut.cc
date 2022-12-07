@@ -6,16 +6,14 @@
 // UEFI.  It can be found at http://www.uefi.org/pnp_id_list
 //
 // If new entries are to be added, the table *must* remain sorted in order of
-#include <iterator>
 // ascending EISA vendor ID.
+
+#include "src/graphics/display/lib/edid/eisa_vid_lut.h"
 
 #include <zircon/assert.h>
 
 #include <algorithm>
-
-#include <fbl/algorithm.h>
-
-#include "eisa_vid_lut.h"
+#include <iterator>
 
 namespace {
 

@@ -6,6 +6,7 @@ group("tests") {
   testonly = true
   deps = [
     "designware:tests",
+    "edid:tests",
     "rust:tests",
   ]
 }

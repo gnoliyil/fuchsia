@@ -5,7 +5,7 @@
 source_set("eld") {
   sources = [ "eld.h" ]
   public_deps = [
-    "//zircon/system/ulib/edid",
+    "//src/graphics/display/lib/edid",
     "//zircon/system/ulib/hwreg",
   ]
 }

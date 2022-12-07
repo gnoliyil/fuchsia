@@ -2,7 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#pragma once
+#ifndef SRC_GRAPHICS_DISPLAY_LIB_EDID_TIMINGS_H_
+#define SRC_GRAPHICS_DISPLAY_LIB_EDID_TIMINGS_H_
 
 #include <inttypes.h>
 
@@ -45,3 +46,5 @@ extern const uint32_t cea_timings_count;
 
 }  // namespace internal
 }  // namespace edid
+
+#endif  // SRC_GRAPHICS_DISPLAY_LIB_EDID_TIMINGS_H_

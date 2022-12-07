@@ -6,7 +6,6 @@
 
 #include <lib/ddk/debug.h>
 #include <lib/ddk/driver.h>
-#include <lib/edid/edid.h>
 #include <lib/mmio/mmio-buffer.h>
 #include <lib/stdcompat/span.h>
 #include <lib/zx/time.h>

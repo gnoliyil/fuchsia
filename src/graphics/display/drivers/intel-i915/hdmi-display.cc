@@ -5,7 +5,6 @@
 #include "src/graphics/display/drivers/intel-i915/hdmi-display.h"
 
 #include <lib/ddk/driver.h>
-#include <lib/edid/edid.h>
 
 #include <iterator>
 

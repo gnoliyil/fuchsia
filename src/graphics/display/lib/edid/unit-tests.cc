@@ -2,9 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <lib/edid/edid.h>
+#include <algorithm>
+#include <iterator>
 
 #include <zxtest/zxtest.h>
+
+#include "src/graphics/display/lib/edid/edid.h"
 
 TEST(EdidTest, CaeValidationDtdOverflow) {
   edid::CeaEdidTimingExtension cea = {};

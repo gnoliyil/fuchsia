@@ -2,7 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#pragma once
+#ifndef SRC_GRAPHICS_DISPLAY_LIB_EDID_EISA_VID_LUT_H_
+#define SRC_GRAPHICS_DISPLAY_LIB_EDID_EISA_VID_LUT_H_
 
 #include <zircon/compiler.h>
 #include <zircon/types.h>
@@ -18,3 +19,5 @@ __BEGIN_CDECLS
 const char* lookup_eisa_vid(uint32_t eisa_vid);
 
 __END_CDECLS
+
+#endif  // SRC_GRAPHICS_DISPLAY_LIB_EDID_EISA_VID_LUT_H_

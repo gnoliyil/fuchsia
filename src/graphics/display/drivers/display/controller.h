@@ -14,7 +14,6 @@
 #include <lib/async-loop/cpp/loop.h>
 #include <lib/async-loop/default.h>
 #include <lib/async/cpp/wait.h>
-#include <lib/edid/edid.h>
 #include <lib/fidl-utils/bind.h>
 #include <lib/fit/function.h>
 #include <lib/inspect/cpp/inspect.h>
@@ -37,6 +36,7 @@
 #include "src/graphics/display/drivers/display/id-map.h"
 #include "src/graphics/display/drivers/display/image.h"
 #include "src/graphics/display/drivers/display/util.h"
+#include "src/graphics/display/lib/edid/edid.h"
 #include "src/lib/async-watchdog/watchdog.h"
 
 namespace display {

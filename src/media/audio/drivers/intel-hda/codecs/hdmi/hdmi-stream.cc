@@ -5,7 +5,6 @@
 #include "hdmi-stream.h"
 
 #include <lib/ddk/debug.h>
-#include <lib/edid/edid.h>
 #include <lib/zx/clock.h>
 
 #include <algorithm>
@@ -18,6 +17,8 @@
 #include <intel-hda/utils/codec-state.h>
 #include <intel-hda/utils/utils.h>
 #include <src/lib/eld/eld.h>
+
+#include "src/graphics/display/lib/edid/edid.h"
 
 DECLARE_STATIC_SLAB_ALLOCATOR_STORAGE(audio::intel_hda::codecs::HdmiStream::PCAT, 16);
 #define THUNK(_method) (&HdmiStream::_method)

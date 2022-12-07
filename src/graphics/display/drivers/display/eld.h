@@ -5,9 +5,9 @@
 #ifndef SRC_GRAPHICS_DISPLAY_DRIVERS_DISPLAY_ELD_H_
 #define SRC_GRAPHICS_DISPLAY_DRIVERS_DISPLAY_ELD_H_
 
-#include <lib/edid/edid.h>
-
 #include <fbl/array.h>
+
+#include "src/graphics/display/lib/edid/edid.h"
 
 namespace display {
 

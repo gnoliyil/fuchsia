@@ -10,7 +10,6 @@
 #include <lib/async/cpp/task.h>
 #include <lib/ddk/debug.h>
 #include <lib/ddk/trace/event.h>
-#include <lib/edid/edid.h>
 #include <lib/fidl/cpp/wire/server.h>
 #include <lib/fit/defer.h>
 #include <lib/image-format/image_format.h>
@@ -39,6 +38,7 @@
 #include <fbl/string_printf.h>
 
 #include "src/graphics/display/drivers/display/util.h"
+#include "src/graphics/display/lib/edid/edid.h"
 #include "src/lib/fsl/handles/object_info.h"
 
 namespace fhd = fuchsia_hardware_display;

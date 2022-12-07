@@ -2,12 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#ifndef LIB_EDID_EDID_H_2
-#define LIB_EDID_EDID_H_2
-
-#include <lib/edid/edid.h>
+#ifndef SRC_LIB_ELD_ELD_H_
+#define SRC_LIB_ELD_ELD_H_
 
 #include <hwreg/bitfields.h>
+
+#include "src/graphics/display/lib/edid/edid.h"
 
 namespace hda {
 
@@ -51,4 +51,4 @@ struct EldBaselinePart1 {
 
 }  // namespace hda
 
-#endif  // LIB_EDID_EDID_H_2
+#endif  // SRC_LIB_ELD_ELD_H_

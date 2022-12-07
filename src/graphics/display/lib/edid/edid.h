@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#ifndef LIB_EDID_EDID_H_
-#define LIB_EDID_EDID_H_
+#ifndef SRC_GRAPHICS_DISPLAY_LIB_EDID_EDID_H_
+#define SRC_GRAPHICS_DISPLAY_LIB_EDID_EDID_H_
 
 #include <stddef.h>
 #include <stdint.h>
@@ -13,7 +13,7 @@
 
 #include <hwreg/bitfields.h>
 
-#include "lib/edid/timings.h"
+#include "src/graphics/display/lib/edid/timings.h"
 
 namespace edid {
 
@@ -462,4 +462,4 @@ class audio_data_block_iterator {
 
 }  // namespace edid
 
-#endif  // LIB_EDID_EDID_H_
+#endif  // SRC_GRAPHICS_DISPLAY_LIB_EDID_EDID_H_
