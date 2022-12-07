@@ -199,12 +199,15 @@ zx::result<zx::channel> RecursiveWaitForFile(const int dir_fd, const char* path)
 
 __EXPORT
 zx::result<zx::channel> RecursiveWaitForFile(const char* path) {
-  constexpr char kDevPath[] = "/dev/";
   const std::string_view target{path};
-  const size_t dev = target.find(kDevPath);
-  if (dev != 0) {
+  if (const size_t first_slash = target.find_first_of('/'); first_slash != 0) {
+    // Relative paths are not supported.
     return zx::error(ZX_ERR_NOT_SUPPORTED);
   }
+  const size_t second_slash = target.find_first_of('/', 1);
+  const size_t split_point = second_slash == std::string::npos ? 1 : second_slash + 1;
+  const std::string_view directory = target.substr(0, split_point);
+  const std::string_view rest = target.substr(split_point);
 
   zx::channel client, server;
   if (zx_status_t status = zx::channel::create(0, &client, &server); status != ZX_OK) {
@@ -212,7 +215,7 @@ zx::result<zx::channel> RecursiveWaitForFile(const char* path) {
   }
 
   if (zx_status_t status =
-          fdio_open(kDevPath,
+          fdio_open(std::string(directory).c_str(),
                     static_cast<uint32_t>(fuchsia_io::wire::OpenFlags::kRightReadable |
                                           fuchsia_io::wire::OpenFlags::kDirectory),
                     server.release());
@@ -225,7 +228,7 @@ zx::result<zx::channel> RecursiveWaitForFile(const char* path) {
     return zx::error(status);
   }
   const auto close_dir = fit::defer([dir_fd]() { close(dir_fd); });
-  return RecursiveWaitForFile(dir_fd, target.substr(dev + std::string_view{kDevPath}.length()));
+  return RecursiveWaitForFile(dir_fd, rest);
 }
 
 }  // namespace device_watcher

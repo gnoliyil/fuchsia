@@ -21,7 +21,7 @@ namespace device_watcher {
 zx::result<zx::channel> RecursiveWaitForFile(int dir_fd, const char* path);
 
 // Waits for the absolute |path| to appear, and opens it.
-// NOTE: This only works for paths starting with /dev/,
+// NOTE: This only works for absolute paths,
 // otherwise it will return ZX_ERR_NOT_SUPPORTED.
 zx::result<zx::channel> RecursiveWaitForFile(const char* path);
 
