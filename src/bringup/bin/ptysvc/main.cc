@@ -3,8 +3,8 @@
 // found in the LICENSE file.
 
 #include <lib/async-loop/cpp/loop.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/fdio/directory.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 #include <lib/zx/eventpair.h>
 #include <zircon/process.h>
 #include <zircon/processargs.h>

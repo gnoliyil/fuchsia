@@ -9,7 +9,7 @@
 #include <fidl/fuchsia.sys2/cpp/wire_test_base.h>
 #include <lib/async-loop/cpp/loop.h>
 #include <lib/async-loop/default.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/syslog/cpp/macros.h>
 
 #include <cstring>

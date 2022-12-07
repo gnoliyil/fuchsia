@@ -90,8 +90,8 @@ source_set("tests_base") {
   testonly = true
   public_deps = [
     ":lib",
+    "//sdk/lib/component/outgoing/cpp",
     "//sdk/lib/fdio",
-    "//sdk/lib/sys/component/cpp",
     "//sdk/lib/sys/cpp",
     "//sdk/testing/fidl:test",
     "//sdk/testing/fidl:test_support",

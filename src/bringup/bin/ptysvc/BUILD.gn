@@ -10,7 +10,7 @@ executable("ptysvc") {
   sources = [ "main.cc" ]
   deps = [
     ":common",
-    "//sdk/lib/sys/component/cpp",
+    "//sdk/lib/component/outgoing/cpp",
     "//src/sys/lib/stdout-to-debuglog/cpp",
     "//zircon/system/ulib/async-loop:async-loop-cpp",
     "//zircon/system/ulib/fidl-async:fidl-async-cpp",
