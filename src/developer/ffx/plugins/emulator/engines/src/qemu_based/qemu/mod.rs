@@ -10,7 +10,7 @@
 use crate::{qemu_based::QemuBasedEngine, serialization::SerializingEngine};
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
-use ffx_emulator_common::{config::QEMU_TOOL, process};
+use ffx_emulator_common::{config::QEMU_TOOL, process, target::remove_target};
 use ffx_emulator_config::{
     CpuArchitecture, EmulatorConfiguration, EmulatorEngine, EngineConsoleType, EngineState,
     EngineType, PointingDevice, ShowDetail,
@@ -71,13 +71,7 @@ impl EmulatorEngine for QemuEngine {
         emulator_cmd: Command,
         proxy: &ffx::TargetCollectionProxy,
     ) -> Result<i32> {
-        let result = self.run(emulator_cmd, proxy).await;
-        if result.is_ok() {
-            self.engine_state = EngineState::Running;
-        } else {
-            self.engine_state = EngineState::Error;
-        }
-        result
+        self.run(emulator_cmd, proxy).await
     }
 
     fn show(&self, details: Vec<ShowDetail>) {
@@ -85,16 +79,12 @@ impl EmulatorEngine for QemuEngine {
     }
 
     async fn stop(&mut self, proxy: &ffx::TargetCollectionProxy) -> Result<()> {
-        // Extract values from the self here, since there are sharing issues with trying to call
-        // shutdown_emulator from another thread.
-        let target_id = &self.emulator_configuration.runtime.name;
-        let result = Self::stop_emulator(self.is_running(), self.get_pid(), target_id, proxy).await;
-        if result.is_ok() {
-            self.engine_state = EngineState::Staged;
-        } else {
-            self.engine_state = EngineState::Error;
+        let name = &self.emu_config().runtime.name;
+        if let Err(e) = remove_target(proxy, name).await {
+            // Even if we can't remove it, still continue shutting down.
+            tracing::warn!("Couldn't remove target from ffx during shutdown: {:?}", e);
         }
-        result
+        self.stop_emulator()
     }
 
     fn configure(&mut self) -> Result<()> {

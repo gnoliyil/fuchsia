@@ -434,12 +434,12 @@ pub(crate) trait QemuBasedEngine: EmulatorEngine + SerializingEngine {
                     return Ok(0);
                 }
                 Err(e) => {
-                    let running = self.is_running();
-                    let pid = self.get_pid();
-                    let target_id = self.emu_config().runtime.name.clone();
-                    if let Some(stop_error) =
-                        Self::stop_emulator(running, pid, &target_id, proxy).await.err()
-                    {
+                    let name = &self.emu_config().runtime.name;
+                    if let Err(e) = remove_target(proxy, name).await {
+                        // Even if we can't remove it, still continue shutting down.
+                        tracing::warn!("Couldn't remove target from ffx during shutdown: {:?}", e);
+                    }
+                    if let Some(stop_error) = self.stop_emulator().err() {
                         tracing::debug!(
                             "Error encountered in stop when handling failed launch: {:?}",
                             stop_error
@@ -599,37 +599,15 @@ pub(crate) trait QemuBasedEngine: EmulatorEngine + SerializingEngine {
         }
     }
 
-    /// The parameters here may be a bit unintuitive: because stop_emulator is called from
-    /// run(), it can't receive "self" as a parameter. Since both are running async (required for
-    /// calls to add_target/remove_target), they run in separate threads, and self can't be safely
-    /// shared across threads. Instead, we pull only those variables we need for stop out of
-    /// "self" and pass them in explicitly.
-    ///
-    /// running:    Boolean to indicate that the engine specified is active.
-    ///             Typically comes from `engine::is_running();`.
-    /// pid:        The process ID of the running emulator; used to send a signal to the process to
-    ///             cause termination.
-    /// target_id:  This is the engine name, used to issue a `ffx target remove` command.
-    /// proxy:      The interface to the `ffx target` backend, provided by the ffx front-end as a
-    ///             parameter to the plugin subcommands. Used to issue a `ffx target remove`
-    ///             command.
-    async fn stop_emulator(
-        running: bool,
-        pid: u32,
-        target_id: &str,
-        proxy: &ffx::TargetCollectionProxy,
-    ) -> Result<()> {
-        if let Err(e) = remove_target(proxy, target_id).await {
-            // Even if we can't remove it, still continue shutting down.
-            tracing::warn!("Couldn't remove target from ffx during shutdown: {:?}", e);
-        }
-        if running {
-            println!("Terminating running instance {:?}", pid);
-            if let Some(terminate_error) = process::terminate(pid).err() {
+    fn stop_emulator(&mut self) -> Result<()> {
+        if self.is_running() {
+            println!("Terminating running instance {:?}", self.get_pid());
+            if let Some(terminate_error) = process::terminate(self.get_pid()).err() {
                 tracing::warn!("Error encountered terminating process: {:?}", terminate_error);
             }
         }
-        Ok(())
+        self.set_engine_state(EngineState::Staged);
+        self.save_to_disk()
     }
 
     /// Access to the engine's pid field.
