@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/components.gni")
 import("//build/components/fuchsia_test_package.gni")
 import("//build/components/fuchsia_unittest_component.gni")
 import("//build/components/fuchsia_unittest_package.gni")
@@ -97,4 +98,55 @@ group("tests") {
   if (host_os == "linux") {
     deps += [ ":socket_benchmarks($host_toolchain)" ]
   }
+}
+
+####################
+# Perftest Section #
+####################
+
+fuchsia_test_component("socket_benchmark_component") {
+  component_name = "socket_benchmark"
+  manifest = "meta/socket-benchmarks-perftest.cml"
+  deps = [ ":socket_benchmarks" ]
+}
+
+fuchsia_test_component("socket_benchmark_with_fast_udp_component") {
+  component_name = "socket_benchmark_with_fast_udp"
+  manifest = "meta/socket-benchmarks-with-fast-udp-perftest.cml"
+  deps = [ ":socket_benchmarks" ]
+}
+
+fuchsia_test_component("socket_benchmark_with_netstack3_component") {
+  component_name = "socket_benchmark_with_netstack3"
+  manifest = "meta/socket-benchmarks-with-netstack3-perftest.cml"
+  deps = [ ":socket_benchmarks" ]
+}
+
+fuchsia_test_component("socket_benchmark_with_fake_netstack_component") {
+  component_name = "socket_benchmark_with_fake_netstack"
+  manifest = "meta/socket-benchmarks-with-fake-netstack-perftest.cml"
+  deps = [ ":socket_benchmarks" ]
+}
+
+fuchsia_test_component("udp_serde_benchmark_component") {
+  component_name = "udp_serde_benchmark"
+  manifest = "meta/udp-serde-benchmarks-perftest.cml"
+  deps = [ ":udp_serde_benchmarks" ]
+}
+
+fuchsia_test_package("netstack_perftest_pkg") {
+  package_name = "netstack-perftest"
+  test_components = [
+    ":socket_benchmark_component",
+    ":socket_benchmark_with_fake_netstack_component",
+    ":socket_benchmark_with_fast_udp_component",
+    ":socket_benchmark_with_netstack3_component",
+    ":udp_serde_benchmark_component",
+  ]
+  deps = [
+    "//src/connectivity/network/netstack:component",
+    "//src/connectivity/network/netstack:component-with-fast-udp",
+    "//src/connectivity/network/netstack3:component",
+    "//src/connectivity/network/tests/benchmarks/fake-netstack",
+  ]
 }

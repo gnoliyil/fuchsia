@@ -13,5 +13,6 @@ group("tests") {
     "web:simple_png_web_system_validation_test_pkg",
     "web:simple_video_web_system_validation_test_pkg",
     "//src/chromium:web_engine",
+    "//src/connectivity/network/tests/benchmarks:netstack_perftest_pkg",
   ]
 }
