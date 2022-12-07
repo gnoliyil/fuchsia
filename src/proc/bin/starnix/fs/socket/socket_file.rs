@@ -154,16 +154,44 @@ impl SocketFile {
         deadline: Option<zx::Time>,
     ) -> Result<MessageReadInfo, Errno> {
         // TODO: Implement more `flags`.
+        let mut read_all_buffers = UserBufferIterator::new(data);
+        let mut read_all_info = MessageReadInfo::default();
 
-        let op = || {
-            let mut user_buffers = UserBufferIterator::new(data);
-            self.socket.read(current_task, &mut user_buffers, flags).map(BlockableOpsResult::Done)
+        let mut op = || {
+            if self.wait_all(current_task, flags) {
+                self.socket.read(current_task, &mut read_all_buffers, flags).map(|mut read_info| {
+                    read_all_info.append(&mut read_info);
+                    read_all_info.address = read_info.address;
+
+                    if read_all_buffers.remaining() > 0 {
+                        BlockableOpsResult::Partial(read_all_info.clone())
+                    } else {
+                        BlockableOpsResult::Done(read_all_info.clone())
+                    }
+                })
+            } else {
+                let mut user_buffers = UserBufferIterator::new(data);
+                self.socket
+                    .read(current_task, &mut user_buffers, flags)
+                    .map(BlockableOpsResult::Done)
+            }
         };
+
         if flags.contains(SocketMessageFlags::DONTWAIT) {
             op().map(BlockableOpsResult::value)
         } else {
             let deadline = deadline.or_else(|| self.socket.receive_timeout().map(zx::Time::after));
-            file.blocking_op(current_task, op, FdEvents::POLLIN | FdEvents::POLLHUP, deadline)
+            match file.blocking_op(current_task, op, FdEvents::POLLIN | FdEvents::POLLHUP, deadline)
+            {
+                Err(e) if e == EAGAIN && self.wait_all(current_task, flags) => Ok(read_all_info),
+                result => result,
+            }
         }
+    }
+
+    fn wait_all(&self, current_task: &CurrentTask, flags: SocketMessageFlags) -> bool {
+        self.socket.socket_type == SocketType::Stream
+            && flags.contains(SocketMessageFlags::WAITALL)
+            && !(self.socket.query_events(current_task) & FdEvents::POLLHUP)
     }
 }

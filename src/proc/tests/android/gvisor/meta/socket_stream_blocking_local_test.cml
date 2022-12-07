@@ -5,8 +5,5 @@
     include: [ "//src/proc/tests/android/gvisor/meta/gvisor.shard.cml" ],
     program: {
         binary: "data/tests/socket_stream_blocking_local_test",
-
-        // Needs MSG_WAITALL.
-        args: [ "--gunit_filter=-*.RecvLessThanBufferWaitAll/*" ],
     },
 }

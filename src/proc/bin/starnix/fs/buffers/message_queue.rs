@@ -10,12 +10,21 @@ use crate::fs::FdEvents;
 use crate::task::Task;
 use crate::types::*;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct MessageReadInfo {
     pub bytes_read: usize,
     pub message_length: usize,
     pub address: Option<SocketAddress>,
     pub ancillary_data: Vec<AncillaryData>,
+}
+
+impl MessageReadInfo {
+    /// Appends `info` to self.
+    pub fn append(&mut self, info: &mut MessageReadInfo) {
+        self.bytes_read += info.bytes_read;
+        self.message_length += info.message_length;
+        self.ancillary_data.append(&mut info.ancillary_data);
+    }
 }
 
 /// A `MessageQueue` stores a FIFO sequence of messages.

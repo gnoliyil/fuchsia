@@ -8,7 +8,7 @@ use crate::fs::buffers::*;
 use crate::fs::fuchsia::*;
 use crate::fs::*;
 use crate::logging::not_implemented;
-use crate::mm::MemoryAccessorExt;
+use crate::mm::{MemoryAccessor, MemoryAccessorExt};
 use crate::task::*;
 use crate::types::*;
 use fidl::endpoints::ProtocolMarker;
@@ -144,7 +144,7 @@ impl InetSocket {
         flags: SocketMessageFlags,
     ) -> Result<RecvMessageInfo, Errno> {
         self.zxio
-            .recvmsg(iovec_length, flags.bits() & !MSG_DONTWAIT)
+            .recvmsg(iovec_length, flags.bits() & !MSG_DONTWAIT & !MSG_WAITALL)
             .map_err(|status| from_status_like_fdio!(status))?
             .map_err(|out_code| errno_from_zxio_code!(out_code))
     }
@@ -212,11 +212,15 @@ impl SocketOps for InetSocket {
         user_buffers: &mut UserBufferIterator<'_>,
         flags: SocketMessageFlags,
     ) -> Result<MessageReadInfo, Errno> {
-        let buffers = user_buffers.drain_to_vec();
-        let iovec_length = UserBuffer::get_total_length(&buffers)?;
+        let iovec_length = user_buffers.remaining();
         let info = self.recvmsg(iovec_length, flags)?;
 
-        current_task.mm.write_all(&buffers, &info.message)?;
+        let mut bytes_read = 0;
+        while let Some(user_buffer) = user_buffers.next(info.message_length - bytes_read) {
+            let bytes_chunk = &info.message[bytes_read..user_buffer.length];
+            current_task.mm.write_memory(user_buffer.address, bytes_chunk)?;
+            bytes_read += user_buffer.length;
+        }
 
         let address = if !info.address.is_empty() {
             Some(SocketAddress::from_bytes(info.address)?)
@@ -226,7 +230,7 @@ impl SocketOps for InetSocket {
 
         // TODO: Handle ancillary_data.
         Ok(MessageReadInfo {
-            bytes_read: info.message.len(),
+            bytes_read,
             message_length: info.message_length,
             address,
             ancillary_data: vec![],
