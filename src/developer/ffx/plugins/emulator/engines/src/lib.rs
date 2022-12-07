@@ -18,8 +18,8 @@ use serialization::read_from_disk;
 use anyhow::{bail, Context, Result};
 use ffx_emulator_common::instances::{get_instance_dir, SERIALIZE_FILE_NAME};
 use ffx_emulator_config::{
-    DeviceConfig, EmulatorConfiguration, EmulatorEngine, EngineType, FlagData, GuestConfig,
-    HostConfig, LogLevel, RuntimeConfig,
+    DeviceConfig, EmulatorConfiguration, EmulatorEngine, EngineState, EngineType, FlagData,
+    GuestConfig, HostConfig, LogLevel, RuntimeConfig,
 };
 use port_picker::{is_free_tcp_port, pick_unused_port};
 
@@ -138,11 +138,13 @@ impl EngineBuilder {
             EngineType::Femu => Box::new(FemuEngine {
                 emulator_configuration: self.emulator_configuration,
                 engine_type: self.engine_type,
+                engine_state: EngineState::Configured,
                 ..Default::default()
             }),
             EngineType::Qemu => Box::new(QemuEngine {
                 emulator_configuration: self.emulator_configuration,
                 engine_type: self.engine_type,
+                engine_state: EngineState::Configured,
                 ..Default::default()
             }),
         };
@@ -154,6 +156,10 @@ impl EngineBuilder {
 
         engine.emu_config_mut().flags = process_flag_template(engine.emu_config())
             .context("Failed to process the flags template file.")?;
+
+        engine
+            .save_to_disk()
+            .context("Failed to write the emulation configuration file to disk.")?;
 
         Ok(engine)
     }

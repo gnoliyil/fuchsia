@@ -177,6 +177,9 @@ mod tests {
         fn attach(&self, _console: EngineConsoleType) -> Result<()> {
             todo!()
         }
+        fn save_to_disk(&self) -> Result<()> {
+            todo!()
+        }
     }
 
     #[fuchsia_async::run_singlethreaded(test)]

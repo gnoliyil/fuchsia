@@ -84,6 +84,7 @@ pub async fn start(cmd: StartCommand, proxy: TargetCollectionProxy) -> Result<()
         println!("\n[emulator] Command line after Configuration: {:?}\n", emulator_cmd);
         println!("[emulator] With ENV: {:?}\n", emulator_cmd.get_envs());
         if cmd.dry_run {
+            engine.save_to_disk()?;
             return Ok(());
         }
     }

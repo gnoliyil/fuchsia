@@ -82,6 +82,8 @@ pub trait EmulatorEngine {
 
     /// Access to the engine's engine_state field.
     fn engine_state(&self) -> EngineState;
+
+    fn save_to_disk(&self) -> Result<()>;
 }
 
 /// Collects the specific configurations into a single struct for ease of passing around.

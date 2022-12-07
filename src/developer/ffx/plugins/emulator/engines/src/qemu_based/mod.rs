@@ -358,8 +358,7 @@ pub(crate) trait QemuBasedEngine: EmulatorEngine + SerializingEngine {
         emu_config.flags = process_flag_template(emu_config)
             .context("Failed to process the flags template file.")?;
 
-        self.write_to_disk(&self.emu_config().runtime.instance_directory)
-            .context("Failed to write the emulation configuration file to disk.")
+        Ok(())
     }
 
     async fn run(
@@ -401,8 +400,7 @@ pub(crate) trait QemuBasedEngine: EmulatorEngine + SerializingEngine {
         self.set_pid(child_arc.id());
         self.set_engine_state(EngineState::Running);
 
-        self.write_to_disk(&self.emu_config().runtime.instance_directory)
-            .context("Failed to write the emulation configuration file to disk.")?;
+        self.save_to_disk().context("Failed to write the emulation configuration file to disk.")?;
 
         let ssh = self.emu_config().host.port_map.get("ssh");
         let ssh_port = if let Some(ssh) = ssh { ssh.host } else { None };
@@ -504,7 +502,7 @@ pub(crate) trait QemuBasedEngine: EmulatorEngine + SerializingEngine {
                         }
 
                         self.set_engine_state(EngineState::Staged);
-                        self.write_to_disk(&self.emu_config().runtime.instance_directory)
+                        self.save_to_disk()
                             .context("Failed to write the emulation configuration file to disk.")?;
 
                         return Ok(1);
@@ -753,6 +751,9 @@ mod tests {
             todo!()
         }
         fn attach(&self, _console: EngineConsoleType) -> Result<()> {
+            todo!()
+        }
+        fn save_to_disk(&self) -> Result<()> {
             todo!()
         }
     }

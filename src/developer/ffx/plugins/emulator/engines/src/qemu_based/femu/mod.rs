@@ -47,14 +47,16 @@ impl FemuEngine {
 #[async_trait]
 impl EmulatorEngine for FemuEngine {
     async fn stage(&mut self) -> Result<()> {
-        <Self as QemuBasedEngine>::stage(&mut self).await?;
-        let result = self.validate_staging();
+        let result = <Self as QemuBasedEngine>::stage(&mut self)
+            .await
+            .and_then(|()| self.validate_staging());
         if result.is_ok() {
             self.engine_state = EngineState::Staged;
+            self.save_to_disk()
         } else {
             self.engine_state = EngineState::Error;
+            self.save_to_disk().with_context(|| format!("{:?}", result.unwrap_err()))
         }
-        result
     }
 
     async fn start(
@@ -181,6 +183,10 @@ impl EmulatorEngine for FemuEngine {
 
     fn emu_config_mut(&mut self) -> &mut EmulatorConfiguration {
         return &mut self.emulator_configuration;
+    }
+
+    fn save_to_disk(&self) -> Result<()> {
+        self.write_to_disk(&self.emu_config().runtime.instance_directory)
     }
 }
 
