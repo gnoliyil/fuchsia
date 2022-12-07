@@ -60,11 +60,45 @@ MATCHER_P(ValidReferenceClock, want_domain, "") {
   return true;
 }
 
-// Checks if a FakeGraphServer::CallType is an edge connecting source -> dest.
+// Checks if a FakeGraphServer::CallType is a `CreateEdge(source, dest)` call.
 MATCHER_P2(CreateEdgeEq, want_source, want_dest, "") {
   auto call = std::get_if<fuchsia_audio_mixer::GraphCreateEdgeRequest>(&arg);
   if (!call) {
     *result_listener << "got " << arg.index() << ", wanted a CreateEdge call";
+    return false;
+  }
+  if (!call->source_id() || !call->dest_id()) {
+    *result_listener << "missing ids";
+    return false;
+  }
+  if (*call->source_id() != want_source || *call->dest_id() != want_dest) {
+    *result_listener << "got edge " << *call->source_id() << "->" << *call->dest_id()
+                     << " want edge " << want_source << "->" << want_dest;
+    return false;
+  }
+  return true;
+}
+
+// Checks if a FakeGraphServer::CallType is a CreateEdge call with the given gain controls.
+MATCHER_P(CreateEdgeWithGainControlsEq, want_gain_controls, "") {
+  auto call = std::get_if<fuchsia_audio_mixer::GraphCreateEdgeRequest>(&arg);
+  if (!call) {
+    *result_listener << "got " << arg.index() << ", wanted a CreateEdge call";
+    return false;
+  }
+  if (!call->gain_controls()) {
+    *result_listener << "missing gain_controls";
+    return false;
+  }
+  return ExplainMatchResult(testing::UnorderedElementsAreArray(want_gain_controls),
+                            *call->gain_controls(), result_listener);
+}
+
+// Checks if a FakeGraphServer::CallType is a `DeleteEdge(source, dest)` call.
+MATCHER_P2(DeleteEdgeEq, want_source, want_dest, "") {
+  auto call = std::get_if<fuchsia_audio_mixer::GraphDeleteEdgeRequest>(&arg);
+  if (!call) {
+    *result_listener << "got " << arg.index() << ", wanted a DeleteEdge call";
     return false;
   }
   if (!call->source_id() || !call->dest_id()) {

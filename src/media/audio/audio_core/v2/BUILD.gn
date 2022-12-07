@@ -18,6 +18,8 @@ source_set("audio_core_lib") {
     "output_device_pipeline.h",
     "reference_clock.cc",
     "reference_clock.h",
+    "route_graph.cc",
+    "route_graph.h",
     "stream_sink_server.cc",
     "stream_sink_server.h",
     "task_barrier.h",
@@ -64,6 +66,7 @@ executable("unittest_bin") {
     "audio_renderer_server_unittest.cc",
     "input_device_pipeline_unittest.cc",
     "output_device_pipeline_unittest.cc",
+    "route_graph_unittest.cc",
     "stream_sink_server_unittest.cc",
   ]
 
