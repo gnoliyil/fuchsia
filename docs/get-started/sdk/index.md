@@ -299,7 +299,7 @@ Note: If your machine supports KVM hardware virtualization, see
 [Set up KVM virtualization on a Linux machine](#set-up-kvm-virtualization-on-a-linux-machine)
 to verify that KVM is configured correctly.
 
-On the other hand, for machines that **supports** AMD
+On the other hand, for machines that **support** AMD
 virtualization, you may see the following field in the output:
 
 ```none {:.devsite-disable-click-to-copy}
