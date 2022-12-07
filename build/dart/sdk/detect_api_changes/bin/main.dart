@@ -6,6 +6,7 @@
 // @dart=2.9
 
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:args/args.dart';
 import 'package:detect_api_changes/analyze.dart';
@@ -23,6 +24,8 @@ void main(List<String> arguments) async {
     ..addOption('fuchsia-root', help: 'root path of the fuchsia repo')
     ..addOption('fuchsia-build-root', help: 'root path of the out directory')
     ..addOption('depfile', help: 'depfile')
+    ..addOption('all-deps-sources-file',
+        help: 'source files for all dart deps.')
     ..addFlag('overwrite',
         defaultsTo: false, help: 'overwrite the golden API file');
 
@@ -88,6 +91,15 @@ void main(List<String> arguments) async {
     exit(1);
   }
 
+  String dartDepsSourcesFile = argResults['all-deps-sources-file'];
+  if (dartDepsSourcesFile == null) {
+    print('Missing required flag: all-deps-sources-file');
+    exit(1);
+  }
+  var dartDepsSources =
+      json.decode(await File(dartDepsSourcesFile).readAsString());
+  var dartDepsSourcesText = dartDepsSources.join(' ');
+
   // Analyze and save the new library.
   var dotPackagesFilePath = dotPackagesFile.absolute.path;
   var dotPackagesFileRelativePath =
@@ -102,7 +114,7 @@ void main(List<String> arguments) async {
 
   var sourcesText = sources.join(' ');
   var depfileText =
-      '$newAPIPath: $goldenAPIPath $sourcesText $dotPackagesFileRelativePath';
+      '$newAPIPath: $goldenAPIPath $sourcesText $dartDepsSourcesText $dotPackagesFileRelativePath';
   File depfile = File(depfilePath);
   await depfile.writeAsString(depfileText);
 

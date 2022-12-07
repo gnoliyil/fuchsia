@@ -587,6 +587,7 @@ if (current_toolchain == dart_toolchain) {
           _detect_snapshot_path,
           _packages_path,
           source_file,
+          _all_deps_sources_file,
         ]  # the gen directory, which triggers an "unexpected file access"
            # error.
            # Explicitly add that file to the inputs here.
@@ -616,11 +617,16 @@ if (current_toolchain == dart_toolchain) {
           "--depfile",
           rebase_path(depfile, root_build_dir),
 
+          # This is added to ensure we add the sources of the detect_action dependencies to the depfile as not doing so is breaking hermeticity.
+          "--all-deps-sources-file",
+          rebase_path(_all_deps_sources_file, root_build_dir),
+
           # Uncomment to force updating the .api files
           #"--overwrite",
         ]
 
         deps = dart_sdk_deps + [
+                 ":$_all_deps_sources_target",
                  ":$_dart_package_config_target_name",
                  _detect_snapshot_label,
                  runner_label,
