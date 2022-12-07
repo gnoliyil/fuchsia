@@ -87,6 +87,15 @@ void Device::DdkInit(ddk::InitTxn txn) {
     context_->device_ = this;
     context_->event_handler_ = &event_handler_;
 
+    // Create the internal memory allocator (for mlan malloc() calls).
+    status = InternalMemAllocator::Create(bus_, InternalMemAllocator::kDefaultInternalVmoSize,
+                                          &internal_mem_allocator_);
+    if (status != ZX_OK) {
+      NXPF_ERR("Failed to create internal mem allocator: %s", status);
+      return status;
+    }
+    context_->internal_mem_allocator_ = internal_mem_allocator_.get();
+
     populate_callbacks(&mlan_device_);
 
     mlan_status ml_status = mlan_register(&mlan_device_, &mlan_adapter_);
@@ -337,7 +346,6 @@ zx_status_t Device::LoadPowerFile(char country_code[3], std::vector<uint8_t> *pw
   constexpr char kTxPwrXXPath[] = "nxpfmac/txpower_";
   // Attempt to load the corresponding rgpower file first
   std::string tx_pwr_file_name = std::string(kRgPwrXXPath) + country_code + ".bin";
-  zxlogf(INFO, "Attempting to load Power file:%s", tx_pwr_file_name.c_str());
   zx_status_t status = LoadFirmwareData(tx_pwr_file_name.c_str(), pwr_data_out);
   if (status != ZX_OK) {
     NXPF_INFO("Failed to load Power file:%s err: %s", tx_pwr_file_name.c_str(),
@@ -345,7 +353,6 @@ zx_status_t Device::LoadPowerFile(char country_code[3], std::vector<uint8_t> *pw
     // rgpowerxx.bin is not found. Attempt to load the corresponding txpowerxx.bin file next
     tx_pwr_file_name = std::string(kTxPwrXXPath) + country_code + ".bin";
 
-    zxlogf(INFO, "Attempting to load Power file:%s", tx_pwr_file_name.c_str());
     status = LoadFirmwareData(tx_pwr_file_name.c_str(), pwr_data_out);
     if (status != ZX_OK) {
       NXPF_ERR("Failed to load Tx Power file:%s err: %s", tx_pwr_file_name.c_str(),

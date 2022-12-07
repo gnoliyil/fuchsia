@@ -29,6 +29,7 @@
 #include <type_traits>
 
 #include <wlan/drivers/components/frame.h>
+#include <wlan/drivers/components/frame_storage.h>
 
 #include "src/connectivity/wlan/drivers/third_party/nxp/nxpfmac/bus_interface.h"
 #include "src/connectivity/wlan/drivers/third_party/nxp/nxpfmac/device_context.h"
@@ -56,12 +57,11 @@ class SdioBus : public BusInterface {
   zx_status_t TriggerMainProcess() override;
   zx_status_t OnMlanRegistered(void* mlan_adapter) override;
   zx_status_t OnFirmwareInitialized() override;
-  zx_status_t PrepareVmo(uint8_t vmo_id, zx::vmo&& vmo, uint8_t* mapped_address,
-                         size_t mapped_size) override;
-  zx_status_t ReleaseVmo(uint8_t vmo_id) override;
   uint16_t GetRxHeadroom() const override;
   uint16_t GetTxHeadroom() const override;
   uint32_t GetBufferAlignment() const override;
+  zx_status_t PrepareVmo(uint32_t vmo_id, zx::vmo&& vmo) override;
+  zx_status_t ReleaseVmo(uint32_t vmo_id) override;
 
  private:
   explicit SdioBus(zx_device_t* parent);
@@ -92,8 +92,6 @@ class SdioBus : public BusInterface {
   SdioContext sdio_context_ = {};
   async::Loop main_process_loop_{&kAsyncLoopConfigNeverAttachToThread};
   std::atomic<bool> main_process_queued_{false};
-
-  zx::vmo vmos_[MAX_VMOS];
 };
 
 }  // namespace wlan::nxpfmac

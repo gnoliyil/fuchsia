@@ -207,7 +207,7 @@ void DataPlane::NetDevQueueRxSpace(const rx_space_buffer_t *buffers_list, size_t
 
 zx_status_t DataPlane::NetDevPrepareVmo(uint8_t vmo_id, zx::vmo vmo, uint8_t *mapped_address,
                                         size_t mapped_size) {
-  zx_status_t status = bus_->PrepareVmo(vmo_id, std::move(vmo), mapped_address, mapped_size);
+  zx_status_t status = bus_->PrepareVmo(vmo_id, std::move(vmo));
   if (status != ZX_OK) {
     NXPF_ERR("Failed to prepare VMO: %s", zx_status_get_string(status));
     return status;

@@ -17,10 +17,14 @@
 
 #include <inttypes.h>
 #include <lib/async/cpp/task.h>
+#include <lib/zx/vmar.h>
+#include <lib/zx/vmo.h>
 
 #include <wlan/drivers/log.h>
 
+#include "src/connectivity/wlan/drivers/third_party/nxp/nxpfmac/align.h"
 #include "src/connectivity/wlan/drivers/third_party/nxp/nxpfmac/debug.h"
+#include "src/connectivity/wlan/drivers/third_party/nxp/nxpfmac/internal_mem_allocator.h"
 
 namespace wlan::nxpfmac {
 
@@ -177,29 +181,11 @@ zx_status_t SdioBus::OnMlanRegistered(void* mlan_adapter) {
 
 zx_status_t SdioBus::OnFirmwareInitialized() { return StartIrqThread(); }
 
-zx_status_t SdioBus::PrepareVmo(uint8_t vmo_id, zx::vmo&& vmo, uint8_t* mapped_address,
-                                size_t mapped_size) {
+zx_status_t SdioBus::PrepareVmo(uint32_t vmo_id, zx::vmo&& vmo) {
   std::lock_guard lock(func1_mutex_);
 
-  if (vmo_id >= std::size(vmos_)) {
-    NXPF_ERR("VMO ID %u exceeds maximum value of %zu", vmo_id, std::size(vmos_));
-    return ZX_ERR_INVALID_ARGS;
-  }
-
-  if (vmos_[vmo_id].is_valid()) {
-    NXPF_ERR("VMO ID %u already prepared");
-    return ZX_ERR_INVALID_ARGS;
-  }
-
-  // SDIO expects its own handle, keep a duplicate here for our needs.
-  zx_status_t status = vmo.duplicate(ZX_RIGHT_SAME_RIGHTS, &vmos_[vmo_id]);
-  if (status != ZX_OK) {
-    NXPF_ERR("Failed to duplicate VMO %u: %s", vmo_id, zx_status_get_string(status));
-    return status;
-  }
-
   uint64_t vmo_size = 0;
-  status = vmo.get_size(&vmo_size);
+  zx_status_t status = vmo.get_size(&vmo_size);
   if (status != ZX_OK) {
     NXPF_ERR("Failed to get VMO size: %s", zx_status_get_string(status));
     return status;
@@ -211,28 +197,19 @@ zx_status_t SdioBus::PrepareVmo(uint8_t vmo_id, zx::vmo&& vmo, uint8_t* mapped_a
     NXPF_ERR("Failed to register VMO with SDIO bus: %s", zx_status_get_string(status));
     return status;
   }
+  NXPF_INFO("%s: vmo id: %d registered", __func__, vmo_id);
 
   return ZX_OK;
 }
 
-zx_status_t SdioBus::ReleaseVmo(uint8_t vmo_id) {
+zx_status_t SdioBus::ReleaseVmo(uint32_t vmo_id) {
   std::lock_guard lock(func1_mutex_);
-  if (vmo_id >= std::size(vmos_)) {
-    NXPF_ERR("VMO ID %u exceeds maximum value %zu", vmo_id, std::size(vmos_));
-    return ZX_ERR_INVALID_ARGS;
-  }
-  if (!vmos_[vmo_id].is_valid()) {
-    NXPF_ERR("Attempt to release invalid VMO ID %u", vmo_id);
-    return ZX_ERR_INVALID_ARGS;
-  }
-
   zx::vmo unregistered_vmo;
   const zx_status_t status = func1_.UnregisterVmo(vmo_id, &unregistered_vmo);
   if (status != ZX_OK) {
-    NXPF_ERR("Failed to unregister VMO from SDIO bus: %s", zx_status_get_string(status));
+    NXPF_ERR("Failed to unregister internal VMO from SDIO bus: %s", zx_status_get_string(status));
     return status;
   }
-  vmos_[vmo_id].reset();
   return ZX_OK;
 }
 
@@ -367,6 +344,8 @@ zx_status_t SdioBus::DoSyncRwTxn(pmlan_buffer pmbuf, t_u32 port, bool write) {
   }
 
   uint8_t* buffer = pmbuf->pbuf + pmbuf->data_offset;
+  sdmmc_buffer_region_t region;
+
   const bool use_block_mode = (port & MLAN_SDIO_BYTE_MODE_MASK) == 0;
   const uint32_t block_size = use_block_mode ? MLAN_SDIO_BLOCK_SIZE : 1;
   // This will drop trailing data if data_len is not a multiple of the block size. But this seems
@@ -376,80 +355,69 @@ zx_status_t SdioBus::DoSyncRwTxn(pmlan_buffer pmbuf, t_u32 port, bool write) {
   const uint32_t transfer_size = block_count * block_size;
   const uint32_t io_port = (port & MLAN_SDIO_IO_PORT_MASK);
 
-  if (pmbuf->pdesc) {
-    // Frame-backed buffer
+  if (!pmbuf->pdesc) {
+    InternalMemAllocator* allocator = sdio_context_.internal_mem_allocator_;
+    uint32_t vmo_id = 0;
+    uint64_t vmo_offset = 0;
+    // Check to see if it is one of the internal VMOs.
+    if (!allocator || !allocator->GetInternalVmoInfo(pmbuf->pbuf, &vmo_id, &vmo_offset)) {
+      ZX_PANIC("allocator: %p not set or address: %p not found", allocator, pmbuf->pbuf);
+      return ZX_ERR_INTERNAL;
+    }
+    region = {
+        .buffer{.vmo_id = vmo_id},
+        .type = SDMMC_BUFFER_TYPE_VMO_ID,
+        .offset = static_cast<uint64_t>(vmo_offset + pmbuf->data_offset),
+        .size = transfer_size,
+    };
+  } else {
     auto frame = reinterpret_cast<wlan::drivers::components::Frame*>(pmbuf->pdesc);
 
     // The VMO offset in the frame has not been modified by mlan, only the data_offset member of the
     // buffer. Use it (as computed in buffer) to determine the additional offset needed.
     const ptrdiff_t offset = buffer - frame->Data();
 
-    const sdmmc_buffer_region_t region{
+    region = {
         .buffer{.vmo_id = frame->VmoId()},
         .type = SDMMC_BUFFER_TYPE_VMO_ID,
         .offset = frame->VmoOffset() + offset,
         .size = transfer_size,
     };
+  }
 
-    const sdio_rw_txn_new_t txn{.addr = io_port,
-                                .incr = false,
-                                .write = write,
-                                .buffers_list = &region,
-                                .buffers_count = 1};
+  const sdio_rw_txn_new_t txn{
+      .addr = io_port, .incr = false, .write = write, .buffers_list = &region, .buffers_count = 1};
 
-    // For write operations flush the cache to ensure that any modifications through mapped memory
-    // of this VMO will be available in main memory for the DMA controller.
-    // For read operations flush and invalidate the mapped memory location to prevent any cached
-    // writes from occurring during or after the DMA operation.
-    const uint32_t cache_op =
-        write ? ZX_CACHE_FLUSH_DATA : (ZX_CACHE_FLUSH_DATA | ZX_CACHE_FLUSH_INVALIDATE);
-    zx_status_t result = zx_cache_flush(buffer, transfer_size, cache_op);
-    if (result != ZX_OK) {
-      NXPF_ERR("Failed to flush cache before SDIO transaction: %s", zx_status_get_string(result));
-      return result;
-    }
+  // For write operations flush the cache to ensure that any modifications through mapped memory
+  // of this VMO will be available in main memory for the DMA controller.
+  // For read operations flush and invalidate the mapped memory location to prevent any cached
+  // writes from occurring during or after the DMA operation.
+  const uint32_t cache_op =
+      write ? ZX_CACHE_FLUSH_DATA : (ZX_CACHE_FLUSH_DATA | ZX_CACHE_FLUSH_INVALIDATE);
+  zx_status_t result = zx_cache_flush(buffer, transfer_size, cache_op);
+  if (result != ZX_OK) {
+    NXPF_ERR("Failed to flush cache before SDIO transaction: %s", zx_status_get_string(result));
+    return result;
+  }
 
-    {
-      std::lock_guard lock(func1_mutex_);
-      result = func1_.DoRwTxnNew(&txn);
-      if (result != ZX_OK) {
-        NXPF_ERR("SDIO transaction failed: %s", zx_status_get_string(result));
-        return result;
-      }
-    }
-
-    if (!write) {
-      // For reads we flush and invalidate the cache again to make sure that whatever the DMA
-      // controller read into physical memory is now available through our mapped memory location.
-      result =
-          zx_cache_flush(buffer, transfer_size, ZX_CACHE_FLUSH_DATA | ZX_CACHE_FLUSH_INVALIDATE);
-      if (result != ZX_OK) {
-        NXPF_ERR("Failed to flush cache when reading from SDIO: %s", zx_status_get_string(result));
-        return result;
-      }
-    }
-  } else {
-    sdio_rw_txn_t txn{.addr = io_port,
-                      .data_size = transfer_size,
-                      .incr = false,
-                      .write = write,
-                      .use_dma = false,
-                      .virt_buffer = buffer,
-                      .virt_size = transfer_size,
-                      .buf_offset = 0};
-
+  {
     std::lock_guard lock(func1_mutex_);
-    zx_status_t status = func1_.DoRwTxn(&txn);
-    if (status != ZX_OK) {
-      NXPF_ERR("SDIO %s failed: %s", write ? "write" : "read", zx_status_get_string(status));
-      zx_status_t abort_status = func1_.IoAbort();
-      if (abort_status != ZX_OK) {
-        NXPF_ERR("SDIO IO abort failed: %s", zx_status_get_string(abort_status));
-      }
-      return status;
+    result = func1_.DoRwTxnNew(&txn);
+    if (result != ZX_OK) {
+      NXPF_ERR("SDIO transaction failed: %s", zx_status_get_string(result));
+      return result;
     }
   }
 
+  if (!write) {
+    // For reads we flush and invalidate the cache again to make sure that whatever the DMA
+    // controller read into physical memory is now available through our mapped memory location.
+    result = zx_cache_flush(buffer, transfer_size, ZX_CACHE_FLUSH_DATA | ZX_CACHE_FLUSH_INVALIDATE);
+    if (result != ZX_OK) {
+      NXPF_ERR("Failed to flush cache when reading from SDIO: %s", zx_status_get_string(result));
+      return result;
+    }
+  }
   return ZX_OK;
 }
 

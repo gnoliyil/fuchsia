@@ -47,6 +47,7 @@ source_set("core") {
     "device.cc",
     "event_handler.cc",
     "ies.cc",
+    "internal_mem_allocator.cc",
     "ioctl_adapter.cc",
     "key_ring.cc",
     "moal_shim.cc",
@@ -71,6 +72,7 @@ source_set("core") {
     "//src/lib/ddk",
     "//zircon/system/ulib/async",
     "//zircon/system/ulib/async-loop:async-loop-cpp",
+    "//zircon/system/ulib/region-alloc",
     "//zircon/system/ulib/zx",
   ]
   public_configs = [ ":mlan_sdio_config" ]

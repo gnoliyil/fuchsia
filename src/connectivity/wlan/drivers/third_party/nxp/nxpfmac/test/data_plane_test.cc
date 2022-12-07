@@ -251,11 +251,9 @@ TEST_F(DataPlaneTest, PrepareVmo) {
 
   bool prepare_vmo_called = false;
   bus_.SetPrepareVmo(
-      [&](uint8_t vmo_id, zx::vmo vmo, uint8_t* mapped_addr, size_t mapped_size) -> zx_status_t {
+      [&](uint8_t vmo_id, zx::vmo vmo) -> zx_status_t {
         EXPECT_EQ(kVmoId, vmo_id);
         EXPECT_EQ(vmo_handle, vmo.get());
-        EXPECT_EQ(&test_byte, mapped_addr);
-        EXPECT_EQ(sizeof(test_byte), mapped_size);
         prepare_vmo_called = true;
         return ZX_OK;
       });

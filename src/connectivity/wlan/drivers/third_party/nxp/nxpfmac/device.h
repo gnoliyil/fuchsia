@@ -27,6 +27,7 @@
 #include "src/connectivity/wlan/drivers/third_party/nxp/nxpfmac/bus_interface.h"
 #include "src/connectivity/wlan/drivers/third_party/nxp/nxpfmac/data_plane.h"
 #include "src/connectivity/wlan/drivers/third_party/nxp/nxpfmac/event_handler.h"
+#include "src/connectivity/wlan/drivers/third_party/nxp/nxpfmac/internal_mem_allocator.h"
 #include "src/connectivity/wlan/drivers/third_party/nxp/nxpfmac/ioctl_adapter.h"
 #include "src/connectivity/wlan/drivers/third_party/nxp/nxpfmac/mlan.h"
 #include "src/connectivity/wlan/drivers/third_party/nxp/nxpfmac/wlan_interface.h"
@@ -117,6 +118,7 @@ class Device : public DeviceType,
   EventHandler event_handler_;
   std::unique_ptr<IoctlAdapter> ioctl_adapter_;
   std::unique_ptr<DataPlane> data_plane_;
+  std::unique_ptr<InternalMemAllocator> internal_mem_allocator_;
 
   // Dispatcher for the FIDL server
   fdf::Dispatcher fidl_dispatcher_;

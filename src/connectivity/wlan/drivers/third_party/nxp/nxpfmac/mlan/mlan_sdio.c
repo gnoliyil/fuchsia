@@ -2385,6 +2385,7 @@ wlan_get_sdio_device(pmlan_adapter pmadapter)
 		LEAVE();
 		return MLAN_STATUS_FAILURE;
 	}
+        pmadapter->callbacks.moal_memset(pmadapter->pmoal_handle, pmadapter->pcard_sd, 0, sizeof(mlan_sdio_card));
 	pmadapter->pcard_sd->max_ports = MAX_PORT;
 	pmadapter->pcard_sd->mp_aggr_pkt_limit = SDIO_MP_AGGR_DEF_PKT_LIMIT;
 	pmadapter->pcard_sd->supports_sdio_new_mode = MTRUE;

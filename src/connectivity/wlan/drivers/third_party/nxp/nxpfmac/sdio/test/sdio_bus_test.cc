@@ -19,6 +19,7 @@
 #include <wlan/drivers/components/frame.h>
 #include <zxtest/zxtest.h>
 
+#include "src/connectivity/wlan/drivers/third_party/nxp/nxpfmac/internal_mem_allocator.h"
 #include "src/connectivity/wlan/drivers/third_party/nxp/nxpfmac/mlan.h"
 #include "src/connectivity/wlan/drivers/third_party/nxp/nxpfmac/test/mlan_mocks.h"
 #include "src/devices/testing/mock-ddk/mock-device.h"
@@ -77,6 +78,11 @@ class MockSdio : public ddk::MockSdio {
     // Do nothing, this method gets called every IRQ thread loop and can be called multiple times.
     // Adding an expectation for each call becomes tedious and counter-productive.
   }
+  zx_status_t SdioRegisterVmo(uint32_t vmo_id, zx::vmo vmo, uint64_t offset, uint64_t size,
+                              uint32_t vmo_rights) override {
+    return ZX_OK;
+  }
+  zx_status_t SdioUnregisterVmo(uint32_t vmo_id, zx::vmo* out_vmo) override { return ZX_OK; }
 };
 
 class SdioBusTest : public zxtest::Test {
@@ -209,41 +215,6 @@ TEST_F(SdioBusTest, WriteRegister) {
             bus.mlan_dev.callbacks.moal_write_reg(bus.mlan_dev.pmoal_handle, kAddress, kValue));
 }
 
-TEST_F(SdioBusTest, ReadDataSync) {
-  SdioBusInfo bus;
-  CreateBus(&bus);
-
-  // Should have been populated when the SdioBus object was created.
-  ASSERT_NOT_NULL(bus.mlan_dev.callbacks.moal_read_data_sync);
-
-  constexpr uint32_t kPort = 0x1232;
-  constexpr uint32_t kOffset = 2;
-  // It seems like the expectation is that transfers are always an exact multiple of the block size.
-  uint8_t test_data[7 * kSdioBlockSize + kOffset];
-  const uint32_t size = sizeof(test_data) - kOffset;
-
-  sdio_.mock_do_rw_txn().ExpectCallWithMatcher([&](sdio_rw_txn_t txn) {
-    EXPECT_EQ(kPort, txn.addr);
-    EXPECT_EQ(size, txn.data_size);
-    EXPECT_FALSE(txn.incr);
-    EXPECT_FALSE(txn.write);
-    EXPECT_FALSE(txn.use_dma);
-    EXPECT_EQ(test_data + kOffset, txn.virt_buffer);
-    EXPECT_EQ(size, txn.virt_size);
-    EXPECT_EQ(0, txn.buf_offset);
-    return std::tuple<zx_status_t>(ZX_OK);
-  });
-
-  mlan_buffer buffer = {
-      .pbuf = test_data,
-      .data_offset = kOffset,
-      .data_len = size,
-      .use_count = 1,
-  };
-  ASSERT_EQ(MLAN_STATUS_SUCCESS, bus.mlan_dev.callbacks.moal_read_data_sync(
-                                     bus.mlan_dev.pmoal_handle, &buffer, kPort, 0 /* timeout */));
-}
-
 TEST_F(SdioBusTest, ReadDataSyncNewTxn) {
   SdioBusInfo bus;
   CreateBus(&bus);
@@ -276,7 +247,8 @@ TEST_F(SdioBusTest, ReadDataSyncNewTxn) {
                 bus.mlan_dev.pmoal_handle, &buffer_data.buffer, kPort, 0 /* timeout */));
 }
 
-TEST_F(SdioBusTest, WriteDataSync) {
+// Allocate a buffer from the internal memory allocator for a read request and pass it on to SDIO.
+TEST_F(SdioBusTest, ReadDataSyncNewTxnWithRegion) {
   SdioBusInfo bus;
   CreateBus(&bus);
 
@@ -284,31 +256,44 @@ TEST_F(SdioBusTest, WriteDataSync) {
   ASSERT_NOT_NULL(bus.mlan_dev.callbacks.moal_read_data_sync);
 
   constexpr uint32_t kPort = 0x87543;
-  const uint32_t offset = 4;
-  // It seems like the expectation is that transfers are always an exact multiple of the block size.
-  uint8_t test_data[3 * kSdioBlockSize + offset];
-  const uint32_t size = sizeof(test_data) - offset;
+  constexpr uint32_t kDataSize = 3 * kSdioBlockSize;
+  constexpr size_t kDataBufferSize = kDataSize;
+  constexpr size_t kDefaultVmoSize = 4096;
+  uint32_t vmo_id;
+  uint64_t vmo_offset;
 
-  sdio_.mock_do_rw_txn().ExpectCallWithMatcher([&](sdio_rw_txn_t txn) {
+  sdio_.mock_do_rw_txn_new().ExpectCallWithMatcher([&](sdio_rw_txn_new_t txn) {
     EXPECT_EQ(kPort & 0xfffff, txn.addr);
-    EXPECT_EQ(size, txn.data_size);
+    EXPECT_EQ(1u, txn.buffers_count);
+    EXPECT_EQ(SDMMC_BUFFER_TYPE_VMO_ID, txn.buffers_list[0].type);
+    EXPECT_EQ(vmo_id, txn.buffers_list[0].buffer.vmo_id);
+    EXPECT_EQ(kDataSize, txn.buffers_list[0].size);
     EXPECT_FALSE(txn.incr);
-    EXPECT_TRUE(txn.write);
-    EXPECT_FALSE(txn.use_dma);
-    EXPECT_EQ(test_data + offset, txn.virt_buffer);
-    EXPECT_EQ(size, txn.virt_size);
-    EXPECT_EQ(0, txn.buf_offset);
+    EXPECT_FALSE(txn.write);
+    EXPECT_EQ(vmo_offset, txn.buffers_list[0].offset);
     return std::tuple<zx_status_t>(ZX_OK);
   });
 
-  mlan_buffer buffer = {
-      .pbuf = test_data,
-      .data_offset = offset,
-      .data_len = size,
-      .use_count = 1,
-  };
-  ASSERT_EQ(MLAN_STATUS_SUCCESS, bus.mlan_dev.callbacks.moal_write_data_sync(
-                                     bus.mlan_dev.pmoal_handle, &buffer, kPort, 0 /* timeout */));
+  // Create the mem allocator and set in the Device Context
+  std::unique_ptr<wlan::nxpfmac::InternalMemAllocator> internal_mem_allocator;
+  ASSERT_EQ(ZX_OK, wlan::nxpfmac::InternalMemAllocator::Create(bus.bus.get(), kDefaultVmoSize,
+                                                               &internal_mem_allocator));
+  wlan::nxpfmac::DeviceContext* dev_context =
+      reinterpret_cast<wlan::nxpfmac::DeviceContext*>(bus.mlan_dev.pmoal_handle);
+  dev_context->internal_mem_allocator_ = internal_mem_allocator.get();
+
+  // Allocate a buffer from the allocator and verify the read request.
+  void* buffer = dev_context->internal_mem_allocator_->Alloc(kDataBufferSize);
+  ASSERT_NE(nullptr, buffer);
+  ASSERT_EQ(true, dev_context->internal_mem_allocator_->GetInternalVmoInfo(
+                      reinterpret_cast<uint8_t*>(buffer), &vmo_id, &vmo_offset));
+  mlan_buffer mlan_buf = {};
+  mlan_buf.pbuf = reinterpret_cast<uint8_t*>(buffer);
+  mlan_buf.data_len = kDataBufferSize;
+
+  ASSERT_EQ(MLAN_STATUS_SUCCESS, bus.mlan_dev.callbacks.moal_read_data_sync(
+                                     bus.mlan_dev.pmoal_handle, &mlan_buf, kPort, 0 /* timeout */));
+  dev_context->internal_mem_allocator_->Free(buffer);
 }
 
 TEST_F(SdioBusTest, WriteDataSyncNewTxn) {
@@ -341,6 +326,54 @@ TEST_F(SdioBusTest, WriteDataSyncNewTxn) {
   ASSERT_EQ(MLAN_STATUS_SUCCESS,
             bus.mlan_dev.callbacks.moal_write_data_sync(
                 bus.mlan_dev.pmoal_handle, &buffer_data.buffer, kPort, 0 /* timeout */));
+}
+
+// Allocate a buffer from the internal memory allocator for a write request and pass it on to SDIO.
+TEST_F(SdioBusTest, WriteDataSyncNewTxnWithRegion) {
+  SdioBusInfo bus;
+  CreateBus(&bus);
+
+  // Should have been populated when the SdioBus object was created.
+  ASSERT_NOT_NULL(bus.mlan_dev.callbacks.moal_read_data_sync);
+
+  constexpr uint32_t kPort = 0x87543;
+  constexpr uint32_t kDataSize = 3 * kSdioBlockSize;
+  constexpr size_t kDataBufferSize = kDataSize;
+  constexpr size_t kDefaultVmoSize = 4096;
+  uint32_t vmo_id;
+  uint64_t vmo_offset;
+
+  sdio_.mock_do_rw_txn_new().ExpectCallWithMatcher([&](sdio_rw_txn_new_t txn) {
+    EXPECT_EQ(kPort & 0xfffff, txn.addr);
+    EXPECT_EQ(1u, txn.buffers_count);
+    EXPECT_EQ(SDMMC_BUFFER_TYPE_VMO_ID, txn.buffers_list[0].type);
+    EXPECT_EQ(vmo_id, txn.buffers_list[0].buffer.vmo_id);
+    EXPECT_EQ(kDataSize, txn.buffers_list[0].size);
+    EXPECT_FALSE(txn.incr);
+    EXPECT_TRUE(txn.write);
+    EXPECT_EQ(vmo_offset, txn.buffers_list[0].offset);
+    return std::tuple<zx_status_t>(ZX_OK);
+  });
+
+  // Create the mem allocator and set in the Device Context
+  std::unique_ptr<wlan::nxpfmac::InternalMemAllocator> internal_mem_allocator;
+  ASSERT_EQ(ZX_OK, wlan::nxpfmac::InternalMemAllocator::Create(bus.bus.get(), kDefaultVmoSize,
+                                                               &internal_mem_allocator));
+  wlan::nxpfmac::DeviceContext* dev_context =
+      reinterpret_cast<wlan::nxpfmac::DeviceContext*>(bus.mlan_dev.pmoal_handle);
+  dev_context->internal_mem_allocator_ = internal_mem_allocator.get();
+
+  // Allocate a buffer from the allocator and verify the write request.
+  void* buffer = dev_context->internal_mem_allocator_->Alloc(kDataBufferSize);
+  ASSERT_NE(nullptr, buffer);
+  dev_context->internal_mem_allocator_->GetInternalVmoInfo(reinterpret_cast<uint8_t*>(buffer),
+                                                           &vmo_id, &vmo_offset);
+  mlan_buffer mlan_buf = {};
+  mlan_buf.pbuf = reinterpret_cast<uint8_t*>(buffer);
+  mlan_buf.data_len = kDataBufferSize;
+  ASSERT_EQ(MLAN_STATUS_SUCCESS, bus.mlan_dev.callbacks.moal_write_data_sync(
+                                     bus.mlan_dev.pmoal_handle, &mlan_buf, kPort, 0 /* timeout */));
+  dev_context->internal_mem_allocator_->Free(buffer);
 }
 
 }  // namespace

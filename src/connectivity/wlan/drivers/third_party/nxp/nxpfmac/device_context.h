@@ -20,6 +20,7 @@ class DataPlane;
 class Device;
 class EventHandler;
 class IoctlAdapter;
+class InternalMemAllocator;
 
 // A struct used as the context in many places in the driver that need to access device specific
 // data. Among other things it's used as the context for moal callbacks but it's also used to pass
@@ -39,6 +40,7 @@ struct DeviceContext {
   EventHandler* event_handler_;
   IoctlAdapter* ioctl_adapter_;
   DataPlane* data_plane_;
+  InternalMemAllocator* internal_mem_allocator_;
 };
 
 }  // namespace wlan::nxpfmac

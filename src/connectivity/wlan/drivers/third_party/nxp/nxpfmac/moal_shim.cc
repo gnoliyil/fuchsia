@@ -30,13 +30,56 @@
 namespace {
 
 mlan_status moal_malloc(t_void *pmoal, t_u32 size, t_u32 flag, t_u8 **ppbuf) {
-  *ppbuf = static_cast<t_u8 *>(malloc(size));
-  return MLAN_STATUS_SUCCESS;
+  if (pmoal == nullptr) {
+    return MLAN_STATUS_FAILURE;
+  }
+  if (flag & MLAN_MEM_DMA) {
+    // Allocate from the internal memory allocator.
+    auto allocator = static_cast<wlan::nxpfmac::DeviceContext *>(pmoal)->internal_mem_allocator_;
+    if (!allocator) {
+      return MLAN_STATUS_FAILURE;
+    }
+    *ppbuf = static_cast<t_u8 *>(allocator->Alloc(size));
+  } else {
+    // Else, allocate from the heap.
+    *ppbuf = static_cast<t_u8 *>(malloc(size));
+  }
+  if (*ppbuf) {
+    return MLAN_STATUS_SUCCESS;
+  } else {
+    return MLAN_STATUS_RESOURCE;
+  }
 }
 
 mlan_status moal_free(t_void *pmoal, t_u8 *pbuf) {
-  free(pbuf);
+  if (!pbuf || !pmoal) {
+    return MLAN_STATUS_FAILURE;
+  }
+  auto allocator = static_cast<wlan::nxpfmac::DeviceContext *>(pmoal)->internal_mem_allocator_;
+  if (!allocator) {
+    return MLAN_STATUS_FAILURE;
+  }
+  // If the memory belongs to the internal allocator, free it, else call free().
+  if (!allocator->Free(pbuf)) {
+    free(pbuf);
+  }
   return MLAN_STATUS_SUCCESS;
+}
+
+mlan_status moal_vmalloc(t_void *pmoal, t_u32 size, t_u8 **ppbuf) {
+  *ppbuf = static_cast<t_u8 *>(malloc(size));
+  if (*ppbuf) {
+    return MLAN_STATUS_SUCCESS;
+  } else
+    return MLAN_STATUS_RESOURCE;
+}
+
+mlan_status moal_vfree(t_void *pmoal, t_u8 *pbuf) {
+  if (pbuf) {
+    free(pbuf);
+    return MLAN_STATUS_SUCCESS;
+  }
+  return MLAN_STATUS_FAILURE;
 }
 
 t_void *moal_memcpy(t_void *pmoal, t_void *pdest, const t_void *psrc, t_u32 num) {
@@ -314,6 +357,8 @@ namespace wlan::nxpfmac {
 void populate_callbacks(mlan_device *mlan_dev) {
   mlan_dev->callbacks.moal_malloc = &moal_malloc;
   mlan_dev->callbacks.moal_mfree = &moal_free;
+  mlan_dev->callbacks.moal_vmalloc = &moal_vmalloc;
+  mlan_dev->callbacks.moal_vfree = &moal_vfree;
   mlan_dev->callbacks.moal_memset = &moal_memset;
   mlan_dev->callbacks.moal_memmove = &moal_memmove;
   mlan_dev->callbacks.moal_udelay = &moal_udelay;
