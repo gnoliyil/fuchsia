@@ -2,10 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use crate::device::{
-    binder::create_binders, logd::create_socket_and_start_server, magma::MagmaFile,
-    wayland::serve_wayland,
-};
+use crate::device::{binder::create_binders, magma::MagmaFile, wayland::serve_wayland};
 use crate::fs::{devtmpfs::dev_tmp_fs, SpecialNode};
 use crate::logging::log_warn;
 use crate::task::CurrentTask;
@@ -23,10 +20,6 @@ pub fn run_features<'a>(entries: &'a Vec<String>, current_task: &CurrentTask) ->
             "binder" => {
                 // Creates the various binder drivers (/dev/binder, /dev/hwbinder, /dev/vndbinder).
                 create_binders(current_task)?;
-            }
-            "logd" => {
-                // Creates a socket at /dev/socket/logdw logs anything written to it.
-                create_socket_and_start_server(current_task);
             }
             "selinux_enabled" => {}
             "framebuffer" => {

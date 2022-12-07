@@ -130,7 +130,6 @@ if (target_cpu == "x64") {
       "device/features.rs",
       "device/framebuffer.rs",
       "device/framebuffer_server.rs",
-      "device/logd.rs",
       "device/magma/ffi.rs",
       "device/magma/file.rs",
       "device/magma/magma.rs",
