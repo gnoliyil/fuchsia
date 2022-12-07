@@ -7,6 +7,7 @@ use crate::pbm::{list_virtual_devices, make_configs};
 use anyhow::{Context, Result};
 use errors::ffx_bail;
 use ffx_core::ffx_plugin;
+use ffx_emulator_commands::get_engine_by_name;
 use ffx_emulator_config::EngineType;
 use ffx_emulator_engines::EngineBuilder;
 use ffx_emulator_start_args::StartCommand;
@@ -35,27 +36,39 @@ pub async fn start(cmd: StartCommand, proxy: TargetCollectionProxy) -> Result<()
         };
     }
 
-    let emulator_configuration = match make_configs(&cmd).await {
-        Ok(config) => config,
-        Err(e) => {
-            ffx_bail!("{:?}", e);
+    let mut engine = if cmd.reuse && cmd.config.is_none() {
+        match get_engine_by_name(&mut Some(cmd.name)).await {
+            Ok(engine) => engine,
+            Err(e) => {
+                ffx_bail!("{:?}", e);
+            }
         }
-    };
+    } else {
+        let emulator_configuration = match make_configs(&cmd).await {
+            Ok(config) => config,
+            Err(e) => {
+                ffx_bail!("{:?}", e);
+            }
+        };
 
-    // Initialize an engine of the requested type with the configuration defined in the manifest.
-    let engine_type = match EngineType::from_str(&cmd.engine().await.unwrap_or("femu".to_string()))
-    {
-        Ok(e) => e,
-        Err(e) => ffx_bail!("{:?}", e.context("Couldn't retrieve engine type from ffx config.")),
-    };
-    let mut engine = match EngineBuilder::new()
-        .config(emulator_configuration)
-        .engine_type(engine_type)
-        .build()
-        .await
-    {
-        Ok(engine) => engine,
-        Err(e) => ffx_bail!("{:?}", e.context("The emulator could not be configured.")),
+        // Initialize an engine of the requested type with the configuration defined in the manifest.
+        let engine_type =
+            match EngineType::from_str(&cmd.engine().await.unwrap_or("femu".to_string())) {
+                Ok(e) => e,
+                Err(e) => {
+                    ffx_bail!("{:?}", e.context("Couldn't retrieve engine type from ffx config."))
+                }
+            };
+
+        match EngineBuilder::new()
+            .config(emulator_configuration)
+            .engine_type(engine_type)
+            .build()
+            .await
+        {
+            Ok(engine) => engine,
+            Err(e) => ffx_bail!("{:?}", e.context("The emulator could not be configured.")),
+        }
     };
 
     if cmd.edit {
@@ -75,7 +88,7 @@ pub async fn start(cmd: StartCommand, proxy: TargetCollectionProxy) -> Result<()
         }
     }
 
-    if cmd.config.is_none() {
+    if cmd.config.is_none() && !cmd.reuse {
         // We don't stage files for custom configurations, because the EmulatorConfiguration
         // doesn't hold valid paths to the system images.
         if let Err(e) = engine.stage().await {
