@@ -47,25 +47,7 @@ impl FemuEngine {
 #[async_trait]
 impl EmulatorEngine for FemuEngine {
     async fn stage(&mut self) -> Result<()> {
-        let sdk = ffx_config::global_env_context()
-            .context("loading global environment context")?
-            .get_sdk()
-            .await?;
-        self.emulator_binary = match sdk.get_host_tool(config::FEMU_TOOL) {
-            Ok(aemu_path) => aemu_path.canonicalize().context(format!(
-                "Failed to canonicalize the path to the emulator binary: {:?}",
-                aemu_path
-            ))?,
-            Err(e) => {
-                bail!("Cannot find {} in the SDK: {:?}", config::FEMU_TOOL, e);
-            }
-        };
-
-        if !self.emulator_binary.exists() || !self.emulator_binary.is_file() {
-            bail!("Giving up finding emulator binary. Tried {:?}", self.emulator_binary)
-        }
-
-        <Self as QemuBasedEngine>::stage(&mut self.emulator_configuration).await?;
+        <Self as QemuBasedEngine>::stage(&mut self).await?;
         let result = self.validate_staging();
         if result.is_ok() {
             self.engine_state = EngineState::Staged;
@@ -164,6 +146,28 @@ impl EmulatorEngine for FemuEngine {
             cmd.envs(&self.emulator_configuration.flags.envs);
         }
         cmd
+    }
+
+    /// Get the AEMU binary path from the SDK manifest and verify it exists.
+    async fn load_emulator_binary(&mut self) -> Result<()> {
+        let sdk = ffx_config::global_env_context()
+            .context("loading global environment context")?
+            .get_sdk()
+            .await?;
+        self.emulator_binary = match sdk.get_host_tool(config::FEMU_TOOL) {
+            Ok(aemu_path) => aemu_path.canonicalize().context(format!(
+                "Failed to canonicalize the path to the emulator binary: {:?}",
+                aemu_path
+            ))?,
+            Err(e) => {
+                bail!("Cannot find {} in the SDK: {:?}", config::FEMU_TOOL, e);
+            }
+        };
+
+        if !self.emulator_binary.exists() || !self.emulator_binary.is_file() {
+            bail!("Giving up finding emulator binary. Tried {:?}", self.emulator_binary)
+        }
+        Ok(())
     }
 
     fn emu_config(&self) -> &EmulatorConfiguration {

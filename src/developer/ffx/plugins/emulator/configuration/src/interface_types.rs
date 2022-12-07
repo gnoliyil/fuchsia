@@ -67,6 +67,10 @@ pub trait EmulatorEngine {
     /// emulation. There are no side-effects, and the operation can be repeated as necessary.
     fn build_emulator_cmd(&self) -> Command;
 
+    /// Determine the appropriate binary for the target engine, and load its path into the
+    /// engine's configuration for future use.
+    async fn load_emulator_binary(&mut self) -> Result<()>;
+
     /// Access to the engine's emulator_configuration field.
     fn emu_config(&self) -> &EmulatorConfiguration;
 

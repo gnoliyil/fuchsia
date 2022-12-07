@@ -34,42 +34,6 @@ pub struct QemuEngine {
 }
 
 impl QemuEngine {
-    /// returns the path to the qemu binary to execute. This is based on the guest OS architecture.
-    ///
-    /// Currently this is done by getting the default CLI which is for x64 images, and then
-    /// replace it if the guest OK is arm64.
-    /// TODO(http://fxdev.bug/98862): Improve the SDK metadata to have multiple binaries per tool.
-    async fn get_qemu_path(&self) -> Result<PathBuf> {
-        let cli_name = match self.emulator_configuration.device.cpu.architecture {
-            CpuArchitecture::Arm64 => Some("qemu-system-aarch64"),
-            CpuArchitecture::X64 => None,
-            CpuArchitecture::Unsupported => None,
-        };
-
-        // Realistically, the file is always in a directory, so the empty path is a reasonable
-        // fallback since it will "never" happen
-        let sdk = ffx_config::global_env_context()
-            .context("loading global environment context")?
-            .get_sdk()
-            .await?;
-        let qemu_x64_path = match sdk.get_host_tool(QEMU_TOOL) {
-            Ok(qemu_path) => qemu_path.canonicalize().context(format!(
-                "Failed to canonicalize the path to the emulator binary: {:?}",
-                qemu_path
-            ))?,
-            Err(e) => bail!("Cannot find {} in the SDK: {:?}", QEMU_TOOL, e),
-        };
-
-        // If we need to, replace the executable name.
-        if let Some(exe_name) = cli_name {
-            let mut p = PathBuf::from(qemu_x64_path.parent().unwrap_or(Path::new("")));
-            p.push(exe_name);
-            Ok(p)
-        } else {
-            Ok(qemu_x64_path)
-        }
-    }
-
     fn validate_configuration(&self) -> Result<()> {
         if self.emulator_configuration.device.pointing_device == PointingDevice::Touch {
             eprintln!("Touchscreen as a pointing device is not available on Qemu.");
@@ -90,14 +54,7 @@ impl QemuEngine {
 #[async_trait]
 impl EmulatorEngine for QemuEngine {
     async fn stage(&mut self) -> Result<()> {
-        self.emulator_binary =
-            self.get_qemu_path().await.context("could not determine qemu cli path")?;
-
-        if !self.emulator_binary.exists() || !self.emulator_binary.is_file() {
-            bail!("Giving up finding emulator binary. Tried {:?}", self.emulator_binary)
-        }
-
-        <Self as QemuBasedEngine>::stage(&mut self.emulator_configuration).await?;
+        <Self as QemuBasedEngine>::stage(&mut self).await?;
         let result = self.validate_staging();
         if result.is_ok() {
             self.engine_state = EngineState::Staged;
@@ -183,6 +140,47 @@ impl EmulatorEngine for QemuEngine {
             cmd.envs(&self.emulator_configuration.flags.envs);
         }
         cmd
+    }
+
+    /// Loads the path to the qemu binary to execute. This is based on the guest OS architecture.
+    ///
+    /// Currently this is done by getting the default CLI which is for x64 images, and then
+    /// replacing it if the guest OS is arm64.
+    /// TODO(http://fxdev.bug/98862): Improve the SDK metadata to have multiple binaries per tool.
+    async fn load_emulator_binary(&mut self) -> Result<()> {
+        let cli_name = match self.emulator_configuration.device.cpu.architecture {
+            CpuArchitecture::Arm64 => Some("qemu-system-aarch64"),
+            CpuArchitecture::X64 => None,
+            CpuArchitecture::Unsupported => None,
+        };
+
+        let sdk = ffx_config::global_env_context()
+            .context("loading global environment context")?
+            .get_sdk()
+            .await?;
+        let qemu_x64_path = match sdk.get_host_tool(QEMU_TOOL) {
+            Ok(qemu_path) => qemu_path.canonicalize().context(format!(
+                "Failed to canonicalize the path to the emulator binary: {:?}",
+                qemu_path
+            ))?,
+            Err(e) => bail!("Cannot find {} in the SDK: {:?}", QEMU_TOOL, e),
+        };
+
+        // If we need to, replace the executable name.
+        self.emulator_binary = if let Some(exe_name) = cli_name {
+            // Realistically, the file is always in a directory, so the empty path is a reasonable
+            // fallback since it will "never" happen
+            let mut p = PathBuf::from(qemu_x64_path.parent().unwrap_or(Path::new("")));
+            p.push(exe_name);
+            p
+        } else {
+            qemu_x64_path
+        };
+
+        if !self.emulator_binary.exists() || !self.emulator_binary.is_file() {
+            bail!("Giving up finding emulator binary. Tried {:?}", self.emulator_binary)
+        }
+        Ok(())
     }
 
     fn emu_config(&self) -> &EmulatorConfiguration {

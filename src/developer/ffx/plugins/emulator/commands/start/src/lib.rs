@@ -58,16 +58,13 @@ pub async fn start(cmd: StartCommand, proxy: TargetCollectionProxy) -> Result<()
         Err(e) => ffx_bail!("{:?}", e.context("The emulator could not be configured.")),
     };
 
-    if let Err(e) = engine.stage().await {
-        ffx_bail!("{:?}", e.context("Problem staging to the emulator's instance directory."));
-    }
-
     if cmd.edit {
         if let Err(e) = edit_configuration(engine.emu_config_mut()) {
             ffx_bail!("{:?}", e.context("Problem editing configuration."));
         }
     }
 
+    // We do an initial build here, because we need an initial configuration before staging.
     let emulator_cmd = engine.build_emulator_cmd();
 
     if cmd.verbose || cmd.dry_run {
@@ -77,6 +74,13 @@ pub async fn start(cmd: StartCommand, proxy: TargetCollectionProxy) -> Result<()
             return Ok(());
         }
     }
+
+    if let Err(e) = engine.stage().await {
+        ffx_bail!("{:?}", e.context("Problem staging to the emulator's instance directory."));
+    }
+
+    // We rebuild the command, since staging likely changed the file paths.
+    let emulator_cmd = engine.build_emulator_cmd();
 
     match engine.start(emulator_cmd, &proxy).await {
         Ok(0) => Ok(()),

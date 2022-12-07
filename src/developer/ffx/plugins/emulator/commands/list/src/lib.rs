@@ -165,6 +165,9 @@ mod tests {
         fn build_emulator_cmd(&self) -> Command {
             todo!()
         }
+        async fn load_emulator_binary(&mut self) -> Result<()> {
+            todo!()
+        }
         fn emu_config(&self) -> &EmulatorConfiguration {
             todo!()
         }

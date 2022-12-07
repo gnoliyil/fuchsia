@@ -10,6 +10,7 @@ mod qemu_based;
 pub mod serialization;
 mod show_output;
 
+use arg_templates::process_flag_template;
 use qemu_based::femu::FemuEngine;
 use qemu_based::qemu::QemuEngine;
 use serialization::read_from_disk;
@@ -146,6 +147,14 @@ impl EngineBuilder {
             }),
         };
         engine.configure()?;
+
+        engine.load_emulator_binary().await.with_context(|| {
+            format!("Failed to load the emulator binary path for {}", self.engine_type)
+        })?;
+
+        engine.emu_config_mut().flags = process_flag_template(engine.emu_config())
+            .context("Failed to process the flags template file.")?;
+
         Ok(engine)
     }
 }

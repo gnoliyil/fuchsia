@@ -326,7 +326,8 @@ pub(crate) trait QemuBasedEngine: EmulatorEngine + SerializingEngine {
         Ok(())
     }
 
-    async fn stage(emu_config: &mut EmulatorConfiguration) -> Result<()> {
+    async fn stage(&mut self) -> Result<()> {
+        let mut emu_config = self.emu_config_mut();
         let name = emu_config.runtime.name.clone();
         let reuse = emu_config.runtime.reuse;
 
@@ -357,7 +358,8 @@ pub(crate) trait QemuBasedEngine: EmulatorEngine + SerializingEngine {
         emu_config.flags = process_flag_template(emu_config)
             .context("Failed to process the flags template file.")?;
 
-        Ok(())
+        self.write_to_disk(&self.emu_config().runtime.instance_directory)
+            .context("Failed to write the emulation configuration file to disk.")
     }
 
     async fn run(
@@ -397,6 +399,7 @@ pub(crate) trait QemuBasedEngine: EmulatorEngine + SerializingEngine {
         let child_arc = Arc::new(shared_process);
 
         self.set_pid(child_arc.id());
+        self.set_engine_state(EngineState::Running);
 
         self.write_to_disk(&self.emu_config().runtime.instance_directory)
             .context("Failed to write the emulation configuration file to disk.")?;
@@ -499,6 +502,11 @@ pub(crate) trait QemuBasedEngine: EmulatorEngine + SerializingEngine {
                                 }
                             }
                         }
+
+                        self.set_engine_state(EngineState::Staged);
+                        self.write_to_disk(&self.emu_config().runtime.instance_directory)
+                            .context("Failed to write the emulation configuration file to disk.")?;
+
                         return Ok(1);
                     }
 
@@ -726,6 +734,9 @@ mod tests {
             false
         }
         fn build_emulator_cmd(&self) -> Command {
+            todo!()
+        }
+        async fn load_emulator_binary(&mut self) -> Result<()> {
             todo!()
         }
         fn emu_config(&self) -> &EmulatorConfiguration {
