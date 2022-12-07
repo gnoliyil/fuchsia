@@ -181,7 +181,9 @@ template("license_data") {
     deps = [
       ":$check_licenses_target",
       ":$copy_html_notices_target",
-      ":$copy_spdx_target",
+
+      # TODO(fxb/116788): Uncomment once SPDX generation flakiness resolves
+      # ":$copy_spdx_target",
       ":$copy_txt_notices_target",
     ]
   }
