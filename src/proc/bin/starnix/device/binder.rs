@@ -669,7 +669,7 @@ impl<'a> BinderProcessGuard<'a> {
         if let Some(object) = self.objects.get(&local.weak_ref_addr).and_then(Weak::upgrade) {
             object
         } else {
-            let object = Arc::new(BinderObject::new(self.base, local));
+            let object = BinderObject::new(self.base, local);
             self.objects.insert(object.local.weak_ref_addr, Arc::downgrade(&object));
             // Tell the owning process that a remote process now has a strong reference to
             // to this object.
@@ -1551,15 +1551,15 @@ struct BinderObjectMutableState {
 }
 
 impl BinderObject {
-    fn new(owner: &Arc<BinderProcess>, local: LocalBinderObject) -> Self {
-        Self {
+    fn new(owner: &Arc<BinderProcess>, local: LocalBinderObject) -> Arc<Self> {
+        Arc::new(Self {
             owner: Arc::downgrade(owner),
             local,
             state: Mutex::new(BinderObjectMutableState {
                 oneway_transactions: VecDeque::new(),
                 handling_oneway_transaction: false,
             }),
-        }
+        })
     }
 
     /// Locks the mutable state of the binder object for exclusive access.
@@ -2067,7 +2067,7 @@ impl BinderDriver {
                 // TODO: Read the flat_binder_object when ioctl is uapi::BINDER_SET_CONTEXT_MGR_EXT.
 
                 *self.context_manager.write() =
-                    Some(Arc::new(BinderObject::new(binder_proc, LocalBinderObject::default())));
+                    Some(BinderObject::new(binder_proc, LocalBinderObject::default()));
                 self.context_manager_notification.notify_all();
                 Ok(SUCCESS)
             }
@@ -3171,13 +3171,13 @@ mod tests {
     fn handle_0_succeeds_when_context_manager_is_set() {
         let driver = BinderDriver::new();
         let context_manager_proc = driver.create_process(1);
-        let context_manager = Arc::new(BinderObject::new(
+        let context_manager = BinderObject::new(
             &context_manager_proc,
             LocalBinderObject {
                 weak_ref_addr: UserAddress::from(0xDEADBEEF),
                 strong_ref_addr: UserAddress::from(0xDEADDEAD),
             },
-        ));
+        );
         *driver.context_manager.write() = Some(context_manager);
         let (object, owner) = driver.get_context_manager().expect("failed to find handle 0");
         assert!(Arc::ptr_eq(&context_manager_proc, &owner));
@@ -3198,13 +3198,13 @@ mod tests {
         let proc_1 = driver.create_process(1);
         let proc_2 = driver.create_process(2);
 
-        let transaction_ref = Arc::new(BinderObject::new(
+        let transaction_ref = BinderObject::new(
             &proc_1,
             LocalBinderObject {
                 weak_ref_addr: UserAddress::from(0xffffffffffffffff),
                 strong_ref_addr: UserAddress::from(0x1111111111111111),
             },
-        ));
+        );
 
         // Insert the transaction once.
         let _ = proc_2.lock().handles.insert_for_transaction(transaction_ref.clone());
@@ -3234,13 +3234,13 @@ mod tests {
         let proc_1 = driver.create_process(1);
         let proc_2 = driver.create_process(2);
 
-        let transaction_ref = Arc::new(BinderObject::new(
+        let transaction_ref = BinderObject::new(
             &proc_1,
             LocalBinderObject {
                 weak_ref_addr: UserAddress::from(0xffffffffffffffff),
                 strong_ref_addr: UserAddress::from(0x1111111111111111),
             },
-        ));
+        );
 
         // Transactions always take a strong reference to binder objects.
         let handle = proc_2.lock().handles.insert_for_transaction(transaction_ref.clone());
@@ -3264,13 +3264,13 @@ mod tests {
         let proc_1 = driver.create_process(1);
         let proc_2 = driver.create_process(2);
 
-        let transaction_ref = Arc::new(BinderObject::new(
+        let transaction_ref = BinderObject::new(
             &proc_1,
             LocalBinderObject {
                 weak_ref_addr: UserAddress::from(0xffffffffffffffff),
                 strong_ref_addr: UserAddress::from(0x1111111111111111),
             },
-        ));
+        );
 
         // The handle starts with a strong ref.
         let handle = proc_2.lock().handles.insert_for_transaction(transaction_ref.clone());
@@ -3580,7 +3580,7 @@ mod tests {
             strong_ref_addr: UserAddress::from(0x0000000000000100),
         };
 
-        let object = Arc::new(BinderObject::new(&proc, LOCAL_BINDER_OBJECT));
+        let object = BinderObject::new(&proc, LOCAL_BINDER_OBJECT);
 
         drop(object);
 
@@ -3595,13 +3595,13 @@ mod tests {
         let driver = BinderDriver::new();
         let proc = driver.create_process(1);
 
-        let object = Arc::new(BinderObject::new(
+        let object = BinderObject::new(
             &proc,
             LocalBinderObject {
                 weak_ref_addr: UserAddress::from(0x0000000000000010),
                 strong_ref_addr: UserAddress::from(0x0000000000000100),
             },
-        ));
+        );
 
         let mut handle_table = HandleTable::default();
 
@@ -4105,9 +4105,11 @@ mod tests {
         };
 
         // Pretend the binder object was given to the sender earlier, so it can be sent back.
-        let handle = test.sender_proc.lock().handles.insert_for_transaction(Arc::new(
-            BinderObject::new(&test.receiver_proc, binder_object),
-        ));
+        let handle = test
+            .sender_proc
+            .lock()
+            .handles
+            .insert_for_transaction(BinderObject::new(&test.receiver_proc, binder_object));
 
         const DATA_PREAMBLE: &[u8; 5] = b"stuff";
 
@@ -4167,15 +4169,15 @@ mod tests {
             .sender_proc
             .lock()
             .handles
-            .insert_for_transaction(Arc::new(BinderObject::new(&owner_proc, binder_object)));
+            .insert_for_transaction(BinderObject::new(&owner_proc, binder_object));
         assert_eq!(SENDING_HANDLE, handle);
 
         // Give the receiver another handle so that the input handle number and output handle
         // number aren't the same.
-        test.receiver_proc.lock().handles.insert_for_transaction(Arc::new(BinderObject::new(
-            &owner_proc,
-            LocalBinderObject::default(),
-        )));
+        test.receiver_proc
+            .lock()
+            .handles
+            .insert_for_transaction(BinderObject::new(&owner_proc, LocalBinderObject::default()));
 
         const DATA_PREAMBLE: &[u8; 5] = b"stuff";
 
@@ -4249,8 +4251,8 @@ mod tests {
         const RECEIVING_HANDLE_OTHER: Handle = Handle::from_raw(3);
 
         // Add both objects (sender owned and other owned) to sender handle table.
-        let sender_object = Arc::new(BinderObject::new(&test.sender_proc, binder_object_addr));
-        let other_object = Arc::new(BinderObject::new(&other_proc, binder_object_addr));
+        let sender_object = BinderObject::new(&test.sender_proc, binder_object_addr);
+        let other_object = BinderObject::new(&other_proc, binder_object_addr);
         assert_eq!(
             test.sender_proc.lock().handles.insert_for_transaction(sender_object),
             SENDING_HANDLE_SENDER
@@ -4262,7 +4264,7 @@ mod tests {
 
         // Give the receiver another handle so that the input handle numbers and output handle
         // numbers aren't the same.
-        let obj = Arc::new(BinderObject::new(&other_proc, LocalBinderObject::default()));
+        let obj = BinderObject::new(&other_proc, LocalBinderObject::default());
         test.receiver_proc.lock().handles.insert_for_transaction(obj);
 
         const DATA_PREAMBLE: &[u8; 5] = b"stuff";
@@ -5713,13 +5715,13 @@ mod tests {
             // Set the context manager, as external ioctl will wait for it to be set before
             // executing.
             let context_manager_proc = driver.create_process(1);
-            let context_manager = Arc::new(BinderObject::new(
+            let context_manager = BinderObject::new(
                 &context_manager_proc,
                 LocalBinderObject {
                     weak_ref_addr: UserAddress::from(0xDEADBEEF),
                     strong_ref_addr: UserAddress::from(0xDEADDEAD),
                 },
-            ));
+            );
             *driver.context_manager.write() = Some(context_manager);
 
             let process = fuchsia_runtime::process_self()
@@ -5802,10 +5804,7 @@ mod tests {
         weak_ref_addr: UserAddress,
         strong_ref_addr: UserAddress,
     ) -> Arc<BinderObject> {
-        let object = Arc::new(BinderObject::new(
-            owner,
-            LocalBinderObject { weak_ref_addr, strong_ref_addr },
-        ));
+        let object = BinderObject::new(owner, LocalBinderObject { weak_ref_addr, strong_ref_addr });
         owner.lock().objects.insert(weak_ref_addr, Arc::downgrade(&object));
         object
     }
