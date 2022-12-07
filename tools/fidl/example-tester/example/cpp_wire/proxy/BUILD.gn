@@ -12,8 +12,8 @@ executable("bin") {
 
   deps = [
     "//sdk/lib/component/incoming/cpp",
+    "//sdk/lib/component/outgoing/cpp",
     "//sdk/lib/fdio",
-    "//sdk/lib/sys/component/cpp",
     "//sdk/lib/sys/cpp",
     "//sdk/lib/syslog/cpp",
     "//tools/fidl/example-tester/example/fidl:test.exampletester_cpp_wire",
