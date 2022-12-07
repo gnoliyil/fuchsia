@@ -11,13 +11,21 @@ use argh::FromArgs;
     description = "Dump device tree",
     example = "To dump the device tree:
 
-    $ driver dump",
+    $ driver dump\n",
+    example = "To dump the subtree of the device tree under a node:
+
+    $ driver dump my-node-name\n",
     error_code(1, "Failed to connect to the driver development service"),
     example = "To graph device tree:
 
     $ driver dump --graph | dot -Tpng | display"
 )]
 pub struct DumpCommand {
+    /// the device name to dump. All devices with this name will have their subtree printed. If
+    /// this is not supplied then the entire device tree will be dumped.
+    #[argh(positional)]
+    pub device: Option<String>,
+
     /// output device graph in dot language so that it may be viewed
     #[argh(switch, short = 'g', long = "graph")]
     pub graph: bool,

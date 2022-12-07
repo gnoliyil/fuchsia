@@ -26,9 +26,7 @@ impl DeviceInfoPrinter for DFv1Device {
             writer,
             "{:indent$}[{}] pid={} {}",
             "",
-            Self::extract_name(
-                self.0.topological_path.as_ref().ok_or(format_err!("Missing topological path"))?
-            ),
+            self.extract_name()?,
             self.0.driver_host_koid.as_ref().ok_or(format_err!("Missing driver host KOID"))?,
             self.0.bound_driver_libname.as_ref().ok_or(format_err!("Missing driver libname"))?,
             indent = tabs * 3,
@@ -41,13 +39,7 @@ impl DeviceInfoPrinter for DFv1Device {
             writer,
             "     \"{}\" [label=\"{}\"]",
             self.0.id.as_ref().ok_or(format_err!("Device missing id"))?,
-            Self::extract_name(
-                &self
-                    .0
-                    .topological_path
-                    .as_ref()
-                    .ok_or(format_err!("Device missing topological path"))?
-            )
+            self.extract_name()?,
         )?;
         Ok(())
     }
@@ -69,7 +61,7 @@ impl DeviceInfoPrinter for DFv2Node {
             writer,
             "{:indent$}[{}] pid={} {}",
             "",
-            Self::extract_name(self.0.moniker.as_ref().ok_or(format_err!("Missing moniker"))?),
+            self.extract_name()?,
             self.0.driver_host_koid.as_ref().ok_or(format_err!("Missing driver host KOID"))?,
             self.0.bound_driver_url.as_deref().unwrap_or(""),
             indent = tabs * 3,
@@ -82,9 +74,7 @@ impl DeviceInfoPrinter for DFv2Node {
             writer,
             "     \"{}\" [label=\"{}\"]",
             self.0.id.as_ref().ok_or(format_err!("Node missing id"))?,
-            Self::extract_name(
-                &self.0.moniker.as_ref().ok_or(format_err!("Node missing moniker"))?
-            )
+            self.extract_name()?,
         )?;
         Ok(())
     }
@@ -192,16 +182,21 @@ pub async fn dump(
         writeln!(writer, "}}")?;
     } else {
         let roots = devices.iter().filter(|device| {
-            let device_info = device.get_device_info();
-            if let Some(parent_ids) = device_info.parent_ids.as_ref() {
-                for parent_id in parent_ids.iter() {
-                    if device_map.contains_key(parent_id) {
-                        return false;
-                    }
-                }
-                true
+            if let Some(device_filter) = &cmd.device {
+                let name = device.extract_name().unwrap_or("");
+                name == device_filter
             } else {
-                true
+                let device_info = device.get_device_info();
+                if let Some(parent_ids) = device_info.parent_ids.as_ref() {
+                    for parent_id in parent_ids.iter() {
+                        if device_map.contains_key(parent_id) {
+                            return false;
+                        }
+                    }
+                    true
+                } else {
+                    true
+                }
             }
         });
 
@@ -347,56 +342,9 @@ mod tests {
                     control_handle: _,
                     exact_match: _,
                 } => {
-                    let null_id = 0;
-                    let root_id = 1;
-                    let composite_parent_id = 2;
-                    let composite_child_id = 3;
-                    run_device_info_iterator_server(
-                        vec![
-                            // Root device
-                            fdd::DeviceInfo {
-                                id: Some(root_id),
-                                parent_ids: Some(vec![null_id]),
-                                child_ids: Some(vec![composite_parent_id]),
-                                driver_host_koid: Some(0),
-                                topological_path: Some(String::from("/dev/sys/platform")),
-                                bound_driver_libname: Some(String::from("root.so")),
-                                bound_driver_url: Some(String::from(
-                                    "fuchsia-pkg://fuchsia.com/root-package#meta/root.cm",
-                                )),
-                                ..fdd::DeviceInfo::EMPTY
-                            },
-                            // Composite parent
-                            fdd::DeviceInfo {
-                                id: Some(composite_parent_id),
-                                parent_ids: None,
-                                child_ids: Some(vec![composite_child_id]),
-                                driver_host_koid: Some(0),
-                                topological_path: Some(String::from("/dev/parent")),
-                                bound_driver_libname: Some(String::from("parent.so")),
-                                bound_driver_url: Some(String::from(
-                                    "fuchsia-pkg://fuchsia.com/parent-package#meta/parent.cm",
-                                )),
-                                ..fdd::DeviceInfo::EMPTY
-                            },
-                            // Composite child
-                            fdd::DeviceInfo {
-                                id: Some(composite_child_id),
-                                parent_ids: Some(vec![composite_parent_id]),
-                                child_ids: Some(Vec::new()),
-                                driver_host_koid: Some(0),
-                                topological_path: Some(String::from("/dev/parent/child")),
-                                bound_driver_libname: Some(String::from("child.so")),
-                                bound_driver_url: Some(String::from(
-                                    "fuchsia-pkg://fuchsia.com/child-package#meta/child.cm",
-                                )),
-                                ..fdd::DeviceInfo::EMPTY
-                            },
-                        ],
-                        iterator,
-                    )
-                    .await
-                    .context("Failed to run device info iterator server")?;
+                    run_device_info_iterator_server(make_test_devices(), iterator)
+                        .await
+                        .context("Failed to run device info iterator server")?;
                 }
                 _ => {}
             }
@@ -414,5 +362,84 @@ mod tests {
    [child] pid=0 child.so
 "#
         );
+    }
+
+    #[fasync::run_singlethreaded(test)]
+    async fn test_with_device_filter() {
+        let cmd = DumpCommand::from_args(&["dump"], &["parent"]).unwrap();
+
+        let output = test_dump(cmd, |request: fdd::DriverDevelopmentRequest| async move {
+            match request {
+                fdd::DriverDevelopmentRequest::GetDeviceInfo {
+                    device_filter: _,
+                    iterator,
+                    control_handle: _,
+                    exact_match: _,
+                } => {
+                    run_device_info_iterator_server(make_test_devices(), iterator)
+                        .await
+                        .context("Failed to run device info iterator server")?;
+                }
+                _ => {}
+            }
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(
+            output,
+            r#"[parent] pid=0 parent.so
+   [child] pid=0 child.so
+"#
+        );
+    }
+
+    fn make_test_devices() -> Vec<fdd::DeviceInfo> {
+        let null_id = 0;
+        let root_id = 1;
+        let composite_parent_id = 2;
+        let composite_child_id = 3;
+        vec![
+            // Root device
+            fdd::DeviceInfo {
+                id: Some(root_id),
+                parent_ids: Some(vec![null_id]),
+                child_ids: Some(vec![composite_parent_id]),
+                driver_host_koid: Some(0),
+                topological_path: Some(String::from("/dev/sys/platform")),
+                bound_driver_libname: Some(String::from("root.so")),
+                bound_driver_url: Some(String::from(
+                    "fuchsia-pkg://fuchsia.com/root-package#meta/root.cm",
+                )),
+                ..fdd::DeviceInfo::EMPTY
+            },
+            // Composite parent
+            fdd::DeviceInfo {
+                id: Some(composite_parent_id),
+                parent_ids: None,
+                child_ids: Some(vec![composite_child_id]),
+                driver_host_koid: Some(0),
+                topological_path: Some(String::from("/dev/parent")),
+                bound_driver_libname: Some(String::from("parent.so")),
+                bound_driver_url: Some(String::from(
+                    "fuchsia-pkg://fuchsia.com/parent-package#meta/parent.cm",
+                )),
+                ..fdd::DeviceInfo::EMPTY
+            },
+            // Composite child
+            fdd::DeviceInfo {
+                id: Some(composite_child_id),
+                parent_ids: Some(vec![composite_parent_id]),
+                child_ids: Some(Vec::new()),
+                driver_host_koid: Some(0),
+                topological_path: Some(String::from("/dev/parent/child")),
+                bound_driver_libname: Some(String::from("child.so")),
+                bound_driver_url: Some(String::from(
+                    "fuchsia-pkg://fuchsia.com/child-package#meta/child.cm",
+                )),
+                ..fdd::DeviceInfo::EMPTY
+            },
+        ]
     }
 }

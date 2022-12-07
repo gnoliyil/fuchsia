@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 use {
-    anyhow::{anyhow, Context, Result},
+    anyhow::{anyhow, format_err, Context, Result},
     fidl_fuchsia_driver_development as fdd, futures,
 };
 
@@ -11,9 +11,11 @@ use {
 pub struct DFv1Device(pub fdd::DeviceInfo);
 
 impl DFv1Device {
-    pub fn extract_name<'b>(topological_path: &'b str) -> &'b str {
+    pub fn extract_name(&self) -> Result<&str> {
+        let topological_path =
+            self.0.topological_path.as_ref().ok_or(format_err!("Missing topological path"))?;
         let (_, name) = topological_path.rsplit_once('/').unwrap_or(("", &topological_path));
-        name
+        Ok(name)
     }
 }
 
@@ -21,9 +23,10 @@ impl DFv1Device {
 pub struct DFv2Node(pub fdd::DeviceInfo);
 
 impl DFv2Node {
-    pub fn extract_name<'b>(moniker: &'b str) -> &'b str {
+    pub fn extract_name(&self) -> Result<&str> {
+        let moniker = self.0.moniker.as_ref().ok_or(format_err!("Missing moniker"))?;
         let (_, name) = moniker.rsplit_once('.').unwrap_or(("", &moniker));
-        name
+        Ok(name)
     }
 }
 
@@ -38,6 +41,13 @@ impl Device {
         match self {
             Device::V1(device) => &device.0,
             Device::V2(node) => &node.0,
+        }
+    }
+
+    pub fn extract_name(&self) -> Result<&str> {
+        match self {
+            Device::V1(device) => device.extract_name(),
+            Device::V2(node) => node.extract_name(),
         }
     }
 }
