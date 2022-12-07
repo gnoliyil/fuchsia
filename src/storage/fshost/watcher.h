@@ -24,13 +24,14 @@ class Watcher {
 
   using WatcherCallback =
       fit::function<bool(Watcher&, int, fuchsia_io::wire::WatchEvent, const char*)>;
-  using AddDeviceCallback =
-      fit::function<zx_status_t(BlockDeviceManager&, FilesystemMounter*, fbl::unique_fd)>;
+  using AddDeviceCallback = fit::function<zx_status_t(
+      BlockDeviceManager&, FilesystemMounter*, fidl::ClientEnd<fuchsia_hardware_block::Block>)>;
 
   // Parse watch events from |buf|, calling |callback| for each event.
   // |callback| should return true if it receives an idle event and the block watcher is paused.
   void ProcessWatchMessages(cpp20::span<uint8_t> buf, WatcherCallback callback);
-  zx_status_t AddDevice(BlockDeviceManager& manager, FilesystemMounter* mounter, fbl::unique_fd fd);
+  zx_status_t AddDevice(BlockDeviceManager& manager, FilesystemMounter* mounter,
+                        fidl::ClientEnd<fuchsia_hardware_block::Block> block_device);
   const char* path() { return path_; }
   bool ignore_existing() const { return ignore_existing_; }
   fidl::UnownedClientEnd<fuchsia_io::DirectoryWatcher> borrow_watcher() {

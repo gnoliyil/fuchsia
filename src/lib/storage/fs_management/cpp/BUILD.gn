@@ -169,7 +169,10 @@ source_set("mkfs_with_default") {
     "mkfs_with_default.cc",
     "mkfs_with_default.h",
   ]
-  deps = [ ":fs-management" ]
+  deps = [
+    ":fs-management",
+    "//sdk/lib/component/incoming/cpp",
+  ]
 }
 
 group("tests") {

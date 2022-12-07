@@ -13,7 +13,6 @@
 #include <fbl/unique_fd.h>
 
 #include "src/lib/storage/fs_management/cpp/mount.h"
-#include "src/storage/fshost/block-watcher.h"
 #include "src/storage/fshost/fshost_config.h"
 
 namespace fshost::storage_wiper {

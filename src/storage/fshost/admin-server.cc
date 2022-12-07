@@ -32,6 +32,7 @@
 #include "src/lib/storage/fs_management/cpp/options.h"
 #include "src/lib/storage/vfs/cpp/service.h"
 #include "src/storage/fshost/block-device.h"
+#include "src/storage/fshost/block-watcher.h"
 #include "src/storage/fshost/constants.h"
 #include "src/storage/fshost/filesystem-mounter.h"
 #include "src/storage/fshost/fxfs.h"
@@ -64,29 +65,16 @@ fbl::RefPtr<fs::Service> AdminServer::Create(FsManager* fs_manager,
 }
 
 void AdminServer::Mount(MountRequestView request, MountCompleter::Sync& completer) {
-  std::string device_path;
-  if (auto result = fidl::WireCall(fidl::UnownedClientEnd<fuchsia_device::Controller>(
-                                       request->device.channel().borrow()))
-                        ->GetTopologicalPath();
-      result.status() != ZX_OK) {
-    FX_LOGS(WARNING) << "Unable to get device topological path (FIDL error): "
-                     << zx_status_get_string(result.status());
-  } else if (result->is_error()) {
-    FX_LOGS(WARNING) << "Unable to get device topological path: "
-                     << zx_status_get_string(result->error_value());
-  } else {
-    device_path = result->value()->path.get();
-  }
-
-  fs_management::DiskFormat df = fs_management::DetectDiskFormat(request->device);
-
-  fbl::unique_fd fd;
-  if (zx_status_t status =
-          fdio_fd_create(request->device.TakeChannel().release(), fd.reset_and_get_address());
-      status != ZX_OK) {
-    completer.ReplyError(status);
+  zx::result topological_path = GetTopologicalPath(
+      fidl::UnownedClientEnd<fuchsia_device::Controller>(request->device.channel().borrow()));
+  if (topological_path.is_error()) {
+    FX_PLOGS(WARNING, topological_path.error_value()) << "Unable to get device topological path";
+    completer.ReplyError(topological_path.error_value());
     return;
   }
+  const std::string device_path = topological_path.value();
+
+  fs_management::DiskFormat df = fs_management::DetectDiskFormat(request->device);
 
   const std::string name(request->name.get());
   const auto& o = request->options;
@@ -112,7 +100,7 @@ void AdminServer::Mount(MountRequestView request, MountCompleter::Sync& complete
   // thread-safe if we're shutting down, but since mounting is a debug only thing for now, we don't
   // worry about it.
   std::thread thread([device_path = std::move(device_path), name, completer = completer.ToAsync(),
-                      options = std::move(options), fd = std::move(fd), df,
+                      options = std::move(options), device = std::move(request->device), df,
                       fs_manager = fs_manager_, dispatcher]() mutable {
     static int mount_index = 0;
     std::string component_child_name = name + "." + std::to_string(mount_index++);
@@ -121,7 +109,7 @@ void AdminServer::Mount(MountRequestView request, MountCompleter::Sync& complete
 
     // TODO(fxbug.dev/93066): Support mounting multi-volume filesystems as well.
     auto mounted_filesystem =
-        fs_management::Mount(std::move(fd), df, options, fs_management::LaunchLogsAsync);
+        fs_management::Mount(std::move(device), df, options, fs_management::LaunchLogsAsync);
     if (mounted_filesystem.is_error()) {
       FX_LOGS(WARNING) << "Mount failed: " << mounted_filesystem.status_string();
       completer.ReplyError(mounted_filesystem.error_value());
@@ -219,11 +207,18 @@ zx::result<> AdminServer::WriteDataFileInner(WriteDataFileRequestView request) {
     format = fs_management::kDiskFormatF2fs;
   }
 
-  std::string fvm_path = GetTopologicalPath(fvm->get());
+  fdio_cpp::UnownedFdioCaller fvm_caller(fvm.value());
+  std::string parent_device;
+  if (zx::result fvm_path = GetTopologicalPath(fvm_caller.borrow_as<fuchsia_device::Controller>());
+      fvm_path.is_error()) {
+    FX_PLOGS(WARNING, fvm_path.error_value()) << "Unable to get FVM topological path";
+  } else {
+    parent_device = std::move(fvm_path.value());
+  }
   const fs_management::PartitionMatcher data_matcher{
       .type_guids = {GUID_DATA_VALUE},
       .labels = {kDataPartitionLabel, kLegacyDataPartitionLabel},
-      .parent_device = fvm_path,
+      .parent_device = parent_device,
       .ignore_if_path_contains = "zxcrypt/unsealed",
   };
   auto partition = OpenPartition(data_matcher, kOpenPartitionDuration, nullptr);
@@ -231,102 +226,117 @@ zx::result<> AdminServer::WriteDataFileInner(WriteDataFileRequestView request) {
     FX_PLOGS(ERROR, partition.status_value()) << "Failed to find data partition";
     return partition.take_error();
   }
-  FX_LOGS(INFO) << "Using data path " << GetTopologicalPath(partition.value().get());
+  fdio_cpp::FdioCaller caller(std::move(partition.value()));
 
   bool inside_zxcrypt = false;
   if (format != fs_management::kDiskFormatFxfs && !config_.no_zxcrypt()) {
     // For non-Fxfs configurations, we expect zxcrypt to be present and have already been formatted
     // (if needed) by the block watcher.
-    std::string zxcrypt_path = GetTopologicalPath(partition.value().get()) + "/zxcrypt/unsealed";
+    std::string parent_device;
+    if (zx::result device_path = GetTopologicalPath(caller.borrow_as<fuchsia_device::Controller>());
+        device_path.is_error()) {
+      FX_PLOGS(WARNING, device_path.error_value()) << "Unable to get device topological path";
+    } else {
+      parent_device = std::move(device_path.value());
+    }
+    parent_device += "/zxcrypt/unsealed";
     const fs_management::PartitionMatcher zxcrypt_matcher{
         .type_guids = {GUID_DATA_VALUE},
         .labels = {kDataPartitionLabel, kLegacyDataPartitionLabel},
-        .parent_device = zxcrypt_path,
+        .parent_device = parent_device,
     };
     partition = OpenPartition(zxcrypt_matcher, kOpenPartitionDuration, nullptr);
     if (partition.is_error()) {
       FX_PLOGS(ERROR, partition.status_value()) << "Failed to find inner data partition";
       return partition.take_error();
     }
+    caller.reset(std::move(partition.value()));
     inside_zxcrypt = true;
   }
 
   std::optional<StartedFilesystem> started_fs;
   fidl::ClientEnd<fuchsia_io::Directory> data_root;
-  {
-    std::string partition_path = GetTopologicalPath(partition.value().get());
-    fdio_cpp::UnownedFdioCaller caller(partition.value());
-    fs_management::DiskFormat detected_format =
-        fs_management::DetectDiskFormat(caller.borrow_as<fuchsia_hardware_block::Block>());
 
-    FX_LOGS(INFO) << "Using data partition at " << partition_path << ", has format "
+  fs_management::DiskFormat detected_format =
+      fs_management::DetectDiskFormat(caller.borrow_as<fuchsia_hardware_block::Block>());
+
+  const zx::result partition_path =
+      GetTopologicalPath(caller.borrow_as<fuchsia_device::Controller>());
+  if (partition_path.is_error()) {
+    FX_PLOGS(WARNING, partition_path.error_value())
+        << "Using data partition with format " << fs_management::DiskFormatString(detected_format)
+        << ", unable to get topological path";
+  } else {
+    FX_LOGS(INFO) << "Using data partition at " << partition_path.value() << ", has format "
                   << fs_management::DiskFormatString(detected_format);
+  }
 
-    if (detected_format != format) {
-      FX_LOGS(INFO) << "Data partition is not in expected format; reformatting";
-      if (format != fs_management::kDiskFormatMinfs) {
-        // Minfs is FVM-aware and will grow as needed, but other filesystems require a
-        // pre-allocation.
-        uint64_t target_size = config_.data_max_bytes();
-        if (format == fs_management::kDiskFormatF2fs) {
-          auto query_result =
-              fidl::WireCall(caller.borrow_as<fuchsia_hardware_block_volume::Volume>())
-                  ->GetVolumeInfo();
-          if (query_result.status() != ZX_OK) {
-            return zx::error(query_result.status());
-          }
-          if (query_result.value().status != ZX_OK) {
-            return zx::error(query_result.value().status);
-          }
-          const uint64_t slice_size = query_result.value().manager->slice_size;
-          uint64_t required_size = fbl::round_up(kDefaultF2fsMinBytes, slice_size);
-          // f2fs always requires at least a certain size.
-          if (inside_zxcrypt) {
-            // Allocate an additional slice for zxcrypt metadata.
-            required_size += slice_size;
-          }
-          target_size = std::max(target_size, required_size);
+  if (detected_format != format) {
+    FX_LOGS(INFO) << "Data partition is not in expected format; reformatting";
+    if (format != fs_management::kDiskFormatMinfs) {
+      // Minfs is FVM-aware and will grow as needed, but other filesystems require a
+      // pre-allocation.
+      uint64_t target_size = config_.data_max_bytes();
+      if (format == fs_management::kDiskFormatF2fs) {
+        auto query_result =
+            fidl::WireCall(caller.borrow_as<fuchsia_hardware_block_volume::Volume>())
+                ->GetVolumeInfo();
+        if (query_result.status() != ZX_OK) {
+          return zx::error(query_result.status());
         }
-        FX_LOGS(INFO) << "Resizing data volume, target = " << target_size << " bytes";
-        auto actual_size = ResizeVolume(caller.borrow_as<fuchsia_hardware_block_volume::Volume>(),
-                                        target_size, inside_zxcrypt);
-        if (actual_size.is_error()) {
-          FX_PLOGS(ERROR, actual_size.status_value()) << "Failed to resize volume";
-          return actual_size.take_error();
+        if (query_result.value().status != ZX_OK) {
+          return zx::error(query_result.value().status);
         }
-        if (format == fs_management::kDiskFormatF2fs && *actual_size < kDefaultF2fsMinBytes) {
-          FX_LOGS(ERROR) << "Only allocated " << *actual_size << " bytes but needed "
-                         << kDefaultF2fsMinBytes;
-          return zx::error(ZX_ERR_NO_SPACE);
+        const uint64_t slice_size = query_result.value().manager->slice_size;
+        uint64_t required_size = fbl::round_up(kDefaultF2fsMinBytes, slice_size);
+        // f2fs always requires at least a certain size.
+        if (inside_zxcrypt) {
+          // Allocate an additional slice for zxcrypt metadata.
+          required_size += slice_size;
         }
-        if (*actual_size < target_size) {
-          FX_LOGS(WARNING) << "Only allocated " << *actual_size << " bytes";
-        }
+        target_size = std::max(target_size, required_size);
       }
-      if (format == fs_management::kDiskFormatFxfs) {
-        zx::result owned = component::Clone(caller.borrow_as<fuchsia_hardware_block::Block>(),
-                                            component::AssumeProtocolComposesNode);
-        if (owned.is_error()) {
-          return owned.take_error();
-        }
-        auto fxfs = FormatFxfsAndInitDataVolume(std::move(owned.value()), config_);
-        if (fxfs.is_error()) {
-          FX_PLOGS(ERROR, fxfs.status_value()) << "Failed to format data partition";
-          return fxfs.take_error();
-        }
-        if (auto status = fxfs->second->DataRoot(); status.is_ok()) {
-          data_root = std::move(*status);
-        } else {
-          FX_PLOGS(ERROR, status.status_value()) << "Failed to get data root";
-          return status.take_error();
-        }
-        started_fs.emplace(std::move(fxfs->first));
+      FX_LOGS(INFO) << "Resizing data volume, target = " << target_size << " bytes";
+      auto actual_size = ResizeVolume(caller.borrow_as<fuchsia_hardware_block_volume::Volume>(),
+                                      target_size, inside_zxcrypt);
+      if (actual_size.is_error()) {
+        FX_PLOGS(ERROR, actual_size.status_value()) << "Failed to resize volume";
+        return actual_size.take_error();
+      }
+      if (format == fs_management::kDiskFormatF2fs && *actual_size < kDefaultF2fsMinBytes) {
+        FX_LOGS(ERROR) << "Only allocated " << *actual_size << " bytes but needed "
+                       << kDefaultF2fsMinBytes;
+        return zx::error(ZX_ERR_NO_SPACE);
+      }
+      if (*actual_size < target_size) {
+        FX_LOGS(WARNING) << "Only allocated " << *actual_size << " bytes";
+      }
+    }
+    if (format == fs_management::kDiskFormatFxfs) {
+      zx::result owned = component::Clone(caller.borrow_as<fuchsia_hardware_block::Block>(),
+                                          component::AssumeProtocolComposesNode);
+      if (owned.is_error()) {
+        return owned.take_error();
+      }
+      auto fxfs = FormatFxfsAndInitDataVolume(std::move(owned.value()), config_);
+      if (fxfs.is_error()) {
+        FX_PLOGS(ERROR, fxfs.status_value()) << "Failed to format data partition";
+        return fxfs.take_error();
+      }
+      if (auto status = fxfs->second->DataRoot(); status.is_ok()) {
+        data_root = std::move(*status);
       } else {
-        fs_management::MkfsOptions options;
-        if (!fs_management::DiskFormatComponentUrl(format).empty()) {
-          options.component_child_name = fs_management::DiskFormatString(format);
-        }
-        if (zx_status_t status = fs_management::Mkfs(partition_path.c_str(), format,
+        FX_PLOGS(ERROR, status.status_value()) << "Failed to get data root";
+        return status.take_error();
+      }
+      started_fs.emplace(std::move(fxfs->first));
+    } else {
+      fs_management::MkfsOptions options;
+      if (!fs_management::DiskFormatComponentUrl(format).empty()) {
+        options.component_child_name = fs_management::DiskFormatString(format);
+      }
+      if (partition_path.is_ok()) {
+        if (zx_status_t status = fs_management::Mkfs(partition_path.value().c_str(), format,
                                                      fs_management::LaunchStdioAsync, options);
             status != ZX_OK) {
           FX_PLOGS(ERROR, status) << "Failed to format data partition";
@@ -336,11 +346,17 @@ zx::result<> AdminServer::WriteDataFileInner(WriteDataFileRequestView request) {
     }
   }
 
+  zx::result device = caller.take_as<fuchsia_hardware_block::Block>();
+  if (device.is_error()) {
+    FX_PLOGS(ERROR, device.error_value()) << "Failed to acquire partition channel";
+    return device.take_error();
+  }
+
   if (!data_root) {
     fs_management::MountOptions options;
     if (format == fs_management::kDiskFormatFxfs) {
       options.component_child_name = fs_management::DiskFormatString(format);
-      auto fxfs = fs_management::MountMultiVolume(std::move(partition.value()), format, options,
+      auto fxfs = fs_management::MountMultiVolume(std::move(device.value()), format, options,
                                                   fs_management::LaunchStdioAsync);
       if (fxfs.is_error()) {
         FX_PLOGS(ERROR, fxfs.status_value()) << "Failed to open data partition";
@@ -362,7 +378,7 @@ zx::result<> AdminServer::WriteDataFileInner(WriteDataFileRequestView request) {
       if (!fs_management::DiskFormatComponentUrl(format).empty()) {
         options.component_child_name = fs_management::DiskFormatString(format);
       }
-      auto fs = fs_management::Mount(std::move(partition.value()), format, options,
+      auto fs = fs_management::Mount(std::move(device.value()), format, options,
                                      fs_management::LaunchStdioAsync);
       if (fs.is_error()) {
         FX_PLOGS(ERROR, fs.status_value()) << "Failed to open data partition";

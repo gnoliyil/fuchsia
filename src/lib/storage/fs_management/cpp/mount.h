@@ -17,7 +17,6 @@
 #include <fbl/unique_fd.h>
 
 #include "src/lib/storage/fs_management/cpp/format.h"
-#include "src/lib/storage/fs_management/cpp/fvm.h"
 #include "src/lib/storage/fs_management/cpp/launch.h"
 #include "src/lib/storage/fs_management/cpp/options.h"
 
@@ -33,8 +32,8 @@ class NamespaceBinding {
 
   NamespaceBinding(const NamespaceBinding&) = delete;
   NamespaceBinding& operator=(const NamespaceBinding&) = delete;
-  NamespaceBinding(NamespaceBinding&& o) : path_(std::move(o.path_)) { o.path_.clear(); }
-  NamespaceBinding& operator=(NamespaceBinding&& o) {
+  NamespaceBinding(NamespaceBinding&& o) noexcept : path_(std::move(o.path_)) { o.path_.clear(); }
+  NamespaceBinding& operator=(NamespaceBinding&& o) noexcept {
     path_ = std::move(o.path_);
     o.path_.clear();
     return *this;
@@ -76,11 +75,11 @@ class __EXPORT StartedSingleVolumeFilesystem : public SingleVolumeFilesystemInte
   StartedSingleVolumeFilesystem() = default;
   explicit StartedSingleVolumeFilesystem(fidl::ClientEnd<fuchsia_io::Directory> export_root)
       : export_root_(std::move(export_root)) {}
-  StartedSingleVolumeFilesystem(StartedSingleVolumeFilesystem&& o)
+  StartedSingleVolumeFilesystem(StartedSingleVolumeFilesystem&& o) noexcept
       : export_root_(std::move(o.export_root_)) {
     o.Release();
   }
-  StartedSingleVolumeFilesystem& operator=(StartedSingleVolumeFilesystem&& o) {
+  StartedSingleVolumeFilesystem& operator=(StartedSingleVolumeFilesystem&& o) noexcept {
     export_root_ = std::move(o.export_root_);
     o.Release();
     return *this;
@@ -112,8 +111,10 @@ class MountedVolume {
   MountedVolume() = default;
   explicit MountedVolume(fidl::ClientEnd<fuchsia_io::Directory> export_root)
       : export_root_(std::move(export_root)) {}
-  MountedVolume(MountedVolume&& o) : export_root_(std::move(o.export_root_)) { o.Release(); }
-  MountedVolume& operator=(MountedVolume&& o) {
+  MountedVolume(MountedVolume&& o) noexcept : export_root_(std::move(o.export_root_)) {
+    o.Release();
+  }
+  MountedVolume& operator=(MountedVolume&& o) noexcept {
     export_root_ = std::move(o.export_root_);
     o.Release();
     return *this;
@@ -140,11 +141,11 @@ class __EXPORT StartedMultiVolumeFilesystem {
   StartedMultiVolumeFilesystem() = default;
   explicit StartedMultiVolumeFilesystem(fidl::ClientEnd<fuchsia_io::Directory> exposed_dir)
       : exposed_dir_(std::move(exposed_dir)) {}
-  StartedMultiVolumeFilesystem(StartedMultiVolumeFilesystem&& o)
+  StartedMultiVolumeFilesystem(StartedMultiVolumeFilesystem&& o) noexcept
       : exposed_dir_(std::move(o.exposed_dir_)), volumes_(std::move(o.volumes_)) {
     o.Release();
   }
-  StartedMultiVolumeFilesystem& operator=(StartedMultiVolumeFilesystem&& o) {
+  StartedMultiVolumeFilesystem& operator=(StartedMultiVolumeFilesystem&& o) noexcept {
     exposed_dir_ = std::move(o.exposed_dir_);
     volumes_ = std::move(o.volumes_);
     o.Release();
@@ -211,12 +212,12 @@ class __EXPORT StartedSingleVolumeMultiVolumeFilesystem : public SingleVolumeFil
   StartedSingleVolumeMultiVolumeFilesystem(fidl::ClientEnd<fuchsia_io::Directory> exposed_dir,
                                            MountedVolume volume)
       : exposed_dir_(std::move(exposed_dir)), volume_(std::move(volume)) {}
-  StartedSingleVolumeMultiVolumeFilesystem(StartedSingleVolumeMultiVolumeFilesystem&& o)
+  StartedSingleVolumeMultiVolumeFilesystem(StartedSingleVolumeMultiVolumeFilesystem&& o) noexcept
       : exposed_dir_(std::move(o.exposed_dir_)), volume_(std::move(o.volume_)) {
     o.Release();
   }
   StartedSingleVolumeMultiVolumeFilesystem& operator=(
-      StartedSingleVolumeMultiVolumeFilesystem&& o) {
+      StartedSingleVolumeMultiVolumeFilesystem&& o) noexcept {
     exposed_dir_ = std::move(o.exposed_dir_);
     volume_ = std::move(o.volume_);
     o.Release();
@@ -256,8 +257,9 @@ class __EXPORT StartedSingleVolumeMultiVolumeFilesystem : public SingleVolumeFil
 //                filesystems). This can be one of the functions declared in launch.h.
 //
 // See //src/storage/docs/launching.md for more information.
-zx::result<StartedSingleVolumeFilesystem> Mount(fbl::unique_fd device_fd, DiskFormat df,
-                                                const MountOptions& options, LaunchCallback cb);
+zx::result<StartedSingleVolumeFilesystem> Mount(
+    fidl::ClientEnd<fuchsia_hardware_block::Block> device, DiskFormat df,
+    const MountOptions& options, LaunchCallback cb);
 
 // Mounts a multi-volume filesystem.
 //
@@ -268,9 +270,9 @@ zx::result<StartedSingleVolumeFilesystem> Mount(fbl::unique_fd device_fd, DiskFo
 //                filesystems). This can be one of the functions declared in launch.h.
 //
 // See //src/storage/docs/launching.md for more information.
-zx::result<StartedMultiVolumeFilesystem> MountMultiVolume(fbl::unique_fd device_fd, DiskFormat df,
-                                                          const MountOptions& options,
-                                                          LaunchCallback cb);
+zx::result<StartedMultiVolumeFilesystem> MountMultiVolume(
+    fidl::ClientEnd<fuchsia_hardware_block::Block> device, DiskFormat df,
+    const MountOptions& options, LaunchCallback cb);
 
 // Mounts a multi-volume filesystem using a default singular volume.  Generally this is used for
 // testing and production use should favour |MountMultiVolume|.
@@ -284,8 +286,8 @@ zx::result<StartedMultiVolumeFilesystem> MountMultiVolume(fbl::unique_fd device_
 //
 // See //src/storage/docs/launching.md for more information.
 zx::result<StartedSingleVolumeMultiVolumeFilesystem> MountMultiVolumeWithDefault(
-    fbl::unique_fd device_fd, DiskFormat df, const MountOptions& options, LaunchCallback cb,
-    const char* volume_name = "default");
+    fidl::ClientEnd<fuchsia_hardware_block::Block> device, DiskFormat df,
+    const MountOptions& options, LaunchCallback cb, const char* volume_name = "default");
 
 // Shuts down a filesystem.
 //

@@ -36,7 +36,6 @@
 
 #include <fbl/algorithm.h>
 #include <fbl/alloc_checker.h>
-#include <fbl/unique_fd.h>
 #include <fbl/vector.h>
 #include <pretty/hexdump.h>
 
@@ -306,22 +305,17 @@ zx::result<> StartedSingleVolumeMultiVolumeFilesystem::Unmount() {
 __EXPORT SingleVolumeFilesystemInterface::~SingleVolumeFilesystemInterface() = default;
 
 __EXPORT
-zx::result<StartedSingleVolumeFilesystem> Mount(fbl::unique_fd device_fd, DiskFormat df,
-                                                const MountOptions& options, LaunchCallback cb) {
+zx::result<StartedSingleVolumeFilesystem> Mount(
+    fidl::ClientEnd<fuchsia_hardware_block::Block> device, DiskFormat df,
+    const MountOptions& options, LaunchCallback cb) {
   if (IsMultiVolume(df)) {
     return zx::error(ZX_ERR_NOT_SUPPORTED);
-  }
-
-  fdio_cpp::FdioCaller caller(std::move(device_fd));
-  zx::result device = caller.take_as<fuchsia_hardware_block::Block>();
-  if (device.is_error()) {
-    return device.take_error();
   }
 
   StartedSingleVolumeFilesystem fs;
   if (options.component_child_name) {
     // Componentized filesystem
-    auto exposed_dir = InitFsComponent(std::move(device.value()), df, options);
+    auto exposed_dir = InitFsComponent(std::move(device), df, options);
     if (exposed_dir.is_error()) {
       return exposed_dir.take_error();
     }
@@ -332,7 +326,7 @@ zx::result<StartedSingleVolumeFilesystem> Mount(fbl::unique_fd device_fd, DiskFo
     if (binary.empty()) {
       return zx::error(ZX_ERR_NOT_SUPPORTED);
     }
-    auto export_root = InitNativeFs(binary.c_str(), std::move(device.value()), options, cb);
+    auto export_root = InitNativeFs(binary.c_str(), std::move(device), options, cb);
     if (export_root.is_error()) {
       return export_root.take_error();
     }
@@ -343,20 +337,14 @@ zx::result<StartedSingleVolumeFilesystem> Mount(fbl::unique_fd device_fd, DiskFo
 }
 
 __EXPORT
-zx::result<StartedMultiVolumeFilesystem> MountMultiVolume(fbl::unique_fd device_fd, DiskFormat df,
-                                                          const MountOptions& options,
-                                                          LaunchCallback cb) {
+zx::result<StartedMultiVolumeFilesystem> MountMultiVolume(
+    fidl::ClientEnd<fuchsia_hardware_block::Block> device, DiskFormat df,
+    const MountOptions& options, LaunchCallback cb) {
   if (!IsMultiVolume(df)) {
     return zx::error(ZX_ERR_NOT_SUPPORTED);
   }
 
-  fdio_cpp::FdioCaller caller(std::move(device_fd));
-  zx::result device = caller.take_as<fuchsia_hardware_block::Block>();
-  if (device.is_error()) {
-    return device.take_error();
-  }
-
-  auto outgoing_dir = InitFsComponent(std::move(device.value()), df, options);
+  auto outgoing_dir = InitFsComponent(std::move(device), df, options);
   if (outgoing_dir.is_error()) {
     return outgoing_dir.take_error();
   }
@@ -365,19 +353,13 @@ zx::result<StartedMultiVolumeFilesystem> MountMultiVolume(fbl::unique_fd device_
 
 __EXPORT
 zx::result<StartedSingleVolumeMultiVolumeFilesystem> MountMultiVolumeWithDefault(
-    fbl::unique_fd device_fd, DiskFormat df, const MountOptions& options, LaunchCallback cb,
-    const char* volume_name) {
+    fidl::ClientEnd<fuchsia_hardware_block::Block> device, DiskFormat df,
+    const MountOptions& options, LaunchCallback cb, const char* volume_name) {
   if (!IsMultiVolume(df)) {
     return zx::error(ZX_ERR_NOT_SUPPORTED);
   }
 
-  fdio_cpp::FdioCaller caller(std::move(device_fd));
-  zx::result device = caller.take_as<fuchsia_hardware_block::Block>();
-  if (device.is_error()) {
-    return device.take_error();
-  }
-
-  auto outgoing_dir_or = InitFsComponent(std::move(device.value()), df, options);
+  auto outgoing_dir_or = InitFsComponent(std::move(device), df, options);
   if (outgoing_dir_or.is_error()) {
     return outgoing_dir_or.take_error();
   }
