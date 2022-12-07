@@ -7,8 +7,8 @@
 #include <fidl/test.protocol.connector/cpp/fidl.h>
 #include <lib/async/cpp/task.h>
 #include <lib/component/incoming/cpp/service_client.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/fidl/cpp/wire/channel.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 
 #include <functional>
 #include <optional>

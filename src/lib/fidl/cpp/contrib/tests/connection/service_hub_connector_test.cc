@@ -13,7 +13,7 @@
 #include <queue>
 #include <type_traits>
 
-#include <sdk/lib/sys/component/cpp/outgoing_directory.h>
+#include <sdk/lib/component/outgoing/cpp/outgoing_directory.h>
 
 #include "lib/async/cpp/task.h"
 #include "src/lib/storage/vfs/cpp/pseudo_dir.h"

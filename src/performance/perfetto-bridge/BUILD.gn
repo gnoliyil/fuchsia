@@ -51,10 +51,10 @@ executable("bin") {
 
   deps = [
     ":perfetto_bridge_lib",
+    "//sdk/lib/component/outgoing/cpp",
     "//sdk/lib/fidl/cpp",
     "//sdk/lib/fidl/cpp",
     "//sdk/lib/fit",
-    "//sdk/lib/sys/component/cpp",
     "//sdk/lib/sys/cpp",
     "//sdk/lib/syslog/cpp",
     "//src/lib/fxl",

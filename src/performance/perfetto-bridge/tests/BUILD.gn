@@ -39,7 +39,7 @@ executable("perfetto_producer_bin") {
   deps = [
     "//sdk/fidl/fuchsia.tracing.perfetto:fuchsia.tracing.perfetto_cpp",
     "//sdk/lib/component/incoming/cpp",
-    "//sdk/lib/sys/component/cpp",
+    "//sdk/lib/component/outgoing/cpp",
     "//sdk/lib/syslog/cpp:cpp",
     "//third_party/perfetto:libperfetto_client_experimental",
     "//third_party/perfetto/include/perfetto/ext/ipc",

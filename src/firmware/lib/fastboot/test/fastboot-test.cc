@@ -14,10 +14,10 @@
 #include <lib/async-loop/cpp/loop.h>
 #include <lib/async-loop/default.h>
 #include <lib/async/dispatcher.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/fastboot/fastboot.h>
 #include <lib/fastboot/test/test-transport.h>
 #include <lib/fidl-async/cpp/bind.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 
 #include <unordered_map>
 #include <vector>
