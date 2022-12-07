@@ -66,7 +66,7 @@ pub struct CreateRfcArgs {
 const AREAS_FILE: &str = "_areas.yaml";
 const FX_RFC_GENERATED: &str = "<!-- Generated with `fx rfc` -->";
 const META_FILE: &str = "_rfcs.yaml";
-const RFC_NAME_PLACEHOLDER: &str = "RFC-NNNN";
+const RFC_NAME_PLACEHOLDER: &str = "RFC-0000";
 const RFCS_PATH: &str = "docs/contribute/governance/rfcs";
 const STATUS_PLACEHOLDER: &str = "Pending";
 const TEMPLATE_FILE: &str = "TEMPLATE.md";
@@ -376,7 +376,7 @@ where
 
 fn filename_from_title(title: &str) -> String {
     let filename = format!(
-        "NNNN_{}.md",
+        "0000_{}.md",
         title.to_lowercase().split(' ').map(|s| s.trim()).collect::<Vec<_>>().join("_"),
     );
     filename.replace(std::path::is_separator, "_")
@@ -437,7 +437,7 @@ fn create_rfc(meta: &RfcMetadata, path: &PathBuf) -> Result<()> {
 
     let template = template.replace(
         r#"{% set rfcid = "RFC-0000" %}"#,
-        r#"{% set rfcid = "RFC-NNNN" %} <!-- TODO: DO NOT SUBMIT, update number -->"#,
+        r#"{% set rfcid = "RFC-0000" %} <!-- TODO: DO NOT SUBMIT, update number -->"#,
     );
 
     let reviewers =
@@ -598,7 +598,7 @@ mod test {
         dir.validate_rfcs_file(META_FILE, include_str!("../test_data/rfcs.golden.yaml"));
         dir.validate_rfcs_file(TOC_FILE, include_str!("../test_data/toc.golden.yaml"));
         dir.validate_rfcs_file(
-            "NNNN_back_to_the_fuchsia.md",
+            "0000_back_to_the_fuchsia.md",
             include_str!("../test_data/rfc.golden.md"),
         );
     }
@@ -648,7 +648,7 @@ mod test {
         dir.validate_rfcs_file(META_FILE, include_str!("../test_data/rfcs.golden.yaml"));
         dir.validate_rfcs_file(TOC_FILE, include_str!("../test_data/toc.golden.yaml"));
         dir.validate_rfcs_file(
-            "NNNN_back_to_the_fuchsia.md",
+            "0000_back_to_the_fuchsia.md",
             include_str!("../test_data/rfc.golden.md"),
         );
     }
@@ -736,6 +736,6 @@ mod test {
         .expect("succeeds");
 
         assert_eq!(std::str::from_utf8(&stdout).expect("stdout bytes"), "Title: ");
-        assert!(dir.rfc_file_exists("NNNN_hello_there.md"));
+        assert!(dir.rfc_file_exists("0000_hello_there.md"));
     }
 }

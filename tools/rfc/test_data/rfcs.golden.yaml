@@ -11,11 +11,11 @@
   submitted: '01/02/2000'
   reviewed: '01/01/2000'
 
-- name: 'RFC-NNNN'  # TODO: DO NOT SUBMIT, update.
+- name: 'RFC-0000'  # TODO: DO NOT SUBMIT, update.
   title: 'Back to the Fuchsia'
   short_description: 'Fuchsia is a modern OS'
   authors: ['bar@google.com', 'foo@google.com']
-  file: 'NNNN_back_to_the_fuchsia.md'
+  file: '0000_back_to_the_fuchsia.md'
   area: ['Pink']
   issue: ['1234', '5678']
   gerrit_change_id: ['']  # TODO: DO NOT SUBMIT, update.
