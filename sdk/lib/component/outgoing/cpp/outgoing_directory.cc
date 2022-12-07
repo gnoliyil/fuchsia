@@ -3,9 +3,9 @@
 // found in the LICENSE file.
 
 #include <lib/component/incoming/cpp/constants.h>
+#include <lib/component/outgoing/cpp/handlers.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/svc/dir.h>
-#include <lib/sys/component/cpp/handlers.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 #include <lib/zx/result.h>
 #include <zircon/assert.h>
 #include <zircon/errors.h>
