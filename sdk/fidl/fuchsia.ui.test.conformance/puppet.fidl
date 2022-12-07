@@ -194,19 +194,22 @@ protocol Puppet {
     });
 };
 
+/// Used to create a puppet instance.
+type PuppetCreationArgs = resource table {
+    1: server_end server_end:<Puppet>;
+    2: view_token fuchsia.ui.views.ViewCreationToken;
+    3: touch_listener client_end:fuchsia.ui.test.input.TouchInputListener;
+    4: mouse_listener client_end:fuchsia.ui.test.input.MouseInputListener;
+    5: keyboard_listener client_end:fuchsia.ui.test.input.KeyboardInputListener;
+};
+
 /// A helper to spawn a puppet instance, which will own a view created with a specific
 /// token.
 @discoverable
 protocol PuppetFactory {
     /// Spawns a puppet instance, which will own a view created using `view_token`, and
     /// binds `puppet_server` to it.
-    Create(resource table {
-        1: view_token fuchsia.ui.views.ViewCreationToken;
-        2: puppet_server server_end:<Puppet>;
-        3: touch_listener client_end:fuchsia.ui.test.input.TouchInputListener;
-        4: mouse_listener client_end:fuchsia.ui.test.input.MouseInputListener;
-        5: keyboard_listener client_end:fuchsia.ui.test.input.KeyboardInputListener;
-    }) -> (table {
+    Create(PuppetCreationArgs) -> (table {
         1: result Result;
     });
 };

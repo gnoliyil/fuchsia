@@ -37,8 +37,7 @@ pub async fn run_puppet_factory(request_stream: PuppetFactoryRequestStream) {
                     info!("create puppet");
                     let view_token =
                         payload.view_token.expect("missing puppet viewport creation token");
-                    let puppet_server =
-                        payload.puppet_server.expect("missing puppet server endpoint");
+                    let puppet_server = payload.server_end.expect("missing puppet server endpoint");
                     let touch_listener = match payload.touch_listener {
                         None => None,
                         Some(touch_listener) => {

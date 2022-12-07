@@ -4,6 +4,7 @@
 
 use {
     anyhow::Error,
+    fidl::endpoints::create_proxy,
     fidl_fuchsia_element::GraphicalPresenterMarker,
     fidl_fuchsia_logger::LogSinkMarker,
     fidl_fuchsia_scheduler::ProfileProviderMarker,
@@ -98,24 +99,36 @@ async fn run_context_server(
             ui_test_context::ContextRequest::ConnectToPuppetUnderTest { payload, .. } => {
                 assert!(!connected_to_puppet_under_test);
                 connected_to_puppet_under_test = true;
-                let server_end = payload.server_end.expect("missing puppet-under-test server end");
+                let (puppet_factory_proxy, puppet_factory_server) =
+                    create_proxy::<ui_conformance::PuppetFactoryMarker>()
+                        .expect("failed to open puppet factory channel");
                 puppet_realm
                     .root
                     .connect_request_to_named_protocol_at_exposed_dir(
                         PUPPET_UNDER_TEST_FACTORY_SERVICE,
-                        server_end.into_channel(),
+                        puppet_factory_server.into_channel(),
                     )
                     .expect("failed to connect to puppet");
+                puppet_factory_proxy
+                    .create(payload)
+                    .await
+                    .expect("failed to create puppet-under-test instance");
             }
             ui_test_context::ContextRequest::ConnectToAuxiliaryPuppet { payload, .. } => {
-                let server_end = payload.server_end.expect("missing auxiliary puppet server end");
+                let (puppet_factory_proxy, puppet_factory_server) =
+                    create_proxy::<ui_conformance::PuppetFactoryMarker>()
+                        .expect("failed to open puppet factory channel");
                 puppet_realm
                     .root
                     .connect_request_to_named_protocol_at_exposed_dir(
                         AUXILIARY_PUPPET_FACTORY_SERVICE,
-                        server_end.into_channel(),
+                        puppet_factory_server.into_channel(),
                     )
                     .expect("failed to connect to puppet");
+                puppet_factory_proxy
+                    .create(payload)
+                    .await
+                    .expect("failed to create auxilliary puppet instance");
             }
             ui_test_context::ContextRequest::ConnectToFlatland { server_end, .. } => {
                 puppet_realm
