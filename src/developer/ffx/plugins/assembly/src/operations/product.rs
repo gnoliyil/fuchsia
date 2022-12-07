@@ -84,15 +84,13 @@ pub fn assemble(args: ProductArgs) -> Result<()> {
         .add_bundle(&legacy_bundle_path)
         .context(format!("Adding legacy bundle: {}", legacy_bundle_path))?;
 
-    // Set structured configuration
-    builder.set_bootfs_structured_config(assembly_platform_configuration::define_bootfs_config(
-        &config,
-        board_info.as_ref(),
-    )?);
-    for (package, config) in
-        assembly_platform_configuration::define_repackaging(&config, board_info.as_ref())?
-    {
-        builder.set_structured_config(package, config)?;
+    // Get platform configuration
+    let configuration =
+        assembly_platform_configuration::define_configuration(&config, board_info.as_ref())?;
+
+    builder.set_bootfs_structured_config(configuration.bootfs);
+    for (package, config) in configuration.package_configs {
+        builder.set_package_config(package, config)?;
     }
 
     // Add product-specified packages and configuration

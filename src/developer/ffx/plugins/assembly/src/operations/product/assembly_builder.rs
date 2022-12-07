@@ -14,7 +14,7 @@ use assembly_config_schema::{
 };
 use assembly_driver_manifest::DriverManifestBuilder;
 use assembly_package_utils::{PackageInternalPathBuf, PackageManifestPathBuf};
-use assembly_platform_configuration::{PackageConfigPatch, StructuredConfigPatches};
+use assembly_platform_configuration::{ComponentConfigs, PackageConfig, PackageConfigs};
 use assembly_shell_commands::ShellCommandsBuilder;
 use assembly_structured_config::Repackager;
 use assembly_tool::ToolProvider;
@@ -52,10 +52,10 @@ pub struct ImageAssemblyConfigBuilder {
     config_data: ConfigDataMap,
 
     /// Modifications that must be made to structured config within bootfs.
-    bootfs_structured_config: PackageConfigPatch,
+    bootfs_structured_config: ComponentConfigs,
 
-    /// Modifications that must be made to structured config within packages.
-    structured_config: StructuredConfigPatches,
+    /// Modifications that must be made to configuration for packages.
+    package_configs: PackageConfigs,
 
     kernel_path: Option<Utf8PathBuf>,
     kernel_args: BTreeSet<String>,
@@ -106,8 +106,8 @@ impl ImageAssemblyConfigBuilder {
             shell_commands: ShellCommands::default(),
             bootfs_files: FileEntryMap::new("bootfs files"),
             config_data: ConfigDataMap::default(),
-            bootfs_structured_config: PackageConfigPatch::default(),
-            structured_config: StructuredConfigPatches::default(),
+            bootfs_structured_config: ComponentConfigs::default(),
+            package_configs: PackageConfigs::default(),
             kernel_path: None,
             kernel_args: BTreeSet::default(),
             kernel_clock_backstop: None,
@@ -396,18 +396,18 @@ impl ImageAssemblyConfigBuilder {
             })
     }
 
-    pub fn set_bootfs_structured_config(&mut self, config: PackageConfigPatch) {
+    pub fn set_bootfs_structured_config(&mut self, config: ComponentConfigs) {
         self.bootfs_structured_config = config;
     }
 
-    /// Set the structured configuration updates for a package. Can only be called once per
+    /// Set the configuration updates for a package. Can only be called once per
     /// package.
-    pub fn set_structured_config(
+    pub fn set_package_config(
         &mut self,
         package: impl AsRef<str>,
-        config: PackageConfigPatch,
+        config: PackageConfig,
     ) -> Result<()> {
-        if self.structured_config.insert(package.as_ref().to_owned(), config).is_none() {
+        if self.package_configs.insert(package.as_ref().to_owned(), config).is_none() {
             Ok(())
         } else {
             Err(anyhow::format_err!("duplicate config patch"))
@@ -449,7 +449,7 @@ impl ImageAssemblyConfigBuilder {
         // Decompose the fields in self, so that they can be recomposed into the generated
         // image assembly configuration.
         let Self {
-            structured_config,
+            package_configs,
             mut base,
             mut cache,
             base_drivers,
@@ -472,7 +472,7 @@ impl ImageAssemblyConfigBuilder {
 
         // add structured config value files to bootfs
         let mut bootfs_repackager = Repackager::for_bootfs(&mut bootfs_files.entries, outdir);
-        for (component, values) in bootfs_structured_config.components {
+        for (component, values) in bootfs_structured_config {
             // check if we should try to configure the component before attempting so we can still
             // return errors for other conditions like a missing config field or a wrong type
             if bootfs_repackager.has_component(&component) {
@@ -483,28 +483,33 @@ impl ImageAssemblyConfigBuilder {
         }
 
         // repackage any matching packages
-        for (package, config) in structured_config {
-            // get the manifest for this package name, returning the set from which it was removed
-            if let Some((manifest, source_package_set)) =
-                remove_package_from_sets(&package, [&mut base, &mut cache, &mut system])
-                    .with_context(|| format!("removing {} for repackaging", package))?
-            {
-                let outdir = outdir.join("repackaged").join(&package);
-                let mut repackager = Repackager::new(manifest, outdir)
-                    .with_context(|| format!("reading existing manifest for {}", package))?;
-                for (component, values) in &config.components {
-                    repackager
-                        .set_component_config(component, values.fields.clone())
-                        .with_context(|| format!("setting new config for {}", component))?;
+        for (package, config) in package_configs {
+            // Only process configs that have component entries for structured config.
+            if !config.components.is_empty() {
+                // get the manifest for this package name, returning the set from which it was removed
+                if let Some((manifest, source_package_set)) =
+                    remove_package_from_sets(&package, [&mut base, &mut cache, &mut system])
+                        .with_context(|| format!("removing {} for repackaging", package))?
+                {
+                    let outdir = outdir.join("repackaged").join(&package);
+                    let mut repackager = Repackager::new(manifest, outdir)
+                        .with_context(|| format!("reading existing manifest for {}", package))?;
+
+                    // Iterate over the components to get their structured config values
+                    for (component, values) in &config.components {
+                        repackager
+                            .set_component_config(component, values.fields.clone())
+                            .with_context(|| format!("setting new config for {}", component))?;
+                    }
+                    let new_path = repackager
+                        .build()
+                        .with_context(|| format!("building repackaged {}", package))?;
+                    let new_entry = PackageEntry::parse_from(new_path)
+                        .with_context(|| format!("parsing repackaged {}", package))?;
+                    source_package_set.insert(new_entry.name().to_owned(), new_entry);
+                } else {
+                    // TODO(https://fxbug.dev/101556) return an error here
                 }
-                let new_path = repackager
-                    .build()
-                    .with_context(|| format!("building repackaged {}", package))?;
-                let new_entry = PackageEntry::parse_from(new_path)
-                    .with_context(|| format!("parsing repackaged {}", package))?;
-                source_package_set.insert(new_entry.name().to_owned(), new_entry);
-            } else {
-                // TODO(https://fxbug.dev/101556) return an error here
             }
         }
 

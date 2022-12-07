@@ -9,7 +9,11 @@ assert(is_host, "Assembly libraries are host-only")
 rustc_library("platform_configuration") {
   edition = "2021"
   name = "assembly_platform_configuration"
-  sources = [ "src/lib.rs" ]
+  sources = [
+    "src/common.rs",
+    "src/lib.rs",
+    "src/subsystems.rs",
+  ]
   deps = [
     "//sdk/fidl/fuchsia.logger:fuchsia.logger_rust",
     "//src/developer/ffx/config:lib",

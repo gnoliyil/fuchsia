@@ -40,7 +40,7 @@ tool][configure-product]. For example, to configure a value based on the build
 type:
 
 ```rs
-{% includecode gerrit_repo="fuchsia/fuchsia" gerrit_path="src/lib/assembly/platform_configuration/src/lib.rs" region_tag="example_patches" adjust_indentation="auto" %}
+{% includecode gerrit_repo="fuchsia/fuchsia" gerrit_path="src/lib/assembly/platform_configuration/src/subsystems.rs" region_tag="example_patches" adjust_indentation="auto" %}
 ```
 
 Note: A given component cannot mix [configuration values produced by GN][gn-doc]
