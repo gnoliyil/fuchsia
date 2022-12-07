@@ -110,12 +110,12 @@ NodeId AudioRendererServer::producer_node() const {
 
 GainControlId AudioRendererServer::stream_gain_control() const {
   FX_CHECK(IsConfigured());
-  return *stream_gain_id_;
+  return *stream_gain_control_;
 }
 
 std::optional<GainControlId> AudioRendererServer::play_pause_ramp_gain_control() const {
   FX_CHECK(IsConfigured());
-  return play_pause_ramp_gain_id_;
+  return play_pause_ramp_gain_control_;
 }
 
 void AudioRendererServer::SetPtsUnits(SetPtsUnitsRequestView request,
@@ -684,10 +684,36 @@ void AudioRendererServer::PauseInternal(std::optional<PauseCompleter::Async> com
       });
 }
 
-// TODO(fxbug.dev/98652): need to delete all graph objects
 void AudioRendererServer::OnShutdown(fidl::UnbindInfo info) {
   state_ = State::kShutdown;
   queued_tasks_.clear();
+
+  // Delete all graph objects. Since we're already shutting down, don't callShutdown on error.
+  // Just check if the calls return an application-level error, which should never happen.
+  fidl::Arena<> arena;
+  if (producer_node_) {
+    (*graph_client_)
+        ->DeleteNode(fuchsia_audio_mixer::wire::GraphDeleteNodeRequest::Builder(arena)
+                         .id(*producer_node_)
+                         .Build())
+        .Then([](auto& result) { LogResultError(result, "DeleteNode(producer)"); });
+  }
+  if (stream_gain_control_) {
+    (*graph_client_)
+        ->DeleteGainControl(fuchsia_audio_mixer::wire::GraphDeleteGainControlRequest::Builder(arena)
+                                .id(*stream_gain_control_)
+                                .Build())
+        .Then([](auto& result) { LogResultError(result, "DeleteGainControl(stream_gain)"); });
+  }
+  if (play_pause_ramp_gain_control_) {
+    (*graph_client_)
+        ->DeleteGainControl(fuchsia_audio_mixer::wire::GraphDeleteGainControlRequest::Builder(arena)
+                                .id(*play_pause_ramp_gain_control_)
+                                .Build())
+        .Then([](auto& result) {
+          LogResultError(result, "DeleteGainControl(play_pause_ramp_gain)");
+        });
+  }
 
   // Disconnect all clients.
   graph_client_ = nullptr;
@@ -816,7 +842,7 @@ void AudioRendererServer::MaybeConfigure() {
           Shutdown(ZX_ERR_INTERNAL);
           return;
         }
-        stream_gain_id_ = result->value()->id();
+        stream_gain_control_ = result->value()->id();
         MaybeSetFullyCreated();
       });
 
@@ -850,7 +876,7 @@ void AudioRendererServer::MaybeConfigure() {
             Shutdown(ZX_ERR_INTERNAL);
             return;
           }
-          play_pause_ramp_gain_id_ = result->value()->id();
+          play_pause_ramp_gain_control_ = result->value()->id();
           MaybeSetFullyCreated();
         });
   }
@@ -860,7 +886,8 @@ void AudioRendererServer::MaybeSetFullyCreated() {
   if (state_ == State::kShutdown) {
     return;
   }
-  if (!producer_node_ || !stream_gain_id_ || (ramp_on_play_pause_ && !play_pause_ramp_gain_id_)) {
+  if (!producer_node_ || !stream_gain_control_ ||
+      (ramp_on_play_pause_ && !play_pause_ramp_gain_control_)) {
     return;
   }
 

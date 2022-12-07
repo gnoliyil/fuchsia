@@ -26,6 +26,8 @@ using ::fuchsia_audio::GainControlSetGainRequest;
 using ::fuchsia_audio_mixer::GraphBindProducerLeadTimeWatcherRequest;
 using ::fuchsia_audio_mixer::GraphCreateGainControlRequest;
 using ::fuchsia_audio_mixer::GraphCreateProducerRequest;
+using ::fuchsia_audio_mixer::GraphDeleteGainControlRequest;
+using ::fuchsia_audio_mixer::GraphDeleteNodeRequest;
 using ::fuchsia_audio_mixer::GraphStartRequest;
 using ::fuchsia_audio_mixer::GraphStopRequest;
 
@@ -187,6 +189,8 @@ TEST(AudioRendererServerTest, ConfigureWithDefaults) {
   ASSERT_EQ(calls.size(), 4u);
 
   static constexpr NodeId kProducerId = 1;
+  static constexpr NodeId kStreamGainControlId = 1;
+  static constexpr NodeId kPlayPauseRampGainControlId = 2;
 
   {
     SCOPED_TRACE("calls[0] is CreateProducer");
@@ -237,6 +241,33 @@ TEST(AudioRendererServerTest, ConfigureWithDefaults) {
     EXPECT_EQ(call->id(), kProducerId);
     ASSERT_TRUE(call->server_end());
     ASSERT_TRUE(call->server_end()->is_valid());
+  }
+
+  // Closing the connection should delete everything.
+  h.renderer_client = nullptr;
+  h.loop.RunUntilIdle();
+
+  ASSERT_EQ(calls.size(), 7u);
+
+  {
+    SCOPED_TRACE("calls[4] is DeleteNode (producer)");
+    auto call = std::get_if<GraphDeleteNodeRequest>(&calls[4]);
+    ASSERT_TRUE(call);
+    EXPECT_EQ(call->id(), kProducerId);
+  }
+
+  {
+    SCOPED_TRACE("calls[5] is DeleteGainControl (stream gain)");
+    auto call = std::get_if<GraphDeleteGainControlRequest>(&calls[5]);
+    ASSERT_TRUE(call);
+    EXPECT_EQ(call->id(), kStreamGainControlId);
+  }
+
+  {
+    SCOPED_TRACE("calls[6] is DeleteGainControl (play-pause-ramp gain)");
+    auto call = std::get_if<GraphDeleteGainControlRequest>(&calls[6]);
+    ASSERT_TRUE(call);
+    EXPECT_EQ(call->id(), kPlayPauseRampGainControlId);
   }
 }
 

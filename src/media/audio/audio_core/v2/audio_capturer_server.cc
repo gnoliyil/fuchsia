@@ -87,7 +87,7 @@ NodeId AudioCapturerServer::consumer_node() const {
 
 GainControlId AudioCapturerServer::stream_gain_control() const {
   FX_CHECK(IsConfigured());
-  return *stream_gain_id_;
+  return *stream_gain_control_;
 }
 
 void AudioCapturerServer::SetReferenceClock(SetReferenceClockRequestView request,
@@ -542,10 +542,27 @@ void AudioCapturerServer::SendPacket(
   }
 }
 
-// TODO(fxbug.dev/98652): need to delete all graph objects
 void AudioCapturerServer::OnShutdown(fidl::UnbindInfo info) {
   state_ = State::kShutdown;
   queued_tasks_.clear();
+
+  // Delete all graph objects. Since we're already shutting down, don't call Shutdown on error.
+  // Just check if the calls return an application-level error, which should never happen.
+  fidl::Arena<> arena;
+  if (consumer_node_) {
+    (*graph_client_)
+        ->DeleteNode(fuchsia_audio_mixer::wire::GraphDeleteNodeRequest::Builder(arena)
+                         .id(*consumer_node_)
+                         .Build())
+        .Then([](auto& result) { LogResultError(result, "DeleteNode(consumer)"); });
+  }
+  if (stream_gain_control_) {
+    (*graph_client_)
+        ->DeleteGainControl(fuchsia_audio_mixer::wire::GraphDeleteGainControlRequest::Builder(arena)
+                                .id(*stream_gain_control_)
+                                .Build())
+        .Then([](auto& result) { LogResultError(result, "DeleteGainControl(stream_gain)"); });
+  }
 
   // Disconnect all clients and servers.
   graph_client_ = nullptr;
@@ -681,7 +698,7 @@ void AudioCapturerServer::MaybeConfigure() {
           Shutdown(ZX_ERR_INTERNAL);
           return;
         }
-        stream_gain_id_ = result->value()->id();
+        stream_gain_control_ = result->value()->id();
         MaybeSetFullyCreated();
       });
 }
@@ -690,7 +707,7 @@ void AudioCapturerServer::MaybeSetFullyCreated() {
   if (state_ == State::kShutdown) {
     return;
   }
-  if (!consumer_node_ || !stream_gain_id_) {
+  if (!consumer_node_ || !stream_gain_control_) {
     return;
   }
 

@@ -159,8 +159,8 @@ class AudioRendererServer
   // Objects in the mixer graph.
   std::shared_ptr<fidl::WireSharedClient<fuchsia_audio_mixer::Graph>> graph_client_;
   std::optional<NodeId> producer_node_;
-  std::optional<GainControlId> stream_gain_id_;
-  std::optional<GainControlId> play_pause_ramp_gain_id_;
+  std::optional<GainControlId> stream_gain_control_;
+  std::optional<GainControlId> play_pause_ramp_gain_control_;
   std::shared_ptr<DelayWatcherClient> delay_watcher_client_;
   fidl::ServerEnd<fuchsia_audio::DelayWatcher> delay_watcher_server_end_;
 

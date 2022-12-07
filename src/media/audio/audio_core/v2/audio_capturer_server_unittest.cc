@@ -25,6 +25,8 @@ using ::media::audio::CaptureUsage;
 using ::fuchsia_audio::wire::Timestamp;
 using ::fuchsia_audio_mixer::GraphCreateConsumerRequest;
 using ::fuchsia_audio_mixer::GraphCreateGainControlRequest;
+using ::fuchsia_audio_mixer::GraphDeleteGainControlRequest;
+using ::fuchsia_audio_mixer::GraphDeleteNodeRequest;
 using ::fuchsia_audio_mixer::GraphStartRequest;
 using ::fuchsia_audio_mixer::GraphStopRequest;
 
@@ -246,6 +248,26 @@ TEST(AudioCapturerServerTest, ConfigureWithDefaults) {
     ASSERT_TRUE(call->control()->is_valid());
     EXPECT_THAT(call->reference_clock(),
                 ValidReferenceClock(fuchsia_hardware_audio::kClockDomainExternal));
+  }
+
+  // Closing the connection should delete everything.
+  h.capturer_client = nullptr;
+  h.loop.RunUntilIdle();
+
+  ASSERT_EQ(calls.size(), 4u);
+
+  {
+    SCOPED_TRACE("calls[2] is DeleteNode (consumer)");
+    auto call = std::get_if<GraphDeleteNodeRequest>(&calls[2]);
+    ASSERT_TRUE(call);
+    EXPECT_EQ(call->id(), /*consumer_id=*/1);
+  }
+
+  {
+    SCOPED_TRACE("calls[3] is DeleteGainControl (stream gain)");
+    auto call = std::get_if<GraphDeleteGainControlRequest>(&calls[3]);
+    ASSERT_TRUE(call);
+    EXPECT_EQ(call->id(), /*stream_gain_control_id=*/1);
   }
 }
 

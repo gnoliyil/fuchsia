@@ -154,7 +154,7 @@ class AudioCapturerServer
   // Objects in the mixer graph.
   std::shared_ptr<fidl::WireSharedClient<fuchsia_audio_mixer::Graph>> graph_client_;
   std::optional<NodeId> consumer_node_;
-  std::optional<GainControlId> stream_gain_id_;
+  std::optional<GainControlId> stream_gain_control_;
 
   // Configuration which is mutable before the StreamSink channel is created.
   // Optional fields will be set to a default value if not set explicitly by the client.
