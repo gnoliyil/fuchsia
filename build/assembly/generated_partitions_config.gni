@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-# Generates a partitions config to be consued by the Image Assembler.
+# Generates a partitions config to be consumed by the Image Assembler.
 #
 # Arguments:
 #   output_path (optional)
@@ -58,7 +58,7 @@
 #   fvm (optional)
 #     [string] The name of the fvm partition.
 #
-template("generated_partitions_config_new") {
+template("generated_partitions_config") {
   assert(defined(invoker.hw_revision), "Need to define hw_revision")
 
   output_path = "$target_out_dir/$target_name.json"
@@ -196,67 +196,5 @@ template("generated_partitions_config_new") {
       bootstrap_partitions = bootstraps
       unlock_credentials = credentials
     }
-  }
-}
-
-# Generates a partitions config to be consumed by the Image Assembler.
-#
-# Arguments:
-#   output_path (optional)
-#     [path] Board config output location.
-#     Defaults to $target_out_dir/$target_name.json
-#
-#   hw_revision (required)
-#     [string] The name of the hardware revision.
-#     This is placed in the flash manifest to ensure partitions are not
-#     flashed to the wrong hardware.
-#
-#   bootloader_partitions (optional)
-#     [list] List of bootloaders to use when flashing or updating.
-#     Each entry will have the following format.
-#       {
-#         image = "path/to/image"
-#         type = "bl2"
-#         name = "boot1"
-#       }
-#
-#     If a name is not provided, then the bootloader will not be flashed, but
-#     will still be included in the update package.
-#
-#   bootstrap_partitions (optional)
-#     [list] List of OEM images to flash when using:
-#       ffx target flash --product fuchsia
-#
-#     Each entry will have the following format. A file is only flashed to the
-#     partition if the conditional fastboot arg equals the specified value.
-#       {
-#         path = "path/to/image"
-#         partition = "partition"
-#         condition = {
-#           variable = "variable"
-#           value = "value
-#         }
-#       }
-#
-#   unlock_credentials (optional)
-#     [list] List of zip files containing the credentials used to unlock
-#     a device in fastboot mode.
-#
-#   zbi_a (optional)
-#   zbi_b (optional)
-#   zbi_r (optional)
-#     [string] The name of the zbi partitions for each slot.
-#
-#   vbmeta_a (optional)
-#   vbmeta_b (optional)
-#   vbmeta_r (optional)
-#     [string] The name of the vbmeta partitions for each slot.
-#
-#   fvm (optional)
-#     [string] The name of the fvm partition.
-#
-template("generated_partitions_config") {
-  generated_partitions_config_new(target_name) {
-    forward_variables_from(invoker, "*")
   }
 }
