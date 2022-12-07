@@ -43,8 +43,13 @@ int Nvme::IrqLoop() {
   while (true) {
     zx_status_t status = zx_interrupt_wait(irqh_, nullptr);
     if (status != ZX_OK) {
-      zxlogf(ERROR, "irq wait failed: %s", zx_status_get_string(status));
+      zxlogf(ERROR, "Failed to wait for interrupt: %s", zx_status_get_string(status));
       break;
+    }
+
+    // The interrupt mask register should only be used when not using MSI-X.
+    if (irq_mode_ != PCI_INTERRUPT_MODE_MSI_X) {
+      InterruptReg::MaskSet().FromValue(1).WriteTo(&*mmio_);
     }
 
     Completion* admin_completion;
@@ -58,6 +63,19 @@ int Nvme::IrqLoop() {
     // namespace/queue).
     for (Namespace* ns : namespaces_) {
       ns->SignalIo();
+    }
+
+    if (irq_mode_ != PCI_INTERRUPT_MODE_MSI_X) {
+      // Unmask the interrupt.
+      InterruptReg::MaskClear().FromValue(1).WriteTo(&*mmio_);
+    }
+
+    if (irq_mode_ == PCI_INTERRUPT_MODE_LEGACY) {
+      status = pci_ack_interrupt(&pci_);
+      if (status != ZX_OK) {
+        zxlogf(ERROR, "Failed to ack interrupt: %s", zx_status_get_string(status));
+        break;
+      }
     }
   }
   return 0;
@@ -481,11 +499,12 @@ zx_status_t Nvme::AddDevice(zx_device_t* dev) {
   }
   mmio_ = std::make_unique<fdf::MmioBuffer>(mmio_buffer);
 
-  status = pci_configure_interrupt_mode(&pci_, 1, nullptr);
+  status = pci_configure_interrupt_mode(&pci_, 1, &irq_mode_);
   if (status != ZX_OK) {
     zxlogf(ERROR, "could not configure irqs: %s", zx_status_get_string(status));
     return ZX_ERR_NOT_SUPPORTED;
   }
+  zxlogf(DEBUG, "Interrupt mode: %u", irq_mode_);
 
   status = pci_map_interrupt(&pci_, 0, &irqh_);
   if (status != ZX_OK) {

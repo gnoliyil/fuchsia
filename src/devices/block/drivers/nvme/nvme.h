@@ -56,6 +56,7 @@ class Nvme : public DeviceType {
 
   pci_protocol_t pci_;
   std::unique_ptr<fdf::MmioBuffer> mmio_;
+  pci_interrupt_mode_t irq_mode_;
   zx_handle_t irqh_;
   zx::bti bti_;
   inspect::Inspector inspect_;
