@@ -43,7 +43,7 @@ std::string GetInspectInstanceGuid(const zx::vmo& inspect_vmo) {
 }
 
 zx::vmo GetInspectVMOHandle(const fbl::unique_fd& devfs_root) {
-  zx::result channel = device_watcher::RecursiveWaitForFileReadOnly(
+  zx::result channel = device_watcher::RecursiveWaitForFile(
       devfs_root.get(), "diagnostics/class/zxcrypt/000.inspect");
   if (channel.is_error()) {
     printf("Failed in wait for inspect file: %s\n", channel.status_string());

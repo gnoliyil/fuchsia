@@ -20,13 +20,7 @@
 #include <fbl/unique_fd.h>
 #include <fbl/vector.h>
 
-#include "sdk/lib/driver_test_realm/realm_builder/cpp/lib.h"
-
-namespace devmgr_integration_test {
-using device_watcher::DirWatcher;
-using device_watcher::RecursiveWaitForFile;
-using device_watcher::RecursiveWaitForFileReadOnly;
-}  // namespace devmgr_integration_test
+#include "sdk/lib/sys/component/cpp/testing/realm_builder.h"
 
 namespace driver_integration_test {
 

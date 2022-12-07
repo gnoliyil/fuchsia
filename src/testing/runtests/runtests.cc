@@ -57,7 +57,7 @@ class FuchsiaStopwatch final : public runtests::Stopwatch {
 // Parse |argv| for an output directory argument.
 const char* GetOutputDir(int argc, const char* const* argv) {
   int i = 1;
-  while (i < argc - 1 && (strcmp(argv[i], "--output") != 0 && strcmp(argv[i], "-o"))) {
+  while (i < argc - 1 && (strcmp(argv[i], "--output") != 0 && strcmp(argv[i], "-o") != 0)) {
     ++i;
   }
   if (i >= argc - 1) {
@@ -107,7 +107,7 @@ int main(int argc, char** argv) {
   ZX_ASSERT_MSG(root.is_valid(),
                 "runtests must be given \"/\" as the sole entry "
                 "in its incoming namespace");
-  zx::result channel = device_watcher::RecursiveWaitForFileReadOnly(root.get(), "dev");
+  zx::result channel = device_watcher::RecursiveWaitForFile(root.get(), "dev");
   if (channel.is_error()) {
     printf("Error: Failed to wait for /dev to appear: %s", channel.status_string());
     return -1;

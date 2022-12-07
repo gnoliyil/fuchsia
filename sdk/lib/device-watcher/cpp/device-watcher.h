@@ -15,10 +15,6 @@
 
 namespace device_watcher {
 
-// Waits for |file| to appear in the directory represented by |dir_fd|, and opens it.
-// This method does not take ownership of |dir_fd|.
-zx::result<zx::channel> WaitForFile(int dir_fd, const char* file);
-
 // Waits for the relative |path| starting in the directory represented by |dir_fd| to appear,
 // and opens it.
 // This method does not take ownership of |dir_fd|.
@@ -28,16 +24,6 @@ zx::result<zx::channel> RecursiveWaitForFile(int dir_fd, const char* path);
 // NOTE: This only works for paths starting with /dev/,
 // otherwise it will return ZX_ERR_NOT_SUPPORTED.
 zx::result<zx::channel> RecursiveWaitForFile(const char* path);
-
-// Waits for the relative |path| starting in the directory represented by |dir_fd| to appear,
-// and opens it in Read only mode.
-// This method does not take ownership of |dir_fd|.
-zx::result<zx::channel> RecursiveWaitForFileReadOnly(int dir_fd, const char* path);
-
-// Waits for the absolute |path| to appear, and opens it as ReadOnly.
-// NOTE: This only works for paths starting with /dev/,
-// otherwise it will return ZX_ERR_NOT_SUPPORTED.
-zx::result<zx::channel> RecursiveWaitForFileReadOnly(const char* path);
 
 // Invokes |callback| on each entry in the directory, returning immediately after all entries have
 // been processed. |callback| is passed the file name and a channel for the file's fuchsia.io.Node

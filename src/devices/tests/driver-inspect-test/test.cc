@@ -18,7 +18,6 @@
 
 namespace {
 using driver_integration_test::IsolatedDevmgr;
-using fuchsia_device::Controller;
 using fuchsia_device_inspect_test::TestInspect;
 using inspect::InspectTestHelper;
 
@@ -56,17 +55,16 @@ class InspectTestCase : public InspectTestHelper, public zxtest::Test {
 
 TEST_F(InspectTestCase, InspectDevfs) {
   // Check if inspect-test device is hosted in diagnostics folder
-  ASSERT_OK(
-      device_watcher::RecursiveWaitForFileReadOnly(devmgr().devfs_root().get(), "diagnostics/class")
-          .status_value());
-  ASSERT_OK(device_watcher::RecursiveWaitForFileReadOnly(devmgr().devfs_root().get(),
-                                                         "diagnostics/class/test/000.inspect")
+  ASSERT_OK(device_watcher::RecursiveWaitForFile(devmgr().devfs_root().get(), "diagnostics/class")
+                .status_value());
+  ASSERT_OK(device_watcher::RecursiveWaitForFile(devmgr().devfs_root().get(),
+                                                 "diagnostics/class/test/000.inspect")
                 .status_value());
 }
 
 TEST_F(InspectTestCase, ReadInspectData) {
   // Wait for inspect data to appear
-  zx::result inspect_channel = device_watcher::RecursiveWaitForFileReadOnly(
+  zx::result inspect_channel = device_watcher::RecursiveWaitForFile(
       devmgr().devfs_root().get(), "diagnostics/class/test/000.inspect");
   ASSERT_OK(inspect_channel.status_value());
   fbl::unique_fd fd;

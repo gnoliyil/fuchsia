@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <lib/async-loop/cpp/loop.h>
 #include <lib/async-loop/default.h>
+#include <lib/async-loop/loop.h>
 #include <lib/device-watcher/cpp/device-watcher.h>
 #include <lib/fdio/directory.h>
 #include <lib/fdio/fd.h>
@@ -16,11 +17,9 @@
 #include <fbl/unique_fd.h>
 #include <zxtest/zxtest.h>
 
-#include "lib/async-loop/loop.h"
 #include "src/lib/storage/vfs/cpp/managed_vfs.h"
 #include "src/lib/storage/vfs/cpp/pseudo_dir.h"
 #include "src/lib/storage/vfs/cpp/pseudo_file.h"
-#include "src/lib/storage/vfs/cpp/service.h"
 
 TEST(DeviceWatcherTest, Smoke) {
   async::Loop loop(&kAsyncLoopConfigNoAttachToCurrentThread);
@@ -49,14 +48,8 @@ TEST(DeviceWatcherTest, Smoke) {
   ASSERT_EQ(ZX_OK,
             fdio_fd_create(endpoints->client.TakeChannel().release(), dir.reset_and_get_address()));
 
-  ASSERT_EQ(ZX_OK, device_watcher::WaitForFile(dir.get(), "file").status_value());
-
   ASSERT_EQ(ZX_OK,
             device_watcher::RecursiveWaitForFile(dir.get(), "second/third/file").status_value());
-
-  ASSERT_EQ(
-      ZX_OK,
-      device_watcher::RecursiveWaitForFileReadOnly(dir.get(), "second/third/file").status_value());
 
   sync_completion_t shutdown;
 
@@ -68,7 +61,6 @@ TEST(DeviceWatcherTest, Smoke) {
 }
 
 TEST(DeviceWatcherTest, OpenInNamespace) {
-  ASSERT_EQ(device_watcher::RecursiveWaitForFileReadOnly("/dev/sys/test").status_value(), ZX_OK);
   ASSERT_EQ(device_watcher::RecursiveWaitForFile("/dev/sys/test").status_value(), ZX_OK);
 
   ASSERT_EQ(device_watcher::RecursiveWaitForFile("/other-test/file").status_value(),
@@ -103,7 +95,6 @@ TEST(DeviceWatcherTest, DirWatcherWaitForRemoval) {
             fdio_fd_create(endpoints->client.TakeChannel().release(), dir.reset_and_get_address()));
   fbl::unique_fd sub_dir(openat(dir.get(), "second/third", O_DIRECTORY | O_RDONLY));
 
-  ASSERT_EQ(ZX_OK, device_watcher::WaitForFile(dir.get(), "file").status_value());
   ASSERT_EQ(ZX_OK,
             device_watcher::RecursiveWaitForFile(dir.get(), "second/third/file").status_value());
 
@@ -149,8 +140,6 @@ TEST(DeviceWatcherTest, DirWatcherVerifyUnowned) {
   fbl::unique_fd dir;
   ASSERT_EQ(ZX_OK,
             fdio_fd_create(endpoints->client.TakeChannel().release(), dir.reset_and_get_address()));
-
-  ASSERT_EQ(ZX_OK, device_watcher::WaitForFile(dir.get(), "file").status_value());
 
   std::unique_ptr<device_watcher::DirWatcher> root_watcher;
   ASSERT_EQ(ZX_OK, device_watcher::DirWatcher::Create(dir.get(), &root_watcher));
