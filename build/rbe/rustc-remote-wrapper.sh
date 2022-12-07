@@ -288,6 +288,8 @@ extern_paths=()
 save_analysis=0
 llvm_time_trace=0
 
+want_sysroot_libgcc=0
+
 extra_linker_outputs=()
 
 prev_opt=
@@ -326,9 +328,17 @@ do
   fi
 
   # Extract optarg from --opt=optarg
+  # optkey is the left side of =
   case "$opt" in
-    *=?*) optarg=$(expr "X$opt" : '[^=]*=\(.*\)') ;;
-    *=) optarg= ;;
+    *=?*)
+      optarg=$(expr "X$opt" : '[^=]*=\(.*\)')
+      optkey=$(expr "$opt" : '\([^=]*\)=.*')
+      ;;
+    *=)
+      optarg=
+      # remove '=' suffix
+      optkey="${opt%=}"
+      ;;
   esac
 
   # Reject absolute paths, for the sake of build artifact portability,
@@ -469,7 +479,7 @@ EOF
         remote_only_token="-Clinker=$_remote_linker_arg"
         ;;
 
-    -Clink-arg=* )
+    -Clink-arg=* | link-arg=* )
         case "$optarg" in
           # sysroot is a directory with system libraries
           --sysroot=* )
@@ -478,6 +488,10 @@ EOF
             debug_var "[from -Clink-arg=--sysroot]" "$sysroot_relative"
             link_sysroot=("$sysroot_relative")
             ;;
+
+
+          # Detect when libgcc is linked
+          -lgcc ) want_sysroot_libgcc=1 ;;
 
           # Link arguments that reference .o or .a files need to be uploaded.
           *.o | *.a | *.so | *.so.debug | *.ld )
@@ -488,7 +502,7 @@ EOF
         esac
         _remote_optarg=("${optarg/clang\/*\/bin\/../clang/linux-x64/bin/..}")
         _remote_optarg=("${_remote_optarg/clang\/*\/lib\/clang/clang/linux-x64/lib/clang}")
-        remote_only_token="-Clink-arg=$_remote_optarg"
+        remote_only_token="$optkey=$_remote_optarg"
         ;;
 
     # Linker can produce a .map output file.
@@ -897,6 +911,18 @@ test "${#link_sysroot[@]}" = 0 || {
       "$sysroot_dir"/usr/lib/"$sysroot_triple"/crti.o
       "$sysroot_dir"/usr/lib/"$sysroot_triple"/crtn.o
     )
+    if test "$want_sysroot_libgcc" = 1
+    then
+      sysroot_files+=(
+        "$sysroot_dir"/usr/lib/gcc/"$sysroot_triple"/4.9/libgcc.a
+        "$sysroot_dir"/usr/lib/gcc/"$sysroot_triple"/4.9/libgcc_eh.a
+        # The toolchain probes (stat) for the existence of crtbegin.o
+        "$sysroot_dir"/usr/lib/gcc/"$sysroot_triple"/4.9/crtbegin.o
+        # libgcc also needs sysroot libc.a,
+        # although this might be coming from -Cdefault-linker-libraries.
+        "$sysroot_dir"/usr/lib/"$sysroot_triple"/libc.a
+      )
+    fi
   else
     sysroot_files+=(
       "$sysroot_dir"/lib/libc.so
