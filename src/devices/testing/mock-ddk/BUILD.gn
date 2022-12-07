@@ -46,7 +46,7 @@ test("mock-ddk-test-bin") {
   sources = [ "mock-ddk-test.cc" ]
   deps = [
     ":mock-ddk",
-    "//sdk/lib/sys/component/cpp",
+    "//sdk/lib/component/outgoing/cpp",
     "//src/devices/tests/fidl-service:echo_cpp_wire",
     "//src/lib/ddktl",
     "//zircon/system/ulib/async-loop:async-loop-cpp",

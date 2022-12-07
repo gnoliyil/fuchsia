@@ -9,13 +9,13 @@
 #include <fuchsia/hardware/sysmem/cpp/banjo.h>
 #include <lib/async-loop/cpp/loop.h>
 #include <lib/async-loop/default.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/fake-bti/bti.h>
 #include <lib/fake-object/object.h>
 #include <lib/fake-resource/resource.h>
 #include <lib/fidl/cpp/wire/client.h>
 #include <lib/fidl/cpp/wire/connect_service.h>
 #include <lib/sync/completion.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 #include <lib/zx/bti.h>
 #include <stdlib.h>
 #include <zircon/time.h>

@@ -78,9 +78,9 @@ test("composite-driver-v1-test") {
   deps = [
     "//sdk/fidl/fuchsia.driver.test:fuchsia.driver.test_hlcpp",
     "//sdk/fidl/fuchsia.io:fuchsia.io_hlcpp",
+    "//sdk/lib/component/outgoing/cpp",
     "//sdk/lib/device-watcher/cpp",
     "//sdk/lib/driver_test_realm/realm_builder/cpp",
-    "//sdk/lib/sys/component/cpp",
     "//src/lib/fxl/test:gtest_main",
     "//src/lib/testing/loop_fixture",
     "//zircon/system/ulib/async-loop",

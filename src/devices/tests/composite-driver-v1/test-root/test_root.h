@@ -8,8 +8,8 @@
 #include <fidl/fuchsia.composite.test/cpp/wire.h>
 #include <lib/async-loop/cpp/loop.h>
 #include <lib/async-loop/default.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/inspect/cpp/inspect.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 
 #include <ddktl/device.h>
 

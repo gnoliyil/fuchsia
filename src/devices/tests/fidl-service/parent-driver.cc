@@ -5,13 +5,13 @@
 #include <fidl/fidl.examples.echo/cpp/wire.h>
 #include <fidl/fuchsia.io/cpp/wire.h>
 #include <lib/async/dispatcher.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/ddk/debug.h>
 #include <lib/ddk/device.h>
 #include <lib/ddk/driver.h>
 #include <lib/fdf/cpp/dispatcher.h>
 #include <lib/fidl/cpp/wire/channel.h>
 #include <lib/fidl/cpp/wire/connect_service.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 #include <lib/zx/channel.h>
 
 #include <string>
