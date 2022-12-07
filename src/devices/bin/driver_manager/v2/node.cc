@@ -542,11 +542,14 @@ void Node::Remove(RemovalSet removal_set, NodeRemovalTracker* removal_tracker) {
 
   // Now, the cases where we do something:
   // Set the new state
-  if (removal_set == RemovalSet::kPackage && collection_ == Collection::kBoot) {
+  if (removal_set == RemovalSet::kPackage &&
+      (collection_ == Collection::kBoot || collection_ == Collection::kNone)) {
     node_state_ = NodeState::kPrestop;
   } else {
     // Either removing kAll, or is package driver and removing kPackage.
     node_state_ = NodeState::kWaitingOnChildren;
+    // All children should be removed regardless as they block removal of this node.
+    removal_set = RemovalSet::kAll;
   }
   // Either way, propagate removal message to children
   if (should_register) {
