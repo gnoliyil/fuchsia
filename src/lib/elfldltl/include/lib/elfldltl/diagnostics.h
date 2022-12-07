@@ -91,6 +91,14 @@ namespace elfldltl {
 //   the limit of the resource are unknown at compile time like
 //   PreallocatedVector with a dynamic extent.
 //
+// * `bool SystemError(std::string_view error, ...)`
+//
+//    SystemError is used when the system cannot fulfill an otherwise valid
+//    request likely unrelated to the contents of the ELF file. SystemError
+//    can optionally take PosixError and ZirconError objects to give more
+//    context to the error encountered. Those two types are found in posix.h
+//    and zircon.h, and take either an errno value or zx_status_t respectively.
+//
 // * `bool extra_checking()`
 //
 //   If this returns true, the processor may do some extra work that is not
@@ -241,6 +249,11 @@ class Diagnostics {
   constexpr bool ResourceLimit(size_t max, std::string_view error, size_t requested) {
     return FormatError(error, internal::ConstString(": maximum "), max,
                        internal::ConstString(" < requested "), requested);
+  }
+
+  template <typename... Args>
+  constexpr bool SystemError(std::string_view error, Args&&... args) {
+    return FormatError(error, args...);
   }
 
  private:
@@ -406,6 +419,11 @@ constexpr decltype(auto) operator<<(S&& ostream, FileOffset<T> offset) {
 template <typename S, typename T>
 constexpr decltype(auto) operator<<(S&& ostream, FileAddress<T> address) {
   return std::forward<S>(ostream) << " at relative address " << *address;
+}
+
+template <typename S, typename T, typename = decltype(std::declval<T>().str())>
+constexpr decltype(auto) operator<<(S&& ostream, T&& t) {
+  return std::forward<S>(ostream) << t.str();
 }
 
 }  // namespace elfldltl

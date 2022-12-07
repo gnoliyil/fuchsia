@@ -3,6 +3,11 @@
 // found in the LICENSE file.
 
 #include <lib/elfldltl/diagnostics.h>
+#include <lib/elfldltl/posix.h>
+
+#ifdef __Fuchsia__
+#include <lib/elfldltl/zircon.h>
+#endif
 
 #include <array>
 #include <sstream>
@@ -54,6 +59,38 @@ TEST(ElfldltlDiagnosticsTests, PrintfDiagnosticsReport) {
       " at relative address 0x1234 at relative address 0x4567",
       buffer.data());
 }
+
+// clang-format off
+// clang-format is all confused for some reason
+TEST(ElfldltlDiagnosticsTests, PrintfDiagnosticsReportSystemErrors) {
+  {
+    std::array<char, 50> buffer{};
+    auto printer = [&buffer](const char* format, auto&&... args) {
+      snprintf(buffer.data(), buffer.size(), format, std::forward<decltype(args)>(args)...);
+    };
+
+    auto report = elfldltl::PrintfDiagnosticsReport(printer);
+    ASSERT_TRUE(report(elfldltl::PosixError{EPERM}));
+
+    ASSERT_EQ(buffer.back(), '\0');
+    EXPECT_STREQ(strerror(EPERM), buffer.data());
+  }
+#ifdef __Fuchsia__
+  {
+    std::array<char, 50> buffer{};
+    auto printer = [&buffer](const char* format, auto&&... args) {
+      snprintf(buffer.data(), buffer.size(), format, std::forward<decltype(args)>(args)...);
+    };
+
+    auto report = elfldltl::PrintfDiagnosticsReport(printer);
+    ASSERT_TRUE(report(elfldltl::ZirconError{ZX_ERR_NOT_SUPPORTED}));
+
+    ASSERT_EQ(buffer.back(), '\0');
+    EXPECT_STREQ(zx_status_get_string(ZX_ERR_NOT_SUPPORTED), buffer.data());
+  }
+#endif
+}
+// clang-format on
 
 TEST(ElfldltlDiagnosticsTests, Trap) {
   auto diag = elfldltl::TrapDiagnostics();
@@ -172,6 +209,19 @@ TEST(ElfldltlDiagnosticsTests, ResourceLimit) {
     ExpectedSingleError expected("error", ": maximum 501 < requested ", 723);
     expected.diag().ResourceLimit<501>("error", 723);
   }
+}
+
+TEST(ElfldltlDiagnosticsTests, SystemError) {
+  {
+    ExpectedSingleError expected("error", elfldltl::PosixError{EPERM});
+    expected.diag().SystemError("error", elfldltl::PosixError{EPERM});
+  }
+#ifdef __Fuchsia__
+  {
+    ExpectedSingleError expected("error", elfldltl::ZirconError{ZX_ERR_NOT_SUPPORTED});
+    expected.diag().SystemError("error", elfldltl::ZirconError{ZX_ERR_NOT_SUPPORTED});
+  }
+#endif
 }
 
 }  // namespace

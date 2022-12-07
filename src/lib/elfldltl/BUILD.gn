@@ -35,6 +35,7 @@ zx_library("elfldltl") {
     "lib/elfldltl/memory.h",
     "lib/elfldltl/note.h",
     "lib/elfldltl/phdr.h",
+    "lib/elfldltl/posix.h",
     "lib/elfldltl/preallocated-vector.h",
     "lib/elfldltl/relocation.h",
     "lib/elfldltl/relro.h",
@@ -44,6 +45,7 @@ zx_library("elfldltl") {
     "lib/elfldltl/static-vector.h",
     "lib/elfldltl/symbol.h",
     "lib/elfldltl/vmo.h",
+    "lib/elfldltl/zircon.h",
   ]
 
   sources = []
