@@ -9,4 +9,8 @@ use ffx_core::ffx_command;
 #[derive(FromArgs, Default, Debug, PartialEq)]
 #[argh(subcommand, name = "list")]
 /// List running Fuchsia emulators.
-pub struct ListCommand {}
+pub struct ListCommand {
+    /// list only the emulators that are currently in the "running" state.
+    #[argh(switch, short = 'r')]
+    pub only_running: bool,
+}

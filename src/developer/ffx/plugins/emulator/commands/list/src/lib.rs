@@ -6,7 +6,7 @@ use anyhow::Result;
 use cfg_if::cfg_if;
 use errors::ffx_bail;
 use ffx_core::ffx_plugin;
-use ffx_emulator_config::EmulatorEngine;
+use ffx_emulator_config::{EmulatorEngine, EngineState};
 use ffx_emulator_list_args::ListCommand;
 
 #[cfg(test)]
@@ -53,14 +53,15 @@ appear anymore.
 "#;
 
 #[ffx_plugin()]
-pub async fn list(_cmd: ListCommand) -> Result<()> {
-    exec_list_impl(&mut std::io::stdout(), &mut std::io::stderr()).await
+pub async fn list(cmd: ListCommand) -> Result<()> {
+    exec_list_impl(&mut std::io::stdout(), &mut std::io::stderr(), cmd).await
 }
 
 /// Entry point for the list command that allows specifying the writer for the output.
 pub async fn exec_list_impl<W: std::io::Write, E: std::io::Write>(
     writer: &mut W,
     error_writer: &mut E,
+    cmd: ListCommand,
 ) -> Result<()> {
     let instance_list: Vec<Option<String>> = match get_all_instances().await {
         Ok(list) => list.into_iter().map(|v| Some(v)).collect(),
@@ -72,7 +73,11 @@ pub async fn exec_list_impl<W: std::io::Write, E: std::io::Write>(
             Ok(engine) => {
                 let name = some_name.unwrap();
                 let state = format!("[{}]", engine.engine_state());
-                writeln!(writer, "{:16}{}", state, name)?;
+                if engine.engine_state() != EngineState::Running && cmd.only_running {
+                    continue;
+                } else {
+                    writeln!(writer, "{:16}{}", state, name)?;
+                }
             }
             Err(_) => {
                 writeln!(
@@ -96,9 +101,7 @@ mod tests {
     use super::*;
     use anyhow::anyhow;
     use async_trait::async_trait;
-    use ffx_emulator_config::{
-        EmulatorConfiguration, EngineConsoleType, EngineState, EngineType, ShowDetail,
-    };
+    use ffx_emulator_config::{EmulatorConfiguration, EngineConsoleType, EngineType, ShowDetail};
     use fidl_fuchsia_developer_ffx as ffx;
     use lazy_static::lazy_static;
     use std::{
@@ -188,13 +191,14 @@ mod tests {
         // no existing instances
         let ctx = mock_modules::get_all_instances_context();
         ctx.expect().returning(|| Ok(vec![]));
+        let cmd = ListCommand { only_running: false };
 
         let engine_ctx = mock_modules::get_engine_by_name_context();
         engine_ctx.expect().times(0);
 
         let mut stdout: Vec<u8> = vec![];
         let mut stderr: Vec<u8> = vec![];
-        exec_list_impl(&mut stdout, &mut stderr).await?;
+        exec_list_impl(&mut stdout, &mut stderr, cmd).await?;
 
         assert!(stdout.is_empty());
         assert!(stderr.is_empty());
@@ -209,6 +213,7 @@ mod tests {
 
         let ctx = mock_modules::get_all_instances_context();
         ctx.expect().returning(|| Ok(vec!["notrunning_emu".to_string()]));
+        let cmd = ListCommand { only_running: false };
 
         let engine_ctx = mock_modules::get_engine_by_name_context();
         engine_ctx.expect().returning(|_| {
@@ -217,7 +222,7 @@ mod tests {
 
         let mut stdout: Vec<u8> = vec![];
         let mut stderr: Vec<u8> = vec![];
-        exec_list_impl(&mut stdout, &mut stderr).await?;
+        exec_list_impl(&mut stdout, &mut stderr, cmd).await?;
 
         let stdout_expected = "[new]           notrunning_emu\n";
         assert_eq!(str::from_utf8(&stdout)?, stdout_expected);
@@ -233,6 +238,7 @@ mod tests {
 
         let ctx = mock_modules::get_all_instances_context();
         ctx.expect().returning(|| Ok(vec!["notrunning_emu".to_string()]));
+        let cmd = ListCommand { only_running: false };
 
         let engine_ctx = mock_modules::get_engine_by_name_context();
         engine_ctx.expect().returning(|_| {
@@ -241,7 +247,7 @@ mod tests {
 
         let mut stdout: Vec<u8> = vec![];
         let mut stderr: Vec<u8> = vec![];
-        exec_list_impl(&mut stdout, &mut stderr).await?;
+        exec_list_impl(&mut stdout, &mut stderr, cmd).await?;
 
         let stdout_expected = "[configured]    notrunning_emu\n";
         assert_eq!(str::from_utf8(&stdout)?, stdout_expected);
@@ -257,6 +263,7 @@ mod tests {
 
         let ctx = mock_modules::get_all_instances_context();
         ctx.expect().returning(|| Ok(vec!["notrunning_emu".to_string()]));
+        let cmd = ListCommand { only_running: false };
 
         let engine_ctx = mock_modules::get_engine_by_name_context();
         engine_ctx.expect().returning(|_| {
@@ -265,7 +272,7 @@ mod tests {
 
         let mut stdout: Vec<u8> = vec![];
         let mut stderr: Vec<u8> = vec![];
-        exec_list_impl(&mut stdout, &mut stderr).await?;
+        exec_list_impl(&mut stdout, &mut stderr, cmd).await?;
 
         let stdout_expected = "[staged]        notrunning_emu\n";
         assert_eq!(str::from_utf8(&stdout)?, stdout_expected);
@@ -281,6 +288,7 @@ mod tests {
 
         let ctx = mock_modules::get_all_instances_context();
         ctx.expect().returning(|| Ok(vec!["running_emu".to_string()]));
+        let cmd = ListCommand { only_running: false };
 
         let engine_ctx = mock_modules::get_engine_by_name_context();
         engine_ctx.expect().returning(|_| {
@@ -290,10 +298,125 @@ mod tests {
         let mut stdout: Vec<u8> = vec![];
         let mut stderr: Vec<u8> = vec![];
 
-        exec_list_impl(&mut stdout, &mut stderr).await?;
+        exec_list_impl(&mut stdout, &mut stderr, cmd).await?;
 
         let stdout_expected = "[running]       running_emu\n";
         assert_eq!(str::from_utf8(&stdout)?, stdout_expected);
+        assert!(stderr.is_empty());
+        Ok(())
+    }
+
+    #[fuchsia_async::run_singlethreaded(test)]
+    async fn test_running_flag() -> Result<()> {
+        // get the lock for the mock, it is released when
+        // the test exits.
+        let _m = get_lock(&MTX);
+
+        let ctx = mock_modules::get_all_instances_context();
+        ctx.expect()
+            .returning(|| {
+                Ok(vec![
+                    "new_emu".to_string(),
+                    "config_emu".to_string(),
+                    "staged_emu".to_string(),
+                    "running_emu".to_string(),
+                    "error_emu".to_string(),
+                ])
+            })
+            .times(2);
+
+        // First make sure it filters the non-running instances when the flag is true.
+        let engine_ctx = mock_modules::get_engine_by_name_context();
+        engine_ctx
+            .expect()
+            .returning(|_| {
+                Ok(Box::new(TestEngine { running_flag: true, engine_state: EngineState::New }))
+            })
+            .times(1);
+        engine_ctx
+            .expect()
+            .returning(|_| {
+                Ok(Box::new(TestEngine {
+                    running_flag: true,
+                    engine_state: EngineState::Configured,
+                }))
+            })
+            .times(1);
+        engine_ctx
+            .expect()
+            .returning(|_| {
+                Ok(Box::new(TestEngine { running_flag: true, engine_state: EngineState::Staged }))
+            })
+            .times(1);
+        engine_ctx
+            .expect()
+            .returning(|_| {
+                Ok(Box::new(TestEngine { running_flag: true, engine_state: EngineState::Running }))
+            })
+            .times(1);
+        engine_ctx
+            .expect()
+            .returning(|_| {
+                Ok(Box::new(TestEngine { running_flag: true, engine_state: EngineState::Error }))
+            })
+            .times(1);
+
+        let mut stdout: Vec<u8> = vec![];
+        let mut stderr: Vec<u8> = vec![];
+
+        let cmd = ListCommand { only_running: true };
+        exec_list_impl(&mut stdout, &mut stderr, cmd).await?;
+
+        let stdout_expected = "[running]       running_emu\n";
+        assert_eq!(str::from_utf8(&stdout)?, stdout_expected);
+        assert!(stderr.is_empty());
+
+        // Then make sure it leaves them in when the flag is false.
+        engine_ctx
+            .expect()
+            .returning(|_| {
+                Ok(Box::new(TestEngine { running_flag: true, engine_state: EngineState::New }))
+            })
+            .times(1);
+        engine_ctx
+            .expect()
+            .returning(|_| {
+                Ok(Box::new(TestEngine {
+                    running_flag: true,
+                    engine_state: EngineState::Configured,
+                }))
+            })
+            .times(1);
+        engine_ctx
+            .expect()
+            .returning(|_| {
+                Ok(Box::new(TestEngine { running_flag: true, engine_state: EngineState::Staged }))
+            })
+            .times(1);
+        engine_ctx
+            .expect()
+            .returning(|_| {
+                Ok(Box::new(TestEngine { running_flag: true, engine_state: EngineState::Running }))
+            })
+            .times(1);
+        engine_ctx
+            .expect()
+            .returning(|_| {
+                Ok(Box::new(TestEngine { running_flag: true, engine_state: EngineState::Error }))
+            })
+            .times(1);
+
+        let mut stdout: Vec<u8> = vec![];
+        let mut stderr: Vec<u8> = vec![];
+
+        let cmd = ListCommand { only_running: false };
+        exec_list_impl(&mut stdout, &mut stderr, cmd).await?;
+
+        assert!(str::from_utf8(&stdout)?.contains("new_emu"));
+        assert!(str::from_utf8(&stdout)?.contains("config_emu"));
+        assert!(str::from_utf8(&stdout)?.contains("staged_emu"));
+        assert!(str::from_utf8(&stdout)?.contains("running_emu"));
+        assert!(str::from_utf8(&stdout)?.contains("error_emu"));
         assert!(stderr.is_empty());
         Ok(())
     }
@@ -306,6 +429,7 @@ mod tests {
 
         let ctx = mock_modules::get_all_instances_context();
         ctx.expect().returning(|| Ok(vec!["running_emu".to_string()]));
+        let cmd = ListCommand { only_running: false };
 
         let engine_ctx = mock_modules::get_engine_by_name_context();
         engine_ctx.expect().returning(|_| {
@@ -315,7 +439,7 @@ mod tests {
         let mut stdout: Vec<u8> = vec![];
         let mut stderr: Vec<u8> = vec![];
 
-        exec_list_impl(&mut stdout, &mut stderr).await?;
+        exec_list_impl(&mut stdout, &mut stderr, cmd).await?;
 
         let stdout_expected = "[error]         running_emu\n";
         assert_eq!(str::from_utf8(&stdout)?, stdout_expected);
@@ -331,6 +455,7 @@ mod tests {
 
         let ctx = mock_modules::get_all_instances_context();
         ctx.expect().returning(|| Ok(vec!["error_emu".to_string()]));
+        let cmd = ListCommand { only_running: false };
 
         let engine_ctx = mock_modules::get_engine_by_name_context();
         engine_ctx.expect().returning(|_| Err(anyhow!("This instance cannot be parsed")));
@@ -338,7 +463,7 @@ mod tests {
         let mut stdout: Vec<u8> = vec![];
         let mut stderr: Vec<u8> = vec![];
 
-        exec_list_impl(&mut stdout, &mut stderr).await?;
+        exec_list_impl(&mut stdout, &mut stderr, cmd).await?;
 
         let stdout_expected = "[Broken]        error_emu\n";
         assert_eq!(str::from_utf8(&stdout)?, stdout_expected);
