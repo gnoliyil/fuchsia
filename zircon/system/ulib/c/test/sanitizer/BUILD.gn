@@ -74,6 +74,7 @@ template("lsan_target") {
 group("sanitizer") {
   testonly = true
   deps = [
+    ":hwasan-ctor-order-bootfs-test",
     ":lsan-bootfs-test",
     ":sanitizer-utils-bootfs-test",
   ]
@@ -169,6 +170,63 @@ source_set("memory-snapshot-test") {
   # This test needs to verify how stack allocations come out, which is
   # incompatible with ASan fake-stack allocations.
   deps += [ "//build/config/sanitizers:suppress-asan-stack-use-after-return" ]
+}
+
+shared_library("ctor-order-test-no-deps-dso") {
+  visibility = [ ":*" ]
+
+  sources = [ "no-deps.cc" ]
+  testonly = true
+}
+
+shared_library("ctor-order-test-interposable-dso") {
+  visibility = [ ":*" ]
+
+  sources = [ "interposable.cc" ]
+  testonly = true
+}
+
+shared_library("ctor-order-test-interposable-weak-dso") {
+  visibility = [ ":*" ]
+
+  sources = [ "interposable-weak.cc" ]
+  testonly = true
+}
+
+shared_library("ctor-order-test-no-interposing-dso") {
+  visibility = [ ":*" ]
+
+  sources = [ "no-interposing.cc" ]
+  deps = [ ":ctor-order-test-interposable-dso" ]
+  testonly = true
+}
+
+shared_library("ctor-order-test-interposing-dso") {
+  visibility = [ ":*" ]
+
+  sources = [ "interposing.cc" ]
+  deps = [ ":ctor-order-test-interposable-dso" ]
+  testonly = true
+}
+
+test("hwasan-ctor-order-test") {
+  visibility = [ ":*" ]
+
+  sources = [ "hwasan-ctor-order.cc" ]
+  data_deps = [
+    ":ctor-order-test-interposable-dso",
+    ":ctor-order-test-interposable-weak-dso",
+    ":ctor-order-test-interposing-dso",
+    ":ctor-order-test-no-deps-dso",
+    ":ctor-order-test-no-interposing-dso",
+  ]
+  deps = [ "//zircon/system/ulib/zxtest" ]
+  testonly = true
+}
+
+bootfs_test("hwasan-ctor-order-bootfs-test") {
+  name = "hwasan-ctor-order-test"
+  deps = [ ":hwasan-ctor-order-test" ]
 }
 
 shared_library("sanitizer-memory-snapshot-test-needed-dso") {
