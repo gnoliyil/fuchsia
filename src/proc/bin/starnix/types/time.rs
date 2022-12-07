@@ -40,8 +40,8 @@ pub fn duration_from_timespec(ts: timespec) -> Result<zx::Duration, Errno> {
 }
 
 pub fn duration_from_timeval(tv: timeval) -> Result<zx::Duration, Errno> {
-    if tv.tv_usec >= MICROS_PER_SECOND {
-        return error!(EINVAL);
+    if tv.tv_usec < 0 || tv.tv_usec >= MICROS_PER_SECOND {
+        return error!(EDOM);
     }
     Ok(zx::Duration::from_seconds(tv.tv_sec) + zx::Duration::from_micros(tv.tv_usec))
 }
