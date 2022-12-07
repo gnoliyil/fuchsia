@@ -75,18 +75,22 @@ pub async fn start(cmd: StartCommand, proxy: TargetCollectionProxy) -> Result<()
         }
     }
 
-    if let Err(e) = engine.stage().await {
-        ffx_bail!("{:?}", e.context("Problem staging to the emulator's instance directory."));
-    }
+    if cmd.config.is_none() {
+        // We don't stage files for custom configurations, because the EmulatorConfiguration
+        // doesn't hold valid paths to the system images.
+        if let Err(e) = engine.stage().await {
+            ffx_bail!("{:?}", e.context("Problem staging to the emulator's instance directory."));
+        }
 
-    // We rebuild the command, since staging likely changed the file paths.
-    let emulator_cmd = engine.build_emulator_cmd();
+        // We rebuild the command, since staging likely changed the file paths.
+        let emulator_cmd = engine.build_emulator_cmd();
 
-    if cmd.verbose || cmd.stage {
-        println!("\n[emulator] Command line after Staging: {:?}\n", emulator_cmd);
-        println!("[emulator] With ENV: {:?}\n", emulator_cmd.get_envs());
-        if cmd.stage {
-            return Ok(());
+        if cmd.verbose || cmd.stage {
+            println!("\n[emulator] Command line after Staging: {:?}\n", emulator_cmd);
+            println!("[emulator] With ENV: {:?}\n", emulator_cmd.get_envs());
+            if cmd.stage {
+                return Ok(());
+            }
         }
     }
 

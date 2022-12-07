@@ -578,6 +578,13 @@ pub(crate) trait QemuBasedEngine: EmulatorEngine + SerializingEngine {
 
     fn show(&self, details: Vec<ShowDetail>) {
         if details.contains(&ShowDetail::Raw) {
+            if self.emu_config().runtime.config_override {
+                println!(
+                    "Configuration was provided manually to the start command using the --config\n\
+                    flag. Details are likely inconsistent between the EmulatorConfiguration and\n\
+                    the FlagData used to invoke the emulator.\n"
+                );
+            }
             println!("{:#?}", self.emu_config());
         } else {
             for segment in details {

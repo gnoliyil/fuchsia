@@ -187,11 +187,25 @@ pub struct HostConfig {
 /// and behavior of Fuchsia running within the emulator instance.
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub struct RuntimeConfig {
+    /// Additional arguments to pass directly to the emulator.
+    #[serde(default)]
+    pub addl_kernel_args: Vec<String>,
+
+    /// A flag to indicate that the --config flag was used to override the standard configuration.
+    /// This matters because the contents of the EmulatorConfiguration no longer represent a
+    /// consistent description of the emulator instance.
+    #[serde(default)]
+    pub config_override: bool,
+
     /// The emulator's output, which might come from the serial console, the guest, or nothing.
     pub console: ConsoleType,
 
     /// Pause the emulator and wait for the user to attach a debugger to the process.
     pub debugger: bool,
+
+    /// Engine type name. Added here to be accessible in the configuration template processing.
+    #[serde(default)]
+    pub engine_type: EngineType,
 
     /// Run the emulator without a GUI. Graphics drivers will still be loaded.
     pub headless: bool,
@@ -202,10 +216,6 @@ pub struct RuntimeConfig {
 
     /// The staging and working directory for the emulator instance.
     pub instance_directory: PathBuf,
-
-    /// Additional arguments to pass directly to the emulator.
-    #[serde(default)]
-    pub addl_kernel_args: Vec<String>,
 
     /// The verbosity level of the logs for this instance.
     pub log_level: LogLevel,
@@ -232,8 +242,4 @@ pub struct RuntimeConfig {
     /// Optional path to a Tap upscript file, which is passed to the emulator when Tap networking
     /// is enabled.
     pub upscript: Option<PathBuf>,
-
-    /// Engine type name. Added here to be accessible in the configuration template processing.
-    #[serde(default)]
-    pub engine_type: EngineType,
 }

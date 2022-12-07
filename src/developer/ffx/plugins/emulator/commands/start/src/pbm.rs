@@ -38,11 +38,22 @@ pub(crate) async fn list_virtual_devices(
 
 /// Create a RuntimeConfiguration based on the command line args.
 pub(crate) async fn make_configs(cmd: &StartCommand) -> Result<EmulatorConfiguration> {
-    // Apply the values from the manifest to an emulation configuration.
-    let mut emu_config =
-        convert_bundle_to_configs(cmd.product_bundle.clone(), cmd.device().await?, cmd.verbose)
-            .await
-            .context("problem with convert_bundle_to_configs")?;
+    // Start with a default structure, than fill it in as we go.
+    let mut emu_config = EmulatorConfiguration::default();
+
+    // If the user specified a path to a flag config file on the command line, use that.
+    // This bypasses the rest of the configuration phase, which means the EmulationConfiguration
+    // contents don't actually represent the configuration being used to launch the emulator.
+    if let Some(template_file) = &cmd.config {
+        emu_config.runtime.template = PathBuf::from(env::current_dir()?).join(template_file);
+        emu_config.runtime.config_override = true;
+    } else {
+        // Apply the values from the manifest to an emulation configuration.
+        emu_config =
+            convert_bundle_to_configs(cmd.product_bundle.clone(), cmd.device().await?, cmd.verbose)
+                .await
+                .context("problem with convert_bundle_to_configs")?;
+    }
 
     // HostConfig values that come from the OS environment.
     emu_config.host.os = std::env::consts::OS.to_string().into();
@@ -50,11 +61,7 @@ pub(crate) async fn make_configs(cmd: &StartCommand) -> Result<EmulatorConfigura
 
     // Integrate the values from command line flags into the emulation configuration, and
     // return the result to the caller.
-    emu_config = apply_command_line_options(emu_config, cmd)
-        .await
-        .context("problem with apply command lines")?;
-
-    Ok(emu_config)
+    apply_command_line_options(emu_config, cmd).await.context("problem with apply command lines")
 }
 
 /// Given an EmulatorConfiguration and a StartCommand, write the values from the
@@ -166,11 +173,6 @@ async fn apply_command_line_options(
         emu_config.runtime.console = ConsoleType::None;
     }
     emu_config.runtime.log_level = if cmd.verbose { LogLevel::Verbose } else { LogLevel::Info };
-
-    // If the user specified a path to a flag config file on the command line, use that.
-    if let Some(template_file) = &cmd.config {
-        emu_config.runtime.template = PathBuf::from(env::current_dir()?).join(template_file);
-    }
 
     if emu_config.host.networking == NetworkingMode::User {
         // Reconcile the guest ports from device_spec with the host ports from the command line.
@@ -322,7 +324,6 @@ mod tests {
         assert_eq!(opts.runtime.hidpi_scaling, true);
         assert_eq!(opts.runtime.log_level, LogLevel::Verbose);
         assert_eq!(opts.runtime.name, "SomeName");
-        assert_eq!(opts.runtime.template, PathBuf::from("/path/to/template"));
         assert_eq!(opts.runtime.upscript, None);
 
         query(EMU_UPSCRIPT_FILE)
@@ -348,44 +349,33 @@ mod tests {
         env::set_current_dir(&temp_path).context("Error setting cwd in test")?;
 
         cmd.log = Some(PathBuf::from("tmp.log"));
-        cmd.config = Some(PathBuf::from("tmp.template"));
         let result = apply_command_line_options(emu_config.clone(), &cmd).await;
         assert!(result.is_ok(), "{:?}", result.err());
         let opts = result.unwrap();
         assert_eq!(opts.host.log, temp_path.join("tmp.log"));
-        assert_eq!(opts.runtime.template, temp_path.join("tmp.template"));
 
         cmd.log = Some(PathBuf::from("relative/path/to/emulator.file"));
-        cmd.config = Some(PathBuf::from("relative/path/to/emulator.template"));
         let result = apply_command_line_options(emu_config.clone(), &cmd).await;
         assert!(result.is_ok(), "{:?}", result.err());
         let opts = result.unwrap();
         assert_eq!(opts.host.log, temp_path.join("relative/path/to/emulator.file"));
-        assert_eq!(opts.runtime.template, temp_path.join("relative/path/to/emulator.template"));
 
         // Set the CWD to the longer directory, so we can test ".."
         env::set_current_dir(&long_path).context("Error setting cwd in test")?;
         cmd.log = Some(PathBuf::from("../other/file.log"));
-        cmd.config = Some(PathBuf::from("relative/../path/to/../template.file"));
         let result = apply_command_line_options(emu_config.clone(), &cmd).await;
         assert!(result.is_ok(), "{:?}", result.err());
         let opts = result.unwrap();
         // As mentioned in the code, it'd be nice to canonicalize this, but since the file doesn't
         // already exist that would lead to failures.
         assert_eq!(opts.host.log, temp_path.join("longer/path/to/files/../other/file.log"));
-        assert_eq!(
-            opts.runtime.template,
-            temp_path.join("longer/path/to/files/relative/../path/to/../template.file")
-        );
 
         // Test absolute path
         cmd.log = Some(long_path.join("absolute.file"));
-        cmd.config = Some(long_path.join("absolute.template"));
         let result = apply_command_line_options(emu_config.clone(), &cmd).await;
         assert!(result.is_ok(), "{:?}", result.err());
         let opts = result.unwrap();
         assert_eq!(opts.host.log, long_path.join("absolute.file"));
-        assert_eq!(opts.runtime.template, long_path.join("absolute.template"));
 
         env::set_current_dir(cwd).context("Revert to previous CWD")?;
 

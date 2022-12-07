@@ -9,6 +9,15 @@ use ffx_emulator_config::{EmulatorConfiguration, NetworkingMode};
 use serde_json;
 
 pub(crate) fn net(emu_config: &EmulatorConfiguration) {
+    if emu_config.runtime.config_override {
+        println!(
+            "Configuration was provided manually to the start command using the --config flag.\n\
+            Network details for this instance cannot be shown with this tool; try\n    \
+                `ffx emu show --config`\n\
+            to review the emulator flags directly."
+        );
+        return;
+    }
     println!("Networking Mode: {}", emu_config.host.networking);
     match emu_config.host.networking {
         NetworkingMode::Tap => {

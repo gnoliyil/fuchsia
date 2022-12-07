@@ -96,7 +96,12 @@ impl EmulatorEngine for QemuEngine {
     }
 
     fn configure(&mut self) -> Result<()> {
-        let result = self.validate_configuration();
+        let result = if self.emu_config().runtime.config_override {
+            println!("Custom configuration provided; bypassing validation.");
+            Ok(())
+        } else {
+            self.validate_configuration()
+        };
         if result.is_ok() {
             self.engine_state = EngineState::Configured;
         } else {
