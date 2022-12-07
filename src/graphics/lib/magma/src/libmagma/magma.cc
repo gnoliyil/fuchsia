@@ -305,7 +305,7 @@ magma_status_t magma_create_semaphore(magma_connection_t connection,
       magma::PlatformConnectionClient::cast(connection)
           ->ImportObject(handle, magma::PlatformObject::SEMAPHORE, semaphore->id());
   if (result != MAGMA_STATUS_OK)
-    return DRET_MSG(MAGMA_STATUS_INTERNAL_ERROR, "failed to ImportObject");
+    return DRET_MSG(result, "failed to ImportObject");
 
   *semaphore_out = reinterpret_cast<magma_semaphore_t>(semaphore.release());
   return MAGMA_STATUS_OK;
