@@ -7,7 +7,7 @@
 # These drivers are used when Fuchsia is running as a guest in a hypervisor
 # such as QEMU.
 virtio_drivers = [
-  "//src/connectivity/ethernet/drivers/virtio:virtio_ethernet",
+  "//src/connectivity/ethernet/drivers/virtio:virtio_netdevice",
   "//src/devices/block/drivers/virtio:virtio_block",
   "//src/devices/block/drivers/virtio:virtio_scsi",
   "//src/devices/misc/drivers/virtio-rng:virtio_rng",

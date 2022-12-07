@@ -18,7 +18,6 @@ group("drivers") {
     "drivers/rndis-host:driver",
     "drivers/usb-cdc-ecm",
     "drivers/usb-cdc-function",
-    "drivers/virtio:virtio_ethernet",
     "drivers/virtio:virtio_netdevice",
   ]
 

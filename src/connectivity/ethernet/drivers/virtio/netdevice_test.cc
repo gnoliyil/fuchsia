@@ -23,8 +23,8 @@ class FakeBackendForNetdeviceTest : public FakeBackend {
   static constexpr uint8_t kMac[] = {0x02, 0x03, 0x04, 0x05, 0x06, 0x07};
 
   FakeBackendForNetdeviceTest()
-      : FakeBackend({{NetworkDevice::kRxId, NetworkDevice::kBacklog},
-                     {NetworkDevice::kTxId, NetworkDevice::kBacklog}}) {
+      : FakeBackend({{NetworkDevice::kRxId, NetworkDevice::kMaxDepth},
+                     {NetworkDevice::kTxId, NetworkDevice::kMaxDepth}}) {
     for (size_t i = 0; i < sizeof(virtio_net_config_t); i++) {
       AddClassRegister(static_cast<uint16_t>(i), static_cast<uint8_t>(0));
     }
@@ -88,7 +88,7 @@ class FakeBackendForNetdeviceTest : public FakeBackend {
         ADD_FAILURE("unexpected ring index %d", index);
         return ZX_ERR_INTERNAL;
     }
-    EXPECT_EQ(count, NetworkDevice::kBacklog);
+    EXPECT_EQ(count, NetworkDevice::kMaxDepth);
     return ZX_OK;
   }
 

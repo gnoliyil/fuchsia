@@ -86,6 +86,8 @@ zx_status_t NetworkDevice::Init() {
     return status;
   }
   device_ = zxdev();
+  tx_depth_ = std::min(GetRingSize(kTxId), kMaxDepth);
+  rx_depth_ = std::min(GetRingSize(kRxId), kMaxDepth);
 
   // Start the interrupt thread.
   StartIrqThread();
@@ -136,7 +138,7 @@ bool NetworkDevice::IrqRingUpdateInternal() {
 
   bool more_work = false;
 
-  std::array<tx_result_t, kBacklog> tx_results;
+  std::array<tx_result_t, kMaxDepth> tx_results;
   auto tx_it = tx_results.begin();
   {
     std::lock_guard lock(tx_lock_);
@@ -158,8 +160,8 @@ bool NetworkDevice::IrqRingUpdateInternal() {
     ifc_.CompleteTx(tx_results.data(), count);
   }
 
-  std::array<rx_buffer_t, kBacklog> rx_buffers;
-  std::array<rx_buffer_part_t, kBacklog> rx_buffers_parts;
+  std::array<rx_buffer_t, kMaxDepth> rx_buffers;
+  std::array<rx_buffer_part_t, kMaxDepth> rx_buffers_parts;
   auto rx_part_it = rx_buffers_parts.begin();
   auto rx_it = rx_buffers.begin();
   {
@@ -260,18 +262,17 @@ void NetworkDevice::NetworkDeviceImplStart(network_device_impl_start_callback ca
     }
 
     // Allocate virtqueues.
-    uint16_t num_descs = static_cast<uint16_t>(kBacklog & 0xffff);
     {
       std::lock_guard rx_lock(rx_lock_);
       std::lock_guard tx_lock(tx_lock_);
       Ring rx_queue(this);
-      if (zx_status_t status = rx_queue.Init(kRxId, num_descs); status != ZX_OK) {
+      if (zx_status_t status = rx_queue.Init(kRxId, rx_depth_); status != ZX_OK) {
         zxlogf(ERROR, "failed to allocate rx virtqueue: %s", zx_status_get_string(status));
         return status;
       }
       rx_ = std::move(rx_queue);
       Ring tx_queue(this);
-      if (zx_status_t status = tx_queue.Init(kTxId, num_descs); status != ZX_OK) {
+      if (zx_status_t status = tx_queue.Init(kTxId, tx_depth_); status != ZX_OK) {
         zxlogf(ERROR, "failed to allocate tx virtqueue: %s", zx_status_get_string(status));
         return status;
       }
@@ -294,7 +295,7 @@ void NetworkDevice::NetworkDeviceImplStop(network_device_impl_stop_callback call
     network::SharedAutoLock state_lock(&state_lock_);
     // Pending tx buffers.
     {
-      std::array<tx_result_t, kBacklog> tx_return;
+      std::array<tx_result_t, kMaxDepth> tx_return;
       auto iter = tx_return.begin();
       {
         std::lock_guard lock(tx_lock_);
@@ -312,8 +313,8 @@ void NetworkDevice::NetworkDeviceImplStop(network_device_impl_stop_callback call
     }
     // Pending rx buffers.
     {
-      std::array<rx_buffer_t, kBacklog> rx_return;
-      std::array<rx_buffer_part_t, kBacklog> rx_return_parts;
+      std::array<rx_buffer_t, kMaxDepth> rx_return;
+      std::array<rx_buffer_part_t, kMaxDepth> rx_return_parts;
       auto iter = rx_return.begin();
       auto parts_iter = rx_return_parts.begin();
       {
@@ -339,9 +340,9 @@ void NetworkDevice::NetworkDeviceImplStop(network_device_impl_stop_callback call
 void NetworkDevice::NetworkDeviceImplGetInfo(device_info_t* out_info) {
   LTRACE_ENTRY;
   *out_info = {
-      .tx_depth = kBacklog,
-      .rx_depth = kBacklog,
-      .rx_threshold = kBacklog / 2,
+      .tx_depth = tx_depth_,
+      .rx_depth = rx_depth_,
+      .rx_threshold = static_cast<uint16_t>(rx_depth_ / 2),
       .max_buffer_parts = 1,
       .max_buffer_length = kFrameSize,
       .buffer_alignment = ZX_PAGE_SIZE / 2,
@@ -496,9 +497,9 @@ void NetworkDevice::NetworkDeviceImplReleaseVmo(uint8_t vmo_id) {
 
 void NetworkDevice::NetworkPortGetInfo(port_info_t* out_info) {
   LTRACE_ENTRY;
-  constexpr uint8_t kRxTypesList[] = {
+  static constexpr uint8_t kRxTypesList[] = {
       static_cast<uint8_t>(fuchsia_hardware_network::wire::FrameType::kEthernet)};
-  constexpr tx_support_t kTxTypesList[] = {{
+  static constexpr tx_support_t kTxTypesList[] = {{
       .type = static_cast<uint8_t>(fuchsia_hardware_network::wire::FrameType::kEthernet),
       .features = fuchsia_hardware_network::wire::kFrameFeaturesRaw,
   }};

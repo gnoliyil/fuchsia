@@ -48,7 +48,7 @@ class NetworkDevice : public Device,
   // backlogs.
   // Chosen arbitrarily. Larger values will cause increased memory consumption,
   // lower values may cause ring underruns.
-  static constexpr size_t kBacklog = 256;
+  static constexpr uint16_t kMaxDepth = 256;
   // The single port ID created by this device.
   static constexpr uint8_t kPortId = 1;
   // Specifies the maximum transfer unit we support.
@@ -122,6 +122,8 @@ class NetworkDevice : public Device,
   // https://docs.oasis-open.org/virtio/virtio/v1.1/csprd01/virtio-v1.1-csprd01.html#x1-1960002
   Ring rx_ __TA_GUARDED(rx_lock_);
   Ring tx_ __TA_GUARDED(tx_lock_);
+  uint16_t rx_depth_;
+  uint16_t tx_depth_;
 
   struct Descriptor {
     uint32_t buffer_id;
@@ -145,7 +147,7 @@ class NetworkDevice : public Device,
     bool Empty() const { return count_ == 0; }
 
    private:
-    std::array<Descriptor, kBacklog> data_;
+    std::array<Descriptor, kMaxDepth> data_;
     size_t wr_ = 0;
     size_t rd_ = 0;
     size_t count_ = 0;
