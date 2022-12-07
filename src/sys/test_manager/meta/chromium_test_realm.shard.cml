@@ -58,8 +58,6 @@
                 // are ready.
                 "fuchsia.sysinfo.SysInfo",
                 "fuchsia.sysmem.Allocator",
-                "fuchsia.tracing.perfetto.ProducerConnector",
-                "fuchsia.tracing.provider.Registry",
                 "fuchsia.ui.composition.Allocator",
                 "fuchsia.ui.composition.Flatland",
                 "fuchsia.ui.input3.Keyboard",
@@ -72,7 +70,11 @@
             to: "#chromium-tests",
         },
         {
-            protocol: "fuchsia.media.drm.Widevine",
+            protocol: [
+                "fuchsia.media.drm.Widevine",
+                "fuchsia.tracing.perfetto.ProducerConnector",
+                "fuchsia.tracing.provider.Registry",
+            ],
             from: "parent",
             to: "#chromium-tests",
             availability: "optional",
