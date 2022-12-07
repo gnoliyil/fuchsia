@@ -48,7 +48,7 @@ class SdioControllerDevice : public SdioControllerDeviceType,
   zx_status_t Probe();
   zx_status_t AddDevice();
 
-  zx_status_t SdioGetDevHwInfo(sdio_hw_info_t* out_hw_info);
+  zx_status_t SdioGetDevHwInfo(uint8_t fn_idx, sdio_hw_info_t* out_hw_info) TA_EXCL(lock_);
   zx_status_t SdioEnableFn(uint8_t fn_idx) TA_EXCL(lock_);
   zx_status_t SdioDisableFn(uint8_t fn_idx) TA_EXCL(lock_);
   zx_status_t SdioEnableFnIntr(uint8_t fn_idx) TA_EXCL(lock_);

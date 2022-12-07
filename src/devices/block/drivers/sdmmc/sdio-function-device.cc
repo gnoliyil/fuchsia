@@ -49,7 +49,7 @@ zx_status_t SdioFunctionDevice::AddDevice(const sdio_func_hw_info_t& hw_info, ui
 }
 
 zx_status_t SdioFunctionDevice::SdioGetDevHwInfo(sdio_hw_info_t* out_hw_info) {
-  return sdio_parent_->SdioGetDevHwInfo(out_hw_info);
+  return sdio_parent_->SdioGetDevHwInfo(function_, out_hw_info);
 }
 
 zx_status_t SdioFunctionDevice::SdioEnableFn() { return sdio_parent_->SdioEnableFn(function_); }

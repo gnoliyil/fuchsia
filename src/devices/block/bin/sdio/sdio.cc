@@ -128,13 +128,14 @@ int Info(SdioClient client) {
 
   const SdioHwInfo& info = result->value()->hw_info;
   const SdioDeviceHwInfo& dev_info = info.dev_hw_info;
-  printf("Host:\n    Max transfer size: %u\n", info.host_max_transfer_size);
+  printf("Host:\n    Max transfer size: %u\n\n", info.host_max_transfer_size);
   printf("Card:\n");
   printf(
       "    SDIO version: %u\n"
       "    CCCR version: %u\n"
+      "    Functions:    %u\n"
       "    Capabilities: 0x%08x\n",
-      dev_info.sdio_vsn, dev_info.cccr_vsn, dev_info.caps);
+      dev_info.sdio_vsn, dev_info.cccr_vsn, dev_info.num_funcs, dev_info.caps);
 
   for (size_t i = 0; i < std::size(kCapabilityStrings); i++) {
     if (dev_info.caps & static_cast<uint32_t>(kCapabilityStrings[i].capability)) {
@@ -142,26 +143,21 @@ int Info(SdioClient client) {
     }
   }
 
-  for (uint32_t i = 0; i < dev_info.num_funcs; i++) {
-    printf("    Function %u:\n", i);
-    const SdioFuncHwInfo& func_info = info.funcs_hw_info[i];
-    printf(
-        "        Manufacturer ID:    0x%04x\n"
-        "        Product ID:         0x%04x\n"
-        "        Max block size:     %u\n",
-        func_info.manufacturer_id, func_info.product_id, func_info.max_blk_size);
+  printf("\n    Function:\n");
+  const SdioFuncHwInfo& func_info = info.func_hw_info;
+  printf(
+      "        Manufacturer ID:    0x%04x\n"
+      "        Product ID:         0x%04x\n"
+      "        Max block size:     %u\n",
+      func_info.manufacturer_id, func_info.product_id, func_info.max_blk_size);
 
-    if (i == 0) {
-      printf("        Max transfer speed: ");
-      if (func_info.max_tran_speed > 1000) {
-        printf("%.1f Mb/s\n", static_cast<double>(func_info.max_tran_speed) / 1000.0);
-      } else {
-        printf("%u kb/s\n", func_info.max_tran_speed);
-      }
-    } else {
-      printf("        Interface code:     0x%02x\n", func_info.fn_intf_code);
-    }
+  printf("        Max transfer speed: ");
+  if (func_info.max_tran_speed > 1000) {
+    printf("%.1f Mb/s\n", static_cast<double>(func_info.max_tran_speed) / 1000.0);
+  } else {
+    printf("%u kb/s\n", func_info.max_tran_speed);
   }
+  printf("        Interface code:     0x%02x\n", func_info.fn_intf_code);
 
   return 0;
 }

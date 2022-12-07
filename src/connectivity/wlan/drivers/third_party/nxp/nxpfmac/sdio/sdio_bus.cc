@@ -103,12 +103,8 @@ zx_status_t SdioBus::Init(mlan_device* mlan_dev) {
       NXPF_ERR("Unable to get SDIO hardware info: %s", zx_status_get_string(status));
       return status;
     }
-    if (devinfo.dev_hw_info.num_funcs < 2) {
-      lerror("Not enough SDIO funcs (need 2, have %u)", devinfo.dev_hw_info.num_funcs);
-      return ZX_ERR_IO;
-    }
 
-    const uint32_t product_id = devinfo.funcs_hw_info[1].product_id;
+    const uint32_t product_id = devinfo.func_hw_info.product_id;
     status = get_card_type(product_id, &mlan_dev->card_type);
     if (status != ZX_OK) {
       NXPF_ERR("Unable to determine card type for vid 0x%04x", product_id);

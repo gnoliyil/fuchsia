@@ -117,9 +117,8 @@ class SdioBusTest : public zxtest::Test {
   std::shared_ptr<MockDevice> parent_;
   zx::interrupt interrupt_;
 
-  // Must have at least two SDIO functions and the second one should indicate card type.
-  sdio_hw_info_t hw_info_{.dev_hw_info = {.num_funcs = 2},
-                          .funcs_hw_info = {{.product_id = 0}, {.product_id = kProductSD8987}}};
+  // Indicate card type for this function.
+  sdio_hw_info_t hw_info_{.func_hw_info = {.product_id = kProductSD8987}};
 
   // Mock function called when SdioBus calls mlan_interrupt.
   std::function<mlan_status(t_u16, t_void*)> on_mlan_interrupt_;

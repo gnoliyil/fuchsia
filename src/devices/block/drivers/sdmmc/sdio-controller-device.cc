@@ -271,13 +271,15 @@ void SdioControllerDevice::DdkRelease() {
   delete this;
 }
 
-zx_status_t SdioControllerDevice::SdioGetDevHwInfo(sdio_hw_info_t* out_hw_info) {
+zx_status_t SdioControllerDevice::SdioGetDevHwInfo(uint8_t fn_idx, sdio_hw_info_t* out_hw_info) {
+  if (!SdioFnIdxValid(fn_idx)) {
+    return ZX_ERR_INVALID_ARGS;
+  }
+
   fbl::AutoLock lock(&lock_);
 
   memcpy(&out_hw_info->dev_hw_info, &hw_info_, sizeof(sdio_device_hw_info_t));
-  for (size_t i = 0; i < hw_info_.num_funcs; i++) {
-    memcpy(&out_hw_info->funcs_hw_info[i], &funcs_[i].hw_info, sizeof(sdio_func_hw_info_t));
-  }
+  memcpy(&out_hw_info->func_hw_info, &funcs_[fn_idx].hw_info, sizeof(sdio_func_hw_info_t));
   out_hw_info->host_max_transfer_size = static_cast<uint32_t>(sdmmc_.host_info().max_transfer_size);
   return ZX_OK;
 }

@@ -869,8 +869,8 @@ zx_status_t brcmf_sdio_register(brcmf_pub* drvr, std::unique_ptr<brcmf_bus>* out
     goto fail;
   }
 
-  BRCMF_DBG(SDIO, "sdio vendor ID: 0x%04x", devinfo.funcs_hw_info[SDIO_FN_1].manufacturer_id);
-  BRCMF_DBG(SDIO, "sdio device ID: 0x%04x", devinfo.funcs_hw_info[SDIO_FN_1].product_id);
+  BRCMF_DBG(SDIO, "sdio vendor ID: 0x%04x", devinfo.func_hw_info.manufacturer_id);
+  BRCMF_DBG(SDIO, "sdio device ID: 0x%04x", devinfo.func_hw_info.product_id);
 
   // TODO(cphoenix): Reexamine this when SDIO is more mature - do we need to support "quirks" in
   // Fuchsia? (MMC_QUIRK_LENIENT_FN0 is defined outside this driver.)
@@ -923,8 +923,8 @@ zx_status_t brcmf_sdio_register(brcmf_pub* drvr, std::unique_ptr<brcmf_bus>* out
   sdiodev->drvr = drvr;
   bus_if->bus_priv.sdio = sdiodev;
 
-  sdiodev->manufacturer_id = devinfo.funcs_hw_info[SDIO_FN_1].manufacturer_id;
-  sdiodev->product_id = devinfo.funcs_hw_info[SDIO_FN_1].product_id;
+  sdiodev->manufacturer_id = devinfo.func_hw_info.manufacturer_id;
+  sdiodev->product_id = devinfo.func_hw_info.product_id;
 
   // No need to call brcmf_sdiod_change_state here. Since the bus struct was allocated above it
   // can't contain any meaningful previous state that we can transition from. So we just need to set

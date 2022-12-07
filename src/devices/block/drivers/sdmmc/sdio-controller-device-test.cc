@@ -527,7 +527,7 @@ TEST_F(SdioControllerDeviceTest, ProcessCccr) {
 
   EXPECT_OK(dut_->Probe());
   sdio_hw_info_t info = {};
-  EXPECT_OK(dut_->SdioGetDevHwInfo(&info));
+  EXPECT_OK(dut_->SdioGetDevHwInfo(0, &info));
   EXPECT_EQ(info.dev_hw_info.caps,
             SDIO_CARD_MULTI_BLOCK | SDIO_CARD_LOW_SPEED | SDIO_CARD_FOUR_BIT_BUS |
                 SDIO_CARD_HIGH_SPEED | SDIO_CARD_UHS_SDR50 | SDIO_CARD_UHS_SDR104 |
@@ -539,7 +539,7 @@ TEST_F(SdioControllerDeviceTest, ProcessCccr) {
   sdmmc_.Write(0x15, std::vector<uint8_t>{0x00}, 0);
 
   EXPECT_OK(dut_->Probe());
-  EXPECT_OK(dut_->SdioGetDevHwInfo(&info));
+  EXPECT_OK(dut_->SdioGetDevHwInfo(0, &info));
   EXPECT_EQ(info.dev_hw_info.caps, 0);
 
   sdmmc_.Write(0x00, std::vector<uint8_t>{0x41}, 0);
@@ -573,12 +573,12 @@ TEST_F(SdioControllerDeviceTest, ProcessCis) {
   EXPECT_OK(dut_->Probe());
 
   sdio_hw_info_t info = {};
-  EXPECT_OK(dut_->SdioGetDevHwInfo(&info));
+  EXPECT_OK(dut_->SdioGetDevHwInfo(5, &info));
 
   EXPECT_EQ(info.dev_hw_info.num_funcs, 6);
-  EXPECT_EQ(info.funcs_hw_info[5].max_blk_size, 256);
-  EXPECT_EQ(info.funcs_hw_info[5].manufacturer_id, 0xc001);
-  EXPECT_EQ(info.funcs_hw_info[5].product_id, 0xface);
+  EXPECT_EQ(info.func_hw_info.max_blk_size, 256);
+  EXPECT_EQ(info.func_hw_info.manufacturer_id, 0xc001);
+  EXPECT_EQ(info.func_hw_info.product_id, 0xface);
 }
 
 TEST_F(SdioControllerDeviceTest, ProcessCisFunction0) {
@@ -614,13 +614,13 @@ TEST_F(SdioControllerDeviceTest, ProcessCisFunction0) {
   EXPECT_OK(dut_->Probe());
 
   sdio_hw_info_t info = {};
-  EXPECT_OK(dut_->SdioGetDevHwInfo(&info));
+  EXPECT_OK(dut_->SdioGetDevHwInfo(0, &info));
 
   EXPECT_EQ(info.dev_hw_info.num_funcs, 6);
-  EXPECT_EQ(info.funcs_hw_info[0].max_blk_size, 512);
-  EXPECT_EQ(info.funcs_hw_info[0].max_tran_speed, 25000);
-  EXPECT_EQ(info.funcs_hw_info[0].manufacturer_id, 0xbeef);
-  EXPECT_EQ(info.funcs_hw_info[0].product_id, 0xcafe);
+  EXPECT_EQ(info.func_hw_info.max_blk_size, 512);
+  EXPECT_EQ(info.func_hw_info.max_tran_speed, 25000);
+  EXPECT_EQ(info.func_hw_info.manufacturer_id, 0xbeef);
+  EXPECT_EQ(info.func_hw_info.product_id, 0xcafe);
 }
 
 TEST_F(SdioControllerDeviceTest, ProcessFbr) {
@@ -636,13 +636,20 @@ TEST_F(SdioControllerDeviceTest, ProcessFbr) {
   EXPECT_OK(dut_->Probe());
 
   sdio_hw_info_t info = {};
-  EXPECT_OK(dut_->SdioGetDevHwInfo(&info));
-
+  EXPECT_OK(dut_->SdioGetDevHwInfo(0, &info));
   EXPECT_EQ(info.dev_hw_info.num_funcs, 8);
-  EXPECT_EQ(info.funcs_hw_info[1].fn_intf_code, 0x03);
-  EXPECT_EQ(info.funcs_hw_info[5].fn_intf_code, 0x00);
-  EXPECT_EQ(info.funcs_hw_info[6].fn_intf_code, 0xab);
-  EXPECT_EQ(info.funcs_hw_info[7].fn_intf_code, 0x0e);
+
+  EXPECT_OK(dut_->SdioGetDevHwInfo(1, &info));
+  EXPECT_EQ(info.func_hw_info.fn_intf_code, 0x03);
+
+  EXPECT_OK(dut_->SdioGetDevHwInfo(5, &info));
+  EXPECT_EQ(info.func_hw_info.fn_intf_code, 0x00);
+
+  EXPECT_OK(dut_->SdioGetDevHwInfo(6, &info));
+  EXPECT_EQ(info.func_hw_info.fn_intf_code, 0xab);
+
+  EXPECT_OK(dut_->SdioGetDevHwInfo(7, &info));
+  EXPECT_EQ(info.func_hw_info.fn_intf_code, 0x0e);
 }
 
 TEST_F(SdioControllerDeviceTest, SmallHostTransferSize) {
@@ -972,11 +979,11 @@ TEST_F(SdioControllerDeviceTest, DifferentManufacturerProductIds) {
   EXPECT_OK(dut_->Probe());
 
   sdio_hw_info_t info = {};
-  EXPECT_OK(dut_->SdioGetDevHwInfo(&info));
+  EXPECT_OK(dut_->SdioGetDevHwInfo(0, &info));
 
   EXPECT_EQ(info.dev_hw_info.num_funcs, 5);
-  EXPECT_EQ(info.funcs_hw_info[0].manufacturer_id, 0xbeef);
-  EXPECT_EQ(info.funcs_hw_info[0].product_id, 0xcafe);
+  EXPECT_EQ(info.func_hw_info.manufacturer_id, 0xbeef);
+  EXPECT_EQ(info.func_hw_info.product_id, 0xcafe);
 
   EXPECT_OK(dut_->AddDevice());
 
