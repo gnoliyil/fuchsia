@@ -149,7 +149,7 @@ In VS Code, do the following:
 1. Continue to click the **Step Over** icon to step through the
    `HandleIrq()` function until the line 126 is reached.
 
-   When the `HandleIrq()` function finishes the execution, it replies
+   When the `HandleIrq()` function is finished, it replies
    with the result of the factorial.
 
 1. In the **TERMINAL** panel, verify that the `eductl_tool` command

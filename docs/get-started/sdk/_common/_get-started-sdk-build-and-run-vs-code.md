@@ -17,8 +17,7 @@ In VS Code, do the following:
 
 1. Open the `getting-started.code-workspace` file.
 
-   This file includes the following launch configuration, which is
-   set to build and run the `hello_world` component:
+1. Verify that this file includes the following launch configuration:
 
    ```none {:.devsite-disable-click-to-copy}
    "launch": {
@@ -34,6 +33,9 @@ In VS Code, do the following:
      ]
    }
    ```
+
+   This configuration is set to build and run the `hello_world` sample
+   component.
 
 1. Click the **Run and Debug** icon on the left side of VS Code.
 
