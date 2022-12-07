@@ -24,6 +24,20 @@ In VS Code, do the following:
    Note: You may see more pop-ups recommending other extensions while using
    VS Code. However, you can safely ignore them for the rest of this guide.
 
+The layout diagram below shows the parts in VS Code that are relevant in this guide:
+
+<img src="images/get-started-vscode-tabs-and-icons.png" alt="Parts in VS Code relevant to this guide" class="screenshot">
+
+1. **TERMINAL** tab
+2. Target device icon
+3. Command Palette
+4. **FUCHSIA LOGS** tab
+5. **Explorer** icon
+6. **Run and Debug** icon
+7. **DEBUG CONSOLE** tab
+8. **OPEN EDITORS** view
+9. Status bar for the remote host
+
 <!-- Reference links -->
 
 [bazel-vscode-ext]: https://marketplace.visualstudio.com/items?itemName=BazelBuild.vscode-bazel
