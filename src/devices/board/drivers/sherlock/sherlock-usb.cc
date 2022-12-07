@@ -54,11 +54,6 @@ static const std::vector<fpbus::Bti> dwc2_btis{
     }},
 };
 
-#if (ENABLE_RNDIS)
-constexpr char kManufacturer[] = "Zircon";
-constexpr char kSerial[] = "0123456789ABCDEF";
-constexpr char kProductRndis[] = "RNDIS-Ethernet";
-#endif
 
 // Metadata for DWC2 driver.
 constexpr dwc2_metadata_t dwc2_metadata = {
@@ -222,57 +217,6 @@ zx_status_t Sherlock::UsbInit() {
     return result->error_value();
   }
 
-#if (ENABLE_RNDIS)
-  constexpr size_t alignment = alignof(UsbConfig) > __STDCPP_DEFAULT_NEW_ALIGNMENT__
-                                   ? alignof(UsbConfig)
-                                   : __STDCPP_DEFAULT_NEW_ALIGNMENT__;
-  {
-    constexpr size_t config_size = sizeof(UsbConfig) + 1 * sizeof(FunctionDescriptor);
-    UsbConfig* config =
-        reinterpret_cast<UsbConfig*>(aligned_alloc(alignment, ZX_ROUNDUP(config_size, alignment)));
-    if (!config) {
-      return ZX_ERR_NO_MEMORY;
-    }
-    auto call = fit::defer([=]() { free(config); });
-    config->vid = GOOGLE_USB_VID;
-    config->pid = GOOGLE_USB_CDC_AND_FUNCTION_TEST_PID;
-    strncpy(config->manufacturer, kManufacturer, sizeof(config->manufacturer));
-    strncpy(config->serial, kSerial, sizeof(config->serial));
-    strncpy(config->product, kProductRndis, sizeof(config->product));
-    config->functions[0].interface_class = USB_CLASS_MISC;
-    config->functions[0].interface_subclass = USB_SUBCLASS_MSC_RNDIS;
-    config->functions[0].interface_protocol = USB_PROTOCOL_MSC_RNDIS_ETHERNET;
-    usb_metadata[0].data() = std::vector<uint8_t>(reinterpret_cast<uint8_t*>(config),
-                                                  reinterpret_cast<uint8_t*>(config) + config_size);
-
-    fpbus::Node dwc2_dev;
-    dwc2_dev.name() = "dwc2";
-    dwc2_dev.vid() = PDEV_VID_GENERIC;
-    dwc2_dev.pid() = PDEV_PID_GENERIC;
-    dwc2_dev.did() = PDEV_DID_USB_DWC2;
-    dwc2_dev.mmio() = dwc2_mmios;
-    dwc2_dev.irq() = dwc2_irqs;
-    dwc2_dev.bti() = dwc2_btis;
-    dwc2_dev.metadata() = usb_metadata;
-    dwc2_dev.boot_metadata() = usb_boot_metadata;
-
-    result = pbus_.buffer(arena)->AddComposite(
-        fidl::ToWire(fidl_arena, dwc2_dev),
-        platform_bus_composite::MakeFidlFragment(fidl_arena, dwc2_phy_fragments,
-                                                 std::size(dwc2_phy_fragments)),
-        "dwc2-phy");
-    if (!result.ok()) {
-      zxlogf(ERROR, "%s: AddComposite Usb(dwc2_dev) request failed: %s", __func__,
-             result.FormatDescription().data());
-      return result.status();
-    }
-    if (result->is_error()) {
-      zxlogf(ERROR, "%s: AddComposite Usb(dwc2_dev) failed: %s", __func__,
-             zx_status_get_string(result->error_value()));
-      return result->error_value();
-    }
-  }
-#else
   {
     std::unique_ptr<usb::UsbPeripheralConfig> peripheral_config;
     auto status = usb::UsbPeripheralConfig::CreateFromBootArgs(parent_, &peripheral_config);
@@ -308,7 +252,6 @@ zx_status_t Sherlock::UsbInit() {
       return result->error_value();
     }
   }
-#endif  //(ENABLE_RNDIS)
 
   return ZX_OK;
 }

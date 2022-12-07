@@ -13,10 +13,6 @@ config("dai-test") {
   defines = [ "ENABLE_DAI_TEST" ]
 }
 
-config("rndis") {
-  defines = [ "ENABLE_RNDIS=1" ]
-}
-
 driver_bind_rules("sherlock-dai-test-in-bind") {
   rules = "bind/sherlock-dai-test-in.bind"
   header_output = "sherlock-dai-test-in-bind.h"
@@ -552,9 +548,6 @@ template("sherlock_driver") {
     if (use_factory) {
       configs += [ ":factory" ]
     }
-    if (enable_rndis) {
-      configs += [ ":rndis" ]
-    }
     if (enable_dai_test) {
       configs += [ ":dai-test" ]
     }
@@ -722,45 +715,27 @@ template("sherlock_driver") {
 
 sherlock_driver("sherlock") {
   use_factory = false
-  enable_rndis = false
   enable_dai_test = false
 }
 
 sherlock_driver("sherlock-factory") {
   use_factory = true
-  enable_rndis = false
   enable_dai_test = false
 }
 
 sherlock_driver("sherlock-dai-test") {
   use_factory = false
-  enable_rndis = false
   enable_dai_test = true
-}
-
-sherlock_driver("sherlock-factory-rndis") {
-  use_factory = true
-  enable_rndis = true
-  enable_dai_test = false
 }
 
 sherlock_driver("luis") {
   use_factory = false
-  enable_rndis = false
   is_luis = true
   enable_dai_test = false
 }
 
 sherlock_driver("luis-factory") {
   use_factory = true
-  enable_rndis = false
-  enable_dai_test = false
-  is_luis = true
-}
-
-sherlock_driver("luis-factory-rndis") {
-  use_factory = true
-  enable_rndis = true
   enable_dai_test = false
   is_luis = true
 }
