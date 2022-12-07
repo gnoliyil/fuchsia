@@ -316,7 +316,7 @@ fbl::RefPtr<zx_device> zx_device::GetDeviceFromLocalId(uint64_t local_id) {
   return fbl::RefPtr(&*itr);
 }
 
-bool zx_device::Unbound() { return flags_ & DEV_FLAG_UNBOUND; }
+bool zx_device::Unbound() { return flags_ & DEV_FLAG_UNBINDING; }
 
 bool zx_device::has_composite() const { return !!composite_; }
 

@@ -231,8 +231,8 @@ void DeviceInspect::set_flags(uint32_t flags) {
   if (flags & DEV_FLAG_INVISIBLE) {
     flags_str.Append("invisible ");
   }
-  if (flags & DEV_FLAG_UNBOUND) {
-    flags_str.Append("unbound ");
+  if (flags & DEV_FLAG_UNBINDING) {
+    flags_str.Append("unbinding ");
   }
   if (flags & DEV_FLAG_WANTS_REBIND) {
     flags_str.Append("rebind ");

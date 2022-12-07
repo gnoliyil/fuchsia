@@ -517,8 +517,8 @@ zx_status_t DriverHostContext::DeviceCompleteRemoval(const fbl::RefPtr<zx_device
 zx_status_t DriverHostContext::DeviceUnbind(const fbl::RefPtr<zx_device_t>& dev) {
   enum_lock_acquire();
 
-  if (!(dev->flags() & DEV_FLAG_UNBOUND)) {
-    dev->set_flag(DEV_FLAG_UNBOUND);
+  if (!(dev->flags() & DEV_FLAG_UNBINDING)) {
+    dev->set_flag(DEV_FLAG_UNBINDING);
     // Call dev's unbind op.
     if (dev->ops()->unbind) {
       VLOGD(1, *dev, "Device %p is being unbound", dev.get());
@@ -539,7 +539,7 @@ void DriverHostContext::DeviceUnbindReply(const fbl::RefPtr<zx_device_t>& dev) {
     LOGD(FATAL, *dev, "Device %p cannot reply to unbind, bad flags: %s", dev.get(),
          internal::removal_problem(dev->flags()));
   }
-  if (!(dev->flags() & DEV_FLAG_UNBOUND)) {
+  if (!(dev->flags() & DEV_FLAG_UNBINDING)) {
     LOGD(FATAL, *dev, "Device %p cannot reply to unbind, not in unbinding state (flags %#x)",
          dev.get(), dev->flags());
   }
