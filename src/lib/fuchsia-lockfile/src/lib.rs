@@ -1,4 +1,4 @@
-// Copyright 2020 The Fuchsia Authors. All rights reserved.
+// Copyright 2022 The Fuchsia Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,8 @@ pub struct Lockfile {
 #[derive(thiserror::Error, Debug)]
 /// An error while creating a lockfile, including the underlying file io error
 /// and if possible the error
-#[error("Error obtaining lock on {:?} (existing owner if present: '{:?}', our pid is {pid})", .lock_path, .owner, pid=std::process::id())]
+#[error("Error obtaining lock on {:?} (existing owner if present: '{:?}', our pid is {pid})",
+        .lock_path, .owner, pid=std::process::id())]
 pub struct LockfileCreateError {
     /// The underlying error attempting to obtain the lockfile
     #[source]
@@ -61,25 +62,42 @@ impl LockfileCreateError {
         // just warnings/info
         match self.owner.as_ref() {
             Some(ctx) if ctx.pid == my_pid => {
-                info!("Overlapping access to the lockfile at {path} from the same process, this may be a sign of other issues.", path=self.lock_path.display());
+                info!(
+                    "Overlapping access to the lockfile at {path} from the same process, \
+                       this may be a sign of other issues.",
+                    path = self.lock_path.display()
+                );
             }
             _ => (),
         };
         // actual errors
         match (self.owner.as_ref(), ctime) {
             (_, Some(ctime)) if ctime > at + Duration::from_secs(2) => {
-                warn!("Lockfile {path} is in the future somehow, considering it invalid (ctime: {ctime:?}, now: {at:?})", path=self.lock_path.display());
+                warn!(
+                    "Lockfile {path} is in the future somehow, considering it invalid \
+                       (ctime: {ctime:?}, now: {at:?})",
+                    path = self.lock_path.display()
+                );
                 false
             }
             (None, Some(ctime)) if ctime + Duration::from_secs(10) < at => {
-                warn!("Lockfile {path} is older than 10s, so is probably stale, considering it invalid (ctime {ctime:?}, now: {at:?})", path = self.lock_path.display());
+                warn!(
+                    "Lockfile {path} is older than 10s, so is probably stale, considering it \
+                       invalid (ctime {ctime:?}, now: {at:?})",
+                    path = self.lock_path.display()
+                );
                 false
             }
             (Some(ctx), _)
                 if unistd::getpgid(Some(Pid::from_raw(ctx.pid as i32)))
                     == Err(nix::Error::Sys(Errno::ESRCH)) =>
             {
-                warn!("Lockfile {path} was created by a pid that no longer exists ({pid}), considering it invalid.", path=self.lock_path.display(), pid=ctx.pid);
+                warn!(
+                    "Lockfile {path} was created by a pid that no longer exists ({pid}), \
+                       considering it invalid.",
+                    path = self.lock_path.display(),
+                    pid = ctx.pid
+                );
                 false
             }
             _ => true,
@@ -153,7 +171,8 @@ impl Lockfile {
             .map_err(|e| LockfileCreateError::new(lock_path, e))
     }
 
-    /// Creates a lockfile at `filename`.lock if possible. See [`Lockfile::new`] for details on the return value.
+    /// Creates a lockfile at `filename`.lock if possible. See [`Lockfile::new`] for details on
+    /// the return value.
     pub fn new_for(filename: &Path, context: LockContext) -> Result<Self, LockfileCreateError> {
         let mut lock_path = filename.to_owned();
         let filename = lock_path.file_name().map_or(".lock".to_string(), |name| {
@@ -166,8 +185,8 @@ impl Lockfile {
 
     /// Creates a lockfile at `filename` if possible, retrying until it succeeds or times out.
     ///
-    /// If unable to lock within the constraints, will return the error from the last attempt. It will
-    /// try with an increasing sleep between attempts up to `timeout`.
+    /// If unable to lock within the constraints, will return the error from the last attempt.
+    /// It will try with an increasing sleep between attempts up to `timeout`.
     async fn lock(lock_path: &Path, timeout: Duration) -> Result<Self, LockfileCreateError> {
         let end_time = Instant::now() + timeout;
         let context = LockContext::current();

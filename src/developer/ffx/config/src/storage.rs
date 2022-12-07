@@ -5,11 +5,11 @@
 use {
     crate::api::query::SelectMode,
     crate::environment::Environment,
-    crate::lockfile::Lockfile,
     crate::nested::{nested_get, nested_remove, nested_set},
     crate::ConfigLevel,
     anyhow::{bail, Context, Result},
     config_macros::include_default,
+    fuchsia_lockfile::Lockfile,
     futures::{stream::FuturesUnordered, StreamExt},
     serde::de::DeserializeOwned,
     serde_json::{Map, Value},

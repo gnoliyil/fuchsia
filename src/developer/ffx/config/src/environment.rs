@@ -2,11 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use crate::lockfile::{Lockfile, LockfileCreateError};
 use crate::{query, BuildOverride};
 use crate::{ConfigLevel, ConfigMap};
 use anyhow::{bail, Context, Result};
 use errors::ffx_error;
+use fuchsia_lockfile::{Lockfile, LockfileCreateError};
 use sdk::{Sdk, SdkRoot};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

@@ -19,6 +19,7 @@ ffx_plugin("ffx_doctor") {
     "//src/developer/ffx/lib/timeout:lib",
     "//src/lib/fidl/rust/fidl",
     "//src/lib/fuchsia-async",
+    "//src/lib/fuchsia-lockfile:lib",
     "//third_party/rust_crates:anyhow",
     "//third_party/rust_crates:argh",
     "//third_party/rust_crates:async-lock",
