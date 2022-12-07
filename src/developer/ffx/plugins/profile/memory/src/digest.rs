@@ -212,7 +212,7 @@ pub mod processed {
     use std::iter::FromIterator;
 
     /// Per process memory attribution.
-    #[derive(Serialize, PartialEq, Debug)]
+    #[derive(Serialize, PartialEq, Debug, Default)]
     pub struct RetainedMemory {
         /// Total size, in bytes, of VMOs exclusively retained
         /// (directly, or indirectly via children VMOs) by the
@@ -227,6 +227,8 @@ pub mod processed {
         /// not, directly, or indirectly via children VMOs) by this
         /// process.
         pub total: u64,
+        /// List of VMOs aggregated in this group.
+        pub vmos: Vec<u64>,
     }
 
     /// Summary of memory-related data for a given process.
@@ -236,14 +238,15 @@ pub mod processed {
         pub koid: u64,
         pub name: String,
         pub memory: RetainedMemory,
-        /// Mapping between the names of the VMOs related to this
-        /// process, and their retained memory.
+        /// Mapping between VMO group names and the retained memory.
+        /// VMO are grouped by name matching. See `rename` for more detail.
         pub name_to_memory: HashMap<String, RetainedMemory>,
         /// Set of vmo koids related to this process.
         pub vmos: HashSet<u64>,
     }
 
     /// Holds all the data relevant to a Vmo.
+    #[derive(Serialize, PartialEq, Debug)]
     pub struct Vmo {
         pub koid: u64,
         pub name: String,
@@ -265,12 +268,14 @@ pub mod processed {
         pub kernel: Kernel,
         /// Process data.
         pub processes: Vec<Process>,
+        /// Details about VMOs.
+        pub vmos: Vec<Vmo>,
         /// Buckets
         pub buckets: Vec<Bucket>,
     }
 
-    /// Perform ad-hoc VMO name canonicalization. Computes equivalence
-    /// classes for certain VMO names, for aggregation purposes.
+    /// Returns the name of a VMO category when the name match on of the rules.
+    /// This is used for presentation and aggregation.
     fn rename(name: &str) -> &str {
         lazy_static::lazy_static! {
         /// Default, global regex match.
@@ -341,7 +346,7 @@ pub mod processed {
                     let p = Process {
                         koid,
                         name: name.to_string(),
-                        memory: RetainedMemory { private: 0, scaled: 0, total: 0 },
+                        memory: RetainedMemory::default(),
                         name_to_memory: HashMap::new(),
                         vmos: HashSet::from_iter(vmos),
                     };
@@ -400,10 +405,8 @@ pub mod processed {
                             None => unreachable!(),
                         };
                         let name = rename(name).to_string();
-                        let mut name_sizes = process
-                            .name_to_memory
-                            .entry(name)
-                            .or_insert(RetainedMemory { private: 0, scaled: 0, total: 0 });
+                        let mut name_sizes = process.name_to_memory.entry(name).or_default();
+                        name_sizes.vmos.push(*vmo_koid);
                         name_sizes.total += committed_bytes;
                         process.memory.total += committed_bytes;
                         name_sizes.scaled += committed_bytes / share_count;
@@ -439,6 +442,7 @@ pub mod processed {
             total_committed_bytes_in_vmos: total_committed_vmo,
             kernel: raw::Kernel { vmo: kernel_vmo, ..capture.kernel },
             processes,
+            vmos: koid_to_vmo.into_values().collect(),
             buckets,
         }
     }
@@ -450,6 +454,19 @@ mod tests {
     use crate::bucket::Bucket;
     use crate::raw::BucketDefinition;
     use std::collections::{HashMap, HashSet};
+
+    /// Returns a list of references to processes sorted by koid.
+    fn sorted_by_koid(processes: &Vec<processed::Process>) -> Vec<&processed::Process> {
+        let mut vec_of_refs: Vec<&processed::Process> = processes.iter().collect();
+        vec_of_refs.sort_by(|a, b| a.koid.cmp(&b.koid));
+        vec_of_refs
+    }
+    /// Returns a list of references to processes sorted by koid.
+    fn sorted_vmos_by_koid(processes: &Vec<processed::Vmo>) -> Vec<&processed::Vmo> {
+        let mut vec_of_refs: Vec<&processed::Vmo> = processes.iter().collect();
+        vec_of_refs.sort_by(|a, b| a.koid.cmp(&b.koid));
+        vec_of_refs
+    }
 
     #[test]
     fn raw_to_processed_test() {
@@ -509,101 +526,139 @@ mod tests {
                 }),
             ],
         };
-        let expected_processes_per_koid = HashMap::from([
-            (
-                2,
-                processed::Process {
-                    koid: 2,
-                    name: "process2".to_string(),
-                    memory: processed::RetainedMemory { private: 0, scaled: 100, total: 300 },
-                    name_to_memory: {
-                        let mut result = HashMap::new();
-                        result.insert(
-                            "vmo1".to_string(),
-                            processed::RetainedMemory { private: 0, scaled: 100, total: 300 },
-                        );
-                        result
-                    },
-                    vmos: {
-                        let mut result = HashSet::new();
-                        result.insert(1);
-                        result
-                    },
+        let expected_processes = vec![
+            processed::Process {
+                koid: 2,
+                name: "process2".to_string(),
+                memory: processed::RetainedMemory {
+                    private: 0,
+                    scaled: 100,
+                    total: 300,
+                    vmos: vec![],
                 },
-            ),
-            (
-                3,
-                processed::Process {
-                    koid: 3,
-                    name: "process3".to_string(),
-                    memory: processed::RetainedMemory { private: 0, scaled: 150, total: 400 },
-                    name_to_memory: {
-                        let mut result = HashMap::new();
-                        result.insert(
-                            "vmo1".to_string(),
-                            processed::RetainedMemory { private: 0, scaled: 100, total: 300 },
-                        );
-                        result.insert(
-                            "vmo2".to_string(),
-                            processed::RetainedMemory { private: 0, scaled: 50, total: 100 },
-                        );
-                        result
-                    },
-                    vmos: {
-                        let mut result = HashSet::new();
-                        result.insert(1);
-                        result.insert(2);
-                        result
-                    },
+                name_to_memory: {
+                    let mut result = HashMap::new();
+                    result.insert(
+                        "vmo1".to_string(),
+                        processed::RetainedMemory {
+                            private: 0,
+                            scaled: 100,
+                            total: 300,
+                            vmos: vec![1],
+                        },
+                    );
+                    result
                 },
-            ),
-            (
-                5,
-                processed::Process {
-                    koid: 5,
-                    name: "process5".to_string(),
-                    memory: processed::RetainedMemory { private: 0, scaled: 150, total: 400 },
-                    name_to_memory: {
-                        let mut result = HashMap::new();
-                        result.insert(
-                            "vmo2".to_string(),
-                            processed::RetainedMemory { private: 0, scaled: 50, total: 100 },
-                        );
-                        result.insert(
-                            "vmo1".to_string(),
-                            processed::RetainedMemory { private: 0, scaled: 100, total: 300 },
-                        );
-                        result
-                    },
-                    vmos: {
-                        let mut result = HashSet::new();
-                        result.insert(2);
-                        result
-                    },
+                vmos: {
+                    let mut result = HashSet::new();
+                    result.insert(1);
+                    result
                 },
-            ),
-            (
-                4,
-                processed::Process {
-                    koid: 4,
-                    name: "process4".to_string(),
-                    memory: processed::RetainedMemory { private: 100, scaled: 100, total: 100 },
-                    name_to_memory: {
-                        let mut result = HashMap::new();
-                        result.insert(
-                            "vmo3".to_string(),
-                            processed::RetainedMemory { private: 100, scaled: 100, total: 100 },
-                        );
-                        result
-                    },
-                    vmos: {
-                        let mut result = HashSet::new();
-                        result.insert(3);
-                        result
-                    },
+            },
+            processed::Process {
+                koid: 3,
+                name: "process3".to_string(),
+                memory: processed::RetainedMemory {
+                    private: 0,
+                    scaled: 150,
+                    total: 400,
+                    vmos: vec![],
                 },
-            ),
-        ]);
+                name_to_memory: {
+                    let mut result = HashMap::new();
+                    result.insert(
+                        "vmo1".to_string(),
+                        processed::RetainedMemory {
+                            private: 0,
+                            scaled: 100,
+                            total: 300,
+                            vmos: vec![1],
+                        },
+                    );
+                    result.insert(
+                        "vmo2".to_string(),
+                        processed::RetainedMemory {
+                            private: 0,
+                            scaled: 50,
+                            total: 100,
+                            vmos: vec![2],
+                        },
+                    );
+                    result
+                },
+                vmos: {
+                    let mut result = HashSet::new();
+                    result.insert(1);
+                    result.insert(2);
+                    result
+                },
+            },
+            processed::Process {
+                koid: 4,
+                name: "process4".to_string(),
+                memory: processed::RetainedMemory {
+                    private: 100,
+                    scaled: 100,
+                    total: 100,
+                    vmos: vec![],
+                },
+                name_to_memory: {
+                    let mut result = HashMap::new();
+                    result.insert(
+                        "vmo3".to_string(),
+                        processed::RetainedMemory {
+                            private: 100,
+                            scaled: 100,
+                            total: 100,
+                            vmos: vec![3],
+                        },
+                    );
+                    result
+                },
+                vmos: {
+                    let mut result = HashSet::new();
+                    result.insert(3);
+                    result
+                },
+            },
+            processed::Process {
+                koid: 5,
+                name: "process5".to_string(),
+                memory: processed::RetainedMemory {
+                    private: 0,
+                    scaled: 150,
+                    total: 400,
+                    vmos: vec![],
+                },
+                name_to_memory: {
+                    let mut result = HashMap::new();
+                    result.insert(
+                        "vmo2".to_string(),
+                        processed::RetainedMemory {
+                            private: 0,
+                            scaled: 50,
+                            total: 100,
+                            vmos: vec![2],
+                        },
+                    );
+                    result.insert(
+                        "vmo1".to_string(),
+                        processed::RetainedMemory {
+                            private: 0,
+                            scaled: 100,
+                            total: 300,
+                            vmos: vec![1],
+                        },
+                    );
+                    result
+                },
+                vmos: {
+                    let mut result = HashSet::new();
+                    result.insert(2);
+                    result
+                },
+            },
+        ];
 
         let buckets_definitions = vec![
             BucketDefinition {
@@ -636,12 +691,40 @@ mod tests {
                 );
             }
         }
-        for process in processed.processes {
-            let expected = expected_processes_per_koid
-                .get(&process.koid)
-                .expect(&format!("Digest contains unexpected process {:?}", process));
-            pretty_assertions::assert_eq!(process, *expected);
-        }
+
+        pretty_assertions::assert_eq!(
+            sorted_by_koid(&processed.processes),
+            sorted_by_koid(&expected_processes)
+        );
+
+        let expected_vmos = vec![
+            processed::Vmo {
+                koid: 1,
+                name: "vmo1".to_string(),
+                parent_koid: 0,
+                committed_bytes: 300,
+                allocated_bytes: 300,
+            },
+            processed::Vmo {
+                koid: 2,
+                name: "vmo2".to_string(),
+                parent_koid: 1,
+                committed_bytes: 100,
+                allocated_bytes: 100,
+            },
+            processed::Vmo {
+                koid: 3,
+                name: "vmo3".to_string(),
+                parent_koid: 0,
+                committed_bytes: 100,
+                allocated_bytes: 100,
+            },
+        ];
+
+        pretty_assertions::assert_eq!(
+            sorted_vmos_by_koid(&expected_vmos),
+            sorted_vmos_by_koid(&processed.vmos)
+        );
 
         // Check that the buckets have been correctly created.
         // note: `bucket.rs` contain more in-depth bucketing tests.
@@ -697,58 +780,78 @@ mod tests {
                 }),
             ],
         };
-        let expected_processes_per_koid = HashMap::from([
-            (
-                2,
-                processed::Process {
-                    koid: 2,
-                    name: "blobfs.cm".to_string(),
-                    memory: processed::RetainedMemory { private: 0, scaled: 250, total: 500 },
-                    name_to_memory: {
-                        let mut result = HashMap::new();
-                        result.insert(
-                            "blob-xxx".to_string(),
-                            processed::RetainedMemory { private: 0, scaled: 250, total: 500 },
-                        );
-                        result
-                    },
-                    vmos: {
-                        let mut result = HashSet::new();
-                        result.insert(1);
-                        result
-                    },
+        let expected_processes = vec![
+            processed::Process {
+                koid: 2,
+                name: "blobfs.cm".to_string(),
+                memory: processed::RetainedMemory {
+                    private: 0,
+                    scaled: 250,
+                    total: 500,
+                    vmos: vec![],
                 },
-            ),
-            (
-                3,
-                processed::Process {
-                    koid: 3,
-                    name: "app.cmx".to_string(),
-                    memory: processed::RetainedMemory { private: 0, scaled: 250, total: 500 },
-                    name_to_memory: {
-                        let mut result = HashMap::new();
-                        result.insert(
-                            "app.cmx".to_string(),
-                            processed::RetainedMemory { private: 0, scaled: 0, total: 0 },
-                        );
-                        result.insert(
-                            "blob-xxx".to_string(),
-                            processed::RetainedMemory { private: 0, scaled: 250, total: 500 },
-                        );
-                        result
-                    },
-                    vmos: {
-                        let mut result = HashSet::new();
-                        result.insert(2);
-                        result
-                    },
+                name_to_memory: {
+                    let mut result = HashMap::new();
+                    result.insert(
+                        "blob-xxx".to_string(),
+                        processed::RetainedMemory {
+                            private: 0,
+                            scaled: 250,
+                            total: 500,
+                            vmos: vec![1],
+                        },
+                    );
+                    result
                 },
-            ),
-        ]);
+                vmos: {
+                    let mut result = HashSet::new();
+                    result.insert(1);
+                    result
+                },
+            },
+            processed::Process {
+                koid: 3,
+                name: "app.cmx".to_string(),
+                memory: processed::RetainedMemory {
+                    private: 0,
+                    scaled: 250,
+                    total: 500,
+                    vmos: vec![],
+                },
+                name_to_memory: {
+                    let mut result = HashMap::new();
+                    result.insert(
+                        "app.cmx".to_string(),
+                        processed::RetainedMemory {
+                            private: 0,
+                            scaled: 0,
+                            total: 0,
+                            vmos: vec![2],
+                        },
+                    );
+                    result.insert(
+                        "blob-xxx".to_string(),
+                        processed::RetainedMemory {
+                            private: 0,
+                            scaled: 250,
+                            total: 500,
+                            vmos: vec![1],
+                        },
+                    );
+                    result
+                },
+                vmos: {
+                    let mut result = HashSet::new();
+                    result.insert(2);
+                    result
+                },
+            },
+        ];
         let processed = processed::digest_from_memory_monitor_output(
             raw::MemoryMonitorOutput { capture, buckets_definitions: vec![] },
             false,
         );
+
         // Check that the process list is sorted
         {
             let mut pairs = processed.processes.windows(2);
@@ -761,11 +864,31 @@ mod tests {
                 );
             }
         }
-        for process in processed.processes {
-            let expected = expected_processes_per_koid
-                .get(&process.koid)
-                .expect(&format!("Digest contains unexpected process {:?}", process));
-            pretty_assertions::assert_eq!(process, *expected);
-        }
+
+        pretty_assertions::assert_eq!(
+            sorted_by_koid(&processed.processes),
+            sorted_by_koid(&expected_processes)
+        );
+
+        let expected_vmos = vec![
+            processed::Vmo {
+                koid: 1,
+                name: "blob-xxx".to_string(),
+                parent_koid: 0,
+                committed_bytes: 500,
+                allocated_bytes: 1000,
+            },
+            processed::Vmo {
+                koid: 2,
+                name: "app.cmx".to_string(),
+                parent_koid: 1,
+                committed_bytes: 0,
+                allocated_bytes: 1000,
+            },
+        ];
+        pretty_assertions::assert_eq!(
+            sorted_vmos_by_koid(&expected_vmos),
+            sorted_vmos_by_koid(&processed.vmos)
+        );
     }
 }

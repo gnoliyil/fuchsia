@@ -167,16 +167,26 @@ mod tests {
             process_data: vec![processed::Process {
                 koid: 4,
                 name: "P".to_string(),
-                memory: RetainedMemory { private: 11, scaled: 22, total: 33 },
+                memory: RetainedMemory { private: 11, scaled: 22, total: 33, vmos: vec![] },
                 name_to_memory: {
                     let mut result = HashMap::new();
                     result.insert(
                         "vmoC".to_string(),
-                        processed::RetainedMemory { private: 4444, scaled: 55555, total: 666666 },
+                        processed::RetainedMemory {
+                            private: 4444,
+                            scaled: 55555,
+                            total: 666666,
+                            vmos: vec![],
+                        },
                     );
                     result.insert(
                         "vmoB".to_string(),
-                        processed::RetainedMemory { private: 4444, scaled: 55555, total: 666666 },
+                        processed::RetainedMemory {
+                            private: 4444,
+                            scaled: 55555,
+                            total: 666666,
+                            vmos: vec![],
+                        },
                     );
                     result.insert(
                         "vmoA".to_string(),
@@ -184,6 +194,7 @@ mod tests {
                             private: 44444,
                             scaled: 555555,
                             total: 6666666,
+                            vmos: vec![],
                         },
                     );
                     result

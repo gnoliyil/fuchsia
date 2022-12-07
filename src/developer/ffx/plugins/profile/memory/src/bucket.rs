@@ -178,7 +178,7 @@ mod tests {
             processes.push(Process {
                 koid: process_def.process_koid,
                 name: process_def.process_name.to_string(),
-                memory: RetainedMemory { private: 0, scaled: 0, total: 0 },
+                memory: RetainedMemory::default(),
                 name_to_memory: HashMap::new(),
                 vmos: vmo_koids,
             })
