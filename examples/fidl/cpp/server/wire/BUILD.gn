@@ -10,7 +10,7 @@ executable("bin") {
   sources = [ "main.cc" ]
   deps = [
     "//examples/fidl/fuchsia.examples:fuchsia.examples_cpp_wire",
-    "//sdk/lib/sys/component/cpp",
+    "//sdk/lib/component/outgoing/cpp",
     "//sdk/lib/syslog/cpp",
     "//zircon/system/ulib/async-loop:async-loop-cpp",
   ]

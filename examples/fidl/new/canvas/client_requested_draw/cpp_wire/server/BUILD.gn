@@ -12,8 +12,8 @@ executable("bin") {
 
   deps = [
     "//examples/fidl/new/canvas/client_requested_draw/fidl:examples.canvas.clientrequesteddraw_cpp_wire",
+    "//sdk/lib/component/outgoing/cpp",
     "//sdk/lib/fdio",
-    "//sdk/lib/sys/component/cpp",
     "//sdk/lib/sys/cpp",
     "//sdk/lib/syslog/cpp",
     "//src/lib/fxl",

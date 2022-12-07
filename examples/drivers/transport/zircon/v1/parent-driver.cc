@@ -3,8 +3,8 @@
 // found in the LICENSE file.
 
 #include <fidl/fuchsia.examples.gizmo/cpp/wire.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/ddk/device.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 
 #include <ddktl/device.h>
 

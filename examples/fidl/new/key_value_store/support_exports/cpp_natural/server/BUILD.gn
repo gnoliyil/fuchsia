@@ -12,8 +12,8 @@ executable("bin") {
 
   deps = [
     "//examples/fidl/new/key_value_store/support_exports/fidl:examples.keyvaluestore.supportexports_cpp",
+    "//sdk/lib/component/outgoing/cpp",
     "//sdk/lib/fdio",
-    "//sdk/lib/sys/component/cpp",
     "//sdk/lib/sys/cpp",
     "//sdk/lib/syslog/cpp",
     "//third_party/re2",

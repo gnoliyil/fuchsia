@@ -24,7 +24,7 @@
 // For more information on the include path to the bindings, refer to:
 // https://fuchsia.dev/fuchsia-src/development/languages/fidl/tutorials/cpp/basics/domain-objects?hl=en#include-cpp-bindings
 #include <lib/async-loop/cpp/loop.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/syslog/cpp/log_settings.h>
 #include <lib/syslog/cpp/macros.h>
 #include <math.h>
