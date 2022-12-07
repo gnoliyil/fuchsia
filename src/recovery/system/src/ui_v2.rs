@@ -159,6 +159,10 @@ fn make_app_assistant_fut() -> impl FnOnce(&AppSender) -> AssistantCreator<'_> {
             stdout_to_debuglog::init().await.unwrap_or_else(|error| {
                 eprintln!("Failed to initialize debuglog: {:?}", error);
             });
+
+            if let Err(e) = recovery_util::regulatory::set_region_code_from_factory().await {
+                eprintln!("error setting region code: {:?}", e);
+            }
             println!("Starting New recovery UI");
 
             let assistant = Box::new(RecoveryAppAssistant::new(app_sender.clone()));
