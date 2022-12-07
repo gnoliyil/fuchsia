@@ -12,6 +12,7 @@
 #include <efi/protocol/block-io.h>
 #include <efi/protocol/device-path.h>
 #include <efi/protocol/disk-io.h>
+#include <efi/protocol/graphics-output.h>
 #include <efi/protocol/tcg2.h>
 #include <efi/types.h>
 #include <phys/efi/protocol.h>
@@ -29,6 +30,10 @@ inline constexpr const efi_guid& kEfiProtocolGuid<efi_disk_io_protocol> = DiskIo
 
 template <>
 inline constexpr const efi_guid& kEfiProtocolGuid<efi_tcg2_protocol> = Tcg2Protocol;
+
+template <>
+inline constexpr const efi_guid& kEfiProtocolGuid<efi_graphics_output_protocol> =
+    GraphicsOutputProtocol;
 
 namespace gigaboot {
 

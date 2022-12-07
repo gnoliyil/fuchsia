@@ -6,13 +6,19 @@
 #include <lib/zbitl/view.h>
 #include <zircon/limits.h>
 
+#include <array>
+
 #include <efi/types.h>
 #include <gtest/gtest.h>
 
 #include "boot_zbi_items.h"
+#include "efi/boot-services.h"
+#include "efi/protocol/graphics-output.h"
 #include "gpt.h"
 #include "mock_boot_service.h"
 #include "utils.h"
+#include "zircon/boot/image.h"
+#include "zircon/pixelformat.h"
 
 namespace gigaboot {
 namespace {
@@ -31,9 +37,9 @@ std::vector<zbitl::ByteView> FindItems(const void *zbi, uint32_t type) {
   return ret;
 }
 
-class BootZbiItemTest : public testing::Test {
+class BootZbiItemTest : public ::testing::Test {
  public:
-  BootZbiItemTest() : image_device_({"path-A", "path-B", "path-C", "image"}), buffer_(1024) {
+  BootZbiItemTest() : image_device_({"path-A", "path-B", "path-C", "image"}) {
     stub_service_.AddDevice(&image_device_);
   }
 
@@ -48,7 +54,7 @@ class BootZbiItemTest : public testing::Test {
  private:
   MockStubService stub_service_;
   Device image_device_;
-  std::vector<uint8_t> buffer_;
+  std::array<uint8_t, 1024> buffer_ = {};
 };
 
 TEST_F(BootZbiItemTest, AddMemoryRanges) {
@@ -185,6 +191,96 @@ TEST_F(BootZbiItemTest, AcpiRsdpNotFoundTest) {
   ASSERT_EQ(zbi_init(buffer().data(), buffer().size()), ZBI_RESULT_OK);
   ASSERT_FALSE(AddGigabootZbiItems(reinterpret_cast<zbi_header_t *>(buffer().data()),
                                    buffer().size(), kAbrSlotIndexA));
+}
+
+struct PixelFormatTestCase {
+  char const *test_name;
+  efi_graphics_pixel_format format = PixelBitMask;
+  efi_pixel_bitmask mask = {};
+  uint32_t expected_format;
+};
+
+class PixelFormatTest : public BootZbiItemTest,
+                        public testing::WithParamInterface<PixelFormatTestCase> {};
+
+TEST_P(PixelFormatTest, TestPixelFormat) {
+  PixelFormatTestCase const &test_case = GetParam();
+  auto cleanup = SetupEfiGlobalState();
+  GraphicsOutputDevice gd;
+  gd.mode().Info->PixelFormat = test_case.format;
+  gd.mode().Info->PixelInformation = test_case.mask;
+  gd.mode().FrameBufferBase = 0xDEADBEEF;
+  gd.mode().Info->HorizontalResolution = 1024;
+  gd.mode().Info->VerticalResolution = 768;
+  gd.mode().Info->PixelsPerScanLine = 15;
+  stub_service().AddDevice(&gd);
+
+  zbi_swfb_t expected_framebuffer = {
+      .base = 0xDEADBEEF,
+      .width = 1024,
+      .height = 768,
+      .stride = 15,
+      .format = test_case.expected_format,
+  };
+
+  ASSERT_EQ(zbi_init(buffer().data(), buffer().size()), ZBI_RESULT_OK);
+  ASSERT_TRUE(AddGigabootZbiItems(reinterpret_cast<zbi_header_t *>(buffer().data()),
+                                  buffer().size(), kAbrSlotIndexA));
+
+  std::vector<zbitl::ByteView> items = FindItems(buffer().data(), ZBI_TYPE_FRAMEBUFFER);
+  ASSERT_EQ(items.size(), 1ULL);
+
+  ASSERT_TRUE(memcmp(items[0].data(), &expected_framebuffer, sizeof(expected_framebuffer)) == 0);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    PixelFormatTests, PixelFormatTest,
+    testing::ValuesIn<PixelFormatTest::ParamType>({
+        {
+            .test_name = "RGB_x888",
+            .mask = {.RedMask = 0xFF0000, .GreenMask = 0xFF00, .BlueMask = 0xFF},
+            .expected_format = ZX_PIXEL_FORMAT_RGB_x888,
+        },
+        {
+            .test_name = "RGB_332",
+            .mask = {.RedMask = 0xE0, .GreenMask = 0x1C, .BlueMask = 0x3},
+            .expected_format = ZX_PIXEL_FORMAT_RGB_332,
+        },
+        {
+            .test_name = "RGB_565",
+            .mask = {.RedMask = 0xF800, .GreenMask = 0x7E0, .BlueMask = 0x1F},
+            .expected_format = ZX_PIXEL_FORMAT_RGB_565,
+        },
+        {
+            .test_name = "RGB_2220",
+            .mask = {.RedMask = 0xC0, .GreenMask = 0x30, .BlueMask = 0xC},
+            .expected_format = ZX_PIXEL_FORMAT_RGB_2220,
+        },
+        {
+            .test_name = "unsupported",
+            .mask = {.RedMask = 0x0, .GreenMask = 0x0, .BlueMask = 0x0},
+            .expected_format = ZX_PIXEL_FORMAT_NONE,
+        },
+        {
+            .test_name = "no_mask",
+            .format = PixelBlueGreenRedReserved8BitPerColor,
+            .expected_format = ZX_PIXEL_FORMAT_RGB_x888,
+        },
+    }),
+    [](testing::TestParamInfo<PixelFormatTest::ParamType> const &info) {
+      return info.param.test_name;
+    });
+
+TEST_F(BootZbiItemTest, SystemTableTest) {
+  auto cleanup = SetupEfiGlobalState();
+  ASSERT_EQ(zbi_init(buffer().data(), buffer().size()), ZBI_RESULT_OK);
+  ASSERT_TRUE(AddGigabootZbiItems(reinterpret_cast<zbi_header_t *>(buffer().data()),
+                                  buffer().size(), kAbrSlotIndexA));
+
+  std::vector<zbitl::ByteView> items = FindItems(buffer().data(), ZBI_TYPE_EFI_SYSTEM_TABLE);
+  ASSERT_EQ(items.size(), 1ULL);
+
+  ASSERT_EQ(*reinterpret_cast<const efi_system_table *const *>(items[0].data()), gEfiSystemTable);
 }
 
 }  // namespace

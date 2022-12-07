@@ -8,17 +8,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <zircon/limits.h>
+#include <zircon/pixelformat.h>
 
+#include <algorithm>
 #include <numeric>
 
 #include <efi/boot-services.h>
+#include <efi/protocol/graphics-output.h>
 #include <efi/system-table.h>
+#include <efi/types.h>
 #include <fbl/vector.h>
 
 #include "acpi.h"
 #include "phys/efi/main.h"
 #include "utils.h"
-#include "zircon/kernel/lib/efi/include/efi/types.h"
 
 namespace gigaboot {
 
@@ -69,7 +72,7 @@ bool AddMemoryRanges(void* zbi, size_t capacity) {
   zbi_result_t result = zbi_create_entry_with_payload(zbi, capacity, ZBI_TYPE_MEM_CONFIG, 0, 0,
                                                       ranges, num_ranges * sizeof(zbi_mem_range_t));
   if (result != ZBI_RESULT_OK) {
-    printf("Failed to create entry, %d\n", result);
+    printf("Failed to create memory range entry, %d\n", result);
     return false;
   }
 
@@ -129,6 +132,88 @@ bool AppendAcpiRsdp(zbi_header_t* image, size_t capacity) {
   return true;
 }
 
+zx_pixel_format_t PixelFormatFromBitmask(const efi_pixel_bitmask& bitmask) {
+  struct entry {
+    efi_pixel_bitmask mask;
+    zx_pixel_format_t pixel_format;
+  };
+  // Ignore reserved field
+  constexpr entry entries[] = {
+      {.mask = {.RedMask = 0xFF0000, .GreenMask = 0xFF00, .BlueMask = 0xFF},
+       .pixel_format = ZX_PIXEL_FORMAT_RGB_x888},
+      {.mask = {.RedMask = 0xE0, .GreenMask = 0x1C, .BlueMask = 0x3},
+       .pixel_format = ZX_PIXEL_FORMAT_RGB_332},
+      {.mask = {.RedMask = 0xF800, .GreenMask = 0x7E0, .BlueMask = 0x1F},
+       .pixel_format = ZX_PIXEL_FORMAT_RGB_565},
+      {.mask = {.RedMask = 0xC0, .GreenMask = 0x30, .BlueMask = 0xC},
+       .pixel_format = ZX_PIXEL_FORMAT_RGB_2220},
+  };
+
+  auto equal_p = [&bitmask](const entry& e) -> bool {
+    // Ignore reserved
+    return bitmask.RedMask == e.mask.RedMask && bitmask.GreenMask == e.mask.GreenMask &&
+           bitmask.BlueMask == e.mask.BlueMask;
+  };
+
+  auto res = std::find_if(std::begin(entries), std::end(entries), equal_p);
+  if (res == std::end(entries)) {
+    printf("unsupported pixel format bitmask: r %08x / g %08x / b %08x\n", bitmask.RedMask,
+           bitmask.GreenMask, bitmask.BlueMask);
+    return ZX_PIXEL_FORMAT_NONE;
+  }
+
+  return res->pixel_format;
+}
+
+uint32_t GetZxPixelFormat(efi_graphics_output_mode_information* info) {
+  efi_graphics_pixel_format efi_fmt = info->PixelFormat;
+  switch (efi_fmt) {
+    case PixelBlueGreenRedReserved8BitPerColor:
+      return ZX_PIXEL_FORMAT_RGB_x888;
+    case PixelBitMask:
+      return PixelFormatFromBitmask(info->PixelInformation);
+    default:
+      printf("unsupported pixel format %d!\n", efi_fmt);
+      return ZX_PIXEL_FORMAT_NONE;
+  }
+}
+
+// If the firmware supports graphics, append
+// framebuffer information to the list of zbi items.
+//
+// Returns true if there is no graphics support or if framebuffer information
+// was successfully added, and false if appending framebuffer information
+// returned an error.
+bool AddFramebufferIfSupported(zbi_header_t* image, size_t capacity) {
+  auto graphics_protocol = gigaboot::EfiLocateProtocol<efi_graphics_output_protocol>();
+  if (graphics_protocol.is_error() || graphics_protocol.value() == nullptr) {
+    // Graphics are not strictly necessary.
+    printf("No valid graphics output detected\n");
+    return true;
+  }
+
+  zbi_swfb_t framebuffer = {
+      .base = graphics_protocol.value()->Mode->FrameBufferBase,
+      .width = graphics_protocol.value()->Mode->Info->HorizontalResolution,
+      .height = graphics_protocol.value()->Mode->Info->VerticalResolution,
+      .stride = graphics_protocol.value()->Mode->Info->PixelsPerScanLine,
+      .format = GetZxPixelFormat(graphics_protocol.value()->Mode->Info),
+  };
+  if (zbi_result_t result = zbi_create_entry_with_payload(image, capacity, ZBI_TYPE_FRAMEBUFFER, 0,
+                                                          0, &framebuffer, sizeof(framebuffer));
+      result != ZBI_RESULT_OK) {
+    printf("Failed to add framebuffer zbi item: %d\n", result);
+    return false;
+  }
+
+  return true;
+}
+
+bool AddSystemTable(zbi_header_t* image, size_t capacity) {
+  return zbi_create_entry_with_payload(image, capacity, ZBI_TYPE_EFI_SYSTEM_TABLE, 0, 0,
+                                       &gEfiSystemTable, sizeof(gEfiSystemTable)) == ZBI_RESULT_OK;
+}
+
 }  // namespace
 
 bool AddGigabootZbiItems(zbi_header_t* image, size_t capacity, AbrSlotIndex slot) {
@@ -141,6 +226,14 @@ bool AddGigabootZbiItems(zbi_header_t* image, size_t capacity, AbrSlotIndex slot
   }
 
   if (!AppendAcpiRsdp(image, capacity)) {
+    return false;
+  }
+
+  if (!AddFramebufferIfSupported(image, capacity)) {
+    return false;
+  }
+
+  if (!AddSystemTable(image, capacity)) {
     return false;
   }
 

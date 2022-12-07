@@ -33,6 +33,7 @@ class Device {
   virtual efi_block_io_protocol* GetBlockIoProtocol() { return nullptr; }
   virtual efi_disk_io_protocol* GetDiskIoProtocol() { return nullptr; }
   virtual efi_tcg2_protocol* GetTcg2Protocol() { return nullptr; }
+  virtual efi_graphics_output_protocol* GetGraphicsOutputProtocol() { return nullptr; }
 
   efi_device_path_protocol* GetDevicePathProtocol() {
     return reinterpret_cast<efi_device_path_protocol*>(device_path_buffer_.data());
@@ -95,6 +96,19 @@ class Tcg2Device : public Device {
 
   static_assert(std::is_standard_layout<Protocol>::value,
                 "Protocol struct must use standard layout");
+};
+
+class GraphicsOutputDevice : public Device {
+ public:
+  GraphicsOutputDevice();
+  efi_graphics_output_protocol* GetGraphicsOutputProtocol() override { return &protocol_; }
+
+  efi_graphics_output_mode& mode() { return mode_; }
+
+ private:
+  efi_graphics_output_protocol protocol_;
+  efi_graphics_output_mode mode_;
+  efi_graphics_output_mode_information info_;
 };
 
 // Check if the given guid correspond to the protocol of a efi protocol structure.

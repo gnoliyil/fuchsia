@@ -171,11 +171,23 @@ efi_status Tcg2Device::SubmitCommand(struct efi_tcg2_protocol* protocol, uint32_
   return EFI_SUCCESS;
 }
 
+GraphicsOutputDevice::GraphicsOutputDevice() : Device({}) {
+  protocol_.Mode = &mode_;
+  mode_.Info = &info_;
+}
+
 efi_status MockStubService::LocateProtocol(const efi_guid* protocol, void* registration,
                                            void** intf) {
   if (IsProtocol<efi_tcg2_protocol>(*protocol)) {
     for (auto& ele : devices_) {
       if (auto protocol = ele->GetTcg2Protocol(); protocol) {
+        *intf = protocol;
+        return EFI_SUCCESS;
+      }
+    }
+  } else if (IsProtocol<efi_graphics_output_protocol>(*protocol)) {
+    for (auto& ele : devices_) {
+      if (auto protocol = ele->GetGraphicsOutputProtocol(); protocol) {
         *intf = protocol;
         return EFI_SUCCESS;
       }
