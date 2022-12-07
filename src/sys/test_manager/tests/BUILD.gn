@@ -146,8 +146,8 @@ group("tests") {
     ":test_manager_test",
     "chromium_tests:tests",
     "diagnostics_tests:tests",
+    "nonhermetic_packaged_tests:tests",
     "test_data:debug-data-test",
-    "tier_2_tests:tests",
 
     # although these tests don't use test_manager itself, this group includes test_manager's
     # dependencies (such as test runners).

@@ -7,7 +7,9 @@ import("//build/components.gni")
 fuchsia_test_component("echo_test_legacy") {
   component_name = "echo_test"
   manifest = "meta/echo_test.cmx"
-  deps = [ "//src/sys/test_manager/tests/tier_2_tests:echo_test_bin" ]
+  deps = [
+    "//src/sys/test_manager/tests/nonhermetic_packaged_tests:echo_test_bin",
+  ]
 }
 
 fuchsia_test_component("echo_test_modern") {

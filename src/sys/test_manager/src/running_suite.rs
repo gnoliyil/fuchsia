@@ -557,19 +557,9 @@ lazy_static! {
 }
 
 fn get_allowed_package_value(test_url: &str, suite_facet: &facet::SuiteFacets) -> AllowedPackages {
-    let facet::SuiteFacets {
-        collection,
-        deprecated_allowed_packages,
-        deprecated_allowed_all_packages,
-    } = suite_facet;
+    let facet::SuiteFacets { collection, deprecated_allowed_packages } = suite_facet;
     if let Some(deprecated_allowed_packages) = deprecated_allowed_packages {
         AllowedPackages::from_iter(deprecated_allowed_packages.iter().cloned())
-    } else if let Some(deprecated_allowed_all_packages) = deprecated_allowed_all_packages {
-        if *deprecated_allowed_all_packages {
-            AllowedPackages::all(test_url.to_string())
-        } else {
-            AllowedPackages::zero_allowed_pkgs()
-        }
     } else if PREBUILT_TESTS.contains(test_url) {
         AllowedPackages::all(test_url.to_string())
     } else {
@@ -1191,7 +1181,6 @@ mod tests {
         let mut suite_facet = facet::SuiteFacets {
             collection: HERMETIC_TESTS_COLLECTION,
             deprecated_allowed_packages: None,
-            deprecated_allowed_all_packages: None,
         };
 
         let url = "test_url";
@@ -1202,21 +1191,7 @@ mod tests {
             get_allowed_package_value(&url, &suite_facet)
         );
 
-        // deprecated_allowed_packages and deprecated_allowed_all_packages can override
-        // HERMETIC_TESTS_COLLECTION
-        suite_facet.deprecated_allowed_all_packages = Some(true);
-        assert_eq!(
-            AllowedPackages::all(url.to_string()),
-            get_allowed_package_value(&url, &suite_facet)
-        );
-
-        suite_facet.deprecated_allowed_all_packages = Some(false);
-        assert_eq!(
-            AllowedPackages::zero_allowed_pkgs(),
-            get_allowed_package_value(&url, &suite_facet)
-        );
-
-        // deprecated_allowed_packages overrides deprecated_allowed_all_packages
+        // deprecated_allowed_packages overrides HERMETIC_TESTS_COLLECTION
         suite_facet.deprecated_allowed_packages = Some(vec!["pkg-one".to_owned()]);
         assert_eq!(
             AllowedPackages::from_iter(["pkg-one".to_owned()]),
@@ -1231,7 +1206,6 @@ mod tests {
         );
 
         // test default with other collection
-        suite_facet.deprecated_allowed_all_packages = None;
         suite_facet.deprecated_allowed_packages = None;
         let expected = match resolver::ENFORCE_HERMETIC_RESOLUTION {
             true => AllowedPackages::zero_allowed_pkgs(),
@@ -1243,7 +1217,6 @@ mod tests {
             let mut suite_facet = facet::SuiteFacets {
                 collection: HERMETIC_TESTS_COLLECTION,
                 deprecated_allowed_packages: None,
-                deprecated_allowed_all_packages: None,
             };
 
             // default is all packages.

@@ -14,7 +14,7 @@
     children: [
         {
             name: "echo_server",
-            url: "fuchsia-pkg://fuchsia.com/tier_2_echo_server#meta/echo_server.cm",
+            url: "fuchsia-pkg://fuchsia.com/echo_server_for_test#meta/echo_server.cm",
         },
     ],
     use: [
@@ -32,7 +32,7 @@
     ],
     facets: {
         "fuchsia.test": {
-            "deprecated-allowed-packages": [ "tier_2_echo_server" ],
+            "deprecated-allowed-packages": [ "echo_server_for_test" ],
         },
     },
 }

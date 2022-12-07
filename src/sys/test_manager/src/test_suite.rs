@@ -689,13 +689,11 @@ mod tests {
                 Ok(SuiteFacets {
                     collection: HERMETIC_TESTS_COLLECTION,
                     deprecated_allowed_packages: None,
-                    deprecated_allowed_all_packages: None,
                 })
             } else {
                 Ok(SuiteFacets {
                     collection: crate::constants::SYSTEM_TESTS_COLLECTION,
                     deprecated_allowed_packages: None,
-                    deprecated_allowed_all_packages: None,
                 })
             }
         };
