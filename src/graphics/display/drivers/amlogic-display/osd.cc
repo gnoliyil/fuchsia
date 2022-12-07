@@ -843,99 +843,63 @@ void Osd::Dump() {
   rdma_->DumpRdmaRegisters();
 }
 
+#define LOG_REG(reg) DISP_INFO("reg[0x%x]: 0x%08x " #reg, (reg), READ32_REG(VPU, (reg)))
+#define LOG_REG_INSTANCE(reg, offset, index) \
+  DISP_INFO("reg[0x%x]: 0x%08x " #reg " #%d", (reg) + (offset), READ32_REG(VPU, (reg)), index + 1)
 void Osd::DumpNonRdmaRegisters() {
-  uint32_t reg = 0;
   uint32_t offset = 0;
   uint32_t index = 0;
 
-  reg = VPU_VIU_VENC_MUX_CTRL;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VPP_MISC;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VPP_OFIFO_SIZE;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VPP_HOLD_LINES;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
+  LOG_REG(VPU_VIU_VENC_MUX_CTRL);
+  LOG_REG(VPU_VPP_MISC);
+  LOG_REG(VPU_VPP_OFIFO_SIZE);
+  LOG_REG(VPU_VPP_HOLD_LINES);
 
-  reg = VPU_OSD_PATH_MISC_CTRL;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VIU_OSD_BLEND_CTRL;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VIU_OSD_BLEND_DIN0_SCOPE_H;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VIU_OSD_BLEND_DIN0_SCOPE_V;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VIU_OSD_BLEND_DIN1_SCOPE_H;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VIU_OSD_BLEND_DIN1_SCOPE_V;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VIU_OSD_BLEND_DIN2_SCOPE_H;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VIU_OSD_BLEND_DIN2_SCOPE_V;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VIU_OSD_BLEND_DIN3_SCOPE_H;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VIU_OSD_BLEND_DIN3_SCOPE_V;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VIU_OSD_BLEND_DUMMY_DATA0;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VIU_OSD_BLEND_DUMMY_ALPHA;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VIU_OSD_BLEND_BLEND0_SIZE;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VIU_OSD_BLEND_BLEND1_SIZE;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
+  LOG_REG(VPU_OSD_PATH_MISC_CTRL);
+  LOG_REG(VPU_VIU_OSD_BLEND_CTRL);
+  LOG_REG(VPU_VIU_OSD_BLEND_DIN0_SCOPE_H);
+  LOG_REG(VPU_VIU_OSD_BLEND_DIN0_SCOPE_V);
+  LOG_REG(VPU_VIU_OSD_BLEND_DIN1_SCOPE_H);
+  LOG_REG(VPU_VIU_OSD_BLEND_DIN1_SCOPE_V);
+  LOG_REG(VPU_VIU_OSD_BLEND_DIN2_SCOPE_H);
+  LOG_REG(VPU_VIU_OSD_BLEND_DIN2_SCOPE_V);
+  LOG_REG(VPU_VIU_OSD_BLEND_DIN3_SCOPE_H);
+  LOG_REG(VPU_VIU_OSD_BLEND_DIN3_SCOPE_V);
+  LOG_REG(VPU_VIU_OSD_BLEND_DUMMY_DATA0);
+  LOG_REG(VPU_VIU_OSD_BLEND_DUMMY_ALPHA);
+  LOG_REG(VPU_VIU_OSD_BLEND_BLEND0_SIZE);
+  LOG_REG(VPU_VIU_OSD_BLEND_BLEND1_SIZE);
 
-  reg = VPU_VPP_OSD1_IN_SIZE;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VPP_OSD1_BLD_H_SCOPE;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VPP_OSD1_BLD_V_SCOPE;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VPP_OSD2_BLD_H_SCOPE;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VPP_OSD2_BLD_V_SCOPE;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = OSD1_BLEND_SRC_CTRL;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = OSD2_BLEND_SRC_CTRL;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VPP_POSTBLEND_H_SIZE;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VPP_OUT_H_V_SIZE;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
+  LOG_REG(VPU_VPP_OSD1_IN_SIZE);
+  LOG_REG(VPU_VPP_OSD1_BLD_H_SCOPE);
+  LOG_REG(VPU_VPP_OSD1_BLD_V_SCOPE);
+  LOG_REG(VPU_VPP_OSD2_BLD_H_SCOPE);
+  LOG_REG(VPU_VPP_OSD2_BLD_V_SCOPE);
+  LOG_REG(OSD1_BLEND_SRC_CTRL);
+  LOG_REG(OSD2_BLEND_SRC_CTRL);
+  LOG_REG(VPU_VPP_POSTBLEND_H_SIZE);
+  LOG_REG(VPU_VPP_OUT_H_V_SIZE);
 
-  reg = VPU_VPP_OSD_SC_CTRL0;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VPP_OSD_SCI_WH_M1;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VPP_OSD_SCO_H_START_END;
-  DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-  reg = VPU_VPP_OSD_SCO_V_START_END;
-  DISP_INFO("reg[0x%x]: 0x%08x\n", reg, READ32_REG(VPU, reg));
-  reg = VPU_VPP_POSTBLEND_H_SIZE;
-  DISP_INFO("reg[0x%x]: 0x%08x\n", reg, READ32_REG(VPU, reg));
+  LOG_REG(VPU_VPP_OSD_SC_CTRL0);
+  LOG_REG(VPU_VPP_OSD_SCI_WH_M1);
+  LOG_REG(VPU_VPP_OSD_SCO_H_START_END);
+  LOG_REG(VPU_VPP_OSD_SCO_V_START_END);
+  LOG_REG(VPU_VPP_POSTBLEND_H_SIZE);
   for (index = 0; index < 2; index++) {
     if (index == 1)
       offset = REG_OFFSET;
-    reg = offset + VPU_VIU_OSD1_FIFO_CTRL_STAT;
-    DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-    reg = offset + VPU_VIU_OSD1_CTRL_STAT;
-    DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-    reg = offset + VPU_VIU_OSD1_CTRL_STAT2;
-    DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-    reg = offset + VPU_VIU_OSD1_BLK0_CFG_W0;
-    DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-    reg = offset + VPU_VIU_OSD1_BLK0_CFG_W1;
-    DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-    reg = offset + VPU_VIU_OSD1_BLK0_CFG_W2;
-    DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-    reg = offset + VPU_VIU_OSD1_BLK0_CFG_W3;
-    DISP_INFO("reg[0x%x]: 0x%08x", reg, READ32_REG(VPU, reg));
-    reg = VPU_VIU_OSD1_BLK0_CFG_W4;
-    if (index == 1)
-      reg = VPU_VIU_OSD2_BLK0_CFG_W4;
-    DISP_INFO("reg[0x%x]: 0x%08x\n", reg, READ32_REG(VPU, reg));
+    LOG_REG_INSTANCE(VPU_VIU_OSD1_FIFO_CTRL_STAT, offset, index);
+    LOG_REG_INSTANCE(VPU_VIU_OSD1_CTRL_STAT, offset, index);
+    LOG_REG_INSTANCE(VPU_VIU_OSD1_CTRL_STAT2, offset, index);
+    LOG_REG_INSTANCE(VPU_VIU_OSD1_BLK0_CFG_W0, offset, index);
+    LOG_REG_INSTANCE(VPU_VIU_OSD1_BLK0_CFG_W1, offset, index);
+    LOG_REG_INSTANCE(VPU_VIU_OSD1_BLK0_CFG_W2, offset, index);
+    LOG_REG_INSTANCE(VPU_VIU_OSD1_BLK0_CFG_W3, offset, index);
+    if (index == 1) {
+      LOG_REG(VPU_VIU_OSD2_BLK0_CFG_W4);
+    } else {
+      LOG_REG(VPU_VIU_OSD1_BLK0_CFG_W4);
+    }
   }
 
   DISP_INFO("Dumping all Color Correction Matrix related Registers\n");
