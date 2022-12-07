@@ -187,7 +187,7 @@ void BlockDevice::BlockImplQueue(block_op_t* operation, block_impl_queue_callbac
                                  void* cookie) {
   zxlogf(DEBUG, "FTL: Queue");
   uint32_t max_pages = params_.num_pages;
-  switch (operation->command) {
+  switch (operation->command & BLOCK_OP_MASK) {
     case BLOCK_OP_WRITE:
     case BLOCK_OP_READ: {
       if (operation->rw.offset_dev >= max_pages || !operation->rw.length ||

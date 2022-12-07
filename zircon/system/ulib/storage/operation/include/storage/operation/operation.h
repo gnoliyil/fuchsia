@@ -16,8 +16,9 @@ namespace storage {
 enum class OperationType {
   kRead,
   kWrite,
-  kTrim,              // Unimplemented.
-  kMaxValue = kTrim,  // For FuzzedDataProvider
+  kTrim,  // Unimplemented.
+  kWriteFua,
+  kMaxValue = kWriteFua,  // For FuzzedDataProvider
 };
 
 const char* OperationTypeToString(OperationType type);

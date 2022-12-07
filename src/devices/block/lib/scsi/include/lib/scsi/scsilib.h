@@ -188,6 +188,9 @@ static_assert(sizeof(ReportLunsParameterDataHeader) == 16, "Report LUNs Header m
 // Count the number of addressable LUNs attached to a target.
 uint32_t CountLuns(Controller* controller, uint8_t target);
 
+constexpr uint8_t kDpo = 1 << 4;
+constexpr uint8_t kFua = 1 << 3;
+
 struct Read16CDB {
   Opcode opcode;
   // dpo_fua(4) - DPO - Disable Page Out

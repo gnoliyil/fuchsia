@@ -45,9 +45,12 @@ void BlockCompleteCb(void* cookie, zx_status_t status, block_op_t* bop) {
   msg.reset();
 }
 
-uint32_t OpcodeToCommand(uint32_t opcode) {
-  const uint32_t shared = BLOCK_OP_MASK;
-  return opcode & shared;
+uint32_t OpcodeAndFlagsToCommand(uint32_t opcode) {
+  const uint32_t shared = BLOCK_OP_MASK | BLOCK_FLAG_MASK;
+  // BLOCK_GROUP_LAST and BLOCK_GROUP_ITEM are used in block_client, and these flags are not used in
+  // block driver.
+  const uint32_t group_mask = BLOCK_GROUP_LAST | BLOCK_GROUP_ITEM;
+  return (opcode & shared) & ~group_mask;
 }
 
 }  // namespace
@@ -306,7 +309,7 @@ zx_status_t Server::ProcessReadWriteRequest(block_fifo_request_t* request) {
       len_remaining -= length;
 
       *msg->Op() = block_op{.rw = {
-                                .command = OpcodeToCommand(request->opcode),
+                                .command = OpcodeAndFlagsToCommand(request->opcode),
                                 .vmo = iobuf->vmo(),
                                 .length = length,
                                 .offset_dev = dev_offset,
@@ -334,7 +337,7 @@ zx_status_t Server::ProcessReadWriteRequest(block_fifo_request_t* request) {
     }
 
     *msg->Op() = block_op{.rw = {
-                              .command = OpcodeToCommand(request->opcode),
+                              .command = OpcodeAndFlagsToCommand(request->opcode),
                               .vmo = iobuf->vmo(),
                               .length = request->length,
                               .offset_dev = request->dev_offset,
@@ -371,7 +374,7 @@ zx_status_t Server::ProcessFlushRequest(block_fifo_request_t* request) {
   if (status != ZX_OK) {
     return status;
   }
-  msg->Op()->command = OpcodeToCommand(request->opcode);
+  msg->Op()->command = OpcodeAndFlagsToCommand(request->opcode);
   Enqueue(std::move(msg));
   return ZX_OK;
 }
@@ -392,7 +395,7 @@ zx_status_t Server::ProcessTrimRequest(block_fifo_request_t* request) {
   if (status != ZX_OK) {
     return status;
   }
-  msg->Op()->command = OpcodeToCommand(request->opcode);
+  msg->Op()->command = OpcodeAndFlagsToCommand(request->opcode);
   msg->Op()->trim.length = request->length;
   msg->Op()->trim.offset_dev = request->dev_offset;
   Enqueue(std::move(msg));

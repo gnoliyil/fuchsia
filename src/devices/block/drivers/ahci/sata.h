@@ -18,6 +18,7 @@
 #define SATA_CMD_READ_FPDMA_QUEUED 0x60
 #define SATA_CMD_WRITE_DMA 0xca
 #define SATA_CMD_WRITE_DMA_EXT 0x35
+#define SATA_CMD_WRITE_DMA_FUA_EXT 0x3D
 #define SATA_CMD_WRITE_FPDMA_QUEUED 0x61
 
 #define SATA_DEVINFO_SERIAL_LEN 20
@@ -27,6 +28,7 @@
 #define SATA_MAX_BLOCK_COUNT 0x10000  // 16-bit count
 
 #define BLOCK_OP(op) ((op)&BLOCK_OP_MASK)
+#define BLOCK_FLAGS(op) ((op)&BLOCK_FLAG_MASK)
 
 namespace ahci {
 

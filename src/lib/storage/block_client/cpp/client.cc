@@ -61,7 +61,7 @@ zx_status_t Client::Transaction(block_fifo_request_t* requests, size_t count) {
 
   for (size_t i = 0; i < count; i++) {
     requests[i].group = group;
-    requests[i].opcode = (requests[i].opcode & BLOCKIO_OP_MASK) | BLOCKIO_GROUP_ITEM;
+    requests[i].opcode = requests[i].opcode | BLOCKIO_GROUP_ITEM;
   }
 
   requests[count - 1].opcode |= BLOCKIO_GROUP_LAST;

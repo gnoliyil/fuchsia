@@ -41,6 +41,9 @@ zx_status_t DeviceTransactionHandler::RunRequests(
         case storage::OperationType::kTrim:
           request.opcode = BLOCKIO_TRIM;
           break;
+        case storage::OperationType::kWriteFua:
+          request.opcode = BLOCKIO_WRITE | BLOCKIO_FL_FORCE_ACCESS;
+          break;
         default:
           ZX_DEBUG_ASSERT_MSG(false, "Unsupported operation");
       }

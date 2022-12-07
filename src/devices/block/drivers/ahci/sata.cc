@@ -232,9 +232,14 @@ static void sata_queue(void* ctx, block_op_t* bop, block_impl_queue_callback com
         return;
       }
 
-      txn->cmd = (BLOCK_OP(bop->command) == BLOCK_OP_READ) ? SATA_CMD_READ_DMA_EXT
-                                                           : SATA_CMD_WRITE_DMA_EXT;
+      if (BLOCK_OP(bop->command) == BLOCK_OP_READ) {
+        txn->cmd = SATA_CMD_READ_DMA_EXT;
+      } else {
+        txn->cmd = (BLOCK_FLAGS(bop->command) & BLOCK_FL_FORCE_ACCESS) ? SATA_CMD_WRITE_DMA_FUA_EXT
+                                                                       : SATA_CMD_WRITE_DMA_EXT;
+      }
       txn->device = 0x40;
+
       zxlogf(DEBUG, "sata: queue op 0x%x txn %p", bop->command, txn);
       break;
     case BLOCK_OP_FLUSH:

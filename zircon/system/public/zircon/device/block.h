@@ -159,6 +159,11 @@ typedef uint16_t groupid_t;
 // Only respond after this request (and all previous within group) have completed.
 // Only valid with BLOCKIO_GROUP_ITEM.
 #define BLOCKIO_GROUP_LAST 0x00000800
+
+// Mark this operation as "Force Unit Access" (FUA), indicating that
+// it should not complete until the data is written to the non-volatile
+// medium (write), and that reads should bypass any on-device caches.
+#define BLOCKIO_FL_FORCE_ACCESS 0x00001000
 #define BLOCKIO_FLAG_MASK 0x0000FF00
 
 typedef struct {

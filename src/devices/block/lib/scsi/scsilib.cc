@@ -207,6 +207,9 @@ void Disk::BlockImplQueue(block_op_t* op, block_impl_queue_callback completion_c
   } else if (op_type == BLOCK_OP_WRITE) {
     Write16CDB cdb = {};
     cdb.opcode = Opcode::WRITE_16;
+    if (op->command & BLOCK_FL_FORCE_ACCESS) {
+      cdb.dpo_fua |= kFua;
+    }
     cdb.logical_block_address = htobe64(op->rw.offset_dev);
     cdb.transfer_length = htonl(op->rw.length);
     status = controller_->ExecuteCommandAsync(/*target=*/target_, /*lun=*/lun_,

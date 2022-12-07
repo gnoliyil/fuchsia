@@ -33,6 +33,7 @@ struct IoCommand {
   uint8_t flags;
 
   DEF_SUBBIT(flags, 0, command_failed);
+  DEF_SUBBIT(flags, 1, forced_unit_access);
 };
 
 static inline void IoCommandComplete(IoCommand* io_cmd, zx_status_t status) {
@@ -53,6 +54,9 @@ bool Namespace::SubmitAllTxnsForIoCommand(IoCommand* io_cmd) {
     submission.namespace_id = namespace_id_;
     ZX_ASSERT(blocks - 1 <= UINT16_MAX);
     submission.set_start_lba(io_cmd->op.rw.offset_dev).set_block_count(blocks - 1);
+    if (io_cmd->forced_unit_access()) {
+      submission.set_force_unit_access(true);
+    }
 
     zx_status_t status = controller_->io_queue()->Submit(
         submission, zx::unowned_vmo(io_cmd->op.rw.vmo), io_cmd->op.rw.offset_vmo, bytes, io_cmd);
@@ -375,6 +379,10 @@ void Namespace::BlockImplQueue(block_op_t* op, block_impl_queue_callback callbac
   io_cmd->completion_cb = callback;
   io_cmd->cookie = cookie;
   io_cmd->opcode = io_cmd->op.command & BLOCK_OP_MASK;
+  io_cmd->flags = 0;
+  if (io_cmd->op.command & BLOCK_FL_FORCE_ACCESS) {
+    io_cmd->set_forced_unit_access(true);
+  }
 
   switch (io_cmd->opcode) {
     case BLOCK_OP_READ:
@@ -404,7 +412,6 @@ void Namespace::BlockImplQueue(block_op_t* op, block_impl_queue_callback callbac
   io_cmd->op.rw.offset_vmo *= block_info_.block_size;
 
   io_cmd->pending_txns = 0;
-  io_cmd->flags = 0;
 
   zxlogf(TRACE, "Block IO: %s: %u blocks @ LBA %zu", io_cmd->opcode == BLOCK_OP_WRITE ? "wr" : "rd",
          io_cmd->op.rw.length, io_cmd->op.rw.offset_dev);
