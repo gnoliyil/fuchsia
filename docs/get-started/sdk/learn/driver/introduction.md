@@ -44,12 +44,12 @@ Note: For more details on the driver framework, see the
 
 ## Before you begin
 
-As part of the prerequisites, you created a **Bazel workspace** in the `drivers/`
-directory. This is the directory that contains a `WORKSPACE.bazel` file and it
-represents the root of the workspace. Throughout the codelab, this root directory
-is referred to using the `//` prefix. For example, the path `//fuchsia-codelab`
-represents a directory named `fuchsia-codelab` at the root of the Bazel
-workspace.
+As part of the prerequisites, you created a **Bazel workspace** in the
+`fuchsia-drivers/` directory. This is the directory that contains a
+`WORKSPACE.bazel` file and it represents the root of the workspace. Throughout
+the codelab, this root directory is referred to using the `//` prefix. For
+example, the path `//fuchsia-codelab` represents a directory named
+`fuchsia-codelab` at the root of the Bazel workspace.
 
 Note: For more details on the Bazel build system and its terminology, see
 [Bazel core concepts][bazel-concepts]{:.external}.
