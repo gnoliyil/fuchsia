@@ -3,9 +3,19 @@
 // found in the LICENSE file.
 // This is a v2 component manifest.
 {
-    include: [ "syslog/client.shard.cml" ],
+    include: [
+        "syslog/client.shard.cml",
+        "syslog/offer.shard.cml",
+        "syslog/use.shard.cml",
+    ],
     program: {
         runner: "elf",
         binary: "hello_bin",
     },
+    children: [
+        {
+            name: "echo_server",
+            url: "#meta/echo_server.cm",
+        },
+    ],
 }

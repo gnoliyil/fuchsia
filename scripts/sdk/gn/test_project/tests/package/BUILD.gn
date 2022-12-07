@@ -24,6 +24,25 @@ fuchsia_component("invalid_cml_test") {
   manifest = "meta/invalid.cml"
 }
 
+# Invalid cml because it's missing `FakeProtocol` uses, building this label will fail
+fuchsia_component("missing_required_uses_cml_test") {
+  manifest = "meta/test_component.cml"
+  required_uses = [ "fuchsia.faker.FakeProtocol" ]
+}
+
+# Invalid cml because it's missing `FakeProtocol` offer, building this label will fail
+fuchsia_component("missing_required_offer_cml_test") {
+  manifest = "meta/test_component.cml"
+  required_offers = [ "fuchsia.faker.FakeProtocol" ]
+}
+
+# Valid cml, should build with requirements
+fuchsia_component("has_required_routes_cml_test") {
+  manifest = "meta/test_component.cml"
+  required_offers = [ "fuchsia.logger.LogSink" ]
+  required_uses = [ "fuchsia.logger.LogSink" ]
+}
+
 # Produces meta/test_component.cm
 fuchsia_component("test_component_cm") {
   manifest = "meta/test_component.cml"

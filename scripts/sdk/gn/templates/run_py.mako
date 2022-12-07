@@ -281,10 +281,41 @@ class GnTester(object):
         raise AssertionError(
             "Expected build error on cml validation, but no exception caught")
 
+    def _verify_missing_uses_cml(self, arch):
+        """Run gn gen and then run ninja and expect it to fail."""
+        self._invoke_gn(arch)
+        try:
+            (stdout, stderr) = self._invoke_ninja(
+                arch, explain=False, targets=['missing_required_uses_cml_test'])
+        except AssertionError:
+            return
+        raise AssertionError(
+            "Expected build error on cml validation, but no exception caught")
+
+    def _verify_missing_offers_cml(self, arch):
+        """Run gn gen and then run ninja and expect it to fail."""
+        self._invoke_gn(arch)
+        try:
+            (stdout, stderr) = self._invoke_ninja(
+                arch, explain=False, targets=['missing_required_offer_cml_test'])
+        except AssertionError:
+            return
+        raise AssertionError(
+            "Expected build error on cml validation, but no exception caught")
+
+    def _verify_correctly_routed_cml(self, arch):
+        """Run gn gen and then run ninja and expect it to pass."""
+        self._invoke_gn(arch)
+        (stdout, stderr) = self._invoke_ninja(
+            arch, explain=False, targets=['has_required_routes_cml_test'])
+
     def _run_build_tests(self):
         """Run the build tests, once per architecture."""
         for arch in ARCHES:
             self._run_test("_verify_invalid_cml", arch)
+            self._run_test("_verify_missing_uses_cml", arch)
+            self._run_test("_verify_missing_offers_cml", arch)
+            self._run_test("_verify_correctly_routed_cml", arch)
             self._run_test("_build_test_project", arch)
             self._run_test("_host_tests", arch)
             self._run_test("_verify_package_depfile", arch)
