@@ -54,7 +54,10 @@ group("eng_paused") {
   # tools.
   assert_no_deps = [ "//bundles/platform/*" ]
 
-  deps = [ "//src/testing/system-validation:tests" ]
+  deps = [
+    "//src/testing/system-validation:tests",
+    "//src/testing/system-validation:tests_with_host_script",
+  ]
 }
 
 group("host_tests") {

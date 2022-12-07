@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use anyhow::{format_err, Context, Error};
+use anyhow::{format_err, Error};
 use fidl_fuchsia_tracing_controller::{
     ControllerMarker, ControllerProxy, StartErrorCode, StartOptions, StopOptions, TerminateOptions,
     TraceConfig,
@@ -15,8 +15,7 @@ use parking_lot::RwLock;
 use std::fs;
 use std::io::Write;
 
-const RAW_TRACE_FILE: &'static str = "/custom_artifacts/trace.fxt";
-const JSON_TRACE_FILE: &'static str = "/custom_artifacts/trace.json";
+const TRACE_FILE: &'static str = "/custom_artifacts/trace.fxt";
 const BUFFER_SIZE_MB: u32 = 36;
 
 struct Status {
@@ -128,18 +127,8 @@ impl SingleSessionTrace {
         let (_terminate_result, drain_result) = future::try_join(terminate_fut, drain_fut).await?;
 
         // write this to file
-        let mut raw_trace_file = fs::File::create(RAW_TRACE_FILE)?;
-        raw_trace_file.write_all(&drain_result)?;
-        let output = std::process::Command::new("/pkg/bin/trace2json")
-            .args([
-                format!("--input-file={}", RAW_TRACE_FILE),
-                format!("--output-file={}", JSON_TRACE_FILE),
-            ])
-            .output()
-            .context("waiting for trace2json to finish")?;
-        if !output.status.success() {
-            return Err(format_err!("trace2json failed: output.stderr: {:?}", output.stderr));
-        }
+        let mut trace_file = fs::File::create(TRACE_FILE)?;
+        trace_file.write_all(&drain_result)?;
 
         Ok(())
     }

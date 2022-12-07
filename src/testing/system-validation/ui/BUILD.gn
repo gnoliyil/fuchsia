@@ -4,6 +4,7 @@
 
 import("//build/components.gni")
 import("//build/rust/rustc_binary.gni")
+import("//build/testing/run_target_test_and_host_script.gni")
 
 # Create a test wrapper that connects to ViewProvider implemented by example apps
 rustc_binary("bin") {
@@ -28,8 +29,6 @@ rustc_binary("bin") {
     "//src/lib/mapped-vmo",
     "//src/lib/ui/fuchsia-scenic",
     "//src/lib/zircon/rust:fuchsia-zircon",
-    "//src/performance/trace2json:bin",  # trace2json is a tool that'll be
-                                         # available in "/pkg/bin/trace2json"
     "//src/sys/lib/component-events",
     "//third_party/rust_crates:anyhow",
     "//third_party/rust_crates:argh",
@@ -79,4 +78,22 @@ fuchsia_test_package("system_validation_test_pkg") {
     "//src/ui/examples/flatland-view-provider:flatland-view-provider",
     "//src/ui/examples/simplest_sysmem:simplest_sysmem_component",
   ]
+}
+
+# fx set workstation_eng_paused.qemu-x64 --release --with-base //sdk/bundles:tools  \
+# --with-base //src/testing/system-validation:tests \
+# --with-host //src/testing/system-validation/ui:flatland_view_provider_with_host_script
+#
+# fx test --e2e flatland_view_provider_with_host_script
+if (is_host && target_cpu == "x64" && !is_asan) {
+  run_target_test_and_host_script("flatland_view_provider_with_host_script") {
+    test_url = "fuchsia-pkg://fuchsia.com/system_validation#meta/flatland_view_provider_system_validation.cm"
+    test_package = "//src/testing/system-validation/ui:system_validation_test_pkg(${target_toolchain})"
+    host_script = "//src/performance/trace2json:bin"
+    host_script_args = [
+      "--input-file=" + "{test_artifact_dir}/custom-0/trace.fxt",
+      "--output-file=" + "{test_artifact_dir}/custom-0/trace.json",
+    ]
+    environments = [ emu_env ]
+  }
 }

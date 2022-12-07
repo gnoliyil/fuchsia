@@ -16,3 +16,8 @@ group("tests") {
     "//src/connectivity/network/tests/benchmarks:netstack_perftest_pkg",
   ]
 }
+
+group("tests_with_host_script") {
+  testonly = true
+  deps = [ "ui:flatland_view_provider_with_host_script($host_toolchain)" ]
+}
