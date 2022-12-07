@@ -510,14 +510,15 @@ impl FileOps for RemoteFileObject {
         _current_task: &CurrentTask,
         _length: Option<usize>,
         mut prot: zx::VmarFlags,
-    ) -> Result<zx::Vmo, Errno> {
+    ) -> Result<Arc<zx::Vmo>, Errno> {
         let has_execute = prot.contains(zx::VmarFlags::PERM_EXECUTE);
         prot -= zx::VmarFlags::PERM_EXECUTE;
+        // TODO(tbodt): Consider caching the VMO handle instead of getting a new one on each call.
         let mut vmo = self.zxio.vmo_get(prot).map_err(|status| from_status_like_fdio!(status))?;
         if has_execute {
             vmo = vmo.replace_as_executable(&VMEX_RESOURCE).map_err(impossible_error)?;
         }
-        Ok(vmo)
+        Ok(Arc::new(vmo))
     }
 
     fn wait_async(

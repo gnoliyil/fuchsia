@@ -19,7 +19,7 @@ use std::sync::Arc;
 use zerocopy::AsBytes;
 
 pub struct Framebuffer {
-    vmo: zx::Vmo,
+    vmo: Arc<zx::Vmo>,
     vmo_len: u32,
     info: RwLock<fb_var_screeninfo>,
     server: Option<Arc<FramebufferServer>>,
@@ -42,7 +42,7 @@ impl Framebuffer {
 
         if let Ok(server) = FramebufferServer::new() {
             let server = Arc::new(server);
-            let vmo = server.get_vmo()?;
+            let vmo = Arc::new(server.get_vmo()?);
             let vmo_len = vmo.info().map_err(|_| errno!(EINVAL))?.size_bytes as u32;
             // Fill the buffer with white pixels as a placeholder.
             if vmo.write(&vec![0xff; vmo_len as usize], 0).is_err() {
@@ -52,10 +52,10 @@ impl Framebuffer {
             Ok(Arc::new(Self { vmo, vmo_len, server: Some(server), info: RwLock::new(info) }))
         } else {
             let vmo_len = info.xres * info.yres * (info.bits_per_pixel / 8);
-            let vmo = zx::Vmo::create(vmo_len as u64).map_err(|s| match s {
+            let vmo = Arc::new(zx::Vmo::create(vmo_len as u64).map_err(|s| match s {
                 zx::Status::NO_MEMORY => errno!(ENOMEM),
                 _ => impossible_error(s),
-            })?;
+            })?);
             Ok(Arc::new(Self { vmo, vmo_len, server: None, info: RwLock::new(info) }))
         }
     }
@@ -167,7 +167,7 @@ impl FileOps for Arc<Framebuffer> {
         current_task: &CurrentTask,
         _length: Option<usize>,
         prot: zx::VmarFlags,
-    ) -> Result<zx::Vmo, Errno> {
+    ) -> Result<Arc<zx::Vmo>, Errno> {
         VmoFileObject::get_vmo(&self.vmo, file, current_task, prot)
     }
 }

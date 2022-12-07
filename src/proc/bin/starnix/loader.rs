@@ -97,7 +97,7 @@ struct LoadedElf {
     headers: elf_parse::Elf64Headers,
     file_base: usize,
     vaddr_bias: usize,
-    vmo: zx::Vmo,
+    vmo: Arc<zx::Vmo>,
 }
 
 // TODO: Improve the error reporting produced by this function by mapping ElfParseError to Errno more precisely.
@@ -145,7 +145,11 @@ impl elf_load::Mapper for Mapper<'_> {
     }
 }
 
-fn load_elf(elf: FileHandle, elf_vmo: zx::Vmo, mm: &MemoryManager) -> Result<LoadedElf, Errno> {
+fn load_elf(
+    elf: FileHandle,
+    elf_vmo: Arc<zx::Vmo>,
+    mm: &MemoryManager,
+) -> Result<LoadedElf, Errno> {
     let headers = elf_parse::Elf64Headers::from_vmo(&elf_vmo).map_err(elf_parse_error_to_errno)?;
     let elf_info = elf_load::loaded_elf_info(&headers);
     let file_base = match headers.file_header().elf_type() {
@@ -185,7 +189,7 @@ pub struct ResolvedElf {
     /// A file handle to the resolved ELF executable.
     pub file: FileHandle,
     /// A VMO to the resolved ELF executable.
-    pub vmo: zx::Vmo,
+    pub vmo: Arc<zx::Vmo>,
     /// An ELF interpreter, if specified in the ELF executable header.
     pub interp: Option<ResolvedInterpElf>,
     /// Arguments to be passed to the new process.
@@ -199,7 +203,7 @@ pub struct ResolvedInterpElf {
     /// A file handle to the resolved ELF interpreter.
     file: FileHandle,
     /// A VMO to the resolved ELF interpreter.
-    vmo: zx::Vmo,
+    vmo: Arc<zx::Vmo>,
 }
 
 // The magic bytes of a script file.
@@ -252,7 +256,7 @@ fn resolve_executable_impl(
 /// Resolves a #! script file into a validated executable ELF.
 fn resolve_script(
     current_task: &CurrentTask,
-    vmo: zx::Vmo,
+    vmo: Arc<zx::Vmo>,
     path: CString,
     argv: Vec<CString>,
     environ: Vec<CString>,
@@ -323,7 +327,7 @@ fn parse_interpreter_line(line: &[u8]) -> Result<Vec<CString>, Errno> {
 fn resolve_elf(
     current_task: &CurrentTask,
     file: FileHandle,
-    vmo: zx::Vmo,
+    vmo: Arc<zx::Vmo>,
     argv: Vec<CString>,
     environ: Vec<CString>,
 ) -> Result<ResolvedElf, Errno> {

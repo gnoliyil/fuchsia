@@ -144,14 +144,19 @@ impl VmoFileObject {
     }
 
     pub fn get_vmo(
-        vmo: &zx::Vmo,
+        vmo: &Arc<zx::Vmo>,
         _file: &FileObject,
         _current_task: &CurrentTask,
         prot: zx::VmarFlags,
-    ) -> Result<zx::Vmo, Errno> {
-        let mut vmo = vmo.duplicate_handle(zx::Rights::SAME_RIGHTS).map_err(impossible_error)?;
+    ) -> Result<Arc<zx::Vmo>, Errno> {
+        let mut vmo = Arc::clone(vmo);
         if prot.contains(zx::VmarFlags::PERM_EXECUTE) {
-            vmo = vmo.replace_as_executable(&VMEX_RESOURCE).map_err(impossible_error)?;
+            vmo = Arc::new(
+                vmo.duplicate_handle(zx::Rights::SAME_RIGHTS)
+                    .map_err(impossible_error)?
+                    .replace_as_executable(&VMEX_RESOURCE)
+                    .map_err(impossible_error)?,
+            );
         }
         Ok(vmo)
     }
@@ -187,7 +192,7 @@ impl FileOps for VmoFileObject {
         current_task: &CurrentTask,
         _length: Option<usize>,
         prot: zx::VmarFlags,
-    ) -> Result<zx::Vmo, Errno> {
+    ) -> Result<Arc<zx::Vmo>, Errno> {
         VmoFileObject::get_vmo(&self.vmo, file, current_task, prot)
     }
 

@@ -6,7 +6,7 @@ use fuchsia_zircon::cprng_draw;
 
 use crate::device::DeviceOps;
 use crate::fs::*;
-use crate::logging::{log, log_info};
+use crate::logging::*;
 use crate::mm::MemoryAccessorExt;
 use crate::task::*;
 use crate::types::*;

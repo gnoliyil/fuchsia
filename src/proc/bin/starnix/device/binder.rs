@@ -163,7 +163,7 @@ impl FileOps for BinderConnection {
         _current_task: &CurrentTask,
         _length: Option<usize>,
         _prot: zx::VmarFlags,
-    ) -> Result<zx::Vmo, Errno> {
+    ) -> Result<Arc<zx::Vmo>, Errno> {
         panic!("get_vmo should never be called directly.");
     }
 

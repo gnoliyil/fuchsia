@@ -65,7 +65,7 @@ impl FileOps for BufferCollectionFile {
         current_task: &CurrentTask,
         _length: Option<usize>,
         prot: zx::VmarFlags,
-    ) -> Result<zx::Vmo, Errno> {
+    ) -> Result<Arc<zx::Vmo>, Errno> {
         VmoFileObject::get_vmo(&self.vmo, file, current_task, prot)
     }
 }

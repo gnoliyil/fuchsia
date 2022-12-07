@@ -123,7 +123,7 @@ pub trait FileOps: Send + Sync + AsAny + 'static {
         _current_task: &CurrentTask,
         _length: Option<usize>,
         _prot: zx::VmarFlags,
-    ) -> Result<zx::Vmo, Errno> {
+    ) -> Result<Arc<zx::Vmo>, Errno> {
         error!(ENODEV)
     }
 
@@ -146,7 +146,7 @@ pub trait FileOps: Send + Sync + AsAny + 'static {
         let zx_prot_flags = flags
             & (zx::VmarFlags::PERM_READ | zx::VmarFlags::PERM_WRITE | zx::VmarFlags::PERM_EXECUTE);
 
-        let vmo = Arc::new(if options.contains(MappingOptions::SHARED) {
+        let vmo = if options.contains(MappingOptions::SHARED) {
             self.get_vmo(file, current_task, Some(length), zx_prot_flags)?
         } else {
             // TODO(tbodt): Use PRIVATE_CLONE to have the filesystem server do the clone for us.
@@ -160,9 +160,11 @@ pub trait FileOps: Send + Sync + AsAny + 'static {
             if !zx_prot_flags.contains(zx::VmarFlags::PERM_WRITE) {
                 clone_flags |= zx::VmoChildOptions::NO_WRITE;
             }
-            vmo.create_child(clone_flags, 0, vmo.get_size().map_err(impossible_error)?)
-                .map_err(impossible_error)?
-        });
+            Arc::new(
+                vmo.create_child(clone_flags, 0, vmo.get_size().map_err(impossible_error)?)
+                    .map_err(impossible_error)?,
+            )
+        };
         let addr = current_task.mm.map(
             addr,
             vmo.clone(),
@@ -537,7 +539,7 @@ impl FileOps for OPathOps {
         _current_task: &CurrentTask,
         _length: Option<usize>,
         _prot: zx::VmarFlags,
-    ) -> Result<zx::Vmo, Errno> {
+    ) -> Result<Arc<zx::Vmo>, Errno> {
         error!(EBADF)
     }
     fn readdir(
@@ -801,7 +803,7 @@ impl FileObject {
         current_task: &CurrentTask,
         length: Option<usize>,
         prot: zx::VmarFlags,
-    ) -> Result<zx::Vmo, Errno> {
+    ) -> Result<Arc<zx::Vmo>, Errno> {
         if prot.contains(zx::VmarFlags::PERM_READ) && !self.can_read() {
             return error!(EACCES);
         }
