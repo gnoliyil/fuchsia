@@ -6,6 +6,7 @@
 #define SRC_DEVICES_BOARD_DRIVERS_IMX8MMEVK_IMX8MMEVK_H_
 
 #include <fidl/fuchsia.hardware.platform.bus/cpp/driver/fidl.h>
+#include <fuchsia/hardware/gpioimpl/cpp/banjo.h>
 #include <threads.h>
 
 #include <ddktl/device.h>
@@ -27,6 +28,8 @@ class Imx8mmEvk : public ddk::Device<Imx8mmEvk> {
  private:
   zx_status_t Start();
   int Thread();
+
+  zx_status_t GpioInit();
 
   const fdf::WireSyncClient<fuchsia_hardware_platform_bus::PlatformBus> pbus_;
   const fuchsia_hardware_platform_bus::TemporaryBoardInfo board_info_;

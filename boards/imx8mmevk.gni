@@ -27,6 +27,7 @@ _common_bootfs_deps = [
   "//bundles/drivers:bootstrap-dfv2",
   "//src/devices/bin/driver_host2",
   "//src/devices/board/drivers/imx8mmevk",
+  "//src/devices/gpio/drivers/imx8m-gpio",
 ]
 
 board_bootfs_labels += _common_bootfs_deps

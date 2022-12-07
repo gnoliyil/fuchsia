@@ -75,7 +75,13 @@ zx_status_t Imx8mmEvk::Start() {
 int Imx8mmEvk::Thread() {
   zxlogf(DEBUG, "Imx8mmEvk thread cb called");
 
-  return 0;
+  auto status = GpioInit();
+  if (status != ZX_OK) {
+    zxlogf(ERROR, "GpioInit() failed: %s", zx_status_get_string(status));
+    return thrd_error;
+  }
+
+  return status;
 }
 }  // namespace imx8mm_evk
 
