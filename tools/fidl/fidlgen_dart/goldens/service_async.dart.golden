@@ -131,6 +131,7 @@ class FirstProtocolBinding extends $fidl.AsyncBinding<FirstProtocol> {
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       case _kFirstProtocol_MethodOnFirst_Ordinal:
         final String _name = _kFirstProtocol_MethodOnFirst_Type.name;
@@ -142,8 +143,8 @@ class FirstProtocolBinding extends $fidl.AsyncBinding<FirstProtocol> {
           final $async.Future<void> $future = $fidl
               .decodeMessageWithCallback<$async.Future<void>>(
                   $message,
-                  _kFirstProtocol_MethodOnFirst_Type.requestInlineSize(
-                      $message.wireFormat), ($fidl.Decoder decoder) {
+                  _kFirstProtocol_MethodOnFirst_Type
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.methodOnFirst();
           });
         }, close);
@@ -247,6 +248,7 @@ class SecondProtocolBinding extends $fidl.AsyncBinding<SecondProtocol> {
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       case _kSecondProtocol_MethodOnSecond_Ordinal:
         final String _name = _kSecondProtocol_MethodOnSecond_Type.name;
@@ -258,8 +260,8 @@ class SecondProtocolBinding extends $fidl.AsyncBinding<SecondProtocol> {
           final $async.Future<void> $future = $fidl
               .decodeMessageWithCallback<$async.Future<void>>(
                   $message,
-                  _kSecondProtocol_MethodOnSecond_Type.requestInlineSize(
-                      $message.wireFormat), ($fidl.Decoder decoder) {
+                  _kSecondProtocol_MethodOnSecond_Type
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.methodOnSecond();
           });
         }, close);

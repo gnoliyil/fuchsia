@@ -587,12 +587,9 @@ class DenyEachBindingOnlyDenyCppResponse extends $fidl.Struct {
   static DenyEachBindingOnlyDenyCppResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return DenyEachBindingOnlyDenyCppResponse(
             b: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -643,12 +640,9 @@ class DenyEachBindingOnlyDenyGoResponse extends $fidl.Struct {
   static DenyEachBindingOnlyDenyGoResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return DenyEachBindingOnlyDenyGoResponse(
             b: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -699,12 +693,9 @@ class DenyEachBindingOnlyDenyLibfuzzerResponse extends $fidl.Struct {
   static DenyEachBindingOnlyDenyLibfuzzerResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return DenyEachBindingOnlyDenyLibfuzzerResponse(
             b: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -755,12 +746,9 @@ class DenyEachBindingOnlyDenyRustResponse extends $fidl.Struct {
   static DenyEachBindingOnlyDenyRustResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return DenyEachBindingOnlyDenyRustResponse(
             b: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -811,12 +799,9 @@ class DenyEachBindingOnlyDenySyzkallerResponse extends $fidl.Struct {
   static DenyEachBindingOnlyDenySyzkallerResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return DenyEachBindingOnlyDenySyzkallerResponse(
             b: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -867,12 +852,9 @@ class MemberOnlyAppearsInImportingLibrary extends $fidl.Struct {
   static MemberOnlyAppearsInImportingLibrary _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return MemberOnlyAppearsInImportingLibrary(
             a: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -928,13 +910,10 @@ class OnlyAppearsInImportingLibrary extends $fidl.Struct {
   static OnlyAppearsInImportingLibrary _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return OnlyAppearsInImportingLibrary(
             memberOnlyAppearsInImportingLibrary:
                 $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -1009,6 +988,7 @@ class AllowedBinding extends $fidl.AsyncBinding<Allowed> {
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       default:
         $message.closeHandles();
@@ -1151,12 +1131,13 @@ class DenyEachBindingProxy extends $fidl.AsyncProxy<DenyEachBinding>
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kDenyEachBinding_OnlyDenyCpp_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final DenyEachBindingOnlyDenyCppResult $response =
               $fidl.decodeMessage(
                   $message,
                   _kDenyEachBinding_OnlyDenyCpp_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag == DenyEachBindingOnlyDenyCppResultTag.response) {
@@ -1172,11 +1153,11 @@ class DenyEachBindingProxy extends $fidl.AsyncProxy<DenyEachBinding>
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kDenyEachBinding_OnlyDenyGo_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final DenyEachBindingOnlyDenyGoResult $response = $fidl.decodeMessage(
               $message,
-              _kDenyEachBinding_OnlyDenyGo_Type
-                  .responseInlineSize($message.wireFormat),
+              _kDenyEachBinding_OnlyDenyGo_Type.responseInlineSize($wireFormat),
               $types[0]);
 
           if ($response.$tag == DenyEachBindingOnlyDenyGoResultTag.response) {
@@ -1192,12 +1173,13 @@ class DenyEachBindingProxy extends $fidl.AsyncProxy<DenyEachBinding>
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kDenyEachBinding_OnlyDenyLibfuzzer_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final DenyEachBindingOnlyDenyLibfuzzerResult $response =
               $fidl.decodeMessage(
                   $message,
                   _kDenyEachBinding_OnlyDenyLibfuzzer_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -1214,12 +1196,13 @@ class DenyEachBindingProxy extends $fidl.AsyncProxy<DenyEachBinding>
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kDenyEachBinding_OnlyDenyRust_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final DenyEachBindingOnlyDenyRustResult $response =
               $fidl.decodeMessage(
                   $message,
                   _kDenyEachBinding_OnlyDenyRust_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag == DenyEachBindingOnlyDenyRustResultTag.response) {
@@ -1235,12 +1218,13 @@ class DenyEachBindingProxy extends $fidl.AsyncProxy<DenyEachBinding>
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kDenyEachBinding_OnlyDenySyzkaller_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final DenyEachBindingOnlyDenySyzkallerResult $response =
               $fidl.decodeMessage(
                   $message,
                   _kDenyEachBinding_OnlyDenySyzkaller_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -1385,6 +1369,7 @@ class DenyEachBindingBinding extends $fidl.AsyncBinding<DenyEachBinding> {
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       case _kDenyEachBinding_OnlyDenyCpp_Ordinal:
         final String _name = _kDenyEachBinding_OnlyDenyCpp_Type.name;
@@ -1396,8 +1381,8 @@ class DenyEachBindingBinding extends $fidl.AsyncBinding<DenyEachBinding> {
           final $async.Future<int> $future = $fidl
               .decodeMessageWithCallback<$async.Future<int>>(
                   $message,
-                  _kDenyEachBinding_OnlyDenyCpp_Type.requestInlineSize(
-                      $message.wireFormat), ($fidl.Decoder decoder) {
+                  _kDenyEachBinding_OnlyDenyCpp_Type
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.onlyDenyCpp(
               $types[0].decode(decoder, $fidl.kMessageHeaderSize, 1),
             );
@@ -1440,8 +1425,8 @@ class DenyEachBindingBinding extends $fidl.AsyncBinding<DenyEachBinding> {
           final $async.Future<int> $future = $fidl
               .decodeMessageWithCallback<$async.Future<int>>(
                   $message,
-                  _kDenyEachBinding_OnlyDenyGo_Type.requestInlineSize(
-                      $message.wireFormat), ($fidl.Decoder decoder) {
+                  _kDenyEachBinding_OnlyDenyGo_Type
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.onlyDenyGo(
               $types[0].decode(decoder, $fidl.kMessageHeaderSize, 1),
             );
@@ -1484,8 +1469,8 @@ class DenyEachBindingBinding extends $fidl.AsyncBinding<DenyEachBinding> {
           final $async.Future<int> $future = $fidl
               .decodeMessageWithCallback<$async.Future<int>>(
                   $message,
-                  _kDenyEachBinding_OnlyDenyLibfuzzer_Type.requestInlineSize(
-                      $message.wireFormat), ($fidl.Decoder decoder) {
+                  _kDenyEachBinding_OnlyDenyLibfuzzer_Type
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.onlyDenyLibfuzzer(
               $types[0].decode(decoder, $fidl.kMessageHeaderSize, 1),
             );
@@ -1531,8 +1516,8 @@ class DenyEachBindingBinding extends $fidl.AsyncBinding<DenyEachBinding> {
           final $async.Future<int> $future = $fidl
               .decodeMessageWithCallback<$async.Future<int>>(
                   $message,
-                  _kDenyEachBinding_OnlyDenyRust_Type.requestInlineSize(
-                      $message.wireFormat), ($fidl.Decoder decoder) {
+                  _kDenyEachBinding_OnlyDenyRust_Type
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.onlyDenyRust(
               $types[0].decode(decoder, $fidl.kMessageHeaderSize, 1),
             );
@@ -1575,8 +1560,8 @@ class DenyEachBindingBinding extends $fidl.AsyncBinding<DenyEachBinding> {
           final $async.Future<int> $future = $fidl
               .decodeMessageWithCallback<$async.Future<int>>(
                   $message,
-                  _kDenyEachBinding_OnlyDenySyzkaller_Type.requestInlineSize(
-                      $message.wireFormat), ($fidl.Decoder decoder) {
+                  _kDenyEachBinding_OnlyDenySyzkaller_Type
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.onlyDenySyzkaller(
               $types[0].decode(decoder, $fidl.kMessageHeaderSize, 1),
             );
@@ -1745,6 +1730,7 @@ class ImportsSameNameContextBinding
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       case _kImportsSameNameContext_Unattributed_Ordinal:
         final String _name = _kImportsSameNameContext_Unattributed_Type.name;
@@ -1756,8 +1742,8 @@ class ImportsSameNameContextBinding
           final $async.Future<void> $future = $fidl
               .decodeMessageWithCallback<$async.Future<void>>(
                   $message,
-                  _kImportsSameNameContext_Unattributed_Type.requestInlineSize(
-                      $message.wireFormat), ($fidl.Decoder decoder) {
+                  _kImportsSameNameContext_Unattributed_Type
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.unattributed();
           });
         }, close);
@@ -1775,8 +1761,7 @@ class ImportsSameNameContextBinding
               .decodeMessageWithCallback<$async.Future<void>>(
                   $message,
                   _kImportsSameNameContext_AlwaysAppearsInImportingLibrary_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.alwaysAppearsInImportingLibrary();
           });
         }, close);

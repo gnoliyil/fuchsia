@@ -8626,13 +8626,10 @@ class UnknownInteractionsAjarDriverProtocolStrictTwoWayErrResponse
   static UnknownInteractionsAjarDriverProtocolStrictTwoWayErrResponse
       _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 0, 1);
         return UnknownInteractionsAjarDriverProtocolStrictTwoWayErrResponse(
             reserved: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -8689,12 +8686,9 @@ class UnknownInteractionsAjarDriverProtocolStrictTwoWayFieldsErrResponse
   static UnknownInteractionsAjarDriverProtocolStrictTwoWayFieldsErrResponse
       _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return UnknownInteractionsAjarDriverProtocolStrictTwoWayFieldsErrResponse(
             someField: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -8750,13 +8744,10 @@ class UnknownInteractionsAjarProtocolFlexibleEventErrResponse
   static UnknownInteractionsAjarProtocolFlexibleEventErrResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 0, 1);
         return UnknownInteractionsAjarProtocolFlexibleEventErrResponse(
             reserved: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -8809,12 +8800,9 @@ class UnknownInteractionsAjarProtocolFlexibleEventFieldsErrResponse
   static UnknownInteractionsAjarProtocolFlexibleEventFieldsErrResponse
       _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return UnknownInteractionsAjarProtocolFlexibleEventFieldsErrResponse(
             someField: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -8870,13 +8858,10 @@ class UnknownInteractionsAjarProtocolStrictEventErrResponse
   static UnknownInteractionsAjarProtocolStrictEventErrResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 0, 1);
         return UnknownInteractionsAjarProtocolStrictEventErrResponse(
             reserved: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -8929,12 +8914,9 @@ class UnknownInteractionsAjarProtocolStrictEventFieldsErrResponse
   static UnknownInteractionsAjarProtocolStrictEventFieldsErrResponse
       _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return UnknownInteractionsAjarProtocolStrictEventFieldsErrResponse(
             someField: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -8990,13 +8972,10 @@ class UnknownInteractionsAjarProtocolStrictTwoWayErrResponse
   static UnknownInteractionsAjarProtocolStrictTwoWayErrResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 0, 1);
         return UnknownInteractionsAjarProtocolStrictTwoWayErrResponse(
             reserved: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -9049,12 +9028,9 @@ class UnknownInteractionsAjarProtocolStrictTwoWayFieldsErrResponse
   static UnknownInteractionsAjarProtocolStrictTwoWayFieldsErrResponse
       _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return UnknownInteractionsAjarProtocolStrictTwoWayFieldsErrResponse(
             someField: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -9110,13 +9086,10 @@ class UnknownInteractionsClosedDriverProtocolStrictTwoWayErrResponse
   static UnknownInteractionsClosedDriverProtocolStrictTwoWayErrResponse
       _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 0, 1);
         return UnknownInteractionsClosedDriverProtocolStrictTwoWayErrResponse(
             reserved: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -9174,12 +9147,9 @@ class UnknownInteractionsClosedDriverProtocolStrictTwoWayFieldsErrResponse
   static UnknownInteractionsClosedDriverProtocolStrictTwoWayFieldsErrResponse
       _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return UnknownInteractionsClosedDriverProtocolStrictTwoWayFieldsErrResponse(
             someField: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -9235,13 +9205,10 @@ class UnknownInteractionsClosedProtocolStrictEventErrResponse
   static UnknownInteractionsClosedProtocolStrictEventErrResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 0, 1);
         return UnknownInteractionsClosedProtocolStrictEventErrResponse(
             reserved: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -9294,12 +9261,9 @@ class UnknownInteractionsClosedProtocolStrictEventFieldsErrResponse
   static UnknownInteractionsClosedProtocolStrictEventFieldsErrResponse
       _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return UnknownInteractionsClosedProtocolStrictEventFieldsErrResponse(
             someField: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -9355,13 +9319,10 @@ class UnknownInteractionsClosedProtocolStrictTwoWayErrResponse
   static UnknownInteractionsClosedProtocolStrictTwoWayErrResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 0, 1);
         return UnknownInteractionsClosedProtocolStrictTwoWayErrResponse(
             reserved: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -9414,12 +9375,9 @@ class UnknownInteractionsClosedProtocolStrictTwoWayFieldsErrResponse
   static UnknownInteractionsClosedProtocolStrictTwoWayFieldsErrResponse
       _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return UnknownInteractionsClosedProtocolStrictTwoWayFieldsErrResponse(
             someField: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -9475,13 +9433,10 @@ class UnknownInteractionsDriverProtocolFlexibleTwoWayErrResponse
   static UnknownInteractionsDriverProtocolFlexibleTwoWayErrResponse
       _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 0, 1);
         return UnknownInteractionsDriverProtocolFlexibleTwoWayErrResponse(
             reserved: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -9536,12 +9491,9 @@ class UnknownInteractionsDriverProtocolFlexibleTwoWayFieldsErrResponse
   static UnknownInteractionsDriverProtocolFlexibleTwoWayFieldsErrResponse
       _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return UnknownInteractionsDriverProtocolFlexibleTwoWayFieldsErrResponse(
             someField: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -9597,12 +9549,9 @@ class UnknownInteractionsDriverProtocolFlexibleTwoWayFieldsResponse
   static UnknownInteractionsDriverProtocolFlexibleTwoWayFieldsResponse
       _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return UnknownInteractionsDriverProtocolFlexibleTwoWayFieldsResponse(
             someField: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -9658,13 +9607,10 @@ class UnknownInteractionsDriverProtocolFlexibleTwoWayResponse
   static UnknownInteractionsDriverProtocolFlexibleTwoWayResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 0, 1);
         return UnknownInteractionsDriverProtocolFlexibleTwoWayResponse(
             reserved: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -9717,13 +9663,10 @@ class UnknownInteractionsDriverProtocolStrictTwoWayErrResponse
   static UnknownInteractionsDriverProtocolStrictTwoWayErrResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 0, 1);
         return UnknownInteractionsDriverProtocolStrictTwoWayErrResponse(
             reserved: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -9776,12 +9719,9 @@ class UnknownInteractionsDriverProtocolStrictTwoWayFieldsErrResponse
   static UnknownInteractionsDriverProtocolStrictTwoWayFieldsErrResponse
       _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return UnknownInteractionsDriverProtocolStrictTwoWayFieldsErrResponse(
             someField: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -9836,13 +9776,10 @@ class UnknownInteractionsProtocolFlexibleEventErrResponse extends $fidl.Struct {
   static UnknownInteractionsProtocolFlexibleEventErrResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 0, 1);
         return UnknownInteractionsProtocolFlexibleEventErrResponse(
             reserved: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -9895,12 +9832,9 @@ class UnknownInteractionsProtocolFlexibleEventFieldsErrResponse
   static UnknownInteractionsProtocolFlexibleEventFieldsErrResponse
       _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return UnknownInteractionsProtocolFlexibleEventFieldsErrResponse(
             someField: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -9954,13 +9888,10 @@ class UnknownInteractionsProtocolFlexibleTwoWayErrResponse
   static UnknownInteractionsProtocolFlexibleTwoWayErrResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 0, 1);
         return UnknownInteractionsProtocolFlexibleTwoWayErrResponse(
             reserved: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -10013,12 +9944,9 @@ class UnknownInteractionsProtocolFlexibleTwoWayFieldsErrResponse
   static UnknownInteractionsProtocolFlexibleTwoWayFieldsErrResponse
       _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return UnknownInteractionsProtocolFlexibleTwoWayFieldsErrResponse(
             someField: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -10073,12 +10001,9 @@ class UnknownInteractionsProtocolFlexibleTwoWayFieldsResponse
   static UnknownInteractionsProtocolFlexibleTwoWayFieldsResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return UnknownInteractionsProtocolFlexibleTwoWayFieldsResponse(
             someField: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -10130,13 +10055,10 @@ class UnknownInteractionsProtocolFlexibleTwoWayResponse extends $fidl.Struct {
   static UnknownInteractionsProtocolFlexibleTwoWayResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 0, 1);
         return UnknownInteractionsProtocolFlexibleTwoWayResponse(
             reserved: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -10188,13 +10110,10 @@ class UnknownInteractionsProtocolStrictEventErrResponse extends $fidl.Struct {
   static UnknownInteractionsProtocolStrictEventErrResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 0, 1);
         return UnknownInteractionsProtocolStrictEventErrResponse(
             reserved: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -10247,12 +10166,9 @@ class UnknownInteractionsProtocolStrictEventFieldsErrResponse
   static UnknownInteractionsProtocolStrictEventFieldsErrResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return UnknownInteractionsProtocolStrictEventFieldsErrResponse(
             someField: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -10304,13 +10220,10 @@ class UnknownInteractionsProtocolStrictTwoWayErrResponse extends $fidl.Struct {
   static UnknownInteractionsProtocolStrictTwoWayErrResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 0, 1);
         return UnknownInteractionsProtocolStrictTwoWayErrResponse(
             reserved: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -10363,12 +10276,9 @@ class UnknownInteractionsProtocolStrictTwoWayFieldsErrResponse
   static UnknownInteractionsProtocolStrictTwoWayFieldsErrResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return UnknownInteractionsProtocolStrictTwoWayFieldsErrResponse(
             someField: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -12503,6 +12413,7 @@ class UnknownInteractionsAjarProtocolProxy
             () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_StrictEvent_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = null;
 
@@ -12517,11 +12428,12 @@ class UnknownInteractionsAjarProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_StrictEventFields_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsAjarProtocol_StrictEventFields_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           _strictEventFieldsEventStreamController.add($response);
@@ -12534,11 +12446,12 @@ class UnknownInteractionsAjarProtocolProxy
             _strictEventUnionEventStreamController.addError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_StrictEventUnion_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsAjarProtocol_StrictEventUnion_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           _strictEventUnionEventStreamController.add($response);
@@ -12551,11 +12464,12 @@ class UnknownInteractionsAjarProtocolProxy
             _strictEventTableEventStreamController.addError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_StrictEventTable_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsAjarProtocol_StrictEventTable_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           _strictEventTableEventStreamController.add($response);
@@ -12569,12 +12483,13 @@ class UnknownInteractionsAjarProtocolProxy
             () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_StrictEventErr_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsAjarProtocolStrictEventErrResult $response =
               $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsAjarProtocol_StrictEventErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -12594,12 +12509,13 @@ class UnknownInteractionsAjarProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_StrictEventFieldsErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsAjarProtocolStrictEventFieldsErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsAjarProtocol_StrictEventFieldsErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -12621,12 +12537,13 @@ class UnknownInteractionsAjarProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_StrictEventUnionErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsAjarProtocolStrictEventUnionErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsAjarProtocol_StrictEventUnionErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -12647,12 +12564,13 @@ class UnknownInteractionsAjarProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_StrictEventTableErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsAjarProtocolStrictEventTableErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsAjarProtocol_StrictEventTableErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -12673,6 +12591,7 @@ class UnknownInteractionsAjarProtocolProxy
             () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_FlexibleEvent_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = null;
 
@@ -12687,11 +12606,12 @@ class UnknownInteractionsAjarProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_FlexibleEventFields_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsAjarProtocol_FlexibleEventFields_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           _flexibleEventFieldsEventStreamController.add($response);
@@ -12705,11 +12625,12 @@ class UnknownInteractionsAjarProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_FlexibleEventUnion_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsAjarProtocol_FlexibleEventUnion_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           _flexibleEventUnionEventStreamController.add($response);
@@ -12723,11 +12644,12 @@ class UnknownInteractionsAjarProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_FlexibleEventTable_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsAjarProtocol_FlexibleEventTable_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           _flexibleEventTableEventStreamController.add($response);
@@ -12740,12 +12662,13 @@ class UnknownInteractionsAjarProtocolProxy
             _flexibleEventErrEventStreamController.addError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_FlexibleEventErr_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsAjarProtocolFlexibleEventErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsAjarProtocol_FlexibleEventErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -12766,12 +12689,13 @@ class UnknownInteractionsAjarProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_FlexibleEventFieldsErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsAjarProtocolFlexibleEventFieldsErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsAjarProtocol_FlexibleEventFieldsErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -12793,12 +12717,13 @@ class UnknownInteractionsAjarProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_FlexibleEventUnionErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsAjarProtocolFlexibleEventUnionErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsAjarProtocol_FlexibleEventUnionErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -12820,12 +12745,13 @@ class UnknownInteractionsAjarProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_FlexibleEventTableErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsAjarProtocolFlexibleEventTableErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsAjarProtocol_FlexibleEventTableErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -12880,6 +12806,7 @@ class UnknownInteractionsAjarProtocolProxy
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_StrictTwoWay_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = null;
 
@@ -12894,11 +12821,12 @@ class UnknownInteractionsAjarProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_StrictTwoWayFields_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsAjarProtocol_StrictTwoWayFields_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           $completer.complete($response);
@@ -12912,11 +12840,12 @@ class UnknownInteractionsAjarProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_StrictTwoWayUnion_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsAjarProtocol_StrictTwoWayUnion_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           $completer.complete($response);
@@ -12930,11 +12859,12 @@ class UnknownInteractionsAjarProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_StrictTwoWayTable_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsAjarProtocol_StrictTwoWayTable_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           $completer.complete($response);
@@ -12947,12 +12877,13 @@ class UnknownInteractionsAjarProtocolProxy
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_StrictTwoWayErr_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsAjarProtocolStrictTwoWayErrResult $response =
               $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsAjarProtocol_StrictTwoWayErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -12972,12 +12903,13 @@ class UnknownInteractionsAjarProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_StrictTwoWayFieldsErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsAjarProtocolStrictTwoWayFieldsErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsAjarProtocol_StrictTwoWayFieldsErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -12997,12 +12929,13 @@ class UnknownInteractionsAjarProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_StrictTwoWayUnionErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsAjarProtocolStrictTwoWayUnionErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsAjarProtocol_StrictTwoWayUnionErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -13022,12 +12955,13 @@ class UnknownInteractionsAjarProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsAjarProtocol_StrictTwoWayTableErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsAjarProtocolStrictTwoWayTableErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsAjarProtocol_StrictTwoWayTableErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -13995,6 +13929,7 @@ class UnknownInteractionsAjarProtocolBinding
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       case _kUnknownInteractionsAjarProtocol_StrictOneWay_Ordinal:
         final String _name =
@@ -14008,8 +13943,7 @@ class UnknownInteractionsAjarProtocolBinding
               .decodeMessageWithCallback<$async.Future<void>>(
                   $message,
                   _kUnknownInteractionsAjarProtocol_StrictOneWay_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictOneWay();
           });
         }, close);
@@ -14026,8 +13960,7 @@ class UnknownInteractionsAjarProtocolBinding
               .decodeMessageWithCallback<$async.Future<void>>(
                   $message,
                   _kUnknownInteractionsAjarProtocol_FlexibleOneWay_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.flexibleOneWay();
           });
         }, close);
@@ -14044,8 +13977,7 @@ class UnknownInteractionsAjarProtocolBinding
               .decodeMessageWithCallback<$async.Future<void>>(
                   $message,
                   _kUnknownInteractionsAjarProtocol_StrictTwoWay_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWay();
           });
           $future.then(($response) {
@@ -14074,8 +14006,7 @@ class UnknownInteractionsAjarProtocolBinding
               .decodeMessageWithCallback<$async.Future<int>>(
                   $message,
                   _kUnknownInteractionsAjarProtocol_StrictTwoWayFields_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWayFields();
           });
           $future.then(($response) {
@@ -14115,8 +14046,7 @@ class UnknownInteractionsAjarProtocolBinding
                           UnknownInteractionsAjarProtocolStrictTwoWayUnionResponse>>(
                   $message,
                   _kUnknownInteractionsAjarProtocol_StrictTwoWayUnion_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWayUnion();
           });
           $future.then(($response) {
@@ -14156,8 +14086,7 @@ class UnknownInteractionsAjarProtocolBinding
                           UnknownInteractionsAjarProtocolStrictTwoWayTableResponse>>(
                   $message,
                   _kUnknownInteractionsAjarProtocol_StrictTwoWayTable_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWayTable();
           });
           $future.then(($response) {
@@ -14194,8 +14123,7 @@ class UnknownInteractionsAjarProtocolBinding
               .decodeMessageWithCallback<$async.Future<void>>(
                   $message,
                   _kUnknownInteractionsAjarProtocol_StrictTwoWayErr_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWayErr();
           });
           $future.then(($responseValue) {
@@ -14244,8 +14172,7 @@ class UnknownInteractionsAjarProtocolBinding
               .decodeMessageWithCallback<$async.Future<int>>(
                   $message,
                   _kUnknownInteractionsAjarProtocol_StrictTwoWayFieldsErr_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWayFieldsErr();
           });
           $future.then(($responseValue) {
@@ -14298,8 +14225,7 @@ class UnknownInteractionsAjarProtocolBinding
                           UnknownInteractionsAjarProtocolStrictTwoWayUnionErrResponse>>(
                   $message,
                   _kUnknownInteractionsAjarProtocol_StrictTwoWayUnionErr_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWayUnionErr();
           });
           $future.then(($responseValue) {
@@ -14350,8 +14276,7 @@ class UnknownInteractionsAjarProtocolBinding
                           UnknownInteractionsAjarProtocolStrictTwoWayTableErrResponse>>(
                   $message,
                   _kUnknownInteractionsAjarProtocol_StrictTwoWayTableErr_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWayTableErr();
           });
           $future.then(($responseValue) {
@@ -14753,6 +14678,7 @@ class UnknownInteractionsClosedProtocolProxy
             () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsClosedProtocol_StrictEvent_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = null;
 
@@ -14767,11 +14693,12 @@ class UnknownInteractionsClosedProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsClosedProtocol_StrictEventFields_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsClosedProtocol_StrictEventFields_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           _strictEventFieldsEventStreamController.add($response);
@@ -14785,11 +14712,12 @@ class UnknownInteractionsClosedProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsClosedProtocol_StrictEventUnion_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsClosedProtocol_StrictEventUnion_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           _strictEventUnionEventStreamController.add($response);
@@ -14803,11 +14731,12 @@ class UnknownInteractionsClosedProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsClosedProtocol_StrictEventTable_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsClosedProtocol_StrictEventTable_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           _strictEventTableEventStreamController.add($response);
@@ -14821,12 +14750,13 @@ class UnknownInteractionsClosedProtocolProxy
             () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsClosedProtocol_StrictEventErr_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsClosedProtocolStrictEventErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsClosedProtocol_StrictEventErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -14847,12 +14777,13 @@ class UnknownInteractionsClosedProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsClosedProtocol_StrictEventFieldsErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsClosedProtocolStrictEventFieldsErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsClosedProtocol_StrictEventFieldsErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -14874,12 +14805,13 @@ class UnknownInteractionsClosedProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsClosedProtocol_StrictEventUnionErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsClosedProtocolStrictEventUnionErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsClosedProtocol_StrictEventUnionErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -14900,12 +14832,13 @@ class UnknownInteractionsClosedProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsClosedProtocol_StrictEventTableErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsClosedProtocolStrictEventTableErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsClosedProtocol_StrictEventTableErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -14945,6 +14878,7 @@ class UnknownInteractionsClosedProtocolProxy
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsClosedProtocol_StrictTwoWay_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = null;
 
@@ -14959,11 +14893,12 @@ class UnknownInteractionsClosedProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsClosedProtocol_StrictTwoWayFields_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsClosedProtocol_StrictTwoWayFields_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           $completer.complete($response);
@@ -14977,11 +14912,12 @@ class UnknownInteractionsClosedProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsClosedProtocol_StrictTwoWayUnion_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsClosedProtocol_StrictTwoWayUnion_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           $completer.complete($response);
@@ -14995,11 +14931,12 @@ class UnknownInteractionsClosedProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsClosedProtocol_StrictTwoWayTable_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsClosedProtocol_StrictTwoWayTable_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           $completer.complete($response);
@@ -15013,12 +14950,13 @@ class UnknownInteractionsClosedProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsClosedProtocol_StrictTwoWayErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsClosedProtocolStrictTwoWayErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsClosedProtocol_StrictTwoWayErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -15038,12 +14976,13 @@ class UnknownInteractionsClosedProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsClosedProtocol_StrictTwoWayFieldsErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsClosedProtocolStrictTwoWayFieldsErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsClosedProtocol_StrictTwoWayFieldsErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -15063,12 +15002,13 @@ class UnknownInteractionsClosedProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsClosedProtocol_StrictTwoWayUnionErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsClosedProtocolStrictTwoWayUnionErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsClosedProtocol_StrictTwoWayUnionErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -15088,12 +15028,13 @@ class UnknownInteractionsClosedProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsClosedProtocol_StrictTwoWayTableErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsClosedProtocolStrictTwoWayTableErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsClosedProtocol_StrictTwoWayTableErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -15674,6 +15615,7 @@ class UnknownInteractionsClosedProtocolBinding
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       case _kUnknownInteractionsClosedProtocol_StrictOneWay_Ordinal:
         final String _name =
@@ -15687,8 +15629,7 @@ class UnknownInteractionsClosedProtocolBinding
               .decodeMessageWithCallback<$async.Future<void>>(
                   $message,
                   _kUnknownInteractionsClosedProtocol_StrictOneWay_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictOneWay();
           });
         }, close);
@@ -15705,8 +15646,7 @@ class UnknownInteractionsClosedProtocolBinding
               .decodeMessageWithCallback<$async.Future<void>>(
                   $message,
                   _kUnknownInteractionsClosedProtocol_StrictTwoWay_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWay();
           });
           $future.then(($response) {
@@ -15735,8 +15675,7 @@ class UnknownInteractionsClosedProtocolBinding
               .decodeMessageWithCallback<$async.Future<int>>(
                   $message,
                   _kUnknownInteractionsClosedProtocol_StrictTwoWayFields_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWayFields();
           });
           $future.then(($response) {
@@ -15777,8 +15716,7 @@ class UnknownInteractionsClosedProtocolBinding
                           UnknownInteractionsClosedProtocolStrictTwoWayUnionResponse>>(
                   $message,
                   _kUnknownInteractionsClosedProtocol_StrictTwoWayUnion_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWayUnion();
           });
           $future.then(($response) {
@@ -15819,8 +15757,7 @@ class UnknownInteractionsClosedProtocolBinding
                           UnknownInteractionsClosedProtocolStrictTwoWayTableResponse>>(
                   $message,
                   _kUnknownInteractionsClosedProtocol_StrictTwoWayTable_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWayTable();
           });
           $future.then(($response) {
@@ -15857,8 +15794,7 @@ class UnknownInteractionsClosedProtocolBinding
               .decodeMessageWithCallback<$async.Future<void>>(
                   $message,
                   _kUnknownInteractionsClosedProtocol_StrictTwoWayErr_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWayErr();
           });
           $future.then(($responseValue) {
@@ -15907,8 +15843,7 @@ class UnknownInteractionsClosedProtocolBinding
               .decodeMessageWithCallback<$async.Future<int>>(
                   $message,
                   _kUnknownInteractionsClosedProtocol_StrictTwoWayFieldsErr_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWayFieldsErr();
           });
           $future.then(($responseValue) {
@@ -15961,8 +15896,7 @@ class UnknownInteractionsClosedProtocolBinding
                           UnknownInteractionsClosedProtocolStrictTwoWayUnionErrResponse>>(
                   $message,
                   _kUnknownInteractionsClosedProtocol_StrictTwoWayUnionErr_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWayUnionErr();
           });
           $future.then(($responseValue) {
@@ -16013,8 +15947,7 @@ class UnknownInteractionsClosedProtocolBinding
                           UnknownInteractionsClosedProtocolStrictTwoWayTableErrResponse>>(
                   $message,
                   _kUnknownInteractionsClosedProtocol_StrictTwoWayTableErr_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWayTableErr();
           });
           $future.then(($responseValue) {
@@ -16660,6 +16593,7 @@ class UnknownInteractionsProtocolProxy
             () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_StrictEvent_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = null;
 
@@ -16673,11 +16607,12 @@ class UnknownInteractionsProtocolProxy
             _strictEventFieldsEventStreamController.addError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_StrictEventFields_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsProtocol_StrictEventFields_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           _strictEventFieldsEventStreamController.add($response);
@@ -16690,11 +16625,12 @@ class UnknownInteractionsProtocolProxy
             _strictEventUnionEventStreamController.addError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_StrictEventUnion_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsProtocol_StrictEventUnion_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           _strictEventUnionEventStreamController.add($response);
@@ -16707,11 +16643,12 @@ class UnknownInteractionsProtocolProxy
             _strictEventTableEventStreamController.addError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_StrictEventTable_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsProtocol_StrictEventTable_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           _strictEventTableEventStreamController.add($response);
@@ -16725,12 +16662,13 @@ class UnknownInteractionsProtocolProxy
             () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_StrictEventErr_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsProtocolStrictEventErrResult $response =
               $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsProtocol_StrictEventErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -16749,12 +16687,13 @@ class UnknownInteractionsProtocolProxy
             _strictEventFieldsErrEventStreamController.addError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_StrictEventFieldsErr_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsProtocolStrictEventFieldsErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsProtocol_StrictEventFieldsErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -16775,12 +16714,13 @@ class UnknownInteractionsProtocolProxy
             _strictEventUnionErrEventStreamController.addError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_StrictEventUnionErr_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsProtocolStrictEventUnionErrResult $response =
               $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsProtocol_StrictEventUnionErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -16800,12 +16740,13 @@ class UnknownInteractionsProtocolProxy
             _strictEventTableErrEventStreamController.addError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_StrictEventTableErr_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsProtocolStrictEventTableErrResult $response =
               $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsProtocol_StrictEventTableErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -16826,6 +16767,7 @@ class UnknownInteractionsProtocolProxy
             () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_FlexibleEvent_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = null;
 
@@ -16839,11 +16781,12 @@ class UnknownInteractionsProtocolProxy
             _flexibleEventFieldsEventStreamController.addError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_FlexibleEventFields_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsProtocol_FlexibleEventFields_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           _flexibleEventFieldsEventStreamController.add($response);
@@ -16856,11 +16799,12 @@ class UnknownInteractionsProtocolProxy
             _flexibleEventUnionEventStreamController.addError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_FlexibleEventUnion_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsProtocol_FlexibleEventUnion_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           _flexibleEventUnionEventStreamController.add($response);
@@ -16873,11 +16817,12 @@ class UnknownInteractionsProtocolProxy
             _flexibleEventTableEventStreamController.addError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_FlexibleEventTable_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsProtocol_FlexibleEventTable_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           _flexibleEventTableEventStreamController.add($response);
@@ -16890,12 +16835,13 @@ class UnknownInteractionsProtocolProxy
             _flexibleEventErrEventStreamController.addError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_FlexibleEventErr_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsProtocolFlexibleEventErrResult $response =
               $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsProtocol_FlexibleEventErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -16915,12 +16861,13 @@ class UnknownInteractionsProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_FlexibleEventFieldsErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsProtocolFlexibleEventFieldsErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsProtocol_FlexibleEventFieldsErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -16942,12 +16889,13 @@ class UnknownInteractionsProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_FlexibleEventUnionErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsProtocolFlexibleEventUnionErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsProtocol_FlexibleEventUnionErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -16969,12 +16917,13 @@ class UnknownInteractionsProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_FlexibleEventTableErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsProtocolFlexibleEventTableErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsProtocol_FlexibleEventTableErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -17028,6 +16977,7 @@ class UnknownInteractionsProtocolProxy
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_StrictTwoWay_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = null;
 
@@ -17041,11 +16991,12 @@ class UnknownInteractionsProtocolProxy
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_StrictTwoWayFields_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsProtocol_StrictTwoWayFields_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           $completer.complete($response);
@@ -17058,11 +17009,12 @@ class UnknownInteractionsProtocolProxy
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_StrictTwoWayUnion_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsProtocol_StrictTwoWayUnion_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           $completer.complete($response);
@@ -17075,11 +17027,12 @@ class UnknownInteractionsProtocolProxy
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_StrictTwoWayTable_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kUnknownInteractionsProtocol_StrictTwoWayTable_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           $completer.complete($response);
@@ -17092,12 +17045,13 @@ class UnknownInteractionsProtocolProxy
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_StrictTwoWayErr_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsProtocolStrictTwoWayErrResult $response =
               $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsProtocol_StrictTwoWayErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -17116,12 +17070,13 @@ class UnknownInteractionsProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_StrictTwoWayFieldsErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsProtocolStrictTwoWayFieldsErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsProtocol_StrictTwoWayFieldsErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -17140,12 +17095,13 @@ class UnknownInteractionsProtocolProxy
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_StrictTwoWayUnionErr_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsProtocolStrictTwoWayUnionErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsProtocol_StrictTwoWayUnionErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -17164,12 +17120,13 @@ class UnknownInteractionsProtocolProxy
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_StrictTwoWayTableErr_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsProtocolStrictTwoWayTableErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsProtocol_StrictTwoWayTableErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -17188,12 +17145,13 @@ class UnknownInteractionsProtocolProxy
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_FlexibleTwoWay_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsProtocolFlexibleTwoWayResult $response =
               $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsProtocol_FlexibleTwoWay_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -17212,12 +17170,13 @@ class UnknownInteractionsProtocolProxy
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_FlexibleTwoWayFields_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsProtocolFlexibleTwoWayFieldsResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsProtocol_FlexibleTwoWayFields_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -17237,12 +17196,13 @@ class UnknownInteractionsProtocolProxy
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_FlexibleTwoWayUnion_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsProtocolFlexibleTwoWayUnionResult $response =
               $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsProtocol_FlexibleTwoWayUnion_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -17262,12 +17222,13 @@ class UnknownInteractionsProtocolProxy
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_FlexibleTwoWayTable_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsProtocolFlexibleTwoWayTableResult $response =
               $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsProtocol_FlexibleTwoWayTable_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -17287,12 +17248,13 @@ class UnknownInteractionsProtocolProxy
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_FlexibleTwoWayErr_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsProtocolFlexibleTwoWayErrResult $response =
               $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsProtocol_FlexibleTwoWayErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -17315,12 +17277,13 @@ class UnknownInteractionsProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_FlexibleTwoWayFieldsErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsProtocolFlexibleTwoWayFieldsErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsProtocol_FlexibleTwoWayFieldsErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -17344,12 +17307,13 @@ class UnknownInteractionsProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_FlexibleTwoWayUnionErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsProtocolFlexibleTwoWayUnionErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsProtocol_FlexibleTwoWayUnionErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -17373,12 +17337,13 @@ class UnknownInteractionsProtocolProxy
           final List<$fidl.MemberType> $types =
               _kUnknownInteractionsProtocol_FlexibleTwoWayTableErr_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final UnknownInteractionsProtocolFlexibleTwoWayTableErrResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kUnknownInteractionsProtocol_FlexibleTwoWayTableErr_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -18487,6 +18452,7 @@ class UnknownInteractionsProtocolBinding
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       case _kUnknownInteractionsProtocol_StrictOneWay_Ordinal:
         final String _name =
@@ -18500,8 +18466,7 @@ class UnknownInteractionsProtocolBinding
               .decodeMessageWithCallback<$async.Future<void>>(
                   $message,
                   _kUnknownInteractionsProtocol_StrictOneWay_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictOneWay();
           });
         }, close);
@@ -18518,8 +18483,7 @@ class UnknownInteractionsProtocolBinding
               .decodeMessageWithCallback<$async.Future<void>>(
                   $message,
                   _kUnknownInteractionsProtocol_FlexibleOneWay_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.flexibleOneWay();
           });
         }, close);
@@ -18536,8 +18500,7 @@ class UnknownInteractionsProtocolBinding
               .decodeMessageWithCallback<$async.Future<void>>(
                   $message,
                   _kUnknownInteractionsProtocol_StrictTwoWay_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWay();
           });
           $future.then(($response) {
@@ -18565,8 +18528,7 @@ class UnknownInteractionsProtocolBinding
               .decodeMessageWithCallback<$async.Future<int>>(
                   $message,
                   _kUnknownInteractionsProtocol_StrictTwoWayFields_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWayFields();
           });
           $future.then(($response) {
@@ -18605,8 +18567,7 @@ class UnknownInteractionsProtocolBinding
                           UnknownInteractionsProtocolStrictTwoWayUnionResponse>>(
                   $message,
                   _kUnknownInteractionsProtocol_StrictTwoWayUnion_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWayUnion();
           });
           $future.then(($response) {
@@ -18645,8 +18606,7 @@ class UnknownInteractionsProtocolBinding
                           UnknownInteractionsProtocolStrictTwoWayTableResponse>>(
                   $message,
                   _kUnknownInteractionsProtocol_StrictTwoWayTable_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWayTable();
           });
           $future.then(($response) {
@@ -18682,8 +18642,7 @@ class UnknownInteractionsProtocolBinding
               .decodeMessageWithCallback<$async.Future<void>>(
                   $message,
                   _kUnknownInteractionsProtocol_StrictTwoWayErr_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWayErr();
           });
           $future.then(($responseValue) {
@@ -18730,8 +18689,7 @@ class UnknownInteractionsProtocolBinding
               .decodeMessageWithCallback<$async.Future<int>>(
                   $message,
                   _kUnknownInteractionsProtocol_StrictTwoWayFieldsErr_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWayFieldsErr();
           });
           $future.then(($responseValue) {
@@ -18783,8 +18741,7 @@ class UnknownInteractionsProtocolBinding
                           UnknownInteractionsProtocolStrictTwoWayUnionErrResponse>>(
                   $message,
                   _kUnknownInteractionsProtocol_StrictTwoWayUnionErr_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWayUnionErr();
           });
           $future.then(($responseValue) {
@@ -18834,8 +18791,7 @@ class UnknownInteractionsProtocolBinding
                           UnknownInteractionsProtocolStrictTwoWayTableErrResponse>>(
                   $message,
                   _kUnknownInteractionsProtocol_StrictTwoWayTableErr_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictTwoWayTableErr();
           });
           $future.then(($responseValue) {
@@ -18882,8 +18838,7 @@ class UnknownInteractionsProtocolBinding
               .decodeMessageWithCallback<$async.Future<void>>(
                   $message,
                   _kUnknownInteractionsProtocol_FlexibleTwoWay_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.flexibleTwoWay();
           });
           $future.then(($responseValue) {
@@ -18922,8 +18877,7 @@ class UnknownInteractionsProtocolBinding
               .decodeMessageWithCallback<$async.Future<int>>(
                   $message,
                   _kUnknownInteractionsProtocol_FlexibleTwoWayFields_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.flexibleTwoWayFields();
           });
           $future.then(($responseValue) {
@@ -18968,8 +18922,7 @@ class UnknownInteractionsProtocolBinding
                           UnknownInteractionsProtocolFlexibleTwoWayUnionResponse>>(
                   $message,
                   _kUnknownInteractionsProtocol_FlexibleTwoWayUnion_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.flexibleTwoWayUnion();
           });
           $future.then(($responseValue) {
@@ -19012,8 +18965,7 @@ class UnknownInteractionsProtocolBinding
                           UnknownInteractionsProtocolFlexibleTwoWayTableResponse>>(
                   $message,
                   _kUnknownInteractionsProtocol_FlexibleTwoWayTable_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.flexibleTwoWayTable();
           });
           $future.then(($responseValue) {
@@ -19053,8 +19005,7 @@ class UnknownInteractionsProtocolBinding
               .decodeMessageWithCallback<$async.Future<void>>(
                   $message,
                   _kUnknownInteractionsProtocol_FlexibleTwoWayErr_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.flexibleTwoWayErr();
           });
           $future.then(($responseValue) {
@@ -19102,8 +19053,7 @@ class UnknownInteractionsProtocolBinding
               .decodeMessageWithCallback<$async.Future<int>>(
                   $message,
                   _kUnknownInteractionsProtocol_FlexibleTwoWayFieldsErr_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.flexibleTwoWayFieldsErr();
           });
           $future.then(($responseValue) {
@@ -19156,8 +19106,7 @@ class UnknownInteractionsProtocolBinding
                           UnknownInteractionsProtocolFlexibleTwoWayUnionErrResponse>>(
                   $message,
                   _kUnknownInteractionsProtocol_FlexibleTwoWayUnionErr_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.flexibleTwoWayUnionErr();
           });
           $future.then(($responseValue) {
@@ -19208,8 +19157,7 @@ class UnknownInteractionsProtocolBinding
                           UnknownInteractionsProtocolFlexibleTwoWayTableErrResponse>>(
                   $message,
                   _kUnknownInteractionsProtocol_FlexibleTwoWayTableErr_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.flexibleTwoWayTableErr();
           });
           $future.then(($responseValue) {

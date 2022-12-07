@@ -917,20 +917,13 @@ class MemberType<T> {
       case WireFormat.v2:
         type.encode(encoder, value, base + offset, depth);
         break;
-      default:
-        throw FidlError('unknown wire format');
     }
   }
 
   T decode(Decoder decoder, int base, int depth) {
     switch (decoder.wireFormat) {
-      case WireFormat.v1:
-      // Old versions of the C-bindings are sending V2-compatible messages
-      // with the V1 header.
       case WireFormat.v2:
         return type.decode(decoder, base + offset, depth);
-      default:
-        throw FidlError('unknown wire format');
     }
   }
 }
@@ -958,8 +951,6 @@ int envelopeSize(WireFormat wireFormat) {
   switch (wireFormat) {
     case WireFormat.v2:
       return 8;
-    default:
-      throw FidlError('unknown wire format');
   }
 }
 
@@ -1484,25 +1475,15 @@ class MethodType {
 
   int requestInlineSize(WireFormat wireFormat) {
     switch (wireFormat) {
-      case WireFormat.v1:
-      // Old versions of the C-bindings are sending V2-compatible messages
-      // with the V1 header.
       case WireFormat.v2:
         return requestInlineSizeV2;
-      default:
-        throw FidlError('unknown wire format');
     }
   }
 
   int responseInlineSize(WireFormat wireFormat) {
     switch (wireFormat) {
-      case WireFormat.v1:
-      // Old versions of the C-bindings are sending V2-compatible messages
-      // with the V1 header.
       case WireFormat.v2:
         return responseInlineSizeV2;
-      default:
-        throw FidlError('unknown wire format');
     }
   }
 }

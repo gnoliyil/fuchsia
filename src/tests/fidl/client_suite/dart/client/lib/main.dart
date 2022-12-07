@@ -48,6 +48,7 @@ FidlErrorKind classifyError(var error) {
       case FidlErrorCode.fidlInvalidInlineBitInEnvelope:
       case FidlErrorCode.fidlCountExceedsLimit:
       case FidlErrorCode.fidlInvalidPaddingByte:
+      case FidlErrorCode.fidlUnsupportedWireFormat:
         return FidlErrorKind.decodingError;
     }
   }
@@ -72,10 +73,6 @@ class RunnerImpl extends Runner {
       case Test.unknownStrictEventOpenProtocol:
       case Test.unknownStrictServerInitiatedTwoWay:
       case Test.unknownFlexibleServerInitiatedTwoWay:
-        return false;
-      case Test.v1TwoWayNoPayload:
-      case Test.v1TwoWayStructPayload:
-        // TODO(fxbug.dev/99738): Dart bindings should reject V1 wire format.
         return false;
       default:
         return true;

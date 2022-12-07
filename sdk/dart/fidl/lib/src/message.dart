@@ -58,11 +58,12 @@ class _BaseMessage {
   int get txid => data.getUint32(kMessageTxidOffset, Endian.little);
   int get ordinal => data.getUint64(kMessageOrdinalOffset, Endian.little);
   int get magic => data.getUint8(kMessageMagicOffset);
-  WireFormat get wireFormat {
+  WireFormat parseWireFormat() {
     if ((data.getUint8(kMessageFlagOffset) & kWireFormatV2FlagMask) != 0) {
       return WireFormat.v2;
     }
-    return WireFormat.v1;
+    throw FidlError(
+        'unknown wire format', FidlErrorCode.fidlUnsupportedWireFormat);
   }
 
   CallStrictness get strictness =>

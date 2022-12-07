@@ -418,7 +418,6 @@ class Testing extends $fidl.Struct {
   static Testing _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 316, 4);
         return Testing(
@@ -450,8 +449,6 @@ class Testing extends $fidl.Struct {
             aa1: $fieldType25.decode($decoder, $offset + 624, $depth),
             aa2: $fieldType26.decode($decoder, $offset + 640, $depth),
             aa3: $fieldType27.decode($decoder, $offset + 656, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -525,6 +522,7 @@ class MyProtocolBinding extends $fidl.AsyncBinding<MyProtocol> {
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       default:
         $message.closeHandles();

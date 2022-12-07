@@ -78,11 +78,8 @@ class Baz extends $fidl.Struct {
 
   static Baz _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return Baz(g: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }

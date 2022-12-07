@@ -305,11 +305,12 @@ class ProtocolProxy extends $fidl.AsyncProxy<Protocol> implements Protocol {
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kProtocol_RequestStrictResponseFlexible_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kProtocol_RequestStrictResponseFlexible_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           $completer.complete($response);
@@ -321,11 +322,12 @@ class ProtocolProxy extends $fidl.AsyncProxy<Protocol> implements Protocol {
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kProtocol_RequestFlexibleResponseStrict_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kProtocol_RequestFlexibleResponseStrict_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           $completer.complete($response);
@@ -397,6 +399,7 @@ class ProtocolBinding extends $fidl.AsyncBinding<Protocol> {
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       case _kProtocol_RequestStrictResponseFlexible_Ordinal:
         final String _name = _kProtocol_RequestStrictResponseFlexible_Type.name;
@@ -409,8 +412,7 @@ class ProtocolBinding extends $fidl.AsyncBinding<Protocol> {
               .decodeMessageWithCallback<$async.Future<FlexibleFoo>>(
                   $message,
                   _kProtocol_RequestStrictResponseFlexible_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.requestStrictResponseFlexible(
               $types[0].decode(decoder, $fidl.kMessageHeaderSize, 1),
             );
@@ -447,8 +449,7 @@ class ProtocolBinding extends $fidl.AsyncBinding<Protocol> {
               .decodeMessageWithCallback<$async.Future<StrictFoo>>(
                   $message,
                   _kProtocol_RequestFlexibleResponseStrict_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.requestFlexibleResponseStrict(
               $types[0].decode(decoder, $fidl.kMessageHeaderSize, 1),
             );

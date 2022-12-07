@@ -77,13 +77,10 @@ class Empty extends $fidl.Struct {
 
   static Empty _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 0, 1);
         return Empty(
             reserved: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -171,11 +168,11 @@ class EmptyProtocolProxy extends $fidl.AsyncProxy<EmptyProtocol>
             _name, ctrl, 'event', _receiveEventStreamController.addError, () {
           final List<$fidl.MemberType> $types =
               _kEmptyProtocol_Receive_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
-              _kEmptyProtocol_Receive_Type
-                  .responseInlineSize($message.wireFormat),
+              _kEmptyProtocol_Receive_Type.responseInlineSize($wireFormat),
               $types[0]);
 
           _receiveEventStreamController.add($response);
@@ -207,11 +204,12 @@ class EmptyProtocolProxy extends $fidl.AsyncProxy<EmptyProtocol>
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kEmptyProtocol_SendAndReceive_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kEmptyProtocol_SendAndReceive_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           $completer.complete($response);
@@ -319,6 +317,7 @@ class EmptyProtocolBinding extends $fidl.AsyncBinding<EmptyProtocol> {
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       case _kEmptyProtocol_Send_Ordinal:
         final String _name = _kEmptyProtocol_Send_Type.name;
@@ -328,10 +327,9 @@ class EmptyProtocolBinding extends $fidl.AsyncBinding<EmptyProtocol> {
           // ignore: prefer_const_declarations
           final _impl = impl!;
           final $async.Future<void> $future = $fidl
-              .decodeMessageWithCallback<$async.Future<void>>(
-                  $message,
-                  _kEmptyProtocol_Send_Type.requestInlineSize(
-                      $message.wireFormat), ($fidl.Decoder decoder) {
+              .decodeMessageWithCallback<$async.Future<void>>($message,
+                  _kEmptyProtocol_Send_Type.requestInlineSize($wireFormat),
+                  ($fidl.Decoder decoder) {
             return _impl.send(
               $types[0].decode(decoder, $fidl.kMessageHeaderSize, 1),
             );
@@ -348,8 +346,8 @@ class EmptyProtocolBinding extends $fidl.AsyncBinding<EmptyProtocol> {
           final $async.Future<Empty> $future = $fidl
               .decodeMessageWithCallback<$async.Future<Empty>>(
                   $message,
-                  _kEmptyProtocol_SendAndReceive_Type.requestInlineSize(
-                      $message.wireFormat), ($fidl.Decoder decoder) {
+                  _kEmptyProtocol_SendAndReceive_Type
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.sendAndReceive(
               $types[0].decode(decoder, $fidl.kMessageHeaderSize, 1),
             );

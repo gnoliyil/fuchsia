@@ -172,7 +172,7 @@ class Decoder {
   Decoder(IncomingMessage message)
       : data = message.data,
         handleInfos = message.handleInfos,
-        wireFormat = message.wireFormat;
+        wireFormat = message.parseWireFormat();
 
   Decoder.fromRawArgs(this.data, this.handleInfos, this.wireFormat);
 

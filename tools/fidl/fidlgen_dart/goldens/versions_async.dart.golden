@@ -239,11 +239,8 @@ class Struct extends $fidl.Struct {
 
   static Struct _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return Struct(x: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -371,6 +368,7 @@ class OtherProtocolBinding extends $fidl.AsyncBinding<OtherProtocol> {
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       default:
         $message.closeHandles();
@@ -470,6 +468,7 @@ class ProtocolBinding extends $fidl.AsyncBinding<Protocol> {
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       case _kProtocol_Foo_Ordinal:
         final String _name = _kProtocol_Foo_Type.name;
@@ -478,8 +477,8 @@ class ProtocolBinding extends $fidl.AsyncBinding<Protocol> {
           // ignore: prefer_const_declarations
           final _impl = impl!;
           final $async.Future<void> $future = $fidl
-              .decodeMessageWithCallback<$async.Future<void>>($message,
-                  _kProtocol_Foo_Type.requestInlineSize($message.wireFormat),
+              .decodeMessageWithCallback<$async.Future<void>>(
+                  $message, _kProtocol_Foo_Type.requestInlineSize($wireFormat),
                   ($fidl.Decoder decoder) {
             return _impl.foo();
           });

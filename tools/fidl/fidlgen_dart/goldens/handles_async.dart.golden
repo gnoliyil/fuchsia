@@ -414,7 +414,6 @@ class Handles extends $fidl.Struct {
   static Handles _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return Handles(
             plainHandle: $fieldType0.decode($decoder, $offset + 0, $depth),
@@ -457,8 +456,6 @@ class Handles extends $fidl.Struct {
             someProtocol: $fieldType32.decode($decoder, $offset + 128, $depth),
             requestSomeProtocol:
                 $fieldType33.decode($decoder, $offset + 132, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -532,6 +529,7 @@ class SomeProtocolBinding extends $fidl.AsyncBinding<SomeProtocol> {
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       default:
         $message.closeHandles();

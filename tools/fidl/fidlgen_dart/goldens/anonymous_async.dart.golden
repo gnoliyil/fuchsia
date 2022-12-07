@@ -576,15 +576,12 @@ class OverrideTest extends $fidl.Struct {
   static OverrideTest _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 4, 4);
         return OverrideTest(
             op: $fieldType0.decode($decoder, $offset + 0, $depth),
             left: $fieldType1.decode($decoder, $offset + 8, $depth),
             right: $fieldType2.decode($decoder, $offset + 24, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -633,12 +630,9 @@ class SomeProtocolSomeMethodResponse extends $fidl.Struct {
   static SomeProtocolSomeMethodResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return SomeProtocolSomeMethodResponse(
             bitsMember: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -689,12 +683,9 @@ class TableData extends $fidl.Struct {
   static TableData _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return TableData(
             data: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -916,11 +907,11 @@ class SomeProtocolProxy extends $fidl.AsyncProxy<SomeProtocol>
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kSomeProtocol_SomeMethod_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final SomeProtocolSomeMethodResult $response = $fidl.decodeMessage(
               $message,
-              _kSomeProtocol_SomeMethod_Type
-                  .responseInlineSize($message.wireFormat),
+              _kSomeProtocol_SomeMethod_Type.responseInlineSize($wireFormat),
               $types[0]);
 
           if ($response.$tag == SomeProtocolSomeMethodResultTag.response) {
@@ -969,6 +960,7 @@ class SomeProtocolBinding extends $fidl.AsyncBinding<SomeProtocol> {
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       case _kSomeProtocol_SomeMethod_Ordinal:
         final String _name = _kSomeProtocol_SomeMethod_Type.name;
@@ -978,10 +970,9 @@ class SomeProtocolBinding extends $fidl.AsyncBinding<SomeProtocol> {
           // ignore: prefer_const_declarations
           final _impl = impl!;
           final $async.Future<BitsMember> $future = $fidl
-              .decodeMessageWithCallback<$async.Future<BitsMember>>(
-                  $message,
-                  _kSomeProtocol_SomeMethod_Type.requestInlineSize(
-                      $message.wireFormat), ($fidl.Decoder decoder) {
+              .decodeMessageWithCallback<$async.Future<BitsMember>>($message,
+                  _kSomeProtocol_SomeMethod_Type.requestInlineSize($wireFormat),
+                  ($fidl.Decoder decoder) {
             return _impl.someMethod(
               $types[0].decode(decoder, $fidl.kMessageHeaderSize, 1),
               $types[1].decode(decoder, $fidl.kMessageHeaderSize, 1),

@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 enum WireFormat {
-  v1,
   v2,
 }
 const WireFormat kWireFormatDefault = WireFormat.v2;

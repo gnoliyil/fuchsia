@@ -166,12 +166,9 @@ class ExampleFooResponse extends $fidl.Struct {
   static ExampleFooResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return ExampleFooResponse(
             y: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -252,11 +249,10 @@ class ExampleProxy extends $fidl.AsyncProxy<Example> implements Example {
         $fidl.performCtrlWithExceptionHandling(
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types = _kExample_foo_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
-          final ExampleFooResult $response = $fidl.decodeMessage(
-              $message,
-              _kExample_foo_Type.responseInlineSize($message.wireFormat),
-              $types[0]);
+          final ExampleFooResult $response = $fidl.decodeMessage($message,
+              _kExample_foo_Type.responseInlineSize($wireFormat), $types[0]);
 
           if ($response.$tag == ExampleFooResultTag.response) {
             $completer.complete($response.response!.y);
@@ -301,6 +297,7 @@ class ExampleBinding extends $fidl.AsyncBinding<Example> {
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       case _kExample_foo_Ordinal:
         final String _name = _kExample_foo_Type.name;
@@ -309,8 +306,8 @@ class ExampleBinding extends $fidl.AsyncBinding<Example> {
           // ignore: prefer_const_declarations
           final _impl = impl!;
           final $async.Future<int> $future = $fidl
-              .decodeMessageWithCallback<$async.Future<int>>($message,
-                  _kExample_foo_Type.requestInlineSize($message.wireFormat),
+              .decodeMessageWithCallback<$async.Future<int>>(
+                  $message, _kExample_foo_Type.requestInlineSize($wireFormat),
                   ($fidl.Decoder decoder) {
             return _impl.foo(
               $types[0].decode(decoder, $fidl.kMessageHeaderSize, 1),

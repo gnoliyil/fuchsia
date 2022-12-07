@@ -256,7 +256,6 @@ class HandlesInTypes extends $fidl.Struct {
   static HandlesInTypes _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 4, 4);
 
@@ -270,8 +269,6 @@ class HandlesInTypes extends $fidl.Struct {
             tableWithHandle: $fieldType4.decode($decoder, $offset + 64, $depth),
             unionWithHandle:
                 $fieldType5.decode($decoder, $offset + 80, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }

@@ -2120,13 +2120,10 @@ class Empty extends $fidl.Struct {
 
   static Empty _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 0, 1);
         return Empty(
             reserved: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -2182,12 +2179,9 @@ class NullableUnionStruct extends $fidl.Struct {
   static NullableUnionStruct _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return NullableUnionStruct(
             theUnion: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -2235,11 +2229,8 @@ class Pasta extends $fidl.Struct {
 
   static Pasta _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return Pasta(sauce: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -2288,12 +2279,9 @@ class Pizza extends $fidl.Struct {
 
   static Pizza _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return Pizza(
             toppings: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -2349,12 +2337,9 @@ class StructWithNullableXUnion extends $fidl.Struct {
   static StructWithNullableXUnion _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return StructWithNullableXUnion(
             x1: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -2421,7 +2406,6 @@ class UnionSandwich extends $fidl.Struct {
   static UnionSandwich _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 4, 4);
 
@@ -2430,8 +2414,6 @@ class UnionSandwich extends $fidl.Struct {
             a: $fieldType0.decode($decoder, $offset + 0, $depth),
             u: $fieldType1.decode($decoder, $offset + 8, $depth),
             b: $fieldType2.decode($decoder, $offset + 24, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -2536,11 +2518,12 @@ class TestProtocolProxy extends $fidl.AsyncProxy<TestProtocol>
           final List<$fidl.MemberType> $types =
               _kTestProtocol_StrictXUnionHenceResponseMayBeStackAllocated_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kTestProtocol_StrictXUnionHenceResponseMayBeStackAllocated_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           $completer.complete($response);
@@ -2555,11 +2538,12 @@ class TestProtocolProxy extends $fidl.AsyncProxy<TestProtocol>
           final List<$fidl.MemberType> $types =
               _kTestProtocol_FlexibleXUnionHenceResponseMustBeHeapAllocated_Type
                   .response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
               _kTestProtocol_FlexibleXUnionHenceResponseMustBeHeapAllocated_Type
-                  .responseInlineSize($message.wireFormat),
+                  .responseInlineSize($wireFormat),
               $types[0]);
 
           $completer.complete($response);
@@ -2617,6 +2601,7 @@ class TestProtocolBinding extends $fidl.AsyncBinding<TestProtocol> {
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       case _kTestProtocol_StrictXUnionHenceResponseMayBeStackAllocated_Ordinal:
         final String _name =
@@ -2633,8 +2618,7 @@ class TestProtocolBinding extends $fidl.AsyncBinding<TestProtocol> {
                   $async.Future<StrictBoundedXUnion>>(
               $message,
               _kTestProtocol_StrictXUnionHenceResponseMayBeStackAllocated_Type
-                  .requestInlineSize($message.wireFormat),
-              ($fidl.Decoder decoder) {
+                  .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.strictXUnionHenceResponseMayBeStackAllocated();
           });
           $future.then(($response) {
@@ -2674,8 +2658,7 @@ class TestProtocolBinding extends $fidl.AsyncBinding<TestProtocol> {
                   $async.Future<OlderSimpleUnion>>(
               $message,
               _kTestProtocol_FlexibleXUnionHenceResponseMustBeHeapAllocated_Type
-                  .requestInlineSize($message.wireFormat),
-              ($fidl.Decoder decoder) {
+                  .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.flexibleXUnionHenceResponseMustBeHeapAllocated();
           });
           $future.then(($response) {

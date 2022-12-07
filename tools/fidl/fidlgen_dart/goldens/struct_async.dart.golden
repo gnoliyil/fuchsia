@@ -87,14 +87,11 @@ class BasicStruct extends $fidl.Struct {
   static BasicStruct _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         $decoder.checkPadding($offset + 4, 4);
         return BasicStruct(
             x: $fieldType0.decode($decoder, $offset + 0, $depth),
             y: $fieldType1.decode($decoder, $offset + 8, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -151,13 +148,10 @@ class Simple extends $fidl.Struct {
 
   static Simple _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return Simple(
             f1: $fieldType0.decode($decoder, $offset + 0, $depth),
             f2: $fieldType1.decode($decoder, $offset + 1, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }

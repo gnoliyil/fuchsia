@@ -167,12 +167,9 @@ class Int32Wrapper extends $fidl.Struct {
   static Int32Wrapper _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return Int32Wrapper(
             val: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -230,12 +227,9 @@ class StructWithNullableHandle extends $fidl.Struct {
   static StructWithNullableHandle _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return StructWithNullableHandle(
             val: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -293,12 +287,9 @@ class StructWithNullableProtocol extends $fidl.Struct {
   static StructWithNullableProtocol _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return StructWithNullableProtocol(
             val: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -357,12 +348,9 @@ class StructWithNullableRequest extends $fidl.Struct {
   static StructWithNullableRequest _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return StructWithNullableRequest(
             val: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -420,12 +408,9 @@ class StructWithNullableString extends $fidl.Struct {
   static StructWithNullableString _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return StructWithNullableString(
             val: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -483,12 +468,9 @@ class StructWithNullableStruct extends $fidl.Struct {
   static StructWithNullableStruct _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return StructWithNullableStruct(
             val: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -545,12 +527,9 @@ class StructWithNullableUnion extends $fidl.Struct {
   static StructWithNullableUnion _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return StructWithNullableUnion(
             val: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -608,12 +587,9 @@ class StructWithNullableVector extends $fidl.Struct {
   static StructWithNullableVector _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return StructWithNullableVector(
             val: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -696,10 +672,11 @@ class SimpleProtocolProxy extends $fidl.AsyncProxy<SimpleProtocol>
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kSimpleProtocol_Add_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
-              _kSimpleProtocol_Add_Type.responseInlineSize($message.wireFormat),
+              _kSimpleProtocol_Add_Type.responseInlineSize($wireFormat),
               $types[0]);
 
           $completer.complete($response);
@@ -741,6 +718,7 @@ class SimpleProtocolBinding extends $fidl.AsyncBinding<SimpleProtocol> {
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       case _kSimpleProtocol_Add_Ordinal:
         final String _name = _kSimpleProtocol_Add_Type.name;
@@ -750,10 +728,9 @@ class SimpleProtocolBinding extends $fidl.AsyncBinding<SimpleProtocol> {
           // ignore: prefer_const_declarations
           final _impl = impl!;
           final $async.Future<int> $future = $fidl
-              .decodeMessageWithCallback<$async.Future<int>>(
-                  $message,
-                  _kSimpleProtocol_Add_Type.requestInlineSize(
-                      $message.wireFormat), ($fidl.Decoder decoder) {
+              .decodeMessageWithCallback<$async.Future<int>>($message,
+                  _kSimpleProtocol_Add_Type.requestInlineSize($wireFormat),
+                  ($fidl.Decoder decoder) {
             return _impl.add(
               $types[0].decode(decoder, $fidl.kMessageHeaderSize, 1),
               $types[1].decode(decoder, $fidl.kMessageHeaderSize, 1),

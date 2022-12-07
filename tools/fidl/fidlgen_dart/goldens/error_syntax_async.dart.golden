@@ -174,12 +174,9 @@ class ExampleUseOfErrorSyntaxCallWhichMayFailResponse extends $fidl.Struct {
   static ExampleUseOfErrorSyntaxCallWhichMayFailResponse _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return ExampleUseOfErrorSyntaxCallWhichMayFailResponse(
             value: $fieldType0.decode($decoder, $offset + 0, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
@@ -292,13 +289,14 @@ class ExampleUseOfErrorSyntaxProxy extends $fidl
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kExampleUseOfErrorSyntax_ComposedCallWhichMayFail_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final lib$test_errorsyntax_parent
                   .ParentUsesErrorSyntaxComposedCallWhichMayFailResult
               $response = $fidl.decodeMessage(
                   $message,
                   _kExampleUseOfErrorSyntax_ComposedCallWhichMayFail_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -318,12 +316,13 @@ class ExampleUseOfErrorSyntaxProxy extends $fidl
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kExampleUseOfErrorSyntax_CallWhichMayFail_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final ExampleUseOfErrorSyntaxCallWhichMayFailResult $response =
               $fidl.decodeMessage(
                   $message,
                   _kExampleUseOfErrorSyntax_CallWhichMayFail_Type
-                      .responseInlineSize($message.wireFormat),
+                      .responseInlineSize($wireFormat),
                   $types[0]);
 
           if ($response.$tag ==
@@ -401,6 +400,7 @@ class ExampleUseOfErrorSyntaxBinding
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       case _kExampleUseOfErrorSyntax_ComposedCallWhichMayFail_Ordinal:
         final String _name =
@@ -414,8 +414,7 @@ class ExampleUseOfErrorSyntaxBinding
               .decodeMessageWithCallback<$async.Future<int>>(
                   $message,
                   _kExampleUseOfErrorSyntax_ComposedCallWhichMayFail_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.composedCallWhichMayFail(
               $types[0].decode(decoder, $fidl.kMessageHeaderSize, 1),
             );
@@ -468,8 +467,7 @@ class ExampleUseOfErrorSyntaxBinding
               .decodeMessageWithCallback<$async.Future<int>>(
                   $message,
                   _kExampleUseOfErrorSyntax_CallWhichMayFail_Type
-                      .requestInlineSize($message.wireFormat),
-                  ($fidl.Decoder decoder) {
+                      .requestInlineSize($wireFormat), ($fidl.Decoder decoder) {
             return _impl.callWhichMayFail(
               $types[0].decode(decoder, $fidl.kMessageHeaderSize, 1),
             );

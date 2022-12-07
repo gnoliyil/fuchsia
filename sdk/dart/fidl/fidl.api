@@ -1872,6 +1872,10 @@
               "name": "fidlUnknownMethod",
               "type": "EnumConstantDeclarationImpl"
             },
+            "fidlUnsupportedWireFormat": {
+              "name": "fidlUnsupportedWireFormat",
+              "type": "EnumConstantDeclarationImpl"
+            },
             "unknown": {
               "name": "unknown",
               "type": "EnumConstantDeclarationImpl"
@@ -12437,10 +12441,6 @@
       "EnumDeclarationImpl": {
         "WireFormat": {
           "EnumConstantDeclarationImpl": {
-            "v1": {
-              "name": "v1",
-              "type": "EnumConstantDeclarationImpl"
-            },
             "v2": {
               "name": "v2",
               "type": "EnumConstantDeclarationImpl"

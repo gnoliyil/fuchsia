@@ -102,6 +102,7 @@ class ChildBinding extends $fidl.AsyncBinding<Child> {
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       default:
         $message.closeHandles();
@@ -217,10 +218,11 @@ class ParentProxy extends $fidl.AsyncProxy<Parent> implements Parent {
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kParent_GetChild_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
-              _kParent_GetChild_Type.responseInlineSize($message.wireFormat),
+              _kParent_GetChild_Type.responseInlineSize($wireFormat),
               $types[0]);
 
           $completer.complete($response);
@@ -232,11 +234,11 @@ class ParentProxy extends $fidl.AsyncProxy<Parent> implements Parent {
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types =
               _kParent_GetChildRequest_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
           final $response = $fidl.decodeMessage(
               $message,
-              _kParent_GetChildRequest_Type
-                  .responseInlineSize($message.wireFormat),
+              _kParent_GetChildRequest_Type.responseInlineSize($wireFormat),
               $types[0]);
 
           $completer.complete($response);
@@ -332,6 +334,7 @@ class ParentBinding extends $fidl.AsyncBinding<Parent> {
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       case _kParent_GetChild_Ordinal:
         final String _name = _kParent_GetChild_Type.name;
@@ -342,7 +345,7 @@ class ParentBinding extends $fidl.AsyncBinding<Parent> {
           final $async.Future<$fidl.InterfaceHandle<Child>> $future = $fidl
               .decodeMessageWithCallback<
                       $async.Future<$fidl.InterfaceHandle<Child>>>($message,
-                  _kParent_GetChild_Type.requestInlineSize($message.wireFormat),
+                  _kParent_GetChild_Type.requestInlineSize($wireFormat),
                   ($fidl.Decoder decoder) {
             return _impl.getChild();
           });
@@ -373,10 +376,9 @@ class ParentBinding extends $fidl.AsyncBinding<Parent> {
           final _impl = impl!;
           final $async.Future<$fidl.InterfaceRequest<Child>> $future = $fidl
               .decodeMessageWithCallback<
-                      $async.Future<$fidl.InterfaceRequest<Child>>>(
-                  $message,
-                  _kParent_GetChildRequest_Type.requestInlineSize(
-                      $message.wireFormat), ($fidl.Decoder decoder) {
+                      $async.Future<$fidl.InterfaceRequest<Child>>>($message,
+                  _kParent_GetChildRequest_Type.requestInlineSize($wireFormat),
+                  ($fidl.Decoder decoder) {
             return _impl.getChildRequest();
           });
           $future.then(($response) {
@@ -406,10 +408,9 @@ class ParentBinding extends $fidl.AsyncBinding<Parent> {
           // ignore: prefer_const_declarations
           final _impl = impl!;
           final $async.Future<void> $future = $fidl
-              .decodeMessageWithCallback<$async.Future<void>>(
-                  $message,
-                  _kParent_TakeChild_Type.requestInlineSize(
-                      $message.wireFormat), ($fidl.Decoder decoder) {
+              .decodeMessageWithCallback<$async.Future<void>>($message,
+                  _kParent_TakeChild_Type.requestInlineSize($wireFormat),
+                  ($fidl.Decoder decoder) {
             return _impl.takeChild(
               $types[0].decode(decoder, $fidl.kMessageHeaderSize, 1),
             );
@@ -424,10 +425,9 @@ class ParentBinding extends $fidl.AsyncBinding<Parent> {
           // ignore: prefer_const_declarations
           final _impl = impl!;
           final $async.Future<void> $future = $fidl
-              .decodeMessageWithCallback<$async.Future<void>>(
-                  $message,
-                  _kParent_TakeChildRequest_Type.requestInlineSize(
-                      $message.wireFormat), ($fidl.Decoder decoder) {
+              .decodeMessageWithCallback<$async.Future<void>>($message,
+                  _kParent_TakeChildRequest_Type.requestInlineSize($wireFormat),
+                  ($fidl.Decoder decoder) {
             return _impl.takeChildRequest(
               $types[0].decode(decoder, $fidl.kMessageHeaderSize, 1),
             );

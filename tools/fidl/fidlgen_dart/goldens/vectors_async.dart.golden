@@ -92,14 +92,11 @@ class ExampleUseOfVectors extends $fidl.Struct {
   static ExampleUseOfVectors _structDecode(
       $fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         return ExampleUseOfVectors(
             vectorOfUint8: $fieldType0.decode($decoder, $offset + 0, $depth),
             vectorOfVectorOfBool:
                 $fieldType1.decode($decoder, $offset + 16, $depth));
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }

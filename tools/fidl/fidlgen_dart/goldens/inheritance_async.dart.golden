@@ -108,11 +108,10 @@ class SubProxy extends $fidl.AsyncProxy<Sub> implements Sub {
         $fidl.performCtrlWithExceptionHandling(
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types = _kSub_foo_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
-          final $response = $fidl.decodeMessage(
-              $message,
-              _kSub_foo_Type.responseInlineSize($message.wireFormat),
-              $types[0]);
+          final $response = $fidl.decodeMessage($message,
+              _kSub_foo_Type.responseInlineSize($wireFormat), $types[0]);
 
           $completer.complete($response);
         });
@@ -152,6 +151,7 @@ class SubBinding extends $fidl.AsyncBinding<Sub> {
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       case _kSub_foo_Ordinal:
         final String _name = _kSub_foo_Type.name;
@@ -160,8 +160,8 @@ class SubBinding extends $fidl.AsyncBinding<Sub> {
           // ignore: prefer_const_declarations
           final _impl = impl!;
           final $async.Future<int> $future = $fidl
-              .decodeMessageWithCallback<$async.Future<int>>($message,
-                  _kSub_foo_Type.requestInlineSize($message.wireFormat),
+              .decodeMessageWithCallback<$async.Future<int>>(
+                  $message, _kSub_foo_Type.requestInlineSize($wireFormat),
                   ($fidl.Decoder decoder) {
             return _impl.foo(
               $types[0].decode(decoder, $fidl.kMessageHeaderSize, 1),
@@ -260,11 +260,10 @@ class SuperProxy extends $fidl.AsyncProxy<Super> implements Super {
         $fidl.performCtrlWithExceptionHandling(
             _name, ctrl, 'method response', $completer.completeError, () {
           final List<$fidl.MemberType> $types = _kSuper_foo_Type.response!;
+          final $wireFormat = $message.parseWireFormat();
           // ignore: prefer_const_declarations
-          final $response = $fidl.decodeMessage(
-              $message,
-              _kSuper_foo_Type.responseInlineSize($message.wireFormat),
-              $types[0]);
+          final $response = $fidl.decodeMessage($message,
+              _kSuper_foo_Type.responseInlineSize($wireFormat), $types[0]);
 
           $completer.complete($response);
         });
@@ -304,6 +303,7 @@ class SuperBinding extends $fidl.AsyncBinding<Super> {
   @override
   void handleMessage(
       $fidl.IncomingMessage $message, $fidl.OutgoingMessageSink $respond) {
+    final $wireFormat = $message.parseWireFormat();
     switch ($message.ordinal) {
       case _kSuper_foo_Ordinal:
         final String _name = _kSuper_foo_Type.name;
@@ -312,8 +312,8 @@ class SuperBinding extends $fidl.AsyncBinding<Super> {
           // ignore: prefer_const_declarations
           final _impl = impl!;
           final $async.Future<int> $future = $fidl
-              .decodeMessageWithCallback<$async.Future<int>>($message,
-                  _kSuper_foo_Type.requestInlineSize($message.wireFormat),
+              .decodeMessageWithCallback<$async.Future<int>>(
+                  $message, _kSuper_foo_Type.requestInlineSize($wireFormat),
                   ($fidl.Decoder decoder) {
             return _impl.foo(
               $types[0].decode(decoder, $fidl.kMessageHeaderSize, 1),

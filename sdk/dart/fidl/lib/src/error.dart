@@ -35,6 +35,7 @@ enum FidlErrorCode {
   fidlCountExceedsLimit,
   fidlInvalidPaddingByte,
   fidlUnknownMethod,
+  fidlUnsupportedWireFormat,
 }
 
 class FidlError implements Exception {

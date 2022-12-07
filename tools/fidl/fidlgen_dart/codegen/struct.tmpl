@@ -89,7 +89,6 @@ class {{ .Name }} extends $fidl.Struct {
 
   static {{ .Name }} _structDecode($fidl.Decoder $decoder, int $offset, int $depth) {
     switch ($decoder.wireFormat) {
-      case $fidl.WireFormat.v1:
       case $fidl.WireFormat.v2:
         {{- range $padding := .Paddings }}
         {{- if ne $padding.PaddingV2 0 }}
@@ -103,8 +102,6 @@ class {{ .Name }} extends $fidl.Struct {
               $decoder, $offset + {{ $member.OffsetV2 }}, $depth)
         {{- end -}}
         );
-      default:
-        throw $fidl.FidlError('unknown wire format');
     }
   }
 }
