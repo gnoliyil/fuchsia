@@ -34,9 +34,8 @@ use storage_manager::minfs::{disk::DevDiskManager, StorageManager as MinfsStorag
 use tracing::{error, info};
 
 use crate::{
-    account_manager::{AccountManager, EnvCredManagerProvider},
-    account_metadata::DataDirAccountMetadataStore,
-    storage_unlock_mechanism::StorageUnlockMechanism,
+    account_manager::AccountManager, account_metadata::DataDirAccountMetadataStore,
+    pinweaver::EnvCredManagerProvider, storage_unlock_mechanism::StorageUnlockMechanism,
 };
 
 /// PasswordAuthenticator config, populated from a build-time generated

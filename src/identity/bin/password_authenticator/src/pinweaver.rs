@@ -11,7 +11,8 @@ use {
         scrypt::{ScryptError, ScryptParams},
     },
     async_trait::async_trait,
-    fidl_fuchsia_identity_credential::{self as fcred, ManagerProxy},
+    fidl_fuchsia_identity_credential::{self as fcred, ManagerMarker, ManagerProxy},
+    fuchsia_component::client::connect_to_protocol,
     fuchsia_zircon as zx,
     hmac::{Hmac, Mac, NewMac},
     lazy_static::lazy_static,
@@ -86,6 +87,29 @@ fn compute_mix_secret(password: &str, high_entropy_secret: &Key) -> Key {
 /// requires some amount of CPU cost, memory cost, and is salted per-user.
 fn compute_account_key(mix_secret: &Key, params: &ScryptParams) -> Result<Key, ScryptError> {
     params.scrypt(mix_secret)
+}
+
+/// A trait to support injecting credential manager implementations to enable
+/// unit testing.
+pub trait CredManagerProvider {
+    type CM: CredManager + std::marker::Send + std::marker::Sync;
+    fn new_cred_manager(&self) -> Result<Self::CM, anyhow::Error>;
+}
+
+/// A CredManagerProvider that opens a new connection to the CredentialManager in our incoming
+/// namespace whenever a CredManager instance is requested.
+pub struct EnvCredManagerProvider {}
+
+impl CredManagerProvider for EnvCredManagerProvider {
+    type CM = ManagerProxy;
+
+    fn new_cred_manager(&self) -> Result<Self::CM, anyhow::Error> {
+        let proxy = connect_to_protocol::<ManagerMarker>().map_err(|err| {
+            error!("unable to connect to credential manager from environment: {:?}", err);
+            err
+        })?;
+        Ok(proxy)
+    }
 }
 
 /// A trait which abstracts over the Credential Manager interface.
@@ -374,8 +398,26 @@ pub mod test {
         ForceFailWithRetrievalError,
     }
 
+    pub struct MockCredManagerProvider {
+        mcm: MockCredManager,
+    }
+
+    impl MockCredManagerProvider {
+        pub fn new() -> MockCredManagerProvider {
+            MockCredManagerProvider { mcm: MockCredManager::new() }
+        }
+    }
+
+    impl CredManagerProvider for MockCredManagerProvider {
+        type CM = MockCredManager;
+        fn new_cred_manager(&self) -> Result<Self::CM, anyhow::Error> {
+            Ok(self.mcm.clone())
+        }
+    }
+
     /// An in-memory mock of a CredentialManager implementation which stores all secrets in a
     /// HashMap in memory.
+    // TODO(fxb/116814): move this out of ::test.
     #[derive(Clone, Debug)]
     pub struct MockCredManager {
         creds: Arc<Mutex<HashMap<Label, (Key, Key)>>>,

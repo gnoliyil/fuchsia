@@ -8,7 +8,9 @@ use crate::{
         AccountMetadata, AccountMetadataStore, AccountMetadataStoreError, AuthenticatorMetadata,
     },
     keys::{Key, KeyEnrollment, KeyEnrollmentError, KeyRetrieval, KeyRetrievalError},
-    pinweaver::{CredManager, PinweaverKeyEnroller, PinweaverKeyRetriever, PinweaverParams},
+    pinweaver::{
+        CredManagerProvider, PinweaverKeyEnroller, PinweaverKeyRetriever, PinweaverParams,
+    },
     scrypt::{ScryptKeySource, ScryptParams},
     Config,
 };
@@ -18,9 +20,7 @@ use fidl::endpoints::{ControlHandle, ServerEnd};
 use fidl_fuchsia_identity_account::{
     self as faccount, AccountManagerRequest, AccountManagerRequestStream, AccountMarker,
 };
-use fidl_fuchsia_identity_credential::{ManagerMarker, ManagerProxy};
 use fidl_fuchsia_process_lifecycle::{LifecycleRequest, LifecycleRequestStream};
-use fuchsia_component::client::connect_to_protocol;
 use futures::{lock::Mutex, prelude::*};
 use std::{collections::HashMap, sync::Arc};
 use storage_manager::{minfs::disk::DiskError, StorageManager};
@@ -35,29 +35,6 @@ pub const GLOBAL_ACCOUNT_ID: u64 = 1;
 const MIN_PASSWORD_SIZE: usize = 8;
 
 pub type AccountId = u64;
-
-/// A trait to support injecting credential manager implementations into AccountManager to enable
-/// unit testing.
-pub trait CredManagerProvider {
-    type CM: CredManager + std::marker::Send + std::marker::Sync;
-    fn new_cred_manager(&self) -> Result<Self::CM, anyhow::Error>;
-}
-
-pub struct EnvCredManagerProvider {}
-
-/// A CredManagerProvider that opens a new connection to the CredentialManager in our incoming
-/// namespace whenever a CredManager instance is requested.
-impl CredManagerProvider for EnvCredManagerProvider {
-    type CM = ManagerProxy;
-
-    fn new_cred_manager(&self) -> Result<Self::CM, anyhow::Error> {
-        let proxy = connect_to_protocol::<ManagerMarker>().map_err(|err| {
-            error!("unable to connect to credential manager from environment: {:?}", err);
-            err
-        })?;
-        Ok(proxy)
-    }
-}
 
 pub struct AccountManager<AMS, CMP, SM, SMF>
 where
@@ -800,9 +777,13 @@ mod test {
                 test::{TEST_NAME, TEST_PINWEAVER_METADATA, TEST_SCRYPT_METADATA},
                 AccountMetadata, AccountMetadataStoreError,
             },
-            pinweaver::test::{
-                MockCredManager, TEST_PINWEAVER_ACCOUNT_KEY, TEST_PINWEAVER_CREDENTIAL_LABEL,
-                TEST_PINWEAVER_HE_SECRET, TEST_PINWEAVER_LE_SECRET,
+            pinweaver::{
+                test::{
+                    MockCredManagerProvider, TEST_PINWEAVER_ACCOUNT_KEY,
+                    TEST_PINWEAVER_CREDENTIAL_LABEL, TEST_PINWEAVER_HE_SECRET,
+                    TEST_PINWEAVER_LE_SECRET,
+                },
+                CredManager,
             },
             scrypt::test::{TEST_SCRYPT_KEY, TEST_SCRYPT_PASSWORD},
         },
@@ -885,23 +866,6 @@ mod test {
         ) -> Result<(), AccountMetadataStoreError> {
             self.accounts.remove(account_id);
             Ok(())
-        }
-    }
-
-    struct MockCredManagerProvider {
-        mcm: MockCredManager,
-    }
-
-    impl MockCredManagerProvider {
-        fn new() -> MockCredManagerProvider {
-            MockCredManagerProvider { mcm: MockCredManager::new() }
-        }
-    }
-
-    impl CredManagerProvider for MockCredManagerProvider {
-        type CM = MockCredManager;
-        fn new_cred_manager(&self) -> Result<Self::CM, anyhow::Error> {
-            Ok(self.mcm.clone())
         }
     }
 
