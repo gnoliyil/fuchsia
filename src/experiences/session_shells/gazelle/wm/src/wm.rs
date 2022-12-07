@@ -138,13 +138,13 @@ impl WindowManager {
         let mut root_transform_id = window.get_root_transform_id();
         flatland.set_content(&mut root_transform_id, &mut background)?;
 
-        let mut child_views_layer = window.next_transform_id();
-        flatland.create_transform(&mut child_views_layer)?;
-        flatland.add_child(&mut root_transform_id, &mut child_views_layer)?;
-
         let mut shortcuts_image_transform = window.next_transform_id();
         flatland.create_transform(&mut shortcuts_image_transform)?;
         flatland.add_child(&mut root_transform_id, &mut shortcuts_image_transform)?;
+
+        let mut child_views_layer = window.next_transform_id();
+        flatland.create_transform(&mut child_views_layer)?;
+        flatland.add_child(&mut root_transform_id, &mut child_views_layer)?;
 
         let mut shell_views_layer = window.next_transform_id();
         flatland.create_transform(&mut shell_views_layer)?;
