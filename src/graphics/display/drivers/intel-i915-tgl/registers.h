@@ -348,56 +348,6 @@ class GraphicsPrimaryInterrupt : public hwreg::RegisterBase<GraphicsPrimaryInter
   static auto Get() { return hwreg::RegisterAddr<GraphicsPrimaryInterrupt>(0x190010); }
 };
 
-// GMBUS0
-class GMBus0 : public hwreg::RegisterBase<GMBus0, uint32_t> {
- public:
-  DEF_FIELD(2, 0, pin_pair_select);
-  static constexpr uint32_t kDdiCPin = 4;
-  static constexpr uint32_t kDdiBPin = 5;
-  static constexpr uint32_t kDdiDPin = 6;
-
-  static auto Get() { return hwreg::RegisterAddr<GMBus0>(0xc5100); }
-};
-
-// GMBUS1
-class GMBus1 : public hwreg::RegisterBase<GMBus1, uint32_t> {
- public:
-  DEF_BIT(31, sw_clear_int);
-  DEF_BIT(30, sw_ready);
-  DEF_BIT(27, bus_cycle_stop);
-  DEF_BIT(25, bus_cycle_wait);
-  DEF_FIELD(24, 16, total_byte_count);
-  DEF_FIELD(7, 1, slave_register_addr);
-  DEF_BIT(0, read_op);
-
-  static auto Get() { return hwreg::RegisterAddr<GMBus1>(0xc5104); }
-};
-
-// GMBUS2
-class GMBus2 : public hwreg::RegisterBase<GMBus2, uint32_t> {
- public:
-  DEF_BIT(14, wait);
-  DEF_BIT(11, hw_ready);
-  DEF_BIT(10, nack);
-  DEF_BIT(9, active);
-
-  static auto Get() { return hwreg::RegisterAddr<GMBus2>(0xc5108); }
-};
-
-// GMBUS3
-class GMBus3 : public hwreg::RegisterBase<GMBus3, uint32_t> {
- public:
-  static auto Get() { return hwreg::RegisterAddr<GMBus3>(0xc510c); }
-};
-
-// GMBUS4
-class GMBus4 : public hwreg::RegisterBase<GMBus4, uint32_t> {
- public:
-  DEF_FIELD(4, 0, interrupt_mask);
-
-  static auto Get() { return hwreg::RegisterAddr<GMBus4>(0xc5110); }
-};
-
 // PWR_WELL_CTL
 //
 // Skylake: IHD-OS-SKL-Vol 2c-05.16 Part 2 page 690-693
@@ -784,33 +734,6 @@ class VgaCtl : public hwreg::RegisterBase<VgaCtl, uint32_t> {
   DEF_BIT(31, vga_display_disable);
 
   static auto Get() { return hwreg::RegisterAddr<VgaCtl>(0x41000); }
-};
-
-// GPIO_CTL
-class GpioCtl : public hwreg::RegisterBase<GpioCtl, uint32_t> {
- public:
-  DEF_BIT(12, data_in);
-  DEF_BIT(11, data_out);
-  DEF_BIT(10, data_mask);
-  DEF_BIT(9, data_direction_val);
-  DEF_BIT(8, data_direction_mask);
-
-  DEF_BIT(4, clock_in);
-  DEF_BIT(3, clock_out);
-  DEF_BIT(2, clock_mask);
-  DEF_BIT(1, clock_direction_val);
-  DEF_BIT(0, clock_direction_mask);
-
-  static auto Get(i915_tgl::DdiId ddi_id) {
-    if (ddi_id == i915_tgl::DdiId::DDI_B) {
-      return hwreg::RegisterAddr<GpioCtl>(0xc5020);
-    }
-    if (ddi_id == i915_tgl::DdiId::DDI_C) {
-      return hwreg::RegisterAddr<GpioCtl>(0xc501c);
-    }
-    ZX_DEBUG_ASSERT(ddi_id == i915_tgl::DdiId::DDI_D);
-    return hwreg::RegisterAddr<GpioCtl>(0xc5024);
-  }
 };
 
 }  // namespace tgl_registers

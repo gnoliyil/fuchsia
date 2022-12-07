@@ -2272,7 +2272,7 @@ zx_status_t Controller::Init() {
   pch_engine_->Log();
 
   for (unsigned i = 0; i < ddis_.size(); i++) {
-    gmbus_i2cs_.push_back(GMBusI2c(ddis_[i], mmio_space()));
+    gmbus_i2cs_.push_back(GMBusI2c(ddis_[i], GetPlatform(device_id_), mmio_space()));
 
     dp_auxs_.push_back(DpAux(mmio_space(), ddis_[i], device_id_));
     zxlogf(TRACE, "DDI %d AUX channel initial configuration:", ddis_[i]);

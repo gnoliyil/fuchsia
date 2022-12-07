@@ -8,6 +8,8 @@
 #include <stdint.h>
 #include <zircon/assert.h>
 
+#include "src/graphics/display/drivers/intel-i915-tgl/hardware-common.h"
+
 // PCI Device ID sources.
 //
 // Skylake: IHD-OS-SKL-Vol 4-05.16 page 11 and page 12
@@ -51,18 +53,20 @@ constexpr bool is_tgl_u(uint16_t device_id) {
 constexpr uint16_t kTestDeviceDid = 0xffff;
 constexpr bool is_test_device(uint16_t device_id) { return device_id == kTestDeviceDid; }
 
-constexpr uint16_t intel_display_device_gen(uint16_t device_id) {
-  if (is_skl(device_id) || is_kbl(device_id)) {
-    return 9;
+constexpr tgl_registers::Platform GetPlatform(uint16_t device_id) {
+  if (is_skl(device_id)) {
+    return tgl_registers::Platform::kSkylake;
+  }
+  if (is_kbl(device_id)) {
+    return tgl_registers::Platform::kKabyLake;
   }
   if (is_tgl(device_id)) {
-    return 12;
+    return tgl_registers::Platform::kTigerLake;
   }
   if (is_test_device(device_id)) {
-    return 9;
+    return tgl_registers::Platform::kTestDevice;
   }
-  ZX_DEBUG_ASSERT_MSG(false, "device id %u not supported", device_id);
-  return 0;
+  ZX_ASSERT_MSG(false, "device id %u not supported", device_id);
 }
 
 }  // namespace i915_tgl

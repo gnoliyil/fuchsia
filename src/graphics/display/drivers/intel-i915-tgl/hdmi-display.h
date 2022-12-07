@@ -17,18 +17,22 @@
 #include "src/graphics/display/drivers/intel-i915-tgl/ddi-physical-layer-manager.h"
 #include "src/graphics/display/drivers/intel-i915-tgl/display-device.h"
 #include "src/graphics/display/drivers/intel-i915-tgl/dpll.h"
+#include "src/graphics/display/drivers/intel-i915-tgl/gmbus-gpio.h"
 #include "src/graphics/display/drivers/intel-i915-tgl/hardware-common.h"
 
 namespace i915_tgl {
 
 class GMBusI2c {
  public:
-  GMBusI2c(DdiId ddi_id, fdf::MmioBuffer* mmio_space);
+  GMBusI2c(DdiId ddi_id, tgl_registers::Platform platform, fdf::MmioBuffer* mmio_space);
   zx_status_t I2cTransact(const i2c_impl_op_t* ops, size_t count);
 
  private:
-  const DdiId ddi_id_;
-  // The lock protects the registers this class writes to, not the whole register io space.
+  const std::optional<GMBusPinPair> gmbus_pin_pair_;
+  const std::optional<GpioPort> gpio_port_;
+
+  // The lock protects the registers this class writes to, not the whole
+  // register io space.
   fdf::MmioBuffer* mmio_space_ __TA_GUARDED(lock_);
   mtx_t lock_;
 

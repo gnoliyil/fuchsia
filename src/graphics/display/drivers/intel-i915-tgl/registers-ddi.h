@@ -42,6 +42,8 @@ class SdeInterruptBase : public hwreg::RegisterBase<SdeInterruptBase, uint32_t> 
   static constexpr uint32_t kSdeIntIdentity = 0xc4008;
   static constexpr uint32_t kSdeIntEnable = 0xc400c;
 
+  DEF_BIT(23, gmbus);
+
   hwreg::BitfieldRef<uint32_t> skl_ddi_bit(i915_tgl::DdiId ddi_id) {
     uint32_t bit;
     switch (ddi_id) {

@@ -23,12 +23,14 @@
 #include "src/graphics/display/drivers/intel-i915-tgl/ddi-physical-layer-manager.h"
 #include "src/graphics/display/drivers/intel-i915-tgl/dpll-config.h"
 #include "src/graphics/display/drivers/intel-i915-tgl/dpll.h"
+#include "src/graphics/display/drivers/intel-i915-tgl/gmbus-gpio.h"
 #include "src/graphics/display/drivers/intel-i915-tgl/hardware-common.h"
 #include "src/graphics/display/drivers/intel-i915-tgl/intel-i915-tgl.h"
 #include "src/graphics/display/drivers/intel-i915-tgl/pci-ids.h"
 #include "src/graphics/display/drivers/intel-i915-tgl/poll-until.h"
 #include "src/graphics/display/drivers/intel-i915-tgl/registers-ddi.h"
 #include "src/graphics/display/drivers/intel-i915-tgl/registers-dpll.h"
+#include "src/graphics/display/drivers/intel-i915-tgl/registers-gmbus.h"
 #include "src/graphics/display/drivers/intel-i915-tgl/registers-pipe.h"
 #include "src/graphics/display/drivers/intel-i915-tgl/registers-transcoder.h"
 #include "src/graphics/display/drivers/intel-i915-tgl/registers.h"
@@ -78,32 +80,19 @@ cpp20::span<const DdiPhyConfigEntry> GetHdmiPhyConfigEntries(uint16_t device_id,
   return kPhyConfigHdmiSkylakeUhs;
 }
 
-int ddi_id_to_pin(DdiId ddi_id) {
-  if (ddi_id == DdiId::DDI_B) {
-    return tgl_registers::GMBus0::kDdiBPin;
-  } else if (ddi_id == DdiId::DDI_C) {
-    return tgl_registers::GMBus0::kDdiCPin;
-  } else if (ddi_id == DdiId::DDI_D) {
-    return tgl_registers::GMBus0::kDdiDPin;
+void WriteGMBusData(fdf::MmioBuffer* mmio_space, const uint8_t* buf, uint32_t size, uint32_t idx) {
+  if (idx >= size) {
+    return;
   }
-  return -1;
+  cpp20::span<const uint8_t> data(buf + idx, std::min(4u, size - idx));
+  tgl_registers::GMBusData::Get().FromValue(0).set_data(data).WriteTo(mmio_space);
 }
 
-void write_gmbus3(fdf::MmioBuffer* mmio_space, const uint8_t* buf, uint32_t size, uint32_t idx) {
+void ReadGMBusData(fdf::MmioBuffer* mmio_space, uint8_t* buf, uint32_t size, uint32_t idx) {
   int cur_byte = 0;
-  uint32_t val = 0;
+  auto bytes = tgl_registers::GMBusData::Get().ReadFrom(mmio_space).data();
   while (idx < size && cur_byte < 4) {
-    val |= buf[idx++] << (8 * cur_byte++);
-  }
-  tgl_registers::GMBus3::Get().FromValue(val).WriteTo(mmio_space);
-}
-
-void read_gmbus3(fdf::MmioBuffer* mmio_space, uint8_t* buf, uint32_t size, uint32_t idx) {
-  int cur_byte = 0;
-  uint32_t val = tgl_registers::GMBus3::Get().ReadFrom(mmio_space).reg_value();
-  while (idx < size && cur_byte++ < 4) {
-    buf[idx++] = val & 0xff;
-    val >>= 8;
+    buf[idx++] = bytes[cur_byte++];
   }
 }
 
@@ -112,17 +101,18 @@ static constexpr uint8_t kDdcDataAddress = 0x50;
 static constexpr uint8_t kI2cClockUs = 10;  // 100 kHz
 
 // For bit banging i2c over the gpio pins
-bool i2c_scl(fdf::MmioBuffer* mmio_space, DdiId ddi_id, bool hi) {
-  auto gpio = tgl_registers::GpioCtl::Get(ddi_id).FromValue(0);
+bool i2c_scl(fdf::MmioBuffer* mmio_space, const GpioPort& gpio_port, bool hi) {
+  auto gpio_pin_pair_control =
+      tgl_registers::GpioPinPairControl::GetForPort(gpio_port).FromValue(0);
 
   if (!hi) {
-    gpio.set_clock_direction_val(1);
-    gpio.set_clock_mask(1);
+    gpio_pin_pair_control.set_clock_direction_is_output(true);
+    gpio_pin_pair_control.set_write_clock_output(true);
   }
-  gpio.set_clock_direction_mask(1);
+  gpio_pin_pair_control.set_write_clock_direction_is_output(true);
 
-  gpio.WriteTo(mmio_space);
-  gpio.ReadFrom(mmio_space);  // Posting read
+  gpio_pin_pair_control.WriteTo(mmio_space);
+  gpio_pin_pair_control.ReadFrom(mmio_space);  // Posting read
 
   // Handle the case where something on the bus is holding the clock
   // low. Timeout after 1ms.
@@ -132,9 +122,9 @@ bool i2c_scl(fdf::MmioBuffer* mmio_space, DdiId ddi_id, bool hi) {
       if (count != 0) {
         zx_nanosleep(zx_deadline_after(ZX_USEC(kI2cClockUs)));
       }
-      gpio.ReadFrom(mmio_space);
-    } while (count++ < 100 && hi != gpio.clock_in());
-    if (hi != gpio.clock_in()) {
+      gpio_pin_pair_control.ReadFrom(mmio_space);
+    } while (count++ < 100 && hi != gpio_pin_pair_control.clock_input());
+    if (hi != gpio_pin_pair_control.clock_input()) {
       return false;
     }
   }
@@ -143,45 +133,47 @@ bool i2c_scl(fdf::MmioBuffer* mmio_space, DdiId ddi_id, bool hi) {
 }
 
 // For bit banging i2c over the gpio pins
-void i2c_sda(fdf::MmioBuffer* mmio_space, DdiId ddi_id, bool hi) {
-  auto gpio = tgl_registers::GpioCtl::Get(ddi_id).FromValue(0);
+void i2c_sda(fdf::MmioBuffer* mmio_space, const GpioPort& gpio_port, bool hi) {
+  auto gpio_pin_pair_control =
+      tgl_registers::GpioPinPairControl::GetForPort(gpio_port).FromValue(0);
 
   if (!hi) {
-    gpio.set_data_direction_val(1);
-    gpio.set_data_mask(1);
+    gpio_pin_pair_control.set_data_direction_is_output(true);
+    gpio_pin_pair_control.set_write_data_output(true);
   }
-  gpio.set_data_direction_mask(1);
+  gpio_pin_pair_control.set_write_data_direction_is_output(true);
 
-  gpio.WriteTo(mmio_space);
-  gpio.ReadFrom(mmio_space);  // Posting read
+  gpio_pin_pair_control.WriteTo(mmio_space);
+  gpio_pin_pair_control.ReadFrom(mmio_space);  // Posting read
 
   zx_nanosleep(zx_deadline_after(ZX_USEC(kI2cClockUs / 2)));
 }
 
 // For bit banging i2c over the gpio pins
-bool i2c_send_byte(fdf::MmioBuffer* mmio_space, DdiId ddi_id, uint8_t byte) {
+bool i2c_send_byte(fdf::MmioBuffer* mmio_space, const GpioPort& gpio_port, uint8_t byte) {
   // Set the bits from MSB to LSB
   for (int i = 7; i >= 0; i--) {
-    i2c_sda(mmio_space, ddi_id, (byte >> i) & 0x1);
+    i2c_sda(mmio_space, gpio_port, (byte >> i) & 0x1);
 
-    i2c_scl(mmio_space, ddi_id, 1);
+    i2c_scl(mmio_space, gpio_port, 1);
 
     // Leave the data line where it is for the rest of the cycle
     zx_nanosleep(zx_deadline_after(ZX_USEC(kI2cClockUs / 2)));
 
-    i2c_scl(mmio_space, ddi_id, 0);
+    i2c_scl(mmio_space, gpio_port, 0);
   }
 
   // Release the data line and check for an ack
-  i2c_sda(mmio_space, ddi_id, 1);
-  i2c_scl(mmio_space, ddi_id, 1);
+  i2c_sda(mmio_space, gpio_port, 1);
+  i2c_scl(mmio_space, gpio_port, 1);
 
-  bool ack = !tgl_registers::GpioCtl::Get(ddi_id).ReadFrom(mmio_space).data_in();
+  bool ack =
+      !tgl_registers::GpioPinPairControl::GetForPort(gpio_port).ReadFrom(mmio_space).data_input();
 
   // Sleep for the rest of the cycle
   zx_nanosleep(zx_deadline_after(ZX_USEC(kI2cClockUs / 2)));
 
-  i2c_scl(mmio_space, ddi_id, 0);
+  i2c_scl(mmio_space, gpio_port, 0);
 
   return ack;
 }
@@ -192,34 +184,39 @@ bool i2c_send_byte(fdf::MmioBuffer* mmio_space, DdiId ddi_id, uint8_t byte) {
 // directly support segment pointer addressing. Instead, the segment pointer needs to be
 // set by bit-banging the GPIO pins.
 bool GMBusI2c::SetDdcSegment(uint8_t segment_num) {
-  // Reset the clock and data lines
-  i2c_scl(mmio_space_, ddi_id_, 0);
-  i2c_sda(mmio_space_, ddi_id_, 0);
+  ZX_ASSERT(gpio_port_.has_value());
 
-  if (!i2c_scl(mmio_space_, ddi_id_, 1)) {
+  // Reset the clock and data lines
+  i2c_scl(mmio_space_, *gpio_port_, 0);
+  i2c_sda(mmio_space_, *gpio_port_, 0);
+
+  if (!i2c_scl(mmio_space_, *gpio_port_, 1)) {
     return false;
   }
-  i2c_sda(mmio_space_, ddi_id_, 1);
+  i2c_sda(mmio_space_, *gpio_port_, 1);
   // Wait for the rest of the cycle
   zx_nanosleep(zx_deadline_after(ZX_USEC(kI2cClockUs / 2)));
 
   // Send a start condition
-  i2c_sda(mmio_space_, ddi_id_, 0);
-  i2c_scl(mmio_space_, ddi_id_, 0);
+  i2c_sda(mmio_space_, *gpio_port_, 0);
+  i2c_scl(mmio_space_, *gpio_port_, 0);
 
   // Send the segment register index and the segment number
   uint8_t segment_write_command = kDdcSegmentAddress << 1;
-  if (!i2c_send_byte(mmio_space_, ddi_id_, segment_write_command) ||
-      !i2c_send_byte(mmio_space_, ddi_id_, segment_num)) {
+  if (!i2c_send_byte(mmio_space_, *gpio_port_, segment_write_command) ||
+      !i2c_send_byte(mmio_space_, *gpio_port_, segment_num)) {
     return false;
   }
 
   // Set the data and clock lines high to prepare for the GMBus start
-  i2c_sda(mmio_space_, ddi_id_, 1);
-  return i2c_scl(mmio_space_, ddi_id_, 1);
+  i2c_sda(mmio_space_, *gpio_port_, 1);
+  return i2c_scl(mmio_space_, *gpio_port_, 1);
 }
 
 zx_status_t GMBusI2c::I2cTransact(const i2c_impl_op_t* ops, size_t size) {
+  ZX_ASSERT(gmbus_pin_pair_.has_value());
+  ZX_ASSERT(gpio_port_.has_value());
+
   // The GMBus register is a limited interface to the i2c bus - it doesn't support complex
   // transactions like setting the E-DDC segment. For now, providing a special-case interface
   // for reading the E-DDC is good enough.
@@ -229,16 +226,15 @@ zx_status_t GMBusI2c::I2cTransact(const i2c_impl_op_t* ops, size_t size) {
   for (unsigned i = 0; i < size; i++) {
     const i2c_impl_op_t* op = ops + i;
     if (op->address == kDdcSegmentAddress && !op->is_read && op->data_size == 1) {
-      tgl_registers::GMBus0::Get().FromValue(0).WriteTo(mmio_space_);
+      tgl_registers::GMBusClockPortSelect::Get().FromValue(0).WriteTo(mmio_space_);
       gmbus_set = false;
       if (!SetDdcSegment(*static_cast<uint8_t*>(op->data_buffer))) {
         goto fail;
       }
     } else if (op->address == kDdcDataAddress) {
       if (!gmbus_set) {
-        auto gmbus0 = tgl_registers::GMBus0::Get().FromValue(0);
-        gmbus0.set_pin_pair_select(ddi_id_to_pin(ddi_id_));
-        gmbus0.WriteTo(mmio_space_);
+        auto gmbus_clock_port_select = tgl_registers::GMBusClockPortSelect::Get().FromValue(0);
+        gmbus_clock_port_select.SetPinPair(*gmbus_pin_pair_).WriteTo(mmio_space_);
 
         gmbus_set = true;
       }
@@ -253,8 +249,13 @@ zx_status_t GMBusI2c::I2cTransact(const i2c_impl_op_t* ops, size_t size) {
         // scope of the AutoLock.
         fdf::MmioBuffer& mmio_space = *mmio_space_;
 
-        if (!PollUntil([&]() { return tgl_registers::GMBus2::Get().ReadFrom(&mmio_space).wait(); },
-                       zx::msec(1), 10)) {
+        if (!PollUntil(
+                [&]() {
+                  return tgl_registers::GMBusControllerStatus::Get()
+                      .ReadFrom(&mmio_space)
+                      .is_waiting();
+                },
+                zx::msec(1), 10)) {
           zxlogf(TRACE, "Transition to wait phase timed out");
           goto fail;
         }
@@ -284,22 +285,22 @@ fail:
 
 bool GMBusI2c::GMBusWrite(uint8_t addr, const uint8_t* buf, uint8_t size) {
   unsigned idx = 0;
-  write_gmbus3(mmio_space_, buf, size, idx);
+  WriteGMBusData(mmio_space_, buf, size, idx);
   idx += 4;
 
-  auto gmbus1 = tgl_registers::GMBus1::Get().FromValue(0);
-  gmbus1.set_sw_ready(1);
-  gmbus1.set_bus_cycle_wait(1);
-  gmbus1.set_total_byte_count(size);
-  gmbus1.set_slave_register_addr(addr);
-  gmbus1.WriteTo(mmio_space_);
+  auto gmbus_command = tgl_registers::GMBusCommand::Get().FromValue(0);
+  gmbus_command.set_software_ready(true);
+  gmbus_command.set_wait_state_enabled(true);
+  gmbus_command.set_total_byte_count(size);
+  gmbus_command.set_target_address(addr);
+  gmbus_command.WriteTo(mmio_space_);
 
   while (idx < size) {
     if (!I2cWaitForHwReady()) {
       return false;
     }
 
-    write_gmbus3(mmio_space_, buf, size, idx);
+    WriteGMBusData(mmio_space_, buf, size, idx);
     idx += 4;
   }
   // One more wait to ensure we're ready when we leave the function
@@ -307,13 +308,13 @@ bool GMBusI2c::GMBusWrite(uint8_t addr, const uint8_t* buf, uint8_t size) {
 }
 
 bool GMBusI2c::GMBusRead(uint8_t addr, uint8_t* buf, uint8_t size) {
-  auto gmbus1 = tgl_registers::GMBus1::Get().FromValue(0);
-  gmbus1.set_sw_ready(1);
-  gmbus1.set_bus_cycle_wait(1);
-  gmbus1.set_total_byte_count(size);
-  gmbus1.set_slave_register_addr(addr);
-  gmbus1.set_read_op(1);
-  gmbus1.WriteTo(mmio_space_);
+  auto gmbus_command = tgl_registers::GMBusCommand::Get().FromValue(0);
+  gmbus_command.set_software_ready(true);
+  gmbus_command.set_wait_state_enabled(true);
+  gmbus_command.set_total_byte_count(size);
+  gmbus_command.set_target_address(addr);
+  gmbus_command.set_is_read_transaction(true);
+  gmbus_command.WriteTo(mmio_space_);
 
   unsigned idx = 0;
   while (idx < size) {
@@ -321,7 +322,7 @@ bool GMBusI2c::GMBusRead(uint8_t addr, uint8_t* buf, uint8_t size) {
       return false;
     }
 
-    read_gmbus3(mmio_space_, buf, size, idx);
+    ReadGMBusData(mmio_space_, buf, size, idx);
     idx += 4;
   }
 
@@ -329,23 +330,25 @@ bool GMBusI2c::GMBusRead(uint8_t addr, uint8_t* buf, uint8_t size) {
 }
 
 bool GMBusI2c::I2cFinish() {
-  auto gmbus1 = tgl_registers::GMBus1::Get().FromValue(0);
-  gmbus1.set_bus_cycle_stop(1);
-  gmbus1.set_sw_ready(1);
-  gmbus1.WriteTo(mmio_space_);
+  auto gmbus_command = tgl_registers::GMBusCommand::Get().FromValue(0);
+  gmbus_command.set_stop_generated(true);
+  gmbus_command.set_software_ready(true);
+  gmbus_command.WriteTo(mmio_space_);
 
   // Alias `mmio_space_` to aid Clang's thread safety analyzer, which can't
   // reason about closure scopes. The type system still helps ensure
   // thread-safety, because the scope of the alias is smaller than the method
   // scope, and the method is guaranteed to hold the lock.
   fdf::MmioBuffer& mmio_space = *mmio_space_;
-  bool idle =
-      PollUntil([&] { return !tgl_registers::GMBus2::Get().ReadFrom(&mmio_space).active(); },
-                zx::msec(1), 100);
+  bool idle = PollUntil(
+      [&] {
+        return !tgl_registers::GMBusControllerStatus::Get().ReadFrom(&mmio_space).is_active();
+      },
+      zx::msec(1), 100);
 
-  auto gmbus0 = tgl_registers::GMBus0::Get().FromValue(0);
-  gmbus0.set_pin_pair_select(0);
-  gmbus0.WriteTo(mmio_space_);
+  auto gmbus_clock_port_select = tgl_registers::GMBusClockPortSelect::Get().FromValue(0);
+  gmbus_clock_port_select.set_pin_pair_select(0);
+  gmbus_clock_port_select.WriteTo(mmio_space_);
 
   if (!idle) {
     zxlogf(TRACE, "hdmi: GMBus i2c failed to go idle");
@@ -354,7 +357,7 @@ bool GMBusI2c::I2cFinish() {
 }
 
 bool GMBusI2c::I2cWaitForHwReady() {
-  auto gmbus2 = tgl_registers::GMBus2::Get().FromValue(0);
+  auto gmbus_controller_status = tgl_registers::GMBusControllerStatus::Get().FromValue(0);
 
   // Alias `mmio_space_` to aid Clang's thread safety analyzer, which can't
   // reason about closure scopes. The type system still helps ensure
@@ -364,14 +367,14 @@ bool GMBusI2c::I2cWaitForHwReady() {
 
   if (!PollUntil(
           [&] {
-            gmbus2.ReadFrom(&mmio_space);
-            return gmbus2.nack() || gmbus2.hw_ready();
+            gmbus_controller_status.ReadFrom(&mmio_space);
+            return gmbus_controller_status.nack_occurred() || gmbus_controller_status.is_ready();
           },
           zx::msec(1), 50)) {
     zxlogf(TRACE, "hdmi: GMBus i2c wait for hwready timeout");
     return false;
   }
-  if (gmbus2.nack()) {
+  if (gmbus_controller_status.nack_occurred()) {
     zxlogf(TRACE, "hdmi: GMBus i2c got nack");
     return false;
   }
@@ -387,28 +390,33 @@ bool GMBusI2c::I2cClearNack() {
   // scope, and the method is guaranteed to hold the lock.
   fdf::MmioBuffer& mmio_space = *mmio_space_;
 
-  if (!PollUntil([&] { return !tgl_registers::GMBus2::Get().ReadFrom(&mmio_space).active(); },
-                 zx::msec(1), 10)) {
+  if (!PollUntil(
+          [&] {
+            return !tgl_registers::GMBusControllerStatus::Get().ReadFrom(&mmio_space).is_active();
+          },
+          zx::msec(1), 10)) {
     zxlogf(TRACE, "hdmi: GMBus i2c failed to clear active nack");
     return false;
   }
 
   // Set/clear sw clear int to reset the bus
-  auto gmbus1 = tgl_registers::GMBus1::Get().FromValue(0);
-  gmbus1.set_sw_clear_int(1);
-  gmbus1.WriteTo(mmio_space_);
-  gmbus1.set_sw_clear_int(0);
-  gmbus1.WriteTo(mmio_space_);
+  auto gmbus_command = tgl_registers::GMBusCommand::Get().FromValue(0);
+  gmbus_command.set_software_clear_interrupt(true);
+  gmbus_command.WriteTo(mmio_space_);
+  gmbus_command.set_software_clear_interrupt(false);
+  gmbus_command.WriteTo(mmio_space_);
 
   // Reset GMBus0
-  auto gmbus0 = tgl_registers::GMBus0::Get().FromValue(0);
-  gmbus0.WriteTo(mmio_space_);
+  auto gmbus_clock_port_select = tgl_registers::GMBusClockPortSelect::Get().FromValue(0);
+  gmbus_clock_port_select.WriteTo(mmio_space_);
 
   return true;
 }
 
-GMBusI2c::GMBusI2c(DdiId ddi_id, fdf::MmioBuffer* mmio_space)
-    : ddi_id_(ddi_id), mmio_space_(mmio_space) {
+GMBusI2c::GMBusI2c(DdiId ddi_id, tgl_registers::Platform platform, fdf::MmioBuffer* mmio_space)
+    : gmbus_pin_pair_(GMBusPinPair::GetForDdi(ddi_id, platform)),
+      gpio_port_(GpioPort::GetForDdi(ddi_id, platform)),
+      mmio_space_(mmio_space) {
   ZX_ASSERT(mtx_init(&lock_, mtx_plain) == thrd_success);
 }
 
@@ -425,13 +433,14 @@ HdmiDisplay::~HdmiDisplay() = default;
 
 bool HdmiDisplay::Query() {
   // HDMI isn't supported on these DDIs
-  if (ddi_id_to_pin(ddi_id()) == -1) {
+  const tgl_registers::Platform platform = GetPlatform(controller()->device_id());
+  if (!GMBusPinPair::HasValidPinPair(ddi_id(), platform)) {
     return false;
   }
 
   // Reset the GMBus registers and disable GMBus interrupts
-  tgl_registers::GMBus0::Get().FromValue(0).WriteTo(mmio_space());
-  tgl_registers::GMBus4::Get().FromValue(0).WriteTo(mmio_space());
+  tgl_registers::GMBusClockPortSelect::Get().FromValue(0).WriteTo(mmio_space());
+  tgl_registers::GMBusControllerInterruptMask::Get().FromValue(0).WriteTo(mmio_space());
 
   // The only way to tell if an HDMI monitor is actually connected is
   // to try to read from it over I2C.
@@ -444,7 +453,7 @@ bool HdmiDisplay::Query() {
         .is_read = true,
         .stop = 1,
     };
-    tgl_registers::GMBus0::Get().FromValue(0).WriteTo(mmio_space());
+    tgl_registers::GMBusClockPortSelect::Get().FromValue(0).WriteTo(mmio_space());
     // TODO(fxbug.dev/99979): We should read using GMBusI2c directly instead.
     if (controller()->Transact(i2c_bus_id(), &op, 1) == ZX_OK) {
       zxlogf(TRACE, "Found a hdmi/dvi monitor");
