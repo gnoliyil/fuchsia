@@ -11,6 +11,7 @@ source_set("edid") {
     "edid.cc",
     "edid.h",
     "eisa_vid_lut.cc",
+    "test-support.h",
     "timings.cc",
     "timings.h",
   ]

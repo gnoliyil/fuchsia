@@ -10,7 +10,11 @@
 #include <string.h>
 
 #include <memory>
+#include <optional>
+#include <string>
+#include <variant>
 
+#include <fbl/vector.h>
 #include <hwreg/bitfields.h>
 
 #include "src/graphics/display/lib/edid/timings.h"
@@ -297,6 +301,33 @@ static constexpr uint8_t kDdcDataI2cAddress = 0x50;
 // Returned string is a statically allocated constant. Returns NULL if no match is found.
 const char* GetEisaVendorName(uint16_t manufacturer_name_code);
 
+struct ReadEdidResult {
+ public:
+  static ReadEdidResult MakeError(const char* error_message) {
+    return {
+        .is_error = true,
+        .error_message = error_message,
+    };
+  }
+
+  static ReadEdidResult MakeEdidBytes(fbl::Vector<uint8_t>&& edid_bytes) {
+    return {
+        .is_error = false,
+        .edid_bytes = std::move(edid_bytes),
+    };
+  }
+
+  bool is_error = false;
+  fbl::Vector<uint8_t> edid_bytes;
+  const char* error_message = nullptr;
+};
+
+// Read EDID bytes over DDC I2C bus using `transact()` function.
+// If any error occurs, returns an ReadEdidResult::ErrorMessageType;
+// Otherwise, returns the vector containing the raw EDID bytes, including all
+// extension blocks.
+ReadEdidResult ReadEdidFromDdcForTesting(void* ctx, ddc_i2c_transact transact);
+
 class timing_iterator;
 class audio_data_block_iterator;
 
@@ -386,8 +417,8 @@ class Edid {
   const BaseEdid* base_edid_;
 
   // Contains the edid bytes if they are owned by this object. |bytes_| should generally
-  // be used, since this will be null if something else owns the edid bytes.
-  std::unique_ptr<uint8_t[]> edid_bytes_;
+  // be used, since this will be empty if something else owns the edid bytes.
+  fbl::Vector<uint8_t> edid_bytes_;
 
   char manufacturer_id_[sizeof(Descriptor::Monitor::data) + 1];
   char monitor_name_[sizeof(Descriptor::Monitor::data) + 1];

@@ -84,7 +84,7 @@ bool CeaEdidTimingExtension::validate() const {
   return true;
 }
 
-bool Edid::Init(void* ctx, ddc_i2c_transact transact, const char** err_msg) {
+ReadEdidResult ReadEdidFromDdcForTesting(void* ctx, ddc_i2c_transact transact) {
   uint8_t segment_address = 0;
   uint8_t segment_offset = 0;
   ddc_i2c_msg_t msgs[3] = {
@@ -95,36 +95,72 @@ bool Edid::Init(void* ctx, ddc_i2c_transact transact, const char** err_msg) {
 
   BaseEdid base_edid;
   msgs[2].buf = reinterpret_cast<uint8_t*>(&base_edid);
-  // + 1 to skip trying to set the segment for the first block
+
+  // The VESA E-DDC standard claims that the segment pointer is reset to its
+  // default value (00h) at the completion of each command sequence.
+  // (Section 2.2.5 "Segment Pointer", Page 18, VESA E-DDC Standard,
+  //  Version 1.3)
+  //
+  // Note that we are not following the recommended reading patterns in the
+  // E-DDC standard, which requires drivers always issue segment writes for
+  // each read and ignore the NACKs (Section 5.1.1 "Basic Operation for E-DDC
+  // Access of EDID", S 6.5 "E-DDC Sequential Read", VESA E-DDC Standard,
+  // Version 1.3). Instead, when reading the first block (base EDID), we skip
+  // writing the segment address register and rely on display devices' reset
+  // mechanism.
+  //
+  // This makes the following EDID read procedure compatible with display
+  // devices that don't support Enhanced DDC standard; otherwise these devices
+  // will issue NACKs and some display controllers (e.g. Intel HD Display)
+  // might not be able to handle it correctly. It is possible that drivers may
+  // fail connecting to monitors that only recognizes some fixed structures or
+  // I2C command patterns (segment write always precedes data read), though the
+  // chance is rare.
   if (!transact(ctx, msgs + 1, 2)) {
-    *err_msg = "Failed to read base edid";
-    return false;
-  } else if (!base_edid.validate()) {
-    *err_msg = "Failed to validate base edid";
-    return false;
+    return ReadEdidResult::MakeError("Failed to read base edid");
+  }
+  if (!base_edid.validate()) {
+    return ReadEdidResult::MakeError("Failed to validate base edid");
   }
 
   uint16_t edid_length = static_cast<uint16_t>((base_edid.num_extensions + 1) * kBlockSize);
+
   fbl::AllocChecker ac;
-  edid_bytes_ = std::unique_ptr<uint8_t[]>(new (&ac) uint8_t[edid_length]);
+  fbl::Vector<uint8_t> edid;
+  edid.resize(edid_length, &ac);
   if (!ac.check()) {
-    *err_msg = "Failed to allocate edid storage";
-    return false;
+    return ReadEdidResult::MakeError("Failed to allocate edid storage");
   }
 
-  memcpy(edid_bytes_.get(), reinterpret_cast<void*>(&base_edid), kBlockSize);
+  memcpy(edid.data(), reinterpret_cast<void*>(&base_edid), kBlockSize);
   for (uint8_t i = 1; i && i <= base_edid.num_extensions; i++) {
-    *msgs[0].buf = i / 2;
-    *msgs[1].buf = i % 2 ? kBlockSize : 0;
-    msgs[2].buf = edid_bytes_.get() + i * kBlockSize;
-    bool include_segment = i % 2;
-    if (!transact(ctx, msgs + include_segment, 3 - include_segment)) {
-      *err_msg = "Failed to read full edid";
-      return false;
+    segment_address = i / 2;
+    segment_offset = i % 2 ? kBlockSize : 0;
+    msgs[2].buf = edid.data() + i * kBlockSize;
+
+    // The segment pointer is reset to zero every time after a command sequence.
+    // As long as the segment number is not zero, we should issue a DDC segment
+    // read before we read / write a piece of data.
+    bool include_segment = segment_address != 0;
+
+    bool transact_success = include_segment ? transact(ctx, msgs, 3) : transact(ctx, msgs + 1, 2);
+    if (!transact_success) {
+      return ReadEdidResult::MakeError("Failed to read full edid");
     }
   }
 
-  return Init(edid_bytes_.get(), edid_length, err_msg);
+  return ReadEdidResult::MakeEdidBytes(std::move(edid));
+}
+
+bool Edid::Init(void* ctx, ddc_i2c_transact transact, const char** err_msg) {
+  auto read_edid_result = ReadEdidFromDdcForTesting(ctx, transact);
+  if (read_edid_result.is_error) {
+    ZX_DEBUG_ASSERT(read_edid_result.error_message != nullptr);
+    *err_msg = read_edid_result.error_message;
+    return false;
+  }
+  edid_bytes_ = std::move(read_edid_result.edid_bytes);
+  return Init(edid_bytes_.data(), static_cast<uint16_t>(edid_bytes_.size()), err_msg);
 }
 
 bool Edid::Init(const uint8_t* bytes, uint16_t len, const char** err_msg) {
