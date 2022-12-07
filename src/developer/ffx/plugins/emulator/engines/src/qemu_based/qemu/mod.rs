@@ -70,7 +70,7 @@ impl QemuEngine {
         }
     }
 
-    fn validate(&self) -> Result<()> {
+    fn validate_configuration(&self) -> Result<()> {
         if self.emulator_configuration.device.pointing_device == PointingDevice::Touch {
             eprintln!("Touchscreen as a pointing device is not available on Qemu.");
             eprintln!(
@@ -78,10 +78,12 @@ impl QemuEngine {
                 Virtual Device specification."
             );
         }
-        let result = self
-            .validate_network_flags(&self.emulator_configuration)
-            .and_then(|()| self.check_required_files(&self.emulator_configuration.guest));
-        result
+        self.validate_network_flags(&self.emulator_configuration)
+            .and_then(|()| self.check_required_files(&self.emulator_configuration.guest))
+    }
+
+    fn validate_staging(&self) -> Result<()> {
+        self.check_required_files(&self.emulator_configuration.guest)
     }
 }
 
@@ -95,7 +97,8 @@ impl EmulatorEngine for QemuEngine {
             bail!("Giving up finding emulator binary. Tried {:?}", self.emulator_binary)
         }
 
-        let result = <Self as QemuBasedEngine>::stage(&mut self.emulator_configuration).await;
+        <Self as QemuBasedEngine>::stage(&mut self.emulator_configuration).await?;
+        let result = self.validate_staging();
         if result.is_ok() {
             self.engine_state = EngineState::Staged;
         } else {
@@ -136,7 +139,7 @@ impl EmulatorEngine for QemuEngine {
     }
 
     fn configure(&mut self) -> Result<()> {
-        let result = self.validate();
+        let result = self.validate_configuration();
         if result.is_ok() {
             self.engine_state = EngineState::Configured;
         } else {
