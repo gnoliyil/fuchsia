@@ -58,11 +58,15 @@ class AuthService {
   bool useNewAccountManager = false;
 
   AuthService() {
-    Incoming.fromSvcPath()
-        .connectToService(_accountManager, name: kDeprecatedAccountMgr);
-
     useNewAccountManager =
         io.File(kUseNewAccountManagerMarkerFile).existsSync();
+
+    if (useNewAccountManager) {
+      Incoming.fromSvcPath().connectToService(_accountManager);
+    } else {
+      Incoming.fromSvcPath()
+          .connectToService(_accountManager, name: kDeprecatedAccountMgr);
+    }
   }
 
   void dispose() {
