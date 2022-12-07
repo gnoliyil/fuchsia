@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
                                                    producer_host_ptr);
 
   // Instantiate an in-process consumer client.
-  ConsumerAdapter consumer(ipc_host->service(), perfetto_task_runner.get(), &trace_provider);
+  ConsumerAdapter consumer(ipc_host->service(), &trace_provider, perfetto_task_runner.get());
 
   // Expose the FIDL server.
   component::OutgoingDirectory outgoing = component::OutgoingDirectory(dispatcher);

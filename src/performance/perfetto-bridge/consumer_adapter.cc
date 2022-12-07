@@ -16,6 +16,8 @@
 #include <algorithm>
 #include <functional>
 
+#include <perfetto/ext/tracing/core/trace_packet.h>
+#include <perfetto/ext/tracing/core/tracing_service.h>
 #include <rapidjson/document.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
@@ -23,15 +25,14 @@
 #include "lib/trace-engine/context.h"
 #include "lib/trace-engine/instrumentation.h"
 #include "lib/trace-provider/provider.h"
-#include "perfetto/ext/tracing/core/trace_packet.h"
-#include "perfetto/tracing/core/forward_decls.h"
 #include "src/lib/fxl/strings/string_printf.h"
-#include "third_party/perfetto/protos/perfetto/common/trace_stats.gen.h"
-#include "third_party/perfetto/protos/perfetto/config/chrome/chrome_config.gen.h"
-#include "third_party/perfetto/protos/perfetto/config/data_source_config.gen.h"
-#include "third_party/perfetto/protos/perfetto/config/trace_config.gen.h"
-#include "third_party/perfetto/protos/perfetto/config/track_event/track_event_config.gen.h"
-#include "third_party/rapidjson/include/rapidjson/document.h"
+
+#include <protos/perfetto/config/track_event/track_event_config.gen.h>
+#include <third_party/perfetto/protos/perfetto/common/trace_stats.gen.h>
+#include <third_party/perfetto/protos/perfetto/config/chrome/chrome_config.gen.h>
+#include <third_party/perfetto/protos/perfetto/config/data_source_config.gen.h>
+#include <third_party/perfetto/protos/perfetto/config/trace_config.gen.h>
+#include <third_party/perfetto/protos/perfetto/config/track_event/track_event_config.gen.h>
 
 namespace {
 // The size of the consumer buffer.
@@ -39,9 +40,6 @@ constexpr size_t kConsumerBufferSizeKb = 20ul * 1024ul;  // 20MB.
 
 // The delay between buffer utilization checks.
 constexpr int kConsumerStatsPollIntervalMs = 500;
-
-// Sets the amount of buffer usage that will cause the buffer to be read mid-trace.
-constexpr float kConsumerUtilizationReadThreshold = 0.6f;
 
 // Interval for recreating interned string data, in milliseconds.
 // Used for stream recovery in the event of data loss.
@@ -106,36 +104,100 @@ perfetto::protos::gen::TrackEventConfig GetTrackEventConfig(
   }
   return track_event_config;
 }
-}  // namespace
 
-// Prolongs the lifetime of a trace session when set.
-// May be created and freed on any thread.
-class ConsumerAdapter::ScopedProlongedTraceContext {
+class FuchsiaTracingImpl : public FuchsiaTracing {
  public:
-  ScopedProlongedTraceContext() = default;
-  ~ScopedProlongedTraceContext() {
-    if (trace_context_)
-      trace_release_prolonged_context(trace_context_);
+  explicit FuchsiaTracingImpl(trace::TraceProvider* trace_provider)
+      : trace_provider_(trace_provider) {
+    FX_DCHECK(trace_provider_);
   }
-  ScopedProlongedTraceContext(const ScopedProlongedTraceContext&) = delete;
-  void operator=(const ScopedProlongedTraceContext&) = delete;
+  ~FuchsiaTracingImpl() override {
+    FX_DCHECK(!prolonged_context_);
+    FX_DCHECK(!blob_write_context_);
+  }
+
+  void StartObserving(fit::function<void(trace_state_t)> observe_cb) override {
+    trace_observer_.Start(
+        async_get_default_dispatcher(),
+        [observe_cb = std::move(observe_cb)]() mutable { observe_cb(trace_state()); });
+  }
+
+  void AcquireProlongedContext() override {
+    FX_DCHECK(!prolonged_context_);
+
+    prolonged_context_ = trace_acquire_prolonged_context();
+    FX_DCHECK(prolonged_context_);
+  }
+
+  void ReleaseProlongedContext() override {
+    FX_DCHECK(prolonged_context_);
+    FX_DCHECK(!blob_write_context_);
+
+    trace_release_prolonged_context(prolonged_context_);
+    prolonged_context_ = nullptr;
+  }
+
+  void AcquireWriteContext() override {
+    FX_DCHECK(!blob_write_context_);
+
+    blob_write_context_ = trace_acquire_context();
+    if (blob_write_context_) {
+      trace_context_register_string_literal(blob_write_context_, kBlobName, &blob_name_ref_);
+    }
+  }
+
+  bool HasWriteContext() override { return blob_write_context_ != nullptr; }
+
+  void WriteBlob(const char* data, size_t size) override {
+    FX_DCHECK(blob_write_context_);
+    trace_context_write_blob_record(blob_write_context_, TRACE_BLOB_TYPE_PERFETTO, &blob_name_ref_,
+                                    data, size);
+  }
+
+  void ReleaseWriteContext() override {
+    if (blob_write_context_) {
+      trace_release_context(blob_write_context_);
+      blob_write_context_ = nullptr;
+    }
+  }
+
+  trace::ProviderConfig GetProviderConfig() override {
+    return trace_provider_->GetProviderConfig();
+  }
 
  private:
-  trace_prolonged_context_t* trace_context_ = trace_acquire_prolonged_context();
+  trace_prolonged_context_t* prolonged_context_ = nullptr;
+  trace_context_t* blob_write_context_ = nullptr;
+  trace_string_ref_t blob_name_ref_;
+  trace::TraceProvider* trace_provider_;
+
+  // Used for handling Fuchsia trace system events.
+  trace::TraceObserver trace_observer_;
 };
 
-ConsumerAdapter::ConsumerAdapter(perfetto::TracingService* perfetto_service,
-                                 perfetto::base::TaskRunner* perfetto_task_runner,
-                                 trace::TraceProviderWithFdio* trace_provider)
-    : perfetto_task_runner_(perfetto_task_runner),
-      perfetto_service_(perfetto_service),
-      trace_provider_(trace_provider) {
-  FX_DCHECK(perfetto_service_);
-  FX_DCHECK(perfetto_task_runner_);
-  FX_DCHECK(trace_provider_);
+}  // namespace
 
-  trace_observer_.Start(async_get_default_dispatcher(), [this] { OnTraceStateUpdate(); });
+ConsumerAdapter::ConsumerAdapter(ConnectConsumerCallback connect_callback,
+                                 std::unique_ptr<FuchsiaTracing> fuchsia_tracing,
+                                 perfetto::base::TaskRunner* perfetto_task_runner)
+    : perfetto_task_runner_(perfetto_task_runner),
+      connect_callback_(std::move(connect_callback)),
+      fuchsia_tracing_(std::move(fuchsia_tracing)) {
+  FX_DCHECK(connect_callback_);
+  FX_DCHECK(fuchsia_tracing_);
+  FX_DCHECK(perfetto_task_runner_);
+
+  fuchsia_tracing_->StartObserving(fit::bind_member(this, &ConsumerAdapter::OnTraceStateUpdate));
 }
+
+ConsumerAdapter::ConsumerAdapter(perfetto::TracingService* tracing_service,
+                                 trace::TraceProvider* trace_provider,
+                                 perfetto::base::TaskRunner* perfetto_task_runner)
+    : ConsumerAdapter(
+          [tracing_service](perfetto::Consumer* consumer) {
+            return tracing_service->ConnectConsumer(consumer, 0);
+          },
+          std::make_unique<FuchsiaTracingImpl>(trace_provider), perfetto_task_runner) {}
 
 ConsumerAdapter::~ConsumerAdapter() {
   perfetto_task_runner_->PostTask(
@@ -194,7 +256,7 @@ void ConsumerAdapter::OnTraceData(std::vector<perfetto::TracePacket> packets, bo
             GetState() == State::READING_PENDING_SHUTDOWN);
   FX_DCHECK(perfetto_task_runner_->RunsTasksOnCurrentThread());
 
-  if (blob_write_context_) {
+  if (fuchsia_tracing_->HasWriteContext()) {
     // Proto messages must be written as atomic blobs to prevent truncation mid-message
     // if the output buffer is filled.
     std::string proto_str;
@@ -210,8 +272,7 @@ void ConsumerAdapter::OnTraceData(std::vector<perfetto::TracePacket> packets, bo
         FX_LOGS(WARNING) << "Dropping excessively long Perfetto message (size=" << proto_str.size()
                          << " bytes)";
       } else {
-        trace_context_write_blob_record(blob_write_context_, TRACE_BLOB_TYPE_PERFETTO,
-                                        &blob_name_ref_, proto_str.data(), proto_str.size());
+        fuchsia_tracing_->WriteBlob(proto_str.data(), proto_str.size());
       }
       proto_str.clear();
     }
@@ -222,8 +283,8 @@ void ConsumerAdapter::OnTraceData(std::vector<perfetto::TracePacket> packets, bo
   }
 }
 
-void ConsumerAdapter::OnTraceStateUpdate() {
-  switch (trace_state()) {
+void ConsumerAdapter::OnTraceStateUpdate(trace_state_t new_state) {
+  switch (new_state) {
     case TRACE_STARTED:
       perfetto_task_runner_->PostTask([this]() { OnStartTracing(); });
       return;
@@ -260,7 +321,7 @@ void ConsumerAdapter::OnStartTracing() {
   // be sourced from FXT somehow.
   data_source_config->set_name("org.chromium.trace_event");
 
-  const auto track_event_config = GetTrackEventConfig(trace_provider_->GetProviderConfig());
+  const auto track_event_config = GetTrackEventConfig(fuchsia_tracing_->GetProviderConfig());
   data_source_config->set_track_event_config_raw(track_event_config.SerializeAsString());
 
   // TODO(fxbug.dev/115525): Remove this once the migration to track_event_config is complete.
@@ -268,11 +329,12 @@ void ConsumerAdapter::OnStartTracing() {
       GetChromeTraceConfigString(track_event_config));
 
   FX_CHECK(!consumer_endpoint_);
-  consumer_endpoint_ = perfetto_service_->ConnectConsumer(this, 0);
+  consumer_endpoint_ = connect_callback_(this);
+  FX_DCHECK(consumer_endpoint_);
   consumer_endpoint_->EnableTracing(trace_config);
 
   // Explicitly manage the lifetime of the Fuchsia tracing session.
-  scoped_prolonged_trace_ = std::make_unique<ScopedProlongedTraceContext>();
+  fuchsia_tracing_->AcquireProlongedContext();
 
   ChangeState(State::ACTIVE);
   SchedulePerfettoGetStats();
@@ -298,12 +360,11 @@ void ConsumerAdapter::SchedulePerfettoGetStats() {
 }
 
 void ConsumerAdapter::CallPerfettoReadBuffers(bool on_shutdown) {
-  FX_DCHECK(!blob_write_context_);
+  FX_DCHECK(!fuchsia_tracing_->HasWriteContext());
   ChangeState(on_shutdown ? State::SHUTDOWN_READING : State::READING);
 
-  blob_write_context_ = trace_acquire_context();
-  if (blob_write_context_) {
-    trace_context_register_string_literal(blob_write_context_, kBlobName, &blob_name_ref_);
+  fuchsia_tracing_->AcquireWriteContext();
+  if (fuchsia_tracing_->HasWriteContext()) {
     consumer_endpoint_->ReadBuffers();
   } else {
     // The Fuchsia tracing context is gone, so there is nowhere to write
@@ -313,10 +374,7 @@ void ConsumerAdapter::CallPerfettoReadBuffers(bool on_shutdown) {
 }
 
 void ConsumerAdapter::OnPerfettoReadBuffersComplete() {
-  if (blob_write_context_) {
-    trace_release_context(blob_write_context_);
-    blob_write_context_ = nullptr;
-  }
+  fuchsia_tracing_->ReleaseWriteContext();
 
   if (GetState() == State::READING) {
     ChangeState(State::ACTIVE);
@@ -354,19 +412,23 @@ void ConsumerAdapter::OnTracingDisabled(const std::string& error) {
 }
 
 void ConsumerAdapter::OnTraceStats(bool success, const perfetto::TraceStats& stats) {
-  if (GetState() == State::STATS) {
-    const auto& buffer_stats = stats.buffer_stats().front();
-    const size_t buffer_used = buffer_stats.bytes_written() -
-                               (buffer_stats.bytes_read() + buffer_stats.bytes_overwritten());
-    const float utilization =
-        static_cast<float>(buffer_used) / static_cast<float>(buffer_stats.buffer_size());
+  FX_DCHECK(perfetto_task_runner_->RunsTasksOnCurrentThread());
 
-    if (utilization >= kConsumerUtilizationReadThreshold) {
-      CallPerfettoReadBuffers(false /* shutdown */);
-    } else {
-      ChangeState(State::ACTIVE);
-      SchedulePerfettoGetStats();
+  if (GetState() == State::STATS) {
+    if (success) {
+      const auto& buffer_stats = stats.buffer_stats().front();
+      const size_t buffer_used = buffer_stats.bytes_written() -
+                                 (buffer_stats.bytes_read() + buffer_stats.bytes_overwritten());
+      const float utilization =
+          static_cast<float>(buffer_used) / static_cast<float>(buffer_stats.buffer_size());
+
+      if (utilization >= kConsumerUtilizationReadThreshold) {
+        CallPerfettoReadBuffers(false /* shutdown */);
+        return;
+      }
     }
+    ChangeState(State::ACTIVE);
+    SchedulePerfettoGetStats();
   } else if (GetState() == State::SHUTDOWN_STATS) {
     ChangeState(State::INACTIVE);
 
@@ -380,11 +442,8 @@ void ConsumerAdapter::OnTraceStats(bool success, const perfetto::TraceStats& sta
 
 void ConsumerAdapter::ShutdownTracing() {
   consumer_endpoint_.reset();
-  FX_DCHECK(scoped_prolonged_trace_);
-  scoped_prolonged_trace_.reset();
-  if (blob_write_context_) {
-    trace_release_context(blob_write_context_);
-  }
+  fuchsia_tracing_->ReleaseWriteContext();
+  fuchsia_tracing_->ReleaseProlongedContext();
 }
 
 // Ignored Perfetto Consumer events.
