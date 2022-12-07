@@ -8,11 +8,11 @@
 #include <lib/async-loop/cpp/loop.h>
 #include <lib/async-loop/default.h>
 #include <lib/async/cpp/wait.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/fidl/cpp/client.h>
 #include <lib/fidl/cpp/wire/internal/transport.h>
 #include <lib/fidl/cpp/wire/internal/transport_channel.h>
 #include <lib/fidl/cpp/wire/status.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 #include <zircon/assert.h>
 #include <zircon/types.h>
 

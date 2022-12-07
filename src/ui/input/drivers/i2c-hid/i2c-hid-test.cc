@@ -9,6 +9,7 @@
 #include <fidl/fuchsia.hardware.interrupt/cpp/wire.h>
 #include <fuchsia/hardware/hidbus/c/banjo.h>
 #include <lib/async-loop/cpp/loop.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/ddk/debug.h>
 #include <lib/ddk/device.h>
 #include <lib/ddk/driver.h>
@@ -18,7 +19,6 @@
 #include <lib/fake-i2c/fake-i2c.h>
 #include <lib/fidl-async/cpp/bind.h>
 #include <lib/sync/completion.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 #include <lib/zx/clock.h>
 #include <lib/zx/interrupt.h>
 #include <stdbool.h>

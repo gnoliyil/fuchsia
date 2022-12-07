@@ -80,10 +80,10 @@ fuchsia_driver("hid-input-report-driver-v2") {
     ":driver-internals",
     ":hid_input_report_bind",
     "//sdk/fidl/fuchsia.driver.compat:fuchsia.driver.compat_cpp",
+    "//sdk/lib/component/outgoing/cpp",
     "//sdk/lib/driver/compat/cpp",
     "//sdk/lib/driver/compat/cpp:symbols",
     "//sdk/lib/driver/devfs/cpp",
-    "//sdk/lib/sys/component/cpp",
     "//src/devices/lib/driver:driver_runtime",
   ]
 }

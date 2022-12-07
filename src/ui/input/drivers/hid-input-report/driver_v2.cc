@@ -4,6 +4,7 @@
 
 #include <fidl/fuchsia.driver.compat/cpp/fidl.h>
 #include <fidl/fuchsia.driver.framework/cpp/wire.h>
+#include <lib/component/outgoing/cpp/outgoing_directory.h>
 #include <lib/ddk/debug.h>
 #include <lib/driver/compat/cpp/compat.h>
 #include <lib/driver/compat/cpp/context.h>
@@ -11,7 +12,6 @@
 #include <lib/driver/component/cpp/driver_cpp.h>
 #include <lib/driver/devfs/cpp/exporter.h>
 #include <lib/inspect/component/cpp/component.h>
-#include <lib/sys/component/cpp/outgoing_directory.h>
 #include <zircon/errors.h>
 
 #include "src/ui/input/drivers/hid-input-report/input-report.h"
