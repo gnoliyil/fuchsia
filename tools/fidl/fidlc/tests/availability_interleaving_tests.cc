@@ -415,6 +415,12 @@ const TARGET bool = false;
   }
 }
 
+TEST(AvailabilityInterleavingTests, SameLibrarySingleInstance) {
+  TestLibrary library;
+  library.AddFile("bad/fi-0055.test.fidl");
+  ASSERT_ERRORED_DURING_COMPILE(library, fidl::ErrInvalidReferenceToDeprecated);
+}
+
 // Tests compilation of example_fidl and dependency_fidl after substituting
 // ${source_available} in example_fidl and ${target_available} in
 // dependency_fidl using the values from test_case.

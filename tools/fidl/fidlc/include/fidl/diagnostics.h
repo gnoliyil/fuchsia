@@ -117,8 +117,8 @@ constexpr ErrorDef<52, std::string_view, std::vector<std::string_view>> ErrNameN
 constexpr ErrorDef<53, const flat::Decl *> ErrCannotReferToMember("cannot refer to member of {}");
 constexpr ErrorDef<54, const flat::Decl *, std::string_view> ErrMemberNotFound(
     "{} has no member '{}'");
-constexpr UndocumentedErrorDef<55, const flat::Element *, VersionRange, Platform,
-                               const flat::Element *, const flat::Element *>
+constexpr ErrorDef<55, const flat::Element *, VersionRange, Platform, const flat::Element *,
+                   const flat::Element *>
     ErrInvalidReferenceToDeprecated(
         "invalid reference to {}, which is deprecated {} of platform '{}' while {} "
         "is not; either remove this reference or mark {} as deprecated");
