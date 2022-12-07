@@ -60,9 +60,6 @@ class SdmmcDevice {
   zx_status_t SdioSendOpCond(uint32_t ocr, uint32_t* rocr);
   zx_status_t SdioIoRwDirect(bool write, uint32_t fn_idx, uint32_t reg_addr, uint8_t write_byte,
                              uint8_t* read_byte);
-  zx_status_t SdioIoRwExtended(uint32_t caps, bool write, uint32_t fn_idx, uint32_t reg_addr,
-                               bool incr, uint32_t blk_count, uint32_t blk_size, bool use_dma,
-                               uint8_t* buf, zx_handle_t dma_vmo, uint64_t buf_offset);
   zx_status_t SdioIoRwExtended(uint32_t caps, bool write, uint8_t fn_idx, uint32_t reg_addr,
                                bool incr, uint32_t blk_count, uint32_t blk_size,
                                cpp20::span<const sdmmc_buffer_region_t> buffers);
@@ -81,7 +78,6 @@ class SdmmcDevice {
 
   // Retry each request retries_ times (with wait_time delay in between) by default. Requests are
   // always tried at least once.
-  zx_status_t Request(sdmmc_req_t* req, uint32_t retries = 0, zx::duration wait_time = {}) const;
   zx_status_t Request(const sdmmc_req_new_t& req, uint32_t response[4], uint32_t retries = 0,
                       zx::duration wait_time = {}) const;
   zx_status_t RequestWithBlockRead(const sdmmc_req_new_t& req, uint32_t response[4],

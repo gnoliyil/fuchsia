@@ -55,7 +55,6 @@ class SdioControllerDevice : public SdioControllerDeviceType,
   zx_status_t SdioDisableFnIntr(uint8_t fn_idx) TA_EXCL(lock_);
   zx_status_t SdioUpdateBlockSize(uint8_t fn_idx, uint16_t blk_sz, bool deflt) TA_EXCL(lock_);
   zx_status_t SdioGetBlockSize(uint8_t fn_idx, uint16_t* out_cur_blk_size);
-  zx_status_t SdioDoRwTxn(uint8_t fn_idx, sdio_rw_txn_t* txn) TA_EXCL(lock_);
   zx_status_t SdioDoRwByte(bool write, uint8_t fn_idx, uint32_t addr, uint8_t write_byte,
                            uint8_t* out_read_byte) TA_EXCL(lock_);
   zx_status_t SdioGetInBandIntr(uint8_t fn_idx, zx::interrupt* out_irq);

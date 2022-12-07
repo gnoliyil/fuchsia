@@ -37,21 +37,6 @@ namespace sdmmc {
 
 zx_status_t SdmmcDevice::Init() { return host_.HostInfo(&host_info_); }
 
-zx_status_t SdmmcDevice::Request(sdmmc_req_t* req, uint32_t retries, zx::duration wait_time) const {
-  if (retries == 0) {
-    retries = retries_;
-  }
-
-  zx_status_t st;
-  while (((st = host_.Request(req)) != ZX_OK) && retries > 0) {
-    retries--;
-    if (wait_time.get() > 0) {
-      zx::nanosleep(zx::deadline_after(wait_time));
-    }
-  }
-  return st;
-}
-
 zx_status_t SdmmcDevice::Request(const sdmmc_req_new_t& req, uint32_t response[4], uint32_t retries,
                                  zx::duration wait_time) const {
   if (retries == 0) {
@@ -397,63 +382,6 @@ zx_status_t SdmmcDevice::SdioIoRwDirect(bool write, uint32_t fn_idx, uint32_t re
   if (read_byte) {
     *read_byte = static_cast<uint8_t>(GetBits(response[0], SDIO_IO_RW_DIRECT_RESP_READ_BYTE_MASK,
                                               SDIO_IO_RW_DIRECT_RESP_READ_BYTE_LOC));
-  }
-  return ZX_OK;
-}
-
-zx_status_t SdmmcDevice::SdioIoRwExtended(uint32_t caps, bool write, uint32_t fn_idx,
-                                          uint32_t reg_addr, bool incr, uint32_t blk_count,
-                                          uint32_t blk_size, bool use_dma, uint8_t* buf,
-                                          zx_handle_t dma_vmo, uint64_t buf_offset) {
-  uint32_t cmd_arg = 0;
-  if (write) {
-    cmd_arg |= SDIO_IO_RW_EXTD_RW_FLAG;
-  }
-  UpdateBits(&cmd_arg, SDIO_IO_RW_EXTD_FN_IDX_MASK, SDIO_IO_RW_EXTD_FN_IDX_LOC, fn_idx);
-  UpdateBits(&cmd_arg, SDIO_IO_RW_EXTD_REG_ADDR_MASK, SDIO_IO_RW_EXTD_REG_ADDR_LOC, reg_addr);
-  if (incr) {
-    cmd_arg |= SDIO_IO_RW_EXTD_OP_CODE_INCR;
-  }
-
-  uint32_t cmd_flags = SDIO_IO_RW_DIRECT_EXTENDED_FLAGS | (write ? 0 : SDMMC_CMD_READ);
-
-  if (blk_count > 1) {
-    if (caps & SDIO_CARD_MULTI_BLOCK) {
-      cmd_arg |= SDIO_IO_RW_EXTD_BLOCK_MODE;
-      UpdateBits(&cmd_arg, SDIO_IO_RW_EXTD_BYTE_BLK_COUNT_MASK, SDIO_IO_RW_EXTD_BYTE_BLK_COUNT_LOC,
-                 blk_count);
-      cmd_flags |= SDMMC_CMD_MULTI_BLK | SDMMC_CMD_BLKCNT_EN;
-    } else {
-      // Convert the request into byte mode?
-      return ZX_ERR_NOT_SUPPORTED;
-    }
-  } else {
-    // SDIO Spec Table 5-3
-    uint32_t arg_blk_size = (blk_size == 512) ? 0 : blk_size;
-    UpdateBits(&cmd_arg, SDIO_IO_RW_EXTD_BYTE_BLK_COUNT_MASK, SDIO_IO_RW_EXTD_BYTE_BLK_COUNT_LOC,
-               arg_blk_size);
-  }
-  sdmmc_req_t req = {};
-  req.cmd_idx = SDIO_IO_RW_DIRECT_EXTENDED;
-  req.arg = cmd_arg;
-  req.cmd_flags = cmd_flags;
-  req.blockcount = static_cast<uint16_t>(blk_count);
-  req.blocksize = static_cast<uint16_t>(blk_size);
-
-  if (use_dma) {
-    req.virt_buffer = nullptr;
-    req.dma_vmo = dma_vmo;
-    req.buf_offset = buf_offset;
-  } else {
-    req.virt_buffer = buf + buf_offset;
-    req.virt_size = blk_size;
-  }
-  req.use_dma = use_dma;
-
-  zx_status_t st = Request(&req);
-  if (st != ZX_OK) {
-    zxlogf(DEBUG, "SDIO_IO_RW_DIRECT_EXTENDED failed, retcode = %d", st);
-    return st;
   }
   return ZX_OK;
 }

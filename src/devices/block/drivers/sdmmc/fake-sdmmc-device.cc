@@ -17,81 +17,86 @@ zx_status_t FakeSdmmcDevice::SdmmcHostInfo(sdmmc_host_info_t* out_info) {
   return ZX_OK;
 }
 
-zx_status_t FakeSdmmcDevice::SdmmcRequest(sdmmc_req_t* req) {
-  command_counts_[req->cmd_idx]++;
+zx_status_t FakeSdmmcDevice::SdmmcRequest(sdmmc_req_t* req) { return ZX_ERR_NOT_SUPPORTED; }
 
-  uint8_t* const virt_buffer = reinterpret_cast<uint8_t*>(req->virt_buffer) + req->buf_offset;
-  // Zero out the buffer for read requests.
-  if (req->virt_buffer && (req->cmd_flags & SDMMC_RESP_DATA_PRESENT) &&
-      (req->cmd_flags & SDMMC_CMD_READ)) {
-    bzero(virt_buffer, req->virt_size);
+zx_status_t FakeSdmmcDevice::SdmmcRequestInternal(const sdmmc_req_new_t& req,
+                                                  uint32_t out_response[4],
+                                                  cpp20::span<uint8_t> out_data) {
+  command_counts_[req.cmd_idx]++;
+
+  if (!out_data.empty() && out_data.size() % req.blocksize) {
+    return ZX_ERR_INVALID_ARGS;
   }
 
-  req->response[0] = 0;
-  req->response[1] = 0;
-  req->response[2] = 0;
-  req->response[3] = 0;
+  // Zero out the buffer for read requests.
+  if (!out_data.empty() && (req.cmd_flags & SDMMC_RESP_DATA_PRESENT) &&
+      (req.cmd_flags & SDMMC_CMD_READ)) {
+    memset(out_data.data(), 0, out_data.size());
+  }
 
-  switch (req->cmd_idx) {
+  out_response[0] = 0;
+  out_response[1] = 0;
+  out_response[2] = 0;
+  out_response[3] = 0;
+
+  switch (req.cmd_idx) {
     case SDMMC_READ_BLOCK:
     case SDMMC_READ_MULTIPLE_BLOCK: {
-      const size_t req_size = req->blockcount * req->blocksize;
-      if ((req->arg & kBadRegionMask) == kBadRegionStart) {
+      if ((req.arg & kBadRegionMask) == kBadRegionStart) {
         return ZX_ERR_IO;
       }
 
-      memcpy(virt_buffer, Read(req->arg * kBlockSize, req_size).data(), req_size);
+      memcpy(out_data.data(), Read(req.arg * kBlockSize, out_data.size()).data(), out_data.size());
       break;
     }
     case SDMMC_WRITE_BLOCK:
     case SDMMC_WRITE_MULTIPLE_BLOCK: {
-      const size_t req_size = req->blockcount * req->blocksize;
-      if ((req->arg & kBadRegionMask) == kBadRegionStart) {
+      if ((req.arg & kBadRegionMask) == kBadRegionStart) {
         return ZX_ERR_IO;
       }
 
-      Write(req->arg * kBlockSize, cpp20::span<const uint8_t>(virt_buffer, req_size));
+      Write(req.arg * kBlockSize, out_data);
       break;
     }
     case MMC_ERASE_GROUP_START:
-      if ((req->arg & kBadRegionMask) == kBadRegionStart) {
+      if ((req.arg & kBadRegionMask) == kBadRegionStart) {
         erase_group_start_.reset();
         erase_group_end_.reset();
         return ZX_ERR_IO;
       }
 
       if (erase_group_end_) {
-        req->response[0] = MMC_STATUS_ERASE_SEQ_ERR;
+        out_response[0] = MMC_STATUS_ERASE_SEQ_ERR;
         erase_group_start_.reset();
         erase_group_end_.reset();
       } else {
-        erase_group_start_ = req->arg;
+        erase_group_start_ = req.arg;
       }
       break;
     case MMC_ERASE_GROUP_END:
-      if ((req->arg & kBadRegionMask) == kBadRegionStart) {
+      if ((req.arg & kBadRegionMask) == kBadRegionStart) {
         erase_group_start_.reset();
         erase_group_end_.reset();
         return ZX_ERR_IO;
       }
 
       if (!erase_group_start_) {
-        req->response[0] = MMC_STATUS_ERASE_SEQ_ERR;
+        out_response[0] = MMC_STATUS_ERASE_SEQ_ERR;
         erase_group_start_.reset();
         erase_group_end_.reset();
-      } else if (req->arg < erase_group_start_) {
-        req->response[0] = MMC_STATUS_ERASE_PARAM;
+      } else if (req.arg < erase_group_start_) {
+        out_response[0] = MMC_STATUS_ERASE_PARAM;
         erase_group_start_.reset();
         erase_group_end_.reset();
       } else {
-        erase_group_end_ = req->arg;
+        erase_group_end_ = req.arg;
       }
       break;
     case SDMMC_ERASE:
       if (!erase_group_start_ || !erase_group_end_) {
-        req->response[0] = MMC_STATUS_ERASE_SEQ_ERR;
-      } else if (req->arg != MMC_ERASE_DISCARD_ARG || *erase_group_start_ > *erase_group_end_) {
-        req->response[0] = MMC_STATUS_ERASE_PARAM;
+        out_response[0] = MMC_STATUS_ERASE_SEQ_ERR;
+      } else if (req.arg != MMC_ERASE_DISCARD_ARG || *erase_group_start_ > *erase_group_end_) {
+        out_response[0] = MMC_STATUS_ERASE_PARAM;
       } else {
         Erase(*erase_group_start_ * kBlockSize,
               (*erase_group_end_ - *erase_group_start_ + 1) * kBlockSize);
@@ -102,33 +107,33 @@ zx_status_t FakeSdmmcDevice::SdmmcRequest(sdmmc_req_t* req) {
       break;
     case SDIO_IO_RW_DIRECT: {
       const uint32_t address =
-          (req->arg & SDIO_IO_RW_DIRECT_REG_ADDR_MASK) >> SDIO_IO_RW_DIRECT_REG_ADDR_LOC;
+          (req.arg & SDIO_IO_RW_DIRECT_REG_ADDR_MASK) >> SDIO_IO_RW_DIRECT_REG_ADDR_LOC;
       const uint8_t function =
-          (req->arg & SDIO_IO_RW_DIRECT_FN_IDX_MASK) >> SDIO_IO_RW_DIRECT_FN_IDX_LOC;
-      if (req->arg & SDIO_IO_RW_DIRECT_RW_FLAG) {
+          (req.arg & SDIO_IO_RW_DIRECT_FN_IDX_MASK) >> SDIO_IO_RW_DIRECT_FN_IDX_LOC;
+      if (req.arg & SDIO_IO_RW_DIRECT_RW_FLAG) {
         Write(address,
-              std::vector{static_cast<uint8_t>(req->arg & SDIO_IO_RW_DIRECT_WRITE_BYTE_MASK)},
+              std::vector{static_cast<uint8_t>(req.arg & SDIO_IO_RW_DIRECT_WRITE_BYTE_MASK)},
               function);
       } else {
-        req->response[0] = Read(address, 1, function)[0];
+        out_response[0] = Read(address, 1, function)[0];
       }
       break;
     }
     case SDIO_IO_RW_DIRECT_EXTENDED: {
       const uint32_t address =
-          (req->arg & SDIO_IO_RW_EXTD_REG_ADDR_MASK) >> SDIO_IO_RW_EXTD_REG_ADDR_LOC;
+          (req.arg & SDIO_IO_RW_EXTD_REG_ADDR_MASK) >> SDIO_IO_RW_EXTD_REG_ADDR_LOC;
       const uint8_t function =
-          (req->arg & SDIO_IO_RW_EXTD_FN_IDX_MASK) >> SDIO_IO_RW_EXTD_FN_IDX_LOC;
-      const uint32_t block_mode = req->arg & SDIO_IO_RW_EXTD_BLOCK_MODE;
-      const uint32_t blocks = req->arg & SDIO_IO_RW_EXTD_BYTE_BLK_COUNT_MASK;
+          (req.arg & SDIO_IO_RW_EXTD_FN_IDX_MASK) >> SDIO_IO_RW_EXTD_FN_IDX_LOC;
+      const uint32_t block_mode = req.arg & SDIO_IO_RW_EXTD_BLOCK_MODE;
+      const uint32_t blocks = req.arg & SDIO_IO_RW_EXTD_BYTE_BLK_COUNT_MASK;
       const std::vector<uint8_t> block_size_reg = Read(0x10 | (function << 8), 2, 0);
       const uint32_t block_size = block_size_reg[0] | (block_size_reg[1] << 8);
       const uint32_t transfer_size =
           block_mode ? (block_size * blocks) : (blocks == 0 ? 512 : blocks);
-      if (req->arg & SDIO_IO_RW_DIRECT_RW_FLAG) {
-        Write(address, cpp20::span<const uint8_t>(virt_buffer, transfer_size), function);
+      if (req.arg & SDIO_IO_RW_DIRECT_RW_FLAG) {
+        Write(address, {out_data.data(), transfer_size}, function);
       } else {
-        memcpy(virt_buffer, Read(address, transfer_size, function).data(), transfer_size);
+        memcpy(out_data.data(), Read(address, transfer_size, function).data(), transfer_size);
       }
       break;
     }
@@ -136,14 +141,25 @@ zx_status_t FakeSdmmcDevice::SdmmcRequest(sdmmc_req_t* req) {
       break;
   }
 
-  req->status = ZX_OK;
+  zx_status_t status = ZX_OK;
 
-  if (command_callbacks_.find(req->cmd_idx) != command_callbacks_.end()) {
-    command_callbacks_[req->cmd_idx](req);
+  if (command_callbacks_.find(req.cmd_idx) != command_callbacks_.end()) {
+    const auto& callback = command_callbacks_[req.cmd_idx];
+    if (std::holds_alternative<CommandCallbackRequestOnly>(callback)) {
+      std::get<CommandCallbackRequestOnly>(callback)(req);
+    } else if (std::holds_alternative<CommandCallbackResponseOnly>(callback)) {
+      std::get<CommandCallbackResponseOnly>(callback)(out_response);
+    } else if (std::holds_alternative<CommandCallbackRequestAndResponse>(callback)) {
+      std::get<CommandCallbackRequestAndResponse>(callback)(req, out_response);
+    } else if (std::holds_alternative<CommandCallbackWithData>(callback)) {
+      std::get<CommandCallbackWithData>(callback)(out_data);
+    } else if (std::holds_alternative<CommandCallbackWithStatus>(callback)) {
+      status = std::get<CommandCallbackWithStatus>(callback)(req);
+    }
   }
 
-  requests_.push_back(*req);
-  return req->status;
+  requests_.push_back(req);
+  return status;
 }
 
 zx_status_t FakeSdmmcDevice::SdmmcRegisterInBandInterrupt(
@@ -190,7 +206,7 @@ zx_status_t FakeSdmmcDevice::SdmmcRequestNew(const sdmmc_req_new_t* req, uint32_
   SdmmcVmoStore& owned_vmos = *registered_vmos_[req->client_id];
 
   fzl::VmoMapper linear_vmo;
-  uint16_t blockcount = 0;
+  cpp20::span<uint8_t> linear_buffer{};
   if (req->cmd_flags & SDMMC_RESP_DATA_PRESENT) {
     size_t total_size = 0;
     for (const sdmmc_buffer_region_t& buffer : buffers) {
@@ -213,32 +229,13 @@ zx_status_t FakeSdmmcDevice::SdmmcRequestNew(const sdmmc_req_new_t* req, uint32_
       }
     }
 
-    blockcount = static_cast<uint16_t>(linear_vmo.size() / req->blocksize);
+    linear_buffer = {static_cast<uint8_t*>(linear_vmo.start()), linear_vmo.size()};
   }
 
-  sdmmc_req_t linear_req = {
-      .cmd_idx = req->cmd_idx,
-      .cmd_flags = req->cmd_flags,
-      .arg = req->arg,
-      .blockcount = blockcount,
-      .blocksize = static_cast<uint16_t>(req->blocksize),
-      .use_dma = false,
-      .dma_vmo = ZX_HANDLE_INVALID,
-      .virt_buffer = reinterpret_cast<uint8_t*>(linear_vmo.start()),
-      .virt_size = linear_vmo.size(),
-      .buf_offset = 0,
-      .pmt = ZX_HANDLE_INVALID,
-      .suppress_error_messages = req->suppress_error_messages,
-      .response = {},
-      .status = ZX_OK,
-  };
-  zx_status_t status = SdmmcRequest(&linear_req);
-
+  zx_status_t status = SdmmcRequestInternal(*req, out_response, linear_buffer);
   if (status != ZX_OK) {
     return status;
   }
-
-  memcpy(out_response, linear_req.response, sizeof(uint32_t) * 4);
 
   if ((req->cmd_flags & SDMMC_RESP_DATA_PRESENT) && (req->cmd_flags & SDMMC_CMD_READ)) {
     uint8_t* const linear_buffer = static_cast<uint8_t*>(linear_vmo.start());

@@ -123,9 +123,6 @@ class SdmmcBlockDevice : public SdmmcBlockDeviceType {
   block::BorrowedOperationQueue<PartitionInfo> txn_list_ TA_GUARDED(lock_);
   std::deque<RpmbRequestInfo> rpmb_list_ TA_GUARDED(lock_);
 
-  // outstanding request (1 right now)
-  sdmmc_req_t req_;
-
   thrd_t worker_thread_ = 0;
 
   std::atomic<bool> dead_ = false;

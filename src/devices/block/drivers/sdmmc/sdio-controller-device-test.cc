@@ -87,8 +87,9 @@ class SdioScatterGatherTest : public zxtest::Test {
   void SetUp() override { sdmmc_.Reset(); }
 
   void Init(const uint8_t function, const bool multiblock) {
-    sdmmc_.set_command_callback(
-        SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void { req->response[0] = OpCondFunctions(5); });
+    sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+      out_response[0] = OpCondFunctions(5);
+    });
     sdmmc_.Write(
         SDIO_CIA_CCCR_CARD_CAPS_ADDR,
         std::vector<uint8_t>{static_cast<uint8_t>(multiblock ? SDIO_CIA_CCCR_CARD_CAP_SMB : 0)}, 0);
@@ -197,8 +198,9 @@ class SdioScatterGatherTest : public zxtest::Test {
 TEST_F(SdioControllerDeviceTest, MultiplexInterrupts) {
   EXPECT_OK(dut_->Init());
 
-  sdmmc_.set_command_callback(
-      SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void { req->response[0] = OpCondFunctions(7); });
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(7);
+  });
   EXPECT_OK(dut_->Probe());
 
   auto stop_thread = fit::defer([&]() { dut_->StopSdioIrqThread(); });
@@ -282,8 +284,9 @@ TEST_F(SdioControllerDeviceTest, MultiplexInterrupts) {
 
 TEST_F(SdioControllerDeviceTest, SdioDoRwTxn) {
   // Report five IO functions.
-  sdmmc_.set_command_callback(
-      SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void { req->response[0] = OpCondFunctions(5); });
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(5);
+  });
   sdmmc_.Write(SDIO_CIA_CCCR_CARD_CAPS_ADDR, std::vector<uint8_t>{0x00}, 0);
 
   // Set the maximum block size for function three to eight bytes.
@@ -306,16 +309,6 @@ TEST_F(SdioControllerDeviceTest, SdioDoRwTxn) {
   EXPECT_OK(dut_->SdioGetBlockSize(3, &block_size));
   EXPECT_EQ(block_size, 8);
 
-  sdmmc_.set_command_callback(SDIO_IO_RW_DIRECT_EXTENDED, [](sdmmc_req_t* req) -> void {
-    if (req->blockcount > 1) {
-      EXPECT_TRUE(req->cmd_flags & SDMMC_CMD_BLKCNT_EN);
-      EXPECT_TRUE(req->cmd_flags & SDMMC_CMD_MULTI_BLK);
-    } else {
-      EXPECT_FALSE(req->cmd_flags & SDMMC_CMD_BLKCNT_EN);
-      EXPECT_FALSE(req->cmd_flags & SDMMC_CMD_MULTI_BLK);
-    }
-  });
-
   constexpr uint8_t kTestData[52] = {
       0xff, 0x7c, 0xa6, 0x24, 0x6f, 0x69, 0x7a, 0x39, 0x63, 0x68, 0xef, 0x28, 0xf3,
       0x18, 0x91, 0xf1, 0x68, 0x48, 0x78, 0x2f, 0xbb, 0xb2, 0x9a, 0x63, 0x51, 0xd4,
@@ -323,50 +316,86 @@ TEST_F(SdioControllerDeviceTest, SdioDoRwTxn) {
       0x4c, 0x68, 0x71, 0x7f, 0x17, 0x59, 0x82, 0xc5, 0x36, 0xe0, 0x20, 0x0b, 0x56,
   };
 
-  uint8_t buffer[sizeof(kTestData)];
+  sdmmc_.requests().clear();
 
-  memcpy(buffer, kTestData, sizeof(buffer));
-  sdio_rw_txn_t txn = {
+  zx::vmo vmo;
+  EXPECT_OK(zx::vmo::create(sizeof(kTestData), 0, &vmo));
+  EXPECT_OK(vmo.write(kTestData, 0, sizeof(kTestData)));
+
+  sdmmc_buffer_region_t region = {
+      .buffer =
+          {
+              .vmo = vmo.get(),
+          },
+      .type = SDMMC_BUFFER_TYPE_VMO_HANDLE,
+      .offset = 16,
+      .size = 36,
+  };
+  sdio_rw_txn_new_t txn = {
       .addr = 0x1ab08,
-      .data_size = 36,
       .incr = false,
       .write = true,
-      .use_dma = false,
-      .dma_vmo = ZX_HANDLE_INVALID,
-      .virt_buffer = buffer,
-      .virt_size = 0,
-      .buf_offset = 16,
+      .buffers_list = &region,
+      .buffers_count = 1,
   };
-  EXPECT_OK(dut_->SdioDoRwTxn(3, &txn));
+  EXPECT_OK(dut_->SdioDoRwTxnNew(3, &txn));
+
+  ASSERT_EQ(sdmmc_.requests().size(), 5);
+
+  EXPECT_EQ(sdmmc_.requests()[0].cmd_flags & (SDMMC_CMD_BLKCNT_EN | SDMMC_CMD_MULTI_BLK), 0);
+  EXPECT_EQ(sdmmc_.requests()[1].cmd_flags & (SDMMC_CMD_BLKCNT_EN | SDMMC_CMD_MULTI_BLK), 0);
+  EXPECT_EQ(sdmmc_.requests()[2].cmd_flags & (SDMMC_CMD_BLKCNT_EN | SDMMC_CMD_MULTI_BLK), 0);
+  EXPECT_EQ(sdmmc_.requests()[3].cmd_flags & (SDMMC_CMD_BLKCNT_EN | SDMMC_CMD_MULTI_BLK), 0);
+  EXPECT_EQ(sdmmc_.requests()[4].cmd_flags & (SDMMC_CMD_BLKCNT_EN | SDMMC_CMD_MULTI_BLK), 0);
+
+  sdmmc_.requests().clear();
 
   // The write sequence should be: four writes of blocks of eight, one write of four bytes. This is
   // a FIFO write, meaning the data will get overwritten each time. Verify the final state of the
   // device.
   const std::vector<uint8_t> read_data = sdmmc_.Read(0x1ab08, 16, 3);
-  EXPECT_BYTES_EQ(read_data.data(), buffer + sizeof(buffer) - 4, 4);
-  EXPECT_BYTES_EQ(read_data.data() + 4, buffer + sizeof(buffer) - 8, 4);
+  EXPECT_BYTES_EQ(read_data.data(), kTestData + sizeof(kTestData) - 4, 4);
+  EXPECT_BYTES_EQ(read_data.data() + 4, kTestData + sizeof(kTestData) - 8, 4);
 
   sdmmc_.Write(0x12308, cpp20::span<const uint8_t>(kTestData, sizeof(kTestData)), 3);
-  memset(buffer, 0, sizeof(buffer));
+
+  uint8_t buffer[sizeof(kTestData)] = {};
+  EXPECT_OK(vmo.write(buffer, 0, sizeof(buffer)));
+
+  region = {
+      .buffer =
+          {
+              .vmo = vmo.get(),
+          },
+      .type = SDMMC_BUFFER_TYPE_VMO_HANDLE,
+      .offset = 16,
+      .size = 36,
+  };
   txn = {
       .addr = 0x12308,
-      .data_size = 36,
       .incr = true,
       .write = false,
-      .use_dma = false,
-      .dma_vmo = ZX_HANDLE_INVALID,
-      .virt_buffer = buffer,
-      .virt_size = 0,
-      .buf_offset = 16,
+      .buffers_list = &region,
+      .buffers_count = 1,
   };
-  EXPECT_OK(dut_->SdioDoRwTxn(3, &txn));
+  EXPECT_OK(dut_->SdioDoRwTxnNew(3, &txn));
 
+  ASSERT_EQ(sdmmc_.requests().size(), 5);
+
+  EXPECT_EQ(sdmmc_.requests()[0].cmd_flags & (SDMMC_CMD_BLKCNT_EN | SDMMC_CMD_MULTI_BLK), 0);
+  EXPECT_EQ(sdmmc_.requests()[1].cmd_flags & (SDMMC_CMD_BLKCNT_EN | SDMMC_CMD_MULTI_BLK), 0);
+  EXPECT_EQ(sdmmc_.requests()[2].cmd_flags & (SDMMC_CMD_BLKCNT_EN | SDMMC_CMD_MULTI_BLK), 0);
+  EXPECT_EQ(sdmmc_.requests()[3].cmd_flags & (SDMMC_CMD_BLKCNT_EN | SDMMC_CMD_MULTI_BLK), 0);
+  EXPECT_EQ(sdmmc_.requests()[4].cmd_flags & (SDMMC_CMD_BLKCNT_EN | SDMMC_CMD_MULTI_BLK), 0);
+
+  EXPECT_OK(vmo.read(buffer, 0, sizeof(buffer)));
   EXPECT_BYTES_EQ(buffer + 16, kTestData, 36);
 }
 
 TEST_F(SdioControllerDeviceTest, SdioDoRwTxnMultiBlock) {
-  sdmmc_.set_command_callback(
-      SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void { req->response[0] = OpCondFunctions(7); });
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(7);
+  });
 
   sdmmc_.Write(SDIO_CIA_CCCR_CARD_CAPS_ADDR, std::vector<uint8_t>{SDIO_CIA_CCCR_CARD_CAP_SMB}, 0);
 
@@ -406,39 +435,49 @@ TEST_F(SdioControllerDeviceTest, SdioDoRwTxnMultiBlock) {
       // clang-format on
   };
 
-  uint8_t buffer[sizeof(kTestData)] = {};
+  zx::vmo vmo;
+  EXPECT_OK(zx::vmo::create(sizeof(kTestData), 0, &vmo));
+  EXPECT_OK(vmo.write(kTestData, 0, sizeof(kTestData)));
 
   sdmmc_.Write(0x1ab08, cpp20::span<const uint8_t>(kTestData, sizeof(kTestData)), 7);
-  sdio_rw_txn_t txn = {
+
+  sdmmc_buffer_region_t region = {
+      .buffer = {.vmo = vmo.get()},
+      .type = SDMMC_BUFFER_TYPE_VMO_HANDLE,
+      .offset = 64,
+      .size = 68,
+  };
+  sdio_rw_txn_new_t txn = {
       .addr = 0x1ab08,
-      .data_size = 68,
       .incr = false,
       .write = false,
-      .use_dma = false,
-      .dma_vmo = ZX_HANDLE_INVALID,
-      .virt_buffer = buffer,
-      .virt_size = 0,
-      .buf_offset = 64,
+      .buffers_list = &region,
+      .buffers_count = 1,
   };
-  EXPECT_OK(dut_->SdioDoRwTxn(7, &txn));
+  EXPECT_OK(dut_->SdioDoRwTxnNew(7, &txn));
 
-  EXPECT_BYTES_EQ(buffer + 64, kTestData, 32);
-  EXPECT_BYTES_EQ(buffer + 96, kTestData, 32);
+  uint8_t buffer[sizeof(kTestData)];
+  EXPECT_OK(vmo.read(buffer, 0, sizeof(buffer)));
+
+  EXPECT_BYTES_EQ(buffer + 64, kTestData, 64);
   EXPECT_BYTES_EQ(buffer + 128, kTestData, 4);
 
-  memcpy(buffer, kTestData, sizeof(buffer));
+  EXPECT_OK(vmo.write(kTestData, 0, sizeof(kTestData)));
+
+  region = {
+      .buffer = {.vmo = vmo.get()},
+      .type = SDMMC_BUFFER_TYPE_VMO_HANDLE,
+      .offset = 64,
+      .size = 68,
+  };
   txn = {
       .addr = 0x12308,
-      .data_size = 68,
       .incr = true,
       .write = true,
-      .use_dma = false,
-      .dma_vmo = ZX_HANDLE_INVALID,
-      .virt_buffer = buffer,
-      .virt_size = 0,
-      .buf_offset = 64,
+      .buffers_list = &region,
+      .buffers_count = 1,
   };
-  EXPECT_OK(dut_->SdioDoRwTxn(7, &txn));
+  EXPECT_OK(dut_->SdioDoRwTxnNew(7, &txn));
 
   EXPECT_BYTES_EQ(sdmmc_.Read(0x12308, 68, 7).data(), kTestData + 64, 68);
 }
@@ -447,8 +486,9 @@ TEST_F(SdioControllerDeviceTest, DdkLifecycle) {
   // The interrupt thread is started by AddDevice.
   auto stop_thread = fit::defer([&]() { dut_->StopSdioIrqThread(); });
 
-  sdmmc_.set_command_callback(
-      SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void { req->response[0] = OpCondFunctions(4); });
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(4);
+  });
 
   EXPECT_OK(dut_->Probe());
 
@@ -516,8 +556,9 @@ TEST_F(SdioControllerDeviceTest, EnableDisableFnIntr) {
 }
 
 TEST_F(SdioControllerDeviceTest, ProcessCccr) {
-  sdmmc_.set_command_callback(
-      SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void { req->response[0] = OpCondFunctions(0); });
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(0);
+  });
 
   sdmmc_.Write(0x00, std::vector<uint8_t>{0x43}, 0);  // CCCR/SDIO revision.
   sdmmc_.Write(0x08, std::vector<uint8_t>{0xc2}, 0);  // Card capability.
@@ -550,8 +591,9 @@ TEST_F(SdioControllerDeviceTest, ProcessCccr) {
 }
 
 TEST_F(SdioControllerDeviceTest, ProcessCis) {
-  sdmmc_.set_command_callback(
-      SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void { req->response[0] = OpCondFunctions(5); });
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(5);
+  });
 
   sdmmc_.Write(0x0000'0509, std::vector<uint8_t>{0xa2, 0xc2, 0x00}, 0);  // CIS pointer.
 
@@ -582,8 +624,9 @@ TEST_F(SdioControllerDeviceTest, ProcessCis) {
 }
 
 TEST_F(SdioControllerDeviceTest, ProcessCisFunction0) {
-  sdmmc_.set_command_callback(
-      SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void { req->response[0] = OpCondFunctions(5); });
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(5);
+  });
 
   sdmmc_.set_host_info({
       .caps = 0,
@@ -624,8 +667,9 @@ TEST_F(SdioControllerDeviceTest, ProcessCisFunction0) {
 }
 
 TEST_F(SdioControllerDeviceTest, ProcessFbr) {
-  sdmmc_.set_command_callback(
-      SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void { req->response[0] = OpCondFunctions(7); });
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(7);
+  });
 
   sdmmc_.Write(0x100, std::vector<uint8_t>{0x83}, 0);
   sdmmc_.Write(0x500, std::vector<uint8_t>{0x00}, 0);
@@ -652,90 +696,10 @@ TEST_F(SdioControllerDeviceTest, ProcessFbr) {
   EXPECT_EQ(info.func_hw_info.fn_intf_code, 0x0e);
 }
 
-TEST_F(SdioControllerDeviceTest, SmallHostTransferSize) {
-  sdmmc_.set_command_callback(
-      SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void { req->response[0] = OpCondFunctions(3); });
-
-  sdmmc_.set_host_info({
-      .caps = 0,
-      .max_transfer_size = 32,
-      .max_transfer_size_non_dma = 64,
-      .prefs = 0,
-  });
-  EXPECT_OK(dut_->Init());
-
-  // Set the maximum block size for all functions to 128 bytes.
-  sdmmc_.Write(0x1000, std::vector<uint8_t>{0x22, 0x2a, 0x01}, 0);
-  sdmmc_.Write(0x100e, std::vector<uint8_t>{0x80, 0x00}, 0);
-
-  sdmmc_.Write(0x0109, std::vector<uint8_t>{0x00, 0x10, 0x00}, 0);
-  sdmmc_.Write(0x0209, std::vector<uint8_t>{0x00, 0x10, 0x00}, 0);
-  sdmmc_.Write(0x0309, std::vector<uint8_t>{0x00, 0x10, 0x00}, 0);
-
-  EXPECT_OK(dut_->Probe());
-  EXPECT_OK(dut_->SdioUpdateBlockSize(3, 0, true));
-
-  uint16_t block_size = 0;
-  EXPECT_OK(dut_->SdioGetBlockSize(3, &block_size));
-  EXPECT_EQ(block_size, 128);
-
-  constexpr uint8_t kTestData[128] = {
-      // clang-format off
-      0x28, 0x52, 0xe3, 0x9a, 0xa5, 0x5f, 0x39, 0x43,
-      0x7b, 0xb5, 0x24, 0xe7, 0x30, 0x7b, 0x13, 0xc4,
-      0x28, 0xe6, 0xd5, 0xb5, 0xf9, 0x1d, 0xd4, 0x8b,
-      0x2e, 0xfb, 0xdc, 0x5e, 0x89, 0x1e, 0xef, 0x8b,
-      0xa6, 0x7d, 0xf4, 0xb0, 0x87, 0x6f, 0x80, 0x48,
-      0x71, 0x39, 0x4b, 0x28, 0x3d, 0xf9, 0xa7, 0xbb,
-      0x8f, 0x13, 0x34, 0x2b, 0xbc, 0xd3, 0x4e, 0xbe,
-      0xd1, 0x9d, 0x48, 0x1c, 0x79, 0x62, 0x72, 0x48,
-      0x4b, 0xf0, 0x71, 0x1c, 0x97, 0x99, 0x4d, 0x0f,
-      0x5a, 0xa1, 0xc2, 0xb5, 0xa1, 0xca, 0x89, 0x34,
-      0xd9, 0x1a, 0x13, 0xfa, 0xfd, 0x76, 0x74, 0x51,
-      0xfe, 0x24, 0xd1, 0xc3, 0x89, 0x53, 0x36, 0x14,
-      0xbd, 0x66, 0x59, 0xba, 0xc9, 0x3b, 0x9e, 0x0f,
-      0x8f, 0x6b, 0x26, 0x72, 0x72, 0x76, 0x70, 0x68,
-      0xd6, 0x5f, 0x3b, 0x6e, 0x2e, 0xda, 0x51, 0xf7,
-      0x55, 0x8b, 0x0e, 0xed, 0x93, 0x71, 0x48, 0xc2,
-      // clang-format on
-  };
-
-  zx::vmo vmo;
-  ASSERT_OK(zx::vmo::create(
-      fbl::round_up<size_t, size_t>(sizeof(kTestData), zx_system_get_page_size()), 0, &vmo));
-  ASSERT_OK(vmo.write(kTestData, 0, sizeof(kTestData)));
-
-  uint8_t buffer[sizeof(kTestData)];
-  memcpy(buffer, kTestData, sizeof(buffer));
-
-  sdio_rw_txn_t txn = {
-      .addr = 0,
-      .data_size = 64,
-      .incr = false,
-      .write = true,
-      .use_dma = true,
-      .dma_vmo = vmo.get(),
-      .virt_buffer = buffer,
-      .virt_size = 0,
-      .buf_offset = 0,
-  };
-
-  EXPECT_NOT_OK(dut_->SdioDoRwTxn(3, &txn));
-
-  txn.use_dma = false;
-  EXPECT_OK(dut_->SdioDoRwTxn(3, &txn));
-  EXPECT_BYTES_EQ(sdmmc_.Read(0, 64, 3).data(), kTestData, 64);
-
-  txn.data_size = 128;
-  EXPECT_NOT_OK(dut_->SdioDoRwTxn(3, &txn));
-
-  txn.use_dma = true;
-  EXPECT_NOT_OK(dut_->SdioDoRwTxn(3, &txn));
-}
-
 TEST_F(SdioControllerDeviceTest, ProbeFail) {
-  sdmmc_.set_command_callback(
-      SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void { req->response[0] = OpCondFunctions(5); });
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(5);
+  });
 
   // Set the function 3 CIS pointer to zero. This should cause InitFunc and subsequently Probe
   // to fail.
@@ -745,8 +709,8 @@ TEST_F(SdioControllerDeviceTest, ProbeFail) {
 }
 
 TEST_F(SdioControllerDeviceTest, ProbeSdr104) {
-  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void {
-    req->response[0] = OpCondFunctions(5) | SDIO_SEND_OP_COND_RESP_S18A;
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(5) | SDIO_SEND_OP_COND_RESP_S18A;
   });
 
   sdmmc_.Write(0x0014, std::vector<uint8_t>{0x07}, 0);
@@ -769,8 +733,8 @@ TEST_F(SdioControllerDeviceTest, ProbeSdr104) {
 }
 
 TEST_F(SdioControllerDeviceTest, ProbeSdr50LimitedByHost) {
-  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void {
-    req->response[0] = OpCondFunctions(5) | SDIO_SEND_OP_COND_RESP_S18A;
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(5) | SDIO_SEND_OP_COND_RESP_S18A;
   });
 
   sdmmc_.Write(0x0014, std::vector<uint8_t>{0x07}, 0);
@@ -792,8 +756,8 @@ TEST_F(SdioControllerDeviceTest, ProbeSdr50LimitedByHost) {
 }
 
 TEST_F(SdioControllerDeviceTest, ProbeSdr50LimitedByCard) {
-  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void {
-    req->response[0] = OpCondFunctions(5) | SDIO_SEND_OP_COND_RESP_S18A;
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(5) | SDIO_SEND_OP_COND_RESP_S18A;
   });
 
   sdmmc_.Write(0x0014, std::vector<uint8_t>{0x01}, 0);
@@ -816,8 +780,8 @@ TEST_F(SdioControllerDeviceTest, ProbeSdr50LimitedByCard) {
 }
 
 TEST_F(SdioControllerDeviceTest, ProbeFallBackToHs) {
-  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void {
-    req->response[0] = OpCondFunctions(5) | SDIO_SEND_OP_COND_RESP_S18A;
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(5) | SDIO_SEND_OP_COND_RESP_S18A;
   });
 
   sdmmc_.Write(0x0008, std::vector<uint8_t>{0x00}, 0);
@@ -842,15 +806,16 @@ TEST_F(SdioControllerDeviceTest, ProbeFallBackToHs) {
 }
 
 TEST_F(SdioControllerDeviceTest, ProbeSetVoltage) {
-  sdmmc_.set_command_callback(
-      SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void { req->response[0] = OpCondFunctions(5); });
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(5);
+  });
 
   EXPECT_OK(dut_->Probe());
   // Card does not report 1.8V support so we don't request a change from the host.
   EXPECT_EQ(sdmmc_.signal_voltage(), SDMMC_VOLTAGE_MAX);
 
-  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void {
-    req->response[0] = OpCondFunctions(5) | SDIO_SEND_OP_COND_RESP_S18A;
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(5) | SDIO_SEND_OP_COND_RESP_S18A;
   });
 
   EXPECT_OK(dut_->Probe());
@@ -858,19 +823,19 @@ TEST_F(SdioControllerDeviceTest, ProbeSetVoltage) {
 }
 
 TEST_F(SdioControllerDeviceTest, ProbeRetriesRequests) {
-  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void {
-    req->response[0] = OpCondFunctions(5) | SDIO_SEND_OP_COND_RESP_S18A;
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(5) | SDIO_SEND_OP_COND_RESP_S18A;
   });
   uint32_t tries = 0;
-  sdmmc_.set_command_callback(SDIO_IO_RW_DIRECT, [&](sdmmc_req_t* req) -> void {
-    const bool write = req->arg & SDIO_IO_RW_DIRECT_RW_FLAG;
+  sdmmc_.set_command_callback(SDIO_IO_RW_DIRECT, [&](const sdmmc_req_new_t& req) -> zx_status_t {
+    const bool write = req.arg & SDIO_IO_RW_DIRECT_RW_FLAG;
     const uint32_t fn_idx =
-        (req->arg & SDIO_IO_RW_DIRECT_FN_IDX_MASK) >> SDIO_IO_RW_DIRECT_FN_IDX_LOC;
+        (req.arg & SDIO_IO_RW_DIRECT_FN_IDX_MASK) >> SDIO_IO_RW_DIRECT_FN_IDX_LOC;
     const uint32_t addr =
-        (req->arg & SDIO_IO_RW_DIRECT_REG_ADDR_MASK) >> SDIO_IO_RW_DIRECT_REG_ADDR_LOC;
+        (req.arg & SDIO_IO_RW_DIRECT_REG_ADDR_MASK) >> SDIO_IO_RW_DIRECT_REG_ADDR_LOC;
 
     const bool read_fn0_fbr = !write && (fn_idx == 0) && (addr == SDIO_CIA_FBR_CIS_ADDR);
-    req->status = (read_fn0_fbr && tries++ < 7) ? ZX_ERR_IO : ZX_OK;
+    return (read_fn0_fbr && tries++ < 7) ? ZX_ERR_IO : ZX_OK;
   });
 
   EXPECT_OK(dut_->Init());
@@ -879,22 +844,23 @@ TEST_F(SdioControllerDeviceTest, ProbeRetriesRequests) {
 }
 
 TEST_F(SdioControllerDeviceTest, IoAbortSetsAbortFlag) {
-  sdmmc_.set_command_callback(
-      SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void { req->response[0] = OpCondFunctions(5); });
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(5);
+  });
 
   EXPECT_OK(dut_->Probe());
 
-  sdmmc_.set_command_callback(SDIO_IO_RW_DIRECT, [](sdmmc_req_t* req) -> void {
-    EXPECT_EQ(req->cmd_idx, SDIO_IO_RW_DIRECT);
-    EXPECT_FALSE(req->cmd_flags & SDMMC_CMD_TYPE_ABORT);
-    EXPECT_EQ(req->arg, 0xb024'68ab);
+  sdmmc_.set_command_callback(SDIO_IO_RW_DIRECT, [](const sdmmc_req_new_t& req) -> void {
+    EXPECT_EQ(req.cmd_idx, SDIO_IO_RW_DIRECT);
+    EXPECT_FALSE(req.cmd_flags & SDMMC_CMD_TYPE_ABORT);
+    EXPECT_EQ(req.arg, 0xb024'68ab);
   });
   EXPECT_OK(dut_->SdioDoRwByte(true, 3, 0x1234, 0xab, nullptr));
 
-  sdmmc_.set_command_callback(SDIO_IO_RW_DIRECT, [](sdmmc_req_t* req) -> void {
-    EXPECT_EQ(req->cmd_idx, SDIO_IO_RW_DIRECT);
-    EXPECT_TRUE(req->cmd_flags & SDMMC_CMD_TYPE_ABORT);
-    EXPECT_EQ(req->arg, 0x8000'0c03);
+  sdmmc_.set_command_callback(SDIO_IO_RW_DIRECT, [](const sdmmc_req_new_t& req) -> void {
+    EXPECT_EQ(req.cmd_idx, SDIO_IO_RW_DIRECT);
+    EXPECT_TRUE(req.cmd_flags & SDMMC_CMD_TYPE_ABORT);
+    EXPECT_EQ(req.arg, 0x8000'0c03);
   });
   EXPECT_OK(dut_->SdioIoAbort(3));
 }
@@ -902,8 +868,9 @@ TEST_F(SdioControllerDeviceTest, IoAbortSetsAbortFlag) {
 TEST_F(SdioControllerDeviceTest, DifferentManufacturerProductIds) {
   auto stop_thread = fit::defer([&]() { dut_->StopSdioIrqThread(); });
 
-  sdmmc_.set_command_callback(
-      SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void { req->response[0] = OpCondFunctions(4); });
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(4);
+  });
 
   EXPECT_OK(dut_->Init());
 
@@ -1035,8 +1002,9 @@ TEST_F(SdioControllerDeviceTest, DifferentManufacturerProductIds) {
 }
 
 TEST_F(SdioControllerDeviceTest, RunDiagnostics) {
-  sdmmc_.set_command_callback(
-      SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void { req->response[0] = OpCondFunctions(4); });
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(4);
+  });
 
   sdmmc_.set_host_info({
       .caps = SDMMC_HOST_CAP_SDR104,  // Make the SDIO driver call PerformTuning.
@@ -1051,8 +1019,9 @@ TEST_F(SdioControllerDeviceTest, RunDiagnostics) {
 }
 
 TEST_F(SdioControllerDeviceTest, FunctionZeroInvalidBlockSize) {
-  sdmmc_.set_command_callback(
-      SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void { req->response[0] = OpCondFunctions(4); });
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(4);
+  });
 
   sdmmc_.Write(0x2000, std::vector<uint8_t>{0x22, 0x04, 0x00, 0x00, 0x00}, 0);
 
@@ -1062,8 +1031,9 @@ TEST_F(SdioControllerDeviceTest, FunctionZeroInvalidBlockSize) {
 }
 
 TEST_F(SdioControllerDeviceTest, IOFunctionInvalidBlockSize) {
-  sdmmc_.set_command_callback(
-      SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void { req->response[0] = OpCondFunctions(4); });
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(4);
+  });
 
   sdmmc_.Write(0x3000, std::vector<uint8_t>{0x22, 0x2a, 0x01}, 0);
   sdmmc_.Write(0x300e, std::vector<uint8_t>{0x00, 0x00}, 0);
@@ -1074,8 +1044,9 @@ TEST_F(SdioControllerDeviceTest, IOFunctionInvalidBlockSize) {
 }
 
 TEST_F(SdioControllerDeviceTest, FunctionZeroNoBlockSize) {
-  sdmmc_.set_command_callback(
-      SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void { req->response[0] = OpCondFunctions(4); });
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(4);
+  });
 
   sdmmc_.Write(0x3000, std::vector<uint8_t>{0xff}, 0);
 
@@ -1085,8 +1056,9 @@ TEST_F(SdioControllerDeviceTest, FunctionZeroNoBlockSize) {
 }
 
 TEST_F(SdioControllerDeviceTest, IOFunctionNoBlockSize) {
-  sdmmc_.set_command_callback(
-      SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void { req->response[0] = OpCondFunctions(4); });
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(4);
+  });
 
   sdmmc_.Write(0x3000, std::vector<uint8_t>{0xff}, 0);
 
@@ -1096,8 +1068,9 @@ TEST_F(SdioControllerDeviceTest, IOFunctionNoBlockSize) {
 }
 
 TEST_F(SdioControllerDeviceTest, UpdateBlockSizeMultiBlock) {
-  sdmmc_.set_command_callback(
-      SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void { req->response[0] = OpCondFunctions(4); });
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(4);
+  });
   sdmmc_.Write(SDIO_CIA_CCCR_CARD_CAPS_ADDR, std::vector<uint8_t>{SDIO_CIA_CCCR_CARD_CAP_SMB}, 0);
 
   sdmmc_.Write(0x3000, std::vector<uint8_t>{0x22, 0x2a, 0x01}, 0);
@@ -1149,8 +1122,9 @@ TEST_F(SdioControllerDeviceTest, UpdateBlockSizeMultiBlock) {
 }
 
 TEST_F(SdioControllerDeviceTest, UpdateBlockSizeNoMultiBlock) {
-  sdmmc_.set_command_callback(
-      SDIO_SEND_OP_COND, [](sdmmc_req_t* req) -> void { req->response[0] = OpCondFunctions(4); });
+  sdmmc_.set_command_callback(SDIO_SEND_OP_COND, [](uint32_t out_response[4]) -> void {
+    out_response[0] = OpCondFunctions(4);
+  });
   sdmmc_.Write(SDIO_CIA_CCCR_CARD_CAPS_ADDR, std::vector<uint8_t>{0}, 0);
 
   sdmmc_.Write(0x3000, std::vector<uint8_t>{0x22, 0x2a, 0x01}, 0);

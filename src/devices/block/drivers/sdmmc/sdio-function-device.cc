@@ -72,9 +72,7 @@ zx_status_t SdioFunctionDevice::SdioGetBlockSize(uint16_t* out_cur_blk_size) {
   return sdio_parent_->SdioGetBlockSize(function_, out_cur_blk_size);
 }
 
-zx_status_t SdioFunctionDevice::SdioDoRwTxn(sdio_rw_txn_t* txn) {
-  return sdio_parent_->SdioDoRwTxn(function_, txn);
-}
+zx_status_t SdioFunctionDevice::SdioDoRwTxn(sdio_rw_txn_t* txn) { return ZX_ERR_NOT_SUPPORTED; }
 
 zx_status_t SdioFunctionDevice::SdioDoRwByte(bool write, uint32_t addr, uint8_t write_byte,
                                              uint8_t* out_read_byte) {
@@ -171,29 +169,7 @@ void SdioFunctionDevice::GetBlockSize(GetBlockSizeCompleter::Sync& completer) {
 }
 
 void SdioFunctionDevice::DoRwTxn(DoRwTxnRequestView request, DoRwTxnCompleter::Sync& completer) {
-  sdio_rw_txn_t sdio_txn = {};
-  sdio_txn.addr = request->txn.addr;
-  sdio_txn.data_size = request->txn.data_size;
-  sdio_txn.incr = request->txn.incr;
-  sdio_txn.write = request->txn.write;
-  sdio_txn.use_dma = request->txn.use_dma;
-  sdio_txn.buf_offset = request->txn.buf_offset;
-  if (request->txn.use_dma) {
-    sdio_txn.dma_vmo = request->txn.dma_vmo.get();
-    sdio_txn.virt_buffer = nullptr;
-    sdio_txn.virt_size = 0;
-  } else {
-    sdio_txn.dma_vmo = ZX_HANDLE_INVALID;
-    sdio_txn.virt_buffer = request->txn.virt.data();
-    sdio_txn.virt_size = request->txn.virt.count();
-  }
-
-  zx_status_t status = SdioDoRwTxn(&sdio_txn);
-  if (status != ZX_OK) {
-    completer.ReplyError(status);
-    return;
-  }
-  completer.ReplySuccess(std::move(request->txn));
+  completer.ReplyError(ZX_ERR_NOT_SUPPORTED);
 }
 
 void SdioFunctionDevice::DoRwByte(DoRwByteRequestView request, DoRwByteCompleter::Sync& completer) {
