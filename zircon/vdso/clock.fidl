@@ -43,7 +43,7 @@ protocol Clockfuncs {
     ///
     /// `zx_clock_get_monotonic()` cannot fail.
     @vdsocall
-    ClockGetMonotonic() -> (struct {
+    ClockGetMonotonic() -> (@wrapped_return struct {
         time time;
     });
 
@@ -53,7 +53,7 @@ protocol Clockfuncs {
     // See the notes for ticks_get_via_kernel; this is not a syscall meant
     // to be used by application code.
     @internal
-    ClockGetMonotonicViaKernel() -> (struct {
+    ClockGetMonotonicViaKernel() -> (@wrapped_return struct {
         time time;
     });
 

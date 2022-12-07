@@ -60,7 +60,7 @@ protocol System {
     /// TODO(fxbug.dev/32938)
     @const
     @vdsocall
-    GetDcacheLineSize() -> (struct {
+    GetDcacheLineSize() -> (@wrapped_return struct {
         size uint32;
     });
 
@@ -103,7 +103,7 @@ protocol System {
     /// [`zx_system_get_physmem()`]: system_get_physmem.md
     @const
     @vdsocall
-    GetNumCpus() -> (struct {
+    GetNumCpus() -> (@wrapped_return struct {
         count uint32;
     });
 
@@ -209,7 +209,7 @@ protocol System {
     /// [`zx_vmo_create()`]: vmo_create.md
     @const
     @vdsocall
-    GetPageSize() -> (struct {
+    GetPageSize() -> (@wrapped_return struct {
         size uint32;
     });
 
@@ -253,7 +253,7 @@ protocol System {
     ///
     /// [`zx_system_get_num_cpus()`]: system_get_num_cpus.md
     @vdsocall
-    GetPhysmem() -> (struct {
+    GetPhysmem() -> (@wrapped_return struct {
         physmem uint64;
     });
 

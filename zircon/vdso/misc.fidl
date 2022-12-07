@@ -108,7 +108,7 @@ protocol Misc {
     ///
     /// [ticks_per_second](ticks_per_second.md)
     @vdsocall
-    TicksGet() -> (struct {
+    TicksGet() -> (@wrapped_return struct {
         ticks ticks;
     });
 
@@ -168,7 +168,7 @@ protocol Misc {
     /// [`zx_ticks_get()`]: ticks_get.md
     @const
     @vdsocall
-    TicksPerSecond() -> (struct {
+    TicksPerSecond() -> (@wrapped_return struct {
         ticks ticks;
     });
 
@@ -217,7 +217,7 @@ protocol Misc {
     @vdsocall
     DeadlineAfter(struct {
         nanoseconds duration;
-    }) -> (struct {
+    }) -> (@wrapped_return struct {
         time time;
     });
 
@@ -388,7 +388,7 @@ protocol Misc {
     // backing the tick counter, or by making a syscall if the register is not
     // accessible from user mode code (for whatever reason).
     @internal
-    TicksGetViaKernel() -> (struct {
+    TicksGetViaKernel() -> (@wrapped_return struct {
         ticks ticks;
     });
 };

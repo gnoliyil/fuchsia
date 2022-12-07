@@ -462,7 +462,7 @@ protocol Syscall {
         b uint32;
         c uint16;
         d uint8;
-    }) -> (struct {
+    }) -> (@wrapped_return struct {
         total uint64;
     });
 
@@ -472,7 +472,7 @@ protocol Syscall {
         b int32;
         c int16;
         d int8;
-    }) -> (struct {
+    }) -> (@wrapped_return struct {
         total int64;
     });
 
@@ -482,7 +482,7 @@ protocol Syscall {
         b uint32;
         c uint16;
         d uint8;
-    }) -> (struct {
+    }) -> (@wrapped_return struct {
         total uint64;
     });
 
@@ -492,7 +492,7 @@ protocol Syscall {
         b int32;
         c int16;
         d int8;
-    }) -> (struct {
+    }) -> (@wrapped_return struct {
         total int64;
     });
 };

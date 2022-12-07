@@ -827,6 +827,15 @@ type Struct struct {
 	// or implicitly declared (as is in the case of a protocol method
 	// request/response payload).
 	synthesized bool
+
+	// TODO(fxbug.dev/110021): wrappedReturn indicates that this struct defines
+	// the singleton, response body of a protocol method used to define a
+	// syscall, and further that the return type of that syscall is actually
+	// the type of the wrapped parameter. The reason for this workaround is
+	// that protocol methods must return a struct.
+	//
+	// See the definition of @wrapped_return in //zircon/vdso/README.md
+	wrappedReturn bool
 }
 
 // StructMember represents a FIDL struct member.
@@ -851,9 +860,10 @@ type StructMember struct {
 
 func newStruct(strct fidlgen.Struct, decls declMap, typeKinds map[TypeKind]struct{}) (*Struct, error) {
 	s := &Struct{
-		decl:        newDecl(strct),
-		Size:        strct.TypeShapeV2.InlineSize,
-		synthesized: strct.IsAnonymous(),
+		decl:          newDecl(strct),
+		Size:          strct.TypeShapeV2.InlineSize,
+		synthesized:   strct.IsAnonymous(),
+		wrappedReturn: strct.GetAttributes().HasAttribute("wrapped_return"),
 	}
 	for _, member := range strct.Members {
 		attrs := member.GetAttributes()
@@ -1248,6 +1258,20 @@ func newSyscallFamily(protocol fidlgen.Protocol, decls declMap) (*SyscallFamily,
 			s, ok := ident.(*Struct)
 			if !ok {
 				panic(fmt.Sprintf("method %s type %s is not a struct", what, typ.Identifier))
+			}
+
+			if s.wrappedReturn {
+				if request {
+					panic(fmt.Sprintf("@wrapped_return cannot annotate a request payload: %s", syscall.Name))
+				}
+				if syscall.ReturnType != nil {
+					panic(fmt.Sprintf("@wrapped_return cannot be paired with `error`: %s", syscall.Name))
+				}
+				if len(s.Members) != 1 {
+					panic(fmt.Sprintf("@wrapped_return must annotate a singleton struct: %s", syscall.Name))
+				}
+				syscall.ReturnType = &s.Members[0].Type
+				return
 			}
 
 			// If we are (a) processing the outputs, (b) the syscall has no

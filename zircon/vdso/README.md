@@ -267,6 +267,30 @@ backends that the mapped types should be represented with `void*`.
 This should be redesigned altogether in the context of
 [fxbug.dev/110021][110021].
 
+#### @wrapped_return
+
+Annotates a _singleton_, syscall response struct, indicating that the syscall's
+return type is actually the type of the contained parameter.
+
+As an example, consider `uint32_t zx_system_get_num_cpus()`:
+```
+@transport("Syscall")
+protocol System {
+    @const
+    @vdsocall
+    GetNumCpus() -> (@wrapped_return struct {
+        count uint32;
+    });
+
+    ...
+};
+```
+
+This gives a workaround the limitation of protocol methods only being able to
+return a struct and should be sidestepped an ultimate design for syscall
+specification that does not have to piggy back off of protocols
+([fxbug.dev/110021][110021]).
+
 
 [105758]: http://fxbug.dev/105758
 [109734]: http://fxbug.dev/109734

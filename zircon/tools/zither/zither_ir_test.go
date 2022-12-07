@@ -1059,6 +1059,10 @@ protocol SyscallWithParameters {
 	}) error StatusEnum;
 
 	SyscallWithStructReturnType() -> (StructReturnType);
+
+	SyscallWithWrappedReturnType() -> (@wrapped_return struct {
+		value uint32;
+	});
 };
 
 `)
@@ -1281,6 +1285,13 @@ protocol SyscallWithParameters {
 					ReturnType: &TypeDescriptor{
 						Type: "example/StructReturnType",
 						Kind: TypeKindStruct,
+					},
+				},
+				{
+					member: member{Name: "SyscallWithWrappedReturnType"},
+					ReturnType: &TypeDescriptor{
+						Type: "uint32",
+						Kind: TypeKindInteger,
 					},
 				},
 			},
