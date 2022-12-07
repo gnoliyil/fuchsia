@@ -80,11 +80,12 @@ class BlockDeviceTest : public testing::Test {
     ASSERT_EQ(wait_for_device(ramdisk_->path().c_str(), zx::sec(10).get()), ZX_OK);
   }
 
+  fbl::unique_fd GetRamdiskFd() { return fbl::unique_fd(open(ramdisk_->path().c_str(), O_RDWR)); }
   zx::result<fidl::ClientEnd<fuchsia_hardware_block::Block>> RamdiskDevice() const {
     return ramdisk_->channel();
   }
 
-  static fbl::unique_fd devfs_root() { return fbl::unique_fd(open("/dev", O_RDONLY)); }
+  static fbl::unique_fd devfs_root() { return fbl::unique_fd(open("/dev", O_RDWR)); }
 
  protected:
   FsManager manager_;
@@ -105,7 +106,10 @@ TEST_F(BlockDeviceTest, TestBadHandleDevice) {
   EXPECT_EQ(memcmp(&device.GetTypeGuid(), &null_guid, sizeof(null_guid)), 0);
   EXPECT_EQ(device.AttachDriver("/foobar"), ZX_ERR_BAD_HANDLE);
 
-  EXPECT_EQ(device.UnsealZxcrypt(), ZX_ERR_BAD_HANDLE);
+  // Returns ZX_OK because zxcrypt currently passes the empty fd to a background
+  // thread without observing the results.
+  EXPECT_EQ(device.UnsealZxcrypt(), ZX_OK);
+
   EXPECT_EQ(device.CheckFilesystem(), ZX_ERR_BAD_HANDLE);
   EXPECT_EQ(device.FormatFilesystem(), ZX_ERR_BAD_HANDLE);
   EXPECT_EQ(device.MountFilesystem(), ZX_ERR_BAD_HANDLE);
@@ -117,9 +121,7 @@ TEST_F(BlockDeviceTest, TestEmptyDevice) {
   // Initialize Ramdisk.
   ASSERT_NO_FATAL_FAILURE(CreateRamdisk(/*use_guid=*/true));
 
-  zx::result channel = RamdiskDevice();
-  ASSERT_EQ(channel.status_value(), ZX_OK);
-  BlockDevice device(&mounter, std::move(channel.value()), &config_);
+  BlockDevice device(&mounter, GetRamdiskFd(), &config_);
   EXPECT_EQ(device.GetFormat(), fs_management::kDiskFormatUnknown);
   zx::result info = device.GetInfo();
   EXPECT_EQ(info.status_value(), ZX_OK);
@@ -145,15 +147,15 @@ class TestMinfsMounter : public FilesystemMounter {
   TestMinfsMounter(FsManager& fshost, const fshost_config::Config* config)
       : FilesystemMounter(fshost, config) {}
 
-  zx::result<StartedFilesystem> LaunchFs(
-      fidl::ClientEnd<fuchsia_hardware_block::Block> block_device,
-      const fs_management::MountOptions& options, fs_management::DiskFormat format) const final {
+  zx::result<StartedFilesystem> LaunchFs(zx::channel block_device,
+                                         const fs_management::MountOptions& options,
+                                         fs_management::DiskFormat format) const final {
     EXPECT_EQ(format, fs_management::kDiskFormatMinfs);
     return zx::ok(fs_management::StartedSingleVolumeFilesystem());
   }
 
   zx::result<> LaunchFsNative(fidl::ServerEnd<fuchsia_io::Directory> server, const char* binary,
-                              fidl::ClientEnd<fuchsia_hardware_block::Block> block_device,
+                              zx::channel block_device,
                               const fs_management::MountOptions& options) const final {
     ADD_FAILURE() << "Unexpected call to LaunchFsNative";
     return zx::error(ZX_ERR_NOT_SUPPORTED);
@@ -173,9 +175,7 @@ TEST_F(BlockDeviceTest, TestMinfsBadGUID) {
 
   // We started with an empty block device, but let's lie and say it
   // should have been a minfs device.
-  zx::result channel = RamdiskDevice();
-  ASSERT_EQ(channel.status_value(), ZX_OK);
-  BlockDevice device(&mounter, std::move(channel.value()), &config_);
+  BlockDevice device(&mounter, GetRamdiskFd(), &config_);
   device.SetFormat(fs_management::kDiskFormatMinfs);
   EXPECT_EQ(device.GetFormat(), fs_management::kDiskFormatMinfs);
   EXPECT_EQ(device.FormatFilesystem(), ZX_OK);
@@ -191,9 +191,7 @@ TEST_F(BlockDeviceTest, TestMinfsGoodGUID) {
   // Initialize Ramdisk with a data GUID.
   ASSERT_NO_FATAL_FAILURE(CreateRamdisk(true));
 
-  zx::result channel = RamdiskDevice();
-  ASSERT_EQ(channel.status_value(), ZX_OK);
-  BlockDevice device(&mounter, std::move(channel.value()), &config_);
+  BlockDevice device(&mounter, GetRamdiskFd(), &config_);
   device.SetFormat(fs_management::kDiskFormatMinfs);
   EXPECT_EQ(device.GetFormat(), fs_management::kDiskFormatMinfs);
   EXPECT_EQ(device.FormatFilesystem(), ZX_OK);
@@ -210,9 +208,7 @@ TEST_F(BlockDeviceTest, TestMinfsReformat) {
   // Initialize Ramdisk with a data GUID.
   ASSERT_NO_FATAL_FAILURE(CreateRamdisk(true));
 
-  zx::result channel = RamdiskDevice();
-  ASSERT_EQ(channel.status_value(), ZX_OK);
-  BlockDevice device(&mounter, std::move(channel.value()), &config_);
+  BlockDevice device(&mounter, GetRamdiskFd(), &config);
   device.SetFormat(fs_management::kDiskFormatMinfs);
   EXPECT_EQ(device.GetFormat(), fs_management::kDiskFormatMinfs);
 
@@ -234,9 +230,7 @@ TEST_F(BlockDeviceTest, TestBlobfs) {
   // Initialize Ramdisk with a data GUID.
   ASSERT_NO_FATAL_FAILURE(CreateRamdisk(true));
 
-  zx::result channel = RamdiskDevice();
-  ASSERT_EQ(channel.status_value(), ZX_OK);
-  BlockDevice device(&mounter, std::move(channel.value()), &config_);
+  BlockDevice device(&mounter, GetRamdiskFd(), &config);
   device.SetFormat(fs_management::kDiskFormatBlobfs);
   EXPECT_EQ(device.GetFormat(), fs_management::kDiskFormatBlobfs);
 
@@ -258,9 +252,7 @@ TEST_F(BlockDeviceTest, TestMinfsCorruptionEventLogged) {
   // Initialize Ramdisk with a data GUID.
   ASSERT_NO_FATAL_FAILURE(CreateRamdisk(true));
 
-  zx::result channel = RamdiskDevice();
-  ASSERT_EQ(channel.status_value(), ZX_OK);
-  BlockDevice device(&mounter, std::move(channel.value()), &config_);
+  BlockDevice device(&mounter, GetRamdiskFd(), &config);
   device.SetFormat(fs_management::kDiskFormatMinfs);
   EXPECT_EQ(device.GetFormat(), fs_management::kDiskFormatMinfs);
   // Format minfs.

@@ -24,6 +24,7 @@
 #include "src/security/lib/zxcrypt/client.h"
 #include "src/storage/fshost/crypt_policy.h"
 #include "src/storage/fshost/fshost_config.h"
+#include "src/storage/fshost/utils.h"
 
 namespace fshost {
 namespace {
@@ -317,47 +318,44 @@ zx::result<fs_management::MountedVolume*> UnwrapOrInitDataVolume(
 zx::result<std::pair<fs_management::StartedMultiVolumeFilesystem, fs_management::MountedVolume*>>
 FormatFxfsAndInitDataVolume(fidl::ClientEnd<fuchsia_hardware_block::Block> block_device,
                             const fshost_config::Config& config) {
-  {
-    constexpr char kStartupServicePath[] = "/fxfs/svc/fuchsia.fs.startup.Startup";
-    auto startup_client_end = component::Connect<fuchsia_fs_startup::Startup>(kStartupServicePath);
-    if (startup_client_end.is_error()) {
-      FX_PLOGS(ERROR, startup_client_end.error_value())
-          << "Failed to connect to startup service at " << kStartupServicePath;
-      return startup_client_end.take_error();
-    }
-    fidl::WireSyncClient startup_client{std::move(*startup_client_end)};
-    const fs_management::MkfsOptions options;
-
-    zx::result cloned = component::Clone(block_device, component::AssumeProtocolComposesNode);
-    if (cloned.is_error()) {
-      FX_PLOGS(ERROR, cloned.error_value()) << "Failed to clone block channel";
-      return cloned.take_error();
-    }
-
-    auto res = startup_client->Format(std::move(cloned.value()), options.as_format_options());
-    if (!res.ok()) {
-      FX_PLOGS(ERROR, res.status()) << "Failed to format (FIDL error)";
-      return zx::error(res.status());
-    }
-    if (res.value().is_error()) {
-      FX_PLOGS(ERROR, res.value().error_value()) << "Format failed";
-      return zx::error(res.value().error_value());
-    }
+  auto device_path = GetDevicePath(
+      fidl::UnownedClientEnd<fuchsia_device::Controller>(block_device.channel().get()));
+  if (device_path.is_error()) {
+    return device_path.take_error();
+  }
+  constexpr char kStartupServicePath[] = "/fxfs/svc/fuchsia.fs.startup.Startup";
+  auto startup_client_end = component::Connect<fuchsia_fs_startup::Startup>(kStartupServicePath);
+  if (startup_client_end.is_error()) {
+    FX_PLOGS(ERROR, startup_client_end.error_value())
+        << "Failed to connect to startup service at " << kStartupServicePath;
+    return startup_client_end.take_error();
+  }
+  fidl::WireSyncClient startup_client{std::move(*startup_client_end)};
+  const fs_management::MkfsOptions options;
+  auto res = startup_client->Format(std::move(block_device), options.as_format_options());
+  if (!res.ok()) {
+    FX_PLOGS(ERROR, res.status()) << "Failed to format (FIDL error)";
+    return zx::error(res.status());
+  }
+  if (res.value().is_error()) {
+    FX_PLOGS(ERROR, res.value().error_value()) << "Format failed";
+    return zx::error(res.value().error_value());
   }
 
+  fbl::unique_fd block_device_fd(open(device_path->c_str(), O_RDWR));
+  if (!block_device_fd) {
+    return zx::error(ZX_ERR_BAD_STATE);
+  }
   fs_management::MountOptions mount_options;
   mount_options.component_child_name =
       fs_management::DiskFormatString(fs_management::kDiskFormatFxfs);
-  zx::result fs =
-      fs_management::MountMultiVolume(std::move(block_device), fs_management::kDiskFormatFxfs,
+  auto fs =
+      fs_management::MountMultiVolume(std::move(block_device_fd), fs_management::kDiskFormatFxfs,
                                       mount_options, fs_management::LaunchLogsAsync);
-  if (fs.is_error()) {
-    FX_PLOGS(ERROR, fs.error_value()) << "MountMultiVolume failed";
+  if (fs.is_error())
     return fs.take_error();
-  }
-  zx::result volume = InitDataVolume(*fs, config);
+  auto volume = InitDataVolume(*fs, config);
   if (volume.is_error()) {
-    FX_PLOGS(ERROR, fs.error_value()) << "InitDataVolume failed";
     return volume.take_error();
   }
   return zx::ok(std::make_pair(std::move(*fs), *volume));

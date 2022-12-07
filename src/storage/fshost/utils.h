@@ -25,6 +25,12 @@ zx::result<uint64_t> ResizeVolume(
     fidl::UnownedClientEnd<fuchsia_hardware_block_volume::Volume> volume, uint64_t target_bytes,
     bool inside_zxcrypt);
 
+// Clones the given node, returning a raw channel to it.
+zx::result<zx::channel> CloneNode(fidl::UnownedClientEnd<fuchsia_io::Node> node);
+
+// Returns the topological path of the given device.
+zx::result<std::string> GetDevicePath(fidl::UnownedClientEnd<fuchsia_device::Controller> device);
+
 }  // namespace fshost
 
 #endif  // SRC_STORAGE_FSHOST_UTILS_H_

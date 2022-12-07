@@ -37,17 +37,14 @@ TEST(FactoryFs, ExportedFilesystemIsMountable) {
   fbl::unique_fd staging(open(staging_path, O_RDONLY));
   ASSERT_TRUE(staging);
 
-  {
-    fbl::unique_fd fd(openat(staging.get(), hello, O_CREAT | O_RDWR, 0777));
-    ASSERT_TRUE(fd) << errno;
-    ASSERT_EQ(write(fd.get(), "world", 5), 5);
-    ASSERT_EQ(mkdirat(staging.get(), foo, 0777), 0);
-  }
-  {
-    fbl::unique_fd fd(openat(staging.get(), bar, O_CREAT | O_RDWR, 0777));
-    ASSERT_TRUE(fd) << errno;
-    ASSERT_EQ(write(fd.get(), "bar", 3), 3);
-  }
+  fbl::unique_fd fd(openat(staging.get(), hello, O_CREAT | O_RDWR, 0777));
+  ASSERT_TRUE(fd) << errno;
+  ASSERT_EQ(write(fd.get(), "world", 5), 5);
+  ASSERT_EQ(mkdirat(staging.get(), foo, 0777), 0);
+  fd.reset(openat(staging.get(), bar, O_CREAT | O_RDWR, 0777));
+  ASSERT_TRUE(fd);
+  ASSERT_EQ(write(fd.get(), "bar", 3), 3);
+  fd.reset();
 
   std::string ram_disk_path = ram_disk_or.value().path();
   const char *argv[] = {"/pkg/bin/export-ffs", staging_path, ram_disk_path.c_str(), nullptr};
@@ -62,11 +59,11 @@ TEST(FactoryFs, ExportedFilesystemIsMountable) {
   // Now try and mount Factoryfs.
   ASSERT_EQ(ramdisk_set_flags(ram_disk_or.value().client(), BLOCK_FLAG_READONLY), ZX_OK);
 
-  zx::result device = ram_disk_or.value().channel();
-  ASSERT_EQ(device.status_value(), ZX_OK);
+  fd.reset(open(ram_disk_path.c_str(), O_RDONLY));
+  ASSERT_TRUE(fd) << errno;
 
   auto result =
-      fs_management::Mount(std::move(device.value()), fs_management::kDiskFormatFactoryfs,
+      fs_management::Mount(std::move(fd), fs_management::kDiskFormatFactoryfs,
                            fs_management::MountOptions(), fs_management::LaunchStdioAsync);
   ASSERT_EQ(result.status_value(), ZX_OK);
   auto data = result->DataRoot();
@@ -77,19 +74,16 @@ TEST(FactoryFs, ExportedFilesystemIsMountable) {
   // And check contents of factoryfs.
   fbl::unique_fd factoryfs(open(kMountPath, O_RDONLY));
   ASSERT_TRUE(factoryfs);
+  fd.reset(openat(factoryfs.get(), hello, O_RDONLY));
+  ASSERT_TRUE(fd) << errno;
   char buf[11];
-  {
-    fbl::unique_fd fd(openat(factoryfs.get(), hello, O_RDONLY));
-    ASSERT_TRUE(fd) << errno;
-    EXPECT_EQ(read(fd.get(), buf, sizeof(buf)), 5);
-    EXPECT_EQ(memcmp(buf, "world", 5), 0);
-  }
-  {
-    fbl::unique_fd fd(openat(factoryfs.get(), bar, O_RDONLY));
-    ASSERT_TRUE(fd) << errno;
-    EXPECT_EQ(read(fd.get(), buf, sizeof(buf)), 3) << errno;
-    EXPECT_EQ(memcmp(buf, "bar", 3), 0);
-  }
+  EXPECT_EQ(read(fd.get(), buf, sizeof(buf)), 5);
+  EXPECT_EQ(memcmp(buf, "world", 5), 0);
+
+  fd.reset(openat(factoryfs.get(), bar, O_RDONLY));
+  ASSERT_TRUE(fd) << errno;
+  EXPECT_EQ(read(fd.get(), buf, sizeof(buf)), 3) << errno;
+  EXPECT_EQ(memcmp(buf, "bar", 3), 0);
 }
 
 }  // namespace

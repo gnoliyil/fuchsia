@@ -137,8 +137,8 @@ class OutgoingDirectoryFixture : public testing::Test {
   void StartFilesystem(const MountOptions& options) {
     ASSERT_EQ(state_, kFormatted);
 
-    zx::result device = ramdisk_.channel();
-    ASSERT_EQ(device.status_value(), ZX_OK);
+    fbl::unique_fd device_fd(open(ramdisk_.path().c_str(), O_RDWR));
+    ASSERT_TRUE(device_fd);
 
     MountOptions actual_options = options;
     if (format_ == kDiskFormatFxfs) {
@@ -150,12 +150,12 @@ class OutgoingDirectoryFixture : public testing::Test {
           return *std::move(service);
         }
       };
-      auto fs = MountMultiVolumeWithDefault(std::move(device.value()), format_, actual_options,
+      auto fs = MountMultiVolumeWithDefault(std::move(device_fd), format_, actual_options,
                                             LaunchStdioAsync);
       ASSERT_TRUE(fs.is_ok()) << fs.status_string();
       fs_ = std::make_unique<StartedSingleVolumeMultiVolumeFilesystem>(std::move(*fs));
     } else {
-      auto fs = Mount(std::move(device.value()), format_, actual_options, LaunchStdioAsync);
+      auto fs = Mount(std::move(device_fd), format_, actual_options, LaunchStdioAsync);
       ASSERT_TRUE(fs.is_ok()) << fs.status_string();
       fs_ = std::make_unique<StartedSingleVolumeFilesystem>(std::move(*fs));
     }
@@ -232,7 +232,7 @@ Combinations TestCombinations() {
 
   auto add = [&](DiskFormat format, std::initializer_list<Mode> modes) {
     for (Mode mode : modes) {
-      c.emplace_back(format, mode);
+      c.push_back(std::tuple(format, mode));
     }
   };
 

@@ -8,7 +8,6 @@
 #include <fidl/fuchsia.device/cpp/wire.h>
 #include <fidl/fuchsia.io/cpp/wire.h>
 #include <inttypes.h>
-#include <lib/component/incoming/cpp/service_client.h>
 #include <lib/fdio/cpp/caller.h>
 #include <lib/fdio/directory.h>
 #include <lib/fdio/fd.h>
@@ -43,8 +42,12 @@
 #include <fbl/unique_fd.h>
 #include <gpt/gpt.h>
 
+#include "src/lib/storage/fs_management/cpp/mount.h"
+#include "src/security/lib/zxcrypt/client.h"
 #include "src/storage/fshost/block-device-manager.h"
+#include "src/storage/fshost/block-device.h"
 #include "src/storage/fshost/fs-manager.h"
+#include "src/storage/fshost/nand-device.h"
 
 namespace fshost {
 namespace {
@@ -238,15 +241,12 @@ bool BlockWatcher::Callback(Watcher& watcher, int dirfd, fio::wire::WatchEvent e
     return false;
   }
 
-  fdio_cpp::UnownedFdioCaller caller(dirfd);
-  zx::result block_device =
-      component::ConnectAt<fuchsia_hardware_block::Block>(caller.directory(), name);
-  if (block_device.is_error()) {
+  fbl::unique_fd device_fd(openat(dirfd, name, O_RDWR));
+  if (!device_fd) {
     return false;
   }
 
-  zx_status_t status =
-      watcher.AddDevice(device_manager_, &mounter_, std::move(block_device.value()));
+  zx_status_t status = watcher.AddDevice(device_manager_, &mounter_, std::move(device_fd));
   if (status == ZX_ERR_NOT_SUPPORTED) {
     // The femu tests watch for the following message and will need updating if this changes.
     FX_LOGS(INFO) << "" << watcher.path() << "/" << name << " ignored (not supported)";
@@ -264,6 +264,7 @@ zx_signals_t BlockWatcher::WaitForWatchMessages(cpp20::span<Watcher> watchers,
                                                 cpp20::span<uint8_t>& buf,
                                                 Watcher** selected) const {
   *selected = nullptr;
+  zx_status_t status;
   std::vector<zx_wait_item_t> wait_items;
   bool can_pause = true;
   for (auto& watcher : watchers) {
@@ -287,10 +288,9 @@ zx_signals_t BlockWatcher::WaitForWatchMessages(cpp20::span<Watcher> watchers,
     });
   }
 
-  if (zx_status_t status =
-          zx_object_wait_many(wait_items.data(), wait_items.size(), zx::time::infinite().get());
-      status != ZX_OK) {
-    FX_PLOGS(ERROR, status) << "failed to wait_many";
+  if ((status = zx_object_wait_many(wait_items.data(), wait_items.size(),
+                                    zx::time::infinite().get())) != ZX_OK) {
+    FX_LOGS(ERROR) << "failed to wait_many: " << zx_status_get_string(status);
     return 0;
   }
 
@@ -310,10 +310,10 @@ zx_signals_t BlockWatcher::WaitForWatchMessages(cpp20::span<Watcher> watchers,
 
     if (wait_items[i].pending & ZX_CHANNEL_READABLE) {
       uint32_t read_len;
-      if (zx_status_t status = watchers[i].borrow_watcher().channel()->read(
-              0, buf.begin(), nullptr, static_cast<uint32_t>(buf.size()), 0, &read_len, nullptr);
-          status != ZX_OK) {
-        FX_PLOGS(ERROR, status) << "failed to read from channel";
+      status = watchers[i].borrow_watcher().channel()->read(
+          0, buf.begin(), nullptr, static_cast<uint32_t>(buf.size()), 0, &read_len, nullptr);
+      if (status != ZX_OK) {
+        FX_LOGS(ERROR) << "failed to read from channel:" << zx_status_get_string(status);
         return 0;
       }
       *selected = &watchers[i];

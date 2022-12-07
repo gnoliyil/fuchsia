@@ -4,7 +4,7 @@
 
 #include "src/lib/storage/fs_management/cpp/mkfs_with_default.h"
 
-#include <lib/component/incoming/cpp/service_client.h>
+#include <fcntl.h>
 
 #include <iostream>
 
@@ -27,11 +27,7 @@ zx::result<> MkfsWithDefault(const char* device_path, DiskFormat df, LaunchCallb
       .component_url = options.component_url,
   };
 
-  zx::result device = component::Connect<fuchsia_hardware_block::Block>(device_path);
-  if (device.is_error()) {
-    return device.take_error();
-  }
-  auto fs = MountMultiVolume(std::move(device.value()), df, mount_options,
+  auto fs = MountMultiVolume(fbl::unique_fd(open(device_path, O_RDWR)), df, mount_options,
                              fs_management::LaunchStdioAsync);
   if (fs.is_error()) {
     std::cerr << "Could not mount to create default volume: " << fs.status_string() << std::endl;

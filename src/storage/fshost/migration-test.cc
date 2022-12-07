@@ -21,9 +21,13 @@
 #include "src/lib/storage/fs_management/cpp/launch.h"
 #include "src/lib/storage/fs_management/cpp/mount.h"
 #include "src/lib/storage/fs_management/cpp/options.h"
+#include "src/storage/fshost/block-device-manager.h"
+#include "src/storage/fshost/block-device.h"
+#include "src/storage/fshost/config.h"
 #include "src/storage/fshost/constants.h"
 #include "src/storage/fshost/testing/fshost_integration_test.h"
 #include "src/storage/lib/utils/topological_path.h"
+#include "src/storage/minfs/format.h"
 #include "src/storage/testing/fvm.h"
 #include "src/storage/testing/ram_disk.h"
 #include "src/storage/testing/zxcrypt.h"
@@ -79,11 +83,10 @@ TEST_F(MigrationTest, MigratesZxcryptMinfs) {
               ZX_OK);
 
     // Mount the filesystem and add some data.
-    zx::result device =
-        component::Connect<fuchsia_hardware_block::Block>(zxcrypt_device_path_or.value());
-    ASSERT_EQ(device.status_value(), ZX_OK);
+    auto device_fd = fbl::unique_fd(::open(zxcrypt_device_path_or->c_str(), O_RDONLY));
+    ASSERT_TRUE(device_fd) << strerror(errno);
     auto mount =
-        fs_management::Mount(std::move(device.value()), fs_management::kDiskFormatMinfs,
+        fs_management::Mount(std::move(device_fd), fs_management::kDiskFormatMinfs,
                              fs_management::MountOptions{}, fs_management::LaunchStdioAsync);
     ASSERT_EQ(mount.status_value(), ZX_OK);
     auto data = mount->DataRoot();

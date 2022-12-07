@@ -1159,10 +1159,10 @@ TEST_F(BlobfsWithFvmTest, CorruptAtMount) {
   ASSERT_GT(len, 0ul);
   ASSERT_NO_FATAL_FAILURE(FvmShrink(fs().DevicePath().value(), offset + len - 1, 1));
 
-  zx::result device = component::Connect<fuchsia_hardware_block::Block>(fs().DevicePath().value());
-  ASSERT_EQ(device.status_value(), ZX_OK);
+  fbl::unique_fd fd(open(fs().DevicePath().value().c_str(), O_RDWR));
+  ASSERT_TRUE(fd);
 
-  ASSERT_NE(fs_management::Mount(std::move(device.value()), fs_management::kDiskFormatBlobfs,
+  ASSERT_NE(fs_management::Mount(std::move(fd), fs_management::kDiskFormatBlobfs,
                                  fs().DefaultMountOptions(), fs_management::LaunchStdioAsync)
                 .status_value(),
             ZX_OK);

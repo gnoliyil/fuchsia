@@ -18,8 +18,8 @@ namespace fio = fuchsia_io;
 
 template <typename T>
 zx_status_t AddDeviceImpl(BlockDeviceManager& manager, FilesystemMounter* mounter,
-                          fidl::ClientEnd<fuchsia_hardware_block::Block> block_device) {
-  T device(mounter, std::move(block_device), manager.config());
+                          fbl::unique_fd fd) {
+  T device(mounter, std::move(fd), manager.config());
   return manager.AddDevice(device);
 }
 
@@ -107,8 +107,8 @@ void Watcher::ProcessWatchMessages(cpp20::span<uint8_t> buf, WatcherCallback cal
 }
 
 zx_status_t Watcher::AddDevice(BlockDeviceManager& manager, FilesystemMounter* mounter,
-                               fidl::ClientEnd<fuchsia_hardware_block::Block> block_device) {
-  return add_device_(manager, mounter, std::move(block_device));
+                               fbl::unique_fd fd) {
+  return add_device_(manager, mounter, std::move(fd));
 }
 
 }  // namespace fshost

@@ -4,7 +4,6 @@
 
 #include "src/storage/fs_test/json_filesystem.h"
 
-#include <lib/component/incoming/cpp/service_client.h>
 #include <zircon/errors.h>
 
 #include "src/lib/storage/fs_management/cpp/launch.h"
@@ -69,7 +68,7 @@ class JsonInstance : public FilesystemInstance {
         device_(std::move(device)),
         device_path_(std::move(device_path)) {}
 
-  zx::result<> Format(const TestFilesystemOptions& options) override {
+  virtual zx::result<> Format(const TestFilesystemOptions& options) override {
     fs_management::MkfsOptions mkfs_options;
     mkfs_options.sectors_per_cluster = filesystem_.sectors_per_cluster();
     if (filesystem_.is_component()) {
@@ -130,12 +129,12 @@ class JsonInstance : public FilesystemInstance {
       mount_options.component_child_name = name.c_str();
       mount_options.component_url = "#meta/" + name;
     }
-    zx::result device = component::Connect<fuchsia_hardware_block::Block>(device_path_);
-    if (device.is_error()) {
-      return device.take_error();
+    fbl::unique_fd fd(open(device_path_.c_str(), O_RDONLY));
+    if (!fd) {
+      return zx::error(ZX_ERR_BAD_STATE);
     }
-    auto fs = fs_management::MountMultiVolume(std::move(device.value()), filesystem_.format(),
-                                              mount_options, fs_management::LaunchStdioAsync);
+    auto fs = fs_management::MountMultiVolume(std::move(fd), filesystem_.format(), mount_options,
+                                              fs_management::LaunchStdioAsync);
     if (fs.is_error()) {
       return fs.take_error();
     }

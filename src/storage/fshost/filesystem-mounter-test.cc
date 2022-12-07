@@ -22,6 +22,7 @@
 #include "src/lib/storage/fs_management/cpp/format.h"
 #include "src/lib/storage/fs_management/cpp/mount.h"
 #include "src/lib/testing/predicates/status.h"
+#include "src/storage/blobfs/mount.h"
 #include "src/storage/fshost/block-watcher.h"
 #include "src/storage/fshost/config.h"
 #include "src/storage/fshost/constants.h"
@@ -88,9 +89,9 @@ class TestMounter : public FilesystemMounter {
 
   void ExpectFilesystem(FilesystemType fs) { expected_filesystem_ = fs; }
 
-  zx::result<StartedFilesystem> LaunchFs(
-      fidl::ClientEnd<fuchsia_hardware_block::Block> block_device,
-      const fs_management::MountOptions& options, fs_management::DiskFormat format) const final {
+  zx::result<StartedFilesystem> LaunchFs(zx::channel block_device,
+                                         const fs_management::MountOptions& options,
+                                         fs_management::DiskFormat format) const final {
     switch (expected_filesystem_) {
       case FilesystemType::kBlobfs:
         EXPECT_EQ(format, fs_management::kDiskFormatBlobfs);
@@ -106,7 +107,7 @@ class TestMounter : public FilesystemMounter {
   }
 
   zx::result<> LaunchFsNative(fidl::ServerEnd<fuchsia_io::Directory> server, const char* binary,
-                              fidl::ClientEnd<fuchsia_hardware_block::Block> block_device,
+                              zx::channel block_device,
                               const fs_management::MountOptions& options) const final {
     switch (expected_filesystem_) {
       case FilesystemType::kFactoryfs:
@@ -137,7 +138,7 @@ TEST_F(MounterTest, FactoryMount) {
   TestMounter mounter(manager(), &config_);
 
   mounter.ExpectFilesystem(FilesystemType::kFactoryfs);
-  ASSERT_OK(mounter.MountFactoryFs({}, fs_management::MountOptions()));
+  ASSERT_OK(mounter.MountFactoryFs(zx::channel(), fs_management::MountOptions()));
 
   ASSERT_TRUE(mounter.FactoryMounted());
 }
@@ -145,7 +146,7 @@ TEST_F(MounterTest, FactoryMount) {
 TEST_F(MounterTest, DataMount) {
   TestMounter mounter(manager(), &config_);
   mounter.ExpectFilesystem(FilesystemType::kData);
-  ASSERT_OK(mounter.MountData({}, std::nullopt, fs_management::MountOptions(),
+  ASSERT_OK(mounter.MountData(zx::channel(), std::nullopt, fs_management::MountOptions(),
                               fs_management::DiskFormat::kDiskFormatMinfs));
   ASSERT_TRUE(mounter.DataMounted());
 }
@@ -153,7 +154,7 @@ TEST_F(MounterTest, DataMount) {
 TEST_F(MounterTest, BlobfsMount) {
   TestMounter mounter(manager(), &config_);
   mounter.ExpectFilesystem(FilesystemType::kBlobfs);
-  ASSERT_OK(mounter.MountBlob({}, fs_management::MountOptions()));
+  ASSERT_OK(mounter.MountBlob(zx::channel(), fs_management::MountOptions()));
   ASSERT_TRUE(mounter.BlobMounted());
 }
 

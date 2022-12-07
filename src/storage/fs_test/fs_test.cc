@@ -6,7 +6,6 @@
 
 #include <dlfcn.h>
 #include <errno.h>
-#include <fcntl.h>
 #include <fidl/fuchsia.device/cpp/wire.h>
 #include <fidl/fuchsia.fs/cpp/wire.h>
 #include <fidl/fuchsia.hardware.ramdisk/cpp/wire.h>
@@ -237,7 +236,7 @@ zx::result<std::pair<RamDevice, std::string>> CreateRamDevice(
     }
 
     if (options.dummy_fvm_partition_size > 0) {
-      auto fvm_fd = fbl::unique_fd(open((device_path + "/fvm").c_str(), O_RDONLY));
+      auto fvm_fd = fbl::unique_fd(open((device_path + "/fvm").c_str(), O_RDWR));
       if (!fvm_fd) {
         std::cout << "Could not open FVM driver: " << strerror(errno) << std::endl;
         return zx::error(ZX_ERR_BAD_STATE);
@@ -289,11 +288,10 @@ zx::result<std::pair<std::unique_ptr<fs_management::SingleVolumeFilesystemInterf
 FsMount(const std::string& device_path, const std::string& mount_path,
         fs_management::DiskFormat format, const fs_management::MountOptions& options,
         bool is_multi_volume) {
-  zx::result device = component::Connect<fuchsia_hardware_block::Block>(device_path);
-  if (device.is_error()) {
-    std::cout << "Could not open device: " << device_path << ": " << device.status_string()
-              << std::endl;
-    return device.take_error();
+  auto fd = fbl::unique_fd(open(device_path.c_str(), O_RDWR));
+  if (!fd) {
+    std::cout << "Could not open device: " << device_path << ": errno=" << errno << std::endl;
+    return zx::error(ZX_ERR_BAD_STATE);
   }
 
   // Uncomment the following line to force an fsck at the end of every transaction (where
@@ -308,8 +306,7 @@ FsMount(const std::string& device_path, const std::string& mount_path,
   std::unique_ptr<fs_management::SingleVolumeFilesystemInterface> fs;
   if (is_multi_volume) {
     auto result = fs_management::MountMultiVolumeWithDefault(
-        std::move(device.value()), format, options, fs_management::LaunchStdioAsync,
-        kDefaultVolumeName);
+        std::move(fd), format, options, fs_management::LaunchStdioAsync, kDefaultVolumeName);
     if (result.is_error()) {
       LogMountError(result);
       return result.take_error();
@@ -317,8 +314,8 @@ FsMount(const std::string& device_path, const std::string& mount_path,
     fs = std::make_unique<fs_management::StartedSingleVolumeMultiVolumeFilesystem>(
         std::move(*result));
   } else {
-    auto result = fs_management::Mount(std::move(device.value()), format, options,
-                                       fs_management::LaunchStdioAsync);
+    auto result =
+        fs_management::Mount(std::move(fd), format, options, fs_management::LaunchStdioAsync);
     if (result.is_error()) {
       LogMountError(result);
       return result.take_error();
@@ -369,7 +366,7 @@ zx::result<std::pair<RamDevice, std::string>> OpenRamDevice(const TestFilesystem
 
   if (options.use_fvm) {
     // Now bind FVM to it.
-    zx::result device = component::Connect<fuchsia_device::Controller>(device_path);
+    zx::result device = component::Connect<fuchsia_device::Controller>(device_path.c_str());
     if (device.is_error()) {
       return device.take_error();
     }

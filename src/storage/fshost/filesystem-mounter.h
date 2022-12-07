@@ -15,10 +15,12 @@
 
 #include <fbl/unique_fd.h>
 
+#include "fidl/fuchsia.fxfs/cpp/markers.h"
 #include "fidl/fuchsia.io/cpp/markers.h"
 #include "lib/fidl/cpp/wire/internal/transport_channel.h"
 #include "src/lib/storage/fs_management/cpp/mount.h"
 #include "src/lib/storage/fs_management/cpp/options.h"
+#include "src/security/lib/fcrypto/bytes.h"
 #include "src/storage/fshost/copier.h"
 #include "src/storage/fshost/fs-manager.h"
 #include "src/storage/fshost/fshost-boot-args.h"
@@ -43,9 +45,9 @@ class StartedFilesystem {
       fs_;
 };
 
-zx::result<StartedFilesystem> LaunchFilesystem(
-    fidl::ClientEnd<fuchsia_hardware_block::Block> block_device,
-    const fs_management::MountOptions& options, fs_management::DiskFormat format);
+zx::result<StartedFilesystem> LaunchFilesystem(zx::channel block_device,
+                                               const fs_management::MountOptions& options,
+                                               fs_management::DiskFormat format);
 
 // FilesystemMounter is a utility class which wraps the FsManager
 // and helps clients mount filesystems within the fshost namespace.
@@ -64,18 +66,17 @@ class FilesystemMounter {
   // If |copier| is set, its data will be copied into the data filesystem before exposing the
   // filesystem to clients.
   //
-  zx_status_t MountData(fidl::ClientEnd<fuchsia_hardware_block::Block> block_device,
-                        std::optional<Copier> copier, fs_management::MountOptions options,
-                        fs_management::DiskFormat format);
+  zx_status_t MountData(zx::channel block_device_client, std::optional<Copier> copier,
+                        fs_management::MountOptions options, fs_management::DiskFormat format);
 
   // Attempts to mount a block device to "/blob".
   // Fails if already mounted.
-  zx_status_t MountBlob(fidl::ClientEnd<fuchsia_hardware_block::Block> block_device,
+  zx_status_t MountBlob(zx::channel block_device_client,
                         const fs_management::MountOptions& options);
 
   // Attempts to mount a block device to "/factory".
   // Fails if already mounted.
-  zx_status_t MountFactoryFs(fidl::ClientEnd<fuchsia_hardware_block::Block> block_device,
+  zx_status_t MountFactoryFs(zx::channel block_device_client,
                              const fs_management::MountOptions& options);
 
   std::shared_ptr<FshostBootArgs> boot_args() { return fshost_.boot_args(); }
@@ -100,29 +101,27 @@ class FilesystemMounter {
   // protocol.
   // Performs the mechanical action of mounting a filesystem, without validating the type of
   // filesystem being mounted.
-  zx::result<> MountLegacyFilesystem(
-      FsManager::MountPoint point, fs_management::DiskFormat df, const char* binary_path,
-      const fs_management::MountOptions& options,
-      fidl::ClientEnd<fuchsia_hardware_block::Block> block_device) const;
+  zx::result<> MountLegacyFilesystem(FsManager::MountPoint point, fs_management::DiskFormat df,
+                                     const char* binary_path,
+                                     const fs_management::MountOptions& options,
+                                     zx::channel block_device) const;
 
   // Actually launches the filesystem component.  Note that for non-componentized filesystems there
   // is the LaunchFsNative variant which allows control over where the endpoint is bound to.
   //
   // Virtualized to enable testing.
-  virtual zx::result<StartedFilesystem> LaunchFs(
-      fidl::ClientEnd<fuchsia_hardware_block::Block> block_device,
-      const fs_management::MountOptions& options, fs_management::DiskFormat format) const;
+  virtual zx::result<StartedFilesystem> LaunchFs(zx::channel block_device,
+                                                 const fs_management::MountOptions& options,
+                                                 fs_management::DiskFormat format) const;
 
   // Actually launches the filesystem.
   //
   // Virtualized to enable testing.
   virtual zx::result<> LaunchFsNative(fidl::ServerEnd<fuchsia_io::Directory> server,
-                                      const char* binary,
-                                      fidl::ClientEnd<fuchsia_hardware_block::Block> block_device,
+                                      const char* binary, zx::channel block_device,
                                       const fs_management::MountOptions& options) const;
 
-  zx_status_t CopyDataToLegacyFilesystem(fs_management::DiskFormat df,
-                                         fidl::ClientEnd<fuchsia_hardware_block::Block> device,
+  zx_status_t CopyDataToLegacyFilesystem(fs_management::DiskFormat df, zx::channel device,
                                          const Copier& copier) const;
 
   FsManager& fshost_;

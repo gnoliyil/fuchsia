@@ -112,4 +112,32 @@ zx::result<uint64_t> ResizeVolume(
   return zx::ok(slice_count * slice_size);
 }
 
+zx::result<zx::channel> CloneNode(fidl::UnownedClientEnd<fuchsia_io::Node> node) {
+  auto endpoints = fidl::CreateEndpoints<fuchsia_io::Node>();
+  if (endpoints.is_error())
+    return endpoints.take_error();
+
+  if (zx_status_t status =
+          fidl::WireCall(fidl::UnownedClientEnd<fuchsia_io::Node>(node))
+              ->Clone(fuchsia_io::wire::OpenFlags::kCloneSameRights, std::move(endpoints->server))
+              .status();
+      status != ZX_OK) {
+    return zx::error(status);
+  }
+
+  return zx::ok(std::move(endpoints->client).TakeChannel());
+}
+
+zx::result<std::string> GetDevicePath(fidl::UnownedClientEnd<fuchsia_device::Controller> device) {
+  std::string device_path;
+  if (auto result = fidl::WireCall(device)->GetTopologicalPath(); result.status() != ZX_OK) {
+    return zx::error(result.status());
+  } else if (result->is_error()) {
+    return zx::error(result->error_value());
+  } else {
+    device_path = result->value()->path.get();
+  }
+  return zx::ok(device_path);
+}
+
 }  // namespace fshost
