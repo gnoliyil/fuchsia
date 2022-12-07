@@ -34,12 +34,12 @@ constexpr float kMinimumGainForPlayPauseRamps = -120.0f;
 template <typename ResultT>
 bool LogResultError(const ResultT& result, const char* debug_context) {
   if (!result.ok()) {
-    FX_LOGS(ERROR) << debug_context << ": failed with status " << result;
+    FX_LOGS(WARNING) << debug_context << ": failed with transport error: " << result;
     return true;
   }
   if (!result->is_ok()) {
-    FX_LOGS(ERROR) << debug_context << ": failed with code "
-                   << fidl::ToUnderlying(result->error_value());
+    FX_LOGS(ERROR) << debug_context
+                   << ": failed with code: " << fidl::ToUnderlying(result->error_value());
     return true;
   }
   return false;
@@ -91,6 +91,31 @@ AudioRendererServer::AudioRendererServer(std::shared_ptr<const FidlThread> fidl_
       .thread = fidl_thread,
   });
   delay_watcher_server_end_ = std::move(delay_watcher_endpoints->server);
+}
+
+media::audio::RenderUsage AudioRendererServer::usage() const {
+  FX_CHECK(IsConfigured());
+  return usage_;
+}
+
+const Format& AudioRendererServer::format() const {
+  FX_CHECK(IsConfigured());
+  return *format_;
+}
+
+NodeId AudioRendererServer::producer_node() const {
+  FX_CHECK(IsConfigured());
+  return *producer_node_;
+}
+
+GainControlId AudioRendererServer::stream_gain_control() const {
+  FX_CHECK(IsConfigured());
+  return *stream_gain_id_;
+}
+
+std::optional<GainControlId> AudioRendererServer::play_pause_ramp_gain_control() const {
+  FX_CHECK(IsConfigured());
+  return play_pause_ramp_gain_id_;
 }
 
 void AudioRendererServer::SetPtsUnits(SetPtsUnitsRequestView request,
@@ -400,7 +425,7 @@ void AudioRendererServer::EnableMinLeadTimeEvents(
 void AudioRendererServer::SendPacketInternal(fuchsia_media::StreamPacket packet,
                                              std::optional<SendPacketCompleter::Async> completer) {
   TRACE_DURATION("audio", "AudioRendererServer::SendPacketInternal");
-  FX_CHECK(state_ == State::kReadyToPlay);
+  FX_CHECK(state_ == State::kFullyCreated);
   FX_CHECK(stream_sink_client_);
 
   // TODO(fxbug.dev/98652): support IDs other than 0.
@@ -756,7 +781,7 @@ void AudioRendererServer::MaybeConfigure() {
           return;
         }
         producer_node_ = result->value()->id();
-        MaybeSetReadyToPlay();
+        MaybeSetFullyCreated();
 
         // Watch for lead time events.
         fidl::Arena<> arena;
@@ -792,7 +817,7 @@ void AudioRendererServer::MaybeConfigure() {
           return;
         }
         stream_gain_id_ = result->value()->id();
-        MaybeSetReadyToPlay();
+        MaybeSetFullyCreated();
       });
 
   // Create GainControl for ramping on play/pause.
@@ -826,12 +851,12 @@ void AudioRendererServer::MaybeConfigure() {
             return;
           }
           play_pause_ramp_gain_id_ = result->value()->id();
-          MaybeSetReadyToPlay();
+          MaybeSetFullyCreated();
         });
   }
 }
 
-void AudioRendererServer::MaybeSetReadyToPlay() {
+void AudioRendererServer::MaybeSetFullyCreated() {
   if (state_ == State::kShutdown) {
     return;
   }
@@ -839,7 +864,7 @@ void AudioRendererServer::MaybeSetReadyToPlay() {
     return;
   }
 
-  state_ = State::kReadyToPlay;
+  state_ = State::kFullyCreated;
 
   // TODO(fxbug.dev/98652): after implementing RouteGraph, this is where we should add this renderer
   // to the RouteGroup.
@@ -862,7 +887,7 @@ void AudioRendererServer::RunWhenReady(const char* debug_string, fit::closure fn
     case State::kConfigured:
       queued_tasks_.push_back(std::move(fn));
       break;
-    case State::kReadyToPlay:
+    case State::kFullyCreated:
       fn();
       break;
   }

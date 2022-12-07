@@ -51,6 +51,19 @@ class AudioCapturerServer
       std::shared_ptr<const FidlThread> fidl_thread,
       fidl::ServerEnd<fuchsia_media::AudioCapturer> server_end, Args args);
 
+  // Reports if the capturer is configured.
+  bool IsFullyCreated() const { return state_ == State::kFullyCreated; }
+
+  // Reports current properties of the capturer.
+  // These cannot be called unless the capturer is `IsConfigured()`.
+  media::audio::CaptureUsage usage() const;
+  const Format& format() const;
+
+  // Reports graph objects used by this capturer.
+  // These cannot be called unless the capturer is `IsConfigured()`.
+  NodeId consumer_node() const;
+  GainControlId stream_gain_control() const;
+
   //
   // Implementation of fidl::WireServer<fuchsia_media::AudioCapturer>.
   //
@@ -114,7 +127,7 @@ class AudioCapturerServer
 
   void OnShutdown(fidl::UnbindInfo info) final;
   void MaybeConfigure();
-  void MaybeSetReadyToCapture();
+  void MaybeSetFullyCreated();
   void RunWhenReady(const char* debug_string, fit::closure fn);
   fuchsia_audio_mixer::wire::ReferenceClock ReferenceClockToFidl(fidl::AnyArena& arena);
   bool IsConfigured() const { return state_ >= State::kConfigured; }
@@ -130,7 +143,7 @@ class AudioCapturerServer
     // Finalized the format and payload buffer. Started graph node creations.
     kConfigured,
     // Graph nodes created.
-    kReadyToCapture,
+    kFullyCreated,
     // Capturing started on behalf of CaptureAt.
     kCapturingSync,
     // Capturing started on behalf of StartAsyncCapture.

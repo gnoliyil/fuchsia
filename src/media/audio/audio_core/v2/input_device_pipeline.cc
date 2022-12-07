@@ -28,12 +28,12 @@ std::pair<int64_t, int64_t> FormatToKey(const Format& format) {
 template <typename ResultT>
 bool LogResultError(const ResultT& result, const char* debug_context) {
   if (!result.ok()) {
-    FX_LOGS(ERROR) << debug_context << ": failed with status " << result;
+    FX_LOGS(WARNING) << debug_context << ": failed with transport error: " << result;
     return true;
   }
   if (!result->is_ok()) {
-    FX_LOGS(ERROR) << debug_context << ": failed with code "
-                   << fidl::ToUnderlying(result->error_value());
+    FX_LOGS(ERROR) << debug_context
+                   << ": failed with code: " << fidl::ToUnderlying(result->error_value());
     return true;
   }
   return false;
@@ -135,6 +135,12 @@ void Connector<N>::SetFailed() {
 }
 
 }  // namespace
+
+struct InputDevicePipeline::PendingCreate {
+  Format format;
+  std::vector<fit::callback<void(std::optional<NodeId>)>> callbacks;
+  std::shared_ptr<Connector<3>> connector;
+};
 
 // static
 void InputDevicePipeline::CreateForDevice(DeviceArgs args) {
@@ -303,12 +309,24 @@ bool InputDevicePipeline::SupportsUsage(CaptureUsage usage) const {
   return supported_usages_.count(StreamUsage::WithCaptureUsage(usage)) > 0;
 }
 
+std::optional<NodeId> InputDevicePipeline::SourceNodeForFormat(const Format& desired_format) const {
+  const auto key = FormatToKey(desired_format);
+  auto it = splitters_by_format_.find(key);
+  return (it != splitters_by_format_.end()) ? std::optional(it->second) : std::nullopt;
+}
+
 void InputDevicePipeline::CreateSourceNodeForFormat(
     const Format& desired_format, fit::callback<void(std::optional<NodeId>)> callback) {
   // Check if a suitable source node already exists.
   const auto key = FormatToKey(desired_format);
   if (auto it = splitters_by_format_.find(key); it != splitters_by_format_.end()) {
     callback(it->second);
+    return;
+  }
+
+  // Check if a create operation is already pending for this format.
+  if (auto it = pending_creates_.find(key); it != pending_creates_.end()) {
+    it->second->callbacks.push_back(std::move(callback));
     return;
   }
 
@@ -322,27 +340,25 @@ void InputDevicePipeline::CreateSourceNodeForFormat(
   fidl::Arena arena;
 
   // State held during this asynchronous operation.
-  struct State {
-    Format format;
-    fit::callback<void(std::optional<NodeId>)> callback;
-    std::shared_ptr<Connector<3>> connector;
-  };
-
-  auto state = std::make_shared<State>(State{
-      .format = format,
-      .callback = std::move(callback),
-  });
+  auto state = std::make_shared<PendingCreate>(PendingCreate{.format = format});
+  state->callbacks.push_back(std::move(callback));
+  pending_creates_[key] = state;
 
   // Create a sequence root_splitter -> mixer -> splitter, then return the last splitter.
   state->connector =
-      std::make_shared<Connector<3>>(client_, [this, self = shared_from_this(), state]() {
+      std::make_shared<Connector<3>>(client_, [this, self = shared_from_this(), state, key]() {
         if (state->connector->failed()) {
-          state->callback(std::nullopt);
+          for (auto& cb : state->callbacks) {
+            cb(std::nullopt);
+          }
           return;
         }
         const auto splitter_node = state->connector->node(2);
         splitters_by_format_[FormatToKey(state->format)] = splitter_node;
-        state->callback(splitter_node);
+        for (auto& cb : state->callbacks) {
+          cb(splitter_node);
+        }
+        pending_creates_.erase(key);
       });
 
   state->connector->SetNode(0, root_splitter_);

@@ -22,12 +22,12 @@ namespace {
 template <typename ResultT>
 bool LogResultError(const ResultT& result, const char* debug_context) {
   if (!result.ok()) {
-    FX_LOGS(ERROR) << debug_context << ": failed with status " << result;
+    FX_LOGS(WARNING) << debug_context << ": failed with transport error: " << result;
     return true;
   }
   if (!result->is_ok()) {
-    FX_LOGS(ERROR) << debug_context << ": failed with code "
-                   << fidl::ToUnderlying(result->error_value());
+    FX_LOGS(ERROR) << debug_context
+                   << ": failed with code: " << fidl::ToUnderlying(result->error_value());
     return true;
   }
   return false;

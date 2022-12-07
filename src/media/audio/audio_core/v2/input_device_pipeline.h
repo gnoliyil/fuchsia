@@ -92,6 +92,12 @@ class InputDevicePipeline : public std::enable_shared_from_this<InputDevicePipel
   // Reports if this pipeline supports capturers with the given `usage`.
   bool SupportsUsage(media::audio::CaptureUsage usage) const;
 
+  // Returns a source node that can accept a destination capturer with the given format. The
+  // returned node can accept an arbitrarily large number of renderers. Returns `std::nullopt` if
+  // such a node does not exist yet, in which case the node should be created with
+  // `CreateSourceNodeForFormat`.
+  std::optional<NodeId> SourceNodeForFormat(const Format& format) const;
+
   // Creates a source node that can accept a destination capturer with the given format. On success,
   // the created node is passed to `callback`. On failure, `callback` receives `std::nullopt`.
   void CreateSourceNodeForFormat(const Format& format,
@@ -153,6 +159,10 @@ class InputDevicePipeline : public std::enable_shared_from_this<InputDevicePipel
   // Using `std::map` instead of `std::unordered_map` because `std::pair` does not have a default
   // hash function, plus this should not have very many keys in practice.
   std::map<std::pair<int64_t, int64_t>, NodeId> splitters_by_format_;
+
+  // Pending calls to CreateSourceNodeForFormat.
+  struct PendingCreate;
+  std::map<std::pair<int64_t, int64_t>, std::shared_ptr<PendingCreate>> pending_creates_;
 
   // All nodes created by this pipeline.
   std::unordered_set<NodeId> created_nodes_;

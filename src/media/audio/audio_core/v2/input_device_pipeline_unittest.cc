@@ -166,13 +166,21 @@ TEST(InputDevicePipelineTest, CreateForDevice) {
   EXPECT_FALSE(pipeline->SupportsUsage(CaptureUsage::SYSTEM_AGENT));
   EXPECT_FALSE(pipeline->SupportsUsage(CaptureUsage::COMMUNICATION));
 
-  // Should not created 2 nodes with one edge connecting them.
+  // Should have created 2 nodes with one edge connecting them.
   EXPECT_EQ(h.server->calls().size(), 3u);
 
   static constexpr NodeId kProducerId = 1;
   static constexpr NodeId kRootSplitterId = 2;
   static constexpr NodeId kStereoMixerId = 3;
   static constexpr NodeId kStereoSplitterId = 4;
+
+  // Formats match the device.
+  EXPECT_EQ(pipeline->SourceNodeForFormat(kFormatIntMono), kRootSplitterId);
+  EXPECT_EQ(pipeline->SourceNodeForFormat(kFormatFloatMono), kRootSplitterId);
+
+  // Formats don't match the device: these nodes need to be created.
+  EXPECT_FALSE(pipeline->SourceNodeForFormat(kFormatIntStereo));
+  EXPECT_FALSE(pipeline->SourceNodeForFormat(kFormatFloatStereo));
 
   // When the format matches the device, this call should return immediately.
   {
@@ -226,6 +234,10 @@ TEST(InputDevicePipelineTest, CreateForDevice) {
   // Adds 4 DeleteNode calls.
   pipeline->Destroy();
   h.loop.RunUntilIdle();
+
+  // These have been created.
+  EXPECT_EQ(pipeline->SourceNodeForFormat(kFormatIntStereo), kStereoSplitterId);
+  EXPECT_EQ(pipeline->SourceNodeForFormat(kFormatFloatStereo), kStereoSplitterId);
 
   // Check the graph calls.
   const auto& calls = h.server->calls();
@@ -285,6 +297,14 @@ TEST(InputDevicePipelineTest, CreateForLoopback) {
   // Should not have created any nodes.
   EXPECT_EQ(h.server->calls().size(), 0u);
 
+  // Formats match the device.
+  EXPECT_EQ(pipeline->SourceNodeForFormat(kFormatIntMono), kLoopbackSplitterId);
+  EXPECT_EQ(pipeline->SourceNodeForFormat(kFormatFloatMono), kLoopbackSplitterId);
+
+  // Formats don't match the device: these nodes need to be created.
+  EXPECT_FALSE(pipeline->SourceNodeForFormat(kFormatIntStereo));
+  EXPECT_FALSE(pipeline->SourceNodeForFormat(kFormatFloatStereo));
+
   // When the format matches the splitter, this call should return immediately.
   {
     SCOPED_TRACE("CreateSourceNode same format as splitter");
@@ -338,6 +358,10 @@ TEST(InputDevicePipelineTest, CreateForLoopback) {
   pipeline->Destroy();
   h.loop.RunUntilIdle();
 
+  // These have been created.
+  EXPECT_EQ(pipeline->SourceNodeForFormat(kFormatIntStereo), kStereoSplitterId);
+  EXPECT_EQ(pipeline->SourceNodeForFormat(kFormatFloatStereo), kStereoSplitterId);
+
   // Check the graph calls.
   const auto& calls = h.server->calls();
   ASSERT_EQ(calls.size(), 6u);
@@ -348,6 +372,47 @@ TEST(InputDevicePipelineTest, CreateForLoopback) {
                                          /*splitter_id=*/2, kThreadId, calls, 0);
 
   ValidateDeletedNodes(calls, 4, {kStereoMixerId, kStereoSplitterId});
+}
+
+TEST(InputDevicePipelineTest, ConcurrentCreateSourceNode) {
+  static constexpr auto kThreadId = 100;
+  static constexpr auto kLoopbackSplitterId = 99;
+  static constexpr auto kStereoSplitterId = 2;
+
+  TestHarness h;
+  auto pipeline = InputDevicePipeline::CreateForLoopback({
+      .graph_client = h.client,
+      .splitter_node = kLoopbackSplitterId,
+      .format = kFormatIntMono,
+      .reference_clock = h.reference_clock.Dup(),
+      .thread = kThreadId,
+  });
+  ASSERT_TRUE(pipeline);
+
+  EXPECT_TRUE(pipeline->SupportsUsage(CaptureUsage::LOOPBACK));
+  EXPECT_FALSE(pipeline->SupportsUsage(CaptureUsage::BACKGROUND));
+  EXPECT_FALSE(pipeline->SupportsUsage(CaptureUsage::FOREGROUND));
+  EXPECT_FALSE(pipeline->SupportsUsage(CaptureUsage::SYSTEM_AGENT));
+  EXPECT_FALSE(pipeline->SupportsUsage(CaptureUsage::COMMUNICATION));
+
+  // This format is not supported yet.
+  ASSERT_FALSE(pipeline->SourceNodeForFormat(kFormatIntStereo));
+
+  // When called concurrently, both calls should return the same node ID.
+  bool done1 = false;
+  bool done2 = false;
+  pipeline->CreateSourceNodeForFormat(kFormatIntStereo, [&done1](auto node) {
+    EXPECT_EQ(node, kStereoSplitterId);
+    done1 = true;
+  });
+  pipeline->CreateSourceNodeForFormat(kFormatIntStereo, [&done2](auto node) {
+    EXPECT_EQ(node, kStereoSplitterId);
+    done2 = true;
+  });
+
+  h.loop.RunUntilIdle();
+  EXPECT_TRUE(done1);
+  EXPECT_TRUE(done2);
 }
 
 }  // namespace

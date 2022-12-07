@@ -26,12 +26,12 @@ int64_t num_capturers = 0;
 template <typename ResultT>
 bool LogResultError(const ResultT& result, const char* debug_context) {
   if (!result.ok()) {
-    FX_LOGS(ERROR) << debug_context << ": failed with status " << result;
+    FX_LOGS(WARNING) << debug_context << ": failed with transport error: " << result;
     return true;
   }
   if (!result->is_ok()) {
-    FX_LOGS(ERROR) << debug_context << ": failed with code "
-                   << fidl::ToUnderlying(result->error_value());
+    FX_LOGS(ERROR) << debug_context
+                   << ": failed with code: " << fidl::ToUnderlying(result->error_value());
     return true;
   }
   return false;
@@ -68,6 +68,26 @@ AudioCapturerServer::AudioCapturerServer(std::shared_ptr<const FidlThread> fidl_
   if (usage_ == CaptureUsage::ULTRASOUND) {
     FX_CHECK(format_);
   }
+}
+
+media::audio::CaptureUsage AudioCapturerServer::usage() const {
+  FX_CHECK(IsConfigured());
+  return usage_;
+}
+
+const Format& AudioCapturerServer::format() const {
+  FX_CHECK(IsConfigured());
+  return *format_;
+}
+
+NodeId AudioCapturerServer::consumer_node() const {
+  FX_CHECK(IsConfigured());
+  return *consumer_node_;
+}
+
+GainControlId AudioCapturerServer::stream_gain_control() const {
+  FX_CHECK(IsConfigured());
+  return *stream_gain_id_;
 }
 
 void AudioCapturerServer::SetReferenceClock(SetReferenceClockRequestView request,
@@ -302,7 +322,7 @@ void AudioCapturerServer::CaptureAtInternal(uint32_t payload_buffer_id, uint32_t
   }
 
   switch (state_) {
-    case State::kReadyToCapture:
+    case State::kFullyCreated:
       // Flush packets still pending from a prior async capture, if any.
       stream_sink_server_->DiscardPackets();
       // Start the ConsumerNode. It will keep running until we receive StartAsyncCapture (which
@@ -350,7 +370,7 @@ void AudioCapturerServer::StartAsyncCaptureInternal(uint32_t frames_per_packet) 
   }
 
   switch (state_) {
-    case State::kReadyToCapture:
+    case State::kFullyCreated:
       // Flush packets still pending from a prior async capture, if any.
       stream_sink_server_->DiscardPackets();
       // Start the ConsumerNode. It will keep running until we receive StopAsyncCapture.
@@ -399,7 +419,7 @@ void AudioCapturerServer::StopAsyncCaptureInternal(
   switch (state_) {
     case State::kCapturingAsync:
       Stop();
-      state_ = State::kReadyToCapture;
+      state_ = State::kFullyCreated;
       break;
     default:
       FX_LOGS(WARNING) << "StopAsyncCapture called in bad state " << static_cast<int>(state_);
@@ -641,7 +661,7 @@ void AudioCapturerServer::MaybeConfigure() {
           return;
         }
         consumer_node_ = result->value()->id();
-        MaybeSetReadyToCapture();
+        MaybeSetFullyCreated();
       });
 
   // Create GainControl for controlling stream gain.
@@ -662,11 +682,11 @@ void AudioCapturerServer::MaybeConfigure() {
           return;
         }
         stream_gain_id_ = result->value()->id();
-        MaybeSetReadyToCapture();
+        MaybeSetFullyCreated();
       });
 }
 
-void AudioCapturerServer::MaybeSetReadyToCapture() {
+void AudioCapturerServer::MaybeSetFullyCreated() {
   if (state_ == State::kShutdown) {
     return;
   }
@@ -674,7 +694,7 @@ void AudioCapturerServer::MaybeSetReadyToCapture() {
     return;
   }
 
-  state_ = State::kReadyToCapture;
+  state_ = State::kFullyCreated;
 
   // TODO(fxbug.dev/98652): after implementing RouteGraph, this is where we should add this capturer
   // to the RouteGroup.
@@ -697,7 +717,7 @@ void AudioCapturerServer::RunWhenReady(const char* debug_string, fit::closure fn
     case State::kConfigured:
       queued_tasks_.push_back(std::move(fn));
       break;
-    case State::kReadyToCapture:
+    case State::kFullyCreated:
     case State::kCapturingSync:
     case State::kCapturingAsync:
       fn();

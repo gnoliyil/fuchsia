@@ -54,6 +54,20 @@ class AudioRendererServer
       std::shared_ptr<const FidlThread> fidl_thread,
       fidl::ServerEnd<fuchsia_media::AudioRenderer> server_end, Args args);
 
+  // Reports if the renderer is configured and all graph nodes have been created.
+  bool IsFullyCreated() const { return state_ == State::kFullyCreated; }
+
+  // Reports current properties of the renderer.
+  // These cannot be called unless the renderer is `IsConfigured()`.
+  media::audio::RenderUsage usage() const;
+  const Format& format() const;
+
+  // Reports graph objects used by this renderer.
+  // These cannot be called unless the renderer is `IsConfigured()`.
+  NodeId producer_node() const;
+  GainControlId stream_gain_control() const;
+  std::optional<GainControlId> play_pause_ramp_gain_control() const;
+
   //
   // Implementation of fidl::WireServer<fuchsia_media::AudioRenderer>.
   //
@@ -121,7 +135,7 @@ class AudioRendererServer
   void OnShutdown(fidl::UnbindInfo info) final;
   void OnMinLeadTimeUpdated(std::optional<zx::duration> min_lead_time);
   void MaybeConfigure();
-  void MaybeSetReadyToPlay();
+  void MaybeSetFullyCreated();
   void RunWhenReady(const char* debug_string, fit::closure fn);
   fuchsia_audio_mixer::wire::ReferenceClock ReferenceClockToFidl(fidl::AnyArena& arena);
   bool IsConfigured() const { return state_ >= State::kConfigured; }
@@ -138,7 +152,7 @@ class AudioRendererServer
     // Finalized the format and payload buffer. Started graph node creations.
     kConfigured,
     // Graph nodes created.
-    kReadyToPlay,
+    kFullyCreated,
   };
   State state_ = State::kWaitingForConfig;
 
@@ -170,7 +184,7 @@ class AudioRendererServer
   bool enable_min_lead_time_events_ = false;
   zx::duration min_lead_time_;
 
-  // Commands that are queued between State::kConfigured and State::kReadyToPlay.
+  // Commands that are queued between State::kConfigured and State::kFullyCreated.
   std::vector<fit::closure> queued_tasks_;
 };
 
