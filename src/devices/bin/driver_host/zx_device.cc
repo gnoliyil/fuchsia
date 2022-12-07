@@ -225,17 +225,6 @@ zx_status_t zx_device_t::get_dev_power_state_from_mapping(
   return ZX_OK;
 }
 
-void zx_device::CloseAllConnections() {
-  // Posted to the main event loop to synchronize with any other calls that may manipulate the state
-  // of this Vnode (such as dev->vnode being reset by DriverHostContext::DriverManagerRemove).
-  async::PostTask(internal::ContextForApi()->loop().dispatcher(),
-                  [dev = fbl::RefPtr<zx_device>(this)] {
-                    if (std::optional<DeviceServer>& vnode = dev->vnode; vnode.has_value()) {
-                      vnode.value().CloseAllConnections(/*callback=*/nullptr);
-                    }
-                  });
-}
-
 zx_status_t zx_device::SetSystemPowerStateMapping(const SystemPowerStateMapping& mapping) {
   for (size_t i = 0; i < mapping.size(); i++) {
     auto info = &mapping[i];

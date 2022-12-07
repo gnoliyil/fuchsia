@@ -127,8 +127,6 @@ struct zx_device
   static zx_status_t Create(DriverHostContext* ctx, std::string name, fbl::RefPtr<Driver> driver,
                             fbl::RefPtr<zx_device>* out_dev);
 
-  void CloseAllConnections();
-
   void InitOp() {
     libsync::Completion completion;
 
