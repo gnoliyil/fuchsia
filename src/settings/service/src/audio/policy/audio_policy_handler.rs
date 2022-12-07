@@ -444,8 +444,6 @@ impl AudioPolicyHandler {
     /// setting.
     ///
     /// [Rebroadcast]: crate::handler::base::Request::Rebroadcast
-    // TODO(fxbug.dev/67784): consider keeping copy of external audio info so previous external
-    // volume doesn't need to be calculated.
     async fn apply_policy_transforms(
         &mut self,
         target: PropertyTarget,
