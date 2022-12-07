@@ -1204,17 +1204,6 @@ pub fn update_ipv6_configuration<
     crate::ip::device::update_ipv6_configuration(&mut sync_ctx, ctx, device, update_cb)
 }
 
-/// An address that may be "tentative" in that it has not yet passed duplicate
-/// address detection (DAD).
-///
-/// A tentative address is one for which DAD is currently being performed. An
-/// address is only considered assigned to an interface once DAD has completed
-/// without detecting any duplicates. See [RFC 4862] for more details.
-///
-/// [RFC 4862]: https://tools.ietf.org/html/rfc4862
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct Tentative<T>(T, bool);
-
 #[cfg(test)]
 pub(crate) mod testutil {
     use super::*;
