@@ -69,18 +69,15 @@ pub async fn exec_list_impl<W: std::io::Write, E: std::io::Write>(
     let mut broken = false;
     for mut some_name in instance_list {
         match get_engine_by_name(&mut some_name).await {
-            Ok(mut engine) => {
+            Ok(engine) => {
                 let name = some_name.unwrap();
-                if engine.is_running() {
-                    writeln!(writer, "[Active]    {}: {}", name, engine.engine_state())?;
-                } else {
-                    writeln!(writer, "[Inactive]  {}: {}", name, engine.engine_state())?;
-                }
+                let state = format!("[{}]", engine.engine_state());
+                writeln!(writer, "{:16}{}", state, name)?;
             }
             Err(_) => {
                 writeln!(
                     writer,
-                    "[Broken]    {}",
+                    "[Broken]        {}",
                     some_name.unwrap_or("<unspecified>".to_string())
                 )?;
                 broken = true;
@@ -222,7 +219,7 @@ mod tests {
         let mut stderr: Vec<u8> = vec![];
         exec_list_impl(&mut stdout, &mut stderr).await?;
 
-        let stdout_expected = "[Inactive]  notrunning_emu: new\n";
+        let stdout_expected = "[new]           notrunning_emu\n";
         assert_eq!(str::from_utf8(&stdout)?, stdout_expected);
         assert!(stderr.is_empty());
         Ok(())
@@ -246,7 +243,7 @@ mod tests {
         let mut stderr: Vec<u8> = vec![];
         exec_list_impl(&mut stdout, &mut stderr).await?;
 
-        let stdout_expected = "[Inactive]  notrunning_emu: configured\n";
+        let stdout_expected = "[configured]    notrunning_emu\n";
         assert_eq!(str::from_utf8(&stdout)?, stdout_expected);
         assert!(stderr.is_empty());
         Ok(())
@@ -270,7 +267,7 @@ mod tests {
         let mut stderr: Vec<u8> = vec![];
         exec_list_impl(&mut stdout, &mut stderr).await?;
 
-        let stdout_expected = "[Inactive]  notrunning_emu: staged\n";
+        let stdout_expected = "[staged]        notrunning_emu\n";
         assert_eq!(str::from_utf8(&stdout)?, stdout_expected);
         assert!(stderr.is_empty());
         Ok(())
@@ -295,7 +292,7 @@ mod tests {
 
         exec_list_impl(&mut stdout, &mut stderr).await?;
 
-        let stdout_expected = "[Active]    running_emu: running\n";
+        let stdout_expected = "[running]       running_emu\n";
         assert_eq!(str::from_utf8(&stdout)?, stdout_expected);
         assert!(stderr.is_empty());
         Ok(())
@@ -320,7 +317,7 @@ mod tests {
 
         exec_list_impl(&mut stdout, &mut stderr).await?;
 
-        let stdout_expected = "[Active]    running_emu: error\n";
+        let stdout_expected = "[error]         running_emu\n";
         assert_eq!(str::from_utf8(&stdout)?, stdout_expected);
         assert!(stderr.is_empty());
         Ok(())
@@ -343,7 +340,7 @@ mod tests {
 
         exec_list_impl(&mut stdout, &mut stderr).await?;
 
-        let stdout_expected = "[Broken]    error_emu\n";
+        let stdout_expected = "[Broken]        error_emu\n";
         assert_eq!(str::from_utf8(&stdout)?, stdout_expected);
         assert_eq!(str::from_utf8(&stderr)?, format!("{}\n", BROKEN_MESSAGE));
         Ok(())
