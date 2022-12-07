@@ -13,6 +13,12 @@
 #define WRITE32_VPU_REG(a, v) vpu_mmio_->Write32(v, a)
 
 #define VPU_VIU_OSD1_CTRL_STAT (0x1a10 << 2)
+#define VPU_VIU_OSD1_COLOR_ADDR (0x1a11 << 2)
+#define VPU_VIU_OSD1_COLOR (0x1a12 << 2)
+#define VPU_VIU_OSD1_TCOLOR_AG0 (0x1a17 << 2)
+#define VPU_VIU_OSD1_TCOLOR_AG1 (0x1a19 << 2)
+#define VPU_VIU_OSD1_TCOLOR_AG2 (0x1a19 << 2)
+#define VPU_VIU_OSD1_TCOLOR_AG3 (0x1a1a << 2)
 #define VPU_VIU_OSD1_CTRL_STAT2 (0x1a2d << 2)
 #define VPU_VIU_OSD1_BLK0_CFG_W0 (0x1a1b << 2)
 #define VPU_VIU_OSD1_BLK0_CFG_W1 (0x1a1c << 2)
@@ -22,7 +28,9 @@
 #define VPU_VIU_OSD1_BLK1_CFG_W4 (0x1a14 << 2)
 #define VPU_VIU_OSD1_BLK2_CFG_W4 (0x1a15 << 2)
 #define VPU_VIU_OSD1_FIFO_CTRL_STAT (0x1a2b << 2)
-#define VIU_OSD1_MALI_UNPACK_CTRL (0x1a2f << 2)
+#define VPU_VIU_OSD1_PROT_CTRL (0x1a2e << 2)
+#define VPU_VIU_OSD1_MALI_UNPACK_CTRL (0x1a2f << 2)
+#define VPU_VIU_OSD1_DIMM_CTRL (0x1adf << 2)
 #define VPU_VIU_OSD2_CTRL_STAT (0x1a30 << 2)
 #define VPU_VIU_OSD2_FIFO_CTRL_STAT (0x1a4b << 2)
 #define VPU_VIU_OSD2_BLK0_CFG_W4 (0x1a64 << 2)
@@ -50,6 +58,7 @@
 #define VPU_VPP_OSD_HSC_CTRL0 (0x1dc5 << 2)
 #define VPU_VPP_OSD_HSC_PHASE_STEP (0x1dc3 << 2)
 #define VPU_VPP_OSD_HSC_INI_PHASE (0x1dc4 << 2)
+#define VPU_VPP_OSD_SC_DUMMY_DATA (0x1dc7 << 2)
 #define VPU_VPP_OSD_SC_CTRL0 (0x1dc8 << 2)
 #define VPU_VPP_OSD_SCI_WH_M1 (0x1dc9 << 2)
 #define VPU_VPP_OSD_SCO_H_START_END (0x1dca << 2)
@@ -161,6 +170,13 @@
 #define VPU_MAFBC_PREFETCH_CFG_S0 (0x3a1c << 2)
 
 namespace amlogic_display {
+
+template <class DerivedType, class IntType>
+class RegisterBase : public hwreg::RegisterBase<DerivedType, IntType> {
+ public:
+  static auto Get(uint32_t addr) { return hwreg::RegisterAddr<DerivedType>(addr); }
+};
+
 class WrBackMiscCtrlReg : public hwreg::RegisterBase<WrBackMiscCtrlReg, uint32_t> {
  public:
   DEF_BIT(1, chan1_hsync_enable);
@@ -321,50 +337,40 @@ class VdInIfMuxCtrlReg : public hwreg::RegisterBase<VdInIfMuxCtrlReg, uint32_t> 
   static auto Get() { return hwreg::RegisterAddr<VdInIfMuxCtrlReg>(VPU_VIU_VDIN_IF_MUX_CTRL); }
 };
 
-class AfbcCommandReg : public hwreg::RegisterBase<AfbcCommandReg, uint32_t> {
+class AfbcCommandReg : public RegisterBase<AfbcCommandReg, uint32_t> {
  public:
   DEF_BIT(1, pending_swap);
   DEF_BIT(0, direct_swap);
-  static auto Get() { return hwreg::RegisterAddr<AfbcCommandReg>(VPU_MAFBC_COMMAND); }
 };
 
-class AfbcSurfaceCfgReg : public hwreg::RegisterBase<AfbcSurfaceCfgReg, uint32_t> {
+class AfbcSurfaceCfgReg : public RegisterBase<AfbcSurfaceCfgReg, uint32_t> {
  public:
   DEF_BIT(16, cont);
   DEF_BIT(3, s3_en);
   DEF_BIT(2, s2_en);
   DEF_BIT(1, s1_en);
   DEF_BIT(0, s0_en);
-  static auto Get() { return hwreg::RegisterAddr<AfbcSurfaceCfgReg>(VPU_MAFBC_SURFACE_CFG); }
 };
 
-class AfbcIrqMaskReg : public hwreg::RegisterBase<AfbcIrqMaskReg, uint32_t> {
+class AfbcIrqMaskReg : public RegisterBase<AfbcIrqMaskReg, uint32_t> {
  public:
   DEF_BIT(3, detiling_error);
   DEF_BIT(2, decode_error);
   DEF_BIT(1, configuration_swapped);
   DEF_BIT(0, surfaces_completed);
-  static auto Get() { return hwreg::RegisterAddr<AfbcIrqMaskReg>(VPU_MAFBC_IRQ_MASK); }
 };
 
-class AfbcHeaderBufAddrLowS0Reg : public hwreg::RegisterBase<AfbcHeaderBufAddrLowS0Reg, uint32_t> {
+class AfbcHeaderBufAddrLowS0Reg : public RegisterBase<AfbcHeaderBufAddrLowS0Reg, uint32_t> {
  public:
   DEF_FIELD(31, 0, header_buffer_addr);
-  static auto Get() {
-    return hwreg::RegisterAddr<AfbcHeaderBufAddrLowS0Reg>(VPU_MAFBC_HEADER_BUF_ADDR_LOW_S0);
-  }
 };
 
-class AfbcHeaderBufAddrHighS0Reg
-    : public hwreg::RegisterBase<AfbcHeaderBufAddrHighS0Reg, uint32_t> {
+class AfbcHeaderBufAddrHighS0Reg : public RegisterBase<AfbcHeaderBufAddrHighS0Reg, uint32_t> {
  public:
   DEF_FIELD(15, 0, header_buffer_addr);
-  static auto Get() {
-    return hwreg::RegisterAddr<AfbcHeaderBufAddrHighS0Reg>(VPU_MAFBC_HEADER_BUF_ADDR_HIGH_S0);
-  }
 };
 
-class AfbcFormatSpecifierS0Reg : public hwreg::RegisterBase<AfbcFormatSpecifierS0Reg, uint32_t> {
+class AfbcFormatSpecifierS0Reg : public RegisterBase<AfbcFormatSpecifierS0Reg, uint32_t> {
  public:
   DEF_BIT(19, payload_limit_en);
   DEF_BIT(18, tiled_header_en);
@@ -372,104 +378,69 @@ class AfbcFormatSpecifierS0Reg : public hwreg::RegisterBase<AfbcFormatSpecifierS
   DEF_BIT(9, block_split);
   DEF_BIT(8, yuv_transform);
   DEF_FIELD(3, 0, pixel_format);
-  static auto Get() {
-    return hwreg::RegisterAddr<AfbcFormatSpecifierS0Reg>(VPU_MAFBC_FORMAT_SPECIFIER_S0);
-  }
 };
 
-class AfbcBufferWidthS0Reg : public hwreg::RegisterBase<AfbcBufferWidthS0Reg, uint32_t> {
+class AfbcBufferWidthS0Reg : public RegisterBase<AfbcBufferWidthS0Reg, uint32_t> {
  public:
   DEF_FIELD(13, 0, buffer_width);
-  static auto Get() { return hwreg::RegisterAddr<AfbcBufferWidthS0Reg>(VPU_MAFBC_BUFFER_WIDTH_S0); }
 };
 
-class AfbcBufferHeightS0Reg : public hwreg::RegisterBase<AfbcBufferHeightS0Reg, uint32_t> {
+class AfbcBufferHeightS0Reg : public RegisterBase<AfbcBufferHeightS0Reg, uint32_t> {
  public:
   DEF_FIELD(13, 0, buffer_height);
-  static auto Get() {
-    return hwreg::RegisterAddr<AfbcBufferHeightS0Reg>(VPU_MAFBC_BUFFER_HEIGHT_S0);
-  }
 };
 
-class AfbcBoundingBoxXStartS0Reg
-    : public hwreg::RegisterBase<AfbcBoundingBoxXStartS0Reg, uint32_t> {
+class AfbcBoundingBoxXStartS0Reg : public RegisterBase<AfbcBoundingBoxXStartS0Reg, uint32_t> {
  public:
   DEF_FIELD(12, 0, buffer_x_start);
-  static auto Get() {
-    return hwreg::RegisterAddr<AfbcBoundingBoxXStartS0Reg>(VPU_MAFBC_BOUNDING_BOX_X_START_S0);
-  }
 };
 
-class AfbcBoundingBoxXEndS0Reg : public hwreg::RegisterBase<AfbcBoundingBoxXEndS0Reg, uint32_t> {
+class AfbcBoundingBoxXEndS0Reg : public RegisterBase<AfbcBoundingBoxXEndS0Reg, uint32_t> {
  public:
   DEF_FIELD(12, 0, buffer_x_end);
-  static auto Get() {
-    return hwreg::RegisterAddr<AfbcBoundingBoxXEndS0Reg>(VPU_MAFBC_BOUNDING_BOX_X_END_S0);
-  }
 };
 
-class AfbcBoundingBoxYStartS0Reg
-    : public hwreg::RegisterBase<AfbcBoundingBoxYStartS0Reg, uint32_t> {
+class AfbcBoundingBoxYStartS0Reg : public RegisterBase<AfbcBoundingBoxYStartS0Reg, uint32_t> {
  public:
   DEF_FIELD(12, 0, buffer_y_start);
-  static auto Get() {
-    return hwreg::RegisterAddr<AfbcBoundingBoxYStartS0Reg>(VPU_MAFBC_BOUNDING_BOX_Y_START_S0);
-  }
 };
 
-class AfbcBoundingBoxYEndS0Reg : public hwreg::RegisterBase<AfbcBoundingBoxYEndS0Reg, uint32_t> {
+class AfbcBoundingBoxYEndS0Reg : public RegisterBase<AfbcBoundingBoxYEndS0Reg, uint32_t> {
  public:
   DEF_FIELD(12, 0, buffer_y_end);
-  static auto Get() {
-    return hwreg::RegisterAddr<AfbcBoundingBoxYEndS0Reg>(VPU_MAFBC_BOUNDING_BOX_Y_END_S0);
-  }
 };
 
-class AfbcOutputBufAddrLowS0Reg : public hwreg::RegisterBase<AfbcOutputBufAddrLowS0Reg, uint32_t> {
+class AfbcOutputBufAddrLowS0Reg : public RegisterBase<AfbcOutputBufAddrLowS0Reg, uint32_t> {
  public:
   DEF_FIELD(31, 0, output_buffer_addr);
-  static auto Get() {
-    return hwreg::RegisterAddr<AfbcOutputBufAddrLowS0Reg>(VPU_MAFBC_OUTPUT_BUF_ADDR_LOW_S0);
-  }
 };
 
-class AfbcOutputBufAddrHighS0Reg
-    : public hwreg::RegisterBase<AfbcOutputBufAddrHighS0Reg, uint32_t> {
+class AfbcOutputBufAddrHighS0Reg : public RegisterBase<AfbcOutputBufAddrHighS0Reg, uint32_t> {
  public:
   DEF_FIELD(15, 0, output_buffer_addr);
-  static auto Get() {
-    return hwreg::RegisterAddr<AfbcOutputBufAddrHighS0Reg>(VPU_MAFBC_OUTPUT_BUF_ADDR_HIGH_S0);
-  }
 };
 
-class AfbcOutputBufStrideS0Reg : public hwreg::RegisterBase<AfbcOutputBufStrideS0Reg, uint32_t> {
+class AfbcOutputBufStrideS0Reg : public RegisterBase<AfbcOutputBufStrideS0Reg, uint32_t> {
  public:
   DEF_FIELD(15, 0, output_buffer_stride);
-  static auto Get() {
-    return hwreg::RegisterAddr<AfbcOutputBufStrideS0Reg>(VPU_MAFBC_OUTPUT_BUF_STRIDE_S0);
-  }
 };
 
-class AfbcPrefetchCfgS0Reg : public hwreg::RegisterBase<AfbcPrefetchCfgS0Reg, uint32_t> {
+class AfbcPrefetchCfgS0Reg : public RegisterBase<AfbcPrefetchCfgS0Reg, uint32_t> {
  public:
   DEF_BIT(1, prefetch_read_y);
   DEF_BIT(0, prefetch_read_x);
-  static auto Get() { return hwreg::RegisterAddr<AfbcPrefetchCfgS0Reg>(VPU_MAFBC_PREFETCH_CFG_S0); }
 };
 
-class Osd1MaliUnpackCtrlReg : public hwreg::RegisterBase<Osd1MaliUnpackCtrlReg, uint32_t> {
+class OsdMaliUnpackCtrlReg : public RegisterBase<OsdMaliUnpackCtrlReg, uint32_t> {
  public:
   DEF_BIT(31, mali_unpack_en);
   DEF_FIELD(15, 12, r);
   DEF_FIELD(11, 8, g);
   DEF_FIELD(7, 4, b);
   DEF_FIELD(3, 0, a);
-  static auto Get() {
-    return hwreg::RegisterAddr<Osd1MaliUnpackCtrlReg>(VIU_OSD1_MALI_UNPACK_CTRL);
-  }
 };
 
-class Osd1Blk0CfgW0Reg : public hwreg::RegisterBase<Osd1Blk0CfgW0Reg, uint32_t> {
+class OsdBlk0CfgW0Reg : public RegisterBase<OsdBlk0CfgW0Reg, uint32_t> {
  public:
   DEF_BIT(30, mali_src_en);
   DEF_FIELD(23, 16, tbl_addr);
@@ -479,65 +450,69 @@ class Osd1Blk0CfgW0Reg : public hwreg::RegisterBase<Osd1Blk0CfgW0Reg, uint32_t> 
   DEF_FIELD(5, 2, color_matrix);
   DEF_BIT(1, interlace_en);
   DEF_BIT(0, interlace_sel_odd);
-  static auto Get() { return hwreg::RegisterAddr<Osd1Blk0CfgW0Reg>(VPU_VIU_OSD1_BLK0_CFG_W0); }
 };
 
-class Osd1Blk0CfgW1Reg : public hwreg::RegisterBase<Osd1Blk0CfgW1Reg, uint32_t> {
+class OsdBlk0CfgW1Reg : public RegisterBase<OsdBlk0CfgW1Reg, uint32_t> {
  public:
   DEF_FIELD(28, 16, x_end);
   DEF_FIELD(12, 0, x_start);
 };
 
-class Osd1Blk0CfgW2Reg : public hwreg::RegisterBase<Osd1Blk0CfgW2Reg, uint32_t> {
+class OsdBlk0CfgW2Reg : public RegisterBase<OsdBlk0CfgW2Reg, uint32_t> {
  public:
   DEF_FIELD(28, 16, y_end);
   DEF_FIELD(12, 0, y_start);
 };
 
-class Osd1Blk0CfgW3Reg : public hwreg::RegisterBase<Osd1Blk0CfgW3Reg, uint32_t> {
+class OsdBlk0CfgW3Reg : public RegisterBase<OsdBlk0CfgW3Reg, uint32_t> {
  public:
   DEF_FIELD(27, 16, h_end);
   DEF_FIELD(11, 0, h_start);
 };
 
-class Osd1Blk0CfgW4Reg : public hwreg::RegisterBase<Osd1Blk0CfgW4Reg, uint32_t> {
+class OsdBlk0CfgW4Reg : public RegisterBase<OsdBlk0CfgW4Reg, uint32_t> {
  public:
   DEF_FIELD(27, 16, v_end);
   DEF_FIELD(11, 0, v_start);
 };
 
-class Osd1Blk1CfgW4Reg : public hwreg::RegisterBase<Osd1Blk1CfgW4Reg, uint32_t> {
+class OsdBlk1CfgW4Reg : public RegisterBase<OsdBlk1CfgW4Reg, uint32_t> {
  public:
   DEF_FIELD(31, 0, frame_addr);
-  static auto Get() { return hwreg::RegisterAddr<Osd1Blk1CfgW4Reg>(VPU_VIU_OSD1_BLK1_CFG_W4); }
 };
 
-class Osd1Blk2CfgW4Reg : public hwreg::RegisterBase<Osd1Blk2CfgW4Reg, uint32_t> {
+class OsdBlk2CfgW4Reg : public RegisterBase<OsdBlk2CfgW4Reg, uint32_t> {
  public:
   // TRM shows 32 bits for linear_stride, but vendor code uses only the first 12
   DEF_FIELD(11, 0, linear_stride);
-  static auto Get() { return hwreg::RegisterAddr<Osd1Blk2CfgW4Reg>(VPU_VIU_OSD1_BLK2_CFG_W4); }
 };
 
-class Osd1FifoCtrlStatReg : public hwreg::RegisterBase<Osd1FifoCtrlStatReg, uint32_t> {
+enum FifoWordsPerBurst {
+  Burst1 = 0x0,
+  Burst2 = 0x1,
+  Burst4 = 0x2,
+  BurstInvalid = 0x3,
+};
+
+class OsdFifoCtrlStatReg : public RegisterBase<OsdFifoCtrlStatReg, uint32_t> {
  public:
-  DEF_BIT(31, burst_len_sel_hi);      // bit 2 of burst_len_sel
-  DEF_BIT(30, byte_swap);             // 1`swap bytes, 0 do not swap
-  DEF_BIT(29, div_swap);              // 1 swap 64-bit words in 128-bit data
-  DEF_FIELD(28, 24, fifo_lim);        // when fifo.length() < fifo_lim*16, close OSD_RD_MIF
-  DEF_FIELD(23, 22, fifo_ctrl);       // 00=1 word/burst, 01=2, 10=4, 11=invalid
-  DEF_FIELD(21, 20, fifo_st);         // read-only. 0=idle, 1=active, 2=aborting
-  DEF_BIT(19, fifo_overflow);         // read-only
-  DEF_FIELD(18, 12, fifo_depth_val);  // depth of fifo = val*8
-  DEF_FIELD(11, 10, burst_len_sel);   // index into [24, 32, 48, 64, 96, 128] per burst
-  DEF_FIELD(9, 5, hold_fifo_lines);   // lines after vsync to wait before requesting data
+  DEF_BIT(31, burst_len_sel_hi_bit2);  // bit 2 of burst_len_sel
+  DEF_BIT(30, byte_swap);              // 1`swap bytes, 0 do not swap
+  DEF_BIT(29, div_swap);               // 1 swap 64-bit words in 128-bit data
+  DEF_FIELD(28, 24, fifo_lim);         // when fifo.length() < fifo_lim*16, close OSD_RD_MIF
+  DEF_ENUM_FIELD(FifoWordsPerBurst, 23, 22, fifo_ctrl);  // 00=1 word/burst, 01=2, 10=4, 11=invalid
+  DEF_FIELD(21, 20, fifo_st);                            // read-only. 0=idle, 1=active, 2=aborting
+  DEF_BIT(19, fifo_overflow);                            // read-only
+  DEF_FIELD(18, 12, fifo_depth_val);                     // depth of fifo = val*8
+  DEF_FIELD(11, 10, burst_len_sel_bits10);  // index into [24, 32, 48, 64, 96, 128] per burst
+  DEF_FIELD(9, 5, hold_fifo_lines);         // lines after vsync to wait before requesting data
   DEF_BIT(4, clear_err);
   DEF_BIT(3, fifo_sync_rst);
   DEF_FIELD(2, 1, endian);  // endianness of 64-bit data [none, 32-bit LE, 16-bit LE, 16-bit ME
   DEF_BIT(1, urgent);       // priority of data requests
 };
 
-class Osd1CtrlStatReg : public hwreg::RegisterBase<Osd1CtrlStatReg, uint32_t> {
+class OsdCtrlStatReg : public RegisterBase<OsdCtrlStatReg, uint32_t> {
  public:
   DEF_BIT(21, osd_en);
   DEF_FIELD(20, 12, global_alpha);
@@ -545,18 +520,16 @@ class Osd1CtrlStatReg : public hwreg::RegisterBase<Osd1CtrlStatReg, uint32_t> {
   DEF_BIT(2, osd_mem_mode);
   DEF_BIT(1, premult_en);
   DEF_BIT(0, blk_en);
-  static auto Get() { return hwreg::RegisterAddr<Osd1CtrlStatReg>(VPU_VIU_OSD1_CTRL_STAT); }
 };
 
-class Osd1CtrlStat2Reg : public hwreg::RegisterBase<Osd1CtrlStat2Reg, uint32_t> {
+class OsdCtrlStat2Reg : public RegisterBase<OsdCtrlStat2Reg, uint32_t> {
  public:
   DEF_BIT(14, replaced_alpha_en);
   DEF_FIELD(13, 6, replaced_alpha);
   DEF_BIT(1, pending_status_cleanup);
-  static auto Get() { return hwreg::RegisterAddr<Osd1CtrlStat2Reg>(VPU_VIU_OSD1_CTRL_STAT2); }
 };
 
-class Osd1TcolorAgReg : public hwreg::RegisterBase<Osd1TcolorAgReg, uint32_t> {
+class OsdTcolorAgReg : public RegisterBase<OsdTcolorAgReg, uint32_t> {
  public:
   DEF_FIELD(31, 24, y_or_r);
   DEF_FIELD(23, 16, cb_or_g);
@@ -564,9 +537,9 @@ class Osd1TcolorAgReg : public hwreg::RegisterBase<Osd1TcolorAgReg, uint32_t> {
   DEF_FIELD(7, 0, a);
 };
 
-class Osd1ColorAddrReg : public hwreg::RegisterBase<Osd1ColorAddrReg, uint32_t> {};
+class OsdColorAddrReg : public RegisterBase<OsdColorAddrReg, uint32_t> {};
 
-class Osd1ColorReg : public hwreg::RegisterBase<Osd1ColorReg, uint32_t> {
+class OsdColorReg : public RegisterBase<OsdColorReg, uint32_t> {
  public:
   DEF_FIELD(31, 24, r);
   DEF_FIELD(23, 16, g);
@@ -574,20 +547,20 @@ class Osd1ColorReg : public hwreg::RegisterBase<Osd1ColorReg, uint32_t> {
   DEF_FIELD(7, 0, a);
 };
 
-class Osd1ProtCtrlReg : public hwreg::RegisterBase<Osd1ProtCtrlReg, uint32_t> {
+class OsdProtCtrlReg : public RegisterBase<OsdProtCtrlReg, uint32_t> {
  public:
   DEF_FIELD(31, 16, urgent_ctrl);
   DEF_BIT(15, prot_en);
   DEF_FIELD(12, 0, prot_fifo_size);
 };
 
-class Osd1DimmCtrlReg : public hwreg::RegisterBase<Osd1DimmCtrlReg, uint32_t> {
+class OsdDimmCtrlReg : public RegisterBase<OsdDimmCtrlReg, uint32_t> {
  public:
   DEF_BIT(30, en);
   DEF_FIELD(29, 0, rgb);
 };
 
-class Osd1ScaleCoefIdxReg : public hwreg::RegisterBase<Osd1ScaleCoefIdxReg, uint32_t> {
+class OsdScaleCoefIdxReg : public RegisterBase<OsdScaleCoefIdxReg, uint32_t> {
  public:
   DEF_BIT(15, auto_incr_step);  // bit9 ? (value ? 2 : 1) :  2
   DEF_BIT(14, unused_cbus_readback);
@@ -596,18 +569,18 @@ class Osd1ScaleCoefIdxReg : public hwreg::RegisterBase<Osd1ScaleCoefIdxReg, uint
   DEF_FIELD(6, 0, index);
 };
 
-class Osd1ScaleCoefReg : public hwreg::RegisterBase<Osd1ScaleCoefReg, uint32_t> {};
+class OsdScaleCoefReg : public RegisterBase<OsdScaleCoefReg, uint32_t> {};
 
-class Osd1VscPhaseStepReg : public hwreg::RegisterBase<Osd1VscPhaseStepReg, uint32_t> {
+class OsdVscPhaseStepReg : public RegisterBase<OsdVscPhaseStepReg, uint32_t> {
   DEF_FIELD(27, 0, phase_4_24);
 };
 
-class Osd1VscInitPhaseReg : public hwreg::RegisterBase<Osd1VscInitPhaseReg, uint32_t> {
+class OsdVscInitPhaseReg : public RegisterBase<OsdVscInitPhaseReg, uint32_t> {
   DEF_FIELD(31, 16, bottom_vscale_phase);
   DEF_FIELD(15, 0, top_vscale_phase);
 };
 
-class Osd1VscCtrl0Reg : public hwreg::RegisterBase<Osd1VscCtrl0Reg, uint32_t> {
+class OsdVscCtrl0Reg : public RegisterBase<OsdVscCtrl0Reg, uint32_t> {
  public:
   DEF_BIT(24, en);
   DEF_BIT(23, interlace);
@@ -621,18 +594,18 @@ class Osd1VscCtrl0Reg : public hwreg::RegisterBase<Osd1VscCtrl0Reg, uint32_t> {
   DEF_FIELD(2, 0, bank_length);
 };
 
-class Osd1HscPhaseStepReg : public hwreg::RegisterBase<Osd1HscPhaseStepReg, uint32_t> {
+class OsdHscPhaseStepReg : public RegisterBase<OsdHscPhaseStepReg, uint32_t> {
  public:
   DEF_FIELD(27, 0, phase_4_24);
 };
 
-class Osd1HscInitPhaseReg : public hwreg::RegisterBase<Osd1HscInitPhaseReg, uint32_t> {
+class OsdHscInitPhaseReg : public RegisterBase<OsdHscInitPhaseReg, uint32_t> {
  public:
   DEF_FIELD(31, 16, init_phase1);
   DEF_FIELD(15, 0, init_phase0);
 };
 
-class Osd1HscCtrl0Reg : public hwreg::RegisterBase<Osd1HscCtrl0Reg, uint32_t> {
+class OsdHscCtrl0Reg : public RegisterBase<OsdHscCtrl0Reg, uint32_t> {
  public:
   DEF_BIT(22, hsc_en);
   DEF_BIT(21, double_pix_mode);
@@ -645,7 +618,7 @@ class Osd1HscCtrl0Reg : public hwreg::RegisterBase<Osd1HscCtrl0Reg, uint32_t> {
   DEF_FIELD(2, 0, hsc_bank_length);
 };
 
-class Osd1ScDummyDataReg : public hwreg::RegisterBase<Osd1ScDummyDataReg, uint32_t> {
+class OsdScDummyDataReg : public RegisterBase<OsdScDummyDataReg, uint32_t> {
  public:
   DEF_FIELD(31, 24, c0);  // >>4
   DEF_FIELD(23, 16, c1);
@@ -653,7 +626,7 @@ class Osd1ScDummyDataReg : public hwreg::RegisterBase<Osd1ScDummyDataReg, uint32
   DEF_FIELD(7, 0, c3);  // alpha
 };
 
-class Osd1ScCtrl0Reg : public hwreg::RegisterBase<Osd1ScCtrl0Reg, uint32_t> {
+class OsdScCtrl0Reg : public RegisterBase<OsdScCtrl0Reg, uint32_t> {
  public:
   DEF_FIELD(27, 16, gclk_ctrl);
   DEF_BIT(13, din_osd_alpha_mode);
@@ -663,19 +636,19 @@ class Osd1ScCtrl0Reg : public hwreg::RegisterBase<Osd1ScCtrl0Reg, uint32_t> {
   DEF_BIT(2, en);
 };
 
-class Osd1SciWhM1Reg : public hwreg::RegisterBase<Osd1SciWhM1Reg, uint32_t> {
+class OsdSciWhM1Reg : public RegisterBase<OsdSciWhM1Reg, uint32_t> {
  public:
   DEF_FIELD(28, 16, width_minus_1);
   DEF_FIELD(12, 0, height_minus_1);
 };
 
-class Osd1ScoHStartEndReg : public hwreg::RegisterBase<Osd1ScoHStartEndReg, uint32_t> {
+class OsdScoHStartEndReg : public RegisterBase<OsdScoHStartEndReg, uint32_t> {
  public:
   DEF_FIELD(27, 16, h_start);
   DEF_FIELD(11, 0, h_end);
 };
 
-class Osd1ScoVStartEndReg : public hwreg::RegisterBase<Osd1ScoVStartEndReg, uint32_t> {
+class OsdScoVStartEndReg : public RegisterBase<OsdScoVStartEndReg, uint32_t> {
  public:
   DEF_FIELD(27, 16, v_start);
   DEF_FIELD(11, 0, v_end);
@@ -691,10 +664,9 @@ class Osd2CtrlStatReg : public hwreg::RegisterBase<Osd2CtrlStatReg, uint32_t> {
   static auto Get() { return hwreg::RegisterAddr<Osd2CtrlStatReg>(VPU_VIU_OSD2_CTRL_STAT); }
 };
 
-class OsdPathMiscCtrlReg : public hwreg::RegisterBase<OsdPathMiscCtrlReg, uint32_t> {
+class OsdPathMiscCtrlReg : public RegisterBase<OsdPathMiscCtrlReg, uint32_t> {
  public:
   DEF_BIT(4, osd1_mali_sel);
-  static auto Get() { return hwreg::RegisterAddr<OsdPathMiscCtrlReg>(VPU_OSD_PATH_MISC_CTRL); }
 };
 
 class VpuVpuViuVencMuxCtrlReg : public hwreg::RegisterBase<VpuVpuViuVencMuxCtrlReg, uint32_t> {
@@ -792,6 +764,14 @@ class VpuHdmiSettingReg : public hwreg::RegisterBase<VpuHdmiSettingReg, uint32_t
                              // 10: select ENCP data to HDMI
 
   static auto Get() { return hwreg::RegisterAddr<VpuHdmiSettingReg>(VPU_HDMI_SETTING); }
+};
+
+// Common register type for VD1/VD2, post, OSD, and OSD-wrap matrices.
+class MatrixEnCtrlReg : public hwreg::RegisterBase<MatrixEnCtrlReg, uint32_t> {
+ public:
+  DEF_FIELD(5, 4, gate_clock_ctrl);
+  DEF_BIT(1, enable_sync_sel);
+  DEF_BIT(0, conv_en_pre);
 };
 
 }  // namespace amlogic_display

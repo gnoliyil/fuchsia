@@ -198,7 +198,7 @@ void RdmaEngine::ResetRdmaTable() {
     rdma_table[IDX_MATRIX_PRE_OFFSET2].reg = (VPU_VPP_POST_MATRIX_PRE_OFFSET2 >> 2);
     rdma_table[IDX_GAMMA_EN].reg = (VPP_GAMMA_CNTL_PORT >> 2);
     rdma_table[IDX_BLK2_CFG_W4].reg = (VPU_VIU_OSD1_BLK2_CFG_W4 >> 2);
-    rdma_table[IDX_MALI_UNPACK_CTRL].reg = (VIU_OSD1_MALI_UNPACK_CTRL >> 2);
+    rdma_table[IDX_MALI_UNPACK_CTRL].reg = (VPU_VIU_OSD1_MALI_UNPACK_CTRL >> 2);
     rdma_table[IDX_PATH_MISC_CTRL].reg = (VPU_OSD_PATH_MISC_CTRL >> 2);
     rdma_table[IDX_AFBC_HEAD_BUF_ADDR_LOW].reg = (VPU_MAFBC_HEADER_BUF_ADDR_LOW_S0 >> 2);
     rdma_table[IDX_AFBC_HEAD_BUF_ADDR_HIGH].reg = (VPU_MAFBC_HEADER_BUF_ADDR_HIGH_S0 >> 2);
