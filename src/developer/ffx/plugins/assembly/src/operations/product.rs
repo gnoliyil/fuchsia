@@ -5,7 +5,7 @@
 use crate::operations::product::assembly_builder::ImageAssemblyConfigBuilder;
 use crate::util;
 use anyhow::{Context, Result};
-use assembly_config_schema::{AssemblyConfig, BoardInformation, BuildType, FeatureSupportLevel};
+use assembly_config_schema::{AssemblyConfig, BoardInformation};
 use assembly_tool::SdkToolProvider;
 use camino::Utf8PathBuf;
 use ffx_assembly_args::ProductArgs;
@@ -38,57 +38,28 @@ pub fn assemble(args: ProductArgs) -> Result<()> {
 
     let mut builder = ImageAssemblyConfigBuilder::default();
 
-    // Choose platform bundles based on the chosen base level of support and build type
-    //
-    // TODO(tbd): Move this to the `assembly_platform_configuration` crate after
-    // https://fxrev.dev/694448 lands.
-    let mut platform_bundles =
-        match (&config.platform.feature_set_level, &config.platform.build_type) {
-            (FeatureSupportLevel::Bringup, BuildType::Eng) => {
-                vec!["common_bringup"]
-            }
-            (FeatureSupportLevel::Minimal, BuildType::Eng) => {
-                vec![
-                    "common_bringup",
-                    "common_minimal",
-                    "common_minimal_eng",
-                    "common_minimal_userdebug",
-                ]
-            }
-            (FeatureSupportLevel::Bringup, BuildType::UserDebug) => {
-                vec!["common_bringup"]
-            }
-            (FeatureSupportLevel::Minimal, BuildType::UserDebug) => {
-                vec!["common_bringup", "common_minimal", "common_minimal_userdebug"]
-            }
-            (FeatureSupportLevel::Bringup, BuildType::User) => {
-                vec!["common_bringup"]
-            }
-            (FeatureSupportLevel::Minimal, BuildType::User) => {
-                vec!["common_bringup", "common_minimal"]
-            }
-            _ => vec![],
-        };
-    platform_bundles.push("emulator_support");
+    // Get platform configuration based on the AssemblyConfig and the BoardInformation.
+    let configuration =
+        assembly_platform_configuration::define_configuration(&config, board_info.as_ref())?;
 
-    // Add the platform bundles chosen above.
-    for platform_bundle_name in platform_bundles {
+    // Add the platform Assembly Input Bundles that were chosen by the configuration.
+    for platform_bundle_name in &configuration.bundles {
         let platform_bundle_path = make_bundle_path(&input_bundles_dir, platform_bundle_name);
         builder.add_bundle(&platform_bundle_path).with_context(|| {
             format!("Adding platform bundle {} ({})", platform_bundle_name, platform_bundle_path)
         })?;
     }
 
+    // Add the legacy bundle.
     let legacy_bundle_path = legacy_bundle.join("assembly_config.json");
     builder
         .add_bundle(&legacy_bundle_path)
         .context(format!("Adding legacy bundle: {}", legacy_bundle_path))?;
 
-    // Get platform configuration
-    let configuration =
-        assembly_platform_configuration::define_configuration(&config, board_info.as_ref())?;
+    // Set the Structured Configuration for the components in Bootfs
+    builder.set_bootfs_structured_config(configuration.bootfs.components);
 
-    builder.set_bootfs_structured_config(configuration.bootfs);
+    // Set the configuration for the rest of the packages.
     for (package, config) in configuration.package_configs {
         builder.set_package_config(package, config)?;
     }

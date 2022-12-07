@@ -9,11 +9,19 @@ assert(is_host, "Assembly libraries are host-only")
 rustc_library("platform_configuration") {
   edition = "2021"
   name = "assembly_platform_configuration"
+  with_unit_tests = true
+
   sources = [
     "src/common.rs",
     "src/lib.rs",
     "src/subsystems.rs",
+    "src/subsystems/console.rs",
+    "src/subsystems/example.rs",
+    "src/subsystems/identity.rs",
+    "src/subsystems/input.rs",
+    "src/subsystems/session.rs",
   ]
+
   deps = [
     "//sdk/fidl/fuchsia.logger:fuchsia.logger_rust",
     "//src/developer/ffx/config:lib",
@@ -23,4 +31,9 @@ rustc_library("platform_configuration") {
     "//third_party/rust_crates:serde_json",
     "//third_party/rust_crates:static_assertions",
   ]
+}
+
+group("host_tests") {
+  testonly = true
+  deps = [ ":platform_configuration_test" ]
 }

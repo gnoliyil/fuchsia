@@ -13,7 +13,6 @@ pub mod product_config;
 
 pub use assembly_config::AssemblyConfig;
 pub use board_config::BoardInformation;
-pub use board_config::BoardInformationExt;
 pub use common::{DriverDetails, FeatureControl, FileEntry};
 pub use image_assembly_config::{ImageAssemblyConfig, PartialImageAssemblyConfig};
 pub use platform_config::{BuildType, FeatureSupportLevel};

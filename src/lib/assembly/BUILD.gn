@@ -19,6 +19,7 @@ if (is_host) {
       "package_list:host_tests",
       "package_utils:host_tests",
       "partitions_config:host_tests",
+      "platform_configuration:host_tests",
       "shell_commands:host_tests",
       "structured_config:host_tests",
       "test_util:host_tests",
