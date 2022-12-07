@@ -68,8 +68,9 @@ pub struct StartCommand {
     #[argh(switch)]
     pub device_list: bool,
 
-    /// sets up the emulation, but doesn't start the emulator. The command line arguments that the
-    /// current configuration generates will be printed to stdout for review.
+    /// sets up the emulation configuration, but doesn't stage files or start the emulator. The
+    /// command line arguments that the current configuration generates will be printed to stdout
+    /// for review.
     #[argh(switch)]
     pub dry_run: bool,
 
@@ -150,6 +151,12 @@ pub struct StartCommand {
     /// the old instance is still running, the new emulator will not attempt to start.
     #[argh(switch)]
     pub reuse: bool,
+
+    /// sets up the emulation configuration and stages files, but doesn't start the emulator. The
+    /// command line arguments that the staged configuration generates will be printed to stdout
+    /// for review.
+    #[argh(switch)]
+    pub stage: bool,
 
     /// the maximum time (in seconds) to wait on an emulator to boot before returning control
     /// to the user. A value of 0 will skip the check entirely. Default is 60 seconds. This
