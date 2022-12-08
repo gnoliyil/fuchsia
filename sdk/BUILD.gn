@@ -440,12 +440,12 @@ sdk("core.modular") {
 
 group("host_tools.all") {
   public_deps = []
-  if (host_os == "linux") {
+  if (host_os == "linux" && sdk_cross_compile_host_tools) {
     public_deps += [
       ":host_tools.modular($host_arm64_toolchain)",
       ":host_tools.modular($host_x64_toolchain)",
     ]
-  } else if (host_os == "mac") {
+  } else {
     public_deps += [ ":host_tools.modular($host_toolchain)" ]
   }
 }
