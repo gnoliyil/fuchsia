@@ -20,10 +20,7 @@ fuchsia_driver("sdhci-driver") {
     "//build/config:all_source",
     "//build/config/fuchsia:enable_zircon_asserts",
   ]
-  sources = [
-    "sdhci-scatter-gather.cc",
-    "sdhci.cc",
-  ]
+  sources = [ "sdhci.cc" ]
   deps = [
     ":sdhci-bind",
     "//sdk/banjo/fuchsia.hardware.block:fuchsia.hardware.block_banjo_cpp",
@@ -53,7 +50,6 @@ test("sdhci-test-bin") {
   output_name = "sdhci-test"
   configs += [ "//build/config:all_source" ]
   sources = [
-    "sdhci-scatter-gather.cc",
     "sdhci-test.cc",
     "sdhci.cc",
   ]

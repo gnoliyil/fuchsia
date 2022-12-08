@@ -39,11 +39,15 @@ constexpr zx::duration kVoltageStabilizationTime = zx::msec(5);
 constexpr zx::duration kInhibitWaitTime = zx::msec(1);
 constexpr zx::duration kWaitYieldTime = zx::usec(1);
 
-constexpr bool SdmmcCmdRspBusy(uint32_t cmd_flags) { return cmd_flags & SDMMC_RESP_LEN_48B; }
+constexpr uint32_t Hi32(zx_paddr_t val) { return static_cast<uint32_t>((val >> 32) & 0xffffffff); }
+constexpr uint32_t Lo32(zx_paddr_t val) { return val & 0xffffffff; }
 
-constexpr bool SdmmcCmdHasData(uint32_t cmd_flags) { return cmd_flags & SDMMC_RESP_DATA_PRESENT; }
+// for 2M max transfer size for fully discontiguous
+// also see SDMMC_PAGES_COUNT in fuchsia/hardware/sdmmc/c/banjo.h
+constexpr int kDmaDescCount = 512;
 
-zx_paddr_t PageMask() { return static_cast<uintptr_t>(zx_system_get_page_size()) - 1; }
+// 64k max per descriptor
+constexpr size_t kMaxDescriptorLength = 0x1'0000;
 
 uint16_t GetClockDividerValue(const uint32_t base_clock, const uint32_t target_rate) {
   if (target_rate >= base_clock) {
@@ -64,54 +68,108 @@ uint16_t GetClockDividerValue(const uint32_t base_clock, const uint32_t target_r
 
 namespace sdhci {
 
-void Sdhci::PrepareCmd(sdmmc_req_t* req, TransferMode* transfer_mode, Command* command) {
-  command->set_command_index(static_cast<uint16_t>(req->cmd_idx));
+// Maintains a list of physical memory regions to be used for DMA. Input buffers are pinned if
+// needed, and unpinned upon destruction.
+class Sdhci::DmaDescriptorBuilder {
+ public:
+  DmaDescriptorBuilder(const sdmmc_req_new_t& request, SdmmcVmoStore& registered_vmos,
+                       uint64_t dma_boundary_alignment, zx::unowned_bti bti)
+      : request_(request),
+        registered_vmos_(registered_vmos),
+        dma_boundary_alignment_(dma_boundary_alignment),
+        bti_(std::move(bti)) {}
+  ~DmaDescriptorBuilder() {
+    for (size_t i = 0; i < pmt_count_; i++) {
+      pmts_[i].unpin();
+    }
+  }
 
-  if (req->cmd_flags & SDMMC_RESP_LEN_EMPTY) {
+  // Appends the physical memory regions for this buffer to the end of the list.
+  zx_status_t ProcessBuffer(const sdmmc_buffer_region_t& buffer);
+
+  // Builds DMA descriptors of the template type in the array provided.
+  template <typename DescriptorType>
+  zx_status_t BuildDmaDescriptors(cpp20::span<DescriptorType> out_descriptors);
+
+  size_t block_count() const {
+    ZX_DEBUG_ASSERT(request_.blocksize != 0);
+    return total_size_ / request_.blocksize;
+  }
+  size_t descriptor_count() const { return descriptor_count_; }
+
+ private:
+  // Pins the buffer if needed, and fills out_regions with the physical addresses corresponding to
+  // the (owned or unowned) input buffer. Contiguous runs of pages are condensed into single
+  // regions so that the minimum number of DMA descriptors are required.
+  zx::result<size_t> GetPinnedRegions(uint32_t vmo_id, const sdmmc_buffer_region_t& buffer,
+                                      cpp20::span<fzl::PinnedVmo::Region> out_regions);
+  zx::result<size_t> GetPinnedRegions(zx::unowned_vmo vmo, const sdmmc_buffer_region_t& buffer,
+                                      cpp20::span<fzl::PinnedVmo::Region> out_regions);
+
+  // Appends the regions to the current list of regions being tracked by this object. Regions are
+  // split if needed according to hardware restrictions on size or alignment.
+  zx_status_t AppendRegions(cpp20::span<const fzl::PinnedVmo::Region> regions);
+
+  const sdmmc_req_new_t& request_;
+  SdmmcVmoStore& registered_vmos_;
+  const uint64_t dma_boundary_alignment_;
+  std::array<fzl::PinnedVmo::Region, SDMMC_PAGES_COUNT> regions_ = {};
+  size_t region_count_ = 0;
+  size_t total_size_ = 0;
+  size_t descriptor_count_ = 0;
+  std::array<zx::pmt, SDMMC_PAGES_COUNT> pmts_ = {};
+  size_t pmt_count_ = 0;
+  const zx::unowned_bti bti_;
+};
+
+void Sdhci::PrepareCmd(const sdmmc_req_new_t& req, TransferMode* transfer_mode, Command* command) {
+  command->set_command_index(static_cast<uint16_t>(req.cmd_idx));
+
+  if (req.cmd_flags & SDMMC_RESP_LEN_EMPTY) {
     command->set_response_type(Command::kResponseTypeNone);
-  } else if (req->cmd_flags & SDMMC_RESP_LEN_136) {
+  } else if (req.cmd_flags & SDMMC_RESP_LEN_136) {
     command->set_response_type(Command::kResponseType136Bits);
-  } else if (req->cmd_flags & SDMMC_RESP_LEN_48) {
+  } else if (req.cmd_flags & SDMMC_RESP_LEN_48) {
     command->set_response_type(Command::kResponseType48Bits);
-  } else if (req->cmd_flags & SDMMC_RESP_LEN_48B) {
+  } else if (req.cmd_flags & SDMMC_RESP_LEN_48B) {
     command->set_response_type(Command::kResponseType48BitsWithBusy);
   }
 
-  if (req->cmd_flags & SDMMC_CMD_TYPE_NORMAL) {
+  if (req.cmd_flags & SDMMC_CMD_TYPE_NORMAL) {
     command->set_command_type(Command::kCommandTypeNormal);
-  } else if (req->cmd_flags & SDMMC_CMD_TYPE_SUSPEND) {
+  } else if (req.cmd_flags & SDMMC_CMD_TYPE_SUSPEND) {
     command->set_command_type(Command::kCommandTypeSuspend);
-  } else if (req->cmd_flags & SDMMC_CMD_TYPE_RESUME) {
+  } else if (req.cmd_flags & SDMMC_CMD_TYPE_RESUME) {
     command->set_command_type(Command::kCommandTypeResume);
-  } else if (req->cmd_flags & SDMMC_CMD_TYPE_ABORT) {
+  } else if (req.cmd_flags & SDMMC_CMD_TYPE_ABORT) {
     command->set_command_type(Command::kCommandTypeAbort);
   }
 
-  if (req->cmd_flags & SDMMC_CMD_AUTO12) {
+  if (req.cmd_flags & SDMMC_CMD_AUTO12) {
     transfer_mode->set_auto_cmd_enable(TransferMode::kAutoCmd12);
-  } else if (req->cmd_flags & SDMMC_CMD_AUTO23) {
+  } else if (req.cmd_flags & SDMMC_CMD_AUTO23) {
     transfer_mode->set_auto_cmd_enable(TransferMode::kAutoCmd23);
   }
 
-  if (req->cmd_flags & SDMMC_RESP_CRC_CHECK) {
+  if (req.cmd_flags & SDMMC_RESP_CRC_CHECK) {
     command->set_command_crc_check(1);
   }
-  if (req->cmd_flags & SDMMC_RESP_CMD_IDX_CHECK) {
+  if (req.cmd_flags & SDMMC_RESP_CMD_IDX_CHECK) {
     command->set_command_index_check(1);
   }
-  if (req->cmd_flags & SDMMC_RESP_DATA_PRESENT) {
+  if (req.cmd_flags & SDMMC_RESP_DATA_PRESENT) {
     command->set_data_present(1);
   }
-  if (req->cmd_flags & SDMMC_CMD_DMA_EN) {
+  if (req.cmd_flags & SDMMC_CMD_DMA_EN) {
     transfer_mode->set_dma_enable(1);
   }
-  if (req->cmd_flags & SDMMC_CMD_BLKCNT_EN) {
+  if (req.cmd_flags & SDMMC_CMD_BLKCNT_EN) {
     transfer_mode->set_block_count_enable(1);
   }
-  if (req->cmd_flags & SDMMC_CMD_READ) {
+  if (req.cmd_flags & SDMMC_CMD_READ) {
     transfer_mode->set_read(1);
   }
-  if (req->cmd_flags & SDMMC_CMD_MULTI_BLK) {
+  if (req.cmd_flags & SDMMC_CMD_MULTI_BLK) {
     transfer_mode->set_multi_block(1);
   }
 }
@@ -181,132 +239,85 @@ zx_status_t Sdhci::WaitForInternalClockStable() const {
   return ZX_ERR_TIMED_OUT;
 }
 
-void Sdhci::CompleteRequestLocked(sdmmc_req_t* req, zx_status_t status) {
-  zxlogf(DEBUG, "sdhci: complete cmd 0x%08x status %d", req->cmd_idx, status);
-
-  // Disable irqs when no pending transfer
-  DisableInterrupts();
-
-  cmd_req_ = nullptr;
-  data_req_ = nullptr;
-  data_blockid_ = 0;
-  data_done_ = false;
-
-  req->status = status;
-  sync_completion_signal(&req_completion_);
-}
-
-void Sdhci::CmdStageCompleteLocked() {
-  if (!cmd_req_) {
-    zxlogf(DEBUG, "sdhci: spurious CMD_CPLT interrupt!");
-    return;
-  }
-
-  zxlogf(DEBUG, "sdhci: got CMD_CPLT interrupt");
-
+bool Sdhci::CmdStageComplete() {
   const uint32_t response_0 = Response::Get(0).ReadFrom(&regs_mmio_buffer_).reg_value();
   const uint32_t response_1 = Response::Get(1).ReadFrom(&regs_mmio_buffer_).reg_value();
   const uint32_t response_2 = Response::Get(2).ReadFrom(&regs_mmio_buffer_).reg_value();
   const uint32_t response_3 = Response::Get(3).ReadFrom(&regs_mmio_buffer_).reg_value();
 
   // Read the response data.
-  if (cmd_req_->cmd_flags & SDMMC_RESP_LEN_136) {
+  if (pending_request_.cmd_flags & SDMMC_RESP_LEN_136) {
     if (quirks_ & SDHCI_QUIRK_STRIP_RESPONSE_CRC) {
-      cmd_req_->response[0] = (response_3 << 8) | ((response_2 >> 24) & 0xFF);
-      cmd_req_->response[1] = (response_2 << 8) | ((response_1 >> 24) & 0xFF);
-      cmd_req_->response[2] = (response_1 << 8) | ((response_0 >> 24) & 0xFF);
-      cmd_req_->response[3] = (response_0 << 8);
+      pending_request_.response[0] = (response_3 << 8) | ((response_2 >> 24) & 0xFF);
+      pending_request_.response[1] = (response_2 << 8) | ((response_1 >> 24) & 0xFF);
+      pending_request_.response[2] = (response_1 << 8) | ((response_0 >> 24) & 0xFF);
+      pending_request_.response[3] = (response_0 << 8);
     } else if (quirks_ & SDHCI_QUIRK_STRIP_RESPONSE_CRC_PRESERVE_ORDER) {
-      cmd_req_->response[0] = (response_0 << 8);
-      cmd_req_->response[1] = (response_1 << 8) | ((response_0 >> 24) & 0xFF);
-      cmd_req_->response[2] = (response_2 << 8) | ((response_1 >> 24) & 0xFF);
-      cmd_req_->response[3] = (response_3 << 8) | ((response_2 >> 24) & 0xFF);
+      pending_request_.response[0] = (response_0 << 8);
+      pending_request_.response[1] = (response_1 << 8) | ((response_0 >> 24) & 0xFF);
+      pending_request_.response[2] = (response_2 << 8) | ((response_1 >> 24) & 0xFF);
+      pending_request_.response[3] = (response_3 << 8) | ((response_2 >> 24) & 0xFF);
     } else {
-      cmd_req_->response[0] = response_0;
-      cmd_req_->response[1] = response_1;
-      cmd_req_->response[2] = response_2;
-      cmd_req_->response[3] = response_3;
+      pending_request_.response[0] = response_0;
+      pending_request_.response[1] = response_1;
+      pending_request_.response[2] = response_2;
+      pending_request_.response[3] = response_3;
     }
-  } else if (cmd_req_->cmd_flags & (SDMMC_RESP_LEN_48 | SDMMC_RESP_LEN_48B)) {
-    cmd_req_->response[0] = response_0;
+  } else if (pending_request_.cmd_flags & (SDMMC_RESP_LEN_48 | SDMMC_RESP_LEN_48B)) {
+    pending_request_.response[0] = response_0;
   }
+
+  pending_request_.cmd_done = true;
 
   // We're done if the command has no data stage or if the data stage completed early
-  if (!data_req_ || data_done_) {
-    CompleteRequestLocked(cmd_req_, ZX_OK);
-  } else {
-    cmd_req_ = nullptr;
+  if (pending_request_.data_done) {
+    CompleteRequest();
   }
+
+  return pending_request_.data_done;
 }
 
-void Sdhci::DataStageReadReadyLocked() {
-  if (!data_req_ || !SdmmcCmdHasData(data_req_->cmd_flags)) {
-    zxlogf(DEBUG, "sdhci: spurious BUFF_READ_READY interrupt!");
-    return;
+bool Sdhci::TransferComplete() {
+  pending_request_.data_done = true;
+  if (pending_request_.cmd_done) {
+    CompleteRequest();
   }
 
-  zxlogf(DEBUG, "sdhci: got BUFF_READ_READY interrupt");
-
-  if ((data_req_->cmd_idx == MMC_SEND_TUNING_BLOCK) ||
-      (data_req_->cmd_idx == SD_SEND_TUNING_BLOCK)) {
-    // tuning command is done here
-    CompleteRequestLocked(data_req_, ZX_OK);
-  } else {
-    // Sequentially read each block.
-    uint32_t* const virt_buffer = reinterpret_cast<uint32_t*>(data_req_->virt_buffer) +
-                                  ((data_blockid_ * data_req_->blocksize) / sizeof(uint32_t));
-    for (size_t wordid = 0; wordid < (data_req_->blocksize / sizeof(uint32_t)); wordid++) {
-      virt_buffer[wordid] = BufferData::Get().ReadFrom(&regs_mmio_buffer_).reg_value();
-    }
-    data_blockid_ = static_cast<uint16_t>(data_blockid_ + 1);
-  }
+  return pending_request_.cmd_done;
 }
 
-void Sdhci::DataStageWriteReadyLocked() {
-  if (!data_req_ || !SdmmcCmdHasData(data_req_->cmd_flags)) {
-    zxlogf(DEBUG, "sdhci: spurious BUFF_WRITE_READY interrupt!");
-    return;
+bool Sdhci::DataStageReadReady() {
+  if ((pending_request_.cmd_idx == MMC_SEND_TUNING_BLOCK) ||
+      (pending_request_.cmd_idx == SD_SEND_TUNING_BLOCK)) {
+    // This is the final interrupt expected for tuning transfers, so mark both command and data
+    // phases complete.
+    pending_request_.cmd_done = true;
+    pending_request_.data_done = true;
+    CompleteRequest();
+    return true;
   }
 
-  zxlogf(DEBUG, "sdhci: got BUFF_WRITE_READY interrupt");
-
-  // Sequentially write each block.
-  const uint32_t* const virt_buffer = reinterpret_cast<uint32_t*>(data_req_->virt_buffer) +
-                                      ((data_blockid_ * data_req_->blocksize) / sizeof(uint32_t));
-  for (size_t wordid = 0; wordid < (data_req_->blocksize / sizeof(uint32_t)); wordid++) {
-    BufferData::Get().FromValue(virt_buffer[wordid]).WriteTo(&regs_mmio_buffer_);
-  }
-  data_blockid_ = static_cast<uint16_t>(data_blockid_ + 1);
+  return false;
 }
 
-void Sdhci::TransferCompleteLocked() {
-  if (!data_req_) {
-    zxlogf(DEBUG, "sdhci: spurious XFER_CPLT interrupt!");
-    return;
-  }
-
-  zxlogf(DEBUG, "sdhci: got XFER_CPLT interrupt");
-
-  if (cmd_req_) {
-    data_done_ = true;
-  } else {
-    CompleteRequestLocked(data_req_, ZX_OK);
-  }
-}
-
-void Sdhci::ErrorRecoveryLocked() {
+void Sdhci::ErrorRecovery() {
   // Reset internal state machines
-  SoftwareReset::Get().ReadFrom(&regs_mmio_buffer_).set_reset_cmd(1).WriteTo(&regs_mmio_buffer_);
-  WaitForReset(SoftwareReset::Get().FromValue(0).set_reset_cmd(1));
-  SoftwareReset::Get().ReadFrom(&regs_mmio_buffer_).set_reset_dat(1).WriteTo(&regs_mmio_buffer_);
-  WaitForReset(SoftwareReset::Get().FromValue(0).set_reset_dat(1));
+  {
+    SoftwareReset::Get().ReadFrom(&regs_mmio_buffer_).set_reset_cmd(1).WriteTo(&regs_mmio_buffer_);
+    [[maybe_unused]] auto _ = WaitForReset(SoftwareReset::Get().FromValue(0).set_reset_cmd(1));
+  }
+  {
+    SoftwareReset::Get().ReadFrom(&regs_mmio_buffer_).set_reset_dat(1).WriteTo(&regs_mmio_buffer_);
+    [[maybe_unused]] auto _ = WaitForReset(SoftwareReset::Get().FromValue(0).set_reset_dat(1));
+  }
 
   // Complete any pending txn with error status
-  if (cmd_req_ != nullptr) {
-    CompleteRequestLocked(cmd_req_, ZX_ERR_IO);
-  } else if (data_req_ != nullptr) {
-    CompleteRequestLocked(data_req_, ZX_ERR_IO);
-  }
+  CompleteRequest();
+}
+
+void Sdhci::CompleteRequest() {
+  DisableInterrupts();
+  sync_completion_signal(&req_completion_);
 }
 
 int Sdhci::IrqThread() {
@@ -321,48 +332,17 @@ int Sdhci::IrqThread() {
 
     // Acknowledge the IRQs that we stashed. IRQs are cleared by writing
     // 1s into the IRQs that fired.
-    auto irq = InterruptStatus::Get().ReadFrom(&regs_mmio_buffer_).WriteTo(&regs_mmio_buffer_);
+    auto status = InterruptStatus::Get().ReadFrom(&regs_mmio_buffer_).WriteTo(&regs_mmio_buffer_);
 
-    zxlogf(DEBUG, "got irq 0x%08x en 0x%08x", irq.reg_value(),
+    zxlogf(DEBUG, "got irq 0x%08x en 0x%08x", status.reg_value(),
            InterruptSignalEnable::Get().ReadFrom(&regs_mmio_buffer_).reg_value());
 
     fbl::AutoLock lock(&mtx_);
-    // cmd_req_ and/or data_req_ being set indicate that a non-scatter-gather request is pending,
-    // while pending_request_ being set indicates that a scatter-gather request is pending. It
-    // should not be possible for both conditions to be true, and both conditions being false is
-    // unexpected in cases other than card interrupts.
-    if (cmd_req_ || data_req_) {
-      ZX_ASSERT(!pending_request_.is_pending());
-
-      if (irq.command_complete()) {
-        CmdStageCompleteLocked();
-      }
-      if (irq.buffer_read_ready()) {
-        DataStageReadReadyLocked();
-      }
-      if (irq.buffer_write_ready()) {
-        DataStageWriteReadyLocked();
-      }
-      if (irq.transfer_complete()) {
-        TransferCompleteLocked();
-      }
-      if (irq.ErrorInterrupt()) {
-        if (zxlog_level_enabled(DEBUG)) {
-          if (irq.adma_error()) {
-            zxlogf(DEBUG, "sdhci: ADMA error 0x%x ADMAADDR0 0x%x ADMAADDR1 0x%x",
-                   AdmaErrorStatus::Get().ReadFrom(&regs_mmio_buffer_).reg_value(),
-                   AdmaSystemAddress::Get(0).ReadFrom(&regs_mmio_buffer_).reg_value(),
-                   AdmaSystemAddress::Get(1).ReadFrom(&regs_mmio_buffer_).reg_value());
-          }
-        }
-        ErrorRecoveryLocked();
-      }
-    } else if (pending_request_.is_pending()) {
-      ZX_ASSERT(!cmd_req_ && !data_req_);
-      SgHandleInterrupt(irq);
+    if (pending_request_.is_pending()) {
+      HandleTransferInterrupt(status);
     }
 
-    if (irq.card_interrupt()) {
+    if (status.card_interrupt()) {
       // Disable the card interrupt and call the callback if there is one.
       InterruptStatusEnable::Get()
           .ReadFrom(&regs_mmio_buffer_)
@@ -377,217 +357,174 @@ int Sdhci::IrqThread() {
   return thrd_success;
 }
 
-zx_status_t Sdhci::PinRequestPages(sdmmc_req_t* req, zx_paddr_t* phys, size_t pagecount) {
-  const uint64_t req_len = req->blockcount * req->blocksize;
-  const bool is_read = req->cmd_flags & SDMMC_CMD_READ;
+void Sdhci::HandleTransferInterrupt(const InterruptStatus status) {
+  if (status.ErrorInterrupt()) {
+    pending_request_.status = status;
+    pending_request_.status.set_error(1);
+    ErrorRecovery();
+    return;
+  }
 
-  // pin the vmo
-  zx::unowned_vmo dma_vmo(req->dma_vmo);
-  zx::pmt pmt;
-  // offset_vmo is converted to bytes by the sdmmc layer
-  const uint32_t options = is_read ? ZX_BTI_PERM_WRITE : ZX_BTI_PERM_READ;
-  zx_status_t st = bti_.pin(options, *dma_vmo, req->buf_offset & ~PageMask(),
-                            pagecount * zx_system_get_page_size(), phys, pagecount, &pmt);
-  if (st != ZX_OK) {
-    zxlogf(ERROR, "sdhci: error %d bti_pin", st);
-    return st;
+  // Clear the interrupt status to indicate that a normal interrupt was handled.
+  pending_request_.status = InterruptStatus::Get().FromValue(0);
+  if (status.buffer_read_ready() && DataStageReadReady()) {
+    return;
   }
-  if (req->cmd_flags & SDMMC_CMD_READ) {
-    st = dma_vmo->op_range(ZX_VMO_OP_CACHE_CLEAN_INVALIDATE, req->buf_offset, req_len, nullptr, 0);
-  } else {
-    st = dma_vmo->op_range(ZX_VMO_OP_CACHE_CLEAN, req->buf_offset, req_len, nullptr, 0);
+  if (status.command_complete() && CmdStageComplete()) {
+    return;
   }
-  if (st != ZX_OK) {
-    zxlogf(ERROR, "sdhci: cache clean failed with error  %d", st);
-    return st;
+  if (status.transfer_complete()) {
+    TransferComplete();
   }
-  // cache this for zx_pmt_unpin() later
-  req->pmt = pmt.release();
-
-  return ZX_OK;
 }
 
-template <typename DescriptorType>
-zx_status_t Sdhci::BuildDmaDescriptor(sdmmc_req_t* req, DescriptorType* descs) {
-  constexpr zx_paddr_t kPhysAddrMask =
-      sizeof(descs->address) == sizeof(uint32_t) ? 0x0000'0000'ffff'ffff : 0xffff'ffff'ffff'ffff;
-
-  const uint64_t req_len = req->blockcount * req->blocksize;
-  const size_t pagecount =
-      ((req->buf_offset & PageMask()) + req_len + PageMask()) / zx_system_get_page_size();
-  if (pagecount > SDMMC_PAGES_COUNT) {
-    zxlogf(ERROR, "sdhci: too many pages %lu vs %lu", pagecount, SDMMC_PAGES_COUNT);
+zx_status_t Sdhci::SdmmcRegisterVmo(uint32_t vmo_id, uint8_t client_id, zx::vmo vmo,
+                                    uint64_t offset, uint64_t size, uint32_t vmo_rights) {
+  if (client_id >= std::size(registered_vmo_stores_)) {
+    return ZX_ERR_OUT_OF_RANGE;
+  }
+  if (vmo_rights == 0) {
     return ZX_ERR_INVALID_ARGS;
   }
 
-  zx_paddr_t phys[SDMMC_PAGES_COUNT];
-  zx_status_t st = PinRequestPages(req, phys, pagecount);
-  if (st != ZX_OK) {
-    return st;
+  vmo_store::StoredVmo<OwnedVmoInfo> stored_vmo(std::move(vmo), OwnedVmoInfo{
+                                                                    .offset = offset,
+                                                                    .size = size,
+                                                                    .rights = vmo_rights,
+                                                                });
+  const uint32_t read_perm = (vmo_rights & SDMMC_VMO_RIGHT_READ) ? ZX_BTI_PERM_READ : 0;
+  const uint32_t write_perm = (vmo_rights & SDMMC_VMO_RIGHT_WRITE) ? ZX_BTI_PERM_WRITE : 0;
+  zx_status_t status = stored_vmo.Pin(bti_, read_perm | write_perm, true);
+  if (status != ZX_OK) {
+    zxlogf(ERROR, "Failed to pin VMO %u for client %u: %s", vmo_id, client_id,
+           zx_status_get_string(status));
+    return status;
   }
 
-  phys_iter_buffer_t buf = {
-      .phys = phys,
-      .phys_count = pagecount,
-      .length = req_len,
-      .vmo_offset = req->buf_offset,
-      .sg_list = nullptr,
-      .sg_count = 0,
-  };
-  phys_iter_t iter;
-  phys_iter_init(&iter, &buf, kMaxDescriptorLength);
-
-  int count = 0;
-  size_t length = 0;
-  zx_paddr_t paddr;
-  for (DescriptorType* desc = descs;; desc++) {
-    if (length == 0) {
-      length = phys_iter_next(&iter, &paddr);
-    }
-
-    if (length == 0) {
-      if (desc != descs) {
-        desc -= 1;
-        // set end bit on the last descriptor
-        desc->attr = Adma2DescriptorAttributes::Get(desc->attr).set_end(1).reg_value();
-        break;
-      } else {
-        zxlogf(DEBUG, "sdhci: empty descriptor list!");
-        return ZX_ERR_NOT_SUPPORTED;
-      }
-    } else if (length > kMaxDescriptorLength) {
-      zxlogf(DEBUG, "sdhci: chunk size > %zu is unsupported", length);
-      return ZX_ERR_NOT_SUPPORTED;
-    } else if ((++count) > kDmaDescCount) {
-      zxlogf(DEBUG, "sdhci: request with more than %zd chunks is unsupported", length);
-      return ZX_ERR_NOT_SUPPORTED;
-    }
-
-    if ((paddr & kPhysAddrMask) != paddr) {
-      zxlogf(ERROR, "sdhci: 64-bit physical address supplied for 32-bit DMA");
-      return ZX_ERR_NOT_SUPPORTED;
-    }
-
-    size_t next_length = 0;
-    zx_paddr_t next_paddr = 0;
-
-    if (quirks_ & SDHCI_QUIRK_USE_DMA_BOUNDARY_ALIGNMENT) {
-      const zx_paddr_t aligned_start = fbl::round_down(paddr, dma_boundary_alignment_);
-      const zx_paddr_t aligned_end = fbl::round_down(paddr + length - 1, dma_boundary_alignment_);
-      if (aligned_start != aligned_end) {
-        // Crossing a boundary, split the DMA buffer in two.
-        const size_t first_length = aligned_start + dma_boundary_alignment_ - paddr;
-        next_length = length - first_length;
-        next_paddr = paddr + first_length;
-        length = first_length;
-      }
-    }
-
-    if constexpr (sizeof(desc->address) == sizeof(uint32_t)) {
-      desc->address = static_cast<uint32_t>(paddr);
-    } else {
-      desc->address = paddr;
-    }
-    desc->length = static_cast<uint16_t>(length);
-    desc->attr = Adma2DescriptorAttributes::Get()
-                     .set_valid(1)
-                     .set_type(Adma2DescriptorAttributes::kTypeData)
-                     .reg_value();
-
-    length = next_length;
-    paddr = next_paddr;
-  }
-
-  if (zxlog_level_enabled(TRACE)) {
-    DescriptorType* desc = descs;
-    do {
-      if constexpr (sizeof(desc->address) == sizeof(uint32_t)) {
-        zxlogf(TRACE, "desc: addr=0x%" PRIx32 " length=0x%04x attr=0x%04x", desc->address,
-               desc->length, desc->attr);
-      } else {
-        zxlogf(TRACE, "desc: addr=0x%" PRIx64 " length=0x%04x attr=0x%04x", desc->address,
-               desc->length, desc->attr);
-      }
-    } while (!Adma2DescriptorAttributes::Get((desc++)->attr).end());
-  }
-
-  zx_paddr_t desc_phys = iobuf_.phys();
-  if ((desc_phys & kPhysAddrMask) != desc_phys) {
-    zxlogf(ERROR, "sdhci: 64-bit physical address supplied for 32-bit DMA");
-    return ZX_ERR_NOT_SUPPORTED;
-  }
-
-  if ((st = iobuf_.CacheOp(ZX_VMO_OP_CACHE_CLEAN, 0, count * sizeof(DescriptorType))) != ZX_OK) {
-    zxlogf(ERROR, "sdhci: cache clean failed with error %d", st);
-    return st;
-  }
-
-  AdmaSystemAddress::Get(0).FromValue(Lo32(desc_phys)).WriteTo(&regs_mmio_buffer_);
-  AdmaSystemAddress::Get(1).FromValue(Hi32(desc_phys)).WriteTo(&regs_mmio_buffer_);
-
-  zxlogf(TRACE, "sdhci: descs at 0x%x 0x%x", Lo32(desc_phys), Hi32(desc_phys));
-
-  return ZX_OK;
+  return registered_vmo_stores_[client_id].RegisterWithKey(vmo_id, std::move(stored_vmo));
 }
 
-zx_status_t Sdhci::StartRequestLocked(sdmmc_req_t* req) {
-  const uint32_t arg = req->arg;
-  const uint16_t blkcnt = req->blockcount;
-  const uint16_t blksiz = req->blocksize;
-  const bool has_data = SdmmcCmdHasData(req->cmd_flags);
+zx_status_t Sdhci::SdmmcUnregisterVmo(uint32_t vmo_id, uint8_t client_id, zx::vmo* out_vmo) {
+  if (client_id >= std::size(registered_vmo_stores_)) {
+    return ZX_ERR_OUT_OF_RANGE;
+  }
 
-  Command command = Command::Get().FromValue(0);
-  TransferMode transfer_mode = TransferMode::Get().FromValue(0);
-  PrepareCmd(req, &transfer_mode, &command);
+  vmo_store::StoredVmo<OwnedVmoInfo>* const vmo_info =
+      registered_vmo_stores_[client_id].GetVmo(vmo_id);
+  if (!vmo_info) {
+    return ZX_ERR_NOT_FOUND;
+  }
 
-  if (req->use_dma && !SupportsAdma2()) {
-    zxlogf(DEBUG, "sdhci: host does not support DMA");
+  const zx_status_t status = vmo_info->vmo()->duplicate(ZX_RIGHT_SAME_RIGHTS, out_vmo);
+  if (status != ZX_OK) {
+    return status;
+  }
+
+  return registered_vmo_stores_[client_id].Unregister(vmo_id).status_value();
+}
+
+zx_status_t Sdhci::SdmmcRequestNew(const sdmmc_req_new_t* req, uint32_t out_response[4]) {
+  if (req->client_id >= std::size(registered_vmo_stores_)) {
+    return ZX_ERR_OUT_OF_RANGE;
+  }
+  if (!SupportsAdma2()) {
+    // TODO(fxbug.dev/106851): Add support for PIO requests.
     return ZX_ERR_NOT_SUPPORTED;
   }
 
-  zxlogf(DEBUG, "sdhci: start_req cmd=0x%08x (data %d dma %d bsy %d) blkcnt %u blksiz %u",
-         command.reg_value(), has_data, req->use_dma, SdmmcCmdRspBusy(req->cmd_flags), blkcnt,
-         blksiz);
+  DmaDescriptorBuilder builder(*req, registered_vmo_stores_[req->client_id],
+                               dma_boundary_alignment_, bti_.borrow());
+
+  {
+    fbl::AutoLock lock(&mtx_);
+
+    // one command at a time
+    if (pending_request_.is_pending()) {
+      return ZX_ERR_SHOULD_WAIT;
+    }
+
+    if (zx_status_t status = StartRequest(*req, builder); status != ZX_OK) {
+      return status;
+    }
+  }
+
+  sync_completion_wait(&req_completion_, ZX_TIME_INFINITE);
+  sync_completion_reset(&req_completion_);
+
+  fbl::AutoLock lock(&mtx_);
+  return FinishRequest(*req, out_response);
+}
+
+zx_status_t Sdhci::StartRequest(const sdmmc_req_new_t& request, DmaDescriptorBuilder& builder) {
+  using BlockSizeType = decltype(BlockSize::Get().FromValue(0).reg_value());
+  using BlockCountType = decltype(BlockCount::Get().FromValue(0).reg_value());
 
   // Every command requires that the Command Inhibit is unset.
   auto inhibit_mask = PresentState::Get().FromValue(0).set_command_inhibit_cmd(1);
 
   // Busy type commands must also wait for the DATA Inhibit to be 0 UNLESS
   // it's an abort command which can be issued with the data lines active.
-  if ((req->cmd_flags & SDMMC_RESP_LEN_48B) && (req->cmd_flags & SDMMC_CMD_TYPE_ABORT)) {
+  if ((request.cmd_flags & SDMMC_RESP_LEN_48B) && (request.cmd_flags & SDMMC_CMD_TYPE_ABORT)) {
     inhibit_mask.set_command_inhibit_dat(1);
   }
 
   // Wait for the inhibit masks from above to become 0 before issuing the command.
-  zx_status_t st = WaitForInhibit(inhibit_mask);
-  if (st != ZX_OK) {
-    return st;
+  zx_status_t status = WaitForInhibit(inhibit_mask);
+  if (status != ZX_OK) {
+    return status;
   }
 
-  if (has_data) {
-    if (req->use_dma) {
-      if (Capabilities0::Get().ReadFrom(&regs_mmio_buffer_).v3_64_bit_system_address_support()) {
-        st = BuildDmaDescriptor(req, reinterpret_cast<AdmaDescriptor96*>(iobuf_.virt()));
-      } else {
-        st = BuildDmaDescriptor(req, reinterpret_cast<AdmaDescriptor64*>(iobuf_.virt()));
-      }
+  TransferMode transfer_mode = TransferMode::Get().FromValue(0);
 
-      if (st != ZX_OK) {
-        zxlogf(ERROR, "sdhci: failed to build DMA descriptor");
-        return st;
-      }
-      transfer_mode.set_dma_enable(1);
+  const bool is_tuning_request =
+      request.cmd_idx == MMC_SEND_TUNING_BLOCK || request.cmd_idx == SD_SEND_TUNING_BLOCK;
+
+  const auto blocksize = static_cast<BlockSizeType>(request.blocksize);
+
+  if (is_tuning_request) {
+    // The SDHCI controller has special logic to handle tuning transfers, so there is no need to set
+    // up any DMA buffers.
+    BlockSize::Get().FromValue(blocksize).WriteTo(&regs_mmio_buffer_);
+    BlockCount::Get().FromValue(0).WriteTo(&regs_mmio_buffer_);
+  } else if (request.cmd_flags & SDMMC_RESP_DATA_PRESENT) {
+    if (request.blocksize > std::numeric_limits<BlockSizeType>::max()) {
+      return ZX_ERR_OUT_OF_RANGE;
     }
+    if (request.blocksize == 0) {
+      return ZX_ERR_INVALID_ARGS;
+    }
+
+    if (const zx_status_t status = SetUpDma(request, builder); status != ZX_OK) {
+      return status;
+    }
+
+    if (builder.block_count() > std::numeric_limits<BlockCountType>::max()) {
+      zxlogf(ERROR, "Block count (%lu) exceeds the maximum (%u)", builder.block_count(),
+             std::numeric_limits<BlockCountType>::max());
+      return ZX_ERR_OUT_OF_RANGE;
+    }
+
+    transfer_mode.set_dma_enable(1).set_multi_block(builder.block_count() > 1 ? 1 : 0);
+
+    const auto blockcount = static_cast<BlockCountType>(builder.block_count());
+
+    BlockSize::Get().FromValue(blocksize).WriteTo(&regs_mmio_buffer_);
+    BlockCount::Get().FromValue(blockcount).WriteTo(&regs_mmio_buffer_);
+  } else {
+    BlockSize::Get().FromValue(0).WriteTo(&regs_mmio_buffer_);
+    BlockCount::Get().FromValue(0).WriteTo(&regs_mmio_buffer_);
   }
 
-  BlockSize::Get().FromValue(blksiz).WriteTo(&regs_mmio_buffer_);
-  BlockCount::Get().FromValue(blkcnt).WriteTo(&regs_mmio_buffer_);
+  Command command = Command::Get().FromValue(0);
+  PrepareCmd(request, &transfer_mode, &command);
 
-  Argument::Get().FromValue(arg).WriteTo(&regs_mmio_buffer_);
+  Argument::Get().FromValue(request.arg).WriteTo(&regs_mmio_buffer_);
 
   // Clear any pending interrupts before starting the transaction.
   auto irq_mask = InterruptSignalEnable::Get().ReadFrom(&regs_mmio_buffer_);
   InterruptStatus::Get().FromValue(irq_mask.reg_value()).WriteTo(&regs_mmio_buffer_);
+
+  pending_request_.Init(request);
 
   // Unmask and enable interrupts
   EnableInterrupts();
@@ -596,45 +533,395 @@ zx_status_t Sdhci::StartRequestLocked(sdmmc_req_t* req) {
   transfer_mode.WriteTo(&regs_mmio_buffer_);
   command.WriteTo(&regs_mmio_buffer_);
 
-  cmd_req_ = req;
-  if (has_data || SdmmcCmdRspBusy(req->cmd_flags)) {
-    data_req_ = req;
-  } else {
-    data_req_ = nullptr;
-  }
-  data_blockid_ = 0;
-  data_done_ = false;
   return ZX_OK;
 }
 
-zx_status_t Sdhci::FinishRequest(sdmmc_req_t* req) {
-  if (req->use_dma && req->pmt != ZX_HANDLE_INVALID) {
-    // Clean the cache one more time after the DMA operation because there
-    // might be a possibility of cpu prefetching while the DMA operation is
-    // going on.
-    zx_status_t st;
-    const uint64_t req_len = req->blockcount * req->blocksize;
-    if ((req->cmd_flags & SDMMC_CMD_READ) && req->use_dma) {
-      st = zx_vmo_op_range(req->dma_vmo, ZX_VMO_OP_CACHE_CLEAN_INVALIDATE, req->buf_offset, req_len,
-                           nullptr, 0);
-      if (st != ZX_OK) {
-        zxlogf(ERROR, "sdhci: cache clean failed with error  %d", st);
-        return st;
-      }
-    }
-    st = zx_pmt_unpin(req->pmt);
-    req->pmt = ZX_HANDLE_INVALID;
-    if (st != ZX_OK) {
-      zxlogf(ERROR, "sdhci: error %d in pmt_unpin", st);
-      return st;
+zx_status_t Sdhci::SetUpDma(const sdmmc_req_new_t& request, DmaDescriptorBuilder& builder) {
+  const cpp20::span buffers{request.buffers_list, request.buffers_count};
+  zx_status_t status;
+  for (const auto& buffer : buffers) {
+    if ((status = builder.ProcessBuffer(buffer)) != ZX_OK) {
+      return status;
     }
   }
 
-  if (req->cmd_flags & SDMMC_CMD_TYPE_ABORT) {
-    // SDHCI spec section 3.8.2: reset the data line after an abort to discard data in the buffer.
-    return WaitForReset(SoftwareReset::Get().FromValue(0).set_reset_cmd(1).set_reset_dat(1));
+  size_t descriptor_size;
+  if (Capabilities0::Get().ReadFrom(&regs_mmio_buffer_).v3_64_bit_system_address_support()) {
+    const cpp20::span descriptors{reinterpret_cast<AdmaDescriptor96*>(iobuf_.virt()),
+                                  kDmaDescCount};
+    descriptor_size = sizeof(descriptors[0]);
+    status = builder.BuildDmaDescriptors(descriptors);
+  } else {
+    const cpp20::span descriptors{reinterpret_cast<AdmaDescriptor64*>(iobuf_.virt()),
+                                  kDmaDescCount};
+    descriptor_size = sizeof(descriptors[0]);
+    status = builder.BuildDmaDescriptors(descriptors);
   }
+
+  if (status != ZX_OK) {
+    return status;
+  }
+
+  status = iobuf_.CacheOp(ZX_VMO_OP_CACHE_CLEAN, 0, builder.descriptor_count() * descriptor_size);
+  if (status != ZX_OK) {
+    zxlogf(ERROR, "Failed to clean cache: %s", zx_status_get_string(status));
+    return status;
+  }
+
+  AdmaSystemAddress::Get(0).FromValue(Lo32(iobuf_.phys())).WriteTo(&regs_mmio_buffer_);
+  AdmaSystemAddress::Get(1).FromValue(Hi32(iobuf_.phys())).WriteTo(&regs_mmio_buffer_);
   return ZX_OK;
+}
+
+zx_status_t Sdhci::FinishRequest(const sdmmc_req_new_t& request, uint32_t out_response[4]) {
+  if (pending_request_.cmd_done) {
+    memcpy(out_response, pending_request_.response, sizeof(uint32_t) * 4);
+  }
+
+  if (request.cmd_flags & SDMMC_CMD_TYPE_ABORT) {
+    // SDHCI spec section 3.8.2: reset the data line after an abort to discard data in the buffer.
+    [[maybe_unused]] auto _ =
+        WaitForReset(SoftwareReset::Get().FromValue(0).set_reset_cmd(1).set_reset_dat(1));
+  }
+
+  if ((request.cmd_flags & SDMMC_RESP_DATA_PRESENT) && (request.cmd_flags & SDMMC_CMD_READ)) {
+    const cpp20::span<const sdmmc_buffer_region_t> regions{request.buffers_list,
+                                                           request.buffers_count};
+    for (const auto& region : regions) {
+      if (region.type != SDMMC_BUFFER_TYPE_VMO_HANDLE) {
+        continue;
+      }
+
+      // Invalidate the cache so that the next CPU read will pick up data that was written to main
+      // memory by the controller.
+      zx_status_t status = zx_vmo_op_range(region.buffer.vmo, ZX_VMO_OP_CACHE_CLEAN_INVALIDATE,
+                                           region.offset, region.size, nullptr, 0);
+      if (status != ZX_OK) {
+        zxlogf(ERROR, "Failed to clean/invalidate cache: %s", zx_status_get_string(status));
+        return status;
+      }
+    }
+  }
+
+  const InterruptStatus interrupt_status = pending_request_.status;
+  pending_request_.Reset();
+
+  if (!interrupt_status.error()) {
+    return ZX_OK;
+  }
+
+  if (interrupt_status.tuning_error()) {
+    zxlogf(ERROR, "Tuning error");
+  }
+  if (interrupt_status.adma_error()) {
+    zxlogf(ERROR, "ADMA error cmd%u", request.cmd_idx);
+  }
+  if (interrupt_status.auto_cmd_error()) {
+    zxlogf(ERROR, "Auto cmd error cmd%u", request.cmd_idx);
+  }
+  if (interrupt_status.current_limit_error()) {
+    zxlogf(ERROR, "Current limit error cmd%u", request.cmd_idx);
+  }
+  if (interrupt_status.data_end_bit_error()) {
+    zxlogf(ERROR, "Data end bit error cmd%u", request.cmd_idx);
+  }
+  if (interrupt_status.data_crc_error()) {
+    if (request.suppress_error_messages) {
+      zxlogf(DEBUG, "Data CRC error cmd%u", request.cmd_idx);
+    } else {
+      zxlogf(ERROR, "Data CRC error cmd%u", request.cmd_idx);
+    }
+  }
+  if (interrupt_status.data_timeout_error()) {
+    zxlogf(ERROR, "Data timeout error cmd%u", request.cmd_idx);
+  }
+  if (interrupt_status.command_index_error()) {
+    zxlogf(ERROR, "Command index error cmd%u", request.cmd_idx);
+  }
+  if (interrupt_status.command_end_bit_error()) {
+    zxlogf(ERROR, "Command end bit error cmd%u", request.cmd_idx);
+  }
+  if (interrupt_status.command_crc_error()) {
+    if (request.suppress_error_messages) {
+      zxlogf(DEBUG, "Command CRC error cmd%u", request.cmd_idx);
+    } else {
+      zxlogf(ERROR, "Command CRC error cmd%u", request.cmd_idx);
+    }
+  }
+  if (interrupt_status.command_timeout_error()) {
+    if (request.suppress_error_messages) {
+      zxlogf(DEBUG, "Command timeout error cmd%u", request.cmd_idx);
+    } else {
+      zxlogf(ERROR, "Command timeout error cmd%u", request.cmd_idx);
+    }
+  }
+  if (interrupt_status.reg_value() ==
+      InterruptStatusEnable::Get().FromValue(0).set_error(1).reg_value()) {
+    // Log an unknown error only if no other bits were set.
+    zxlogf(ERROR, "Unknown error cmd%u", request.cmd_idx);
+  }
+
+  return ZX_ERR_IO;
+}
+
+template <typename DescriptorType>
+zx_status_t Sdhci::DmaDescriptorBuilder::BuildDmaDescriptors(
+    cpp20::span<DescriptorType> out_descriptors) {
+  if (total_size_ % request_.blocksize != 0) {
+    zxlogf(ERROR, "Total buffer size (%lu) is not a multiple of the request block size (%u)",
+           total_size_, request_.blocksize);
+    return ZX_ERR_INVALID_ARGS;
+  }
+
+  const cpp20::span<const fzl::PinnedVmo::Region> regions{regions_.data(), region_count_};
+  auto desc_it = out_descriptors.begin();
+  for (const fzl::PinnedVmo::Region region : regions) {
+    if (desc_it == out_descriptors.end()) {
+      zxlogf(ERROR, "Not enough DMA descriptors to handle request");
+      return ZX_ERR_OUT_OF_RANGE;
+    }
+
+    if constexpr (sizeof(desc_it->address) == sizeof(uint32_t)) {
+      if (Hi32(region.phys_addr) != 0) {
+        zxlogf(ERROR, "64-bit physical address supplied for 32-bit DMA");
+        return ZX_ERR_NOT_SUPPORTED;
+      }
+      desc_it->address = static_cast<uint32_t>(region.phys_addr);
+    } else {
+      desc_it->address = region.phys_addr;
+    }
+
+    // Should be enforced by ProcessBuffer.
+    ZX_DEBUG_ASSERT(region.size > 0);
+    ZX_DEBUG_ASSERT(region.size <= kMaxDescriptorLength);
+
+    desc_it->length = static_cast<uint16_t>(region.size == kMaxDescriptorLength ? 0 : region.size);
+    desc_it->attr = Adma2DescriptorAttributes::Get()
+                        .set_valid(1)
+                        .set_type(Adma2DescriptorAttributes::kTypeData)
+                        .reg_value();
+    desc_it++;
+  }
+
+  if (desc_it == out_descriptors.begin()) {
+    zxlogf(ERROR, "No buffers were provided for the transfer");
+    return ZX_ERR_INVALID_ARGS;
+  }
+
+  // The above check verifies that we have at least on descriptor. Set the end bit on the last
+  // descriptor as per the SDHCI ADMA2 spec.
+  desc_it[-1].attr = Adma2DescriptorAttributes::Get(desc_it[-1].attr).set_end(1).reg_value();
+
+  descriptor_count_ = desc_it - out_descriptors.begin();
+  return ZX_OK;
+}
+
+zx_status_t Sdhci::DmaDescriptorBuilder::ProcessBuffer(const sdmmc_buffer_region_t& buffer) {
+  total_size_ += buffer.size;
+
+  fzl::PinnedVmo::Region region_buffer[SDMMC_PAGES_COUNT];
+  zx::result<size_t> region_count;
+  if (buffer.type == SDMMC_BUFFER_TYPE_VMO_HANDLE) {
+    region_count = GetPinnedRegions(zx::unowned_vmo(buffer.buffer.vmo), buffer,
+                                    {region_buffer, std::size(region_buffer)});
+  } else if (buffer.type == SDMMC_BUFFER_TYPE_VMO_ID) {
+    region_count =
+        GetPinnedRegions(buffer.buffer.vmo_id, buffer, {region_buffer, std::size(region_buffer)});
+  } else {
+    return ZX_ERR_INVALID_ARGS;
+  }
+
+  if (region_count.is_error()) {
+    return region_count.error_value();
+  }
+
+  return AppendRegions({region_buffer, region_count.value()});
+}
+
+zx::result<size_t> Sdhci::DmaDescriptorBuilder::GetPinnedRegions(
+    uint32_t vmo_id, const sdmmc_buffer_region_t& buffer,
+    cpp20::span<fzl::PinnedVmo::Region> out_regions) {
+  vmo_store::StoredVmo<OwnedVmoInfo>* const stored_vmo =
+      registered_vmos_.GetVmo(buffer.buffer.vmo_id);
+  if (stored_vmo == nullptr) {
+    zxlogf(ERROR, "No VMO %u for client %u", buffer.buffer.vmo_id, request_.client_id);
+    return zx::error(ZX_ERR_NOT_FOUND);
+  }
+
+  // Make sure that this request would not cause the controller to violate the rights of the VMO,
+  // as we may not have an IOMMU to otherwise prevent it.
+  if (!(request_.cmd_flags & SDMMC_CMD_READ) &&
+      !(stored_vmo->meta().rights & SDMMC_VMO_RIGHT_READ)) {
+    // Write request, controller reads from this VMO and writes to the card.
+    zxlogf(ERROR, "Request would cause controller to read from write-only VMO");
+    return zx::error(ZX_ERR_ACCESS_DENIED);
+  }
+  if ((request_.cmd_flags & SDMMC_CMD_READ) &&
+      !(stored_vmo->meta().rights & SDMMC_VMO_RIGHT_WRITE)) {
+    // Read request, controller reads from the card and writes to this VMO.
+    zxlogf(ERROR, "Request would cause controller to write to read-only VMO");
+    return zx::error(ZX_ERR_ACCESS_DENIED);
+  }
+
+  size_t region_count = 0;
+  const zx_status_t status =
+      stored_vmo->GetPinnedRegions(buffer.offset + stored_vmo->meta().offset, buffer.size,
+                                   out_regions.data(), out_regions.size(), &region_count);
+  if (status != ZX_OK) {
+    zxlogf(ERROR, "Failed to get pinned regions: %s", zx_status_get_string(status));
+    return zx::error(status);
+  }
+
+  return zx::ok(region_count);
+}
+
+zx::result<size_t> Sdhci::DmaDescriptorBuilder::GetPinnedRegions(
+    zx::unowned_vmo vmo, const sdmmc_buffer_region_t& buffer,
+    cpp20::span<fzl::PinnedVmo::Region> out_regions) {
+  const uint64_t kPageSize = zx_system_get_page_size();
+  const uint64_t kPageMask = kPageSize - 1;
+
+  if (pmt_count_ >= pmts_.size()) {
+    zxlogf(ERROR, "Too many unowned VMOs specified, maximum is %zu", pmts_.size());
+    return zx::error(ZX_ERR_OUT_OF_RANGE);
+  }
+
+  const uint64_t page_offset = buffer.offset & kPageMask;
+  const uint64_t page_count = fbl::round_up(buffer.size + page_offset, kPageSize) / kPageSize;
+
+  const uint32_t options =
+      (request_.cmd_flags & SDMMC_CMD_READ) ? ZX_BTI_PERM_WRITE : ZX_BTI_PERM_READ;
+
+  zx_paddr_t phys[SDMMC_PAGES_COUNT];
+
+  if (page_count == 0) {
+    zxlogf(ERROR, "Buffer has no pages");
+    return zx::error(ZX_ERR_INVALID_ARGS);
+  }
+  if (page_count > std::size(phys)) {
+    zxlogf(ERROR, "Buffer has too many pages, maximum is %zu", std::size(phys));
+    return zx::error(ZX_ERR_OUT_OF_RANGE);
+  }
+
+  zx_status_t status = bti_->pin(options, *vmo, buffer.offset - page_offset, page_count * kPageSize,
+                                 phys, page_count, &pmts_[pmt_count_]);
+  if (status != ZX_OK) {
+    zxlogf(ERROR, "Failed to pin unowned VMO: %s", zx_status_get_string(status));
+    return zx::error(status);
+  }
+
+  pmt_count_++;
+
+  // We don't own this VMO, and therefore cannot make any assumptions about the state of the
+  // cache. The cache must be clean and invalidated for reads so that the final clean + invalidate
+  // doesn't overwrite main memory with stale data from the cache, and must be clean for writes so
+  // that main memory has the latest data.
+  if (request_.cmd_flags & SDMMC_CMD_READ) {
+    status =
+        vmo->op_range(ZX_VMO_OP_CACHE_CLEAN_INVALIDATE, buffer.offset, buffer.size, nullptr, 0);
+  } else {
+    status = vmo->op_range(ZX_VMO_OP_CACHE_CLEAN, buffer.offset, buffer.size, nullptr, 0);
+  }
+
+  if (status != ZX_OK) {
+    zxlogf(ERROR, "Cache op on unowned VMO failed: %s", zx_status_get_string(status));
+    return zx::error(status);
+  }
+
+  ZX_DEBUG_ASSERT(!out_regions.empty());  // This assumption simplifies the following logic.
+
+  out_regions[0].phys_addr = phys[0] + page_offset;
+  out_regions[0].size = kPageSize - page_offset;
+
+  // Check for any pages that happen to be both contiguous and increasing in physical addresses.
+  // Such pages, if there are any, can be combined into a single DMA descriptor to enable larger
+  // transfers.
+
+  size_t last_region = 0;
+  for (size_t paddr_count = 1; paddr_count < page_count; paddr_count++) {
+    if ((out_regions[last_region].phys_addr + out_regions[last_region].size) == phys[paddr_count]) {
+      // The current region is contiguous with this physical address, increase it by the page size.
+      out_regions[last_region].size += kPageSize;
+    } else if (++last_region < out_regions.size()) {
+      // The current region is not contiguous with this physical address, create a new region.
+      out_regions[last_region].phys_addr = phys[paddr_count];
+      out_regions[last_region].size = kPageSize;
+    } else {
+      // Ran out of regions.
+      zxlogf(ERROR, "Buffer has too many regions, maximum is %zu", out_regions.size());
+      return zx::error(ZX_ERR_OUT_OF_RANGE);
+    }
+  }
+
+  // Adjust the last region size based on the offset into the first page and the total size of the
+  // buffer.
+  out_regions[last_region].size -= (page_count * kPageSize) - buffer.size - page_offset;
+
+  return zx::ok(last_region + 1);
+}
+
+zx_status_t Sdhci::DmaDescriptorBuilder::AppendRegions(
+    const cpp20::span<const fzl::PinnedVmo::Region> regions) {
+  if (regions.empty()) {
+    return ZX_ERR_INVALID_ARGS;
+  }
+
+  fzl::PinnedVmo::Region current_region{0, 0};
+  auto vmo_regions_it = regions.begin();
+  for (; region_count_ < regions_.size(); region_count_++) {
+    // Current region is invalid, fetch a new one from the input list.
+    if (current_region.size == 0) {
+      // No more regions left to process.
+      if (vmo_regions_it == regions.end()) {
+        return ZX_OK;
+      }
+      if (vmo_regions_it->size == 0) {
+        return ZX_ERR_INVALID_ARGS;
+      }
+
+      current_region = *vmo_regions_it++;
+    }
+
+    // Default to an invalid region so that the next iteration fetches another one from the input
+    // list. If this region is divided due to a boundary or size restriction, the next region will
+    // remain valid so that processing of the original region will continue.
+    fzl::PinnedVmo::Region next_region{0, 0};
+
+    if (dma_boundary_alignment_) {
+      const zx_paddr_t aligned_start =
+          fbl::round_down(current_region.phys_addr, dma_boundary_alignment_);
+      const zx_paddr_t aligned_end = fbl::round_down(
+          current_region.phys_addr + current_region.size - 1, dma_boundary_alignment_);
+
+      if (aligned_start != aligned_end) {
+        // Crossing a boundary, split the DMA buffer in two.
+        const size_t first_size =
+            aligned_start + dma_boundary_alignment_ - current_region.phys_addr;
+        next_region.size = current_region.size - first_size;
+        next_region.phys_addr = current_region.phys_addr + first_size;
+        current_region.size = first_size;
+      }
+    }
+
+    // The region size is greater than the maximum, split it into two or more smaller regions.
+    if (current_region.size > kMaxDescriptorLength) {
+      const size_t size_diff = current_region.size - kMaxDescriptorLength;
+      if (next_region.size) {
+        next_region.phys_addr -= size_diff;
+      } else {
+        next_region.phys_addr = current_region.phys_addr + kMaxDescriptorLength;
+      }
+      next_region.size += size_diff;
+      current_region.size = kMaxDescriptorLength;
+    }
+
+    regions_[region_count_] = current_region;
+    current_region = next_region;
+  }
+
+  // If processing did not reach the end of the VMO regions or the current region is still valid we
+  // must have hit the end of the output region buffer.
+  return vmo_regions_it == regions.end() && current_region.size == 0 ? ZX_OK : ZX_ERR_OUT_OF_RANGE;
 }
 
 zx_status_t Sdhci::SdmmcHostInfo(sdmmc_host_info_t* out_info) {
@@ -806,34 +1093,6 @@ zx_status_t Sdhci::SdmmcSetTiming(sdmmc_timing_t timing) {
 void Sdhci::SdmmcHwReset() {
   fbl::AutoLock lock(&mtx_);
   sdhci_.HwReset();
-}
-
-zx_status_t Sdhci::SdmmcRequest(sdmmc_req_t* req) {
-  zx_status_t st = ZX_OK;
-
-  {
-    fbl::AutoLock lock(&mtx_);
-
-    // one command at a time
-    if ((cmd_req_ != nullptr) || (data_req_ != nullptr)) {
-      st = ZX_ERR_SHOULD_WAIT;
-    } else {
-      st = StartRequestLocked(req);
-    }
-  }
-
-  if (st != ZX_OK) {
-    FinishRequest(req);
-    return st;
-  }
-
-  sync_completion_wait(&req_completion_, ZX_TIME_INFINITE);
-
-  FinishRequest(req);
-
-  sync_completion_reset(&req_completion_);
-
-  return req->status;
 }
 
 zx_status_t Sdhci::SdmmcPerformTuning(uint32_t cmd_idx) {

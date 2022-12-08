@@ -89,7 +89,7 @@ class Sdhci : public DeviceType, public ddk::SdmmcProtocol<Sdhci, ddk::base_prot
   zx_status_t SdmmcSetTiming(sdmmc_timing_t timing) TA_EXCL(mtx_);
   void SdmmcHwReset() TA_EXCL(mtx_);
   zx_status_t SdmmcPerformTuning(uint32_t cmd_idx) TA_EXCL(mtx_);
-  zx_status_t SdmmcRequest(sdmmc_req_t* req) TA_EXCL(mtx_);
+  zx_status_t SdmmcRequest(sdmmc_req_t* req) { return ZX_ERR_NOT_SUPPORTED; }
   zx_status_t SdmmcRegisterInBandInterrupt(const in_band_interrupt_protocol_t* interrupt_cb)
       TA_EXCL(mtx_);
   void SdmmcAckInBandInterrupt() TA_EXCL(mtx_);
@@ -116,26 +116,6 @@ class Sdhci : public DeviceType, public ddk::SdmmcProtocol<Sdhci, ddk::base_prot
 
   RequestStatus GetRequestStatus() TA_EXCL(&mtx_) {
     fbl::AutoLock lock(&mtx_);
-    if (cmd_req_ != nullptr) {
-      return RequestStatus::COMMAND;
-    }
-    if (data_req_ != nullptr) {
-      const bool has_data = data_req_->cmd_flags & SDMMC_RESP_DATA_PRESENT;
-      const bool busy_response = data_req_->cmd_flags & SDMMC_RESP_LEN_48B;
-
-      if (has_data) {
-        if (data_req_->use_dma) {
-          return RequestStatus::TRANSFER_DATA_DMA;
-        }
-        if (data_req_->cmd_flags & SDMMC_CMD_READ) {
-          return RequestStatus::READ_DATA_PIO;
-        }
-        return RequestStatus::WRITE_DATA_PIO;
-      }
-      if (busy_response) {
-        return RequestStatus::BUSY_RESPONSE;
-      }
-    }
     if (pending_request_.is_pending()) {
       const bool has_data = pending_request_.cmd_flags & SDMMC_RESP_DATA_PRESENT;
       const bool busy_response = pending_request_.cmd_flags & SDMMC_RESP_LEN_48B;
@@ -162,18 +142,7 @@ class Sdhci : public DeviceType, public ddk::SdmmcProtocol<Sdhci, ddk::base_prot
   ddk::IoBuffer iobuf_ = {};
 
  private:
-  // TODO(fxbug.dev/106851): Move these back to sdhci.cc after SdmmcRequest has been removed.
-  static constexpr uint32_t Hi32(zx_paddr_t val) {
-    return static_cast<uint32_t>((val >> 32) & 0xffffffff);
-  }
-  static constexpr uint32_t Lo32(zx_paddr_t val) { return val & 0xffffffff; }
-
-  // for 2M max transfer size for fully discontiguous
-  // also see SDMMC_PAGES_COUNT in fuchsia/hardware/sdmmc/c/banjo.h
-  static constexpr int kDmaDescCount = 512;
-
-  // 64k max per descriptor
-  static constexpr size_t kMaxDescriptorLength = 0x1'0000;
+  class DmaDescriptorBuilder;
 
   struct OwnedVmoInfo {
     uint64_t offset;
@@ -183,66 +152,7 @@ class Sdhci : public DeviceType, public ddk::SdmmcProtocol<Sdhci, ddk::base_prot
 
   using SdmmcVmoStore = vmo_store::VmoStore<vmo_store::HashTableStorage<uint32_t, OwnedVmoInfo>>;
 
-  // Maintains a list of physical memory regions to be used for DMA. Input buffers are pinned if
-  // needed, and unpinned upon destruction.
-  class DmaDescriptorBuilder {
-   public:
-    DmaDescriptorBuilder(const sdmmc_req_new_t& request, SdmmcVmoStore& registered_vmos,
-                         uint64_t dma_boundary_alignment, zx::unowned_bti bti)
-        : request_(request),
-          registered_vmos_(registered_vmos),
-          dma_boundary_alignment_(dma_boundary_alignment),
-          bti_(std::move(bti)) {}
-    ~DmaDescriptorBuilder() {
-      for (size_t i = 0; i < pmt_count_; i++) {
-        pmts_[i].unpin();
-      }
-    }
-
-    // Appends the physical memory regions for this buffer to the end of the list.
-    zx_status_t ProcessBuffer(const sdmmc_buffer_region_t& buffer);
-
-    // Builds DMA descriptors of the template type in the array provided.
-    template <typename DescriptorType>
-    zx_status_t BuildDmaDescriptors(cpp20::span<DescriptorType> out_descriptors);
-
-    size_t block_count() const {
-      ZX_DEBUG_ASSERT(request_.blocksize != 0);
-      return total_size_ / request_.blocksize;
-    }
-    size_t descriptor_count() const { return descriptor_count_; }
-
-   private:
-    // Pins the buffer if needed, and fills out_regions with the physical addresses corresponding to
-    // the (owned or unowned) input buffer. Contiguous runs of pages are condensed into single
-    // regions so that the minimum number of DMA descriptors are required.
-    zx::result<size_t> GetPinnedRegions(uint32_t vmo_id, const sdmmc_buffer_region_t& buffer,
-                                        cpp20::span<fzl::PinnedVmo::Region> out_regions);
-    zx::result<size_t> GetPinnedRegions(zx::unowned_vmo vmo, const sdmmc_buffer_region_t& buffer,
-                                        cpp20::span<fzl::PinnedVmo::Region> out_regions);
-
-    // Appends the regions to the current list of regions being tracked by this object. Regions are
-    // split if needed according to hardware restrictions on size or alignment.
-    zx_status_t AppendRegions(cpp20::span<const fzl::PinnedVmo::Region> regions);
-
-    const sdmmc_req_new_t& request_;
-    SdmmcVmoStore& registered_vmos_;
-    const uint64_t dma_boundary_alignment_;
-    std::array<fzl::PinnedVmo::Region, SDMMC_PAGES_COUNT> regions_ = {};
-    size_t region_count_ = 0;
-    size_t total_size_ = 0;
-    size_t descriptor_count_ = 0;
-    std::array<zx::pmt, SDMMC_PAGES_COUNT> pmts_ = {};
-    size_t pmt_count_ = 0;
-    const zx::unowned_bti bti_;
-  };
-
-  static void PrepareCmd(sdmmc_req_t* req, TransferMode* transfer_mode, Command* command);
-  static void PrepareCmd(const sdmmc_req_new_t& req, TransferMode* transfer_mode,
-                         Command* command) {
-    sdmmc_req_t old_req{.cmd_idx = req.cmd_idx, .cmd_flags = req.cmd_flags};
-    PrepareCmd(&old_req, transfer_mode, command);
-  }
+  static void PrepareCmd(const sdmmc_req_new_t& req, TransferMode* transfer_mode, Command* command);
 
   bool SupportsAdma2() const {
     return (info_.caps & SDMMC_HOST_CAP_DMA) && !(quirks_ & SDHCI_QUIRK_NO_DMA);
@@ -254,38 +164,23 @@ class Sdhci : public DeviceType, public ddk::SdmmcProtocol<Sdhci, ddk::base_prot
   zx_status_t WaitForInhibit(const PresentState mask) const;
   zx_status_t WaitForInternalClockStable() const;
 
-  void CompleteRequestLocked(sdmmc_req_t* req, zx_status_t status) TA_REQ(mtx_);
-  void CmdStageCompleteLocked() TA_REQ(mtx_);
-  void DataStageReadReadyLocked() TA_REQ(mtx_);
-  void DataStageWriteReadyLocked() TA_REQ(mtx_);
-  void TransferCompleteLocked() TA_REQ(mtx_);
-  void ErrorRecoveryLocked() TA_REQ(mtx_);
-
   int IrqThread() TA_EXCL(mtx_);
+  void HandleTransferInterrupt(InterruptStatus status) TA_REQ(mtx_);
 
-  zx_status_t PinRequestPages(sdmmc_req_t* req, zx_paddr_t* phys, size_t pagecount);
-
-  template <typename DescriptorType>
-  zx_status_t BuildDmaDescriptor(sdmmc_req_t* req, DescriptorType* descs);
-  zx_status_t StartRequestLocked(sdmmc_req_t* req) TA_REQ(mtx_);
-  zx_status_t FinishRequest(sdmmc_req_t* req);
-
-  zx_status_t SgStartRequest(const sdmmc_req_new_t& request, DmaDescriptorBuilder& builder)
+  zx_status_t StartRequest(const sdmmc_req_new_t& request, DmaDescriptorBuilder& builder)
       TA_REQ(mtx_);
   zx_status_t SetUpDma(const sdmmc_req_new_t& request, DmaDescriptorBuilder& builder) TA_REQ(mtx_);
-  zx_status_t SgFinishRequest(const sdmmc_req_new_t& request, uint32_t out_response[4])
-      TA_REQ(mtx_);
+  zx_status_t FinishRequest(const sdmmc_req_new_t& request, uint32_t out_response[4]) TA_REQ(mtx_);
 
-  void SgHandleInterrupt(InterruptStatus status) TA_REQ(mtx_);
-  void SgCompleteRequest() TA_REQ(mtx_);
+  void CompleteRequest() TA_REQ(mtx_);
 
   // Always signals the main thread.
-  void SgErrorRecovery() TA_REQ(mtx_);
+  void ErrorRecovery() TA_REQ(mtx_);
 
   // These return true if the main thread was signaled and no further processing is needed.
-  bool SgCmdStageComplete() TA_REQ(mtx_);
-  bool SgTransferComplete() TA_REQ(mtx_);
-  bool SgDataStageReadReady() TA_REQ(mtx_);
+  bool CmdStageComplete() TA_REQ(mtx_);
+  bool TransferComplete() TA_REQ(mtx_);
+  bool DataStageReadReady() TA_REQ(mtx_);
 
   zx::interrupt irq_;
   thrd_t irq_thread_;
@@ -297,17 +192,6 @@ class Sdhci : public DeviceType, public ddk::SdmmcProtocol<Sdhci, ddk::base_prot
   // Held when a command or action is in progress.
   fbl::Mutex mtx_;
 
-  // These are used to synchronize the request thread(s) with the interrupt thread, for requests
-  // from SdmmcRequest (see PendingRequest for SdmmcRequestNew). To be removed after all requests
-  // use SdmmcRequestNew.
-  // Current command request
-  sdmmc_req_t* cmd_req_ TA_GUARDED(mtx_) = nullptr;
-  // Current data line request
-  sdmmc_req_t* data_req_ TA_GUARDED(mtx_) = nullptr;
-  // Current block id to transfer (PIO)
-  uint16_t data_blockid_ TA_GUARDED(mtx_) = 0;
-  // Set to true if the data stage completed before the command stage
-  bool data_done_ TA_GUARDED(mtx_) = false;
   // used to signal request complete
   sync_completion_t req_completion_;
 
