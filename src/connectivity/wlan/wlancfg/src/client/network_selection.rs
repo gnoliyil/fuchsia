@@ -306,6 +306,10 @@ impl NetworkSelector {
                     .map(|id| id.ssid)
                     .collect();
 
+                self.telemetry_sender.send(TelemetryEvent::ActiveScanRequested {
+                    num_ssids_requested: requested_active_scan_ssids.len(),
+                });
+
                 if requested_active_scan_ssids.is_empty() {
                     Ok(passive_scan_results)
                 } else {
@@ -1746,7 +1750,7 @@ mod tests {
     #[fuchsia::test(add_test_attr = false)]
     fn find_available_bss_list_without_network_specified(hidden: bool) {
         let mut exec = fasync::TestExecutor::new().expect("failed to create an executor");
-        let test_values = exec.run_singlethreaded(test_setup(false));
+        let mut test_values = exec.run_singlethreaded(test_setup(false));
         let network_selector = test_values.network_selector;
 
         // create identifiers
@@ -1880,6 +1884,17 @@ mod tests {
                 vec![(ScanReason::NetworkSelection, vec![], vec![])]
             )
         }
+
+        // Check that the metrics were logged
+        assert_variant!(
+            test_values.telemetry_receiver.try_next(),
+            Ok(Some(TelemetryEvent::ActiveScanRequested{num_ssids_requested})) => {
+                if hidden {
+                        assert_eq!(num_ssids_requested, 1);
+                } else {
+                        assert_eq!(num_ssids_requested, 0);
+                }
+        });
     }
 
     #[fuchsia::test]
@@ -2106,7 +2121,11 @@ mod tests {
             },
         });
 
-        // Verify two sets of TelemetryEvent for network selection were sent
+        // Verify TelemetryEvents for network selection were sent
+        assert_variant!(
+            telemetry_receiver.try_next(),
+            Ok(Some(TelemetryEvent::ActiveScanRequested { num_ssids_requested: 0 }))
+        );
         assert_variant!(
             telemetry_receiver.try_next(),
             Ok(Some(TelemetryEvent::LogMetricEvents {

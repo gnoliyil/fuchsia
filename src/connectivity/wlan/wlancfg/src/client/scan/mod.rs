@@ -310,21 +310,9 @@ async fn perform_directed_active_scan(
     saved_networks_manager: Arc<dyn SavedNetworksManagerApi>,
     ssids: Vec<types::Ssid>,
     channels: Vec<types::WlanChan>,
-    scan_reason: ScanReason,
+    _scan_reason: ScanReason,
     telemetry_sender: Option<TelemetrySender>,
 ) -> Result<Vec<types::ScanResult>, types::ScanError> {
-    // Record active scan decisions to metrics. This is optional, based on
-    // the scan reason and if the caller would like metrics logged.
-    if let Some(telemetry_sender) = telemetry_sender.clone() {
-        match scan_reason {
-            ScanReason::NetworkSelection => {
-                telemetry_sender
-                    .send(TelemetryEvent::ActiveScanRequested { num_ssids_requested: ssids.len() });
-            }
-            _ => {}
-        }
-    }
-
     let scan_request = fidl_sme::ScanRequest::Active(fidl_sme::ActiveScanRequest {
         ssids: ssids.iter().map(|ssid| ssid.to_vec()).collect(),
         channels: channels.iter().map(|chan| chan.primary).collect(),
