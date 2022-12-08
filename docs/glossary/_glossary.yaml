@@ -435,6 +435,19 @@
   related_guides: [""]
   area: ["Component Framework"]
 
+- term: "Device pixel ratio"
+  short_description: "The ratio between the display's physical pixels and the display's device
+  independent pixels."
+  full_description: "The ratio between the display's physical pixels and the display's device
+  independent pixels. Each <a href=\"/docs/glossary#logical-pixels\">logical</a> or device
+  independent pixel is displayed on screen by one or more physical pixels, as determined by this
+  scale."
+  see_also: ["<a href=\"/docs/glossary#physical-pixels\">physical pixels</a>",
+             "<a href=\"/docs/glossary#logical-pixels\">logical pixels</a>",
+             "<a href=\"/docs/contribute/governance/rfcs/0174_scale_in_flatland\">RFC-0174</a>"]
+  related_guides: [""]
+  area: ["UI"]
+
 - term: "Directory capability"
   short_description: "A
   <a href=\"/docs/glossary#components-v2\">Components v2</a> concept. A
@@ -966,6 +979,17 @@
   related_guides: [""]
   area: ["Software Assembly", "Developer"]
 
+- term: "Logical pixels"
+  short_description: "<a href=\"/docs/glossary#view\">View</a>'s device independent pixels."
+  full_description: "<a href=\"/docs/glossary#view\">View</a>'s device independent pixels. This
+  affects the content layout. Each pixel is displayed on-screen by one or more physical pixels, as
+  determined by <a href=\"/docs/glossary#device-pixel-ratio\">device pixel ratio</a>."
+  see_also: ["<a href=\"/docs/glossary#device-pixel-ratio\">device pixel ratio</a>",
+             "<a href=\"/docs/glossary#logical-pixels\">logical pixels</a>",
+             "<a href=\"/docs/contribute/governance/rfcs/0174_scale_in_flatland\">RFC-0174</a>"]
+  related_guides: [""]
+  area: ["UI"]
+
 - term: "LK"
   short_description: "Little Kernel (LK) is the embedded kernel that formed the core of the Zircon
   Kernel."
@@ -1116,6 +1140,19 @@
   see_also: [""]
   related_guides: ["<a href=\"/docs/development/hardware/paving.md\">Guide for installing Fuchsia with paver</a>"]
   area: ["System", "Devices"]
+
+- term: "Physical pixels"
+  short_description: "Display's physical pixel count."
+  full_description: "Display's physical pixel count. i.e. if there are 4K and FHD variants of the
+  same size display, 4K has 3840x2160 physical pixels and FHD has 1920x1080 physical pixels.
+  However, they may have the same amount of
+  <a href=\"/docs/glossary#logical-pixels\">logical pixels</a> so the layout of the content looks
+  the same."
+  see_also: ["<a href=\"/docs/glossary#device-pixel-ratio\">device pixel ratio</a>",
+             "<a href=\"/docs/glossary#logical-pixels\">logical pixels</a>",
+             "<a href=\"/docs/contribute/governance/rfcs/0174_scale_in_flatland\">RFC-0174</a>"]
+  related_guides: [""]
+  area: ["UI"]
 
 - term: "PID"
   short_description: "A process KOID. A KOID that uniquely identifies a process object."
