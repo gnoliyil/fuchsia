@@ -255,6 +255,9 @@ pub struct LaunchArgs {
     /// enable virtio-vsock
     #[argh(option)]
     pub virtio_vsock: Option<bool>,
+    /// detach from a guest allowing it to run in the background
+    #[argh(switch, short = 'd')]
+    pub detach: bool,
 }
 
 pub mod stop_args {

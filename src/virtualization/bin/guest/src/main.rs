@@ -21,11 +21,7 @@ async fn main() -> Result<(), Error> {
     let services = guest_cli::platform::FuchsiaPlatformServices::new();
 
     match options.nested {
-        SubCommands::Launch(launch_args) => {
-            let guest_config = launch::parse_vmm_args(&launch_args);
-            let guest = launch::GuestLaunch::new(launch_args.guest_type, guest_config).await?;
-            guest.run().await
-        }
+        SubCommands::Launch(launch_args) => launch::handle_launch(&launch_args).await,
         SubCommands::Stop(stop_args) => {
             let output = guest_cli::stop::handle_stop(&services, &stop_args).await?;
             println!("{}", output);
