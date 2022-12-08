@@ -6,7 +6,6 @@
 package ffxutil
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -17,6 +16,7 @@ import (
 
 	botanistconstants "go.fuchsia.dev/fuchsia/tools/botanist/constants"
 	"go.fuchsia.dev/fuchsia/tools/build"
+	"go.fuchsia.dev/fuchsia/tools/lib/clock"
 	"go.fuchsia.dev/fuchsia/tools/lib/ffxutil/constants"
 	"go.fuchsia.dev/fuchsia/tools/lib/jsonutil"
 	"go.fuchsia.dev/fuchsia/tools/lib/logger"
@@ -56,6 +56,7 @@ func getCommand(
 
 // FFXInstance takes in a path to the ffx tool and runs ffx commands with the provided config.
 type FFXInstance struct {
+	ctx     context.Context
 	ffxPath string
 
 	runner     *subprocess.Runner
@@ -88,6 +89,7 @@ func NewFFXInstance(
 		return nil, err
 	}
 	ffx := &FFXInstance{
+		ctx:        ctx,
 		ffxPath:    absFFXPath,
 		runner:     &subprocess.Runner{Dir: dir, Env: env},
 		stdout:     os.Stdout,
@@ -188,25 +190,13 @@ func (f *FFXInstance) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	err := f.Run(ctx, "daemon", "stop")
-	// Wait to see that the daemon is stopped before exiting this function
+	// Wait to allow the daemon to complete shutdown before exiting this function
 	// because the ffx command returns after it has initiated the shutdown,
 	// but there may be some delay where the daemon can continue to output
 	// logs before it's completely shut down.
 	// TODO(fxbug.dev/92296): Remove this workaround when ffx can ensure that
 	// no more logs are written once the command returns.
-	for i := 0; i < 3; i++ {
-		var b bytes.Buffer
-		cmd := getCommand(f.runner, &b, io.Discard, "pgrep", "-f", f.ffxPath)
-		if err := f.runner.RunCommand(ctx, cmd); err != nil {
-			logger.Debugf(ctx, "failed to run \"pgrep ffx\": %s", err)
-			continue
-		}
-		if len(b.Bytes()) == 0 {
-			break
-		}
-		logger.Debugf(ctx, "ffx daemon hasn't completed shutdown. Checking again after 1 second")
-		time.Sleep(time.Second)
-	}
+	clock.Sleep(f.ctx, time.Second)
 	return err
 }
 

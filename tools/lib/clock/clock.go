@@ -13,6 +13,7 @@ import (
 type clock interface {
 	Now() time.Time
 	After(d time.Duration) <-chan time.Time
+	Sleep(d time.Duration)
 }
 
 type clockKeyType string
@@ -38,6 +39,16 @@ func After(ctx context.Context, d time.Duration) <-chan time.Time {
 		return c.After(d)
 	}
 	return time.After(d)
+}
+
+// Sleep runs time.Sleep() or the equivalent for the clock associated with the
+// given context.
+func Sleep(ctx context.Context, d time.Duration) {
+	if c, ok := ctx.Value(clockKey).(clock); ok && c != nil {
+		c.Sleep(d)
+	} else {
+		time.Sleep(d)
+	}
 }
 
 // NewContext returns a new context with the given clock attached.
@@ -105,4 +116,8 @@ func (c *FakeClock) Advance(d time.Duration) {
 // call to After().
 func (c *FakeClock) AfterCalledChan() <-chan struct{} {
 	return c.afterCalled
+}
+
+func (c *FakeClock) Sleep(d time.Duration) {
+	c.Advance(d)
 }

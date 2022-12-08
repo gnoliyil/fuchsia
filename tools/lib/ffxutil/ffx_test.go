@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"go.fuchsia.dev/fuchsia/tools/build"
+	"go.fuchsia.dev/fuchsia/tools/lib/clock"
 )
 
 func TestFFXInstance(t *testing.T) {
@@ -22,7 +23,8 @@ func TestFFXInstance(t *testing.T) {
 	if err := os.WriteFile(ffxPath, []byte("#!/bin/bash\necho $@"), os.ModePerm); err != nil {
 		t.Fatal("failed to write mock ffx tool")
 	}
-	ctx := context.Background()
+	fakeClock := clock.NewFakeClock()
+	ctx := clock.NewContext(context.Background(), fakeClock)
 	ffx, _ := NewFFXInstance(ctx, ffxPath, tmpDir, []string{}, "target", filepath.Join(tmpDir, "sshKey"), filepath.Join(tmpDir, "out"))
 
 	var buf []byte
