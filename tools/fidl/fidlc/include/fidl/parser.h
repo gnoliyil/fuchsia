@@ -338,7 +338,7 @@ class Parser {
   std::unique_ptr<raw::AttributeList> MaybeParseAttributeList();
   std::unique_ptr<raw::LayoutParameter> ParseLayoutParameter();
   std::unique_ptr<raw::LayoutParameterList> MaybeParseLayoutParameterList();
-  std::unique_ptr<raw::LayoutMember> ParseLayoutMember(raw::LayoutMember::Kind);
+  std::unique_ptr<raw::LayoutMember> ParseLayoutMember(raw::LayoutMember::Kind, raw::Layout::Kind);
   std::unique_ptr<raw::Layout> ParseLayout(
       ASTScope& scope, std::unique_ptr<raw::Modifiers> modifiers,
       std::unique_ptr<raw::CompoundIdentifier> compound_identifier,

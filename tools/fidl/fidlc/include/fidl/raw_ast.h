@@ -678,93 +678,9 @@ class ServiceDeclaration final : public SourceElement {
   std::vector<std::unique_ptr<ServiceMember>> members;
 };
 
-class LayoutMember : public SourceElement {
- public:
-  enum Kind {
-    kOrdinaled,
-    kStruct,
-    kValue,
-  };
-
-  explicit LayoutMember(TokenChain const& element, Kind kind,
-                        std::unique_ptr<AttributeList> attributes,
-                        std::unique_ptr<Identifier> identifier)
-      : SourceElement(element, NodeKind(kind)),
-        kind(kind),
-        attributes(std::move(attributes)),
-        identifier(std::move(identifier)) {}
-
-  void Accept(TreeVisitor* visitor) const;
-
-  static SourceElement::NodeKind NodeKind(Kind kind) {
-    switch (kind) {
-      case Kind::kOrdinaled:
-        return SourceElement::NodeKind::kOrdinaledLayoutMember;
-      case Kind::kStruct:
-        return SourceElement::NodeKind::kStructLayoutMember;
-      case Kind::kValue:
-        return SourceElement::NodeKind::kValueLayoutMember;
-    }
-  }
-
-  const Kind kind;
-  std::unique_ptr<AttributeList> attributes;
-  std::unique_ptr<Identifier> identifier;
-};
-
-class OrdinaledLayoutMember final : public LayoutMember {
- public:
-  explicit OrdinaledLayoutMember(TokenChain const& element,
-                                 std::unique_ptr<AttributeList> attributes,
-                                 std::unique_ptr<Ordinal64> ordinal,
-                                 std::unique_ptr<Identifier> identifier,
-                                 std::unique_ptr<TypeConstructor> type_ctor)
-      : LayoutMember(element, Kind::kOrdinaled, std::move(attributes), std::move(identifier)),
-        ordinal(std::move(ordinal)),
-        type_ctor(std::move(type_ctor)) {}
-  explicit OrdinaledLayoutMember(TokenChain const& element,
-                                 std::unique_ptr<AttributeList> attributes,
-                                 std::unique_ptr<Ordinal64> ordinal)
-      : LayoutMember(element, Kind::kOrdinaled, std::move(attributes), nullptr),
-        ordinal(std::move(ordinal)),
-        type_ctor(nullptr),
-        reserved(true) {}
-
-  void Accept(TreeVisitor* visitor) const;
-
-  std::unique_ptr<Ordinal64> ordinal;
-  std::unique_ptr<TypeConstructor> type_ctor;
-  const bool reserved = false;
-};
-
-class ValueLayoutMember final : public LayoutMember {
- public:
-  explicit ValueLayoutMember(TokenChain const& element, std::unique_ptr<AttributeList> attributes,
-                             std::unique_ptr<Identifier> identifier,
-                             std::unique_ptr<Constant> value)
-      : LayoutMember(element, Kind::kValue, std::move(attributes), std::move(identifier)),
-        value(std::move(value)) {}
-
-  void Accept(TreeVisitor* visitor) const;
-
-  std::unique_ptr<Constant> value;
-};
-
-class StructLayoutMember final : public LayoutMember {
- public:
-  explicit StructLayoutMember(TokenChain const& element, std::unique_ptr<AttributeList> attributes,
-                              std::unique_ptr<Identifier> identifier,
-                              std::unique_ptr<TypeConstructor> type_ctor,
-                              std::unique_ptr<Constant> default_value)
-      : LayoutMember(element, Kind::kStruct, std::move(attributes), std::move(identifier)),
-        type_ctor(std::move(type_ctor)),
-        default_value(std::move(default_value)) {}
-
-  void Accept(TreeVisitor* visitor) const;
-
-  std::unique_ptr<TypeConstructor> type_ctor;
-  std::unique_ptr<Constant> default_value;
-};
+// |LayoutMember| is a child(ren) of |Layout|, but |LayoutMember| itself relies on |Layout::Kind|,
+// which is defined inside of |Layout|. Forward declare to break this cycle.
+class LayoutMember;
 
 class Layout final : public SourceElement {
  public:
@@ -808,6 +724,107 @@ class Layout final : public SourceElement {
   //  currently be seen on LayoutMember and its children.  When that happens
   //  this field will only exist on ValueLayout.
   std::unique_ptr<TypeConstructor> subtype_ctor;
+};
+
+class LayoutMember : public SourceElement {
+ public:
+  enum Kind {
+    kOrdinaled,
+    kStruct,
+    kValue,
+  };
+
+  explicit LayoutMember(TokenChain const& element, Kind kind, Layout::Kind layout_kind,
+                        std::unique_ptr<AttributeList> attributes,
+                        std::unique_ptr<Identifier> identifier)
+      : SourceElement(element, NodeKind(kind)),
+        kind(kind),
+        layout_kind(layout_kind),
+        attributes(std::move(attributes)),
+        identifier(std::move(identifier)) {}
+
+  void Accept(TreeVisitor* visitor) const;
+
+  static SourceElement::NodeKind NodeKind(Kind kind) {
+    switch (kind) {
+      case Kind::kOrdinaled:
+        return SourceElement::NodeKind::kOrdinaledLayoutMember;
+      case Kind::kStruct:
+        return SourceElement::NodeKind::kStructLayoutMember;
+      case Kind::kValue:
+        return SourceElement::NodeKind::kValueLayoutMember;
+    }
+  }
+
+  const Kind kind;
+  const Layout::Kind layout_kind;
+  std::unique_ptr<AttributeList> attributes;
+  std::unique_ptr<Identifier> identifier;
+};
+
+class OrdinaledLayoutMember final : public LayoutMember {
+ public:
+  explicit OrdinaledLayoutMember(TokenChain const& element, Layout::Kind layout_kind,
+                                 std::unique_ptr<AttributeList> attributes,
+                                 std::unique_ptr<Ordinal64> ordinal,
+                                 std::unique_ptr<Identifier> identifier,
+                                 std::unique_ptr<TypeConstructor> type_ctor)
+      : LayoutMember(element, Kind::kOrdinaled, layout_kind, std::move(attributes),
+                     std::move(identifier)),
+        ordinal(std::move(ordinal)),
+        type_ctor(std::move(type_ctor)) {}
+  explicit OrdinaledLayoutMember(TokenChain const& element, Layout::Kind layout_kind,
+                                 std::unique_ptr<AttributeList> attributes,
+                                 std::unique_ptr<Ordinal64> ordinal)
+      : LayoutMember(element, Kind::kOrdinaled, layout_kind, std::move(attributes), nullptr),
+        ordinal(std::move(ordinal)),
+        type_ctor(nullptr),
+        reserved(true) {
+    ZX_ASSERT(layout_kind == Layout::Kind::kTable || layout_kind == Layout::Kind::kUnion);
+  }
+
+  void Accept(TreeVisitor* visitor) const;
+
+  std::unique_ptr<Ordinal64> ordinal;
+  std::unique_ptr<TypeConstructor> type_ctor;
+  const bool reserved = false;
+};
+
+class ValueLayoutMember final : public LayoutMember {
+ public:
+  explicit ValueLayoutMember(TokenChain const& element, Layout::Kind layout_kind,
+                             std::unique_ptr<AttributeList> attributes,
+                             std::unique_ptr<Identifier> identifier,
+                             std::unique_ptr<Constant> value)
+      : LayoutMember(element, Kind::kValue, layout_kind, std::move(attributes),
+                     std::move(identifier)),
+        value(std::move(value)) {
+    ZX_ASSERT(layout_kind == Layout::Kind::kBits || layout_kind == Layout::Kind::kEnum);
+  }
+
+  void Accept(TreeVisitor* visitor) const;
+
+  std::unique_ptr<Constant> value;
+};
+
+class StructLayoutMember final : public LayoutMember {
+ public:
+  explicit StructLayoutMember(TokenChain const& element, Layout::Kind layout_kind,
+                              std::unique_ptr<AttributeList> attributes,
+                              std::unique_ptr<Identifier> identifier,
+                              std::unique_ptr<TypeConstructor> type_ctor,
+                              std::unique_ptr<Constant> default_value)
+      : LayoutMember(element, Kind::kStruct, layout_kind, std::move(attributes),
+                     std::move(identifier)),
+        type_ctor(std::move(type_ctor)),
+        default_value(std::move(default_value)) {
+    ZX_ASSERT(layout_kind == Layout::Kind::kStruct);
+  }
+
+  void Accept(TreeVisitor* visitor) const;
+
+  std::unique_ptr<TypeConstructor> type_ctor;
+  std::unique_ptr<Constant> default_value;
 };
 
 class LayoutReference : public SourceElement {

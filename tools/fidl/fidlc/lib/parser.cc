@@ -1144,7 +1144,8 @@ std::unique_ptr<raw::TypeConstraints> Parser::ParseTypeConstraints() {
   return std::make_unique<raw::TypeConstraints>(scope.GetTokenChain(), std::move(constraints));
 }
 
-std::unique_ptr<raw::LayoutMember> Parser::ParseLayoutMember(raw::LayoutMember::Kind kind) {
+std::unique_ptr<raw::LayoutMember> Parser::ParseLayoutMember(raw::LayoutMember::Kind kind,
+                                                             raw::Layout::Kind layout_kind) {
   ASTScope scope(this);
 
   auto attributes = MaybeParseAttributeList();
@@ -1165,7 +1166,7 @@ std::unique_ptr<raw::LayoutMember> Parser::ParseLayoutMember(raw::LayoutMember::
 
     if (identifier_is_reserved && Peek().kind() == Token::Kind::kSemicolon) {
       return std::make_unique<raw::OrdinaledLayoutMember>(
-          scope.GetTokenChain(), std::move(attributes), std::move(ordinal));
+          scope.GetTokenChain(), layout_kind, std::move(attributes), std::move(ordinal));
     }
   }
 
@@ -1203,18 +1204,19 @@ std::unique_ptr<raw::LayoutMember> Parser::ParseLayoutMember(raw::LayoutMember::
 
   switch (kind) {
     case raw::LayoutMember::kOrdinaled: {
-      return std::make_unique<raw::OrdinaledLayoutMember>(scope.GetTokenChain(),
+      return std::make_unique<raw::OrdinaledLayoutMember>(scope.GetTokenChain(), layout_kind,
                                                           std::move(attributes), std::move(ordinal),
                                                           std::move(identifier), std::move(layout));
     }
     case raw::LayoutMember::kStruct: {
-      return std::make_unique<raw::StructLayoutMember>(scope.GetTokenChain(), std::move(attributes),
-                                                       std::move(identifier), std::move(layout),
-                                                       std::move(value));
+      return std::make_unique<raw::StructLayoutMember>(scope.GetTokenChain(), layout_kind,
+                                                       std::move(attributes), std::move(identifier),
+                                                       std::move(layout), std::move(value));
     }
     case raw::LayoutMember::kValue: {
-      return std::make_unique<raw::ValueLayoutMember>(scope.GetTokenChain(), std::move(attributes),
-                                                      std::move(identifier), std::move(value));
+      return std::make_unique<raw::ValueLayoutMember>(scope.GetTokenChain(), layout_kind,
+                                                      std::move(attributes), std::move(identifier),
+                                                      std::move(value));
     }
   }
 }
@@ -1223,7 +1225,7 @@ std::unique_ptr<raw::Layout> Parser::ParseLayout(
     ASTScope& scope, std::unique_ptr<raw::Modifiers> modifiers,
     std::unique_ptr<raw::CompoundIdentifier> compound_identifier,
     std::unique_ptr<raw::TypeConstructor> subtype_ctor) {
-  raw::Layout::Kind kind;
+  raw::Layout::Kind layout_kind;
   raw::LayoutMember::Kind member_kind;
 
   if (compound_identifier->components.size() != 1) {
@@ -1234,27 +1236,27 @@ std::unique_ptr<raw::Layout> Parser::ParseLayout(
   if (identifier->span().data() == "bits") {
     if (modifiers != nullptr)
       ValidateModifiers<types::Strictness>(modifiers, identifier->start());
-    kind = raw::Layout::Kind::kBits;
+    layout_kind = raw::Layout::Kind::kBits;
     member_kind = raw::LayoutMember::Kind::kValue;
   } else if (identifier->span().data() == "enum") {
     if (modifiers != nullptr)
       ValidateModifiers<types::Strictness>(modifiers, identifier->start());
-    kind = raw::Layout::Kind::kEnum;
+    layout_kind = raw::Layout::Kind::kEnum;
     member_kind = raw::LayoutMember::Kind::kValue;
   } else if (identifier->span().data() == "struct") {
     if (modifiers != nullptr)
       ValidateModifiers<types::Resourceness>(modifiers, identifier->start());
-    kind = raw::Layout::Kind::kStruct;
+    layout_kind = raw::Layout::Kind::kStruct;
     member_kind = raw::LayoutMember::Kind::kStruct;
   } else if (identifier->span().data() == "table") {
     if (modifiers != nullptr)
       ValidateModifiers<types::Resourceness>(modifiers, identifier->start());
-    kind = raw::Layout::Kind::kTable;
+    layout_kind = raw::Layout::Kind::kTable;
     member_kind = raw::LayoutMember::Kind::kOrdinaled;
   } else if (identifier->span().data() == "union") {
     if (modifiers != nullptr)
       ValidateModifiers<types::Strictness, types::Resourceness>(modifiers, identifier->start());
-    kind = raw::Layout::Kind::kUnion;
+    layout_kind = raw::Layout::Kind::kUnion;
     member_kind = raw::LayoutMember::Kind::kOrdinaled;
   } else {
     return Fail(ErrInvalidLayoutClass);
@@ -1274,7 +1276,7 @@ std::unique_ptr<raw::Layout> Parser::ParseLayout(
       ConsumeToken(OfKind(Token::Kind::kRightCurly));
       return Done;
     }
-    add(&members, [&] { return ParseLayoutMember(member_kind); });
+    add(&members, [&] { return ParseLayoutMember(member_kind, layout_kind); });
     return More;
   };
 
@@ -1299,7 +1301,7 @@ std::unique_ptr<raw::Layout> Parser::ParseLayout(
   if (!checkpoint.NoNewErrors())
     return nullptr;
 
-  return std::make_unique<raw::Layout>(scope.GetTokenChain(), kind, std::move(members),
+  return std::make_unique<raw::Layout>(scope.GetTokenChain(), layout_kind, std::move(members),
                                        std::move(modifiers), std::move(subtype_ctor));
 }
 
