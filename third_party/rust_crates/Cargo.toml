@@ -225,7 +225,7 @@ unicase = "2.2.0"
 untrusted = "0.7.1"
 url = "2.1"
 uuid = { version = "1.1.2", features = ["serde", "v4"] } # move ?
-valico = "2.4.2"
+valico = { path = "forks/valico" }
 vte = "0.3"
 wasm-bindgen = "0.2.63"
 webpki = "0.21"
@@ -370,6 +370,7 @@ tracing-core = { path = "forks/tracing-core" }
 type_hash_core = { path = "forks/type_hash/core" }
 type_hash_macros = { path = "forks/type_hash/macros" }
 type_hash = { path = "forks/type_hash/type_hash" }
+valico = { path = "forks/valico" }
 zeroize = { path = "forks/zeroize" }
 zstd-sys = { path = "forks/zstd-sys" }
 

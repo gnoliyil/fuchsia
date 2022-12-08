@@ -91,3 +91,6 @@ xts-mode = ["src/security/OWNERS"]
 
 # storage team
 fatfs = ["src/storage/OWNERS"]
+
+# ACPI/devicetree team
+valico = ["src/devices/board/lib/acpi/OWNERS"]
