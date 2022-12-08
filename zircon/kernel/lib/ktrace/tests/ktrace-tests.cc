@@ -736,7 +736,7 @@ class TestKTraceState : public ::internal::KTraceState {
     auto ReportRecord = fit::defer(
         [&]() { printf("\nFAILED while enumerating record (%u)\n", records_enumerated_out); });
 
-    const uint64_t clock_res = ticks_per_second() / 1000;
+    const uint64_t clock_res = ticks_per_second();
     EXPECT_EQ(uint64_t{0x21}, init_header);
     EXPECT_EQ(clock_res, fxt_ticks);
 

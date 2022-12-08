@@ -34,8 +34,6 @@ internal::KTraceState KTRACE_STATE;
 
 namespace {
 
-zx_ticks_t ktrace_ticks_per_ms() { return ticks_per_second() / 1000; }
-
 StringRef* ktrace_find_probe(const char* name) {
   for (StringRef* ref = StringRef::head(); ref != nullptr; ref = ref->next) {
     if (!strcmp(name, ref->string)) {
@@ -218,7 +216,7 @@ zx_status_t KTraceState::RewindLocked() {
     recs[0] = 0x0016547846040010;
     // FXT Initialization Record
     recs[1] = 0x21;
-    recs[2] = ktrace_ticks_per_ms();
+    recs[2] = ticks_per_second();
   }
 
   return ZX_OK;
