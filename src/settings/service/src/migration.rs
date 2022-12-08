@@ -27,7 +27,7 @@ use fuchsia_fs::directory::{readdir, DirEntry, DirentKind};
 use fuchsia_fs::file::WriteError;
 use fuchsia_fs::node::{OpenError, RenameError};
 use fuchsia_fs::OpenFlags;
-use fuchsia_syslog::fx_log_err;
+use fuchsia_syslog::{fx_log_err, fx_log_warn};
 use fuchsia_zircon as zx;
 use setui_metrics_registry::{
     SetuiMetricDimensionError as ErrorMetric, SetuiMetricDimensionMigrationId as MigrationIdMetric,
@@ -68,7 +68,7 @@ pub(crate) struct MigrationManagerBuilder {
     dir_proxy: Option<DirectoryProxy>,
 }
 
-const MIGRATION_FILE_NAME: &str = "migrations.txt";
+pub(crate) const MIGRATION_FILE_NAME: &str = "migrations.txt";
 const TMP_MIGRATION_FILE_NAME: &str = "tmp_migrations.txt";
 
 impl MigrationManagerBuilder {
@@ -125,11 +125,13 @@ impl MigrationManager {
     pub(crate) async fn run_tracked_migrations(
         self,
         metric_event_logger_proxy: Option<MetricEventLoggerProxy>,
-    ) -> Result<Option<u64>, MigrationError> {
+    ) -> Result<Option<u64>, (Option<u64>, MigrationError)> {
         let migration_result = self.run_migrations().await;
         let (last_migration, migration_result) = match migration_result {
             Ok(last_migration) => (last_migration, Ok(last_migration.map(|m| m.migration_id))),
-            Err((last_migration, e)) => (last_migration, Err(e)),
+            Err((last_migration, e)) => {
+                (last_migration, Err((last_migration.map(|m| m.migration_id), e)))
+            }
         };
         if let Some(metric_event_logger_proxy) = metric_event_logger_proxy {
             if let Err(e) = Self::log_migration_metrics(
@@ -149,7 +151,7 @@ impl MigrationManager {
     /// Log the results of the migration to cobalt.
     async fn log_migration_metrics(
         last_migration: Option<LastMigration>,
-        migration_result: &Result<Option<u64>, MigrationError>,
+        migration_result: &Result<Option<u64>, (Option<u64>, MigrationError)>,
         metric_event_logger_proxy: MetricEventLoggerProxy,
     ) -> Result<(), Error> {
         match last_migration {
@@ -174,7 +176,7 @@ impl MigrationManager {
             }
         }
 
-        if let Err(e) = &migration_result {
+        if let Err((_, e)) = &migration_result {
             let event_code = match e {
                 MigrationError::NoData => ErrorMetric::NoData,
                 MigrationError::DiskFull => ErrorMetric::DiskFull,
@@ -232,12 +234,38 @@ impl MigrationManager {
                         .parse()
                         .context("Failed to parse migration id from migrations.txt")
                         .map_err(|e| (None, e.into()))?;
-                    let &(_, cobalt_id) = self
-                        .migrations
-                        .keys()
-                        .find(|(id, _)| *id == migration_id)
-                        .expect("only registered migrations should be in the migration file");
-                    LastMigration { migration_id, cobalt_id }
+                    if let Some(&(_, cobalt_id)) =
+                        self.migrations.keys().find(|(id, _)| *id == migration_id)
+                    {
+                        LastMigration { migration_id, cobalt_id }
+                    } else {
+                        fx_log_warn!("Unknown migration {migration_id}, reverting to default data");
+
+                        // We don't know which migrations to run. Some future build may have
+                        // run migrations, then something caused a boot loop, and the system
+                        // reverted back to this build. This build doesn't know about the
+                        // future migrations, so it doesn't know what state the data is in.
+                        // Report an error but use the last known migration this build is aware of.
+                        // TODO(fxbug.dev/116822) Remove light migration fallback once proper
+                        // fallback handling is in place. This is safe for now since Light settings
+                        // are always overwritten. The follow-up must be compatible with this
+                        // fallback.
+                        let last_migration = LastMigration {
+                            migration_id: 1653667210,
+                            cobalt_id: MigrationIdMetric::V1653667210 as u32,
+                        };
+                        Self::write_migration_file(&self.dir_proxy, last_migration.migration_id)
+                            .await
+                            .map_err(|e| (Some(last_migration), e))?;
+
+                        return Err((
+                            Some(last_migration),
+                            MigrationError::Unrecoverable(anyhow!(format!(
+                                "Unknown migration {migration_id}. Using migration with id {}",
+                                last_migration.migration_id
+                            ))),
+                        ));
+                    }
                 }
             }
         };
@@ -303,15 +331,10 @@ impl MigrationManager {
         Ok(Some(new_last_migration))
     }
 
-    async fn run_single_migration(
+    async fn write_migration_file(
         dir_proxy: &DirectoryProxy,
-        old_id: u64,
-        migration: &dyn Migration,
+        migration_id: u64,
     ) -> Result<(), MigrationError> {
-        let new_id = migration.id();
-        let file_generator = FileGenerator::new(old_id, new_id, Clone::clone(dir_proxy));
-        migration.migrate(file_generator).await?;
-
         // Write to a temporary file before renaming so we can ensure the update is atomic.
         let tmp_migration_file = fuchsia_fs::directory::open_file(
             dir_proxy,
@@ -323,7 +346,8 @@ impl MigrationManager {
         )
         .await
         .context("unable to create migrations file")?;
-        if let Err(e) = fuchsia_fs::file::write(&tmp_migration_file, new_id.to_string()).await {
+        if let Err(e) = fuchsia_fs::file::write(&tmp_migration_file, migration_id.to_string()).await
+        {
             return Err(match e {
                 WriteError::WriteError(zx::Status::NO_SPACE) => MigrationError::DiskFull,
                 _ => Error::from(e).context("failed to write tmp migration").into(),
@@ -354,6 +378,17 @@ impl MigrationManager {
         Ok(())
     }
 
+    async fn run_single_migration(
+        dir_proxy: &DirectoryProxy,
+        old_id: u64,
+        migration: &dyn Migration,
+    ) -> Result<(), MigrationError> {
+        let new_id = migration.id();
+        let file_generator = FileGenerator::new(old_id, new_id, Clone::clone(dir_proxy));
+        migration.migrate(file_generator).await?;
+        Self::write_migration_file(dir_proxy, new_id).await
+    }
+
     /// Runs the initial migration. If it fails due to a [MigrationError::NoData] error, then it
     /// will return the last migration to initialize all of the data sources.
     async fn initialize_migrations(&mut self) -> Result<Option<LastMigration>, MigrationError> {
@@ -373,12 +408,17 @@ impl MigrationManager {
                 MigrationError::NoData => {
                     // There was no previous data. We just need to use the default value for all
                     // data and use the most recent migration as the migration number.
-                    return Ok(self
+                    let migration_id = self
                         .migrations
                         .keys()
                         .last()
                         .copied()
-                        .map(|(id, cobalt_id)| LastMigration { migration_id: id, cobalt_id }));
+                        .map(|(id, cobalt_id)| LastMigration { migration_id: id, cobalt_id });
+                    if let Some(last_migration) = migration_id.as_ref() {
+                        Self::write_migration_file(&self.dir_proxy, last_migration.migration_id)
+                            .await?;
+                    }
+                    return Ok(migration_id);
                 }
                 MigrationError::DiskFull => return Err(MigrationError::DiskFull),
                 MigrationError::Unrecoverable(e) => {
@@ -572,6 +612,53 @@ mod tests {
                         async move {
                             migration_ran.store(true, Ordering::SeqCst);
                             Ok(())
+                        }
+                        .boxed()
+                    }
+                }),
+            ))
+            .expect("can register");
+        builder.set_migration_dir(Clone::clone(&directory));
+        let migration_manager = builder.build();
+
+        let result = migration_manager.run_migrations().await;
+        assert_matches!(
+            result,
+            Ok(Some(LastMigration { migration_id: id, cobalt_id }))
+                if id == ID && cobalt_id == COBALT_ID
+        );
+        let migration_file = fuchsia_fs::directory::open_file(
+            &directory,
+            MIGRATION_FILE_NAME,
+            OpenFlags::RIGHT_READABLE,
+        )
+        .await
+        .expect("migration file should exist");
+        let migration_number =
+            fuchsia_fs::read_file(&migration_file).await.expect("should be able to read file");
+        let migration_number: u64 = dbg!(migration_number).parse().expect("should be a number");
+        assert_eq!(migration_number, ID);
+    }
+
+    // Test for initial migration
+    #[fasync::run_until_stalled(test)]
+    async fn if_no_migration_file_and_no_data_uses_defaults() {
+        let fs = mut_pseudo_directory! {};
+        let (directory, _vmo_map) = serve_vfs_dir(fs);
+        let mut builder = MigrationManagerBuilder::new();
+        let migration_ran = Arc::new(AtomicBool::new(false));
+
+        builder
+            .register((
+                ID,
+                COBALT_ID,
+                Box::new({
+                    let migration_ran = Arc::clone(&migration_ran);
+                    move |_| {
+                        let migration_ran = Arc::clone(&migration_ran);
+                        async move {
+                            migration_ran.store(true, Ordering::SeqCst);
+                            Err(MigrationError::NoData)
                         }
                         .boxed()
                     }
@@ -871,6 +958,64 @@ mod tests {
         assert_eq!(data, NEW_CONTENTS);
     }
 
+    #[fasync::run_until_stalled(test)]
+    async fn migration_file_unknown_id_uses_light_migration() {
+        const LIGHT_MIGRATION: u64 = 1653667210;
+        const UNKNOWN_ID: u64 = u64::MAX;
+        let unknown_id_str = UNKNOWN_ID.to_string();
+        let fs = mut_pseudo_directory! {
+            MIGRATION_FILE_NAME => read_write(
+                simple_init_vmo_with_capacity(unknown_id_str.as_bytes(), unknown_id_str.len() as u64)
+            ),
+            DATA_FILE_NAME => read_write(
+                simple_init_vmo_with_capacity(b"", 1)
+            ),
+        };
+        let (directory, _vmo_map) = serve_vfs_dir(fs);
+        let mut builder = MigrationManagerBuilder::new();
+        let migration_ran = Arc::new(AtomicBool::new(false));
+
+        builder
+            .register((
+                ID,
+                COBALT_ID,
+                Box::new({
+                    let migration_ran = Arc::clone(&migration_ran);
+                    move |_| {
+                        let migration_ran = Arc::clone(&migration_ran);
+                        async move {
+                            migration_ran.store(true, Ordering::SeqCst);
+                            Ok(())
+                        }
+                        .boxed()
+                    }
+                }),
+            ))
+            .expect("can register");
+        builder.set_migration_dir(Clone::clone(&directory));
+        let migration_manager = builder.build();
+
+        let result = migration_manager.run_migrations().await;
+        assert_matches!(result, Err((Some(LastMigration {
+                    migration_id, cobalt_id
+                }), MigrationError::Unrecoverable(_)))
+            if migration_id == LIGHT_MIGRATION && cobalt_id == MigrationIdMetric::V1653667210 as u32);
+
+        let migration_file = fuchsia_fs::directory::open_file(
+            &directory,
+            MIGRATION_FILE_NAME,
+            OpenFlags::RIGHT_READABLE,
+        )
+        .await
+        .expect("migration file should exist");
+        let migration_number: u64 = fuchsia_fs::read_file(&migration_file)
+            .await
+            .expect("should be able to read file")
+            .parse()
+            .expect("should be a number");
+        assert_eq!(migration_number, LIGHT_MIGRATION);
+    }
+
     /// Setup the event logger, It will track whether the expected metric id and event get
     /// triggered.
     fn setup_event_logger(
@@ -1039,9 +1184,12 @@ mod tests {
         let result = migration_manager.run_tracked_migrations(Some(proxy)).await;
         assert!(matches!(
             (result, expected_error),
-            (Err(MigrationError::NoData), MigrationError::NoData)
-                | (Err(MigrationError::DiskFull), MigrationError::DiskFull)
-                | (Err(MigrationError::Unrecoverable(_)), MigrationError::Unrecoverable(_))
+            (Err((Some(id), MigrationError::NoData)), MigrationError::NoData)
+                | (Err((Some(id), MigrationError::DiskFull)), MigrationError::DiskFull)
+                | (
+                    Err((Some(id), MigrationError::Unrecoverable(_))),
+                    MigrationError::Unrecoverable(_)
+                ) if id == ID
         ));
 
         join_handle.await;

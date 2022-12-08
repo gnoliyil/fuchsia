@@ -13,6 +13,7 @@ use crate::ingress::registration;
 use crate::job::source::Error;
 use crate::job::{self, Job};
 use crate::message::base::{filter, Audience, MessengerType};
+use crate::migration::MIGRATION_FILE_NAME;
 use crate::service::Payload;
 use crate::service_context::ServiceContext;
 use crate::storage::testing::InMemoryStorageFactory;
@@ -20,12 +21,23 @@ use crate::tests::fakes::service_registry::ServiceRegistry;
 use crate::tests::message_utils::verify_payload;
 use crate::tests::scaffold::workload::channel;
 use crate::{service, Environment, EnvironmentBuilder};
+use ::fidl::endpoints::{create_proxy, create_proxy_and_stream, ServerEnd};
+use ::fidl::Vmo;
 use assert_matches::assert_matches;
+use fidl_fuchsia_io::{DirectoryMarker, DirectoryProxy, OpenFlags};
+use fidl_fuchsia_stash::StoreMarker;
 use fuchsia_async as fasync;
 use futures::future::BoxFuture;
+use futures::lock::Mutex;
 use futures::FutureExt;
 use futures::StreamExt;
+use std::collections::HashMap;
 use std::sync::Arc;
+use vfs::directory::entry::DirectoryEntry;
+use vfs::directory::mutable::simple::tree_constructor;
+use vfs::execution_scope::ExecutionScope;
+use vfs::file::vmo::asynchronous::{read_write, simple_init_vmo_with_capacity};
+use vfs::mut_pseudo_directory;
 
 const ENV_NAME: &str = "settings_service_environment_test";
 const TEST_PAYLOAD: &str = "test_payload";
@@ -201,4 +213,63 @@ async fn test_job_sourcing() {
 
     // Ensure job is executed.
     assert_matches!(job_state_rx.next().await, Some(channel::State::Execute));
+}
+
+fn serve_vfs_dir(
+    root: Arc<impl DirectoryEntry>,
+) -> (DirectoryProxy, Arc<Mutex<HashMap<String, Vmo>>>) {
+    let vmo_map = Arc::new(Mutex::new(HashMap::new()));
+    let fs_scope = ExecutionScope::build()
+        .entry_constructor(tree_constructor(move |_, _| {
+            Ok(read_write(simple_init_vmo_with_capacity(b"", 100)))
+        }))
+        .new();
+    let (client, server) = create_proxy::<DirectoryMarker>().unwrap();
+    root.open(
+        fs_scope,
+        OpenFlags::RIGHT_READABLE | OpenFlags::RIGHT_WRITABLE,
+        0,
+        vfs::path::Path::dot(),
+        ServerEnd::new(server.into_channel()),
+    );
+    (client, vmo_map)
+}
+
+#[fuchsia_async::run_until_stalled(test)]
+async fn migration_error_does_not_cause_early_exit() {
+    const UNKNOWN_ID: u64 = u64::MAX;
+    let unknown_id_str = UNKNOWN_ID.to_string();
+    let fs = mut_pseudo_directory! {
+        MIGRATION_FILE_NAME => read_write(
+            simple_init_vmo_with_capacity(unknown_id_str.as_bytes(), unknown_id_str.len() as u64)
+        ),
+    };
+    let (directory, _vmo_map) = serve_vfs_dir(fs);
+    let (store_proxy, mut request_stream) =
+        create_proxy_and_stream::<StoreMarker>().expect("can create");
+    fasync::Task::spawn(async move {
+        while let Some(request) = request_stream.next().await {
+            match request.unwrap() {
+                fidl_fuchsia_stash::StoreRequest::Identify { .. } => {}
+                fidl_fuchsia_stash::StoreRequest::CreateAccessor { accessor_request, .. } => {
+                    let mut stream = accessor_request.into_stream().unwrap();
+                    fasync::Task::spawn(async move {
+                        while let Some(r) = stream.next().await {
+                            panic!("unexpected call to store before migration id checked: {r:?}");
+                        }
+                    })
+                    .detach();
+                }
+            }
+        }
+    })
+    .detach();
+
+    let _ = EnvironmentBuilder::new(Arc::new(InMemoryStorageFactory::new()))
+        .fidl_interfaces(&[fidl::Interface::Light])
+        .store_proxy(store_proxy)
+        .storage_dir(directory)
+        .spawn_nested(ENV_NAME)
+        .await
+        .expect("environment should be built");
 }

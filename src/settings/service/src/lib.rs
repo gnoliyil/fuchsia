@@ -27,7 +27,7 @@ use fuchsia_component::server::{ServiceFs, ServiceFsDir, ServiceObj};
 #[cfg(test)]
 use fuchsia_fs::OpenFlags;
 use fuchsia_inspect::component;
-use fuchsia_syslog::{fx_log_info, fx_log_warn};
+use fuchsia_syslog::{fx_log_err, fx_log_info, fx_log_warn};
 use fuchsia_zircon::{Duration, DurationNum};
 use futures::lock::Mutex;
 use futures::StreamExt;
@@ -532,11 +532,18 @@ impl<T: StorageFactory<Storage = DeviceStorage> + Send + Sync + 'static> Environ
                     store_proxy,
                 )
                 .context("failed to register migrations")?;
-                let migration_id = migration_manager
-                    .run_tracked_migrations(metric_event_logger_proxy)
-                    .await
-                    .context("migrations failed")?;
-                fx_log_info!("migrated storage to {migration_id:?}");
+                let migration_id =
+                    match migration_manager.run_tracked_migrations(metric_event_logger_proxy).await
+                    {
+                        Ok(id) => {
+                            fx_log_info!("migrated storage to {id:?}");
+                            id
+                        }
+                        Err((id, e)) => {
+                            fx_log_err!("Settings migration failed: {e:?}");
+                            id
+                        }
+                    };
                 (migration_id, storage_dir)
             } else {
                 (None, init_storage_dir())
